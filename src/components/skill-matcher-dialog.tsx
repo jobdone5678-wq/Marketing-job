@@ -39,6 +39,7 @@ interface SkillMatcherDialogProps {
     description: string;
     location?: string;
     portal?: string;
+    url?: string;
   };
 }
 

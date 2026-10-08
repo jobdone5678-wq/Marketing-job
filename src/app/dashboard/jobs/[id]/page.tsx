@@ -519,6 +519,7 @@ export default function JobDetailPage() {
           description: job?.content || job?.description || "",
           location: location,
           portal: portal,
+          url: job?.absolute_url || job?.url || "",
         }}
       />
     </div>
