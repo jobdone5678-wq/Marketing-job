@@ -37,7 +37,14 @@ export type VendorFormData = Omit<Vendor, "id" | "created_at" | "updated_at">;
 
 import {api} from './api-client';
 export async function getVendors():Promise<Vendor[]> {return (await api<{vendors:Vendor[]}>('/api/vendors')).vendors;}
-export async function getVendorById(id:string):Promise<Vendor|null> {return (await getVendors()).find(v=>v.id===id)||null;}
+export async function getVendorById(id: string): Promise<Vendor | null> {
+  try {
+    const res = await api<{ vendor: Vendor }>(`/api/vendors/${id}`);
+    return res.vendor || null;
+  } catch {
+    return null;
+  }
+}
 async function save(id:string|null,data:Partial<VendorFormData>){try{const fields=id?{...await getVendorById(id),...data}:data;const result=await api<{id:string}>('/api/vendors',{method:'POST',body:JSON.stringify({id,data:fields})});return {data:await getVendorById(result.id),error:null};}catch(e){return {data:null,error:(e as Error).message};}}
 export async function createVendor(data:VendorFormData){return save(null,data);}
 export async function updateVendor(id:string,data:Partial<VendorFormData>){return save(id,data);}

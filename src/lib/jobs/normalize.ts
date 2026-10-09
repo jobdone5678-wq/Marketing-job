@@ -26,3 +26,27 @@ export function normalizeSnapshot(source:{provider:string;company:string},input:
  }
  const complete=!invalid&&(source.provider==='ashby'||object(root.meta).total===root.jobs.length);return {jobs,completeness:complete?'complete':'partial'};
 }
+
+export function isSoftwareJob(job: { title: string; department?: string | null }): boolean {
+ const t = (job.title || '').toLowerCase();
+ const d = (job.department || '').toLowerCase();
+ const nonTech = [
+   'recruiter', 'recruiting', 'talent acquisition', 'account executive',
+   'sales development', 'sales rep', 'customer success', 'customer support',
+   'office manager', 'executive assistant', 'workplace', 'copywriter', 'content writer',
+   'social media', 'legal counsel', 'paralegal', 'accountant', 'payroll', 'controller',
+   'marketing manager', 'product marketing', 'sales manager', 'partner sales', 'enablement'
+ ];
+ if (nonTech.some(kw => t.includes(kw))) return false;
+ const tech = [
+   'software', 'engineer', 'developer', 'frontend', 'front-end', 'front end',
+   'backend', 'back-end', 'back end', 'fullstack', 'full-stack', 'full stack',
+   'web', 'mobile', 'ios', 'android', 'react', 'node', 'python', 'java', 'golang',
+   'cloud', 'devops', 'sre', 'site reliability', 'infrastructure', 'platform',
+   'data engineer', 'data science', 'machine learning', 'ml', 'ai', 'architect',
+   'qa', 'sdet', 'test engineer', 'security', 'systems', 'tech lead', 'technical lead',
+   'engineering manager', 'director of engineering', 'cto'
+ ];
+ return tech.some(kw => t.includes(kw)) || 
+   ['engineering', 'software', 'technology', 'product & engineering', 'r&d', 'data', 'platform'].some(kw => d.includes(kw));
+}

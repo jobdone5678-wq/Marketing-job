@@ -614,7 +614,7 @@ export function SignupForm() {
             <UserIcon className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
             <Input
               id="name"
-              placeholder={selectedRole === "recruiter" ? "Rahul Sharma" : "Tarun Pothukuri"}
+              placeholder="e.g. John Doe"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required

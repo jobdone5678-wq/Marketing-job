@@ -46,7 +46,7 @@ export async function POST(request: Request) {
       return cors(
         request,
         Response.json(
-          { error: 'Not logged in. Please sign in to the Marketing Portal at this URL first.' },
+          { error: 'Not logged in. Please sign in to NextKinHR at this URL first.' },
           { status: 401 }
         )
       );

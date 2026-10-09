@@ -28,14 +28,16 @@ type Source = {
 export function JobsBrowser({ provider }: { provider?: string }) {
   const { isRecruiter } = useUserProfile();
 
-  // Mode: 'live' (no DB storage) vs 'db' (stored in database)
-  const [mode, setMode] = useState<'live' | 'db'>('live');
+  // Mode: 'db' (fast, cached in database) vs 'live' (direct fetch from ATS)
+  const [mode, setMode] = useState<'live' | 'db'>('db');
 
   // Live Mode states
   const [liveJobs, setLiveJobs] = useState<LiveJob[]>([]);
   const [liveBoard, setLiveBoard] = useState(provider === 'ashby' ? 'openai' : 'ramp');
   const [liveProvider, setLiveProvider] = useState<string>(provider || 'greenhouse');
   const [liveLoading, setLiveLoading] = useState(false);
+  const [saveToDbOnFetch, setSaveToDbOnFetch] = useState(true);
+  const [syncingSoftwareJobs, setSyncingSoftwareJobs] = useState(false);
   const [lastFetchedTime, setLastFetchedTime] = useState<string | null>(null);
   const [expandedJobHash, setExpandedJobHash] = useState<string | null>(null);
 
@@ -57,7 +59,37 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   const [newBoard, setNewBoard] = useState('');
   const [newSourceProvider, setNewSourceProvider] = useState(provider || 'greenhouse');
 
-  // Fetch Live Jobs directly from ATS without saving to database
+  // Sync all configured software jobs to database
+  const handleSyncSoftwareJobs = async () => {
+    setSyncingSoftwareJobs(true);
+    setError('');
+    setNotice('');
+    try {
+      const res = await api<{
+        jobs: LiveJob[];
+        total: number;
+        fetchedAt: string;
+        persistedInDb: boolean;
+      }>('/api/jobs/live?saveToDb=true');
+      setNotice(`✅ Successfully pulled ${res.total} software jobs from ATS and stored in database!`);
+      // Refresh DB jobs
+      setDbPage(0);
+      const dbRes = await api<{ jobs: StoredJob[]; total: number; hasMore: boolean }>(
+        `/api/jobs?type=${employmentType}&search=${encodeURIComponent(search)}&page=0${
+          provider ? '&provider=' + provider : ''
+        }`
+      );
+      setDbJobs(dbRes.jobs);
+      setDbTotal(dbRes.total);
+      setDbMore(dbRes.hasMore);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSyncingSoftwareJobs(false);
+    }
+  };
+
+  // Fetch Live Jobs directly from ATS, saving to DB when requested
   const fetchLiveJobs = useCallback(
     async (customBoard?: string, customProvider?: string) => {
       setLiveLoading(true);
@@ -71,6 +103,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         if (boardToUse.trim()) query.set('board', boardToUse.trim());
         if (employmentType) query.set('type', employmentType);
         if (search.trim()) query.set('search', search.trim());
+        if (saveToDbOnFetch) query.set('saveToDb', 'true');
 
         const res = await api<{
           jobs: LiveJob[];
@@ -81,13 +114,27 @@ export function JobsBrowser({ provider }: { provider?: string }) {
 
         setLiveJobs(res.jobs || []);
         setLastFetchedTime(new Date(res.fetchedAt).toLocaleTimeString());
+        if (saveToDbOnFetch && res.jobs?.length) {
+          setNotice(`✅ Pulled ${res.jobs.length} software jobs and stored them in the database!`);
+          void api<{ jobs: StoredJob[]; total: number; hasMore: boolean }>(
+            `/api/jobs?type=${employmentType}&search=${encodeURIComponent(search)}&page=0${
+              provider ? '&provider=' + provider : ''
+            }`
+          )
+            .then((dbRes) => {
+              setDbJobs(dbRes.jobs);
+              setDbTotal(dbRes.total);
+              setDbMore(dbRes.hasMore);
+            })
+            .catch(() => {});
+        }
       } catch (err) {
         setError((err as Error).message);
       } finally {
         setLiveLoading(false);
       }
     },
-    [liveBoard, liveProvider, employmentType, search]
+    [liveBoard, liveProvider, employmentType, search, saveToDbOnFetch, provider]
   );
 
   // Initial load for live jobs
@@ -135,11 +182,16 @@ export function JobsBrowser({ provider }: { provider?: string }) {
       {/* Top Header & Mode Toggle */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight">
-            {provider ? provider.toUpperCase() : 'Public'} Jobs Portal
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-extrabold tracking-tight">
+              {provider ? provider.toUpperCase() : 'Public'} Jobs Portal
+            </h1>
+            <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-xs py-0.5">
+              💻 Software & Tech Roles Only
+            </Badge>
+          </div>
           <p className="text-muted-foreground text-sm mt-1">
-            Browse active jobs directly from public ATS boards in real-time.
+            Browse verified technical & engineering jobs from public ATS boards, stored directly in the database.
           </p>
         </div>
 
@@ -147,19 +199,19 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         <div className="flex items-center gap-2 bg-muted p-1 rounded-lg border">
           <Button
             size="sm"
-            variant={mode === 'live' ? 'default' : 'ghost'}
-            onClick={() => setMode('live')}
-            className="text-xs h-8"
-          >
-            ⚡ Live Jobs (No DB)
-          </Button>
-          <Button
-            size="sm"
             variant={mode === 'db' ? 'default' : 'ghost'}
             onClick={() => setMode('db')}
             className="text-xs h-8"
           >
-            💾 Saved Database Jobs
+            💾 Saved Database Jobs ({dbTotal})
+          </Button>
+          <Button
+            size="sm"
+            variant={mode === 'live' ? 'default' : 'ghost'}
+            onClick={() => setMode('live')}
+            className="text-xs h-8"
+          >
+            ⚡ Live ATS Fetch
           </Button>
         </div>
       </div>
@@ -172,7 +224,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
             </span>
-            Live ATS Feed Active — Jobs are fetched on-the-fly and NOT stored in the database.
+            Live ATS Feed Active — Strictly filtered for software & tech roles. Persisting to DB: {saveToDbOnFetch ? 'Enabled' : 'Disabled'}.
           </div>
           {lastFetchedTime && (
             <span className="text-xs text-muted-foreground">
@@ -181,8 +233,19 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           )}
         </div>
       ) : (
-        <div className="bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 rounded-lg p-3 text-sm">
-          📁 Viewing cached jobs stored in the Supabase database ({dbTotal} total).
+        <div className="bg-primary/5 border border-primary/20 text-foreground rounded-lg p-3 text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span>📁 Viewing verified software jobs stored in the Supabase database (<strong>{dbTotal}</strong> total).</span>
+            <span className="text-xs text-muted-foreground hidden sm:inline">• High-speed indexed responses</span>
+          </div>
+          <Button
+            size="sm"
+            onClick={handleSyncSoftwareJobs}
+            disabled={syncingSoftwareJobs}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs h-8 px-3"
+          >
+            {syncingSoftwareJobs ? '⏳ Syncing Software Jobs...' : '📥 Pull & Save Jobs to Database'}
+          </Button>
         </div>
       )}
 
@@ -219,14 +282,23 @@ export function JobsBrowser({ provider }: { provider?: string }) {
               </select>
             </div>
 
-            <div className="sm:col-span-2 flex items-end gap-2">
+            <div className="sm:col-span-2 flex flex-wrap items-end gap-2">
               <Button
                 onClick={() => void fetchLiveJobs()}
                 disabled={liveLoading}
                 className="w-full sm:w-auto h-9 font-semibold"
               >
-                {liveLoading ? 'Fetching Jobs...' : '🔄 Fetch Jobs'}
+                {liveLoading ? 'Fetching Jobs...' : '🔄 Fetch & Save Jobs'}
               </Button>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={saveToDbOnFetch}
+                  onChange={(e) => setSaveToDbOnFetch(e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                Save to Database
+              </label>
               {dbSources.length > 0 && (
                 <select
                   aria-label="Select configured source"
@@ -261,7 +333,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
             aria-label="Search jobs"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by title, department, or location..."
+            placeholder="Search software jobs by title, department, or location..."
             className="h-9 flex-1"
           />
 
@@ -281,9 +353,19 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           </select>
 
           {mode === 'db' && (
-            <Button variant="outline" className="h-9" onClick={() => setDbPage(0)}>
-              Reload DB
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" className="h-9" onClick={() => setDbPage(0)}>
+                Reload DB
+              </Button>
+              <Button
+                variant="default"
+                className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold"
+                onClick={handleSyncSoftwareJobs}
+                disabled={syncingSoftwareJobs}
+              >
+                {syncingSoftwareJobs ? 'Syncing...' : '📥 Pull & Save'}
+              </Button>
+            </div>
           )}
         </div>
       </section>

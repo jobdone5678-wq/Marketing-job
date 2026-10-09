@@ -1,6 +1,7 @@
 import {protectedRoute} from '@/lib/http/protected-route';
 import {database,checkDb,CaptureError} from '@/lib/db/admin';
 import {fetchSnapshot,validateBoard} from '@/lib/jobs/adapters/native';
+import {isSoftwareJob} from '@/lib/jobs/normalize';
 import type {NormalizedJob} from '@/lib/jobs/types';
 
 export interface LiveJobItem extends NormalizedJob {
@@ -9,13 +10,14 @@ export interface LiveJobItem extends NormalizedJob {
 }
 
 export async function GET(request: Request) {
-  return protectedRoute(request, 'candidate_or_staff', async () => {
+  return protectedRoute(request, 'candidate_or_staff', async (profile) => {
     const params = new URL(request.url).searchParams;
     const requestedProvider = (params.get('provider') || 'all').toLowerCase();
     const requestedBoard = params.get('board')?.trim();
     const requestedCompany = params.get('company')?.trim();
     const employmentFilter = params.get('type') || 'all';
     const searchQuery = params.get('search')?.trim().toLowerCase();
+    const saveToDb = params.get('saveToDb') === 'true';
 
     const jobs: LiveJobItem[] = [];
     const sourceStatuses: { company: string; board: string; provider: string; count: number; error?: string }[] = [];
@@ -32,15 +34,59 @@ export async function GET(request: Request) {
           company: companyName,
         });
 
-        for (const job of snapshot.jobs) {
+        // Filter strictly for software-related roles
+        const softwareJobs = snapshot.jobs.filter(isSoftwareJob);
+        for (const job of softwareJobs) {
           jobs.push({ ...job, provider, board_slug: requestedBoard });
         }
         sourceStatuses.push({
           company: companyName,
           board: requestedBoard,
           provider,
-          count: snapshot.jobs.length,
+          count: softwareJobs.length,
         });
+
+        // Save to DB if requested
+        if (saveToDb && softwareJobs.length > 0) {
+          const db = database();
+          // Ensure source exists
+          let sourceId = null;
+          const { data: existingSrc } = await db.from('job_sources').select('id').eq('provider', provider).eq('board_slug', requestedBoard).maybeSingle();
+          if (existingSrc) {
+            sourceId = existingSrc.id;
+          } else {
+            const { data: newSrc } = await db.from('job_sources').insert({
+              provider,
+              board_slug: requestedBoard,
+              company: companyName,
+              created_by: profile.id
+            }).select('id').maybeSingle();
+            sourceId = newSrc?.id;
+          }
+
+          if (sourceId) {
+            for (const item of softwareJobs) {
+              await db.from('jobs').upsert({
+                source_id: sourceId,
+                external_id: item.external_id,
+                title: item.title,
+                company: item.company,
+                source_url: item.source_url,
+                application_url: item.application_url,
+                location: item.location,
+                department: item.department,
+                description: item.description,
+                description_html: item.description_html,
+                employment_type: item.employment_type,
+                employment_evidence: item.employment_evidence,
+                arrangements: item.arrangements,
+                compensation: item.compensation,
+                content_hash: item.content_hash,
+                state: 'active'
+              }, { onConflict: 'source_id,external_id' });
+            }
+          }
+        }
       } catch (err) {
         throw new CaptureError(`Failed to fetch from ${provider} board "${requestedBoard}": ${(err as Error).message}`, 400);
       }
@@ -53,7 +99,7 @@ export async function GET(request: Request) {
       const { data: sources, error } = await q;
       checkDb(error);
 
-      // If no sources exist in DB yet, provide helpful default public tech boards for instant live demo
+      // Default active sources if none configured
       const activeSources = (sources && sources.length > 0)
         ? sources
         : [
@@ -66,7 +112,8 @@ export async function GET(request: Request) {
         activeSources.map(async (src) => {
           try {
             const snapshot = await fetchSnapshot(src);
-            return { src, jobs: snapshot.jobs };
+            const softwareJobs = snapshot.jobs.filter(isSoftwareJob);
+            return { src, jobs: softwareJobs };
           } catch (err) {
             return { src, error: (err as Error).message };
           }
@@ -90,6 +137,31 @@ export async function GET(request: Request) {
               provider: src.provider,
               count: srcJobs.length,
             });
+
+            // Save to DB if requested
+            if (saveToDb && src.id && srcJobs.length > 0) {
+              const db = database();
+              for (const item of srcJobs) {
+                await db.from('jobs').upsert({
+                  source_id: src.id,
+                  external_id: item.external_id,
+                  title: item.title,
+                  company: item.company,
+                  source_url: item.source_url,
+                  application_url: item.application_url,
+                  location: item.location,
+                  department: item.department,
+                  description: item.description,
+                  description_html: item.description_html,
+                  employment_type: item.employment_type,
+                  employment_evidence: item.employment_evidence,
+                  arrangements: item.arrangements,
+                  compensation: item.compensation,
+                  content_hash: item.content_hash,
+                  state: 'active'
+                }, { onConflict: 'source_id,external_id' });
+              }
+            }
           } else {
             sourceStatuses.push({
               company: src.company,
@@ -103,7 +175,7 @@ export async function GET(request: Request) {
       }
     }
 
-    // In-memory filter (Zero database queries or writes)
+    // In-memory filter for display
     let filtered = jobs;
     if (employmentFilter !== 'all') {
       filtered = filtered.filter((j) => j.employment_type === employmentFilter);
@@ -125,7 +197,7 @@ export async function GET(request: Request) {
       sources: sourceStatuses,
       fetchedAt: new Date().toISOString(),
       live: true,
-      persistedInDb: false,
+      persistedInDb: saveToDb,
     };
   });
 }

@@ -11,7 +11,7 @@ export function AuthPanel() {
           <div className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <GalleryVerticalEnd className="size-4" />
           </div>
-          Marketing Portal
+          NextKinHR
         </a>
       </div>
 
@@ -22,7 +22,7 @@ export function AuthPanel() {
       </div>
 
       <div className="text-center md:text-left text-xs text-muted-foreground mt-4">
-        © {new Date().getFullYear()} Marketing Portal. All rights reserved.
+        © {new Date().getFullYear()} NextKinHR. All rights reserved.
       </div>
     </div>
   );

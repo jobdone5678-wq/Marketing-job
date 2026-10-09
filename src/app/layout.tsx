@@ -10,9 +10,9 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Marketing Portal — Where dreams rise through the silence",
+  title: "NextKinHR — AI Staffing & Recruiting Intelligence",
   description:
-    "Connecting top marketing talent, recruiters, and forward-thinking clients. Discover curated opportunities, track hiring pipelines, and build exceptional teams in one unified portal.",
+    "Connecting top software engineering talent, recruiters, and forward-thinking clients. Discover curated opportunities, track hiring pipelines, and build exceptional teams in NextKinHR.",
 };
 
 export default function RootLayout({

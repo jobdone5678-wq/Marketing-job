@@ -7,11 +7,14 @@ export class CaptureError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }
 
+let _adminClient: ReturnType<typeof createSupabaseClient> | null = null;
 export function adminClient() {
+  if (_adminClient) return _adminClient;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new CaptureError('Server-side Supabase configuration is missing. See the recruiting setup guide.', 503);
-  return createSupabaseClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  _adminClient = createSupabaseClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  return _adminClient;
 }
 
 export async function requireCaptureStaff() {

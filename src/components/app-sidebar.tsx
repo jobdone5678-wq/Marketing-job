@@ -187,7 +187,7 @@ export function AppSidebar({
             >
               <CommandIcon className="size-5 text-primary" />
               <div className="flex flex-col text-left">
-                <span className="text-sm font-bold tracking-tight">Marketing Portal</span>
+                <span className="text-sm font-bold tracking-tight">NextKinHR</span>
                 <span className="text-[10px] text-muted-foreground capitalize">
                   {currentUser.role === "client" ? "Candidate Workspace" : "Recruiter Workspace"}
                 </span>

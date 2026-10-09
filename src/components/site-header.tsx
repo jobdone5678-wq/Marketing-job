@@ -65,7 +65,7 @@ export function SiteHeader({
                   render={<Link href="/dashboard" />}
                   className="text-muted-foreground hover:text-foreground"
                 >
-                  Marketing Portal
+                  NextKinHR
                 </BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden sm:block" />
