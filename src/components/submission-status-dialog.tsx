@@ -145,6 +145,7 @@ export function SubmissionStatusDialog({
           <DialogTitle className="text-lg font-bold">
             Update Submission Stage
           </DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
             {submission.company_name} — {submission.job_title}
             {submission.candidate?.full_name ? ` (${submission.candidate.full_name})` : ''}
           </DialogDescription>

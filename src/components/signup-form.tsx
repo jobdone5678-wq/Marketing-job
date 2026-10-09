@@ -140,12 +140,7 @@ export function SignupForm() {
     const cleanEmail = email.trim();
     const cleanName = name.trim();
 
-    // Mandatory Phone Validation
-    if (!cleanPhone || cleanPhone.length < 8) {
-      setErrorMsg("Phone number is mandatory. Please enter a valid contact/WhatsApp number with country code.");
-      phoneInputRef.current?.focus();
-      return;
-    }
+    // Phone is optional
 
     if (!cleanEmail || !cleanEmail.includes("@")) {
       setErrorMsg("Please enter a valid email address.");
@@ -162,7 +157,7 @@ export function SignupForm() {
     try {
       const redirectUrl =
         typeof window !== "undefined"
-          ? `${window.location.origin}/auth/callback?next=/dashboard&phone=${encodeURIComponent(cleanPhone)}&role=${selectedRole}`
+          ? `${window.location.origin}/auth/callback?next=/dashboard${cleanPhone ? `&phone=${encodeURIComponent(cleanPhone)}` : ''}&role=${selectedRole}`
           : "";
 
       const { error } = await supabase.auth.signInWithOtp({
@@ -171,7 +166,7 @@ export function SignupForm() {
           shouldCreateUser: true,
           data: {
             full_name: cleanName,
-            phone: cleanPhone,
+            phone: cleanPhone || null,
             role: selectedRole,
           },
           emailRedirectTo: redirectUrl,
@@ -321,18 +316,13 @@ export function SignupForm() {
     setErrorMsg(null);
 
     const cleanPhone = phone.trim();
-    // Mandatory Phone Check before initiating Google Sign-In
-    if (!cleanPhone || cleanPhone.length < 8) {
-      setErrorMsg("Phone number is mandatory. Please enter your phone / WhatsApp number above before continuing with Google.");
-      phoneInputRef.current?.focus();
-      return;
-    }
+    // Phone is optional
 
     setGoogleLoading(true);
     try {
       // Store pending phone and role in localStorage so callback and dashboard can associate them
       if (typeof window !== "undefined") {
-        localStorage.setItem("oauth_phone", cleanPhone);
+        if (cleanPhone) localStorage.setItem("oauth_phone", cleanPhone);
         localStorage.setItem("oauth_role", selectedRole);
       }
 
@@ -341,7 +331,7 @@ export function SignupForm() {
         options: {
           redirectTo:
             typeof window !== "undefined"
-              ? `${window.location.origin}/auth/callback?role=${selectedRole}&phone=${encodeURIComponent(cleanPhone)}`
+              ? `${window.location.origin}/auth/callback?role=${selectedRole}${cleanPhone ? `&phone=${encodeURIComponent(cleanPhone)}` : ''}`
               : undefined,
           queryParams: {
             access_type: "offline",
@@ -623,18 +613,15 @@ export function SignupForm() {
           </div>
         </div>
 
-        {/* Mandatory Phone / WhatsApp */}
+        {/* Phone / WhatsApp (Optional) */}
         <div className="space-y-0.5">
           <div className="flex items-center justify-between">
-            <Label htmlFor="phone" className="text-xs font-semibold">
-              Phone / WhatsApp Number <span className="text-destructive font-bold">*</span>
+            <Label htmlFor="phone" className="text-xs font-medium">
+              Phone / WhatsApp Number <span className="text-[10px] text-muted-foreground font-normal">(Optional)</span>
             </Label>
-            <span className="text-[10px] font-medium text-destructive bg-destructive/10 px-1.5 py-0.5 rounded">
-              Mandatory
-            </span>
           </div>
           <div className="relative">
-            <PhoneIcon className="absolute left-2.5 top-2.5 size-3.5 text-primary pointer-events-none" />
+            <PhoneIcon className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
             <Input
               ref={phoneInputRef}
               id="phone"
@@ -642,13 +629,9 @@ export function SignupForm() {
               placeholder="+1 314 357 5705 or +91 98765 43210"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              required
-              className="h-8.5 pl-8 text-xs font-medium border-primary/40 focus-visible:ring-primary"
+              className="h-8.5 pl-8 text-xs font-medium"
             />
           </div>
-          <p className="text-[10px] text-muted-foreground leading-tight">
-            Required for all account types (includes Google Sign-In).
-          </p>
         </div>
 
         {/* Email Address */}
