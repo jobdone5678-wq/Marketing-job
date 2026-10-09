@@ -15,6 +15,13 @@ try {
 }
 
 import { randomUUID } from 'node:crypto';
+import * as dotenv from 'dotenv';
+import * as path from 'node:path';
+
+try {
+  dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
+} catch {}
+
 import * as nextEnvModule from '@next/env';
 
 const loadEnv = (nextEnvModule as any).loadEnvConfig || (nextEnvModule as any).default?.loadEnvConfig;

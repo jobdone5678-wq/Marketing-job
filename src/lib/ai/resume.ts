@@ -22,8 +22,14 @@ export async function extractResume(task:BackgroundTask) {
   const model=getAIModel();
   const {data:cached,error:cacheError}=await db.from('resume_extractions').select('data,document:candidate_documents!inner(owner_id,content_hash,status)')
     .eq('document.owner_id',document.owner_id).eq('document.content_hash',document.content_hash).eq('model',model).eq('prompt_version','resume-v1').limit(1).maybeSingle();checkDb(cacheError);
-  const extracted=cached?.data || await structuredAI(task,resumeSchema,'resume_profile','Extract only explicit candidate facts. Use null for unknown values, including visa, authorization, salary and availability. Each non-null field and history entry needs an exact source snippet. Dates retain their original precision. Never infer legal eligibility or total experience. Include warnings for unreadable/image text.',
-    'Extract a reviewable candidate profile from this resume.',{raw,mime:parsed.mime,filename:document.filename});
+  const extracted=cached?.data || await structuredAI(
+    task,
+    resumeSchema,
+    'resume_profile',
+    'Extract only explicit candidate facts. Use null for unknown values, including visa, authorization, salary and availability. Each non-null field and history entry needs an exact source snippet. Dates retain their original precision. Never infer legal eligibility or total experience. Include warnings for unreadable/image text.',
+    parsed.text,
+    {raw,mime:parsed.mime,filename:document.filename}
+  );
   const draft=validateResumeExtraction(extracted,parsed.text);
   if(!parsed.text.trim())draft.warnings.push('No machine-readable text was available; extracted facts need manual entry.');
   const {error:saveError}=await db.rpc('save_resume_extraction',{p_task:task.id,p_lease:task.lease_token,p_document:documentId,p_data:draft,p_model:model,p_prompt:'resume-v1'});checkDb(saveError);
