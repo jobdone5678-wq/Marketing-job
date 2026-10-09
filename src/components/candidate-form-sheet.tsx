@@ -15,6 +15,7 @@ export function CandidateFormSheet({
   open,
   onOpenChange,
   candidateToEdit,
+  onSuccess,
 }: CandidateFormSheetProps) {
   if (!open) return null;
 
@@ -22,6 +23,7 @@ export function CandidateFormSheet({
     <div className="fixed inset-0 z-50 bg-background overflow-y-auto w-screen h-screen">
       <CandidateForm
         initialCandidate={candidateToEdit}
+        onSuccess={candidate=>{onSuccess?.(candidate);onOpenChange(false);}}
         backUrl="/dashboard/candidates"
       />
     </div>

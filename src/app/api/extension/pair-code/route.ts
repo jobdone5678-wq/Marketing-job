@@ -1,0 +1,2 @@
+import {protectedRoute} from '@/lib/http/protected-route';import {randomBytes} from 'node:crypto';import {tokenHash} from '@/lib/capture/server';import {database,checkDb} from '@/lib/db/admin';
+export async function POST(request:Request){return protectedRoute(request,'staff',async p=>{const code=randomBytes(24).toString('base64url');const {error}=await database().from('extension_pair_codes').insert({owner_id:p.id,code_hash:tokenHash(code)});checkDb(error);return {code,expiresInSeconds:300};});}

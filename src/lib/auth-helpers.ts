@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/client";
-import type { UserProfile, AppRole } from "@/types/database";
+import type { UserProfile } from "@/types/database";
 
 export async function getCurrentUserProfile(): Promise<UserProfile | null> {
   const supabase = createClient();
@@ -13,27 +13,17 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
     .eq("id", authData.user.id)
     .single();
 
-  if (error || !profile) {
-    return {
-      id: authData.user.id,
-      email: authData.user.email || "",
-      full_name: authData.user.user_metadata?.full_name || null,
-      role: (authData.user.user_metadata?.role as AppRole) || "client",
-      status: "active",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-  }
+  if (error || !profile) return null;
 
   return profile as UserProfile;
 }
 
 export function isSuperAdmin(profile: UserProfile | null): boolean {
-  return profile?.role === "super_admin";
+  return profile?.status === "active" && profile.role === "super_admin";
 }
 
 export function isRecruiter(profile: UserProfile | null): boolean {
-  return profile?.role === "recruiter" || profile?.role === "super_admin";
+  return profile?.status === "active" && ["recruiter","super_admin"].includes(profile.role);
 }
 
 export function isClient(profile: UserProfile | null): boolean {

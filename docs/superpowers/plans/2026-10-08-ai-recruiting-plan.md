@@ -8,7 +8,11 @@
 
 **Tech Stack:** Installed Next.js 16.3.8 / React 19.2.8 / TypeScript / Zod 4, Supabase Auth/Postgres/Storage; add OpenAI SDK, a validated PDF metadata reader for page/encryption checks, HTML sanitization, Vitest, Playwright and tsx for the Node worker. Firecrawl REST v2 is a later adapter, excluded from initial dependencies and setup.
 
-**Spec:** `docs/superpowers/specs/2026-10-08-ai-recruiting-design.md` (proposed, for review alongside this plan).
+**Spec:** `docs/superpowers/specs/2026-10-08-ai-recruiting-design.md` (authorized for implementation).
+
+## Execution status
+
+The checklists below retain the original proposed steps and commands as historical planning input. Actual implementation, equivalent contracts, verification and rulings are recorded in docs/operations/recruiting-progress.md. Resume intake, confirmed candidate profiles/lists/counts, durable tasks, configured public jobs, AI matching, factual draft packets, CRM persistence, real metrics and browser/email capture are implemented locally. Firecrawl is deferred by the user. Live migrations and provider checks have not been run. The runbook supplies current migration filenames and commands.
 
 ## Global Constraints
 
@@ -187,6 +191,8 @@ Do not execute this task for the initial release. It remains here as future scop
 ## Execution prerequisites and handoff
 
 Revision 2026-10-08: the initial release uses public native ATS feeds with contract jobs as the default; Deferred Task 8 is excluded. The user confirmed recruiters use both websites and email. The design document includes a proposed automatic application-capture follow-up using portal-linked application intents, a supported-site extension and an authorized mailbox adapter, feeding one deduplicated application-event service. Write that integration's own implementation plan before building it. An application-link click is never a completed application.
+
+The capture follow-up must implement the user's states started/in_progress/submit_attempted/submitted/confirmed/failed as defined in the design, separate from recruiting pipeline statuses. Its tests must cover missed intermediate events, receipt-first confirmation, multiple tabs/candidates, validation failure followed by retry, late errors not downgrading confirmed results, duplicate extension/email receipts, ambiguous candidate attribution and unavailable portal permissions. Universal automatic portal support is not an acceptance criterion; a supported-site matrix and one-click/forwarded-receipt fallback are required.
 
 This plan and its companion design are proposed artifacts created at the user's request. No product code, dependencies, remote database, credentials or hosted services were changed.
 

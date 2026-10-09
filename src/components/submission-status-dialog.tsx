@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 
 const STATUS_OPTIONS: { label: string; value: SubmissionStatus }[] = [
+  {label:"Draft (not submitted)",value:"Draft"},
   { label: "1. Applied", value: "Applied" },
   { label: "2. Vendor Screening", value: "Vendor_Screening" },
   { label: "3. Submitted to Client", value: "Submitted_to_Client" },
@@ -65,14 +66,15 @@ export function SubmissionStatusDialog({
   onOpenChange,
   onSuccess,
 }: SubmissionStatusDialogProps) {
-  const [status, setStatus] = React.useState<SubmissionStatus>("Applied");
+  const [status, setStatus] = React.useState<SubmissionStatus>("Draft");
   const [notes, setNotes] = React.useState("");
   const [interviewTime, setInterviewTime] = React.useState("");
-  const [interviewMode, setInterviewMode] = React.useState("Zoom");
+  const [interviewMode, setInterviewMode] = React.useState("");
   const [interviewMeetingLink, setInterviewMeetingLink] = React.useState("");
   const [loading, setLoading] = React.useState(false);
 
   React.useEffect(() => {
+    const timer = setTimeout(() => {
     if (submission) {
       setStatus(submission.status);
       setNotes(submission.notes || "");
@@ -81,9 +83,11 @@ export function SubmissionStatusDialog({
           ? new Date(submission.interview_time).toISOString().slice(0, 16)
           : ""
       );
-      setInterviewMode(submission.interview_mode || "Zoom");
+      setInterviewMode(submission.interview_mode || "");
       setInterviewMeetingLink(submission.interview_meeting_link || "");
     }
+    },0);
+    return () => clearTimeout(timer);
   }, [submission]);
 
   if (!submission) return null;

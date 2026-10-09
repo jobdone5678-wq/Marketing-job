@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Marketing Portal Copilot</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card: #131b2e;
+      --border: #22304d;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --primary-glow: rgba(59, 130, 246, 0.25);
+      --success: #10b981;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.4;
+      background: var(--bg);
+      color: var(--text);
+      width: 360px;
+      padding: 16px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo-icon {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: white;
+      font-size: 14px;
+    }
+    .title-group h1 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .title-group p {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 3px 8px;
+      border-radius: 12px;
+      margin-bottom: 8px;
+    }
+    .status-connected {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .status-disconnected {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .field {
+      margin-bottom: 10px;
+    }
+    .field label {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    input {
+      width: 100%;
+      background: #0b1120;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      transition: border 0.15s;
+    }
+    input:focus {
+      border-color: var(--primary);
+    }
+    .btn {
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      box-shadow: 0 2px 8px var(--primary-glow);
+    }
+    .btn-primary:hover {
+      background: var(--primary-hover);
+    }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      margin-top: 8px;
+    }
+    .btn-outline:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: #3b82f6;
+    }
+    .btn-danger {
+      background: transparent;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #f87171;
+      margin-top: 8px;
+    }
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.1);
+    }
+    .user-info {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .user-info strong {
+      color: var(--text);
+    }
+    .stats-row {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+    }
+    .feature-list {
+      list-style: none;
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 10px;
+    }
+    .feature-list li {
+      margin-bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .feature-list li span {
+      color: var(--success);
+    }
+    .details-toggle {
+      font-size: 11px;
+      color: var(--muted);
+      cursor: pointer;
+      margin-top: 8px;
+      text-decoration: underline;
+    }
+    #manual-section {
+      display: none;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+    .toast-msg {
+      font-size: 11px;
+      margin-top: 8px;
+      min-height: 16px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo-icon">MP</div>
+    <div class="title-group">
+      <h1>Recruiting Copilot</h1>
+      <p>Dice, LinkedIn & ATS Application Capture</p>
+    </div>
+  </div>
+
+  <div id="connected-card" class="card" style="display: none;">
+    <div class="status-badge status-connected">
+      <div class="dot"></div> Connected to Portal
+    </div>
+    <div class="user-info">
+      <div>Recruiter: <strong id="user-name">Loading...</strong></div>
+      <div>Email: <span id="user-email">...</span></div>
+      <div>Portal: <span id="portal-url">...</span></div>
+    </div>
+    <div class="stats-row">
+      <span>Bench candidates: <strong id="candidate-count">0</strong></span>
+      <span>Autofill: <strong>Ready</strong></span>
+    </div>
+    <button id="btn-sync-candidates" class="btn btn-outline" style="margin-top: 10px;">
+      🔄 Refresh Candidates
+    </button>
+    <button id="btn-open-portal" class="btn btn-outline">
+      ↗ Open Portal Submissions
+    </button>
+    <button id="btn-disconnect" class="btn btn-danger">
+      Disconnect Browser
+    </button>
+  </div>
+
+  <div id="disconnected-card" class="card">
+    <div class="status-badge status-disconnected">
+      <div class="dot"></div> Not Connected
+    </div>
+    <p style="font-size: 12px; color: var(--muted); margin-bottom: 12px;">
+      Connect to your marketing portal to enable 1-click candidate autofill and automatic application tracking.
+    </p>
+
+    <div class="field">
+      <label for="origin-input">Portal Origin URL</label>
+      <input id="origin-input" value="http://localhost:3000" placeholder="http://localhost:3000">
+    </div>
+
+    <button id="btn-auto-connect" class="btn btn-primary">
+      ⚡ 1-Click Auto-Connect
+    </button>
+
+    <p class="details-toggle" id="toggle-manual">Or enter pairing code manually</p>
+
+    <div id="manual-section">
+      <div class="field">
+        <label for="code-input">5-Minute Pairing Code</label>
+        <input id="code-input" placeholder="Paste code from Application Capture">
+      </div>
+      <button id="btn-manual-pair" class="btn btn-outline">
+        Pair with Code
+      </button>
+    </div>
+  </div>
+
+  <div class="card" style="background: rgba(19, 27, 46, 0.5);">
+    <strong style="font-size: 12px; color: var(--text);">Supported Features:</strong>
+    <ul class="feature-list">
+      <li><span>✓</span> <strong>Dice.com</strong> instant autofill & submission capture</li>
+      <li><span>✓</span> <strong>LinkedIn & Indeed</strong> job application tracking</li>
+      <li><span>✓</span> <strong>Greenhouse, Ashby, Lever, Workday</strong></li>
+      <li><span>✓</span> Automatic sync with Email Confirmations</li>
+    </ul>
+  </div>
+
+  <div id="toast" class="toast-msg" role="status"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

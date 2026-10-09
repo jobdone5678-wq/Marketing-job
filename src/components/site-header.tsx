@@ -80,8 +80,8 @@ export function SiteHeader({
 
         {/* Real-time sync badge */}
         <div className="flex items-center gap-2 text-xs">
-          <span className="flex size-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-muted-foreground hidden sm:inline">Greenhouse & Ashby live sync active</span>
+          <span className="flex size-2 rounded-full bg-muted-foreground" />
+          <span className="text-muted-foreground hidden sm:inline">Public jobs and application capture</span>
         </div>
       </div>
     </header>

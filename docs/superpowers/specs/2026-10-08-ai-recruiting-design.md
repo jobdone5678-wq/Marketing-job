@@ -1,6 +1,6 @@
 # Real data and AI recruiting design
 
-Status: proposed for review; implementation has not started.
+Status: implemented locally for the authorized release; Firecrawl is deferred. Activation and live-provider acceptance checks require server configuration. See docs/operations/ai-recruiting-runbook.md and docs/operations/recruiting-progress.md for actual verification and deviations.
 
 Revision 2026-10-08: prioritize contract jobs from public APIs; defer Firecrawl to a later release. Add a proposed follow-up for capturing recruiters' external application activity, without claiming that opening an application link proves submission.
 
@@ -8,7 +8,7 @@ Revision 2026-10-08: prioritize contract jobs from public APIs; defer Firecrawl 
 
 Replace mock and demo behavior in the existing marketing portal with persistent records, real public job feeds, resume-based candidate intake, and evidence-based AI matching. Keep the current Next.js interface and Supabase foundation. Automatically process uploaded resumes and newly fetched jobs; let users review extracted profile details before saving and review generated submission packets before using them.
 
-## Current evidence
+## Original workspace evidence (before implementation)
 
 - Next.js 16.3.8, React 19.2.8, Supabase Auth/Postgres, Zod 4; no AI SDK, resume processing pipeline, durable worker, or project test runner is configured.
 - `src/lib/vendors.ts` is entirely sample data and process memory.
@@ -81,6 +81,25 @@ For browser-based submissions, an optional Chrome/Edge-compatible extension runs
 For email-based submissions, a recruiter-authorized mailbox connection can read relevant sent messages and confirmation replies, or a dedicated inbound address can accept deliberately forwarded receipts. Mailbox updates alone are not application evidence. Parse candidate/job/company/vendor/date and receipt identifiers; deterministic correlation and evidence validation decide whether to record an application or ask for review. An outbound vendor pitch is outreach, not proof of submission to an end client. If confirmations arrive only in a candidate mailbox, require that mailbox's authorization or forwarded receipts.
 
 Persist application_events with source event IDs, provider receipt IDs, intent linkage and evidence references. Deduplicate replayed extension events/email messages and correlate evidence from different channels to one application intent. Separate event idempotency from business duplicate detection: an actual repeated application may need a distinct event. Ambiguous candidate/company/job association remains in a small review queue. Status automation for rejection/interviews can follow only after this capture layer proves reliable.
+
+### Application capture states proposed by the user
+
+Keep capture progress separate from the existing recruiting pipeline statuses (Applied, Vendor_Screening, Interview_Scheduled, etc.). Use an application intent with capture_status, review_required, evidence_source and evidence_reference. Unknown or conflicting correlation sets review_required=true rather than inventing a candidate or forcing a terminal state.
+
+| Observed event | capture_status | Required interpretation |
+| --- | --- | --- |
+| Recruiter starts Apply with candidate/job selected | started | Create an intent; this does not count as an application. |
+| Supported external application form is observed loaded | in_progress | A browser adapter reported the form, not just a link opening. |
+| Known final submit control is activated | submit_attempted | Record the attempt; click alone does not prove completion. |
+| Supported adapter recognizes a submission-specific success message/page | submitted | Store the specific observed confirmation and its candidate/job context. Generic success banners or unrelated pages require review. |
+| A genuine matching application receipt is received | confirmed | The authorized email or supported ATS integration receipt matches candidate/job/company or an existing receipt/application identifier. Marketing replies or mailbox notifications alone do not confirm anything. |
+| Supported adapter observes an explicit submission failure | failed | Mark that attempt failed and retain the reason. Validation errors are recoverable; users can fix the form and continue. |
+
+These states are not a mandatory linear sequence: a matching email receipt can establish confirmed even when earlier browser events were missed. Missing emails never imply failure. Closing a tab leaves the last observed state unchanged. Late clicks/errors from older attempts cannot downgrade a submitted/confirmed application. A verified newer receipt can supersede a previously failed or unknown attempt after correlation. Keep an append-only event history, event time and ingestion time and allow a new attempt after a recoverable failure.
+
+If a recruiter applies directly on another supported portal, the extension first requires candidate selection and derives/validates job context; portal-launched application intent is preferred but not mandatory. Track context per tab and intent so multiple candidates/jobs cannot leak into one another. Unknown sites, disabled extension permissions, unobserved devices or confirmations sent to an unconnected candidate mailbox require forwarded evidence or explicit recruiter recording. This provides broad coverage with fallbacks, not guaranteed automatic observation of every portal.
+
+Persist capture events through authenticated endpoints with short-lived/revocable extension credentials. Validate active recruiter privileges and candidate/job scope server-side; distinguish observation from provider-verified receipt and manual attestation in the UI. Initial support targets Greenhouse and Ashby application forms, with custom company form variants tested separately. Public job GET APIs provide listings only and do not notify this platform of applications made elsewhere.
 
 The user confirmed that recruiters apply through both websites and email. Plan both capture channels against one event/correlation service: portal-linked intent and compact tracker first, then a supported-site browser extension and an authorized mailbox adapter. Mailbox provider selection (Gmail/Outlook) happens when that follow-up is designed; do not build both provider adapters without knowing what the team uses. No Firecrawl dependency exists for either approach. Do not send mail or submit applications as part of this capture feature.
 

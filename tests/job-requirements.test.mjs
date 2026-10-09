@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {validateRequirements} from '../src/lib/ai/requirements-validation.ts';
+test('requirements retain exact job evidence and reject unsupported claims',()=>{const result=validateRequirements({requirements:[{requirement:'Python',jobEvidence:'Python required'},{requirement:'AWS',jobEvidence:'AWS required'}],constraints:[]},'Python required');assert.equal(result.requirements.length,1);assert.equal(result.requirements[0].requirement,'Python');});
+test("SQL substring is not a NoSQL requirement",()=>{assert.equal(validateRequirements({requirements:[{requirement:"SQL",jobEvidence:"NoSQL required"}],constraints:[]},"NoSQL required").requirements.length,0);});

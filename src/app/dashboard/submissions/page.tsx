@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import {
   getSubmissions,
   deleteSubmission,
-  SAMPLE_SUBMISSIONS,
 } from "@/lib/submissions";
 import { getCandidates } from "@/lib/candidates";
 import type { Candidate, JobSubmission, SubmissionStatus } from "@/types/database";
@@ -99,7 +98,7 @@ export default function SubmissionsPage() {
   }, []);
 
   React.useEffect(() => {
-    loadData();
+    void Promise.resolve().then(loadData);
   }, [loadData]);
 
   // Status Badge Helper
@@ -274,12 +273,12 @@ export default function SubmissionsPage() {
 
     const rows = filteredSubmissions.map((s) => [
       `"${s.submission_date}"`,
-      `"${s.candidate?.full_name || "Tarun Pothukuri"}"`,
-      `"${s.candidate?.visa_status || "STEM [EAD]"}"`,
+      `"${s.candidate?.full_name || "Not recorded"}"`,
+      `"${s.candidate?.visa_status || "Not recorded"}"`,
       `"${s.job_title}"`,
       `"${s.company_name}"`,
-      `"${s.portal_source || "Greenhouse"}"`,
-      `"${s.job_location || "Remote"}"`,
+      `"${s.portal_source || "Not recorded"}"`,
+      `"${s.job_location || "Not recorded"}"`,
       `"${s.vendor_company || ""}"`,
       `"${s.vendor_contact_name || ""}"`,
       `"${s.vendor_contact_email || ""}"`,
@@ -333,10 +332,10 @@ export default function SubmissionsPage() {
 
     report += `📋 ACTIVE PIPELINE DETAILS:\n`;
     filteredSubmissions.forEach((s, idx) => {
-      report += `${idx + 1}. [${s.status.replace(/_/g, " ")}] ${s.candidate?.full_name || "Tarun Pothukuri"} → ${s.company_name} (${s.job_title})\n`;
-      report += `   Vendor: ${s.vendor_company || "Direct"} | Rate: ${s.submitted_rate || "$65/hr C2C"}\n`;
+      report += `${idx + 1}. [${s.status.replace(/_/g, " ")}] ${s.candidate?.full_name || "Not recorded"} → ${s.company_name} (${s.job_title})\n`;
+      report += `   Vendor: ${s.vendor_company || "Direct"} | Rate: ${s.submitted_rate || "Not recorded"}\n`;
       if (s.interview_time) {
-        report += `   Interview: ${new Date(s.interview_time).toLocaleString()} (${s.interview_mode || "Zoom"})\n`;
+        report += `   Interview: ${new Date(s.interview_time).toLocaleString()} (${s.interview_mode || "Not recorded"})\n`;
       }
       if (s.notes) {
         report += `   Notes: ${s.notes}\n`;
@@ -390,6 +389,9 @@ export default function SubmissionsPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" render={<Link href="/dashboard/email-confirmations" />} className="text-xs gap-1.5">
+              <MailIcon className="size-3.5" /> Email confirmations
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -689,9 +691,9 @@ export default function SubmissionsPage() {
               ) : (
                 filteredSubmissions.map((sub) => {
                   const candidateName =
-                    sub.candidate?.full_name || "Tarun Pothukuri";
+                    sub.candidate?.full_name || "Not recorded";
                   const visaStatus =
-                    sub.candidate?.visa_status || "STEM [EAD]";
+                    sub.candidate?.visa_status || "Not recorded";
 
                   return (
                     <TableRow key={sub.id} className="hover:bg-muted/30">
@@ -708,7 +710,7 @@ export default function SubmissionsPage() {
                             {visaStatus}
                           </Badge>
                           <span className="text-[10px] text-muted-foreground truncate max-w-[90px]">
-                            {sub.candidate?.target_job_titles || "Data Engineer"}
+                            {sub.candidate?.target_job_titles || "Not recorded"}
                           </span>
                         </div>
                       </TableCell>
@@ -731,14 +733,15 @@ export default function SubmissionsPage() {
                         <div className="text-[11px] text-muted-foreground font-medium mt-0.5 line-clamp-1">
                           {sub.job_title}
                         </div>
+                        {sub.capture_status === 'confirmed' && <Badge variant="outline" className="text-[9px] mt-1">Email confirmed</Badge>}
                         <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
                           <Badge
                             variant="secondary"
                             className="text-[9px] px-1.5 py-0 h-4"
                           >
-                            {sub.portal_source || "Greenhouse"}
+                            {sub.portal_source || "Not recorded"}
                           </Badge>
-                          <span>{sub.job_location || "Remote"}</span>
+                          <span>{sub.job_location || "Not recorded"}</span>
                           {sub.job_url && (
                             <a
                               href={sub.job_url}
@@ -755,7 +758,7 @@ export default function SubmissionsPage() {
                       {/* Vendor & Recruiter */}
                       <TableCell className="align-top py-3 text-xs">
                         <div className="font-medium text-foreground">
-                          {sub.vendor_company || "Direct Portal"}
+                          {sub.vendor_company || "Not recorded"}
                         </div>
                         {sub.vendor_contact_name && (
                           <div className="text-[11px] text-muted-foreground mt-0.5">
@@ -781,7 +784,7 @@ export default function SubmissionsPage() {
                       {/* Rate */}
                       <TableCell className="align-top py-3 text-xs">
                         <div className="font-semibold text-foreground">
-                          {sub.submitted_rate || "$65/hr"}
+                          {sub.submitted_rate || "Not recorded"}
                         </div>
                         {sub.client_pay_rate && (
                           <div className="text-[10px] text-muted-foreground">
@@ -827,7 +830,7 @@ export default function SubmissionsPage() {
                               })}
                             </div>
                             <div className="flex items-center justify-between gap-1 text-purple-600/90 dark:text-purple-300/80 text-[10px] mt-0.5">
-                              <span>Mode: {sub.interview_mode || "Zoom"}</span>
+                              <span>Mode: {sub.interview_mode || "Not recorded"}</span>
                               {sub.interview_meeting_link && (
                                 <a
                                   href={sub.interview_meeting_link}
@@ -844,7 +847,7 @@ export default function SubmissionsPage() {
 
                         {sub.notes ? (
                           <p className="text-[11px] text-muted-foreground line-clamp-2 italic">
-                            "{sub.notes}"
+                            &quot;{sub.notes}&quot;
                           </p>
                         ) : (
                           <span className="text-[10px] text-muted-foreground/60">

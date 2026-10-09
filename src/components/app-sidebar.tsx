@@ -25,13 +25,21 @@ import {
   SendIcon,
   TrendingUpIcon,
   UserCheckIcon,
+  MailIcon,
 } from "lucide-react"
 import { createClient } from "@/lib/client"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+
 
 // Recruiter & Super Admin Navigation Items
 const recruiterNavItems: NavItem[] = [
+  {id:"application-capture",title:"Application Capture",url:"/dashboard/application-capture",icon:<SendIcon className="size-4"/>},
+  {
+    id: "email-confirmations",
+    title: "Email Confirmations",
+    url: "/dashboard/email-confirmations",
+    icon: <MailIcon className="size-4" />,
+  },
   {
     id: "dashboard",
     title: "Dashboard",
@@ -153,88 +161,20 @@ export function AppSidebar({
   onSelectSection?: (id: string) => void
   onRefreshJobs?: () => void
 } & React.ComponentProps<typeof Sidebar>) {
-  const router = useRouter()
-  const [currentUser, setCurrentUser] = React.useState<{
-    name: string
-    email: string
-    avatar: string
-    role?: string
-  }>({
-    name: "Marketing Lead",
-    email: "lead@marketingportal.com",
-    avatar: "/avatars/shadcn.jpg",
-    role: "recruiter",
-  })
-
+  const [currentUser, setCurrentUser] = React.useState({name: "Loading account", email: "", avatar: "", role: ""})
   React.useEffect(() => {
-    const supabase = createClient()
-
-    const fetchUserRole = async () => {
-      const { data: authData } = await supabase.auth.getUser()
-      if (authData?.user) {
-        const u = authData.user
-        let role = (u.user_metadata?.role as string) || "recruiter"
-        try {
-          const { data: prof } = await supabase
-            .from("profiles")
-            .select("role, full_name")
-            .eq("id", u.id)
-            .single()
-          if (prof?.role) {
-            role = prof.role
-          }
-        } catch {
-          // Keep metadata role
-        }
-
-        setCurrentUser({
-          name: u.user_metadata?.full_name || u.email?.split("@")[0] || "Marketing User",
-          email: u.email || "user@portal.com",
-          avatar: u.user_metadata?.avatar_url || "/avatars/shadcn.jpg",
-          role,
-        })
-      }
+    const client = createClient()
+    let cancelled = false
+    async function load() {
+      const {data: {user}} = await client.auth.getUser()
+      const {data: profile} = user ? await client.from("profiles").select("role,status,full_name").eq("id",user.id).single() : {data:null}
+      if (!cancelled) setCurrentUser({name: profile?.full_name || user?.email || "Account",email: user?.email || "",avatar:"",role:profile?.status === "active" ? profile.role : ""})
     }
-
-    fetchUserRole()
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        const u = session.user
-        let role = (u.user_metadata?.role as string) || "recruiter"
-        try {
-          const { data: prof } = await supabase
-            .from("profiles")
-            .select("role, full_name")
-            .eq("id", u.id)
-            .single()
-          if (prof?.role) {
-            role = prof.role
-          }
-        } catch {
-          // Keep metadata role
-        }
-
-        setCurrentUser({
-          name: u.user_metadata?.full_name || u.email?.split("@")[0] || "Marketing User",
-          email: u.email || "user@portal.com",
-          avatar: u.user_metadata?.avatar_url || "/avatars/shadcn.jpg",
-          role,
-        })
-      }
-    })
-
-    return () => {
-      subscription.unsubscribe()
-    }
+    void load()
+    const {data:{subscription}} = client.auth.onAuthStateChange(() => {setTimeout(() => void load(),0)})
+    return () => {cancelled=true;subscription.unsubscribe()}
   }, [])
-
-  // Choose the tailored navigation items based on user's active role
-  const mainItems =
-    currentUser.role === "client" ? candidateNavItems : recruiterNavItems
-
+  const mainItems = ["recruiter","super_admin"].includes(currentUser.role) ? recruiterNavItems : currentUser.role === "client" ? candidateNavItems : []
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>

@@ -106,6 +106,7 @@ export function SignupForm() {
   }, [countdown]);
 
   useEffect(() => {
+    const timer=setTimeout(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const urlErrorDesc = params.get("error_description");
@@ -125,6 +126,8 @@ export function SignupForm() {
         window.history.replaceState({}, "", "/");
       }
     }
+    },0);
+    return () => clearTimeout(timer);
   }, []);
 
   // STEP 1: Request Email OTP with Mandatory Phone
@@ -237,7 +240,7 @@ export function SignupForm() {
       if (error) {
         setErrorMsg(error.message || "Invalid or expired verification code. Please check the code or request a new one.");
       } else if (data.user) {
-        // Upsert user profile with verified phone and role
+        // Save verified contact details. The database assigns role and approval status.
         const cleanPhone = phone.trim();
         const cleanName = name.trim() || data.user.email?.split("@")[0] || "User";
 
@@ -245,9 +248,7 @@ export function SignupForm() {
           id: data.user.id,
           email: data.user.email || email.trim(),
           full_name: cleanName,
-          role: selectedRole,
           phone: cleanPhone || null,
-          status: "active",
           updated_at: new Date().toISOString(),
         });
 

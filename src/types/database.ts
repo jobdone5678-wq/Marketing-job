@@ -2,6 +2,7 @@ export type AppRole = 'super_admin' | 'recruiter' | 'client';
 export type AccountStatus = 'active' | 'pending' | 'suspended';
 
 export type SubmissionStatus =
+  | 'Draft'
   | 'Applied'
   | 'Vendor_Screening'
   | 'Submitted_to_Client'
@@ -39,10 +40,10 @@ export interface Candidate {
   full_address?: string | null;
 
   // Work Authorization
-  visa_status: string;
-  authorized_in_usa: boolean;
-  need_sponsorship_now: boolean;
-  need_sponsorship_future: boolean;
+  visa_status: string | null;
+  authorized_in_usa: boolean | null;
+  need_sponsorship_now: boolean | null;
+  need_sponsorship_future: boolean | null;
 
   // Employment Information
   current_employer?: string | null;
@@ -55,7 +56,7 @@ export interface Candidate {
   notice_period?: string | null;
   available_to_join?: string | null;
   interview_availability?: string | null;
-  open_to_relocation: boolean;
+  open_to_relocation: boolean | null;
   preferred_work_type?: string | null;
   preferred_locations?: string | null;
 
@@ -77,6 +78,12 @@ export interface Candidate {
   // Bench Status
   is_active_bench: boolean;
   notes?: string | null;
+  version?: number;
+  provenance_status?: 'legacy_unconfirmed'|'confirmed';
+  confirmed_facts?: Record<string,unknown>;
+  employment_history?: Record<string,unknown>[];
+  education_history?: Record<string,unknown>[];
+  evidence?: {field:string;snippet:string;page:number|null;sourceId?:string}[];
 
   created_at: string;
   updated_at: string;
@@ -111,6 +118,8 @@ export interface JobSubmission {
   notes?: string | null;
 
   duplicate_flag: boolean;
+  capture_status?: 'started' | 'in_progress' | 'submit_attempted' | 'submitted' | 'confirmed' | 'failed' | null;
+  email_confirmed_at?: string | null;
 
   created_at: string;
   updated_at: string;

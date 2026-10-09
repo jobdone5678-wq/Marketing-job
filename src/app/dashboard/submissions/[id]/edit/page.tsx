@@ -18,7 +18,6 @@ export default function EditSubmissionPage() {
 
   React.useEffect(() => {
     if (!id) return;
-    setLoading(true);
     getSubmissionById(id)
       .then((data) => {
         if (data) {

@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {validateMatch} from '../src/lib/ai/match-validation.ts';
+test('SQL is not proved by NoSQL or by explicitly negated experience',()=>{for(const skills of ['NoSQL','No experience with SQL']){const r=validateMatch({requirements:[{requirement:'SQL',jobEvidence:'SQL required',status:'met',candidateField:'primary_skills',candidateEvidence:skills}],constraints:[]},{primary_skills:skills},'SQL required');assert.notEqual(r.requirements[0].status,'met');}});

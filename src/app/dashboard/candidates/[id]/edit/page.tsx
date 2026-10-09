@@ -18,7 +18,6 @@ export default function EditCandidatePage() {
 
   React.useEffect(() => {
     if (!id) return;
-    setLoading(true);
     getCandidateById(id)
       .then((data) => {
         if (data) {

@@ -1,0 +1,3 @@
+import {extensionRoute,extensionActor,cors} from '@/lib/capture/server';import {database,checkDb,CaptureError} from '@/lib/db/admin';import {z} from 'zod';
+export async function OPTIONS(request:Request){return cors(request,new Response(null,{status:204}));}
+export async function GET(request:Request,context:{params:Promise<{id:string}>}){return extensionRoute(request,async()=>{const actor=await extensionActor(request),{id}=await context.params;z.uuid().parse(id);const {data,error}=await database().from('application_intents').select('id,attempt,job:jobs(application_url,title),candidate:candidates(full_name)').eq('id',id).eq('owner_id',actor).maybeSingle();checkDb(error);if(!data)throw new CaptureError('Intent not found.',404);return {intent:data};});}

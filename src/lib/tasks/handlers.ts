@@ -1,0 +1,3 @@
+import 'server-only';import {extractResume} from '@/lib/ai/resume';import {syncSource} from '@/lib/jobs/sync';import {analyzeMatch} from '@/lib/ai/match';import {generatePacket} from '@/lib/ai/packet';import type {BackgroundTask} from './types';
+export const handlers={resume_extract:extractResume,source_sync:syncSource,candidate_match:analyzeMatch,packet_generate:generatePacket};
+export async function handleTask(task:BackgroundTask){return handlers[task.kind](task);}

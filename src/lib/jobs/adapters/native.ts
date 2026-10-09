@@ -1,0 +1,8 @@
+import 'server-only';import {normalizeSnapshot} from '../normalize';import {CaptureError} from '@/lib/db/admin';
+export function validateBoard(value:string){if(!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$/.test(value))throw new CaptureError('Use the exact public board slug, without a URL.');return value;}
+export async function fetchSnapshot(source:{provider:string;board_slug:string;company:string}){
+ validateBoard(source.board_slug);const url=source.provider==='greenhouse'?`https://boards-api.greenhouse.io/v1/boards/${source.board_slug}/jobs?content=true`:source.provider==='ashby'?`https://api.ashbyhq.com/posting-api/job-board/${source.board_slug}?includeCompensation=true`:null;if(!url)throw new CaptureError('Unsupported public job provider.');
+ const response=await fetch(url,{redirect:'error',signal:AbortSignal.timeout(30000),cache:'no-store'});if(!response.ok)throw new CaptureError('Public job provider returned '+response.status+'. Previous jobs are retained.',response.status===429?502:422);
+ const reader=response.body?.getReader();if(!reader)throw new CaptureError('Empty provider response.');const chunks:Uint8Array[]=[];let size=0;try{for(;;){const {value,done}=await reader.read();if(done)break;size+=value.length;if(size>20*1024*1024)throw new CaptureError('Provider snapshot exceeds 20 MiB. Previous jobs are retained.');chunks.push(value);}}finally{await reader.cancel();}
+ return normalizeSnapshot(source,JSON.parse(Buffer.concat(chunks).toString('utf8')));
+}

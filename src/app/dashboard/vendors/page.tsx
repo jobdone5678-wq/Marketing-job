@@ -70,7 +70,7 @@ export default function VendorsPage() {
   }, []);
 
   React.useEffect(() => {
-    loadData();
+    void Promise.resolve().then(loadData);
   }, [loadData]);
 
   // Statistics
@@ -531,7 +531,7 @@ export default function VendorsPage() {
 
                   {vendor.notes && (
                     <p className="text-[11px] text-muted-foreground italic line-clamp-2">
-                      "{vendor.notes}"
+                      &quot;{vendor.notes}&quot;
                     </p>
                   )}
                 </CardContent>

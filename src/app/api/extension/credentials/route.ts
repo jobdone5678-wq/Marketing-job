@@ -1,0 +1,3 @@
+import {protectedRoute} from '@/lib/http/protected-route';import {database,checkDb} from '@/lib/db/admin';import {z} from 'zod';
+export async function GET(request:Request){return protectedRoute(request,'staff',async p=>{const {data,error}=await database().from('extension_credentials').select('id,created_at,expires_at,revoked_at').eq('owner_id',p.id).order('created_at',{ascending:false});checkDb(error);return {credentials:data};});}
+export async function DELETE(request:Request){return protectedRoute(request,'staff',async p=>{const {id}=z.object({id:z.uuid()}).parse(await request.json());const {error}=await database().from('extension_credentials').update({revoked_at:new Date().toISOString()}).eq('id',id).eq('owner_id',p.id);checkDb(error);return {revoked:true};});}

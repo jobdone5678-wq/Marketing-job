@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "Recruiting Portal - Copilot & Application Capture",
+  "version": "2.0.0",
+  "description": "Automated application autofill, live capture, and submission logging across Dice, LinkedIn, Greenhouse, Ashby, and top ATS platforms.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "activeTab",
+    "cookies"
+  ],
+  "host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Recruiting Portal Copilot"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.dice.com/*",
+        "https://*.linkedin.com/*",
+        "https://*.indeed.com/*",
+        "https://boards.greenhouse.io/*",
+        "https://job-boards.greenhouse.io/*",
+        "https://jobs.ashbyhq.com/*",
+        "https://jobs.lever.co/*",
+        "https://*.myworkdayjobs.com/*",
+        "https://*.smartrecruiters.com/*",
+        "https://*.icims.com/*",
+        "https://*.ziprecruiter.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

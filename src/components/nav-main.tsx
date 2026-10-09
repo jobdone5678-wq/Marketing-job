@@ -21,7 +21,7 @@ export interface NavItem {
 
 export function NavMain({
   items,
-  role = "recruiter",
+  role = "",
   activeSection,
   onSelectSection,
   onRefreshJobs,
@@ -59,7 +59,7 @@ export function NavMain({
                 <span className="truncate">Track New Board</span>
               </Link>
             )}
-            <Button
+            {onRefreshJobs && <Button
               size="icon"
               className="size-8 group-data-[collapsible=icon]:opacity-0 cursor-pointer shrink-0"
               variant="outline"
@@ -68,13 +68,13 @@ export function NavMain({
             >
               <RefreshCwIcon className="size-3.5" />
               <span className="sr-only">Sync</span>
-            </Button>
+            </Button>}
           </SidebarMenuItem>
         </SidebarMenu>
 
         <div className="px-2 py-1">
           <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
-            {isCandidate ? "Candidate Portal" : "Recruiter Portal"}
+            {isCandidate ? "Candidate Portal" : ["recruiter","super_admin"].includes(role) ? "Recruiter Portal" : "Account"}
           </span>
         </div>
 

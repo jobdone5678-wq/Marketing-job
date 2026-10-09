@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/client";
 import type { User } from "@supabase/supabase-js";
 import type { UserProfile, AppRole } from "@/types/database";
@@ -10,7 +10,7 @@ export function useUserProfile() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const fetchProfile = useCallback(async (authUser: User | null) => {
     if (!authUser) {
@@ -28,32 +28,8 @@ export function useUserProfile() {
 
       if (data && !error) {
         setProfile(data as UserProfile);
-      } else {
-        // Fallback to auth metadata if profile query has delay or not populated yet
-        const metaRole = (authUser.user_metadata?.role as AppRole) || "client";
-        setProfile({
-          id: authUser.id,
-          email: authUser.email || "",
-          full_name: authUser.user_metadata?.full_name || authUser.email?.split("@")[0] || null,
-          role: metaRole,
-          status: "active",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-      }
-    } catch {
-      // In case of error fallback gracefully
-      const metaRole = (authUser.user_metadata?.role as AppRole) || "client";
-      setProfile({
-        id: authUser.id,
-        email: authUser.email || "",
-        full_name: authUser.user_metadata?.full_name || authUser.email?.split("@")[0] || null,
-        role: metaRole,
-        status: "active",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-    } finally {
+      } else { setProfile(null); }
+    } catch { setProfile(null); } finally {
       setLoading(false);
     }
   }, [supabase]);
@@ -79,15 +55,15 @@ export function useUserProfile() {
   }, [supabase, fetchProfile]);
 
   const role: AppRole = profile?.role || "client";
-  const isSuperAdmin = role === "super_admin";
-  const isRecruiter = role === "recruiter" || isSuperAdmin;
+  const isSuperAdmin = profile?.status === "active" && role === "super_admin";
+  const isRecruiter = profile?.status === "active" && (role === "recruiter" || isSuperAdmin);
   const isClient = role === "client";
 
   return {
     user,
     profile,
     role,
-    status: profile?.status || "active",
+    status: profile?.status || "pending",
     loading,
     isSuperAdmin,
     isRecruiter,

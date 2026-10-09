@@ -1,0 +1,2 @@
+import {protectedRoute} from '@/lib/http/protected-route';import {database,checkDb} from '@/lib/db/admin';
+export async function GET(request:Request){return protectedRoute(request,'candidate_or_staff',async p=>{const {data,error}=await database().rpc('workspace_metrics',{p_actor:p.id});checkDb(error);return {metrics:data,role:p.role};});}

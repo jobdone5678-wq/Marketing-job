@@ -1,0 +1,3 @@
+import {randomBytes} from 'node:crypto';import {z} from 'zod';import {extensionRoute,tokenHash,cors} from '@/lib/capture/server';import {database,CaptureError} from '@/lib/db/admin';
+export async function OPTIONS(request:Request){return cors(request,new Response(null,{status:204}));}
+export async function POST(request:Request){return extensionRoute(request,async()=>{const body=z.object({code:z.string().regex(/^[A-Za-z0-9_-]{32}$/)}).parse(await request.json());const token=randomBytes(32).toString('base64url');const {data:id,error}=await database().rpc('pair_extension',{p_code:tokenHash(body.code),p_token:tokenHash(token)});if(error)throw new CaptureError('Pairing code is invalid or expired.',400);return {credentialId:id,token};});}

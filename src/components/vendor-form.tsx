@@ -63,12 +63,12 @@ export function VendorForm({
   >(initialVendor?.payment_terms || "Net 30");
   const [agreementStatus, setAgreementStatus] = React.useState<
     "MSA Active" | "Pending NDA" | "Standard RTR" | "No Agreement"
-  >(initialVendor?.agreement_status || "MSA Active");
+  >(initialVendor?.agreement_status || "No Agreement");
   const [responsiveness, setResponsiveness] = React.useState<"High" | "Medium" | "Low">(
     initialVendor?.responsiveness || "High"
   );
   const [specializationsStr, setSpecializationsStr] = React.useState(
-    initialVendor?.specializations.join(", ") || "Data Engineering, AWS / Cloud Migration"
+    initialVendor?.specializations.join(", ") || ""
   );
   const [notes, setNotes] = React.useState(initialVendor?.notes || "");
 
@@ -76,7 +76,7 @@ export function VendorForm({
   const primaryContact = initialVendor?.contacts?.[0];
   const [contactName, setContactName] = React.useState(primaryContact?.name || "");
   const [contactTitle, setContactTitle] = React.useState(
-    primaryContact?.title || "Lead Technical Recruiter"
+    primaryContact?.title || ""
   );
   const [contactEmail, setContactEmail] = React.useState(primaryContact?.email || "");
   const [contactPhone, setContactPhone] = React.useState(primaryContact?.phone || "");
@@ -106,12 +106,12 @@ export function VendorForm({
       name: name.trim(),
       tier,
       website: website.trim() || undefined,
-      headquarters: headquarters.trim() || "USA",
+      headquarters: headquarters.trim(),
       payment_terms: paymentTerms,
       agreement_status: agreementStatus,
-      specializations: specs.length > 0 ? specs : ["General IT Staffing"],
+      specializations: specs,
       responsiveness,
-      rating: initialVendor?.rating || 4.8,
+      rating: initialVendor?.rating || 0,
       total_submissions: initialVendor?.total_submissions || 0,
       active_interviews: initialVendor?.active_interviews || 0,
       placements_count: initialVendor?.placements_count || 0,

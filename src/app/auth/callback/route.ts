@@ -91,7 +91,7 @@ export async function GET(request: Request) {
           full_name: fullName,
           role: validRole,
           phone: incomingPhone,
-          status: "active",
+          status: validRole === "recruiter" ? "pending" : "active",
         });
       } else if (!profile.phone && incomingPhone) {
         await supabase
@@ -101,7 +101,8 @@ export async function GET(request: Request) {
       }
 
       // Successfully authenticated! Redirect directly to dashboard
-      return NextResponse.redirect(`${origin}${next.startsWith("/") ? next : `/${next}`}`);
+      const destination = new URL(next.startsWith("/") && !next.startsWith("//") && !next.includes("\\") ? next : "/dashboard", origin);
+      return NextResponse.redirect(destination.origin === origin ? destination : `${origin}/dashboard`);
     } catch (err) {
       console.error("Error setting up profile in auth callback:", err);
       return NextResponse.redirect(`${origin}/dashboard`);
