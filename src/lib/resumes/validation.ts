@@ -8,19 +8,36 @@ export async function readResume(raw:Buffer,filename:string):Promise<{text:strin
     const {getDocument}=await import('pdfjs-dist/legacy/build/pdf.mjs');
     let document;let loadingTask;
     try {
-      loadingTask=getDocument({data:new Uint8Array(raw),useWorkerFetch:false,disableFontFace:true,stopAtErrors:true,verbosity:0});
+      loadingTask=getDocument({
+        data:new Uint8Array(raw),
+        useWorkerFetch:false,
+        disableFontFace:true,
+        stopAtErrors:false,
+        verbosity:0,
+      });
       document=await loadingTask.promise;
       if(document.numPages>20)throw new Error('Resume must contain at most 20 pages.');
       const pages=[];
       for(let number=1;number<=document.numPages;number++) {
-        const page=await document.getPage(number);const content=await page.getTextContent();
-        pages.push(content.items.filter(item=>'str' in item).map(item=>'str' in item?item.str:'').join(' '));
+        try {
+          const page=await document.getPage(number);
+          const content=await page.getTextContent();
+          pages.push(content.items.filter(item=>'str' in item).map(item=>'str' in item?item.str:'').join(' '));
+        } catch (pageError) {
+          console.warn(`[readResume] Warning extracting page ${number}:`, pageError);
+          pages.push('');
+        }
       }
       const text=pages.join('\n');if(text.length>500000)throw new Error('Resume text exceeds the processing limit.');
       return {text,pages:document.numPages,mime:'application/pdf'};
-    } catch(error) {
+    } catch(error: any) {
       if(error instanceof Error && /20 pages|processing limit/.test(error.message))throw error;
-      throw new Error('Upload a valid PDF without password protection.');
+      const isPassword = error?.name === 'PasswordException' || /password/i.test(error?.message || '');
+      if (isPassword) {
+        throw new Error('Upload a valid PDF without password protection.');
+      }
+      console.error('[readResume] PDF parse error:', error?.message || error);
+      throw new Error('Upload a valid PDF.');
     } finally {await loadingTask?.destroy();}
   }
   if(/\.docx$/i.test(filename)) {
