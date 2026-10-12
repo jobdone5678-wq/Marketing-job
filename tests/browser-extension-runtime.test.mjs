@@ -4,6 +4,26 @@ import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 
+for(const status of [408,401,403,422,400]){
+ test(`linked capture preserves evidence and reports HTTP ${status} delivery failures`,async()=>{
+  const local={origin:'https://portal.example.test',token:'synthetic',outbox:[]},session={};let listener,alarm;let currentStatus=status;const delivered=[];
+  const storage=data=>({async get(keys){return Object.fromEntries((Array.isArray(keys)?keys:[keys]).map(key=>[key,data[key]]));},async set(values){Object.assign(data,values);}});
+  const chrome={storage:{local:storage(local),session:storage(session)},runtime:{onMessage:{addListener(fn){listener=fn;}}},alarms:{create(){},onAlarm:{addListener(fn){alarm=fn;}}},tabs:{onRemoved:{addListener(){}}}};
+  const fetch=async(url,options)=>{if(url.includes('/intents/'))return {ok:true,json:async()=>({intent:{id:'intent',candidate_id:'candidate',attempt:0,job:{application_url:'https://jobs.ashbyhq.com/fixture/application'}}})};delivered.push(JSON.parse(options.body));return {ok:currentStatus===200,status:currentStatus,json:async()=>({error:'Rejected'})};};
+  const context=vm.createContext({chrome,fetch,URL,AbortSignal,crypto:{randomUUID},Date,Promise});
+  vm.runInContext(await readFile(new URL('../browser-extension/background.js',import.meta.url),'utf8'),context);
+  const result=await new Promise(resolve=>listener({intentId:'intent',status:'submitted',evidence:'Application submitted',answers:[{key:'q1',label:'Experience',value:'Pipeline work'}]},{tab:{id:1},url:'https://jobs.ashbyhq.com/fixture/application'},resolve));
+  assert.equal(local.outbox.length,1);
+  assert.equal(result.queued,true);
+  assert.equal(result.manualReview,status===400||status===422);
+  const key=local.outbox[0].eventKey;
+  assert.equal(local.outbox[0].answers[0].value,'Pipeline work');
+  currentStatus=200;alarm();await vm.runInContext('serial',context);
+  if(status===400||status===422){assert.equal(delivered.length,1);assert.equal(local.outbox.length,1);}
+  else {assert.equal(local.outbox.length,0);assert.equal(delivered.at(-1).eventKey,key);}
+ });
+}
+
 test('extension keeps candidate intents separate per tab and retries offline events with the same key',async()=>{
   const local={origin:'https://portal.example.test',token:'synthetic',outbox:[]},session={},delivered=[];
   let listener,alarm,offline=true;
@@ -55,4 +75,56 @@ test('answer drafts retain application identity through confirmation navigation 
  const redirected=await send('role/confirmation',{type:'get_answer_draft'});
  assert.equal(redirected.eventKey,key);assert.equal(redirected.attempt,1);assert.equal(redirected.answers[0].value,'edited@example.test');
  assert.equal((await send('another-role/application',{type:'get_answer_draft'})).candidateId,undefined);
+});
+
+test('explicit manual review recovers a paused automatic submission without losing evidence or identity',async()=>{
+ const local={origin:'https://portal.example.test',token:'synthetic',outbox:[]},session={},delivered=[];
+ let listener,alarm;
+ const storage=data=>({async get(keys){return Object.fromEntries((Array.isArray(keys)?keys:[keys]).map(key=>[key,data[key]]));},async set(values){Object.assign(data,values);}});
+ const chrome={storage:{local:storage(local),session:storage(session)},alarms:{create(){},onAlarm:{addListener(fn){alarm=fn;}}},runtime:{onMessage:{addListener(fn){listener=fn;}}},tabs:{onRemoved:{addListener(){}}}};
+ const fetch=async(url,options)=>{const payload=JSON.parse(options.body);delivered.push(payload);return {ok:payload.manualAttestation===true,status:payload.manualAttestation?200:422,json:async()=>({success:true})};};
+ const context=vm.createContext({chrome,fetch,URL,AbortSignal,crypto:{randomUUID},Date,Promise});
+ vm.runInContext(await readFile(new URL('../browser-extension/background.js',import.meta.url),'utf8'),context);
+ const send=payload=>new Promise(resolve=>listener({type:'auto_submit',payload},{tab:{id:3},url:'https://jobs.ashbyhq.com/fixture/role/application'},resolve));
+ const payload={candidateId:'candidate',eventKey:randomUUID(),attempt:1,jobUrl:'https://jobs.ashbyhq.com/fixture/role/application',evidence:'Uncertain application state',answers:[{key:'email',label:'Email',value:'edited@example.test'}]};
+ assert.equal((await send(payload)).manualReview,true);
+ alarm();await vm.runInContext('serial',context);
+ assert.equal(delivered.length,1,'passive retries leave rejected evidence paused');
+ const repeated=await send(payload);
+ assert.equal(delivered.length,1);
+ const reviewed=await send({...payload,answers:undefined,manualAttestation:true,evidence:'Applicant manually attested submission'});
+ assert.equal(reviewed.success,true,'the deliberate manual action reaches the server');
+ assert.equal(repeated.manualReview,true,'a repeated automatic observation still reports manual review');
+ assert.equal(delivered.length,2);
+ assert.equal(delivered[1].eventKey,payload.eventKey,'recovery keeps the server idempotency key');
+ assert.equal(delivered[1].manualAttestation,true);
+ assert.equal(local.outbox.length,0);
+ assert.equal(local.captureReviewHistory.length,1);
+ assert.equal(local.captureReviewHistory[0].payload.evidence,payload.evidence);
+ assert.equal(local.captureReviewHistory[0].payload.answers[0].value,'edited@example.test');
+ assert.equal(local.captureReviewHistory[0]._delivery.manualReview,true);
+});
+
+test('linked manual recovery queues an attestation for the same intent and retains rejected automatic evidence',async()=>{
+ const local={origin:'https://portal.example.test',token:'synthetic',outbox:[]},session={},delivered=[];
+ let listener;
+ const storage=data=>({async get(keys){return Object.fromEntries((Array.isArray(keys)?keys:[keys]).map(key=>[key,data[key]]));},async set(values){Object.assign(data,values);}});
+ const chrome={storage:{local:storage(local),session:storage(session)},runtime:{onMessage:{addListener(fn){listener=fn;}}},tabs:{onRemoved:{addListener(){}}}};
+ const fetch=async(url,options)=>{
+  if(url.includes('/intents/'))return {ok:true,json:async()=>({intent:{id:'intent',candidate_id:'candidate',attempt:1,job:{application_url:'https://jobs.ashbyhq.com/fixture/application'}}})};
+  const event=JSON.parse(options.body);delivered.push({url,event});return {ok:event.manualAttestation===true,status:event.manualAttestation?200:422,json:async()=>({status:'submitted'})};
+ };
+ vm.runInNewContext(await readFile(new URL('../browser-extension/background.js',import.meta.url),'utf8'),{chrome,fetch,URL,AbortSignal,crypto:{randomUUID},Date,Promise});
+ const send=message=>new Promise(resolve=>listener(message,{tab:{id:3},url:'https://jobs.ashbyhq.com/fixture/application'},resolve));
+ await send({intentId:'intent',status:'submitted',evidence:'Uncertain state',answers:[{key:'email',label:'Email',value:'final@example.test'}]});
+ const original=local.outbox[0];
+ const result=await send({status:'submitted',manualAttestation:true,evidence:'Applicant manually attested submission'});
+ assert.equal(result.success,true);
+ assert.equal(delivered.length,2);
+ assert.ok(delivered[1].url.endsWith('/api/extension/events'));
+ assert.equal(delivered[1].event.intentId,'intent');assert.equal(delivered[1].event.attempt,1);
+ assert.equal(delivered[1].event.manualAttestation,true);
+ assert.equal(delivered[1].event.answers,undefined);
+ assert.equal(local.outbox.length,0);assert.equal(local.captureReviewHistory[0].eventKey,original.eventKey);
+ assert.equal(local.captureReviewHistory[0].answers[0].value,'final@example.test');
 });

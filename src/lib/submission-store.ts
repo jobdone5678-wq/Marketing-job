@@ -4,6 +4,13 @@ import type { JobSubmission, JobSubmissionFormData, SubmissionStatus } from '@/t
 const columns = '*,candidate:candidates(*),recruiter:profiles!job_submissions_recruiter_id_fkey(*)';
 type WriteResult = { data: JobSubmission | null; error: string | null; isDuplicate?: boolean };
 type InterviewDetails = { interview_time?: string; interview_mode?: string; interview_meeting_link?: string };
+const editableFields = ['submission_date','company_name','job_title','job_url','portal_source','job_location',
+  'vendor_company','vendor_contact_name','vendor_contact_email','vendor_contact_phone','submitted_rate','client_pay_rate',
+  'status','interview_time','interview_mode','interview_meeting_link','notes'] as const;
+function writeFields(input: Partial<JobSubmissionFormData>, creating = false) {
+  const allowed: readonly string[] = creating ? [...editableFields,'candidate_id','job_id'] : editableFields;
+  return Object.fromEntries(Object.entries(input).filter(([key,value]) => allowed.includes(key) && value !== undefined));
+}
 
 export function submissionStore(client: SupabaseClient) {
   async function getSubmissions(candidateId?: string): Promise<JobSubmission[]> {
@@ -30,14 +37,14 @@ export function submissionStore(client: SupabaseClient) {
   async function createSubmission(submissionData: JobSubmissionFormData): Promise<WriteResult> {
     try {
       const isDuplicate = await checkDuplicate(submissionData.candidate_id, submissionData.company_name);
-      const { data, error } = await client.from('job_submissions').insert({ ...submissionData, duplicate_flag: isDuplicate })
+      const { data, error } = await client.from('job_submissions').insert({ ...writeFields(submissionData, true), duplicate_flag: isDuplicate })
         .select(columns).single();
       if (error || !data) return { data: null, error: 'Submission could not be saved. Please retry.' };
       return { data: data as JobSubmission, error: null, isDuplicate };
     } catch { return { data: null, error: 'Submission could not be saved. Please retry.' }; }
   }
   async function updateSubmission(id: string, updates: Partial<JobSubmissionFormData>): Promise<WriteResult> {
-    const { data, error } = await client.from('job_submissions').update(updates).eq('id', id).select(columns).maybeSingle();
+    const { data, error } = await client.from('job_submissions').update(writeFields(updates)).eq('id', id).select(columns).maybeSingle();
     if (error || !data) return { data: null, error: 'Submission could not be updated. Please retry.' };
     return { data: data as JobSubmission, error: null };
   }

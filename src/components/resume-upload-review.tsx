@@ -133,7 +133,7 @@ export function ResumeUploadReview({
     >
       <h2 className="font-semibold">Upload and review a resume</h2>
       <p className="text-sm text-muted-foreground">
-        PDF or Word (.docx), up to 10 MiB and 20 PDF pages. AI automatically extracts candidate facts in 2–3 seconds.
+        PDF or Word (.docx), up to 10 MiB and 20 PDF pages. Review the extracted facts before saving. Processing time depends on the document and provider.
       </p>
       <label className="flex gap-2 text-sm cursor-pointer select-none">
         <input

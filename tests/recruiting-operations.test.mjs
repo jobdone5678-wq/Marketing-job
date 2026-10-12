@@ -11,7 +11,7 @@ const technical='10000000-0000-0000-0000-000000000103';
 const candidateOwner='10000000-0000-0000-0000-000000000104';
 before(async()=>{
   const files=(await readdir(new URL('../supabase/migrations/',import.meta.url))).filter(name=>/^20261009\d{6}_|^20261011\d{6}_/.test(name)&&!name.includes('foundation')).sort();
-  db=await recruitingDatabase(files);
+  db=await recruitingDatabase([...files,'202610120002_api_performance.sql']);
   await db.query(`INSERT INTO auth.users VALUES($1,'admin@example.test','{"role":"client"}'),($2,'staff@example.test','{"role":"recruiter"}'),($3,'tech@example.test','{"role":"technical_recruiter"}'),($4,'candidate@example.test','{"role":"client"}')`,[admin,staff,technical,candidateOwner]);
   await db.query(`UPDATE profiles SET role='super_admin',status='active' WHERE id=$1`,[admin]);
   await db.query(`UPDATE profiles SET status='active' WHERE id=$1`,[staff]);
@@ -135,4 +135,28 @@ test('ending an active placement preserves its earned commission for later appro
  const ended=(await db.query(`SELECT * FROM technical_recruiter_commissions WHERE placement_id=$1`,[placement])).rows[0];
  assert.equal(ended.status,'awaiting_approval');assert.deepEqual(ended.eligible_at,earned.eligible_at);assert.deepEqual(ended.due_date,earned.due_date);
  await db.query(`SELECT decide_placement_commission($1,$2,'approved',NULL)`,[admin,ended.id]);
+});
+
+
+test('unchanged period refresh does not rewrite rows or fire update triggers',async()=>{
+ await db.exec(`CREATE TEMP TABLE refresh_updates(kind text);
+ CREATE FUNCTION public.track_refresh_updates() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN INSERT INTO refresh_updates VALUES(TG_TABLE_NAME); RETURN NEW; END $$;
+ CREATE TRIGGER count_salary_refresh AFTER UPDATE ON staff_salary_periods FOR EACH ROW EXECUTE FUNCTION public.track_refresh_updates();
+ CREATE TRIGGER count_month_refresh AFTER UPDATE ON placement_months FOR EACH ROW EXECUTE FUNCTION public.track_refresh_updates();`);
+ await db.exec(`SELECT sync_staff_salary_periods(id) FROM staff_employments; SELECT sync_placement_months(id) FROM placements; DELETE FROM refresh_updates;`);
+ await db.exec(`SELECT sync_staff_salary_periods(id) FROM staff_employments; SELECT sync_placement_months(id) FROM placements;`);
+ assert.equal((await db.query('SELECT count(*)::int n FROM refresh_updates')).rows[0].n,0);
+ await db.exec('DROP TRIGGER count_salary_refresh ON staff_salary_periods; DROP TRIGGER count_month_refresh ON placement_months; DROP FUNCTION public.track_refresh_updates();');
+});
+
+test('batch period maintenance preserves financial data and is service-only',async()=>{
+ const ids=(await db.query('SELECT id FROM staff_employments')).rows.map(row=>row.id);
+ const placements=(await db.query('SELECT id FROM placements')).rows.map(row=>row.id);
+ const before=(await db.query('SELECT id,amount,status FROM staff_salary_periods ORDER BY id')).rows;
+ await db.query('SELECT sync_recruiting_periods($1::uuid[],$2::uuid[])',[ids.concat(ids),placements]);
+ assert.deepEqual((await db.query('SELECT id,amount,status FROM staff_salary_periods ORDER BY id')).rows,before);
+ for(const role of ['anon','authenticated','service_role']){
+  assert.equal((await db.query("SELECT has_function_privilege($1,'public.sync_recruiting_periods(uuid[],uuid[])','EXECUTE') allowed",[role])).rows[0].allowed,role==='service_role');
+ }
+ await assert.rejects(db.query('SELECT sync_recruiting_periods($1::uuid[],ARRAY[]::uuid[])',[Array(201).fill(staff)]),/at most 200/);
 });

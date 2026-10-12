@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/client";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import type { User } from "@supabase/supabase-js";
 import type { AppRole, UserProfile } from "@/types/database";
+import { ensureSessionProfile, readSessionProfile, registrationRole, roleLabel, roleMismatchMessage } from "@/lib/auth/session-profile";
 import {
   BriefcaseIcon,
   UserCheckIcon,
@@ -20,7 +21,6 @@ import {
   KeyRoundIcon,
   RotateCcwIcon,
   ArrowLeftIcon,
-  SparklesIcon,
 } from "lucide-react";
 
 export function SignupForm() {
@@ -43,37 +43,30 @@ export function SignupForm() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [roleNotice, setRoleNotice] = useState<string | null>(null);
+  const profileRequest = useRef(0);
 
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
-  const loadProfile = async (user: User | null) => {
+  const loadProfile = useCallback(async (user: User | null) => {
+    const requestId = ++profileRequest.current;
+    setCurrentProfile(null);
+    setProfileLoading(!!user);
     if (!user) {
-      setCurrentProfile(null);
       return;
     }
     try {
-      const { data } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
-      if (data) {
-        setCurrentProfile(data as UserProfile);
-      } else {
-        setCurrentProfile({
-          id: user.id,
-          email: user.email || "",
-          full_name: user.user_metadata?.full_name || null,
-          role: (user.user_metadata?.role as AppRole) || "client",
-          status: "active",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-      }
-    } catch {
-      // Fallback
+      const data = await readSessionProfile(supabase, user.id);
+      if (requestId !== profileRequest.current) return;
+      if (!data) throw new Error("Your account profile is missing. Please contact an administrator.");
+      setCurrentProfile(data);
+    } catch (error) {
+      if (requestId === profileRequest.current) setErrorMsg(error instanceof Error ? error.message : "Unable to load your account profile.");
+    } finally {
+      if (requestId === profileRequest.current) setProfileLoading(false);
     }
-  };
+  }, [supabase]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -94,7 +87,7 @@ export function SignupForm() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [supabase]);
+  }, [supabase, loadProfile]);
 
   // Countdown timer for OTP resend
   useEffect(() => {
@@ -111,20 +104,22 @@ export function SignupForm() {
       const params = new URLSearchParams(window.location.search);
       const urlErrorDesc = params.get("error_description");
       const urlError = params.get("error");
+      const registeredRole = params.get("current_role");
+      const attemptedRole = registrationRole(params.get("attempted_role"));
+      if (params.get("role_notice") === "existing_role" && attemptedRole && registeredRole) {
+        setRoleNotice(roleMismatchMessage(registeredRole as AppRole, attemptedRole));
+      }
 
       if (urlErrorDesc) {
-        setErrorMsg(decodeURIComponent(urlErrorDesc.replace(/\+/g, " ")));
+        setErrorMsg(urlErrorDesc);
       } else if (urlError) {
         if (urlError === "auth-code-error") {
           setErrorMsg("Authentication session timed out or was cancelled. Please request a new code.");
         } else {
-          setErrorMsg(decodeURIComponent(urlError.replace(/\+/g, " ")));
+          setErrorMsg(urlError);
         }
       }
 
-      if (urlErrorDesc || urlError) {
-        window.history.replaceState({}, "", "/");
-      }
     }
     },0);
     return () => clearTimeout(timer);
@@ -235,41 +230,26 @@ export function SignupForm() {
       if (error) {
         setErrorMsg(error.message || "Invalid or expired verification code. Please check the code or request a new one.");
       } else if (data.user) {
-        // Save verified contact details. The database assigns role and approval status.
         const cleanPhone = phone.trim();
         const cleanName = name.trim() || data.user.email?.split("@")[0] || "User";
-
-        await supabase.from("profiles").upsert({
-          id: data.user.id,
-          email: data.user.email || email.trim(),
-          full_name: cleanName,
-          role: selectedRole,
+        const prof = await ensureSessionProfile(supabase, data.user, registrationRole(selectedRole), {
+          fullName: cleanName,
           phone: cleanPhone || null,
-          updated_at: new Date().toISOString(),
         });
-
-        // Also update Supabase auth user metadata
-        await supabase.auth.updateUser({
-          data: {
-            full_name: cleanName,
-            phone: cleanPhone,
-            role: selectedRole,
-          },
-        });
-
+        ++profileRequest.current;
         setCurrentUser(data.user);
-        await loadProfile(data.user);
-        const { data: prof } = await supabase
-          .from("profiles")
-          .select("status")
-          .eq("id", data.user.id)
-          .single();
+        setCurrentProfile(prof);
+        setProfileLoading(false);
 
-        if (prof?.status === "active") {
+        if (prof.role !== selectedRole) {
+          setRoleNotice(roleMismatchMessage(prof.role, selectedRole));
+        } else if (prof.status === "active") {
           setSuccessMsg("Verification successful! Opening dashboard...");
           router.push("/dashboard");
-        } else {
+        } else if (prof.status === "pending") {
           setSuccessMsg("Verification successful! Your staff account is pending administrator approval before workspace access.");
+        } else {
+          setErrorMsg(`Your account is ${prof.status}. Please contact an administrator before accessing the portal.`);
         }
       }
     } catch (err: unknown) {
@@ -331,29 +311,11 @@ export function SignupForm() {
 
     setGoogleLoading(true);
     try {
-      // Store pending phone and role in localStorage so callback and dashboard can associate them
-      if (typeof window !== "undefined") {
-        if (cleanPhone) localStorage.setItem("oauth_phone", cleanPhone);
-        localStorage.setItem("oauth_role", selectedRole);
-      }
-
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo:
-            typeof window !== "undefined"
-              ? `${window.location.origin}/auth/callback?role=${selectedRole}${cleanPhone ? `&phone=${encodeURIComponent(cleanPhone)}` : ''}`
-              : undefined,
-          queryParams: {
-            access_type: "offline",
-            prompt: "select_account",
-          },
-        },
-      });
-      if (error) {
-        setErrorMsg(error.message);
-        setGoogleLoading(false);
-      }
+      const params = new URLSearchParams({ role: selectedRole });
+      if (cleanPhone) params.set("phone", cleanPhone);
+      // OAuth needs a full browser navigation so the server can set PKCE and
+      // registration cookies before redirecting to Google.
+      window.location.assign(new URL(`/auth/google?${params}`, window.location.origin).href);
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Failed to initiate Google login.";
@@ -367,6 +329,8 @@ export function SignupForm() {
     await supabase.auth.signOut();
     setCurrentUser(null);
     setCurrentProfile(null);
+    setRoleNotice(null);
+    setErrorMsg(null);
     setOtpStep(false);
     setOtpCode("");
     setSuccessMsg("Signed out successfully.");
@@ -375,14 +339,7 @@ export function SignupForm() {
 
   // Authenticated State View
   if (currentUser) {
-    const roleLabel =
-      currentProfile?.role === "super_admin"
-        ? "Super Admin"
-        : currentProfile?.role === "recruiter"
-        ? "US IT Recruiter"
-        : currentProfile?.role === "technical_recruiter"
-        ? "Technical Recruiter"
-        : "Client / Candidate";
+    const currentRoleLabel = profileLoading ? "Loading account role…" : roleLabel(currentProfile?.role);
 
     const badgeColor =
       currentProfile?.role === "super_admin"
@@ -396,7 +353,7 @@ export function SignupForm() {
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">Current Session</span>
           <Badge variant="outline" className={badgeColor}>
-            {roleLabel}
+            {currentRoleLabel}
           </Badge>
         </div>
 
@@ -413,6 +370,9 @@ export function SignupForm() {
           )}
         </div>
 
+        {errorMsg && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">{errorMsg}</p>}
+        {roleNotice && <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs">{roleNotice}</p>}
+        {currentProfile && ["rejected", "suspended"].includes(currentProfile.status) && <p role="alert" className="text-xs text-destructive">Your account is {currentProfile.status}. Contact an administrator to review access.</p>}
         {currentProfile?.status === "pending" && (
           <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200 text-xs space-y-1">
             <div className="font-semibold flex items-center gap-1.5">
@@ -420,20 +380,21 @@ export function SignupForm() {
               Account Pending Approval
             </div>
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Your {roleLabel.toLowerCase()} account is currently pending administrative approval. An administrator must approve your account before you can access the recruiting workspace.
+              Your {currentRoleLabel.toLowerCase()} account is currently pending administrative approval. An administrator must approve your account before you can access the recruiting workspace.
             </p>
           </div>
         )}
 
         <div className="flex flex-col gap-2 pt-2">
           <Button
-            disabled={currentProfile?.status === "pending"}
+            disabled={profileLoading || currentProfile?.status !== "active"}
             onClick={() => router.push("/dashboard")}
             className="w-full bg-primary text-primary-foreground font-medium flex items-center justify-center gap-1.5 cursor-pointer h-9 text-xs disabled:opacity-50"
           >
             {currentProfile?.status === "pending" ? "Pending Administrator Approval" : "Enter Portal Dashboard"}
             {currentProfile?.status !== "pending" && <ArrowRightIcon className="size-3.5" />}
           </Button>
+          {!currentProfile && !profileLoading && <Button variant="outline" onClick={() => loadProfile(currentUser)} className="w-full h-9 text-xs">Retry Account Profile</Button>}
           <Button
             onClick={handleSignOut}
             disabled={loading}
@@ -552,7 +513,7 @@ export function SignupForm() {
           Portal Access
         </h1>
         <p className="text-xs text-muted-foreground">
-          Select your role and enter your details to receive an instant verification code.
+          Select your account role and verify your email. Both recruiter roles require administrator approval. Existing accounts keep their registered role.
         </p>
       </div>
 

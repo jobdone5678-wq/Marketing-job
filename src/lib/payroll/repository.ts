@@ -1,5 +1,8 @@
 import 'server-only';
 import {database,checkDb,CaptureError} from '@/lib/db/admin';
+import {refreshPeriods} from '@/lib/db/refresh-periods';
+
+export function ensureSalaryPeriodsBatch(ids:string[]) {return refreshPeriods('salary',ids);}
 
 export async function ensureSalaryPeriods(employmentId:string) {
   const {error}=await database().rpc('sync_staff_salary_periods',{p_employment:employmentId});

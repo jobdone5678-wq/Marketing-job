@@ -67,7 +67,7 @@ export async function updateSession(request: NextRequest) {
     }
   }
   // Pending/suspended users stay on the sign-in/status page rather than redirecting in a loop.
-  if (user && pathname === '/' && profile?.status==='active') {
+  if (user && pathname === '/' && profile?.status==='active' && !request.nextUrl.searchParams.has('role_notice') && !request.nextUrl.searchParams.has('error')) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)

@@ -169,7 +169,7 @@ const navSecondaryItems: SecondaryNavItem[] = [
 ]
 
 export function AppSidebar({
-  activeSection = "dashboard",
+  activeSection,
   onSelectSection,
   onRefreshJobs,
   ...props
@@ -206,7 +206,7 @@ export function AppSidebar({
               <div className="flex flex-col text-left">
                 <span className="text-sm font-bold tracking-tight">NextKinHR</span>
                 <span className="text-[10px] text-muted-foreground capitalize">
-                  {currentUser.role === "client" ? "Candidate Workspace" : "Recruiter Workspace"}
+                  {currentUser.role === "client" ? "Candidate workspace" : currentUser.role === "super_admin" ? "Super admin workspace" : currentUser.role === "technical_recruiter" ? "Technical recruiter workspace" : currentUser.role === "recruiter" ? "Recruiter workspace" : "Account"}
                 </span>
               </div>
             </Link>

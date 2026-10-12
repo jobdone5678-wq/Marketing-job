@@ -25,9 +25,12 @@
     for (const el of document.querySelectorAll('input, textarea, select')) {
       if (el.closest('#mp-copilot-root') || !el.getClientRects().length || el.disabled || el.type === 'hidden' || ['password','file','submit','button','reset','image'].includes(el.type)) continue;
       const labels = Array.from(el.labels || []).map(label => label.textContent || '').join(' ').trim();
-      const label = (labels || el.getAttribute('aria-label') || el.placeholder || el.name || el.id || '').trim().slice(0, 200);
+      const labelledBy = (el.getAttribute('aria-labelledby') || '').split(/\s+/).map(id => document.getElementById(id)?.textContent || '').join(' ').trim();
+      const legend = el.closest('fieldset')?.querySelector('legend')?.textContent || '';
+      const question = [legend, labelledBy, labels, el.getAttribute('aria-label'), el.placeholder].filter(Boolean).join(' ').trim();
+      const label = (question || el.name || el.id || '').slice(0, 200);
       const key = String(el.name || el.id || label).trim().slice(0, 160);
-      if (!key || !label || sensitive.test(`${key} ${label}`) || !relevant.test(`${key} ${label}`)) continue;
+      if (!key || !label || sensitive.test(`${key} ${question} ${el.name || ''} ${el.id || ''}`) || !relevant.test(`${key} ${question || label}`)) continue;
       const normalized=key.toLowerCase();
       const value = ['checkbox','radio'].includes(el.type)&&!el.checked?'':el.tagName==='SELECT'&&el.multiple?Array.from(el.selectedOptions).map(option=>option.textContent.trim()).join('; '):String(el.value || '').trim();
       const previous=answers.get(normalized);
@@ -250,6 +253,11 @@
     try {
       submissionAttempt=Math.max(1,submissionAttempt);
       await rememberAnswers(true);
+      if(linked&&manualAttestation){
+        const result=await chrome.runtime.sendMessage({status:'submitted',manualAttestation:true,evidence:evidenceText||'Applicant manually attested submission'});
+        reportCaptureDelivery(result);
+        return;
+      }
       const payload = {
         candidateId: selectedCandidateId,
         eventKey: submissionEventKey,
@@ -268,9 +276,31 @@
       if (res && res.success) {
         showInPageToast(`✅ Logged application for ${candidate?.full_name || 'candidate'} to ${currentCompanyName}!`);
         // Keep the event key for repeated confirmation messages and retries on this application.
-      }else if(res?.queued)showInPageToast('Application details saved locally and queued for sync.');
-      else if(res?.error)showInPageToast(res.error,true);
-    } catch {}
+      }
+      reportCaptureDelivery(res);
+    } catch { reportCaptureDelivery({ error: true }); }
+  }
+
+  function reportCaptureDelivery(result) {
+    let message = '';
+    if (result?.manualReview) message = 'Capture needs manual review in the portal. Evidence remains saved locally; automatic retries are paused.';
+    else if (result?.needsReconnect) message = 'Capture is queued locally. Reconnect the extension to sync this application update.';
+    else if (result?.queued) message = 'Application update queued locally, waiting to sync. Keep the extension connected; review the application in the portal if syncing fails.';
+    else if (result?.error) message = 'Capture could not be saved to the portal. Check the extension connection and review this application in the portal; the capture queue may be full.';
+    else if (result?.success) message = 'Application update synced to the portal.';
+    if (!message) return;
+    const root = document.getElementById('mp-copilot-root');
+    if (!root) return;
+    let status = document.getElementById('mp-capture-status');
+    if (!status) {
+      status = document.createElement('div');
+      status.id = 'mp-capture-status';
+      status.setAttribute('role', 'status');
+      status.style.cssText = 'max-width:320px;margin-top:8px;padding:10px;border-radius:8px;background:#0f172a;color:#f1f5f9;font-size:12px;';
+      root.appendChild(status);
+    }
+    status.textContent = message;
+    if (result?.error || result?.manualReview) showInPageToast(message, true);
   }
 
   // Floating Toast Notification
@@ -497,9 +527,13 @@
     function form() {
       return document.querySelector('form#application_form, form[action*="applications"], form[data-testid*="application"], form');
     }
-    function send(status, evidence) {
+    async function send(status, evidence) {
       if(status==='submit_attempted')rememberAnswers(true);
-      if (linked) chrome.runtime.sendMessage({ status, evidence, ...(['submit_attempted','submitted'].includes(status) ? { answers: captureApplicationAnswers() } : {}) }).catch(() => {});
+      if (!linked) return;
+      try {
+        const result = await chrome.runtime.sendMessage({ status, evidence, ...(['submit_attempted','submitted'].includes(status) ? { answers: captureApplicationAnswers() } : {}) });
+        reportCaptureDelivery(result);
+      } catch { reportCaptureDelivery({ error: true }); }
     }
 
     const inspect = () => {

@@ -1,6 +1,9 @@
 import 'server-only';
 import { database } from '@/lib/db/admin';
 import { checkPayrollError } from '@/lib/payroll/repository';
+import {refreshPeriods} from '@/lib/db/refresh-periods';
+
+export function syncPlacementMonthsBatch(placements:PlacementPeriodSource[]) {return refreshPeriods('placement',placements.map(row=>row.id));}
 
 type PlacementPeriodSource = { id:string };
 

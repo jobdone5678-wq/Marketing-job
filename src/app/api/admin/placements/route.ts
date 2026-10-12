@@ -1,14 +1,17 @@
 import { protectedRoute } from '@/lib/http/protected-route';
 import { database, checkDb, CaptureError } from '@/lib/db/admin';
-import { syncPlacementMonths } from '@/lib/placements/repository';
+import { syncPlacementMonths, syncPlacementMonthsBatch } from '@/lib/placements/repository';
 import { z } from 'zod';
 import {earningSummary,checkPayrollError} from '@/lib/payroll/repository';
 
 export async function GET(request:Request){return protectedRoute(request,'admin',async()=>{
  const {data:initial,error:initialError}=await database().from('placements').select('id');checkDb(initialError);
- await Promise.all((initial||[]).map(syncPlacementMonths));
- const {data,error}=await database().from('placements').select('*,candidate:candidates(id,full_name,email),recruiter:profiles!placements_recruiter_id_fkey(id,full_name,email),technical_recruiter:profiles!placements_technical_recruiter_id_fkey(id,full_name,email),months:placement_months(*),commission:technical_recruiter_commissions(*)').order('created_at',{ascending:false});checkDb(error);
- const {data:payments,error:paymentError}=await database().from('earning_payment_balances').select('commission_id,amount');checkDb(paymentError);
+ await syncPlacementMonthsBatch(initial||[]);
+ const [recordsResult,paymentsResult]=await Promise.all([
+  database().from('placements').select('*,candidate:candidates(id,full_name,email),recruiter:profiles!placements_recruiter_id_fkey(id,full_name,email),technical_recruiter:profiles!placements_technical_recruiter_id_fkey(id,full_name,email),months:placement_months(*),commission:technical_recruiter_commissions(*)').order('created_at',{ascending:false}),
+  database().from('earning_payment_balances').select('commission_id,amount')
+ ]);checkDb(recordsResult.error);checkDb(paymentsResult.error);
+ const data=recordsResult.data,payments=paymentsResult.data;
  const placements=(data||[]).map(item=>({...item,commission:(item.commission||[]).map((commission:{id:string;amount:string;status:string;due_date:string|null})=>({...commission,...earningSummary(commission.amount,(payments||[]).filter(payment=>payment.commission_id===commission.id),commission.due_date,commission.status)}))}));
  return {placements};
 });}

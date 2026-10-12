@@ -1,4 +1,5 @@
 "use client"
+import Link from "next/link"
 
 import {
   Avatar,
@@ -20,7 +21,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { EllipsisVerticalIcon, CircleUserRoundIcon, CreditCardIcon, BellIcon, LogOutIcon } from "lucide-react"
+import { EllipsisVerticalIcon, CircleUserRoundIcon,  LogOutIcon } from "lucide-react"
 
 export function NavUser({
   user,
@@ -38,6 +39,8 @@ export function NavUser({
       ? "Super Admin"
       : user.role === "recruiter"
       ? "Recruiter"
+      : user.role === "technical_recruiter"
+      ? "Technical recruiter"
       : user.role === "client"
       ? "Candidate"
       : undefined
@@ -105,20 +108,10 @@ export function NavUser({
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
+              <DropdownMenuItem render={<Link href="/dashboard/settings" />}>
                 <CircleUserRoundIcon
                 />
                 Account
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <CreditCardIcon
-                />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <BellIcon
-                />
-                Notifications
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

@@ -35,32 +35,45 @@ function allowed(url, base) {
 async function flush() {
   if (flushing) return flushing;
   flushing = (async () => {
-    const config = await chrome.storage.local.get(['origin', 'token', 'outbox']);
+    const config = await chrome.storage.local.get(['origin', 'token', 'outbox', 'captureReviewHistory']);
     if (!config.origin || !config.token) return;
     const remaining = [];
     const outcomes=[];
+    const reviewedIntents=[];
     for (const event of config.outbox || []) {
+      if (event._delivery?.manualReview) { remaining.push(event); continue; }
       try {
+        const observation = { ...event };
+        delete observation._delivery;
         const r = await fetch(config.origin + (event._kind==='submission'?'/api/extension/auto-submit':'/api/extension/events'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer ' + config.token
           },
-          body: JSON.stringify(event._kind==='submission'?event.payload:event),
+          body: JSON.stringify(event._kind==='submission'?event.payload:observation),
           signal: AbortSignal.timeout(15000)
         });
-        if (r.status === 401 || r.status === 403) {
+        if (!r.ok) {
+          const needsReconnect = r.status === 401 || r.status === 403;
+          const manualReview = !needsReconnect && r.status !== 408 && r.status !== 429 && r.status < 500;
+          event._delivery = { status: r.status, manualReview, needsReconnect };
           remaining.push(event);
-          continue;
+          outcomes.push({key:event.payload?.eventKey||event.eventKey,ok:false,queued:true,manualReview,needsReconnect});
+        } else {
+          const data=typeof r.json==='function'?await r.json().catch(()=>({})):{};
+          outcomes.push({key:event.payload?.eventKey||event.eventKey,ok:true,data});
+          if(event.manualAttestation===true)reviewedIntents.push({intentId:event.intentId,attempt:event.attempt});
         }
-        if (!r.ok && (r.status >= 500||r.status===429))remaining.push(event);
-        else {const data=typeof r.json==='function'?await r.json().catch(()=>({})):{};outcomes.push({key:event.payload?.eventKey||event.eventKey,ok:r.ok,data});}
       } catch {
         remaining.push(event);
       }
     }
-    await chrome.storage.local.set({ outbox: remaining.slice(-200) });
+    const reviewed=remaining.filter(event=>event._delivery?.manualReview&&reviewedIntents.some(intent=>intent.intentId===event.intentId&&intent.attempt===event.attempt));
+    const retained=remaining.filter(event=>!reviewed.includes(event));
+    const changes={outbox:retained.slice(-200)};
+    if(reviewed.length)changes.captureReviewHistory=[...(config.captureReviewHistory||[]),...reviewed.map(event=>({...event,_reviewedAt:new Date().toISOString()}))].slice(-200);
+    await chrome.storage.local.set(changes);
     return outcomes;
   })().finally(() => {
     flushing = null;
@@ -82,7 +95,8 @@ async function receive(message, sender) {
       origin: data.origin || 'http://localhost:3000',
       user: data.user || null,
       candidateCount: (data.candidates || []).length,
-      pendingCount:(data.outbox||[]).length
+      pendingCount:(data.outbox||[]).length,
+      manualReviewCount:(data.outbox||[]).filter(event=>event._delivery?.manualReview).length
     };
   }
 
@@ -144,10 +158,24 @@ async function receive(message, sender) {
     const config = await chrome.storage.local.get(['origin', 'token','outbox']);
     if (!config.token) return { error: 'Extension is not connected to portal.' };
     const outbox=config.outbox||[];
-    if(outbox.length>=200)return {error:'Capture queue is full. Review this application in the portal.'};
-    if(!outbox.some(event=>event._kind==='submission'&&event.payload?.eventKey===message.payload?.eventKey))await chrome.storage.local.set({outbox:[...outbox,{_kind:'submission',payload:message.payload}]});
+    const pending=outbox.find(event=>event._kind==='submission'&&event.payload?.eventKey===message.payload?.eventKey);
+    if(pending?._delivery?.manualReview){
+      if(message.payload?.manualAttestation!==true)return {queued:true,manualReview:true};
+      if(pending.payload.candidateId!==message.payload.candidateId)return {error:'This capture belongs to a different candidate. Review it in the portal.'};
+      // An explicit reviewed attestation may replace the rejected delivery, while
+      // retaining its original automatic evidence after the new delivery succeeds.
+      // Reuse the key so a partial earlier save cannot create another application.
+      const {captureReviewHistory=[]}=await chrome.storage.local.get('captureReviewHistory');
+      await chrome.storage.local.set({
+        captureReviewHistory:[...captureReviewHistory,{...pending,_reviewedAt:new Date().toISOString()}].slice(-200),
+        outbox:outbox.map(event=>event===pending?{_kind:'submission',payload:message.payload}:event)
+      });
+    }else if(!pending){
+      if(outbox.length>=200)return {error:'Capture queue is full. Review this application in the portal.'};
+      await chrome.storage.local.set({outbox:[...outbox,{_kind:'submission',payload:message.payload}]});
+    }
     const outcomes=await flush();const result=outcomes?.find(item=>item.key===message.payload?.eventKey);
-    if(result)return result.ok?{success:true,...result.data}:{error:result.data.error||'Application needs manual review.'};
+    if(result)return result.ok?{success:true,...result.data}:{queued:true,manualReview:result.manualReview,needsReconnect:result.needsReconnect};
     return {queued:true};
   }
 
@@ -211,6 +239,7 @@ async function receive(message, sender) {
     if (!['in_progress', 'submit_attempted', 'submitted', 'failed'].includes(message.status)) {
       return { error: 'Invalid event' };
     }
+    if(message.manualAttestation===true&&message.status!=='submitted')return {error:'A manual attestation must refer to a submitted application.'};
     if (message.status === 'submit_attempted') context.attempt += 1;
     const attempt = Math.max(1, context.attempt);
     await chrome.storage.session.set({ [key]: context });
@@ -224,14 +253,17 @@ async function receive(message, sender) {
       url: sender.url.split('#')[0],
       observedAt: new Date().toISOString()
     };
-    if (['submit_attempted','submitted'].includes(message.status) && Array.isArray(message.answers)) {
+    if(message.manualAttestation===true)event.manualAttestation=true;
+    if (!event.manualAttestation && ['submit_attempted','submitted'].includes(message.status) && Array.isArray(message.answers)) {
       event.answers = message.answers.slice(0, 100);
     }
 
     const { outbox = [] } = await chrome.storage.local.get('outbox');
     if (outbox.length >= 200) return { error: 'Capture queue is full. Use the portal review action.' };
     await chrome.storage.local.set({ outbox: [...outbox, event] });
-    await flush();
+    const outcomes = await flush();
+    const result = outcomes?.find(item => item.key === event.eventKey);
+    return { linked: true, candidateId: context.candidateId, success: result?.ok === true, queued: result?.ok !== true, manualReview: result?.manualReview === true, needsReconnect: result?.needsReconnect === true };
   }
 
   return { linked: true, candidateId: context.candidateId };

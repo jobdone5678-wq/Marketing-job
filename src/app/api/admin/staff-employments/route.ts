@@ -1,14 +1,17 @@
 import {protectedRoute} from '@/lib/http/protected-route';
 import {database,checkDb} from '@/lib/db/admin';
-import {ensureSalaryPeriods,checkPayrollError,earningSummary} from '@/lib/payroll/repository';
+import {ensureSalaryPeriodsBatch,checkPayrollError,earningSummary} from '@/lib/payroll/repository';
 import {z} from 'zod';
 
 export async function GET(request:Request) {
   return protectedRoute(request,'admin',async()=>{
     const {data:initial,error:initialError}=await database().from('staff_employments').select('id');checkDb(initialError);
-    await Promise.all((initial||[]).map(row=>ensureSalaryPeriods(row.id)));
-    const {data:rows,error}=await database().from('staff_employments').select('*,profile:profiles!staff_employments_profile_id_fkey(id,email,full_name,role,status),terms:staff_compensation_terms(*),periods:staff_salary_periods(*)').order('hire_date',{ascending:false});checkDb(error);
-    const {data:payments,error:paymentError}=await database().from('earning_payment_balances').select('salary_period_id,amount');checkDb(paymentError);
+    await ensureSalaryPeriodsBatch((initial||[]).map(row=>row.id));
+    const [recordsResult,paymentsResult]=await Promise.all([
+     database().from('staff_employments').select('*,profile:profiles!staff_employments_profile_id_fkey(id,email,full_name,role,status),terms:staff_compensation_terms(*),periods:staff_salary_periods(*)').order('hire_date',{ascending:false}),
+     database().from('earning_payment_balances').select('salary_period_id,amount')
+    ]);checkDb(recordsResult.error);checkDb(paymentsResult.error);
+    const rows=recordsResult.data,payments=paymentsResult.data;
     const employments=(rows||[]).map(row=>({...row,periods:(row.periods||[]).map((period:{id:string;amount:string;due_date:string;status:string})=>({
       ...period,employment:{profile:row.profile,hire_date:row.hire_date},...earningSummary(period.amount,(payments||[]).filter(payment=>payment.salary_period_id===period.id),period.due_date,period.status)
     }))}));

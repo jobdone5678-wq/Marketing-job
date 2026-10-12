@@ -3,6 +3,8 @@
 import { useEffect, Suspense } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { toast } from "sonner";
+import { registrationRole, roleLabel, roleMismatchMessage } from "@/lib/auth/session-profile";
+import type { AppRole } from "@/types/database";
 
 function NotificationInner() {
   const searchParams = useSearchParams();
@@ -15,22 +17,11 @@ function NotificationInner() {
     const attemptedRole = searchParams.get("attempted_role");
 
     if (roleNotice === "existing_role" && currentRole) {
-      const currentRoleLabel =
-        currentRole === "super_admin"
-          ? "Super Admin"
-          : currentRole === "recruiter"
-          ? "Recruiter"
-          : "Candidate";
-
-      const attemptedRoleLabel =
-        attemptedRole === "recruiter"
-          ? "Recruiter"
-          : attemptedRole === "client"
-          ? "Candidate"
-          : "another role";
+      const currentRoleLabel = roleLabel(currentRole);
+      const requested = registrationRole(attemptedRole);
 
       toast.info(`Signed in as ${currentRoleLabel}`, {
-        description: `This email is already registered with a ${currentRoleLabel} profile. To create a ${attemptedRoleLabel} account, please use a separate email.`,
+        description: requested ? roleMismatchMessage(currentRole as AppRole, requested) : "Ask an administrator to review your account role if it is incorrect.",
         duration: 6500,
       });
 

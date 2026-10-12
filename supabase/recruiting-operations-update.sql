@@ -1,9 +1,9 @@
--- Recruiting operations update, generated from the ordered 2026-10-11 migrations.
+-- Recruiting operations update, generated from ordered source migrations.
 -- Requires the existing 2026-10-06 / 2026-10-08 / 2026-10-09 schema.
--- Use ONLY if migrations 20261011000100 through 20261011001000 have not been applied.
--- Preserve individual BEGIN/COMMIT blocks: the enum migration must commit first.
--- Do not wrap this file in an outer transaction. Do not run this and the same migrations twice.
-
+-- Use ONLY when none of migrations 20261011000100 through 20261011001100
+-- or 202610120001_submission_actor_integrity have been applied.
+-- Preserve individual BEGIN/COMMIT blocks; the enum migration must commit first.
+-- Do not wrap in an outer transaction or run the same migrations twice.
 
 -- Source: 20261011000100_add_technical_recruiter_status_values.sql
 BEGIN;
@@ -12,7 +12,6 @@ ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'technical_recruiter';
 ALTER TYPE public.account_status ADD VALUE IF NOT EXISTS 'rejected';
 
 COMMIT;
-
 
 -- Source: 20261011000200_staff_roles_and_assignments.sql
 BEGIN;
@@ -369,7 +368,6 @@ GRANT EXECUTE ON FUNCTION public.pair_extension(text,text) TO service_role;
 
 COMMIT;
 
-
 -- Source: 20261011000300_application_answer_snapshots.sql
 BEGIN;
 
@@ -510,7 +508,6 @@ REVOKE ALL ON FUNCTION public.record_browser_event(uuid,uuid,uuid,text,integer,t
 GRANT EXECUTE ON FUNCTION public.save_application_answer_snapshot(uuid,uuid,uuid,uuid,integer,uuid,text,text,integer,jsonb,timestamptz),public.record_extension_submission(uuid,uuid,uuid,integer,jsonb),public.record_browser_event(uuid,uuid,uuid,text,integer,text,text,text,timestamptz) TO service_role;
 
 COMMIT;
-
 
 -- Source: 20261011000400_placement_payroll.sql
 BEGIN;
@@ -731,7 +728,6 @@ GRANT EXECUTE ON FUNCTION public.record_external_payment(uuid,uuid,uuid,numeric,
 
 COMMIT;
 
-
 -- Source: 20261011000500_payroll_dashboard_metrics.sql
 BEGIN;
 
@@ -789,7 +785,6 @@ BEGIN
 END; $$;
 
 COMMIT;
-
 
 -- Source: 20261011000600_payroll_history_and_adjustments.sql
 BEGIN;
@@ -954,7 +949,6 @@ GRANT EXECUTE ON FUNCTION public.sync_staff_salary_periods(uuid,date),public.sav
 NOTIFY pgrst,'reload schema';
 COMMIT;
 
-
 -- Source: 20261011000700_placement_history_and_operations.sql
 BEGIN;
 
@@ -1111,7 +1105,6 @@ GRANT EXECUTE ON FUNCTION public.sync_placement_months(uuid),public.adjust_place
 NOTIFY pgrst,'reload schema';
 COMMIT;
 
-
 -- Source: 20261011000800_capture_integrity.sql
 BEGIN;
 
@@ -1138,7 +1131,6 @@ REVOKE ALL ON FUNCTION public.save_application_answer_snapshot(uuid,uuid,uuid,uu
 GRANT EXECUTE ON FUNCTION public.save_application_answer_snapshot(uuid,uuid,uuid,uuid,integer,uuid,text,text,integer,jsonb,timestamptz) TO service_role;
 NOTIFY pgrst,'reload schema';
 COMMIT;
-
 
 -- Source: 20261011000900_task_assignment_access.sql
 BEGIN;
@@ -1195,7 +1187,6 @@ GRANT EXECUTE ON FUNCTION public.retry_task(uuid,uuid) TO service_role;
 NOTIFY pgrst,'reload schema';
 COMMIT;
 
-
 -- Source: 20261011001000_preserve_earned_commission.sql
 BEGIN;
 
@@ -1236,4 +1227,217 @@ END; $$;
 NOTIFY pgrst,'reload schema';
 COMMIT;
 
+-- Source: 20261011001100_oauth_staff_registration.sql
+BEGIN;
 
+-- Only the server may complete a signed Google registration intent. An existing
+-- account is never reclassified by selecting a role at login.
+CREATE TABLE public.oauth_registration_intents (
+  id uuid PRIMARY KEY,
+  role public.app_role NOT NULL CHECK(role IN ('client','recruiter','technical_recruiter')),
+  started_at timestamptz NOT NULL DEFAULT now(),
+  expires_at timestamptz NOT NULL DEFAULT now()+interval '15 minutes',
+  consumed_at timestamptz,
+  profile_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL
+);
+ALTER TABLE public.oauth_registration_intents ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.oauth_registration_intents FROM PUBLIC,anon,authenticated;
+GRANT ALL ON public.oauth_registration_intents TO service_role;
+
+CREATE OR REPLACE FUNCTION public.register_new_oauth_staff(p_profile uuid,p_role public.app_role,p_intent uuid)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,auth,pg_temp AS $$
+DECLARE target public.profiles; auth_created timestamptz; provider text; intent public.oauth_registration_intents;
+BEGIN
+  IF p_role NOT IN ('recruiter','technical_recruiter') THEN RAISE EXCEPTION 'Invalid staff registration role'; END IF;
+  SELECT * INTO intent FROM public.oauth_registration_intents WHERE id=p_intent FOR UPDATE;
+  IF NOT FOUND OR intent.consumed_at IS NOT NULL OR intent.role<>p_role OR intent.expires_at<now() THEN RETURN false; END IF;
+  -- Consume even an existing-account attempt so the same signed intent cannot
+  -- later reclassify another newly created Google account.
+  UPDATE public.oauth_registration_intents SET consumed_at=now(),profile_id=p_profile WHERE id=p_intent;
+  SELECT created_at,raw_app_meta_data->>'provider' INTO auth_created,provider FROM auth.users WHERE id=p_profile;
+  IF auth_created IS NULL OR auth_created<intent.started_at OR provider IS DISTINCT FROM 'google' THEN RETURN false; END IF;
+  SELECT * INTO target FROM public.profiles WHERE id=p_profile FOR UPDATE;
+  IF NOT FOUND OR target.role<>'client' OR target.status<>'active'
+     OR EXISTS(SELECT 1 FROM public.candidates WHERE user_id=p_profile) THEN RETURN false; END IF;
+  UPDATE public.profiles SET role=p_role,status='pending',updated_at=now() WHERE id=p_profile;
+  INSERT INTO public.audit_events(actor_id,action,subject_id,metadata)
+    VALUES(p_profile,'oauth_staff_registered',p_profile,jsonb_build_object('role',p_role,'status','pending'));
+  RETURN true;
+END; $$;
+REVOKE ALL ON FUNCTION public.register_new_oauth_staff(uuid,public.app_role,uuid) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.register_new_oauth_staff(uuid,public.app_role,uuid) TO service_role;
+
+-- Administrators can repair candidate profiles from the previous Google flow.
+-- Correction deliberately requires a separate staff approval operation.
+CREATE OR REPLACE FUNCTION public.correct_staff_account_role(p_actor uuid,p_profile uuid,p_role public.app_role,p_reason text DEFAULT NULL)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+DECLARE target public.profiles;
+BEGIN
+  IF NOT EXISTS(SELECT 1 FROM public.profiles WHERE id=p_actor AND role='super_admin' AND status='active') THEN RAISE EXCEPTION 'Active administrator required'; END IF;
+  IF p_actor=p_profile THEN RAISE EXCEPTION 'Cannot correct your own account role'; END IF;
+  IF p_role NOT IN ('recruiter','technical_recruiter') THEN RAISE EXCEPTION 'Choose a recruiter or technical recruiter role'; END IF;
+  IF length(COALESCE(p_reason,''))>500 THEN RAISE EXCEPTION 'Correction reason is too long'; END IF;
+  SELECT * INTO target FROM public.profiles WHERE id=p_profile FOR UPDATE;
+  IF NOT FOUND OR target.role<>'client' THEN RAISE EXCEPTION 'Only an existing candidate account can be corrected to pending staff'; END IF;
+  UPDATE public.profiles SET role=p_role,status='pending',updated_at=now() WHERE id=p_profile;
+  INSERT INTO public.audit_events(actor_id,action,subject_id,metadata)
+    VALUES(p_actor,'staff_account_role_corrected',p_profile,jsonb_build_object('from_role',target.role,'from_status',target.status,'to_role',p_role,'to_status','pending','reason',NULLIF(trim(p_reason),'')));
+END; $$;
+REVOKE ALL ON FUNCTION public.correct_staff_account_role(uuid,uuid,public.app_role,text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.correct_staff_account_role(uuid,uuid,public.app_role,text) TO service_role;
+NOTIFY pgrst,'reload schema';
+COMMIT;
+
+-- Source: 202610120001_submission_actor_integrity.sql
+BEGIN;
+
+-- Manual browser writes must retain the actual submitting staff member.
+-- Trusted capture/receipt/packet functions continue to supply their own actor.
+CREATE OR REPLACE FUNCTION public.guard_submission_attribution() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+DECLARE actor public.profiles;
+BEGIN
+  IF auth.uid() IS NULL OR current_setting('request.jwt.claim.role',true)='service_role'
+    OR COALESCE(NULLIF(current_setting('request.jwt.claims',true),''),'{}')::jsonb->>'role'='service_role' THEN RETURN NEW; END IF;
+  SELECT * INTO actor FROM public.profiles WHERE id=auth.uid() AND status='active';
+  IF actor.id IS NULL OR actor.role NOT IN ('recruiter','technical_recruiter','super_admin') THEN
+    RAISE EXCEPTION 'Active recruiting staff required';
+  END IF;
+  IF TG_OP='INSERT' THEN
+    NEW.recruiter_id:=CASE WHEN actor.role IN ('recruiter','super_admin') THEN actor.id ELSE NULL END;
+    NEW.technical_recruiter_id:=CASE WHEN actor.role='technical_recruiter' THEN actor.id ELSE NULL END;
+  ELSIF NEW.candidate_id IS DISTINCT FROM OLD.candidate_id
+    OR NEW.recruiter_id IS DISTINCT FROM OLD.recruiter_id
+    OR NEW.technical_recruiter_id IS DISTINCT FROM OLD.technical_recruiter_id
+    OR NEW.job_id IS DISTINCT FROM OLD.job_id THEN
+    RAISE EXCEPTION 'Application candidate, job and staff attribution cannot be rewritten';
+  END IF;
+  RETURN NEW;
+END; $$;
+CREATE TRIGGER enforce_submission_attribution BEFORE INSERT OR UPDATE ON public.job_submissions
+FOR EACH ROW EXECUTE FUNCTION public.guard_submission_attribution();
+
+NOTIFY pgrst,'reload schema';
+COMMIT;
+
+-- API performance update (2026-10-12)
+-- Apply after the recruiting operations migrations. Preserves historical adjustments and payment checks.
+BEGIN;
+CREATE OR REPLACE FUNCTION public.sync_staff_salary_periods(p_employment uuid,p_through date DEFAULT (current_date+interval '2 months')::date)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+DECLARE employment public.staff_employments; term public.staff_compensation_terms; existing public.staff_salary_periods;
+  month_date date; start_day date; next_month date; finish_day date; full_finish date; i integer;
+  anchor integer; partial boolean; paid numeric;
+BEGIN
+  SELECT * INTO employment FROM public.staff_employments WHERE id=p_employment FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Employment not found'; END IF;
+  anchor:=extract(day FROM employment.hire_date)::integer;
+  IF employment.end_date IS NOT NULL THEN
+    IF EXISTS(SELECT 1 FROM public.staff_salary_periods p JOIN public.external_payments x ON x.salary_period_id=p.id
+      WHERE p.employment_id=p_employment AND p.start_date>employment.end_date GROUP BY p.id HAVING sum(x.amount)>0) THEN
+      RAISE EXCEPTION 'Correct payments on periods after the employment end date first';
+    END IF;
+    UPDATE public.staff_salary_periods SET status='cancelled' WHERE employment_id=p_employment AND start_date>employment.end_date AND status<>'cancelled';
+  END IF;
+  FOR i IN 0..359 LOOP
+    month_date:=(date_trunc('month',employment.hire_date)+make_interval(months=>i))::date;
+    start_day:=month_date+least(anchor,extract(day FROM month_date+interval '1 month - 1 day')::integer)-1;
+    EXIT WHEN start_day>p_through OR (employment.end_date IS NOT NULL AND start_day>employment.end_date);
+    next_month:=(month_date+interval '1 month')::date;
+    full_finish:=next_month+least(anchor,extract(day FROM next_month+interval '1 month - 1 day')::integer)-1;
+    finish_day:=least(full_finish,COALESCE(employment.end_date+1,full_finish));
+    partial:=finish_day<full_finish;
+    SELECT * INTO existing FROM public.staff_salary_periods WHERE employment_id=p_employment AND period_index=i FOR UPDATE;
+    IF FOUND THEN
+      -- Never resnapshot salary terms or erase an explicit final-period adjustment on a read/refresh.
+      IF existing.start_date IS DISTINCT FROM start_day THEN RAISE EXCEPTION 'Joining date cannot change after salary periods exist'; END IF;
+      IF existing.end_date_exclusive IS DISTINCT FROM finish_day OR existing.status='cancelled' THEN
+        SELECT COALESCE(sum(amount),0) INTO paid FROM public.external_payments WHERE salary_period_id=existing.id;
+        IF paid>0 THEN RAISE EXCEPTION 'Correct payments before changing the covered salary dates'; END IF;
+        UPDATE public.staff_salary_periods SET end_date_exclusive=finish_day,due_date=finish_day,
+          amount=CASE WHEN partial AND employment.partial_period_rule='manual' THEN 0 ELSE COALESCE(existing.monthly_amount,existing.amount) END,
+          status=CASE WHEN partial AND employment.partial_period_rule='manual' THEN 'awaiting_adjustment' ELSE 'accruing' END,
+          adjusted_at=NULL,adjusted_by=NULL,notes=CASE WHEN partial AND employment.partial_period_rule='manual' THEN 'Manual amount required for final partial salary period.' ELSE NULL END
+          WHERE id=existing.id;
+      END IF;
+    ELSE
+      SELECT * INTO term FROM public.staff_compensation_terms WHERE employment_id=p_employment AND effective_from<=start_day
+        AND (effective_to IS NULL OR effective_to>=start_day) ORDER BY effective_from DESC LIMIT 1;
+      IF FOUND THEN
+        INSERT INTO public.staff_salary_periods(employment_id,period_index,start_date,end_date_exclusive,due_date,amount,monthly_amount,currency,status,compensation_term_id,notes)
+          VALUES(p_employment,i,start_day,finish_day,finish_day,CASE WHEN partial AND employment.partial_period_rule='manual' THEN 0 ELSE term.monthly_amount END,
+            term.monthly_amount,term.currency,CASE WHEN partial AND employment.partial_period_rule='manual' THEN 'awaiting_adjustment' ELSE 'accruing' END,
+            term.id,CASE WHEN partial AND employment.partial_period_rule='manual' THEN 'Manual amount required for final partial salary period.' ELSE NULL END);
+      END IF;
+    END IF;
+  END LOOP;
+  -- Aggregate payments once per period instead of repeating correlated sums.
+  WITH balances AS (
+    SELECT p.id,p.amount,p.due_date,COALESCE(sum(x.amount),0) paid_total
+    FROM public.staff_salary_periods p LEFT JOIN public.external_payments x ON x.salary_period_id=p.id
+    WHERE p.employment_id=p_employment AND p.status NOT IN ('awaiting_adjustment','cancelled')
+    GROUP BY p.id
+  ), statuses AS (
+    SELECT b.id,CASE WHEN b.amount-b.paid_total<=0 THEN 'paid' WHEN b.paid_total>0 THEN 'partially_paid'
+      WHEN b.due_date<current_date THEN 'overdue' WHEN b.due_date=current_date THEN 'due' ELSE 'accruing' END status
+    FROM balances b
+  )
+  UPDATE public.staff_salary_periods p SET status=s.status FROM statuses s
+    WHERE p.id=s.id AND p.status IS DISTINCT FROM s.status;
+END; $$;
+
+CREATE OR REPLACE FUNCTION public.sync_placement_months(p_placement uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+DECLARE placement public.placements; existing public.placement_months; cursor_month date; last_month date;
+  first_day date; last_day date; final_date date; month_status text; full_month boolean;
+BEGIN
+  SELECT * INTO placement FROM public.placements WHERE id=p_placement FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Placement not found'; END IF;
+  IF placement.status='cancelled' OR placement.actual_join_date IS NULL THEN
+    UPDATE public.placement_months SET status='cancelled' WHERE placement_id=p_placement AND status<>'cancelled'; RETURN;
+  END IF;
+  final_date:=COALESCE(placement.actual_end_date,current_date);
+  cursor_month:=date_trunc('month',placement.actual_join_date)::date;
+  last_month:=date_trunc('month',final_date)::date;
+  UPDATE public.placement_months SET status='cancelled' WHERE placement_id=p_placement AND status<>'cancelled' AND (month_start<cursor_month OR month_start>last_month);
+  WHILE cursor_month<=last_month LOOP
+    first_day:=greatest(cursor_month,placement.actual_join_date);
+    last_day:=least((cursor_month+interval '1 month - 1 day')::date,COALESCE(placement.actual_end_date,(cursor_month+interval '1 month - 1 day')::date));
+    full_month:=first_day=cursor_month AND last_day=(cursor_month+interval '1 month - 1 day')::date;
+    month_status:=CASE WHEN placement.actual_end_date IS NOT NULL OR cursor_month<date_trunc('month',current_date)::date THEN 'completed' ELSE 'active' END;
+    SELECT * INTO existing FROM public.placement_months WHERE placement_id=p_placement AND month_start=cursor_month FOR UPDATE;
+    IF FOUND THEN
+      IF existing.covered_start<>first_day OR existing.covered_end<>last_day OR existing.status='cancelled' THEN
+        UPDATE public.placement_months SET covered_start=first_day,covered_end=last_day,status=month_status,
+          agreed_amount=CASE WHEN full_month THEN placement.candidate_monthly_amount ELSE NULL END,currency=placement.candidate_currency,
+          adjusted_at=NULL,adjusted_by=NULL,notes=NULL WHERE id=existing.id;
+      ELSE UPDATE public.placement_months SET status=month_status WHERE id=existing.id AND status IS DISTINCT FROM month_status;
+      END IF;
+    ELSE
+      INSERT INTO public.placement_months(placement_id,month_start,covered_start,covered_end,agreed_amount,currency,status)
+        VALUES(p_placement,cursor_month,first_day,last_day,CASE WHEN full_month THEN placement.candidate_monthly_amount ELSE NULL END,placement.candidate_currency,month_status);
+    END IF;
+    cursor_month:=(cursor_month+interval '1 month')::date;
+  END LOOP;
+END; $$;
+
+
+CREATE OR REPLACE FUNCTION public.sync_recruiting_periods(p_employments uuid[] DEFAULT '{}',p_placements uuid[] DEFAULT '{}')
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+DECLARE item uuid;
+BEGIN
+ IF COALESCE(cardinality(p_employments),0)>200 OR COALESCE(cardinality(p_placements),0)>200 THEN
+  RAISE EXCEPTION 'Period refresh accepts at most 200 IDs per kind';
+ END IF;
+ -- Consistent lock order also makes concurrent dashboard refreshes safer.
+ FOR item IN SELECT DISTINCT id FROM unnest(p_employments) id WHERE id IS NOT NULL ORDER BY id LOOP
+  PERFORM public.sync_staff_salary_periods(item);
+ END LOOP;
+ FOR item IN SELECT DISTINCT id FROM unnest(p_placements) id WHERE id IS NOT NULL ORDER BY id LOOP
+  PERFORM public.sync_placement_months(item);
+ END LOOP;
+END; $$;
+REVOKE ALL ON FUNCTION public.sync_recruiting_periods(uuid[],uuid[]) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.sync_recruiting_periods(uuid[],uuid[]) TO service_role;
+NOTIFY pgrst,'reload schema';
+COMMIT;

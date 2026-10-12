@@ -41,7 +41,7 @@
 - Verification: read-only real Greenhouse Stripe board fetch -> 726 normalized jobs, zero classified contract roles; no source or job rows written. No live Supabase/AI/mailbox/installed-extension acceptance check is claimed.
 - Verification: npm run legacy:report -> exit 1 with truthful missing server setup; no report or database modification was produced.
 - Dependency audit limitation: npm audit failed because this npm installation cannot resolve @npmcli/arborist/lib/query-selector-all.js. No clean security-audit claim is made.
-- Deferred minor: duplicate-contact warning UI from the proposed intake checklist; profiles are never auto-merged, and candidate self-service retains one owned profile. Staff can review existing candidates before creating an additional record.
+- Resolved on October 12: candidate intake now warns on matching normalized email/phone contacts within the current authorized candidate scope. It excludes the current profile, links matching profiles for review and never auto-merges or blocks saving.
 - Deferred minor: existing Next.js middleware convention emits a deprecation warning; migration to proxy is separate cleanup and does not block this release.
 
 - Final verification: npm run build -> exit 0, successful optimized production build and all 43 static pages generated; npm run lint -> exit 0, zero errors and 30 warnings; typecheck -> exit 0.

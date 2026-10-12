@@ -11,18 +11,19 @@ export default function DashboardLayout({
 }) {
   return (
     <SidebarProvider
+      className="h-svh min-h-0 overflow-hidden"
       style={
         {
-          "--sidebar-width": "calc(var(--spacing) * 72)",
+          "--sidebar-width": "15.5rem",
           "--header-height": "calc(var(--spacing) * 12)",
         } as React.CSSProperties
       }
     >
-      <AppSidebar variant="inset" />
-      <SidebarInset className="h-svh max-h-svh overflow-y-auto overflow-x-hidden flex flex-col">
+      <AppSidebar variant="sidebar" />
+      <SidebarInset className="h-svh min-h-0 min-w-0 overflow-hidden flex flex-col">
         <SiteHeader />
         <RoleNotificationHandler />
-        <div className="flex flex-1 flex-col pb-16">
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/20">
           {children}
         </div>
       </SidebarInset>

@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/server";
-import type { AppRole } from "@/types/database";
+import { authDestination, ensureSessionProfile, registrationRole } from "@/lib/auth/session-profile";
 import type { EmailOtpType } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
+import { database } from "@/lib/db/admin";
+import { OAUTH_REGISTRATION_COOKIE, readOAuthRegistration } from "@/lib/auth/oauth-registration";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -9,7 +12,11 @@ export async function GET(request: Request) {
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
   const next = searchParams.get("next") ?? "/dashboard";
-  const requestedRole = (searchParams.get("role") as AppRole) || "recruiter";
+  const cookieStore = await cookies();
+  const googleCallback = searchParams.get("oauth_registration") === "1";
+  const registration = googleCallback ? readOAuthRegistration(cookieStore.get(OAUTH_REGISTRATION_COOKIE)?.value) : null;
+  cookieStore.set(OAUTH_REGISTRATION_COOKIE, "", { path: "/auth", maxAge: 0 });
+  const requestedRole = registration?.role || registrationRole(searchParams.get("role"));
   const phoneParam = searchParams.get("phone");
   const error = searchParams.get("error");
   const errorDescription = searchParams.get("error_description");
@@ -24,6 +31,10 @@ export async function GET(request: Request) {
     return NextResponse.redirect(
       `${origin}/?error=${encodeURIComponent(errorMsg || "Authentication failed")}`
     );
+  }
+
+  if (googleCallback && (!code || !registration || searchParams.get("registration_id") !== registration.id)) {
+    return NextResponse.redirect(`${origin}/?error=${encodeURIComponent("Your Google registration session expired or could not be verified. Please select your role and start Google sign-in again.")}`);
   }
 
   const supabase = await createClient();
@@ -66,46 +77,18 @@ export async function GET(request: Request) {
 
   if (user) {
     try {
-      const incomingPhone = phoneParam || (user.user_metadata?.phone as string) || null;
-
-      // Ensure user has a profile record in profiles table
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("id, role, status, full_name, phone")
-        .eq("id", user.id)
-        .single();
-
-      if (!profile) {
-        const roleFromMeta = (user.user_metadata?.role as AppRole) || requestedRole;
-        const validRole: AppRole = roleFromMeta === "client" ? "client"
-          : roleFromMeta === "technical_recruiter" ? "technical_recruiter" : "recruiter";
-        const fullName =
-          user.user_metadata?.full_name ||
-          user.user_metadata?.name ||
-          user.email?.split("@")[0] ||
-          "Recruiter";
-
-        await supabase.from("profiles").upsert({
-          id: user.id,
-          email: user.email || "",
-          full_name: fullName,
-          role: validRole,
-          phone: incomingPhone,
-          status: validRole === "client" ? "active" : "pending",
+      if (registration && (registration.role === "recruiter" || registration.role === "technical_recruiter")) {
+        const { error: registrationError } = await database().rpc("register_new_oauth_staff", {
+          p_profile: user.id, p_role: registration.role, p_intent: registration.id,
         });
-      } else if (!profile.phone && incomingPhone) {
-        await supabase
-          .from("profiles")
-          .update({ phone: incomingPhone })
-          .eq("id", user.id);
+        if (registrationError) throw new Error("Unable to register your staff account. Please contact an administrator to check the Google staff registration database update.");
       }
-
-      // Successfully authenticated! Redirect directly to dashboard
-      const destination = new URL(next.startsWith("/") && !next.startsWith("//") && !next.includes("\\") ? next : "/dashboard", origin);
+      const profile = await ensureSessionProfile(supabase, user, requestedRole, { phone: phoneParam });
+      const destination = new URL(authDestination(profile, requestedRole, next), origin);
       return NextResponse.redirect(destination.origin === origin ? destination : `${origin}/dashboard`);
     } catch (err) {
-      console.error("Error setting up profile in auth callback:", err);
-      return NextResponse.redirect(`${origin}/dashboard`);
+      const message = err instanceof Error ? err.message : "Unable to load your account profile. Please retry or contact an administrator.";
+      return NextResponse.redirect(`${origin}/?error=${encodeURIComponent(message)}`);
     }
   }
 

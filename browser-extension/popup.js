@@ -29,7 +29,7 @@ async function renderState() {
     candidateCountEl.textContent = String((data.candidates || []).length);
     try {
       const status=await chrome.runtime.sendMessage({type:'get_status'});
-      document.getElementById('sync-status').textContent=status.pendingCount?`${status.pendingCount} application update(s) waiting to sync. Reconnect or refresh candidates to retry.`:'Application updates synced.';
+      document.getElementById('sync-status').textContent=status.manualReviewCount?`${status.manualReviewCount} application update(s) need manual review in the portal. Evidence is saved locally; automatic retries are paused for those updates.`:status.pendingCount?`${status.pendingCount} application update(s) waiting to sync. Reconnect to retry.`:'Application updates synced.';
     } catch {
       document.getElementById('sync-status').textContent='Sync status unavailable. Reconnect to retry.';
     }
