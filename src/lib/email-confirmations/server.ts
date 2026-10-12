@@ -25,7 +25,7 @@ export async function requireCaptureStaff() {
   const { data: { user }, error } = await client.auth.getUser();
   if (error || !user) throw new CaptureError('Sign in to manage email confirmations.', 401);
   const { data: profile, error: profileError } = await client.from('profiles').select('*').eq('id', user.id).single();
-  if (profileError || !profile || profile.status !== 'active' || !['recruiter','super_admin'].includes(profile.role)) {
+  if (profileError || !profile || profile.status !== 'active' || !['recruiter', 'technical_recruiter', 'super_admin'].includes(profile.role)) {
     throw new CaptureError('An active recruiter or administrator account is required.', 403);
   }
   return { client, profile: profile as UserProfile };
