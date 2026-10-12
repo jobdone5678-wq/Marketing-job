@@ -126,7 +126,7 @@ export async function structuredAI<T>(
   let usage: string | null = null;
 
   try {
-    const baseURL = process.env.OPENAI_BASE_URL || undefined;
+    const baseURL = process.env.OPENAI_BASE_URL ? process.env.OPENAI_BASE_URL.replace('//localhost:', '//127.0.0.1:') : undefined;
     const client = new OpenAI({
       apiKey: key,
       baseURL,
