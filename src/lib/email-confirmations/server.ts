@@ -33,9 +33,20 @@ export async function requireCaptureStaff() {
 
 export function requireSameOrigin(request: Request) {
   const origin = request.headers.get('origin');
+  const requestOrigin = new URL(request.url).origin;
   const configured = process.env.APP_URL;
-  const expected = configured ? new URL(configured).origin : new URL(request.url).origin;
-  if (!origin || origin !== expected) throw new CaptureError('Request origin is not permitted.', 403);
+  let expected: string | null = null;
+  if (configured) {
+    try {
+      const fullUrl = configured.startsWith('http') ? configured : `https://${configured}`;
+      expected = new URL(fullUrl).origin;
+    } catch {
+      expected = null;
+    }
+  }
+  if (!origin || (origin !== expected && origin !== requestOrigin)) {
+    throw new CaptureError('Request origin is not permitted.', 403);
+  }
 }
 
 export function captureErrorResponse(error: unknown) {
