@@ -16,19 +16,20 @@ async function run() {
   await db.from('background_tasks').update({ status: 'running', lease_token: lease, lease_until: new Date(Date.now() + 180000).toISOString() }).eq('id', taskId);
   task.lease_token = lease;
 
-  const { createRequire } = await import('node:module');
+  const { createRequire, Module } = await import('node:module');
   const req = createRequire(import.meta.url);
   try {
     const s = req.resolve('server-only');
-    req.cache[s] = { id: s, filename: s, loaded: true, exports: {} };
+    req.cache[s] = Object.assign(new Module(s), { filename: s, loaded: true, exports: {} });
   } catch {}
 
   const { handleTask } = await import('../src/lib/tasks/handlers');
   try {
     const res = await handleTask(task);
     console.log('handleTask SUCCESS:', res);
-  } catch (err: any) {
-    console.error('handleTask FAILED:', err.name, err.message, err.stack);
+  } catch (err: unknown) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    console.error('handleTask FAILED:', error.name, error.message, error.stack);
   }
 }
 

@@ -243,6 +243,7 @@ export function SignupForm() {
           id: data.user.id,
           email: data.user.email || email.trim(),
           full_name: cleanName,
+          role: selectedRole,
           phone: cleanPhone || null,
           updated_at: new Date().toISOString(),
         });
@@ -256,10 +257,20 @@ export function SignupForm() {
           },
         });
 
-        setSuccessMsg("Verification successful! Opening dashboard...");
         setCurrentUser(data.user);
         await loadProfile(data.user);
-        router.push("/dashboard");
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("status")
+          .eq("id", data.user.id)
+          .single();
+
+        if (prof?.status === "active") {
+          setSuccessMsg("Verification successful! Opening dashboard...");
+          router.push("/dashboard");
+        } else {
+          setSuccessMsg("Verification successful! Your staff account is pending administrator approval before workspace access.");
+        }
       }
     } catch (err: unknown) {
       const message =
@@ -369,6 +380,8 @@ export function SignupForm() {
         ? "Super Admin"
         : currentProfile?.role === "recruiter"
         ? "US IT Recruiter"
+        : currentProfile?.role === "technical_recruiter"
+        ? "Technical Recruiter"
         : "Client / Candidate";
 
     const badgeColor =
@@ -400,13 +413,26 @@ export function SignupForm() {
           )}
         </div>
 
+        {currentProfile?.status === "pending" && (
+          <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200 text-xs space-y-1">
+            <div className="font-semibold flex items-center gap-1.5">
+              <ShieldCheckIcon className="size-3.5 text-amber-600 dark:text-amber-400" />
+              Account Pending Approval
+            </div>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Your {roleLabel.toLowerCase()} account is currently pending administrative approval. An administrator must approve your account before you can access the recruiting workspace.
+            </p>
+          </div>
+        )}
+
         <div className="flex flex-col gap-2 pt-2">
           <Button
+            disabled={currentProfile?.status === "pending"}
             onClick={() => router.push("/dashboard")}
-            className="w-full bg-primary text-primary-foreground font-medium flex items-center justify-center gap-1.5 cursor-pointer h-9 text-xs"
+            className="w-full bg-primary text-primary-foreground font-medium flex items-center justify-center gap-1.5 cursor-pointer h-9 text-xs disabled:opacity-50"
           >
-            Enter Portal Dashboard
-            <ArrowRightIcon className="size-3.5" />
+            {currentProfile?.status === "pending" ? "Pending Administrator Approval" : "Enter Portal Dashboard"}
+            {currentProfile?.status !== "pending" && <ArrowRightIcon className="size-3.5" />}
           </Button>
           <Button
             onClick={handleSignOut}
@@ -548,7 +574,7 @@ export function SignupForm() {
           <Label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
             Select Your Account Role
           </Label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={() => setSelectedRole("recruiter")}
@@ -569,6 +595,22 @@ export function SignupForm() {
               <span className="text-[10px] text-muted-foreground leading-tight">
                 Bench Sales & Submissions
               </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedRole("technical_recruiter")}
+              className={`flex flex-col items-start p-2 rounded-lg border text-left transition-all cursor-pointer ${
+                selectedRole === "technical_recruiter"
+                  ? "border-primary bg-primary/5 ring-1 ring-primary"
+                  : "border-border hover:bg-muted/50"
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <ShieldCheckIcon className={`size-3.5 ${selectedRole === "technical_recruiter" ? "text-primary" : "text-muted-foreground"}`} />
+                <span className="text-xs font-semibold text-foreground">Technical Recruiter</span>
+              </div>
+              <span className="text-[10px] text-muted-foreground leading-tight">Candidate referrals</span>
             </button>
 
             <button

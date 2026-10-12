@@ -74,7 +74,7 @@ export function NavMain({
 
         <div className="px-2 py-1">
           <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
-            {isCandidate ? "Candidate Portal" : ["recruiter","super_admin"].includes(role) ? "Recruiter Portal" : "Account"}
+            {isCandidate ? "Candidate Portal" : ["recruiter","technical_recruiter","super_admin"].includes(role) ? "Recruiter Portal" : "Account"}
           </span>
         </div>
 

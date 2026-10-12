@@ -5,6 +5,8 @@ export async function GET(request:Request) {return protectedRoute(request,'candi
   const page=Math.max(0,Number(new URL(request.url).searchParams.get('page')||0));if(!Number.isSafeInteger(page))throw new CaptureError('Invalid page.');
   let query=database().from('candidates').select('*',{count:'exact'}).order('created_at',{ascending:false}).order('id').range(page*100,page*100+99);
   if(profile.role==='client')query=query.eq('user_id',profile.id);
+  if(profile.role==='recruiter')query=query.eq('assigned_recruiter_id',profile.id);
+  if(profile.role==='technical_recruiter')query=query.eq('assigned_technical_recruiter_id',profile.id);
   const {data,error,count}=await query;checkDb(error);return {candidates:data,total:count||0,hasMore:(page+1)*100<(count||0),role:profile.role};
 });}
 export async function POST(request:Request) {return protectedRoute(request,'candidate_or_staff',async profile=>{

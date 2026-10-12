@@ -59,11 +59,11 @@ export async function POST(request: Request) {
       .single();
     checkDb(pErr);
 
-    if (!profile || profile.status !== 'active' || !['recruiter', 'super_admin'].includes(profile.role)) {
+    if (!profile || profile.status !== 'active' || !['client', 'recruiter', 'technical_recruiter', 'super_admin'].includes(profile.role)) {
       return cors(
         request,
         Response.json(
-          { error: 'Active recruiter or admin account required to use the extension.' },
+          { error: 'Active candidate, recruiter or admin account required to use the extension.' },
           { status: 403 }
         )
       );

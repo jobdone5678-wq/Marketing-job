@@ -27,6 +27,12 @@ async function renderState() {
     userEmailEl.textContent = data.user.email;
     portalUrlEl.textContent = data.origin || 'http://localhost:3000';
     candidateCountEl.textContent = String((data.candidates || []).length);
+    try {
+      const status=await chrome.runtime.sendMessage({type:'get_status'});
+      document.getElementById('sync-status').textContent=status.pendingCount?`${status.pendingCount} application update(s) waiting to sync. Reconnect or refresh candidates to retry.`:'Application updates synced.';
+    } catch {
+      document.getElementById('sync-status').textContent='Sync status unavailable. Reconnect to retry.';
+    }
   } else {
     connectedCard.style.display = 'none';
     disconnectedCard.style.display = 'block';
@@ -92,7 +98,7 @@ document.getElementById('btn-auto-connect').addEventListener('click', async () =
         const cData = await cRes.json();
         await chrome.storage.local.set({ candidates: cData.candidates || [] });
       }
-    } catch (_) {}
+    } catch {}
 
     showToast('Connected as ' + (data.user.name || data.user.email) + '!');
     await renderState();
@@ -103,7 +109,7 @@ document.getElementById('btn-auto-connect').addEventListener('click', async () =
 
 // Refresh Candidates
 document.getElementById('btn-sync-candidates').addEventListener('click', async () => {
-  showToast('Refreshing bench candidates...');
+  showToast('Refreshing reviewed profiles...');
   try {
     const { origin = 'http://localhost:3000', token } = await chrome.storage.local.get(['origin', 'token']);
     if (!token) throw new Error('Not connected to portal.');
@@ -130,7 +136,7 @@ document.getElementById('btn-open-portal').addEventListener('click', async () =>
 
 // Disconnect
 document.getElementById('btn-disconnect').addEventListener('click', async () => {
-  await chrome.storage.local.remove(['token', 'credentialId', 'user', 'candidates', 'outbox']);
+  await chrome.storage.local.remove(['token', 'credentialId', 'user', 'candidates', 'candidateRole', 'ownCandidateId', 'outbox']);
   showToast('Disconnected locally.');
   await renderState();
 });
@@ -173,7 +179,7 @@ document.getElementById('btn-manual-pair').addEventListener('click', async () =>
         const cData = await cRes.json();
         await chrome.storage.local.set({ candidates: cData.candidates || [] });
       }
-    } catch (_) {}
+    } catch {}
 
     showToast('Pairing successful!');
     await renderState();

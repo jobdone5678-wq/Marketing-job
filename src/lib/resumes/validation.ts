@@ -1,10 +1,14 @@
 import {unzipSync,zipSync} from 'fflate';
 import mammoth from 'mammoth';
 
+export function hasPdfHeader(raw:Buffer):boolean {
+  return raw.subarray(0,1024).indexOf(Buffer.from('%PDF-'))>=0;
+}
+
 export async function readResume(raw:Buffer,filename:string):Promise<{text:string;pages:number|null;mime:string}> {
   if(raw.length>10*1024*1024)throw new Error('Resume must be at most 10 MiB.');
   if(/\.pdf$/i.test(filename)) {
-    if(raw.subarray(0,5).toString()!=='%PDF-')throw new Error('Upload a valid PDF.');
+    if(!hasPdfHeader(raw))throw new Error('The selected file does not contain a PDF header. Choose a valid PDF file.');
     const {getDocument}=await import('pdfjs-dist/legacy/build/pdf.mjs');
     let document;let loadingTask;
     try {
@@ -30,14 +34,16 @@ export async function readResume(raw:Buffer,filename:string):Promise<{text:strin
       }
       const text=pages.join('\n');if(text.length>500000)throw new Error('Resume text exceeds the processing limit.');
       return {text,pages:document.numPages,mime:'application/pdf'};
-    } catch(error: any) {
+    } catch(error: unknown) {
       if(error instanceof Error && /20 pages|processing limit/.test(error.message))throw error;
-      const isPassword = error?.name === 'PasswordException' || /password/i.test(error?.message || '');
+      const message=error instanceof Error?error.message:'';
+      const name=error instanceof Error?error.name:'';
+      const isPassword = name === 'PasswordException' || /password/i.test(message);
       if (isPassword) {
         throw new Error('Upload a valid PDF without password protection.');
       }
-      console.error('[readResume] PDF parse error:', error?.message || error);
-      throw new Error('Upload a valid PDF.');
+      console.error('[readResume] PDF parse error:', error);
+      throw new Error('This PDF could not be read. Re-save or print it as a new PDF, then upload the new copy.');
     } finally {await loadingTask?.destroy();}
   }
   if(/\.docx$/i.test(filename)) {

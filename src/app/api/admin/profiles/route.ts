@@ -1,3 +1,11 @@
-import {protectedRoute} from '@/lib/http/protected-route';import {database,checkDb,CaptureError} from '@/lib/db/admin';import {z} from 'zod';
-export async function GET(request:Request){return protectedRoute(request,'admin',async()=>{const {data,error}=await database().from('profiles').select('id,email,full_name,role,status').order('created_at',{ascending:false}).limit(500);checkDb(error);return {profiles:data};});}
-export async function PATCH(request:Request){return protectedRoute(request,'admin',async p=>{const body=z.object({id:z.uuid(),status:z.enum(['active','pending','suspended'])}).parse(await request.json());if(body.id===p.id&&body.status!=='active')throw new CaptureError('Keep your own administrator account active.');const {data,error}=await database().from('profiles').update({status:body.status}).eq('id',body.id).select('id').maybeSingle();checkDb(error);if(!data)throw new CaptureError('Profile not found.',404);const {error:a}=await database().from('audit_events').insert({actor_id:p.id,action:'profile_status_changed',subject_id:body.id,metadata:{status:body.status}});checkDb(a);return {saved:true};});}
+import {protectedRoute} from '@/lib/http/protected-route';
+import {database,checkDb} from '@/lib/db/admin';
+import {checkPayrollError} from '@/lib/payroll/repository';
+import {z} from 'zod';
+export async function GET(request:Request){return protectedRoute(request,'admin',async()=>{
+ const {data,error}=await database().from('profiles').select('id,email,full_name,role,status').order('created_at',{ascending:false}).limit(500);checkDb(error);return {profiles:data||[]};
+});}
+export async function PATCH(request:Request){return protectedRoute(request,'admin',async actor=>{
+ const body=z.object({id:z.uuid(),status:z.enum(['active','pending','rejected','suspended'])}).parse(await request.json());
+ const {error}=await database().rpc('set_staff_account_status',{p_actor:actor.id,p_profile:body.id,p_status:body.status});checkPayrollError(error);return {saved:true};
+});}

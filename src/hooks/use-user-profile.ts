@@ -57,6 +57,7 @@ export function useUserProfile() {
   const role: AppRole = profile?.role || "client";
   const isSuperAdmin = profile?.status === "active" && role === "super_admin";
   const isRecruiter = profile?.status === "active" && (role === "recruiter" || isSuperAdmin);
+  const isTechnicalRecruiter=profile?.status==='active'&&role==='technical_recruiter';
   const isClient = role === "client";
 
   return {
@@ -67,6 +68,7 @@ export function useUserProfile() {
     loading,
     isSuperAdmin,
     isRecruiter,
+    isTechnicalRecruiter,
     isClient,
     refreshProfile: () => fetchProfile(user),
   };

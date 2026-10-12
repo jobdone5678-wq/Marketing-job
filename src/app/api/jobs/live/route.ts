@@ -3,6 +3,8 @@ import {database,checkDb,CaptureError} from '@/lib/db/admin';
 import {fetchSnapshot,validateBoard} from '@/lib/jobs/adapters/native';
 import {isSoftwareJob} from '@/lib/jobs/normalize';
 import type {NormalizedJob} from '@/lib/jobs/types';
+import { recommendationContext } from '@/lib/jobs/recommendations';
+import { rankResumeJobs } from '@/lib/jobs/relevance';
 
 export interface LiveJobItem extends NormalizedJob {
   provider: 'greenhouse' | 'ashby';
@@ -12,6 +14,8 @@ export interface LiveJobItem extends NormalizedJob {
 export async function GET(request: Request) {
   return protectedRoute(request, 'candidate_or_staff', async (profile) => {
     const params = new URL(request.url).searchParams;
+    const { candidate, recommendation } = await recommendationContext(profile, params);
+    if (recommendation.requiresProfile) return { jobs: [], total: 0, fetchedAt: new Date().toISOString(), persistedInDb: false, recommendation };
     const requestedProvider = (params.get('provider') || 'all').toLowerCase();
     const requestedBoard = params.get('board')?.trim();
     const requestedCompany = params.get('company')?.trim();
@@ -190,9 +194,11 @@ export async function GET(request: Request) {
       );
     }
 
+    const displayed = candidate ? rankResumeJobs(filtered, candidate) : filtered;
     return {
-      jobs: filtered,
-      total: filtered.length,
+      jobs: displayed,
+      total: displayed.length,
+      recommendation,
       unfilteredTotal: jobs.length,
       sources: sourceStatuses,
       fetchedAt: new Date().toISOString(),

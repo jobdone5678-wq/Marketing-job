@@ -12,7 +12,10 @@ const supportedJobHosts = [
   'indeed.com',
   'www.indeed.com',
   'jobs.lever.co',
-  'myworkdayjobs.com'
+  'myworkdayjobs.com',
+  'smartrecruiters.com',
+  'icims.com',
+  'ziprecruiter.com'
 ];
 
 function isSupportedHost(hostname) {
@@ -35,27 +38,30 @@ async function flush() {
     const config = await chrome.storage.local.get(['origin', 'token', 'outbox']);
     if (!config.origin || !config.token) return;
     const remaining = [];
+    const outcomes=[];
     for (const event of config.outbox || []) {
       try {
-        const r = await fetch(config.origin + '/api/extension/events', {
+        const r = await fetch(config.origin + (event._kind==='submission'?'/api/extension/auto-submit':'/api/extension/events'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer ' + config.token
           },
-          body: JSON.stringify(event),
+          body: JSON.stringify(event._kind==='submission'?event.payload:event),
           signal: AbortSignal.timeout(15000)
         });
         if (r.status === 401 || r.status === 403) {
           remaining.push(event);
           continue;
         }
-        if (!r.ok && r.status >= 500) remaining.push(event);
+        if (!r.ok && (r.status >= 500||r.status===429))remaining.push(event);
+        else {const data=typeof r.json==='function'?await r.json().catch(()=>({})):{};outcomes.push({key:event.payload?.eventKey||event.eventKey,ok:r.ok,data});}
       } catch {
         remaining.push(event);
       }
     }
     await chrome.storage.local.set({ outbox: remaining.slice(-200) });
+    return outcomes;
   })().finally(() => {
     flushing = null;
   });
@@ -70,12 +76,13 @@ chrome.alarms?.onAlarm?.addListener(() => {
 async function receive(message, sender) {
   // Handle action/popup messages (which may not have sender.tab)
   if (message.type === 'get_status') {
-    const data = await chrome.storage.local.get(['origin', 'token', 'user', 'candidates']);
+    const data = await chrome.storage.local.get(['origin', 'token', 'user', 'candidates','outbox']);
     return {
       paired: Boolean(data.token),
       origin: data.origin || 'http://localhost:3000',
       user: data.user || null,
-      candidateCount: (data.candidates || []).length
+      candidateCount: (data.candidates || []).length,
+      pendingCount:(data.outbox||[]).length
     };
   }
 
@@ -112,41 +119,49 @@ async function receive(message, sender) {
   }
 
   if (message.type === 'get_candidates') {
-    const config = await chrome.storage.local.get(['origin', 'token', 'candidates']);
+    if (sender?.tab && (!sender.url || !isSupportedHost(new URL(sender.url).hostname))) return { error: 'Unsupported page' };
+    const config = await chrome.storage.local.get(['origin', 'token', 'candidates', 'candidateRole', 'ownCandidateId']);
     if (!config.token) return { error: 'Extension not connected' };
-    if (message.refresh || !config.candidates || config.candidates.length === 0) {
+    if (message.refresh || message.candidateId || !config.candidates || config.candidates.length === 0) {
       try {
-        const res = await fetch(config.origin + '/api/extension/candidates', {
+        const res = await fetch(config.origin + '/api/extension/candidates' + (message.candidateId ? '?candidateId=' + encodeURIComponent(message.candidateId) : ''), {
           headers: { 'Authorization': 'Bearer ' + config.token }
         });
         const data = await res.json();
         if (res.ok && data.candidates) {
-          await chrome.storage.local.set({ candidates: data.candidates });
-          return { candidates: data.candidates };
+          if (!message.candidateId) await chrome.storage.local.set({ candidates: data.candidates, candidateRole: data.role, ownCandidateId: data.ownCandidateId });
+          return { candidates: data.candidates, role: data.role, ownCandidateId: data.ownCandidateId };
         }
-      } catch {}
+        await chrome.storage.local.remove(['candidates', 'candidateRole', 'ownCandidateId']);
+        return { error: data.error || 'Unable to load candidate profiles', candidates: [] };
+      } catch { return { error: 'Unable to refresh candidate profiles', candidates: [] }; }
     }
-    return { candidates: config.candidates || [] };
+    return { candidates: config.candidates || [], role: config.candidateRole, ownCandidateId: config.ownCandidateId };
   }
 
   if (message.type === 'auto_submit') {
-    const config = await chrome.storage.local.get(['origin', 'token']);
+    if(!sender?.tab||!sender.url||!isSupportedHost(new URL(sender.url).hostname)||!allowed(sender.url,message.payload?.jobUrl))return {error:'Unsupported application page'};
+    const config = await chrome.storage.local.get(['origin', 'token','outbox']);
     if (!config.token) return { error: 'Extension is not connected to portal.' };
-    try {
-      const res = await fetch(config.origin + '/api/extension/auto-submit', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + config.token
-        },
-        body: JSON.stringify(message.payload)
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to record submission.');
-      return { success: true, ...data };
-    } catch (e) {
-      return { error: e.message };
+    const outbox=config.outbox||[];
+    if(outbox.length>=200)return {error:'Capture queue is full. Review this application in the portal.'};
+    if(!outbox.some(event=>event._kind==='submission'&&event.payload?.eventKey===message.payload?.eventKey))await chrome.storage.local.set({outbox:[...outbox,{_kind:'submission',payload:message.payload}]});
+    const outcomes=await flush();const result=outcomes?.find(item=>item.key===message.payload?.eventKey);
+    if(result)return result.ok?{success:true,...result.data}:{error:result.data.error||'Application needs manual review.'};
+    return {queued:true};
+  }
+
+  if(['get_answer_draft','save_answer_draft'].includes(message.type)){
+    if(!sender?.tab||!sender.url||!isSupportedHost(new URL(sender.url).hostname))return {error:'Unsupported application page'};
+    const parsed=new URL(sender.url);const scope=parsed.origin+parsed.pathname.replace(/\/(?:application|apply)(?:\/.*)?\/?$/i,'');
+    const key='answer-draft:'+sender.tab.id;
+    const draft=(await chrome.storage.session.get(key))[key];
+    if(message.type==='save_answer_draft'){
+      if(!message.candidateId||!Array.isArray(message.answers))return {error:'Invalid answer draft'};
+      const applicationScope=draft?.candidateId===message.candidateId&&allowed(sender.url,draft.scope)?draft.scope:scope;
+      await chrome.storage.session.set({[key]:{scope:applicationScope,candidateId:message.candidateId,answers:message.answers.slice(0,100),eventKey:message.eventKey,attempt:message.attempt,jobTitle:message.jobTitle,companyName:message.companyName}});return {saved:true};
     }
+    return draft&&allowed(sender.url,draft.scope)?draft:{};
   }
 
   // Intent & observation flow
@@ -181,6 +196,7 @@ async function receive(message, sender) {
     }
     context = {
       intentId: data.intent.id,
+      candidateId: data.intent.candidate_id,
       applicationUrl: data.intent.job.application_url,
       attempt: data.intent.attempt || 0
     };
@@ -208,6 +224,9 @@ async function receive(message, sender) {
       url: sender.url.split('#')[0],
       observedAt: new Date().toISOString()
     };
+    if (['submit_attempted','submitted'].includes(message.status) && Array.isArray(message.answers)) {
+      event.answers = message.answers.slice(0, 100);
+    }
 
     const { outbox = [] } = await chrome.storage.local.get('outbox');
     if (outbox.length >= 200) return { error: 'Capture queue is full. Use the portal review action.' };
@@ -215,7 +234,7 @@ async function receive(message, sender) {
     await flush();
   }
 
-  return { linked: true };
+  return { linked: true, candidateId: context.candidateId };
 }
 
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
@@ -225,4 +244,5 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
 
 chrome.tabs?.onRemoved?.addListener?.(id => {
   chrome.storage.session?.remove?.('tab:' + id);
+  chrome.storage.session?.remove?.('answer-draft:'+id);
 });

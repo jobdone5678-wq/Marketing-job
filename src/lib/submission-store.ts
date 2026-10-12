@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { JobSubmission, JobSubmissionFormData, SubmissionStatus } from '@/types/database';
 
-const columns = '*,candidate:candidates(*),recruiter:profiles(*)';
+const columns = '*,candidate:candidates(*),recruiter:profiles!job_submissions_recruiter_id_fkey(*)';
 type WriteResult = { data: JobSubmission | null; error: string | null; isDuplicate?: boolean };
 type InterviewDetails = { interview_time?: string; interview_mode?: string; interview_meeting_link?: string };
 

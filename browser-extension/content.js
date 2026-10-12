@@ -6,18 +6,56 @@
   let lastFailure = 0;
   let candidates = [];
   let selectedCandidateId = null;
+  let linkedCandidateId = null;
+  let candidateRole = null;
+  const editedFields = new WeakSet();
+  let filling = false;
+  let autofillTimer;
   let currentJobTitle = '';
   let currentCompanyName = '';
+  let submissionEventKey = crypto.randomUUID();
+  let submissionAttempt = 0;
+  const applicationAnswers = new Map();
+  let draftTimer;
+
+  function captureApplicationAnswers() {
+    const answers = new Map();
+    const relevant = /name|email|phone|mobile|address|city|state|zip|postal|country|location|linkedin|portfolio|website|github|skill|experience|employ|education|school|university|degree|qualif|company|title|role|position|salary|compensation|rate|availab|notice|start|relocat|sponsor|authori|work.?permit|cover.?letter|message|hear|referr|interest|project|summary/i;
+    const sensitive = /password|secret|token|credential|payment|credit.?card|bank|routing|ssn|social.?security|tax.?id|birth.?date|dob|medical|health|disability|ethnicity|race|gender|veteran|religion|consent|privacy|captcha|otp|one.?time.?code/i;
+    for (const el of document.querySelectorAll('input, textarea, select')) {
+      if (el.closest('#mp-copilot-root') || !el.getClientRects().length || el.disabled || el.type === 'hidden' || ['password','file','submit','button','reset','image'].includes(el.type)) continue;
+      const labels = Array.from(el.labels || []).map(label => label.textContent || '').join(' ').trim();
+      const label = (labels || el.getAttribute('aria-label') || el.placeholder || el.name || el.id || '').trim().slice(0, 200);
+      const key = String(el.name || el.id || label).trim().slice(0, 160);
+      if (!key || !label || sensitive.test(`${key} ${label}`) || !relevant.test(`${key} ${label}`)) continue;
+      const normalized=key.toLowerCase();
+      const value = ['checkbox','radio'].includes(el.type)&&!el.checked?'':el.tagName==='SELECT'&&el.multiple?Array.from(el.selectedOptions).map(option=>option.textContent.trim()).join('; '):String(el.value || '').trim();
+      const previous=answers.get(normalized);
+      if(previous&&value&&el.type==='checkbox')previous.value=(previous.value+'; '+value).slice(0,4000);
+      else if(value||!previous)answers.set(normalized,{key,label,value:value.slice(0,4000)});
+    }
+    for(const [key,answer] of answers){if(answer.value)applicationAnswers.set(key,answer);else applicationAnswers.delete(key);}
+    return Array.from(applicationAnswers.values()).slice(0,100);
+  }
+
+  function rememberAnswers(event) {
+    if(!selectedCandidateId)return;
+    const answers=captureApplicationAnswers();
+    clearTimeout(draftTimer);
+    const save=()=>chrome.runtime.sendMessage({type:'save_answer_draft',candidateId:selectedCandidateId,answers,eventKey:submissionEventKey,attempt:submissionAttempt,jobTitle:currentJobTitle,companyName:currentCompanyName}).catch(()=>{});
+    if(event===true||event?.type==='submit')return save();
+    draftTimer=setTimeout(save,100);
+  }
+  for(const event of ['input','change','click','submit'])document.addEventListener(event,rememberAnswers,true);
 
   const intentId = new URLSearchParams(location.hash.slice(1)).get('marketing-intent');
 
-  // Existing intent check for portal-linked tabs
-  if (intentId) {
-    chrome.runtime.sendMessage({ intentId }).then(r => {
-      linked = !!r?.linked;
-      if (linked) observeIntent();
-    }).catch(() => {});
-  }
+  // Resolve the tab's intent before choosing a profile; never default recruiters to row one.
+  const intentContext = chrome.runtime.sendMessage(intentId ? { intentId } : { type: 'get_context' }).then(r => {
+        linked = !!r?.linked;
+        linkedCandidateId = linked ? r.candidateId : null;
+        return r;
+      }).catch(() => null);
 
   // Determine portal source from hostname
   function detectPortalSource() {
@@ -34,6 +72,7 @@
 
   // Detect Job Title and Company from DOM
   function detectJobDetails() {
+    if(submissionAttempt>0&&currentJobTitle)return;
     let title = '';
     let company = '';
 
@@ -72,142 +111,165 @@
     currentCompanyName = company || 'Unspecified Company';
   }
 
-  // Fetch candidates from background worker
   async function loadCandidates() {
     try {
-      const res = await chrome.runtime.sendMessage({ type: 'get_candidates' });
-      if (res && res.candidates && res.candidates.length > 0) {
-        candidates = res.candidates;
-        if (!selectedCandidateId) selectedCandidateId = candidates[0].id;
+      await intentContext;
+      const res = await chrome.runtime.sendMessage({ type: 'get_candidates', refresh: true, candidateId: linkedCandidateId });
+      candidates = res?.candidates || [];
+      candidateRole = res?.role;
+      const draft=await chrome.runtime.sendMessage({type:'get_answer_draft'}).catch(()=>null);
+      const id = linkedCandidateId || (candidateRole === 'client' ? res.ownCandidateId : draft?.candidateId);
+      selectedCandidateId = candidates.some(c => c.id === id) ? id : null;
+      if(draft?.candidateId===selectedCandidateId&&Array.isArray(draft.answers)){
+        for(const answer of draft.answers.slice(0,100))applicationAnswers.set(answer.key.toLowerCase(),answer);
+        if(draft.eventKey)submissionEventKey=draft.eventKey;
+        submissionAttempt=Number.isInteger(draft.attempt)?draft.attempt:0;
+        currentJobTitle=draft.jobTitle||'';currentCompanyName=draft.companyName||'';
       }
-    } catch {}
+    } catch { candidates = []; selectedCandidateId = null; }
   }
 
-  // Intelligent Form Autofill Engine
+  function nativeSet(el, property, value) {
+    if (property === 'checked') {
+      // React uses click events to update controlled checkbox/radio state.
+      if (el.checked !== value) {
+        filling = true;
+        try { el.click(); } finally { filling = false; }
+      }
+      return;
+    }
+    const proto = el.tagName === 'SELECT' ? HTMLSelectElement.prototype
+      : el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, property)?.set;
+    if (setter) setter.call(el, value); else el[property] = value;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function chooseCandidate(id) {
+    if ((linkedCandidateId && id !== linkedCandidateId) || (selectedCandidateId && id !== selectedCandidateId)) {
+      showInPageToast('This application is tied to one profile. Reload the application to choose a different candidate.', true);
+      return;
+    }
+    selectedCandidateId = candidates.some(c => c.id === id) ? id : null;
+    scheduleAutofill();
+  }
+
+  // Fill only known profile facts into empty application fields. Never submit.
   function autofillCandidate(candidate) {
     if (!candidate) return 0;
     let count = 0;
-
     const names = (candidate.full_name || '').trim().split(/\s+/);
-    const firstName = names[0] || '';
-    const lastName = names.slice(1).join(' ') || '';
-
-    const inputs = document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]), textarea, select');
-
-    function fillInput(input, value) {
-      if (!value || input.value === value) return;
-      input.value = value;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-      input.dispatchEvent(new Event('blur', { bubbles: true }));
-      input.style.transition = 'box-shadow 0.3s, border-color 0.3s';
-      input.style.borderColor = '#10b981';
-      input.style.boxShadow = '0 0 0 2px rgba(16, 185, 129, 0.3)';
+    const norm = value => String(value || '').toLowerCase().replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
+    const controls = document.querySelectorAll('input, textarea, select');
+    for (const el of controls) {
+      if (el.closest('#mp-copilot-root') || el.disabled || el.readOnly || editedFields.has(el) || !el.getClientRects().length) continue;
+      if (['hidden', 'submit', 'button', 'file', 'password', 'search', 'reset'].includes(el.type)) continue;
+      const labels = Array.from(el.labels || []).map(label => label.textContent).join(' ');
+      const labelledBy = (el.getAttribute('aria-labelledby') || '').split(/\s+/).map(id => document.getElementById(id)?.textContent || '').join(' ');
+      const legend = el.closest('fieldset')?.querySelector('legend')?.textContent || '';
+      const key = norm([el.name, el.id, el.placeholder, el.getAttribute('aria-label'), labels, labelledBy, legend, el.autocomplete].filter(Boolean).join(' '));
+      if (/password|sign in|log in|search|cover letter|reference|referral|emergency|terms|consent|privacy|gender|ethnicity|veteran|disability/.test(key)) continue;
+      let value = null;
+      if (/sponsor/.test(key)) {
+        value = /future/.test(key) ? candidate.need_sponsorship_future : candidate.need_sponsorship_now;
+        if (/now.*future|future.*now/.test(key)) value = candidate.need_sponsorship_now === candidate.need_sponsorship_future ? candidate.need_sponsorship_now : null;
+      } else if (/authoriz|eligible|legally.*work/.test(key)) {
+        // This profile fact is specifically US work authorization.
+        if (!/\b(?:usa|united states|u\.s\.?|us)\b/.test(key) || /\bnot\b|unrestricted|permanent/.test(key)) continue;
+        value = candidate.authorized_in_usa;
+      } else if (/relocat/.test(key)) value = candidate.open_to_relocation;
+      else if (/first.*name|given.*name|given name|\bfname\b/.test(key)) value = names[0];
+      else if (/last.*name|family.*name|surname|\blname\b/.test(key)) value = names.slice(1).join(' ');
+      else if (/e ?mail/.test(key) || el.type === 'email') value = candidate.email;
+      else if (/phone|mobile|telephone/.test(key) || el.type === 'tel') value = candidate.phone;
+      else if (/linkedin/.test(key)) value = candidate.linkedin_url;
+      else if (/university|institution|school/.test(key)) value = candidate.university_name;
+      else if (/degree|qualification/.test(key)) value = candidate.highest_qualification;
+      else if (/graduation/.test(key)) value = candidate.graduation_year;
+      else if (/full.*address|street.*address|address line 1/.test(key)) value = candidate.full_address;
+      else if (/city|address level2/.test(key)) value = candidate.current_city;
+      else if (/state|province|address level1/.test(key)) value = candidate.current_state;
+      else if (/current.*company|current.*employer/.test(key)) value = candidate.current_employer;
+      else if (/current.*title|job.*title|headline/.test(key)) value = candidate.current_job_title;
+      else if (/years.*experience|experience.*years/.test(key)) value = candidate.total_experience_years;
+      else if (/primary.*skills|technical.*skills/.test(key)) value = candidate.primary_skills;
+      else if (/full.*name|legal.*name/.test(key) || norm(el.name) === 'name' || norm(el.autocomplete) === 'name') value = candidate.full_name;
+      if (value === null || value === undefined || value === '') continue;
+      const boolean = typeof value === 'boolean';
+      if (['radio', 'checkbox'].includes(el.type)) {
+        if (!boolean) continue;
+        const group = el.name ? Array.from(document.getElementsByName(el.name)).filter(input => input.form === el.form) : [el];
+        if (group.some(input => input.checked)) continue;
+        const answer = norm(el.value);
+        const labelAnswer = norm(labels);
+        const yes = /^(yes|true|1)$/.test(answer) || /^(yes|yes[,. ].*)$/.test(labelAnswer);
+        const no = /^(no|false|0)$/.test(answer) || /^(no|no[,. ].*)$/.test(labelAnswer);
+        if (!(value ? yes : no)) continue;
+        nativeSet(el, 'checked', true);
+      } else if (el.tagName === 'SELECT') {
+        const selected = el.selectedOptions[0];
+        if (el.value && !/^(select|choose|please select|--)/i.test(selected?.textContent?.trim() || '')) continue;
+        const answer = boolean ? (value ? 'yes' : 'no') : norm(value);
+        const option = Array.from(el.options).find(option => !option.disabled && option.value !== '' &&
+          (norm(option.textContent) === answer || norm(option.value) === answer || boolean && norm(option.value) === String(value)));
+        if (!option) continue;
+        nativeSet(el, 'value', option.value);
+      } else {
+        if (el.value.trim()) continue;
+        const answer = boolean ? (value ? 'Yes' : 'No') : String(value);
+        nativeSet(el, 'value', answer);
+      }
       count++;
     }
-
-    inputs.forEach(el => {
-      const name = (el.name || '').toLowerCase();
-      const id = (el.id || '').toLowerCase();
-      const placeholder = (el.placeholder || '').toLowerCase();
-      const aria = (el.getAttribute('aria-label') || '').toLowerCase();
-      const label = (el.closest('label')?.textContent || '').toLowerCase();
-      const key = `${name} ${id} ${placeholder} ${aria} ${label}`;
-
-      if (el.tagName === 'SELECT') {
-        // Dropdown selection for state, work authorization, or country
-        if (key.includes('state') && candidate.current_state) {
-          const opt = Array.from(el.options).find(o => 
-            o.text.toLowerCase().includes(candidate.current_state.toLowerCase()) || 
-            o.value.toLowerCase() === candidate.current_state.toLowerCase()
-          );
-          if (opt) { el.value = opt.value; el.dispatchEvent(new Event('change', { bubbles: true })); count++; }
-        }
-        if ((key.includes('authoriz') || key.includes('legally')) && candidate.authorized_in_usa) {
-          const opt = Array.from(el.options).find(o => o.text.toLowerCase().includes('yes') || o.value.toLowerCase() === 'yes');
-          if (opt) { el.value = opt.value; el.dispatchEvent(new Event('change', { bubbles: true })); count++; }
-        }
-        return;
-      }
-
-      if (el.type === 'radio' || el.type === 'checkbox') {
-        if ((key.includes('authoriz') || key.includes('legally')) && candidate.authorized_in_usa) {
-          if (key.includes('yes') || el.value.toLowerCase() === 'yes' || el.value === '1') {
-            el.checked = true;
-            el.dispatchEvent(new Event('change', { bubbles: true }));
-            count++;
-          }
-        }
-        return;
-      }
-
-      // First Name
-      if ((key.includes('first') && key.includes('name')) || name === 'fname' || id === 'fname') {
-        fillInput(el, firstName);
-      }
-      // Last Name
-      else if ((key.includes('last') && key.includes('name')) || name === 'lname' || id === 'lname') {
-        fillInput(el, lastName);
-      }
-      // Full Name
-      else if (key.includes('full name') || (key.includes('name') && !key.includes('company') && !key.includes('user') && !key.includes('title'))) {
-        fillInput(el, candidate.full_name);
-      }
-      // Email
-      else if (key.includes('email') || el.type === 'email') {
-        fillInput(el, candidate.email);
-      }
-      // Phone
-      else if (key.includes('phone') || key.includes('mobile') || key.includes('cell') || el.type === 'tel') {
-        fillInput(el, candidate.phone);
-      }
-      // LinkedIn
-      else if (key.includes('linkedin') || key.includes('profile')) {
-        fillInput(el, candidate.linkedin_url);
-      }
-      // City
-      else if (key.includes('city')) {
-        fillInput(el, candidate.current_city);
-      }
-      // State / Province
-      else if (key.includes('state') || key.includes('province')) {
-        fillInput(el, candidate.current_state);
-      }
-      // Current Employer / Company
-      else if (key.includes('current company') || key.includes('current employer') || key.includes('employer')) {
-        fillInput(el, candidate.current_employer);
-      }
-      // Current Title
-      else if (key.includes('current title') || key.includes('job title') || key.includes('headline')) {
-        fillInput(el, candidate.current_job_title);
-      }
-      // Years of experience
-      else if (key.includes('years') && key.includes('experience')) {
-        fillInput(el, String(candidate.total_experience_years || ''));
-      }
-    });
-
     return count;
   }
 
+  function scheduleAutofill() {
+    clearTimeout(autofillTimer);
+    autofillTimer = setTimeout(() => {
+      const candidate = candidates.find(c => c.id === selectedCandidateId);
+      if (candidate) autofillCandidate(candidate);
+    }, 120);
+  }
+
+  function observeAutofill() {
+    for (const event of ['input', 'change']) document.addEventListener(event, e => {
+      if (!filling && e.isTrusted && e.target instanceof Element && !e.target.closest('#mp-copilot-root')) editedFields.add(e.target);
+    }, true);
+    new MutationObserver(mutations => {
+      if (mutations.some(m => !m.target.parentElement?.closest('#mp-copilot-root, #mp-copilot-toast'))) scheduleAutofill();
+    }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'hidden', 'class', 'style', 'aria-hidden'] });
+    scheduleAutofill();
+  }
+
   // Automatic Submission Logger
-  async function logSubmission(evidenceText) {
+  async function logSubmission(evidenceText,manualAttestation=false) {
     if (!selectedCandidateId) return;
     const candidate = candidates.find(c => c.id === selectedCandidateId);
     try {
+      submissionAttempt=Math.max(1,submissionAttempt);
+      await rememberAnswers(true);
       const payload = {
         candidateId: selectedCandidateId,
+        eventKey: submissionEventKey,
+        attempt: Math.max(1, submissionAttempt),
         companyName: currentCompanyName,
         jobTitle: currentJobTitle,
         jobUrl: window.location.href.split('#')[0],
         portalSource: detectPortalSource(),
         status: 'Applied',
-        evidence: evidenceText || 'Detected form submission'
+        evidence: evidenceText || 'Detected form submission',
+        answers: manualAttestation?undefined:captureApplicationAnswers(),
+        manualAttestation,
+        profileVersion: candidate?.version || null
       };
       const res = await chrome.runtime.sendMessage({ type: 'auto_submit', payload });
       if (res && res.success) {
         showInPageToast(`✅ Logged application for ${candidate?.full_name || 'candidate'} to ${currentCompanyName}!`);
-      }
+        // Keep the event key for repeated confirmation messages and retries on this application.
+      }else if(res?.queued)showInPageToast('Application details saved locally and queued for sync.');
+      else if(res?.error)showInPageToast(res.error,true);
     } catch {}
   }
 
@@ -296,9 +358,10 @@
     `;
 
     function updateCardContent() {
+      const escape = text => String(text ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
       const candidateOptions = candidates.map(c => 
         `<option value="${c.id}" ${c.id === selectedCandidateId ? 'selected' : ''}>
-          ${c.full_name} (${c.visa_status || 'US Citizen'})
+          ${escape(c.full_name)}
         </option>`
       ).join('');
 
@@ -314,15 +377,16 @@
         <div style="background: #1e293b; border-radius: 6px; padding: 8px; margin-bottom: 10px;">
           <div style="font-size: 11px; color: #94a3b8;">Detected Job on ${detectPortalSource()}:</div>
           <div style="font-weight: 600; color: #38bdf8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-            ${currentJobTitle}
+            ${escape(currentJobTitle)}
           </div>
-          <div style="color: #cbd5e1; font-size: 11px;">${currentCompanyName}</div>
+          <div style="color: #cbd5e1; font-size: 11px;">${escape(currentCompanyName)}</div>
         </div>
 
         <div style="margin-bottom: 10px;">
-          <label style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px;">Select Bench Candidate:</label>
+          <label style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px;">Candidate profile:</label>
           <select id="mp-candidate-select" style="width: 100%; background: #0b1120; color: #f1f5f9; border: 1px solid #334155; border-radius: 6px; padding: 6px; font-size: 12px; outline: none;">
-            ${candidateOptions || '<option>Loading candidates from portal...</option>'}
+            <option value="">Select a reviewed candidate</option>
+            ${candidateOptions}
           </select>
         </div>
 
@@ -336,7 +400,7 @@
         </div>
 
         <div style="font-size: 10px; color: #64748b; text-align: center; border-top: 1px solid #1e293b; padding-top: 6px;">
-          Active auto-observation: Submitting will auto-log to portal.
+          Known details fill automatically. Review all answers before submitting.
         </div>
       `;
 
@@ -347,8 +411,14 @@
       });
 
       card.querySelector('#mp-candidate-select').addEventListener('change', (e) => {
-        selectedCandidateId = e.target.value;
+        chooseCandidate(e.target.value);
+        e.target.value = selectedCandidateId || '';
+        e.target.disabled = Boolean(selectedCandidateId);
       });
+
+      card.querySelector('#mp-candidate-select').disabled = Boolean(selectedCandidateId) || Boolean(linkedCandidateId) || candidateRole === 'client';
+      card.querySelector('#mp-candidate-select').title = 'Each application uses one profile. Reload an unlinked application to choose another candidate.';
+      card.querySelector('#mp-log-btn').hidden = false;
 
       card.querySelector('#mp-autofill-btn').addEventListener('click', () => {
         const candidate = candidates.find(c => c.id === selectedCandidateId);
@@ -361,7 +431,7 @@
       });
 
       card.querySelector('#mp-log-btn').addEventListener('click', () => {
-        logSubmission('Manually logged via Recruiting Copilot');
+        logSubmission('Applicant manually attested that the application was submitted',true);
       });
     }
 
@@ -382,6 +452,7 @@
   // Observe Application Submission Events
   function observeUniversal() {
     const inspect = () => {
+      if(linked)return;
       // Success confirmation detection on page
       const nodes = document.querySelectorAll('#application_confirmation, .application-confirmation, [data-testid="application-success"], [role="status"], h1, h2, h3, p');
       for (const node of nodes) {
@@ -404,6 +475,8 @@
 
     // Native form submit listener
     document.addEventListener('submit', () => {
+      if(!linked)submissionAttempt += 1;
+      rememberAnswers(true);
       setTimeout(inspect, 1500);
     }, true);
 
@@ -425,7 +498,8 @@
       return document.querySelector('form#application_form, form[action*="applications"], form[data-testid*="application"], form');
     }
     function send(status, evidence) {
-      if (linked) chrome.runtime.sendMessage({ status, evidence }).catch(() => {});
+      if(status==='submit_attempted')rememberAnswers(true);
+      if (linked) chrome.runtime.sendMessage({ status, evidence, ...(['submit_attempted','submitted'].includes(status) ? { answers: captureApplicationAnswers() } : {}) }).catch(() => {});
     }
 
     const inspect = () => {
@@ -460,7 +534,7 @@
     });
 
     document.addEventListener('submit', (e) => {
-      if (e.target === form()) send('submit_attempted', 'Final application Submit attempted');
+      if (e.target === form()) { submissionAttempt += 1; send('submit_attempted', 'Final application Submit attempted'); }
     }, true);
 
     document.addEventListener('invalid', () => {
@@ -473,6 +547,7 @@
     document.addEventListener('click', (e) => {
       const button = e.target.closest?.('button');
       if (button && form()?.contains(button) && button.type !== 'submit' && /^submit application$/i.test(button.textContent.trim())) {
+        submissionAttempt += 1;
         send('submit_attempted', 'Final application Submit attempted');
       }
     }, true);
@@ -483,12 +558,14 @@
     document.addEventListener('DOMContentLoaded', async () => {
       await loadCandidates();
       injectFloatingWidget();
-      observeUniversal();
+      if(linked)observeIntent();else observeUniversal();
+      observeAutofill();
     });
   } else {
     loadCandidates().then(() => {
       injectFloatingWidget();
-      observeUniversal();
+      if(linked)observeIntent();else observeUniversal();
+      observeAutofill();
     });
   }
 })();

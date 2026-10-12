@@ -37,21 +37,44 @@ export default function Page() {
       }
     }
 
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
+    async function checkUserSession() {
+      const { data } = await supabase.auth.getUser();
+      if (data?.user) {
         setUser(data.user);
-        window.location.href = "/dashboard";
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role, status")
+          .eq("id", data.user.id)
+          .single();
+
+        if (profile?.status === "active") {
+          window.location.href = "/dashboard";
+          return;
+        }
+        setLoading(false);
       } else {
         setLoading(false);
       }
-    });
+    }
+
+    void checkUserSession();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         setUser(session.user);
-        router.replace("/dashboard");
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role, status")
+          .eq("id", session.user.id)
+          .single();
+
+        if (profile?.status === "active") {
+          router.replace("/dashboard");
+        } else {
+          setLoading(false);
+        }
       } else {
         setUser(null);
         setLoading(false);

@@ -1,18 +1,23 @@
 "use client";
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useUserProfile } from '@/hooks/use-user-profile';
+import type { Candidate } from '@/types/database';
+import { getCandidates } from '@/lib/candidates';
 import type { StoredJob, NormalizedJob } from '@/lib/jobs/types';
 
 interface LiveJob extends NormalizedJob {
   provider: 'greenhouse' | 'ashby';
   board_slug: string;
+  match_reasons?: string[];
 }
+
+type Recommendation = { enabled: boolean; requiresProfile: boolean; candidateId: string | null; candidateName: string | null };
 
 type Source = {
   id: string;
@@ -26,7 +31,16 @@ type Source = {
 };
 
 export function JobsBrowser({ provider }: { provider?: string }) {
-  const { isRecruiter } = useUserProfile();
+  const { isRecruiter,isTechnicalRecruiter, isClient, loading: profileLoading } = useUserProfile();
+  const isRecruitingStaff=isRecruiter||isTechnicalRecruiter;
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [candidateId, setCandidateId] = useState('');
+  const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
+  const [dbLoading, setDbLoading] = useState(true);
+  const [reload, setReload] = useState(0);
+  const liveRequest = useRef(0);
+  const candidateParam = candidateId ? '&candidateId=' + encodeURIComponent(candidateId) : '';
+
 
   // Mode: 'db' (fast, cached in database) vs 'live' (direct fetch from ATS)
   const [mode, setMode] = useState<'live' | 'db'>('db');
@@ -70,18 +84,12 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         total: number;
         fetchedAt: string;
         persistedInDb: boolean;
+        recommendation: Recommendation;
       }>('/api/jobs/live?saveToDb=true');
-      setNotice(`✅ Successfully pulled ${res.total} software jobs from ATS and stored in database!`);
+      setNotice(res.persistedInDb ? 'Public jobs refreshed and saved. Updating your related roles...' : 'Review and save your resume profile before finding related roles.');
       // Refresh DB jobs
       setDbPage(0);
-      const dbRes = await api<{ jobs: StoredJob[]; total: number; hasMore: boolean }>(
-        `/api/jobs?type=${employmentType}&search=${encodeURIComponent(search)}&page=0${
-          provider ? '&provider=' + provider : ''
-        }`
-      );
-      setDbJobs(dbRes.jobs);
-      setDbTotal(dbRes.total);
-      setDbMore(dbRes.hasMore);
+      setReload(v => v + 1);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -92,6 +100,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   // Fetch Live Jobs directly from ATS, saving to DB when requested
   const fetchLiveJobs = useCallback(
     async (customBoard?: string, customProvider?: string) => {
+      const requestId = ++liveRequest.current;
       setLiveLoading(true);
       setError('');
       try {
@@ -99,6 +108,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         const provToUse = customProvider || liveProvider;
 
         const query = new URLSearchParams();
+        if (candidateId) query.set('candidateId', candidateId);
         if (provToUse) query.set('provider', provToUse);
         if (boardToUse.trim()) query.set('board', boardToUse.trim());
         if (employmentType) query.set('type', employmentType);
@@ -110,18 +120,22 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           total: number;
           fetchedAt: string;
           persistedInDb: boolean;
+        recommendation: Recommendation;
         }>(`/api/jobs/live?${query.toString()}`);
 
+        if (requestId !== liveRequest.current) return;
+        setRecommendation(res.recommendation);
         setLiveJobs(res.jobs || []);
         setLastFetchedTime(new Date(res.fetchedAt).toLocaleTimeString());
         if (saveToDbOnFetch && res.jobs?.length) {
           setNotice(`✅ Pulled ${res.jobs.length} software jobs and stored them in the database!`);
-          void api<{ jobs: StoredJob[]; total: number; hasMore: boolean }>(
+          void api<{ jobs: StoredJob[]; total: number; hasMore: boolean; recommendation: Recommendation }>(
             `/api/jobs?type=${employmentType}&search=${encodeURIComponent(search)}&page=0${
-              provider ? '&provider=' + provider : ''
+              (provider ? '&provider=' + provider : '') + candidateParam
             }`
           )
             .then((dbRes) => {
+              if (requestId !== liveRequest.current) return;
               setDbJobs(dbRes.jobs);
               setDbTotal(dbRes.total);
               setDbMore(dbRes.hasMore);
@@ -129,53 +143,60 @@ export function JobsBrowser({ provider }: { provider?: string }) {
             .catch(() => {});
         }
       } catch (err) {
+        if (requestId !== liveRequest.current) return;
         setError((err as Error).message);
       } finally {
-        setLiveLoading(false);
+        if (requestId === liveRequest.current) setLiveLoading(false);
       }
     },
-    [liveBoard, liveProvider, employmentType, search, saveToDbOnFetch, provider]
+    [liveBoard, liveProvider, employmentType, search, saveToDbOnFetch, provider, candidateId, candidateParam]
   );
 
   // Initial load for live jobs
   useEffect(() => {
-    if (mode === 'live') {
-      void fetchLiveJobs();
-    }
-  }, [mode, fetchLiveJobs]);
+    const request = liveRequest;
+    const timer = setTimeout(() => {
+      if (!profileLoading && mode === 'live') void fetchLiveJobs();
+    }, 0);
+    return () => { clearTimeout(timer); request.current++; };
+  }, [mode, fetchLiveJobs, profileLoading]);
 
   // Load database jobs if in DB mode
   useEffect(() => {
-    if (mode !== 'db') return;
+    if (mode !== 'db' || profileLoading) return;
     let active = true;
-    api<{ jobs: StoredJob[]; total: number; hasMore: boolean }>(
+    queueMicrotask(() => { if (active) setDbLoading(true); });
+    api<{ jobs: StoredJob[]; total: number; hasMore: boolean; recommendation: Recommendation }>(
       `/api/jobs?type=${employmentType}&search=${encodeURIComponent(search)}&page=${dbPage}${
-        provider ? '&provider=' + provider : ''
+        (provider ? '&provider=' + provider : '') + candidateParam
       }`
     )
       .then((r) => {
         if (active) {
+          setRecommendation(r.recommendation);
           setDbJobs(r.jobs);
           setDbTotal(r.total);
           setDbMore(r.hasMore);
           setError('');
         }
       })
-      .catch((e) => active && setError(e.message));
+      .catch((e) => active && setError(e.message))
+      .finally(() => { if (active) setDbLoading(false); });
 
     return () => {
       active = false;
     };
-  }, [mode, employmentType, search, dbPage, provider]);
+  }, [mode, employmentType, search, dbPage, provider, candidateParam, profileLoading, reload]);
 
   // Load configured sources for recruiter
   useEffect(() => {
-    if (isRecruiter) {
+    if (isRecruitingStaff) {
+      void getCandidates().then(items => setCandidates(items.filter(c => c.provenance_status === 'confirmed'))).catch(e => setError(e.message));
       void api<{ sources: Source[] }>('/api/job-sources')
         .then((r) => setDbSources(r.sources || []))
         .catch((e) => setError(e.message));
     }
-  }, [isRecruiter]);
+  }, [isRecruitingStaff]);
 
   return (
     <main className="p-6 max-w-7xl mx-auto space-y-6">
@@ -215,6 +236,18 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           </Button>
         </div>
       </div>
+
+      <section className="rounded-xl border p-4 space-y-2">
+        {isRecruitingStaff && <label className="block text-sm font-medium">Find roles for a candidate
+          <select aria-label="Match jobs to candidate" className="mt-2 block w-full rounded-md border bg-background p-2" value={candidateId}
+            onChange={e => { setCandidateId(e.target.value); setDbPage(0); setDbJobs([]); setLiveJobs([]); setRecommendation(null); }}>
+            <option value="">All saved roles</option>
+            {candidates.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+          </select>
+        </label>}
+        {recommendation?.requiresProfile ? <p className="text-sm">Upload, review and save your resume details to see related roles. <Link className="underline" href="/dashboard/candidates/new">Review your resume</Link></p>
+          : (isClient || candidateId) && <p className="text-sm">Roles related to {recommendation?.candidateName || 'your saved resume'}, ranked by skills and job titles. Matching helps discovery; review each job’s requirements before applying.</p>}
+      </section>
 
       {/* Mode Status Banner */}
       {mode === 'live' ? (
@@ -354,7 +387,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
 
           {mode === 'db' && (
             <div className="flex gap-2">
-              <Button variant="outline" className="h-9" onClick={() => setDbPage(0)}>
+              <Button variant="outline" className="h-9" onClick={() => { setDbPage(0); setReload(v => v + 1); }}>
                 Reload DB
               </Button>
               <Button
@@ -461,6 +494,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                       </div>
                     </div>
 
+                    {job.match_reasons?.map(reason => <p key={reason} className="text-xs text-emerald-700 dark:text-emerald-300">{reason}</p>)}
                     {/* Metadata tags */}
                     <div className="flex flex-wrap gap-2 pt-1">
                       <Badge variant="outline" className="capitalize text-xs">
@@ -521,21 +555,21 @@ export function JobsBrowser({ provider }: { provider?: string }) {
             </span>
           </div>
 
-          {!dbJobs.length ? (
+          {dbLoading ? <p role="status" className="p-8 text-center">Finding related jobs...</p> : !dbJobs.length ? (
             <p className="p-8 text-center border rounded-xl bg-card text-muted-foreground">
-              No saved jobs found in the database. You can switch to &quot;⚡ Live Jobs&quot; above to view jobs
-              directly without saving.
+              {recommendation?.enabled ? 'No related roles found with these filters. Check your saved skills and target roles, or try different filters.' : 'No saved jobs found with these filters.'}
             </p>
           ) : (
             dbJobs.map((j) => (
               <article key={j.id} className="border rounded-xl p-4 bg-card flex justify-between items-center gap-4">
                 <div>
-                  <Link className="font-semibold underline hover:text-primary" href={`/dashboard/jobs/${j.id}`}>
+                  <Link className="font-semibold underline hover:text-primary" href={`/dashboard/jobs/${j.id}${candidateId ? "?candidateId=" + encodeURIComponent(candidateId) : ""}`}>
                     {j.title}
                   </Link>
                   <p className="text-sm text-muted-foreground">
                     {j.company} - {j.location || 'Location unknown'}
                   </p>
+                  {j.match_reasons?.map(reason => <p key={reason} className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">{reason}</p>)}
                   <p className="text-xs text-muted-foreground mt-1">
                     {j.employment_type} - {j.state}
                     {j.arrangements?.length ? ' - ' + j.arrangements.join(', ') : ''}
@@ -543,7 +577,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 </div>
                 <Link
                   className="text-xs font-semibold bg-secondary text-secondary-foreground px-3 py-1.5 rounded-md hover:bg-secondary/80"
-                  href={`/dashboard/jobs/${j.id}`}
+                  href={`/dashboard/jobs/${j.id}${candidateId ? "?candidateId=" + encodeURIComponent(candidateId) : ""}`}
                 >
                   Review and apply
                 </Link>

@@ -58,6 +58,7 @@ const recruiterNavItems: NavItem[] = [
     url: "/dashboard/submissions",
     icon: <SendIcon className="size-4" />,
   },
+  { id:"placements", title:"Placements & Compensation", url:"/dashboard/placements", icon:<TrendingUpIcon className="size-4"/> },
   {
     id: "vendors",
     title: "Prime Vendors",
@@ -90,6 +91,21 @@ const recruiterNavItems: NavItem[] = [
   },
 ]
 
+const technicalRecruiterNavItems: NavItem[] = [
+  {id:"dashboard",title:"Dashboard",url:"/dashboard",icon:<LayoutDashboardIcon className="size-4"/>},
+  {id:"candidates",title:"Assigned Candidates",url:"/dashboard/candidates",icon:<UsersIcon className="size-4"/>},
+  {id:"application-capture",title:"Application Capture",url:"/dashboard/application-capture",icon:<SendIcon className="size-4"/>},
+  {id:"submissions",title:"Job Submissions",url:"/dashboard/submissions",icon:<SendIcon className="size-4"/>},
+  {id:"placements",title:"Placements & Compensation",url:"/dashboard/placements",icon:<TrendingUpIcon className="size-4"/>},
+  {id:"public-jobs",title:"Public Jobs",url:"/dashboard/jobs",icon:<BriefcaseIcon className="size-4"/>},
+  {id:"greenhouse",title:"Greenhouse Portals",url:"/dashboard/greenhouse",icon:<Building2Icon className="size-4"/>},
+  {id:"ashby",title:"Ashby Portals",url:"/dashboard/ashby",icon:<GlobeIcon className="size-4"/>},
+]
+const adminNavItems: NavItem[] = [
+  ...recruiterNavItems,
+  {id:"team",title:"Team & Assignments",url:"/dashboard/team",icon:<UserCheckIcon className="size-4"/>},
+]
+
 // Candidate Navigation Items (Tailored specifically for Candidates)
 const candidateNavItems: NavItem[] = [
   {
@@ -110,6 +126,7 @@ const candidateNavItems: NavItem[] = [
     url: "/dashboard/submissions",
     icon: <SendIcon className="size-4" />,
   },
+  { id:"placements", title:"My Placement", url:"/dashboard/placements", icon:<TrendingUpIcon className="size-4"/> },
   {
     id: "public-jobs",
     title: "Browse Jobs",
@@ -174,7 +191,7 @@ export function AppSidebar({
     const {data:{subscription}} = client.auth.onAuthStateChange(() => {setTimeout(() => void load(),0)})
     return () => {cancelled=true;subscription.unsubscribe()}
   }, [])
-  const mainItems = ["recruiter","super_admin"].includes(currentUser.role) ? recruiterNavItems : currentUser.role === "client" ? candidateNavItems : []
+  const mainItems = currentUser.role === "super_admin" ? adminNavItems : currentUser.role === "recruiter" ? recruiterNavItems : currentUser.role === "technical_recruiter" ? technicalRecruiterNavItems : currentUser.role === "client" ? candidateNavItems : []
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>

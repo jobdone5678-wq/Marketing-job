@@ -77,8 +77,8 @@ export async function GET(request: Request) {
 
       if (!profile) {
         const roleFromMeta = (user.user_metadata?.role as AppRole) || requestedRole;
-        const validRole: AppRole =
-          roleFromMeta === "client" ? "client" : "recruiter";
+        const validRole: AppRole = roleFromMeta === "client" ? "client"
+          : roleFromMeta === "technical_recruiter" ? "technical_recruiter" : "recruiter";
         const fullName =
           user.user_metadata?.full_name ||
           user.user_metadata?.name ||
@@ -91,7 +91,7 @@ export async function GET(request: Request) {
           full_name: fullName,
           role: validRole,
           phone: incomingPhone,
-          status: validRole === "recruiter" ? "pending" : "active",
+          status: validRole === "client" ? "active" : "pending",
         });
       } else if (!profile.phone && incomingPhone) {
         await supabase

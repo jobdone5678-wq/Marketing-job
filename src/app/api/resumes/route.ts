@@ -2,6 +2,7 @@ import {protectedRoute} from '@/lib/http/protected-route';
 import {database,checkDb,CaptureError} from '@/lib/db/admin';
 import {candidateAccess} from '@/lib/resumes/repository';
 import {randomUUID,createHash} from 'node:crypto';
+import {hasPdfHeader} from '@/lib/resumes/validation';
 export const runtime='nodejs';
 export const maxDuration=60;
 export async function POST(request:Request) {return protectedRoute(request,'candidate_or_staff',async profile=>{
@@ -11,7 +12,7 @@ export async function POST(request:Request) {return protectedRoute(request,'cand
   if(form.get('consent')!=='true')throw new CaptureError('Confirm your consent to AI resume processing.');
   const candidateId=String(form.get('candidateId')||'');const candidate=candidateId?await candidateAccess(profile,candidateId):null;
   const filename=file.name.replace(/[^a-zA-Z0-9._ -]/g,'_').slice(-160);const raw=Buffer.from(await file.arrayBuffer());
-  const pdf=/\.pdf$/i.test(filename)&&raw.subarray(0,5).toString()==='%PDF-';const docx=/\.docx$/i.test(filename)&&raw.subarray(0,4).toString('hex')==='504b0304';
+  const pdf=/\.pdf$/i.test(filename)&&hasPdfHeader(raw);const docx=/\.docx$/i.test(filename)&&raw.subarray(0,4).toString('hex')==='504b0304';
   if(!pdf&&!docx)throw new CaptureError('Upload a valid PDF or DOCX.');
   const documentId=randomUUID();const path=`${profile.id}/${documentId}/${filename}`;const db=database();
   const {error:uploadError}=await db.storage.from('candidate-resumes').upload(path,raw,{contentType:pdf?'application/pdf':'application/vnd.openxmlformats-officedocument.wordprocessingml.document',upsert:false});
@@ -22,7 +23,7 @@ export async function POST(request:Request) {return protectedRoute(request,'cand
     // In-route immediate AI processing (Serverless Native)
     try {
       const lease = randomUUID();
-      let task: any = null;
+      let task = null;
       const { data: specificClaimed } = await db.rpc('claim_specific_task', { p_task: taskId, p_lease: lease });
       if (specificClaimed?.[0]) {
         task = specificClaimed[0];
@@ -65,8 +66,8 @@ export async function POST(request:Request) {return protectedRoute(request,'cand
           extraction: extraction?.data || null,
         };
       }
-    } catch (inlineError: any) {
-      console.warn('In-route AI extraction fallback to webhook/queue:', inlineError?.message);
+    } catch (inlineError: unknown) {
+      console.warn('In-route AI extraction fallback to webhook/queue:', inlineError instanceof Error ? inlineError.message : String(inlineError));
     }
 
     return {documentId,taskId};

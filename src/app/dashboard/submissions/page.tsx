@@ -10,6 +10,7 @@ import {
 import { getCandidates } from "@/lib/candidates";
 import type { Candidate, JobSubmission, SubmissionStatus } from "@/types/database";
 import { SubmissionStatusDialog } from "@/components/submission-status-dialog";
+import { ApplicationAnswerSnapshot } from "@/components/application-answer-snapshot";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -734,6 +735,7 @@ export default function SubmissionsPage() {
                           {sub.job_title}
                         </div>
                         {sub.capture_status === 'confirmed' && <Badge variant="outline" className="text-[9px] mt-1">Email confirmed</Badge>}
+                        <ApplicationAnswerSnapshot submissionId={sub.id} />
                         <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
                           <Badge
                             variant="secondary"

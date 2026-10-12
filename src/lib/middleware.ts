@@ -52,8 +52,22 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Authenticated user landing on the public login page (/)
-  if (user && pathname === '/') {
+  let profile: {role:string;status:string}|null=null;
+  if(user&&(pathname==='/'||pathname.startsWith('/dashboard'))){
+    const result=await supabase.from('profiles').select('role,status').eq('id',user.id).single();
+    profile=result.error?null:result.data;
+    if(pathname.startsWith('/dashboard')&&profile?.status!=='active'){
+      const url=request.nextUrl.clone();url.pathname='/';url.search='';
+      return NextResponse.redirect(url);
+    }
+    const adminPage=pathname.startsWith('/dashboard/team');
+    const staffPage=['/dashboard/payroll','/dashboard/commissions'].some(page=>pathname.startsWith(page));
+    if(pathname.startsWith('/dashboard')&&((adminPage&&profile?.role!=='super_admin')||(staffPage&&profile?.role==='client'))){
+      const url=request.nextUrl.clone();url.pathname='/dashboard';url.search='';return NextResponse.redirect(url);
+    }
+  }
+  // Pending/suspended users stay on the sign-in/status page rather than redirecting in a loop.
+  if (user && pathname === '/' && profile?.status==='active') {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)

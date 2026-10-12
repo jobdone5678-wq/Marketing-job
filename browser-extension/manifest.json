@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Recruiting Portal - Copilot & Application Capture",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Automated application autofill, live capture, and submission logging across Dice, LinkedIn, Greenhouse, Ashby, and top ATS platforms.",
   "permissions": [
     "storage",
