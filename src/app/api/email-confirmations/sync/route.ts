@@ -4,7 +4,7 @@ import {adminClient,captureErrorResponse,checkDb} from '@/lib/email-confirmation
 export const runtime='nodejs';
 export const maxDuration=300;
 export async function POST(request:Request) {
-  const secret=process.env.EMAIL_SYNC_SECRET;
+  const secret=process.env.EMAIL_SYNC_SECRET || process.env.EMAI__SYNC_SECRET;
   if(!secret || secret.length<32 || !equalSecret(request.headers.get('authorization')||'',`Bearer ${secret}`)) return Response.json({error:'Unauthorized'},{status:401});
   try {
     const db=adminClient();

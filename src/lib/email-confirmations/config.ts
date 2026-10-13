@@ -4,9 +4,9 @@ import { CaptureError } from './server';
 function readConfiguration() {
   const value = (name: string) => process.env[name]?.trim() || '';
   const appUrl = value('APP_URL') || value('VERCEL_PROJECT_PRODUCTION_URL') || value('VERCEL_URL');
-  const clientId = value('GOOGLE_MAIL_CLIENT_ID');
-  const clientSecret = value('GOOGLE_MAIL_CLIENT_SECRET');
-  const encryptionKey = value('EMAIL_TOKEN_ENCRYPTION_KEY');
+  const clientId = value('GOOGLE_MAIL_CLIENT_ID') || value('GOOG_E_MAIL_CLIENT_ID') || value('GOOGLE_CLIENT_ID');
+  const clientSecret = value('GOOGLE_MAIL_CLIENT_SECRET') || value('GOOG_E_MAIL_CLIENT_SECRET') || value('GOOGLE_CLIENT_SECRET');
+  const encryptionKey = value('EMAIL_TOKEN_ENCRYPTION_KEY') || value('EMAI__TOKEN_ENCRYPTION_KEY');
   const serviceKey = value('SUPABASE_SERVICE_ROLE_KEY');
   const missing = Object.entries({ APP_URL: appUrl, GOOGLE_MAIL_CLIENT_ID: clientId, GOOGLE_MAIL_CLIENT_SECRET: clientSecret,
     EMAIL_TOKEN_ENCRYPTION_KEY: encryptionKey, SUPABASE_SERVICE_ROLE_KEY: serviceKey })

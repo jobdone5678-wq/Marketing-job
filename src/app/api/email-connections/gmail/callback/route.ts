@@ -21,7 +21,10 @@ export async function GET(request:Request) {
     const response=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
       body:new URLSearchParams({client_id:config.clientId,client_secret:config.clientSecret,redirect_uri:config.redirectUri,code,code_verifier:saved.verifier,grant_type:'authorization_code'}),
       signal:AbortSignal.timeout(20000),cache:'no-store'});
-    if(!response.ok) throw new Error('Token exchange failed.');
+    if(!response.ok) {
+      const errText = await response.text().catch(() => '');
+      throw new Error(`Token exchange failed (${response.status}): ${errText}`);
+    }
     const tokens=await response.json() as {access_token?:string;refresh_token?:string;scope?:string};
     if(!tokens.access_token || !tokens.refresh_token || !tokens.scope?.split(' ').includes('https://www.googleapis.com/auth/gmail.readonly')) throw new Error('Required access not granted.');
     const mailbox=await gmailJson<{emailAddress:string}>('profile',tokens.access_token);
@@ -30,7 +33,8 @@ export async function GET(request:Request) {
       {onConflict:'owner_id,provider,mailbox_email'});
     checkDb(error);
     return NextResponse.redirect(`${appOrigin}/dashboard/email-confirmations?mail=connected`);
-  } catch {
+  } catch (error) {
+    console.error('Gmail OAuth callback error:', error);
     return NextResponse.redirect(`${appOrigin}/dashboard/email-confirmations?mail=connection_failed`);
   }
 }
