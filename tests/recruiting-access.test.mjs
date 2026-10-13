@@ -23,6 +23,20 @@ test('suspension takes effect on the next request even with the same authenticat
   await assert.rejects(requireProfile('recruiting_staff'),error=>error.status===403);
 });
 
+test('concurrent requests with the same cookie share a single in-flight auth query',async()=>{
+  let queryCount=0;
+  const load=moduleLoader({
+    'next/headers':{cookies:async()=>({getAll:()=>[{name:'sb-fixture-auth-token',value:'session'}]})},
+    '@/lib/server':{createClient:async()=>({auth:{getUser:async()=>{queryCount++;return {data:{user:{id:'staff'}},error:null};}}})},
+    '@/lib/db/admin':{database:()=>({from:()=>({select(){return this;},eq(){return this;},single:async()=>({data:{id:'staff',role:'technical_recruiter',status:'active'},error:null})})})},
+    '@/lib/email-confirmations/server':{CaptureError},
+  });
+  const {requireProfile}=load('src/lib/auth/require-profile.ts');
+  const results=await Promise.all([requireProfile('recruiting_staff'),requireProfile('recruiting_staff'),requireProfile('recruiting_staff')]);
+  assert.equal(results.length,3);
+  assert.equal(queryCount,1);
+});
+
 test('invalid captured answers cannot mutate application success status',async()=>{
   const calls=[];
   const query={select(){return this;},eq(){return this;},single:async()=>({data:{owner_id:'actor',candidate_id:'candidate',submission_id:'submission',job:{application_url:'https://jobs.ashbyhq.com/fixture/job'},candidate:{version:1}},error:null})};

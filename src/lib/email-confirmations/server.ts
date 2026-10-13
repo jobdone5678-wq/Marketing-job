@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Supabase generated database types are not checked into this repository yet. */
 import 'server-only';
+import {timedDatabaseFetch} from '@/lib/db/timing';
 import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/server';
 import type { UserProfile } from '@/types/database';
@@ -16,7 +17,7 @@ export function adminClient(): SupabaseClient<any> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new CaptureError('Server-side Supabase configuration is missing. See the recruiting setup guide.', 503);
-  _adminClient = createSupabaseClient<any>(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  _adminClient = createSupabaseClient<any>(url, key, { auth: { persistSession: false, autoRefreshToken: false }, global: {fetch:timedDatabaseFetch} });
   return _adminClient;
 }
 

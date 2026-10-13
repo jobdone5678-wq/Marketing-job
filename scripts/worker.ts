@@ -19,7 +19,7 @@ import * as dotenv from 'dotenv';
 import * as path from 'node:path';
 
 try {
-  dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
+  dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: false });
 } catch {}
 
 import * as nextEnvModule from '@next/env';

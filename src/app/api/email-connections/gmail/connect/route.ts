@@ -6,6 +6,10 @@ import {captureErrorResponse,requireCaptureStaff,requireSameOrigin} from '@/lib/
 export async function POST(request:Request) {
   try {
     requireSameOrigin(request); const {profile}=await requireCaptureStaff(); const config=emailConfig();
+    // OAuth state cookies and the signed-in session are host-only. Start consent on the callback host.
+    if(new URL(request.url).origin!==config.appOrigin) {
+      return Response.json({url:`${config.appOrigin}/dashboard/email-confirmations?mail=reconnect`});
+    }
     const state=randomBytes(32).toString('base64url');const verifier=randomBytes(32).toString('base64url');
     const cookie=encryptToken(JSON.stringify({state,verifier,userId:profile.id,expires:Date.now()+600000}),config.encryptionKey);
     (await cookies()).set('mail_oauth',cookie,{httpOnly:true,secure:config.appOrigin.startsWith('https:'),sameSite:'lax',path:'/api/email-connections/gmail',maxAge:600});

@@ -1,0 +1,23 @@
+
+C:\Users\bharg\OneDrive\Desktop\marketing portal\scripts\worker.ts
+  12:8   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  27:35  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  27:75  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\bharg\OneDrive\Desktop\marketing portal\src\app\dashboard\email-confirmations\page.tsx
+  65:32  warning  The ref value 'loadGeneration.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'loadGeneration.current' to a variable inside the effect, and use that variable in the cleanup function  react-hooks/exhaustive-deps
+
+C:\Users\bharg\OneDrive\Desktop\marketing portal\src\lib\ai\client.ts
+   11:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   11:74  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   35:40  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   53:75  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   63:73  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   72:56  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   76:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   78:55  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  148:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  192:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 14 problems (13 errors, 1 warning)
+

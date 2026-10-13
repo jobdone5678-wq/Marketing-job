@@ -37,6 +37,15 @@ export function fixtureDatabase(tables) {
       select() { return query; },
       eq(key, value) { filters.push(row => row[key] === value); return query; },
       neq(key, value) { filters.push(row => row[key] !== value); return query; },
+      or(expression) {
+        const alternatives=expression.split(',').map(part=>{
+          const [key,operator,...rest]=part.split('.');const value=rest.join('.');
+          if(operator==='is'&&value==='null')return row=>row[key]==null;
+          if(operator==='gt')return row=>row[key]!=null&&Date.parse(row[key])>Date.parse(value);
+          throw new Error('Unsupported fixture OR filter: '+part);
+        });
+        filters.push(row=>alternatives.some(filter=>filter(row)));return query;
+      },
       in(key, values) { filters.push(row => values.includes(row[key])); return query; },
       ilike(key, value) { filters.push(row => row[key]?.toLowerCase().includes(value.replace(/^%|%$/g, '').toLowerCase())); return query; },
       order(key, options = {}) { orders.push([key, options.ascending !== false]); return query; },

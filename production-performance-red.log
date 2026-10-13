@@ -1,0 +1,52 @@
+✔ salary refresh batches and deduplicates IDs instead of one HTTP request per employment (105.6651ms)
+✔ staff finances start before placement maintenance and candidates cannot see private compensation (72.3082ms)
+✔ batch refresh only falls back for an unapplied migration, never hides database failures (35.5934ms)
+✔ large refreshes use bounded batches without exceeding SQL payload limits (16.3654ms)
+✔ protected routes expose authentication and handler durations on successful and failed requests (203.434ms)
+✖ super admin dashboard skips unused general metrics while other roles keep their metrics (5.2342ms)
+✔ staff can see their own salary period with the inclusive end date and payment history (3620.4826ms)
+✔ application capture exposes the answer snapshot linked to its submission (465.6204ms)
+✔ admin reviews a partial salary, records external payment and refreshes dashboard data (2221.1125ms)
+✖ collections opens without waiting for unrelated placement or payroll APIs (11369.9311ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 8
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 20554.4693
+
+✖ failing tests:
+
+test at tests\api-performance.test.mjs:51:1
+✖ super admin dashboard skips unused general metrics while other roles keep their metrics (5.2342ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + {
+  +   candidates: 3
+  + }
+  - null
+  
+      at TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/api-performance.test.mjs:54:113)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { candidates: 3 },
+    expected: null,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\recruiting-operations-ui.test.mjs:59:1
+✖ collections opens without waiting for unrelated placement or payroll APIs (11369.9311ms)
+  locator.waitFor: Timeout 10000ms exceeded.
+  Call log:
+  [2m  - waiting for getByRole('heading', { name: 'Candidate / client collections', exact: true }) to be visible[22m
+  
+      at TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\recruiting-operations-ui.test.mjs:67:85) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByRole('heading', { name: 'Candidate / client collections', exact: true }) to be visible" ]
+  }

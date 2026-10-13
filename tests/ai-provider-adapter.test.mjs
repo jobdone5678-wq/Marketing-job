@@ -52,6 +52,14 @@ test('an exhausted allowance prevents the fallback provider request',async t=>{
   assert.deepEqual(adapter.usage.map(row=>row.status),['failed_or_unknown']);
 });
 
+test('unrelated provider validation errors do not consume a second billed attempt',async t=>{
+ const adapter=harness(t,{responses:[new ProviderError('unknown model',400),requirements]});
+ const {requirementsSchema}=adapter.load('src/lib/ai/requirements-validation.ts');
+ await assert.rejects(adapter.structuredAI(task,requirementsSchema,'job_requirements','Extract requirements.','Requires SQL'),error=>error.status===422&&!error.message.includes('unknown model'));
+ assert.equal(adapter.requests.length,1);
+ assert.deepEqual(adapter.usage.map(row=>row.status),['failed_or_unknown']);
+});
+
 for(const name of ['job_requirements','candidate_match'])test(`${name} sends its complete validated output shape to the provider`,async t=>{
   const result=name==='job_requirements'?requirements:{requirements:[{...requirements.requirements[0],status:'met',candidateField:'primary_skills',candidateEvidence:'SQL'}],constraints:[]};
   const adapter=harness(t,{responses:[result]});

@@ -46,3 +46,11 @@ test('protected routes expose authentication and handler durations on successful
   assert.equal(response.status,fail?500:200);
  }
 });
+
+
+test('super admin dashboard skips unused general metrics while other roles keep their metrics',async()=>{
+ let role='super_admin';const calls=[];
+ const {GET}=moduleLoader({'@/lib/http/protected-route':{protectedRoute:(_r,_a,work)=>work({id:'actor',role})},'@/lib/db/admin':{database:()=>({rpc:async(name)=>{calls.push(name);return {data:{candidates:3},error:null};}}),checkDb:error=>{if(error)throw error;}}})('src/app/api/dashboard/route.ts');
+ const admin=await GET(new Request('https://test/api/dashboard'));assert.equal(admin.role,'super_admin');assert.equal(admin.metrics,null);assert.deepEqual(calls,[]);
+ role='recruiter';const staff=await GET(new Request('https://test/api/dashboard'));assert.equal(staff.metrics.candidates,3);assert.deepEqual(calls,['workspace_metrics']);
+});

@@ -1,0 +1,13 @@
+✔ admin layout remains readable at mobile, tablet, desktop and dark mode with one main scroll region (20541.9309ms)
+✔ admin overview explains assignment gaps and replaces overview when opening management (15036.3498ms)
+✔ admin can correct an affected account then separately approve its staff access (2103.507ms)
+✔ incremental platform update applies to the existing operations schema (5425.3592ms)
+✔ the deployable operations bundle applies after the existing schema and includes both new guards (4547.925ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 61487.7599

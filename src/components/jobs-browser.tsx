@@ -10,6 +10,7 @@ import { useUserProfile } from '@/hooks/use-user-profile';
 import type { Candidate } from '@/types/database';
 import { getCandidates } from '@/lib/candidates';
 import type { StoredJob, NormalizedJob } from '@/lib/jobs/types';
+import { JobDates } from '@/components/job-dates';
 
 interface LiveJob extends NormalizedJob {
   provider: 'greenhouse' | 'ashby';
@@ -494,6 +495,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                       </div>
                     </div>
 
+                    <JobDates posted_at={job.posted_at} closes_at={job.closes_at} provider={job.provider}/>
                     {job.match_reasons?.map(reason => <p key={reason} className="text-xs text-emerald-700 dark:text-emerald-300">{reason}</p>)}
                     {/* Metadata tags */}
                     <div className="flex flex-wrap gap-2 pt-1">
@@ -569,6 +571,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                   <p className="text-sm text-muted-foreground">
                     {j.company} - {j.location || 'Location unknown'}
                   </p>
+                  <JobDates posted_at={j.posted_at} closes_at={j.closes_at} provider={j.source?.provider}/>
                   {j.match_reasons?.map(reason => <p key={reason} className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">{reason}</p>)}
                   <p className="text-xs text-muted-foreground mt-1">
                     {j.employment_type} - {j.state}

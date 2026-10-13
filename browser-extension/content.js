@@ -18,16 +18,109 @@
   const applicationAnswers = new Map();
   let draftTimer;
 
+  const US_STATES = {
+    'alabama': 'al', 'alaska': 'ak', 'arizona': 'az', 'arkansas': 'ar', 'california': 'ca',
+    'colorado': 'co', 'connecticut': 'ct', 'delaware': 'de', 'florida': 'fl', 'georgia': 'ga',
+    'hawaii': 'hi', 'idaho': 'id', 'illinois': 'il', 'indiana': 'in', 'iowa': 'ia',
+    'kansas': 'ks', 'kentucky': 'ky', 'louisiana': 'la', 'maine': 'me', 'maryland': 'md',
+    'massachusetts': 'ma', 'michigan': 'mi', 'minnesota': 'mn', 'mississippi': 'ms', 'missouri': 'mo',
+    'montana': 'mt', 'nebraska': 'ne', 'nevada': 'nv', 'new hampshire': 'nh', 'new jersey': 'nj',
+    'new mexico': 'nm', 'new york': 'ny', 'north carolina': 'nc', 'north dakota': 'nd', 'ohio': 'oh',
+    'oklahoma': 'ok', 'oregon': 'or', 'pennsylvania': 'pa', 'rhode island': 'ri', 'south carolina': 'sc',
+    'south dakota': 'sd', 'tennessee': 'tn', 'texas': 'tx', 'utah': 'ut', 'vermont': 'vt',
+    'virginia': 'va', 'washington': 'wa', 'west virginia': 'wv', 'wisconsin': 'wi', 'wyoming': 'wy',
+    'district of columbia': 'dc'
+  };
+
+  // Words that, if present in a field's *direct* context, should exclude it from autofill.
+  // These are NOT used to filter container-collected context — only the field's own
+  // name/id/label is tested against this for exclusion purposes.
+  const EXCLUSIONARY_FIELD = /password|secret|token|credential|payment|credit\.?card|bank|routing|ssn|social\.?security|tax\.?id|birth\.?date|dob|medical|health|disability|ethnicity|race|gender|veteran|religion|consent|privacy|reference|referral|emergency|terms|captcha|otp|one\.?time\.?code|sign\s*in|log\s*in|site\s*search|cover\s*letter/i;
+
+  function getElementContext(el) {
+    const parts = [];
+    if (el.name) parts.push(el.name);
+    if (el.id) parts.push(el.id);
+    if (el.placeholder) parts.push(el.placeholder);
+    if (el.getAttribute('aria-label')) parts.push(el.getAttribute('aria-label'));
+    if (el.getAttribute('data-automation-id')) parts.push(el.getAttribute('data-automation-id'));
+    if (el.getAttribute('data-testid')) parts.push(el.getAttribute('data-testid'));
+    if (el.getAttribute('data-qa')) parts.push(el.getAttribute('data-qa'));
+    if (el.autocomplete) parts.push(el.autocomplete);
+
+    if (el.labels && el.labels.length) {
+      for (const l of el.labels) if (l.textContent) parts.push(l.textContent);
+    }
+    const labelledBy = (el.getAttribute('aria-labelledby') || '').split(/\s+/);
+    for (const id of labelledBy) {
+      if (!id) continue;
+      const node = document.getElementById(id);
+      if (node?.textContent) parts.push(node.textContent);
+    }
+    const describedBy = (el.getAttribute('aria-describedby') || '').split(/\s+/);
+    for (const id of describedBy) {
+      if (!id) continue;
+      const node = document.getElementById(id);
+      if (node?.textContent) parts.push(node.textContent);
+    }
+    const parentLabel = el.closest('label');
+    if (parentLabel?.textContent) parts.push(parentLabel.textContent);
+
+    const legend = el.closest('fieldset')?.querySelector('legend')?.textContent;
+    if (legend) parts.push(legend);
+
+    // Modern ATS container search (Ashby, Greenhouse, Lever, Workday)
+    let container = el.closest('[class*="fieldContainer"], [class*="field-container"], [class*="field_container"], [class*="field"], [class*="question"], [class*="form-group"], [class*="formGroup"], [class*="form_group"], fieldset, li, tr');
+    if (!container || (container.classList?.contains?.('_inputContainer') || /input.*container/i.test(container.className || ''))) {
+      const parentContainer = (container || el).parentElement?.closest('[class*="fieldContainer"], [class*="field-container"], [class*="field"], [class*="question"], [class*="form-group"], [class*="formGroup"], div');
+      if (parentContainer && parentContainer !== document.body && !parentContainer.closest('#mp-copilot-root')) {
+        container = parentContainer;
+      }
+    }
+    if (container && container !== document.body && !container.closest('#mp-copilot-root')) {
+      const titles = container.querySelectorAll('label, [class*="label"], [class*="title"], [class*="header"], [class*="heading"], [class*="prompt"], [class*="name"], h1, h2, h3, h4, h5, h6, strong, b');
+      for (const t of titles) {
+        if (t.contains(el)) continue;
+        const txt = (t.textContent || '').trim();
+        // Filter out exclusionary text (e.g. "Terms and Conditions", "Privacy Policy", "References")
+        // collected from the container so it does not cause unrelated fields to be skipped.
+        if (txt && txt.length < 150 && !EXCLUSIONARY_FIELD.test(txt)) parts.push(txt);
+      }
+    }
+
+    let prev = el.previousElementSibling;
+    if (prev && !prev.contains(el)) {
+      const prevTxt = (prev.textContent || '').trim();
+      if (prevTxt && prevTxt.length < 120 && !EXCLUSIONARY_FIELD.test(prevTxt)) parts.push(prevTxt);
+    }
+
+    return parts.join(' ');
+  }
+
+  function highlightField(el) {
+    try {
+      const originalOutline = el.style.outline;
+      const originalBoxShadow = el.style.boxShadow;
+      const originalTransition = el.style.transition;
+      el.style.transition = 'box-shadow 0.25s ease-in-out, outline 0.25s ease-in-out';
+      el.style.boxShadow = '0 0 0 2px rgba(16, 185, 129, 0.5), 0 0 8px rgba(16, 185, 129, 0.25)';
+      setTimeout(() => {
+        try {
+          el.style.boxShadow = originalBoxShadow || '';
+          el.style.outline = originalOutline || '';
+          el.style.transition = originalTransition || '';
+        } catch {}
+      }, 1500);
+    } catch {}
+  }
+
   function captureApplicationAnswers() {
     const answers = new Map();
     const relevant = /name|email|phone|mobile|address|city|state|zip|postal|country|location|linkedin|portfolio|website|github|skill|experience|employ|education|school|university|degree|qualif|company|title|role|position|salary|compensation|rate|availab|notice|start|relocat|sponsor|authori|work.?permit|cover.?letter|message|hear|referr|interest|project|summary/i;
     const sensitive = /password|secret|token|credential|payment|credit.?card|bank|routing|ssn|social.?security|tax.?id|birth.?date|dob|medical|health|disability|ethnicity|race|gender|veteran|religion|consent|privacy|captcha|otp|one.?time.?code/i;
     for (const el of document.querySelectorAll('input, textarea, select')) {
       if (el.closest('#mp-copilot-root') || !el.getClientRects().length || el.disabled || el.type === 'hidden' || ['password','file','submit','button','reset','image'].includes(el.type)) continue;
-      const labels = Array.from(el.labels || []).map(label => label.textContent || '').join(' ').trim();
-      const labelledBy = (el.getAttribute('aria-labelledby') || '').split(/\s+/).map(id => document.getElementById(id)?.textContent || '').join(' ').trim();
-      const legend = el.closest('fieldset')?.querySelector('legend')?.textContent || '';
-      const question = [legend, labelledBy, labels, el.getAttribute('aria-label'), el.placeholder].filter(Boolean).join(' ').trim();
+      const question = getElementContext(el).trim();
       const label = (question || el.name || el.id || '').slice(0, 200);
       const key = String(el.name || el.id || label).trim().slice(0, 160);
       if (!key || !label || sensitive.test(`${key} ${question} ${el.name || ''} ${el.id || ''}`) || !relevant.test(`${key} ${question || label}`)) continue;
@@ -51,7 +144,16 @@
   }
   for(const event of ['input','change','click','submit'])document.addEventListener(event,rememberAnswers,true);
 
-  const intentId = new URLSearchParams(location.hash.slice(1)).get('marketing-intent');
+  const hash = location.hash.slice(1);
+  const search = location.search.slice(1);
+  const hashParams = new URLSearchParams(hash);
+  const searchParams = new URLSearchParams(search);
+  const intentId = hashParams.get('marketing-intent')
+    || hashParams.get('marketing_intent')
+    || hashParams.get('marketing intent')
+    || searchParams.get('marketing-intent')
+    || searchParams.get('marketing_intent')
+    || hash.match(/marketing[-_ ]?intent=([a-f0-9-]+)/i)?.[1];
 
   // Resolve the tab's intent before choosing a profile; never default recruiters to row one.
   const intentContext = chrome.runtime.sendMessage(intentId ? { intentId } : { type: 'get_context' }).then(r => {
@@ -139,14 +241,32 @@
         filling = true;
         try { el.click(); } finally { filling = false; }
       }
+      highlightField(el);
       return;
+    }
+    // Jobright React value tracker synchronization
+    if (el._valueTracker) {
+      try { el._valueTracker.setValue(''); } catch {}
     }
     const proto = el.tagName === 'SELECT' ? HTMLSelectElement.prototype
       : el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(proto, property)?.set;
     if (setter) setter.call(el, value); else el[property] = value;
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
+
+    try { el.dispatchEvent(new Event('focus', { bubbles: true, composed: true })); } catch {}
+    try {
+      el.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        composed: true,
+        inputType: 'insertText',
+        data: String(value)
+      }));
+    } catch {
+      el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    }
+    el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    try { el.dispatchEvent(new Event('blur', { bubbles: true, composed: true })); } catch {}
+    highlightField(el);
   }
 
   function chooseCandidate(id) {
@@ -155,24 +275,59 @@
       return;
     }
     selectedCandidateId = candidates.some(c => c.id === id) ? id : null;
+    const candidate = candidates.find(c => c.id === selectedCandidateId);
+    if (candidate) {
+      const count = autofillCandidate(candidate, true);
+      if (count > 0) {
+        showInPageToast(`✨ Filled ${count} application fields for ${candidate.full_name}!`);
+      } else {
+        showInPageToast(`No form fields matched resume data for ${candidate.full_name}. Review fields manually or click Autofill.`, true);
+      }
+    }
     scheduleAutofill();
   }
 
-  // Fill only known profile facts into empty application fields. Never submit.
-  function autofillCandidate(candidate) {
+  // Fill known profile facts into application fields using Jobright-grade matching. Never submit.
+  function autofillCandidate(candidate, force = false) {
     if (!candidate) return 0;
     let count = 0;
     const names = (candidate.full_name || '').trim().split(/\s+/);
-    const norm = value => String(value || '').toLowerCase().replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
+    const norm = value => String(value || '').toLowerCase().replace(/[\*:]/g, ' ').replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
     const controls = document.querySelectorAll('input, textarea, select');
     for (const el of controls) {
-      if (el.closest('#mp-copilot-root') || el.disabled || el.readOnly || editedFields.has(el) || !el.getClientRects().length) continue;
+      if (el.closest('#mp-copilot-root') || el.disabled || el.readOnly || (!force && editedFields.has(el)) || !el.getClientRects().length) continue;
       if (['hidden', 'submit', 'button', 'file', 'password', 'search', 'reset'].includes(el.type)) continue;
-      const labels = Array.from(el.labels || []).map(label => label.textContent).join(' ');
-      const labelledBy = (el.getAttribute('aria-labelledby') || '').split(/\s+/).map(id => document.getElementById(id)?.textContent || '').join(' ');
-      const legend = el.closest('fieldset')?.querySelector('legend')?.textContent || '';
-      const key = norm([el.name, el.id, el.placeholder, el.getAttribute('aria-label'), labels, labelledBy, legend, el.autocomplete].filter(Boolean).join(' '));
-      if (/password|sign in|log in|search|cover letter|reference|referral|emergency|terms|consent|privacy|gender|ethnicity|veteran|disability/.test(key)) continue;
+
+      const rawContext = getElementContext(el);
+      const key = norm(rawContext);
+      if (!key) continue;
+
+      // Exclusion based on the field's OWN direct context (name, id, placeholder,
+      // aria-label, labels, parent label, legend). Container-collected context
+      // must NOT drive exclusion — otherwise unrelated labels like "Terms",
+      // "Privacy Policy", "References" in the same form would cause every field
+      // to be skipped.
+      const directParts = [];
+      if (el.name) directParts.push(el.name);
+      if (el.id) directParts.push(el.id);
+      if (el.placeholder) directParts.push(el.placeholder);
+      const ariaLabel = el.getAttribute('aria-label');
+      if (ariaLabel) directParts.push(ariaLabel);
+      if (el.autocomplete) directParts.push(el.autocomplete);
+      if (el.labels && el.labels.length) {
+        for (const l of el.labels) if (l.textContent) directParts.push(l.textContent);
+      }
+      if (el.getAttribute('data-automation-id')) directParts.push(el.getAttribute('data-automation-id'));
+      if (el.getAttribute('data-testid')) directParts.push(el.getAttribute('data-testid'));
+      if (el.getAttribute('data-qa')) directParts.push(el.getAttribute('data-qa'));
+      const parentLabel = el.closest('label');
+      if (parentLabel?.textContent) directParts.push(parentLabel.textContent);
+      const legend = el.closest('fieldset')?.querySelector('legend')?.textContent;
+      if (legend) directParts.push(legend);
+      const directKey = norm(directParts.join(' '));
+
+      if (EXCLUSIONARY_FIELD.test(directKey)) continue;
+
       let value = null;
       if (/sponsor/.test(key)) {
         value = /future/.test(key) ? candidate.need_sponsorship_future : candidate.need_sponsorship_now;
@@ -181,23 +336,58 @@
         // This profile fact is specifically US work authorization.
         if (!/\b(?:usa|united states|u\.s\.?|us)\b/.test(key) || /\bnot\b|unrestricted|permanent/.test(key)) continue;
         value = candidate.authorized_in_usa;
-      } else if (/relocat/.test(key)) value = candidate.open_to_relocation;
-      else if (/first.*name|given.*name|given name|\bfname\b/.test(key)) value = names[0];
-      else if (/last.*name|family.*name|surname|\blname\b/.test(key)) value = names.slice(1).join(' ');
-      else if (/e ?mail/.test(key) || el.type === 'email') value = candidate.email;
-      else if (/phone|mobile|telephone/.test(key) || el.type === 'tel') value = candidate.phone;
-      else if (/linkedin/.test(key)) value = candidate.linkedin_url;
-      else if (/university|institution|school/.test(key)) value = candidate.university_name;
-      else if (/degree|qualification/.test(key)) value = candidate.highest_qualification;
-      else if (/graduation/.test(key)) value = candidate.graduation_year;
-      else if (/full.*address|street.*address|address line 1/.test(key)) value = candidate.full_address;
-      else if (/city|address level2/.test(key)) value = candidate.current_city;
-      else if (/state|province|address level1/.test(key)) value = candidate.current_state;
-      else if (/current.*company|current.*employer/.test(key)) value = candidate.current_employer;
-      else if (/current.*title|job.*title|headline/.test(key)) value = candidate.current_job_title;
-      else if (/years.*experience|experience.*years/.test(key)) value = candidate.total_experience_years;
-      else if (/primary.*skills|technical.*skills/.test(key)) value = candidate.primary_skills;
-      else if (/full.*name|legal.*name/.test(key) || norm(el.name) === 'name' || norm(el.autocomplete) === 'name') value = candidate.full_name;
+      } else if (/relocat/.test(key)) {
+        value = candidate.open_to_relocation;
+      } else if (/\b(?:first\s*name|given\s*name|forename|\bfname\b)\b/.test(key) && !/\b(?:last|family|sur)\b/.test(key)) {
+        value = names[0];
+      } else if (/\b(?:last\s*name|family\s*name|surname|\blname\b)\b/.test(key) && !/\b(?:first|given)\b/.test(key)) {
+        value = names.slice(1).join(' ') || names[0];
+      } else if (/\b(?:middle\s*name|\bmname\b)\b/.test(key)) {
+        value = names.length > 2 ? names.slice(1, -1).join(' ') : '';
+      } else if (/e ?mail/.test(key) || el.type === 'email') {
+        value = candidate.email;
+      } else if (/phone|mobile|telephone/.test(key) || el.type === 'tel') {
+        value = candidate.phone;
+      } else if (/linkedin/.test(key)) {
+        value = candidate.linkedin_url;
+      } else if (/\bgithub\b/.test(key)) {
+        value = candidate.confirmed_facts?.github_url || candidate.github_url;
+      } else if (/\b(?:portfolio|personal\s*website|website|personal\s*site|url)\b/.test(key) && !/\b(?:linkedin|github|company)\b/.test(key)) {
+        value = candidate.confirmed_facts?.portfolio_url || candidate.portfolio_url;
+      } else if (/\b(?:candidate\s*location|your\s*location|current\s*location|\blocation\b|where\s*are\s*you\s*(?:located|based)|city\s*(?:and|,|\/)\s*state)\b/.test(key) && !/\b(?:relocat|work\s*location|office\s*location|job\s*location|desired\s*location|preferred\s*location)\b/.test(key)) {
+        value = [candidate.current_city, candidate.current_state].filter(Boolean).join(', ') || candidate.current_city || candidate.full_address;
+      } else if (/\b(?:city|town|address\s*level2)\b/.test(key)) {
+        value = candidate.current_city;
+      } else if (/\b(?:state|province|region|address\s*level1)\b/.test(key)) {
+        value = candidate.current_state;
+      } else if (/\b(?:full\s*address|street\s*address|address\s*line\s*1|\baddress\b)\b/.test(key) && !/\b(?:email|ip|web|url|level1|level2)\b/.test(key)) {
+        value = candidate.full_address || candidate.current_city;
+      } else if (/\b(?:zip|postal|postcode|post\s*code|pincode)\b/.test(key)) {
+        value = candidate.full_address?.match(/\b\d{5}(?:-\d{4})?\b/)?.[0] || '';
+      } else if (/university|institution|school|alma\s*mater/.test(key) && !/high\s*school/.test(key)) {
+        value = candidate.university_name;
+      } else if (/degree|highest\s*qualification|qualification|education\s*level/.test(key)) {
+        value = candidate.highest_qualification;
+      } else if (/graduation|grad\s*year/.test(key)) {
+        value = candidate.graduation_year;
+      } else if (/current.*company|current.*employer|most\s*recent\s*company|most\s*recent\s*employer|present\s*employer/.test(key) && !/sponsor|authoriz|past|previous/.test(key)) {
+        value = candidate.current_employer;
+      } else if (/current.*title|job.*title|current\s*role|present\s*title|headline/.test(key)) {
+        value = candidate.current_job_title;
+      } else if (/years.*experience|experience.*years|total\s*experience/.test(key)) {
+        value = candidate.total_experience_years;
+      } else if (/primary.*skills|technical.*skills|core\s*skills|key\s*skills/.test(key)) {
+        value = candidate.primary_skills;
+      } else if (/notice\s*period|available\s*to\s*start|start\s*date|how\s*soon\s*can\s*you\s*start|availability/.test(key)) {
+        value = candidate.notice_period || candidate.available_to_join;
+      } else if (/expected\s*salary|desired\s*salary|compensation\s*expectation|salary\s*expectation|desired\s*pay|target\s*salary/.test(key)) {
+        value = candidate.expected_salary || candidate.current_salary;
+      } else if (/\b(?:full\s*name|legal\s*name|candidate\s*name|applicant\s*name|your\s*name|\bname\b)\b/.test(key) || norm(el.name) === 'name' || norm(el.name) === 'systemfield name' || norm(el.name) === 'fullname' || norm(el.autocomplete) === 'name') {
+        if (!/\b(?:company|employer|school|university|organization|college|user\s*name|username|file|referral|emergency|preferred)\b/.test(key) && !/\b(?:first|given|last|family|surname)\b/.test(key)) {
+          value = candidate.full_name;
+        }
+      }
+
       if (value === null || value === undefined || value === '') continue;
       const boolean = typeof value === 'boolean';
       if (['radio', 'checkbox'].includes(el.type)) {
@@ -205,17 +395,18 @@
         const group = el.name ? Array.from(document.getElementsByName(el.name)).filter(input => input.form === el.form) : [el];
         if (group.some(input => input.checked)) continue;
         const answer = norm(el.value);
-        const labelAnswer = norm(labels);
-        const yes = /^(yes|true|1)$/.test(answer) || /^(yes|yes[,. ].*)$/.test(labelAnswer);
-        const no = /^(no|false|0)$/.test(answer) || /^(no|no[,. ].*)$/.test(labelAnswer);
+        const labelsText = norm(Array.from(el.labels || []).map(l => l.textContent).join(' '));
+        const yes = /^(yes|true|1)$/.test(answer) || /^(yes|yes[,. ].*)$/.test(labelsText);
+        const no = /^(no|false|0)$/.test(answer) || /^(no|no[,. ].*)$/.test(labelsText);
         if (!(value ? yes : no)) continue;
         nativeSet(el, 'checked', true);
       } else if (el.tagName === 'SELECT') {
         const selected = el.selectedOptions[0];
         if (el.value && !/^(select|choose|please select|--)/i.test(selected?.textContent?.trim() || '')) continue;
         const answer = boolean ? (value ? 'yes' : 'no') : norm(value);
+        const stateAbbr = typeof value === 'string' ? US_STATES[norm(value)] : null;
         const option = Array.from(el.options).find(option => !option.disabled && option.value !== '' &&
-          (norm(option.textContent) === answer || norm(option.value) === answer || boolean && norm(option.value) === String(value)));
+          (norm(option.textContent) === answer || norm(option.value) === answer || (boolean && norm(option.value) === String(value)) || (stateAbbr && (norm(option.textContent) === stateAbbr || norm(option.value) === stateAbbr))));
         if (!option) continue;
         nativeSet(el, 'value', option.value);
       } else {
@@ -456,7 +647,7 @@
           showInPageToast('Please select a candidate first.', true);
           return;
         }
-        const filledCount = autofillCandidate(candidate);
+        const filledCount = autofillCandidate(candidate, true);
         showInPageToast(`✨ Filled ${filledCount} application fields for ${candidate.full_name}!`);
       });
 

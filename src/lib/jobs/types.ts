@@ -1,4 +1,4 @@
 export type EmploymentType='contract'|'permanent'|'temporary'|'part_time'|'internship'|'unknown';
-export interface NormalizedJob {external_id:string;title:string;company:string;source_url:string;application_url:string;location:string|null;department:string|null;description:string;description_html:string;employment_type:EmploymentType;employment_evidence:string|null;arrangements:string[]|null;compensation:unknown;content_hash:string}
+export interface NormalizedJob {external_id:string;title:string;company:string;source_url:string;application_url:string;location:string|null;department:string|null;description:string;description_html:string;employment_type:EmploymentType;employment_evidence:string|null;arrangements:string[]|null;compensation:unknown;posted_at:string|null;closes_at:string|null;content_hash:string}
 export interface JobSnapshot {jobs:NormalizedJob[];completeness:'complete'|'partial'}
-export interface StoredJob extends NormalizedJob {id:string;source_id:string;version:number;state:'active'|'closed'|'stale';updated_at:string;relevance_score?:number;match_reasons?:string[]}
+export interface StoredJob extends NormalizedJob {id:string;source_id:string;version:number;state:'active'|'closed'|'stale';updated_at:string;source?:{provider:string;health?:string};relevance_score?:number;match_reasons?:string[]}

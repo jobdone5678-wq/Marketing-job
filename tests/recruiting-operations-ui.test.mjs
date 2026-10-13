@@ -54,3 +54,16 @@ test('admin reviews a partial salary, records external payment and refreshes das
  rejectPayment=true;await page.getByLabel('Payment amount',{exact:true}).fill('10');await page.getByLabel('External method',{exact:true}).fill('Bank');await page.getByRole('button',{name:'Record payment',exact:true}).click();await page.getByRole('dialog').getByRole('alert').filter({hasText:'External reference already recorded.'}).waitFor();assert.equal(paid,100);assert.equal(await page.evaluate(()=>window.updated),2);
 });
 
+
+
+test('collections opens without waiting for unrelated placement or payroll APIs',async t=>{
+ const unexpected=[];
+ const page=await mount(t,"require('react-dom/client').createRoot(document.getElementById('root')).render(require('react').createElement(require('placements').PlacementsWorkspace,{initialPanel:'collections'}));",{
+ '/api/settings':{profile:{id:'admin',role:'super_admin'}},
+ '/api/candidates':{candidates:[],hasMore:false},
+ '/api/admin/service-collections':{enrollments:[],limited:false},
+ ...Object.fromEntries(['/api/admin/placements','/api/admin/profiles','/api/admin/staff-employments','/api/admin/payments'].map(path=>[path,route=>{unexpected.push(path);return route.fulfill({status:500,json:{error:'Unrelated request must not block collections'}});}]))
+ });
+ await page.getByRole('heading',{name:'Candidate / client collections',exact:true}).waitFor({timeout:10000});
+ assert.deepEqual(unexpected,[]);
+});

@@ -13,7 +13,7 @@ const statusLabel={met:'Supported',missing:'Missing',unknown:'Unknown',conflict:
 const constraintLabels:Record<string,string>={authorized_in_usa:'US work authorization',need_sponsorship_now:'Sponsorship needed now',need_sponsorship_future:'Future sponsorship needed',open_to_relocation:'Open to relocation'};
 
 export function SkillMatcherDialog({open,onOpenChange,job}:{open:boolean;onOpenChange:(v:boolean)=>void;job:{id?:string;title:string;company:string;description:string;location?:string;portal?:string;url?:string}}){
- const [candidates,setCandidates]=useState<Candidate[]>([]),[selected,setSelected]=useState(''),[tasks,setTasks]=useState<string[]>([]),[result,setResult]=useState<Match|null>(null),[error,setError]=useState('');
+ const [candidates,setCandidates]=useState<Candidate[]>([]),[selected,setSelected]=useState(''),[tasks,setTasks]=useState<string[]>([]),[result,setResult]=useState<Match|null>(null),[error,setError]=useState(''),[failedTask,setFailedTask]=useState<string|null>(null),[submitting,setSubmitting]=useState(false);
  useEffect(()=>{if(!open)return;let active=true;getCandidates().then(rows=>{if(active)setCandidates(rows);}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[open]);
  useEffect(()=>{
   if(!open||!tasks.length||!job.id)return;
@@ -21,7 +21,7 @@ export function SkillMatcherDialog({open,onOpenChange,job}:{open:boolean;onOpenC
   async function poll(){try{
    const response=await api<{task:{status:string;error:string|null;result:{matchId?:string}|null}}>(`/api/tasks/${tasks[0]}`);
    if(cancelled)return;
-   if(response.task.status==='failed'){setError(response.task.error||'Processing failed. Fix the reported issue and queue the comparison again.');return;}
+   if(response.task.status==='failed'){setFailedTask(tasks[0]);setError(response.task.error||'Processing failed. Fix the reported issue and queue the comparison again.');return;}
    if(response.task.status==='succeeded'){
     const data=await api<{matches:Match[]}>(`/api/matches?candidateId=${encodeURIComponent(selected)}&jobId=${encodeURIComponent(job.id!)}`);
     const matches=data.matches.filter(match=>match.job_id===job.id);
@@ -37,8 +37,20 @@ export function SkillMatcherDialog({open,onOpenChange,job}:{open:boolean;onOpenC
  const analysis=visibleResult?.data;
  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-h-[85vh] overflow-auto sm:max-w-3xl">
   <DialogHeader><DialogTitle>Compare candidate with {job.title}</DialogTitle><DialogDescription>{job.company} · Evidence coverage includes unknown requirements. It is not a placement probability or a legal eligibility decision.</DialogDescription></DialogHeader>
-  <label className="grid gap-1 text-sm">Reviewed candidate<select className="rounded border bg-background p-2" aria-label="Candidate for comparison" value={selected} onChange={e=>{setSelected(e.target.value);setResult(null);setTasks([]);setError('');}}><option value="">Choose a reviewed candidate</option>{candidates.filter(candidate=>candidate.provenance_status==='confirmed').map(candidate=><option key={candidate.id} value={candidate.id}>{candidate.full_name}</option>)}</select></label>
-  <Button disabled={!selected||!job.id} onClick={async()=>{try{setError('');setResult(null);setTasks([]);const response=await api<{tasks:{taskId:string}[]}>('/api/matches',{method:'POST',body:JSON.stringify({candidateId:selected,jobIds:[job.id],allowOtherEmployment:true})});setTasks(response.tasks.map(task=>task.taskId));}catch(e){setError((e as Error).message);}}}>Queue AI comparison (this employment type)</Button>
+  <label className="grid gap-1 text-sm">Reviewed candidate<select className="rounded border bg-background p-2" aria-label="Candidate for comparison" value={selected} onChange={e=>{setSelected(e.target.value);setResult(null);setTasks([]);setFailedTask(null);setError('');}}><option value="">Choose a reviewed candidate</option>{candidates.filter(candidate=>candidate.provenance_status==='confirmed').map(candidate=><option key={candidate.id} value={candidate.id}>{candidate.full_name}</option>)}</select></label>
+  <Button disabled={!selected||!job.id||submitting||(tasks.length>0&&!error&&!visibleResult)} onClick={async()=>{
+   setSubmitting(true);
+   try{
+    setError('');setResult(null);setTasks([]);
+    if(failedTask){
+     const response=await api<{taskId:string}>(`/api/tasks/${failedTask}/retry`,{method:'POST'});
+     setFailedTask(null);setTasks([response.taskId]);
+    }else{
+     const response=await api<{tasks:{taskId:string}[]}>('/api/matches',{method:'POST',body:JSON.stringify({candidateId:selected,jobIds:[job.id],allowOtherEmployment:true})});
+     setTasks(response.tasks.map(task=>task.taskId));
+    }
+   }catch(e){setError((e as Error).message);}finally{setSubmitting(false);}
+  }}>{submitting?'Starting comparison…':failedTask?'Retry AI comparison':'Queue AI comparison (this employment type)'}</Button>
   {tasks.length>0&&!visibleResult&&!error&&<p role="status">Comparison queued / processing...</p>}
   {error&&<p role="alert" className="text-destructive">{error}</p>}
   {analysis&&<section className="space-y-5" aria-label="Comparison results">

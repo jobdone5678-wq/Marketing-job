@@ -11,7 +11,7 @@ after(async () => { await browser?.close(); });
 const candidate = { id: 'own', full_name: 'Alex Example', email: 'alex@example.test', phone: '5550100', current_city: 'Austin', current_state: 'Texas', authorized_in_usa: false, need_sponsorship_now: true, highest_qualification: 'Bachelor of Science', university_name: 'Example University', primary_skills: 'Python, SQL' };
 const content = await readFile(new URL('../browser-extension/content.js', import.meta.url), 'utf8');
 
-async function portal(t, { host = 'job-boards.greenhouse.io', candidates = [candidate], intentCandidateId = null, persistedCandidateId = null, role = 'client', beforeContent } = {}) {
+async function portal(t, { host = 'job-boards.greenhouse.io', candidates = [candidate], intentCandidateId = null, persistedCandidateId = null, role = 'client', beforeContent, hash } = {}) {
   const page = await browser.newPage();
   t.after(() => page.close());
   await page.route('https://' + host + '/**', route => route.fulfill({ contentType: 'text/html', body: `<h1>Engineer</h1><form id="application_form" data-testid="application-form">
@@ -23,7 +23,8 @@ async function portal(t, { host = 'job-boards.greenhouse.io', candidates = [cand
     <label for="website">Website</label><input id="website"><label for="password">Password</label><input id="password" type="password">
     <label><input type="checkbox" id="terms">I agree to terms</label><button type="submit">Submit application</button></form>
     <script>window.submits=0;document.querySelector('form').onsubmit=e=>{e.preventDefault();window.submits++};</script>` }));
-  await page.goto('https://' + host + '/fixture/job/application' + (intentCandidateId ? '#marketing-intent=fixture-intent' : ''));
+  const urlHash = hash !== undefined ? hash : (intentCandidateId ? '#marketing-intent=fixture-intent' : '');
+  await page.goto('https://' + host + '/fixture/job/application' + urlHash);
   await page.evaluate(({ candidates, intentCandidateId, persistedCandidateId, role }) => {
     window.chrome = { runtime: { sendMessage: async message => message.type === 'get_candidates'
       ? { candidates, role, ownCandidateId: role === 'client' ? candidates[0]?.id : null }
@@ -128,4 +129,74 @@ test('controlled React radio answers update application state and survive rerend
   assert.equal(await page.textContent('#react-answer'), 'No');
   await page.click('#rerender');
   assert.equal(await page.isChecked('input[name="react-auth"][value="No"]'), true);
+});
+
+test('Ashby container-based Name* and Location* questions without label-for attributes are accurately autofilled', async t => {
+  const page = await portal(t, { host: 'jobs.ashbyhq.com', beforeContent: async page => {
+    await page.evaluate(() => {
+      document.querySelector('form').innerHTML = `
+        <div class="_fieldContainer_123">
+          <div class="_labelContainer_123"><span class="_title_123">Name*</span></div>
+          <div class="_inputContainer_123"><input name="_systemfield_name" id="ashby-name" placeholder="Type here..."></div>
+        </div>
+        <div class="_fieldContainer_456">
+          <div class="_labelContainer_456"><span class="_title_456">Email*</span></div>
+          <div class="_inputContainer_456"><input name="_systemfield_email" id="ashby-email" placeholder="Type here..."></div>
+        </div>
+        <div class="_fieldContainer_789">
+          <div class="_labelContainer_789"><span class="_title_789">Location*</span></div>
+          <div class="_inputContainer_789"><input name="_systemfield_location" id="ashby-loc" placeholder="Search for a location..."></div>
+        </div>
+        <div class="_fieldContainer_abc">
+          <div class="_labelContainer_abc"><span class="_title_abc">LinkedIn Profile</span></div>
+          <div class="_inputContainer_abc"><input name="urls[LinkedIn]" id="ashby-linkedin" placeholder="https://..."></div>
+        </div>
+      `;
+    });
+  } });
+  await page.waitForFunction(() => document.querySelector('#ashby-name').value === 'Alex Example', null, { timeout: 2500 });
+  assert.equal(await page.inputValue('#ashby-name'), 'Alex Example');
+  assert.equal(await page.inputValue('#ashby-email'), 'alex@example.test');
+  assert.equal(await page.inputValue('#ashby-loc'), 'Austin, Texas');
+});
+
+test('URL hash supports #marketing_intent= with underscore', async t => {
+  const page = await portal(t, {
+    role: 'recruiter',
+    candidates: [{ ...candidate, id: 'other', email: 'other@example.test' }, candidate],
+    intentCandidateId: candidate.id,
+    hash: '#marketing_intent=fixture-intent'
+  });
+  await page.waitForFunction(() => document.querySelector('#email').value === 'alex@example.test', null, { timeout: 2500 });
+  assert.equal(await page.inputValue('#mp-candidate-select'), 'own');
+});
+
+test('controlled React text input synchronizes via _valueTracker and triggers onChange', async t => {
+  const require = createRequire(import.meta.url);
+  const packages = { react: ['react', 'react.production.js'], 'react-dom': ['react-dom', 'react-dom.production.js'], scheduler: ['scheduler', 'scheduler.production.js'], 'react-dom/client': ['react-dom', 'react-dom-client.production.js'] };
+  const sources = Object.fromEntries(await Promise.all(Object.entries(packages).map(async ([name, [pkg, file]]) => [name, await readFile(path.join(path.dirname(require.resolve(pkg + '/package.json')), 'cjs', file), 'utf8')])));
+  const page = await portal(t, { beforeContent: async page => {
+    await page.addScriptTag({ content: `(() => { const sources=${JSON.stringify(sources)}, cache={}; function require(name){if(cache[name])return cache[name].exports;const module={exports:{}};cache[name]=module;new Function('require','module','exports',sources[name])(require,module,module.exports);return module.exports;} window.React=require('react');window.ReactDOMClient=require('react-dom/client');})();` });
+    await page.evaluate(() => {
+      const h = window.React.createElement;
+      const container = document.createElement('div');
+      document.querySelector('form').append(container);
+      function ControlledInput() {
+        const [name, setName] = window.React.useState('');
+        const [renderCount, setRenderCount] = window.React.useState(0);
+        return h('div', { className: 'field-container' },
+          h('div', { className: 'label-title' }, 'Full Name*'),
+          h('input', { id: 'react-name-input', name: 'candidate_full_name', value: name, onChange: e => setName(e.target.value) }),
+          h('span', { id: 'react-name-display' }, name),
+          h('button', { id: 'react-rerender-btn', type: 'button', onClick: () => setRenderCount(c => c + 1) }, String(renderCount))
+        );
+      }
+      window.ReactDOMClient.createRoot(container).render(h(ControlledInput));
+    });
+    await page.locator('#react-name-display').waitFor({ state: 'attached', timeout: 2500 });
+  } });
+  await page.waitForFunction(() => document.querySelector('#react-name-display').textContent === 'Alex Example', null, { timeout: 2500 });
+  assert.equal(await page.textContent('#react-name-display'), 'Alex Example');
+  await page.click('#react-rerender-btn');
+  assert.equal(await page.inputValue('#react-name-input'), 'Alex Example');
 });

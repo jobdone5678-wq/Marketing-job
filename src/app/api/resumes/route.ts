@@ -20,56 +20,6 @@ export async function POST(request:Request) {return protectedRoute(request,'cand
   try {
     const {data:taskId,error}=await db.rpc('register_resume',{p_actor:profile.id,p_document:documentId,p_candidate:candidate?.id||null,p_expected:candidate?.version||null,p_path:path,p_filename:filename,p_hash:createHash('sha256').update(raw).digest('hex')});checkDb(error);
     
-    // In-route immediate AI processing (Serverless Native)
-    try {
-      const lease = randomUUID();
-      let task = null;
-      const { data: specificClaimed } = await db.rpc('claim_specific_task', { p_task: taskId, p_lease: lease });
-      if (specificClaimed?.[0]) {
-        task = specificClaimed[0];
-      } else {
-        const { data: directLeased } = await db.from('background_tasks')
-          .update({
-            status: 'running',
-            lease_token: lease,
-            lease_until: new Date(Date.now() + 180000).toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', taskId)
-          .eq('status', 'queued')
-          .select('*')
-          .maybeSingle();
-        if (directLeased) task = directLeased;
-      }
-
-      if (task) {
-        const { handleTask } = await import('@/lib/tasks/handlers');
-        const result = await handleTask(task);
-        await db.rpc('finish_task', {
-          p_task: task.id,
-          p_lease: task.lease_token,
-          p_result: result,
-          p_error: null,
-          p_transient: false,
-        });
-
-        const { data: extraction } = await db
-          .from('resume_extractions')
-          .select('data,model,created_at')
-          .eq('document_id', documentId)
-          .maybeSingle();
-
-        return {
-          documentId,
-          taskId,
-          status: 'ready',
-          extraction: extraction?.data || null,
-        };
-      }
-    } catch (inlineError: unknown) {
-      console.warn('In-route AI extraction fallback to webhook/queue:', inlineError instanceof Error ? inlineError.message : String(inlineError));
-    }
-
     return {documentId,taskId};
   } catch(error) {
     await db.storage.from('candidate-resumes').remove([path]);

@@ -44,3 +44,9 @@ test('role-only profiles still find relevant titles without matching generic eng
   const { rankResumeJobs } = await import('../src/lib/jobs/relevance.ts');
   assert.deepEqual(rankResumeJobs(jobs, { provenance_status: 'confirmed', current_job_title: 'Data Engineer' }).map(j => j.id), ['related']);
 });
+
+test('expired explicit application deadlines are excluded without requiring an observed closed state',async()=>{
+ const {rankResumeJobs}=await import('../src/lib/jobs/relevance.ts');
+ const dated=[{id:'expired',title:'Data Engineer',state:'active',closes_at:'2000-01-01T00:00:00Z'},{id:'future',title:'Data Engineer',closes_at:'2999-01-01T00:00:00Z'},{id:'unknown',title:'Data Engineer',closes_at:null}];
+ assert.deepEqual(rankResumeJobs(dated,candidate).map(j=>j.id),['future','unknown']);
+});

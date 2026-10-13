@@ -10,6 +10,7 @@ export async function GET(request:Request) {
   let appOrigin:string;
   try {appOrigin=emailConfig().appOrigin;} catch {return Response.json({error:'Gmail is not configured.'},{status:503});}
   try {
+    if(new URL(request.url).origin!==appOrigin) throw new Error('Callback host mismatch.');
     const config=emailConfig();const jar=await cookies(); const cookie=jar.get('mail_oauth')?.value;
     jar.set('mail_oauth','',{path:'/api/email-connections/gmail',maxAge:0,httpOnly:true,sameSite:'lax',secure:appOrigin.startsWith('https:')});
     const {profile}=await requireCaptureStaff(); const params=new URL(request.url).searchParams;

@@ -85,6 +85,8 @@ export async function GET(request: Request) {
                 employment_evidence: item.employment_evidence,
                 arrangements: item.arrangements,
                 compensation: item.compensation,
+                posted_at: item.posted_at,
+                closes_at: item.closes_at,
                 content_hash: item.content_hash,
                 state: 'active'
               }, { onConflict: 'source_id,external_id' });
@@ -161,6 +163,8 @@ export async function GET(request: Request) {
                   employment_evidence: item.employment_evidence,
                   arrangements: item.arrangements,
                   compensation: item.compensation,
+                posted_at: item.posted_at,
+                closes_at: item.closes_at,
                   content_hash: item.content_hash,
                   state: 'active'
                 }, { onConflict: 'source_id,external_id' });
@@ -180,7 +184,7 @@ export async function GET(request: Request) {
     }
 
     // In-memory filter for display
-    let filtered = jobs;
+    let filtered = jobs.filter(job => !job.closes_at || !(Date.parse(job.closes_at) <= Date.now()));
     if (employmentFilter !== 'all') {
       filtered = filtered.filter((j) => j.employment_type === employmentFilter);
     }

@@ -13,7 +13,7 @@ test('admin overview explains assignment gaps and replaces overview when opening
  await page.getByRole('heading',{name:'Needs attention',exact:true}).waitFor();
  await page.getByText('Recruiter not assigned',{exact:true}).waitFor();
  assert.equal(await page.getByText('confirmed',{exact:true}).count(),0);
- await page.getByRole('tab',{name:'Payroll',exact:true}).click();
+ await page.getByRole('tab',{name:'Recruiter payroll',exact:true}).click();
  await page.getByRole('heading',{name:'Staff salary periods',exact:true}).waitFor();
  assert.equal(await page.getByRole('heading',{name:'Needs attention',exact:true}).count(),0);
  assert.equal(await page.getByRole('navigation',{name:'Compensation sections',exact:true}).count(),0);

@@ -102,7 +102,7 @@ const technicalRecruiterNavItems: NavItem[] = [
   {id:"ashby",title:"Ashby Portals",url:"/dashboard/ashby",icon:<GlobeIcon className="size-4"/>},
 ]
 const adminNavItems: NavItem[] = [
-  ...recruiterNavItems,
+  ...recruiterNavItems.map(item => item.id === "placements" ? {...item, title: "Collections & Payroll"} : item),
   {id:"team",title:"Team & Assignments",url:"/dashboard/team",icon:<UserCheckIcon className="size-4"/>},
 ]
 
@@ -126,7 +126,7 @@ const candidateNavItems: NavItem[] = [
     url: "/dashboard/submissions",
     icon: <SendIcon className="size-4" />,
   },
-  { id:"placements", title:"My Placement", url:"/dashboard/placements", icon:<TrendingUpIcon className="size-4"/> },
+  { id:"placements", title:"My Service Fees & Placement", url:"/dashboard/placements", icon:<TrendingUpIcon className="size-4"/> },
   {
     id: "public-jobs",
     title: "Browse Jobs",

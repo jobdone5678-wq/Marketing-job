@@ -62,3 +62,19 @@ for(const stale of [false,true])test(`comparison renders evidence, unknowns and 
  assert.equal(await page.getByText(stale?'Insufficient evidence':'50% evidence coverage',{exact:true}).count(),1);
  if(stale)await page.getByRole('alert').filter({hasText:'changed'}).waitFor();
 });
+
+test('a failed AI comparison retries the existing task instead of reusing the old failure',async t=>{
+ let retried=false,queued=0;
+ const page=await mount(t,"require('react-dom/client').createRoot(document.getElementById('root')).render(require('react').createElement(require('matcher').SkillMatcherDialog,{open:true,onOpenChange(){},job:{id:'job',title:'Engineer',company:'Fixture',description:'Requires SQL'}}));",{
+  '/api/candidates':{candidates:[{id:'candidate',full_name:'Reviewed candidate',provenance_status:'confirmed'}],hasMore:false},
+  '/api/matches':route=>{if(route.request().method()==='POST'){queued++;return route.fulfill({json:{tasks:[{taskId:'task'}]}});}return route.fulfill({json:{matches:[{id:'match',job_id:'job',stale:false,data:{coverage:100,requirements:[],constraints:[]}}]}});},
+  '/api/tasks/task':route=>route.fulfill({json:{task:retried?{status:'succeeded',result:{matchId:'match'}}:{status:'failed',error:'OpenAI is not configured.'}}}),
+  '/api/tasks/task/retry':route=>{assert.equal(route.request().method(),'POST');retried=true;return route.fulfill({json:{taskId:'task'}});},
+ });
+ await page.getByLabel('Candidate for comparison').selectOption('candidate');
+ await page.getByRole('button',{name:'Queue AI comparison (this employment type)'}).click();
+ await page.getByRole('alert').filter({hasText:'not configured'}).waitFor({timeout:3000});
+ await page.getByRole('button',{name:'Retry AI comparison'}).click({timeout:3000});
+ await page.getByText('100% evidence coverage',{exact:true}).waitFor({timeout:3000});
+ assert.equal(queued,1);assert.equal(retried,true);
+});

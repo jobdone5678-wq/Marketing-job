@@ -8,7 +8,7 @@ const ownId = '10000000-0000-4000-8000-000000000002';
 const otherId = '10000000-0000-4000-8000-000000000003';
 const token = 'a'.repeat(43);
 class CaptureError extends Error { constructor(message, status = 400) { super(message); this.status = status; } }
-function setup({ role = 'client', candidates, jobs = [], revoked = false } = {}) {
+function setup({ role = 'client', candidates, jobs = [], revoked = false, liveJobs = [] } = {}) {
   const profile = { id: owner, role, status: 'active' };
   const tables = {
     candidates: candidates || [
@@ -16,11 +16,13 @@ function setup({ role = 'client', candidates, jobs = [], revoked = false } = {})
       { id: otherId, user_id: 'another-owner', full_name: 'Other profile', provenance_status: 'confirmed', primary_skills: 'Java' },
     ],
     jobs,
+    job_sources: [{id:'source',provider:'ashby',company:'Fixture',board_slug:'fixture',enabled:true}],
     profiles: [profile],
     extension_credentials: [{ owner_id: owner, token_hash: createHash('sha256').update(token).digest('hex'), expires_at: '2099-01-01', revoked_at: revoked ? '2026-01-01' : null }],
   };
   const db = fixtureDatabase(tables);
   const load = moduleLoader({
+    '@/lib/jobs/adapters/native': {fetchSnapshot:async()=>({jobs:liveJobs,completeness:'complete'}),validateBoard(){}},
     '@/lib/db/admin': { database: () => db, checkDb: error => { if (error) throw error; }, CaptureError, errorResponse: error => Response.json({ error: error.message }, { status: error.status || 500 }), requireSameOrigin() {} },
     '@/lib/auth/require-profile': { requireProfile: async () => profile },
   });
@@ -99,4 +101,18 @@ test('candidate autofill credentials do not gain access to staff submission acti
   const { load } = setup();
   const { extensionActor } = load('src/lib/capture/server.ts');
   await assert.rejects(extensionActor(new Request('https://portal.test', { headers: { authorization: 'Bearer ' + token } })), error => error.status === 403);
+});
+
+test('saved discovery excludes explicit expired deadlines before pagination and retains unknown dates',async()=>{
+ const {load}=setup({jobs:[{id:'expired',title:'Python Developer',state:'active',closes_at:'2000-01-01T00:00:00Z'},{id:'unknown',title:'Python Developer',state:'active',posted_at:null,closes_at:null}]});
+ const response=await load('src/app/api/jobs/route.ts').GET(new Request('https://portal.test/api/jobs'));
+ const result=await response.json();assert.equal(response.status,200);assert.deepEqual(result.jobs.map(job=>job.id),['unknown']);assert.equal(result.jobs[0].posted_at,null);
+});
+
+test('candidate live discovery never falls back to unrelated software roles',async()=>{
+ const {load}=setup({liveJobs:[{title:'Java Developer',description:'Java and Spring'},{title:'Python Developer',description:'Python',posted_at:'2026-10-01T12:00:00Z',closes_at:null}]});
+ const response=await load('src/app/api/jobs/live/route.ts').GET(new Request('https://portal.test/api/jobs/live'));
+ const result=await response.json();assert.equal(response.status,200);assert.deepEqual(result.jobs.map(job=>job.title),['Python Developer']);assert.equal(result.jobs[0].posted_at,'2026-10-01T12:00:00Z');
+ const {load:withoutProfile}=setup({candidates:[],liveJobs:[{title:'Python Developer',description:'Python'}]});
+ const unreviewed=await (await withoutProfile('src/app/api/jobs/live/route.ts').GET(new Request('https://portal.test/api/jobs/live'))).json();assert.deepEqual(unreviewed.jobs,[]);assert.equal(unreviewed.recommendation.requiresProfile,true);
 });

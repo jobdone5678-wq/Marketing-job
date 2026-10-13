@@ -1,5 +1,13 @@
 import {createHash} from 'node:crypto';import sanitize from 'sanitize-html';import type {EmploymentType,JobSnapshot,NormalizedJob} from './types';
 type Raw=Record<string,unknown>;const object=(x:unknown):Raw=>x&&typeof x==='object'&&!Array.isArray(x)?x as Raw:{};const str=(x:unknown)=>typeof x==='string'&&x.trim()?x.trim():null;
+function providerTimestamp(value:unknown):string|null {
+ const text=str(value);
+ // Require a timezone and a real calendar date; do not let Date.parse roll February 30 forward.
+ if(!text||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(text))return null;
+ const day=new Date(text.slice(0,10)+'T00:00:00Z');
+ if(!Number.isFinite(day.getTime())||day.toISOString().slice(0,10)!==text.slice(0,10))return null;
+ const timestamp=Date.parse(text);return Number.isFinite(timestamp)?new Date(timestamp).toISOString():null;
+}
 export function publicJobUrl(value:unknown){const text=str(value);if(!text)return null;try{const u=new URL(text);if(u.protocol!=='https:'||u.username||u.password||u.port||!u.hostname.includes('.')||/^(localhost|127\.|10\.|192\.168\.|169\.254\.|0\.)/.test(u.hostname)||/^172\.(1[6-9]|2\d|3[01])\./.test(u.hostname)||u.hostname.includes(':'))return null;u.hash='';return u.toString();}catch{return null;}}
 export function employment(metadata:unknown,text:string):{type:EmploymentType;evidence:string|null;arrangements:string[]|null}{
  const map:Record<string,EmploymentType>={contract:'contract',fulltime:'permanent','full-time':'permanent',permanent:'permanent',temporary:'temporary',parttime:'part_time','part-time':'part_time',intern:'internship',internship:'internship'};
@@ -22,7 +30,10 @@ export function normalizeSnapshot(source:{provider:string;company:string},input:
  const fact=employment(metadata,description);const external=source.provider==='greenhouse'&&typeof row.id==='number'?String(row.id):createHash('sha256').update(url).digest('hex');
  if(seen.has(external)){invalid=true;continue;}seen.add(external);
  const record={external_id:external,title,company:source.company,source_url:url,application_url:apply,description,description_html:html,location:str(source.provider==='greenhouse'?object(row.location).name:row.location),department:str(source.provider==='greenhouse'?(Array.isArray(row.departments)?object(row.departments[0]).name:null):row.department),employment_type:fact.type,employment_evidence:fact.evidence,arrangements:fact.arrangements,compensation:row.compensation||null};
- jobs.push({...record,content_hash:createHash('sha256').update(JSON.stringify(record)).digest('hex')});
+ // Greenhouse supplies first publication; Ashby supplies last publication (including republication).
+ // Neither public board API documents an application deadline. Absence is not a closing date.
+ const dated={...record,posted_at:providerTimestamp(source.provider==='greenhouse'?row.first_published:row.publishedAt),closes_at:null};
+ jobs.push({...dated,content_hash:createHash('sha256').update(JSON.stringify(dated)).digest('hex')});
  }
  const complete=!invalid&&(source.provider==='ashby'||object(root.meta).total===root.jobs.length);return {jobs,completeness:complete?'complete':'partial'};
 }

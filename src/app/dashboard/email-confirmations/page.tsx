@@ -10,6 +10,8 @@ import {Label} from '@/components/ui/label';
 import {toast} from 'sonner';
 import type {ApplicationIdentity,CandidateIdentity,EmailConnectionSummary,EmailReceiptRecord} from '@/lib/email-confirmations/types';
 
+type GmailSetup = {missing:string[];invalid:string[];appOrigin:string|null;redirectUri:string|null};
+
 async function api<T>(url:string,options?:RequestInit):Promise<T> {
   const response=await fetch(url,{...options,cache:'no-store'});
   const result=await response.json();
@@ -23,6 +25,7 @@ export default function EmailConfirmationsPage() {
   const [candidates,setCandidates]=React.useState<CandidateIdentity[]>([]);
   const [applications,setApplications]=React.useState<ApplicationIdentity[]>([]);
   const [configured,setConfigured]=React.useState(false);
+  const [gmailSetup,setGmailSetup]=React.useState<GmailSetup|null>(null);
   const [loading,setLoading]=React.useState(true);
   const [error,setError]=React.useState('');
   const [busy,setBusy]=React.useState<string|null>(null);
@@ -43,12 +46,13 @@ export default function EmailConfirmationsPage() {
     try {
       const [data,mail]=await Promise.all([
         api<{receipts:EmailReceiptRecord[];candidates:CandidateIdentity[];applications:ApplicationIdentity[];total:number;hasMore:boolean}>(`/api/email-confirmations?disposition=${filter}&page=${page}`),
-        api<{connections:EmailConnectionSummary[];gmailConfigured:boolean}>('/api/email-connections'),
+        api<{connections:EmailConnectionSummary[];gmailConfigured:boolean;gmailSetup?:GmailSetup}>('/api/email-connections'),
       ]);
       if(generation!==loadGeneration.current) return;
       setReceipts(data.receipts);setCandidates(data.candidates);setApplications(data.applications);
       setTotal(data.total);setHasMore(data.hasMore);
       setConnections(mail.connections);setConfigured(mail.gmailConfigured);
+      setGmailSetup(mail.gmailSetup??null);
     } catch(reason) {if(generation===loadGeneration.current)setError(reason instanceof Error?reason.message:'Could not load confirmations.');}
     finally {if(generation===loadGeneration.current)setLoading(false);}
   },[filter,page]);
@@ -56,6 +60,7 @@ export default function EmailConfirmationsPage() {
     const status=new URLSearchParams(window.location.search).get('mail');
     if(status==='connected') toast.success('Mailbox connected. Sync now to import recent receipts.');
     if(status==='connection_failed') toast.error('Mailbox was not connected. Check configuration and consent, then retry.');
+    if(status==='reconnect') toast.info('You are now on the configured Gmail callback host. Connect Gmail again to continue.');
     if(status) window.history.replaceState(null,'',window.location.pathname);
     return ()=>{loadGeneration.current++;};
   },[load]);
@@ -95,7 +100,15 @@ export default function EmailConfirmationsPage() {
           const result=await api<{url:string}>('/api/email-connections/gmail/connect',{method:'POST'});window.location.assign(result.url);
         })}>Connect Gmail</Button>
       </div>
-      {!configured && <p className="text-sm text-amber-700 dark:text-amber-300">Gmail is not configured yet. Your administrator must complete the email capture setup. Imported .eml receipts require review.</p>}
+      {!loading&&!configured && <p className="text-sm text-amber-700 dark:text-amber-300">Gmail is not configured on this deployment. Your administrator must complete the email capture setup. Imported .eml receipts require review.</p>}
+      {gmailSetup&&<details className="text-sm border rounded-lg p-3 space-y-2" open={!configured}>
+        <summary className="cursor-pointer font-medium">Administrator Gmail setup</summary>
+        {gmailSetup.missing.length>0&&<p>Missing server variables: <span className="font-mono break-words">{gmailSetup.missing.join(', ')}</span>.</p>}
+        {gmailSetup.invalid.map(issue=><p key={issue}>{issue}</p>)}
+        <p>Set the server variables in this hosting project&apos;s Production environment, then redeploy. Local .env.local settings do not configure the hosted site.</p>
+        {gmailSetup.redirectUri&&<p>Register this exact authorized redirect URI in the Google OAuth web client: <code className="break-all">{gmailSetup.redirectUri}</code></p>}
+        {gmailSetup.appOrigin&&<p>Connect from <a className="underline" href={`${gmailSetup.appOrigin}/dashboard/email-confirmations`}>{gmailSetup.appOrigin}</a> so the sign-in session and consent cookie use the callback host.</p>}
+      </details>}
       {connections.length===0 && !loading && !error && <p className="text-sm text-muted-foreground">No connected mailboxes.</p>}
       {connections.map(connection=><MailboxCard key={connection.id} connection={connection} busy={!!busy} onSync={()=>void run(connection.id,async()=>{
         const result=await api<{processed:number;confirmed:number;review:number;hasMore:boolean}>(`/api/email-connections/${connection.id}/sync`,{method:'POST'});

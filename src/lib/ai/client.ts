@@ -3,33 +3,8 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 import { database, checkDb, CaptureError } from '@/lib/db/admin';
 import type { BackgroundTask } from '@/lib/tasks/types';
-import * as dotenv from 'dotenv';
-import * as path from 'path';
-
-// Ensure .env.local overrides any stale environment variables in the parent process
-try {
-  dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
-} catch {}
-
-export type AIProvider = 'openai';
-
-export function getAIProvider(): AIProvider {
-  return 'openai';
-}
-
-export function getAIModel(): string {
-  return process.env.OPENAI_MODEL || 'gpt-4o-mini';
-}
-
-export function aiConfiguration() {
-  const configured = Boolean(process.env.OPENAI_API_KEY && (process.env.OPENAI_MODEL || process.env.OPENAI_BASE_URL));
-
-  return {
-    configured,
-    provider: 'openai' as const,
-    model: getAIModel() || null,
-  };
-}
+import {requireAIConfiguration} from './config';
+export {aiConfiguration,getAIModel,getAIProvider,type AIProvider} from './config';
 
 import { emptyCandidateFields } from './schemas';
 
@@ -115,18 +90,12 @@ export async function structuredAI<T>(
   text: string,
   file?: { raw: Buffer; mime: string; filename: string }
 ): Promise<T> {
-  const key = process.env.OPENAI_API_KEY;
-  const model = getAIModel();
-
-  if (!key) {
-    throw new CaptureError('OpenAI is not configured. Set OPENAI_API_KEY in environment variables.', 503);
-  }
+  const {apiKey:key,model,baseURL}=requireAIConfiguration();
 
   const db = database();
   let usage: string | null = null;
 
   try {
-    const baseURL = process.env.OPENAI_BASE_URL ? process.env.OPENAI_BASE_URL.replace('//localhost:', '//127.0.0.1:') : undefined;
     const client = new OpenAI({
       apiKey: key,
       baseURL,
@@ -178,7 +147,7 @@ export async function structuredAI<T>(
       rawContent = completion.choices[0]?.message?.content;
     } catch (chatError: any) {
       // If provider rejects response_format param, fallback to prompt-only JSON
-      if (chatError?.message?.includes('response_format') || chatError?.status === 400) {
+      if (chatError?.status === 400 && /response_format|json_object|json mode/i.test(chatError?.message||'')) {
         const fallback = await completionAttempt({
           model,
           messages: [
@@ -232,7 +201,6 @@ export async function structuredAI<T>(
         throw new CaptureError('AI provider temporarily unavailable or rate limited.', 502);
       }
     }
-    console.error('[structuredAI Error]', err?.message || err);
-    throw new CaptureError(`AI processing failed: ${err?.message || 'No candidate details were confirmed.'}`, 422);
+    throw new CaptureError('AI processing failed. Check the provider endpoint, model and worker configuration. No candidate details were confirmed.', 422);
   }
 }

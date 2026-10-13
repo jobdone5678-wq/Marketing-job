@@ -10,7 +10,7 @@ before(async () => { browser = await chromium.launch({ headless: true }); });
 after(async () => { await browser?.close(); });
 
 const sources = await browserReactModules();
-for (const [name, file] of [['jobs-browser', '../src/components/jobs-browser.tsx'], ['@/lib/candidates', '../src/lib/candidates.ts'], ['@/lib/api-client', '../src/lib/api-client.ts']]) {
+for (const [name, file] of [['@/components/job-dates', '../src/components/job-dates.tsx'], ['jobs-browser', '../src/components/jobs-browser.tsx'], ['@/lib/candidates', '../src/lib/candidates.ts'], ['@/lib/api-client', '../src/lib/api-client.ts']]) {
   sources[name] = ts.transpileModule(await readFile(new URL(file, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
 }
 sources['./api-client'] = "module.exports=require('@/lib/api-client');";
@@ -22,7 +22,7 @@ for (const [name, tag] of [['Button', 'button'], ['Input', 'input'], ['Badge', '
 
 const ownId = '10000000-0000-4000-8000-000000000002';
 const reviewed = { id: ownId, full_name: 'Reviewed candidate', provenance_status: 'confirmed' };
-const matchingJob = { id: 'job', title: 'Python Developer', company: 'Example', employment_type: 'permanent', state: 'active', match_reasons: ['Skills: Python'] };
+const matchingJob = { id: 'job', title: 'Python Developer', company: 'Example', employment_type: 'permanent', state: 'active', posted_at: '2026-10-01T12:00:00Z', closes_at: null, match_reasons: ['Skills: Python'] };
 
 async function jobsPage(t, { role = 'client', requiresProfile = false } = {}) {
   const page = await browser.newPage();
@@ -76,4 +76,11 @@ test('recruiter selector includes reviewed candidates from later pages and carri
   await page.waitForFunction(id => document.querySelector(`a[href="/dashboard/jobs/job?candidateId=${id}"]`), ownId);
   assert.equal(requests.at(-1), ownId);
   assert.equal(await page.getByRole('link', { name: 'Review and apply' }).getAttribute('href'), '/dashboard/jobs/job?candidateId=' + ownId);
+});
+
+test('saved job cards distinguish source dates from unknown closing dates',async t=>{
+ const {page}=await jobsPage(t);
+ await page.getByText('Python Developer',{exact:true}).waitFor();
+ assert.equal(await page.locator('time[datetime="2026-10-01T12:00:00Z"]').count(),1);
+ assert.ok((await page.textContent('main')).includes('Closing date: Not provided by source'));
 });

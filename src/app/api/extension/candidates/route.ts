@@ -42,7 +42,12 @@ export async function GET(request: Request) {
         highest_qualification,
         university_name,
         graduation_year,
-        is_active_bench
+        is_active_bench,
+        notice_period,
+        available_to_join,
+        current_salary,
+        expected_salary,
+        confirmed_facts
       `)
       .eq('provenance_status', 'confirmed')
       .order('updated_at', { ascending: false })

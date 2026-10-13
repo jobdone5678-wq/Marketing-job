@@ -22,9 +22,9 @@ export async function GET(request: Request) {
       checkDb(error);
       sourceIds = ((data || []) as {id:string}[]).map(source => source.id);
     }
-    function query() {
-      let q = database().from('jobs').select('id,external_id,title,company,location,department,description,employment_type,arrangements,compensation,source_url,application_url,version,state,updated_at,source:job_sources(provider,board_slug,health)', { count: 'exact' })
-        .neq('state', 'closed').order('updated_at', { ascending: false }).order('id');
+    function query(count=false) {
+      let q = database().from('jobs').select('id,external_id,title,company,location,department,description,employment_type,arrangements,compensation,source_url,application_url,version,state,updated_at,posted_at,closes_at,source:job_sources(provider,board_slug,health)', count ? { count: 'exact' } : {})
+        .neq('state', 'closed').or('closes_at.is.null,closes_at.gt.' + new Date().toISOString()).order('updated_at', { ascending: false }).order('id');
       if (type !== 'all') q = q.eq('employment_type', type);
       const search = params.get('search')?.trim();
       if (search) q = q.ilike('title', '%' + search.replace(/[\\%_]/g, '\\$&') + '%');
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
       return q;
     }
     if (!candidate) {
-      const { data, error, count } = await query().range(page * 50, page * 50 + 49);
+      const { data, error, count } = await query(true).range(page * 50, page * 50 + 49);
       checkDb(error);
       return { jobs: data || [], total: count || 0, hasMore: (page + 1) * 50 < (count || 0), recommendation };
     }
