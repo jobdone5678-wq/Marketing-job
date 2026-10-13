@@ -185,7 +185,12 @@ export function AppSidebar({
     async function load() {
       const {data: {user}} = await client.auth.getUser()
       const {data: profile} = user ? await client.from("profiles").select("role,status,full_name").eq("id",user.id).single() : {data:null}
-      if (!cancelled) setCurrentUser({name: profile?.full_name || user?.email || "Account",email: user?.email || "",avatar:"",role:profile?.status === "active" ? profile.role : ""})
+      if (!cancelled) setCurrentUser({
+        name: profile?.full_name || user?.user_metadata?.full_name || user?.email || "Account",
+        email: user?.email || "",
+        avatar: (user?.user_metadata?.avatar_url || user?.user_metadata?.picture || "") as string,
+        role: profile?.status === "active" ? profile.role : ""
+      })
     }
     void load()
     const {data:{subscription}} = client.auth.onAuthStateChange(() => {setTimeout(() => void load(),0)})

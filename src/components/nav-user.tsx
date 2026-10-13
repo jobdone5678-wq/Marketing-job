@@ -45,6 +45,17 @@ export function NavUser({
       ? "Candidate"
       : undefined
 
+  const initials = (() => {
+    if (!user.name || user.name === "Loading account" || user.name === "Account") {
+      return user.email ? user.email.slice(0, 2).toUpperCase() : "U";
+    }
+    const words = user.name.trim().split(/\s+/).filter(Boolean);
+    if (words.length >= 2) {
+      return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+    }
+    return user.name.slice(0, 2).toUpperCase();
+  })();
+
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -54,10 +65,10 @@ export function NavUser({
               <SidebarMenuButton size="lg" className="aria-expanded:bg-muted" />
             }
           >
-            <Avatar className="size-8 rounded-lg">
+            <Avatar className="size-8 rounded-lg ring-1 ring-border/50 shadow-xs">
               <AvatarImage src={user.avatar} alt={user.name} />
-              <AvatarFallback className="rounded-lg bg-primary/10 text-primary font-semibold text-xs">
-                {user.name.slice(0, 2).toUpperCase()}
+              <AvatarFallback className="rounded-lg bg-gradient-to-br from-primary/20 via-primary/10 to-primary/5 text-primary font-bold text-xs ring-1 ring-primary/20">
+                {initials}
               </AvatarFallback>
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
@@ -84,10 +95,10 @@ export function NavUser({
             <DropdownMenuGroup>
               <DropdownMenuLabel className="p-0 font-normal">
                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                  <Avatar className="size-8">
+                  <Avatar className="size-8 rounded-lg ring-1 ring-border/50 shadow-xs">
                     <AvatarImage src={user.avatar} alt={user.name} />
-                    <AvatarFallback className="rounded-lg bg-primary/10 text-primary font-semibold text-xs">
-                      {user.name.slice(0, 2).toUpperCase()}
+                    <AvatarFallback className="rounded-lg bg-gradient-to-br from-primary/20 via-primary/10 to-primary/5 text-primary font-bold text-xs ring-1 ring-primary/20">
+                      {initials}
                     </AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
