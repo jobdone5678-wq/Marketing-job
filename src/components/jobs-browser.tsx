@@ -11,6 +11,7 @@ import type { Candidate } from '@/types/database';
 import { getCandidates } from '@/lib/candidates';
 import type { StoredJob, NormalizedJob } from '@/lib/jobs/types';
 import { JobDates } from '@/components/job-dates';
+import { PublicJobCatalog } from '@/components/public-job-catalog';
 
 interface LiveJob extends NormalizedJob {
   provider: 'greenhouse' | 'ashby';
@@ -48,8 +49,8 @@ export function JobsBrowser({ provider }: { provider?: string }) {
 
   // Live Mode states
   const [liveJobs, setLiveJobs] = useState<LiveJob[]>([]);
-  const [liveBoard, setLiveBoard] = useState(provider === 'ashby' ? 'openai' : 'ramp');
-  const [liveProvider, setLiveProvider] = useState<string>(provider || 'greenhouse');
+  const [liveBoard, setLiveBoard] = useState(provider === 'greenhouse' ? 'figma' : 'ramp');
+  const [liveProvider, setLiveProvider] = useState<string>(provider || 'ashby');
   const [liveLoading, setLiveLoading] = useState(false);
   const [saveToDbOnFetch, setSaveToDbOnFetch] = useState(true);
   const [syncingSoftwareJobs, setSyncingSoftwareJobs] = useState(false);
@@ -86,8 +87,11 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         fetchedAt: string;
         persistedInDb: boolean;
         recommendation: Recommendation;
+        sources?: {error?:string}[];
       }>('/api/jobs/live?saveToDb=true');
-      setNotice(res.persistedInDb ? 'Public jobs refreshed and saved. Updating your related roles...' : 'Review and save your resume profile before finding related roles.');
+      setNotice(res.persistedInDb ? 'Public jobs refreshed and saved. Updating your related roles...' : res.recommendation.requiresProfile ? 'Review and save your resume profile before finding related roles.' : 'No complete refresh was saved. Review source errors or try another public board.');
+      const failures = res.sources?.flatMap(source => source.error ? [source.error] : []);
+      if (failures?.length) setError(failures.join(' '));
       // Refresh DB jobs
       setDbPage(0);
       setReload(v => v + 1);
@@ -122,13 +126,16 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           fetchedAt: string;
           persistedInDb: boolean;
         recommendation: Recommendation;
+        sources?: {error?:string}[];
         }>(`/api/jobs/live?${query.toString()}`);
 
         if (requestId !== liveRequest.current) return;
         setRecommendation(res.recommendation);
         setLiveJobs(res.jobs || []);
         setLastFetchedTime(new Date(res.fetchedAt).toLocaleTimeString());
-        if (saveToDbOnFetch && res.jobs?.length) {
+        const failures = res.sources?.flatMap(source => source.error ? [source.error] : []);
+        if (failures?.length) setError(failures.join(' '));
+        if (saveToDbOnFetch && res.persistedInDb) {
           setNotice(`✅ Pulled ${res.jobs.length} software jobs and stored them in the database!`);
           void api<{ jobs: StoredJob[]; total: number; hasMore: boolean; recommendation: Recommendation }>(
             `/api/jobs?type=${employmentType}&search=${encodeURIComponent(search)}&page=0${
@@ -237,6 +244,13 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           </Button>
         </div>
       </div>
+
+      <PublicJobCatalog provider={provider} canSave={isRecruiter} onSelect={board => {
+        setLiveBoard(board.board_slug); setLiveProvider(board.provider); setMode('live');
+      }} onSaved={async () => {
+        const result = await api<{sources:Source[]}>('/api/job-sources');
+        setDbSources(result.sources || []);
+      }}/>
 
       <section className="rounded-xl border p-4 space-y-2">
         {isRecruitingStaff && <label className="block text-sm font-medium">Find roles for a candidate
@@ -437,8 +451,8 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 No live jobs found for board &quot;<strong>{liveBoard}</strong>&quot; with the selected filters.
               </p>
               <div className="flex justify-center gap-2">
-                <Button size="sm" variant="outline" onClick={() => void fetchLiveJobs('ramp', 'greenhouse')}>
-                  Try Ramp (Greenhouse)
+                <Button size="sm" variant="outline" onClick={() => {setLiveBoard('ramp'); setLiveProvider('ashby');}}>
+                  Try Ramp (Ashby)
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => void fetchLiveJobs('figma', 'greenhouse')}>
                   Try Figma (Greenhouse)

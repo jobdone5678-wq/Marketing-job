@@ -18,20 +18,21 @@ export function ResumeUploadReview({
   const [status, setStatus] = useState('');
   const [extraction, setExtraction] = useState<ResumeExtraction | null>(null);
   const [retry, setRetry] = useState(0);
+  const [processingNote,setProcessingNote]=useState('');
 
   useEffect(() => {
     if (!documentId) return;
     let stopped = false;
-    let pollCount = 0;
+    const requested=new Set<string>();
     let timer: ReturnType<typeof setTimeout>;
 
     async function poll() {
       try {
-        pollCount++;
+
         const r = await api<{
           document: { status: string; candidate_version: number | null };
           extraction: { data: ResumeExtraction } | null;
-          task: { status: string; error: string | null } | null;
+          task: { id?:string; status: string; error: string | null } | null;
         }>(`/api/resumes/${documentId}`);
         if (stopped) return;
         setStatus(r.document.status);
@@ -57,13 +58,11 @@ export function ResumeUploadReview({
           return;
         }
 
-        // If still queued after 2 polls, trigger immediate process inline
-        if (pollCount >= 2 && r.document.status === 'queued') {
-          try {
-            await api(`/api/resumes/${documentId}/process`, { method: 'POST', body: '{}' });
-          } catch {
-            // Ignore error and continue poll
-          }
+        if(r.task?.id&&r.task.status==='queued'&&!requested.has(r.task.id)){
+          requested.add(r.task.id);
+          void api<{status:string;message?:string}>(`/api/tasks/${r.task.id}/process`,{method:'POST'}).then(response=>{
+            if(!stopped)setProcessingNote(response.status==='waiting_for_worker'?response.message||'Waiting for the processing worker.':'');
+          }).catch(()=>{if(!stopped)setProcessingNote('Checking saved resume status. If it stays queued, ask your administrator to check the processing worker.');});
         }
 
         timer = setTimeout(poll, 1500);
@@ -84,6 +83,7 @@ export function ResumeUploadReview({
 
   async function upload(file: File) {
     setError('');
+    setProcessingNote('');
     setExtraction(null);
     setBusy(true);
     setStatus('Processing with AI...');
@@ -161,6 +161,7 @@ export function ResumeUploadReview({
           {busy && status !== 'queued' ? ' (processing...)' : ''}
         </p>
       )}
+      {processingNote&&!extraction&&<p role="status" className="text-sm text-muted-foreground">{processingNote}</p>}
       {error && (
         <p role="alert" className="text-destructive text-sm font-medium">
           {error}

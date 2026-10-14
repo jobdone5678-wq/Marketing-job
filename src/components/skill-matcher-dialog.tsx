@@ -13,14 +13,16 @@ const statusLabel={met:'Supported',missing:'Missing',unknown:'Unknown',conflict:
 const constraintLabels:Record<string,string>={authorized_in_usa:'US work authorization',need_sponsorship_now:'Sponsorship needed now',need_sponsorship_future:'Future sponsorship needed',open_to_relocation:'Open to relocation'};
 
 export function SkillMatcherDialog({open,onOpenChange,job}:{open:boolean;onOpenChange:(v:boolean)=>void;job:{id?:string;title:string;company:string;description:string;location?:string;portal?:string;url?:string}}){
- const [candidates,setCandidates]=useState<Candidate[]>([]),[selected,setSelected]=useState(''),[tasks,setTasks]=useState<string[]>([]),[result,setResult]=useState<Match|null>(null),[error,setError]=useState(''),[failedTask,setFailedTask]=useState<string|null>(null),[submitting,setSubmitting]=useState(false);
+ const [candidates,setCandidates]=useState<Candidate[]>([]),[selected,setSelected]=useState(''),[tasks,setTasks]=useState<string[]>([]),[result,setResult]=useState<Match|null>(null),[error,setError]=useState(''),[failedTask,setFailedTask]=useState<string|null>(null),[submitting,setSubmitting]=useState(false),[processingNote,setProcessingNote]=useState(''),[taskStatus,setTaskStatus]=useState('queued');
  useEffect(()=>{if(!open)return;let active=true;getCandidates().then(rows=>{if(active)setCandidates(rows);}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[open]);
  useEffect(()=>{
   if(!open||!tasks.length||!job.id)return;
   let cancelled=false;let timer:ReturnType<typeof setTimeout>;
+  void api<{status:string;message?:string}>(`/api/tasks/${tasks[0]}/process`,{method:'POST'}).then(response=>{if(!cancelled)setProcessingNote(response.status==='waiting_for_worker'?response.message||'Waiting for the processing worker.':response.status==='not_claimed'?'Waiting for the worker to finish the existing task.':'');}).catch(()=>{if(!cancelled)setProcessingNote('Checking saved task status. If this stays queued, ask your administrator to check the processing worker.');});
   async function poll(){try{
    const response=await api<{task:{status:string;error:string|null;result:{matchId?:string}|null}}>(`/api/tasks/${tasks[0]}`);
    if(cancelled)return;
+   setTaskStatus(response.task.status);
    if(response.task.status==='failed'){setFailedTask(tasks[0]);setError(response.task.error||'Processing failed. Fix the reported issue and queue the comparison again.');return;}
    if(response.task.status==='succeeded'){
     const data=await api<{matches:Match[]}>(`/api/matches?candidateId=${encodeURIComponent(selected)}&jobId=${encodeURIComponent(job.id!)}`);
@@ -41,7 +43,7 @@ export function SkillMatcherDialog({open,onOpenChange,job}:{open:boolean;onOpenC
   <Button disabled={!selected||!job.id||submitting||(tasks.length>0&&!error&&!visibleResult)} onClick={async()=>{
    setSubmitting(true);
    try{
-    setError('');setResult(null);setTasks([]);
+    setError('');setResult(null);setTasks([]);setProcessingNote('Starting AI processing...');setTaskStatus('queued');
     if(failedTask){
      const response=await api<{taskId:string}>(`/api/tasks/${failedTask}/retry`,{method:'POST'});
      setFailedTask(null);setTasks([response.taskId]);
@@ -51,7 +53,7 @@ export function SkillMatcherDialog({open,onOpenChange,job}:{open:boolean;onOpenC
     }
    }catch(e){setError((e as Error).message);}finally{setSubmitting(false);}
   }}>{submitting?'Starting comparison…':failedTask?'Retry AI comparison':'Queue AI comparison (this employment type)'}</Button>
-  {tasks.length>0&&!visibleResult&&!error&&<p role="status">Comparison queued / processing...</p>}
+  {tasks.length>0&&!visibleResult&&!error&&<div role="status"><p>{taskStatus==='running'?'AI comparison is processing...':'Comparison queued. Waiting for processing to start.'}</p>{processingNote&&<p className="mt-1 text-sm text-muted-foreground">{processingNote}</p>}</div>}
   {error&&<p role="alert" className="text-destructive">{error}</p>}
   {analysis&&<section className="space-y-5" aria-label="Comparison results">
    {visibleResult?.stale&&<p role="alert" className="rounded border border-amber-400 p-3 text-sm">The candidate profile or job has changed since this comparison. Queue a fresh comparison before relying on these results.</p>}

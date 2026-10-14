@@ -61,3 +61,12 @@ test('production Gmail rejects a local callback origin even when every credentia
  assert.ok(status.invalid.some(message=>message.includes('public HTTPS')));
  assert.equal(status.redirectUri,null);
 });
+
+
+test('candidate can start own Gmail consent without administrator diagnostics',async t=>{
+ setup(t);const writes=[];
+ const route=loader('client',writes);
+ const status=await (await route('src/app/api/email-connections/route.ts').GET()).json();assert.equal(status.gmailConfigured,true);assert.equal(status.gmailSetup,undefined);
+ const response=await route('src/app/api/email-connections/gmail/connect/route.ts').POST(new Request('https://nextkinhr.com/api/email-connections/gmail/connect',{method:'POST'}));
+ assert.equal(response.status,200);assert.equal(new URL((await response.json()).url).hostname,'accounts.google.com');assert.equal(writes.length,1);
+});

@@ -10,7 +10,7 @@ before(async () => { browser = await chromium.launch({ headless: true }); });
 after(async () => { await browser?.close(); });
 
 const sources = await browserReactModules();
-for (const [name, file] of [['@/components/job-dates', '../src/components/job-dates.tsx'], ['jobs-browser', '../src/components/jobs-browser.tsx'], ['@/lib/candidates', '../src/lib/candidates.ts'], ['@/lib/api-client', '../src/lib/api-client.ts']]) {
+for (const [name, file] of [['@/components/public-job-catalog', '../src/components/public-job-catalog.tsx'], ['@/lib/public-directory', '../src/lib/public-directory.ts'], ['@/components/job-dates', '../src/components/job-dates.tsx'], ['jobs-browser', '../src/components/jobs-browser.tsx'], ['@/lib/candidates', '../src/lib/candidates.ts'], ['@/lib/api-client', '../src/lib/api-client.ts']]) {
   sources[name] = ts.transpileModule(await readFile(new URL(file, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
 }
 sources['./api-client'] = "module.exports=require('@/lib/api-client');";
@@ -28,12 +28,21 @@ async function jobsPage(t, { role = 'client', requiresProfile = false } = {}) {
   const page = await browser.newPage();
   t.after(() => page.close());
   const requests = [];
+  const sourceWrites = [];
+  const liveRequests = [];
   await page.route('https://portal.test/**', async route => {
     const url = new URL(route.request().url());
     if (url.pathname === '/api/candidates') return route.fulfill({ json: url.searchParams.get('page') === '0'
       ? { candidates: [{ id: 'legacy', full_name: 'Not reviewed', provenance_status: 'legacy_unconfirmed' }], hasMore: true }
       : { candidates: [reviewed], hasMore: false } });
-    if (url.pathname === '/api/job-sources') return route.fulfill({ json: { sources: [] } });
+    if (url.pathname === '/api/job-sources') {
+      if (route.request().method() === 'POST') sourceWrites.push(route.request().postDataJSON());
+      return route.fulfill({ json: { sources: [] } });
+    }
+    if (url.pathname === '/api/jobs/live') {
+      liveRequests.push({board:url.searchParams.get('board'),provider:url.searchParams.get('provider')});
+      return route.fulfill({json:{jobs:[],total:0,persistedInDb:false,fetchedAt:new Date().toISOString(),recommendation:{requiresProfile:false}}});
+    }
     if (url.pathname === '/api/jobs') {
       requests.push(url.searchParams.get('candidateId'));
       return route.fulfill({ json: { jobs: requiresProfile ? [] : [matchingJob], total: requiresProfile ? 0 : 1, hasMore: false,
@@ -44,8 +53,21 @@ async function jobsPage(t, { role = 'client', requiresProfile = false } = {}) {
   await page.goto('https://portal.test/');
   await page.evaluate(role => { window.fixtureProfile = { isRecruiter: role === 'recruiter', isTechnicalRecruiter:role==='technical_recruiter', isClient: role === 'client', loading: false }; }, role);
   await page.addScriptTag({ content: browserModuleScript(sources, "require('react-dom/client').createRoot(document.getElementById('root')).render(require('react').createElement(require('jobs-browser').JobsBrowser));") });
-  return { page, requests };
+  return { page, requests, sourceWrites, liveRequests };
 }
+
+test('public board selection fetches exact provider and staff can persist it', async t => {
+  const {page, sourceWrites, liveRequests} = await jobsPage(t,{role:'recruiter'});
+  await page.getByLabel('Public company board').selectOption('ashby/notion');
+  await page.getByRole('button',{name:'Save source to directory'}).click();
+  await page.getByText('Source saved.',{exact:false}).waitFor();
+  assert.deepEqual(sourceWrites,[{company:'Notion',provider:'ashby',board_slug:'notion'}]);
+  const response = page.waitForResponse(response => response.url().includes('/api/jobs/live?'));
+  await page.getByRole('button',{name:'Fetch selected board'}).click();
+  await response;
+  await page.getByText('No live jobs found for board',{exact:false}).waitFor();
+  assert.ok(liveRequests.some(request => request.board === 'notion' && request.provider === 'ashby'));
+});
 
 test('candidate job list shows resume-related match reasons and prompts unfinished profiles', async t => {
   const { page } = await jobsPage(t);

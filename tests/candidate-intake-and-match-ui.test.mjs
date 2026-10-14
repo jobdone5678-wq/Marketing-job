@@ -78,3 +78,29 @@ test('a failed AI comparison retries the existing task instead of reusing the ol
  await page.getByText('100% evidence coverage',{exact:true}).waitFor({timeout:3000});
  assert.equal(queued,1);assert.equal(retried,true);
 });
+
+
+test('queueing an AI comparison starts authorized targeted processing',async t=>{
+ let processed=0;
+ const page=await mount(t,"require('react-dom/client').createRoot(document.getElementById('root')).render(require('react').createElement(require('matcher').SkillMatcherDialog,{open:true,onOpenChange(){},job:{id:'job',title:'Engineer',company:'Fixture',description:'Requires SQL'}}));",{
+ '/api/candidates':{candidates:[{id:'candidate',full_name:'Candidate',provenance_status:'confirmed'}],hasMore:false},
+ '/api/matches':route=>route.fulfill({json:route.request().method()==='POST'?{tasks:[{taskId:'task'}]}:{matches:[{id:'match',job_id:'job',stale:false,data:{coverage:100,requirements:[],constraints:[]}}]}}),
+ '/api/tasks/task/process':route=>{assert.equal(route.request().method(),'POST');processed++;return route.fulfill({json:{status:'succeeded'}});},
+ '/api/tasks/task':route=>route.fulfill({json:{task:processed?{status:'succeeded',result:{matchId:'match'}}:{status:'queued'}}})
+ });
+ await page.getByLabel('Candidate for comparison').selectOption('candidate');await page.getByRole('button',{name:'Queue AI comparison (this employment type)'}).click();
+ await page.getByText('100% evidence coverage',{exact:true}).waitFor({timeout:6000});assert.equal(processed,1);
+});
+
+
+test('resume review starts a queued extraction task once without repeated queue-only requests',async t=>{
+ let processed=0;
+ const extraction={fields:{full_name:'Resume Candidate',email:null,phone:null},employmentHistory:[],educationHistory:[],evidence:[],warnings:[]};
+ const page=await mount(t,"require('react-dom/client').createRoot(document.getElementById('root')).render(require('react').createElement(require('./resume-upload-review').ResumeUploadReview,{onDraft:fields=>{window.resumeDraft=fields;}}));",{
+ '/api/resumes':{documentId:'resume'},
+ '/api/resumes/resume':route=>route.fulfill({json:{document:{status:processed?'extracted':'queued',candidate_version:null},extraction:processed?{data:extraction}:null,task:{id:'extract-task',status:processed?'succeeded':'queued'}}}),
+ '/api/tasks/extract-task/process':route=>{assert.equal(route.request().method(),'POST');processed++;return route.fulfill({json:{status:'succeeded'}});}
+ });
+ await page.getByRole('checkbox',{name:/permission to upload/}).check();await page.getByLabel('Resume file').setInputFiles({name:'synthetic.pdf',mimeType:'application/pdf',buffer:Buffer.from('synthetic fixture')});
+ await page.waitForFunction(()=>window.resumeDraft?.full_name==='Resume Candidate',{timeout:6000});assert.equal(processed,1);
+});

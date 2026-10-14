@@ -19,3 +19,12 @@ In Settings, “Configuration present” means the server has the required setti
 If a comparison failed before setup was fixed, use **Retry AI comparison**. It calls the existing authorized task-retry endpoint rather than repeatedly enqueueing the same failed idempotent task. Keep the general worker (`npm run worker`) running; deploying the Next.js app alone does not run that long-lived worker. An optional authenticated database webhook can also process tasks using exclusive leases, but never steals an active worker lease. Provider-format fallbacks count as separate reserved AI attempts; unrelated bad-model errors are not retried as format errors.
 
 The production project and its deployment secrets are not linked to this workspace, so production variables could not be changed here. Gmail has separate credentials and setup requirements: see [Gmail production setup](../gmail-production-setup.md).
+
+
+## Interactive task processing (14 October 2026)
+
+Queueing a comparison now also sends a same-origin authenticated POST to `/api/tasks/{id}/process`. Resume review triggers the same action for its queued extraction task once. This fixes the previous path where the browser only polled and no running worker/webhook picked up the queued task. Upload/status GETs remain queue/read operations; no GET executes AI. The action verifies current task access and actor ownership, claims only the specified eligible AI task through `claim_specific_task`, and never steals an existing worker lease. Provider attempt reservations and artifact validation are unchanged.
+
+When the website has valid AI settings, the interactive action can process the task without a configured database webhook. It declares a 60-second platform duration, uses a 45-second provider execution window, and caps each provider request at 20 seconds within the remaining window. Slow models should use the durable worker, which retains its 120-second provider timeout and heartbeat. Errors are finalized visibly and require authorized retry. If web AI settings are absent/invalid, the task is left untouched for a configured separate worker and the UI explains that it is waiting.
+
+Production needs a reachable public HTTPS AI endpoint with the matching model and key on whichever service executes the work. A localhost gateway cannot serve hosted Vercel requests. No secret keys are added to browser code. In this investigation, the sandbox could not resolve the configured database host and could not access the configured loopback gateway; real provider completion remains unverified.

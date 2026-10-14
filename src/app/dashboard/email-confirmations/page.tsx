@@ -87,7 +87,7 @@ export default function EmailConfirmationsPage() {
   return <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6 max-w-6xl w-full mx-auto">
     <div className="flex flex-wrap items-center justify-between gap-4">
       <div><h1 className="text-2xl font-bold flex items-center gap-2"><MailIcon className="size-6"/>Email confirmations</h1>
-        <p className="text-sm text-muted-foreground mt-1">Capture application receipts and review only the details that need your attention.</p></div>
+        <p className="text-sm text-muted-foreground mt-1">Connect the Gmail mailbox that receives job application confirmations. Recruiters track assigned candidates; candidates track their own applications.</p></div>
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" disabled={loading||!!busy} onClick={()=>void load()}><RefreshCwIcon className="size-4"/>Refresh</Button>
         <Button variant="outline" disabled={!!busy} onClick={()=>uploadRef.current?.click()}><UploadIcon className="size-4"/>Import receipt</Button>
@@ -104,7 +104,7 @@ export default function EmailConfirmationsPage() {
     </div>
     <section className="border rounded-xl bg-card p-5 space-y-4">
       <div className="flex flex-wrap justify-between gap-3"><div><h2 className="font-semibold">Connected mailboxes</h2>
-        <p className="text-xs text-muted-foreground mt-1">Read-only Gmail access. No messages are sent. Scheduled capture runs when the email worker is configured.</p></div>
+        <p className="text-xs text-muted-foreground mt-1">Connect Gmail separately even if you signed in with Google. Read-only scanning finds application receipts; confirmed applications appear in My Applications. A receipt confirms submission, not a job offer.</p></div>
         <Button disabled={!configured||!!busy} onClick={()=>void run('connect',async()=>{
           const result=await api<{url:string}>('/api/email-connections/gmail/connect',{method:'POST'});window.location.assign(result.url);
         })}>Connect Gmail</Button>

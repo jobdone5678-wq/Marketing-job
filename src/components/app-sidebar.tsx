@@ -126,6 +126,7 @@ const candidateNavItems: NavItem[] = [
     url: "/dashboard/submissions",
     icon: <SendIcon className="size-4" />,
   },
+  {id:"email-confirmations",title:"Email Confirmations",url:"/dashboard/email-confirmations",icon:<MailIcon className="size-4"/>},
   { id:"placements", title:"My Service Fees & Placement", url:"/dashboard/placements", icon:<TrendingUpIcon className="size-4"/> },
   {
     id: "public-jobs",

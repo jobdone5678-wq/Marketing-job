@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { PublicVendorImport } from '@/components/public-vendor-import';
 import {
   Building2Icon,
   PlusIcon,
@@ -318,6 +319,8 @@ export default function VendorsPage() {
         </div>
       </div>
 
+      <PublicVendorImport onImported={loadData}/>
+
       {/* FILTER TOOLBAR */}
       <div className="flex flex-col sm:flex-row items-center gap-3">
         <div className="relative flex-1 w-full">
@@ -456,16 +459,21 @@ export default function VendorsPage() {
                             : "bg-muted text-muted-foreground text-[10px]"
                         }
                       >
-                        {vendor.tier}
+                        {vendor.tier || 'Unverified partner'}
                       </Badge>
                       <span className="text-[10px] text-muted-foreground font-medium">
-                        ⭐ {vendor.rating} / 5.0
+                        {vendor.rating ? `⭐ ${vendor.rating} / 5.0` : 'Not rated'}
                       </span>
                     </div>
                   </div>
                 </CardHeader>
 
                 <CardContent className="pt-3.5 pb-2 space-y-3.5 flex-1">
+                  {vendor.source_url && <div className="text-xs space-y-1">
+                    <a href={vendor.source_url} target="_blank" rel="noopener noreferrer" className="underline">Official public source ↗</a>
+                    {vendor.careers_url && <a href={vendor.careers_url} target="_blank" rel="noopener noreferrer" className="ml-3 underline">Careers ↗</a>}
+                    <p className="text-muted-foreground">Source checked {vendor.source_verified_at || 'date unknown'}</p>
+                  </div>}
                   {/* Recruiter Contact Box */}
                   {primaryContact && (
                     <div className="p-3 rounded-lg border bg-muted/20 space-y-1.5 text-xs">
@@ -505,13 +513,13 @@ export default function VendorsPage() {
                     <div className="p-2 rounded border bg-card">
                       <div className="text-muted-foreground">Terms:</div>
                       <div className="font-semibold text-foreground mt-0.5">
-                        {vendor.payment_terms}
+                        {vendor.payment_terms || 'Not verified'}
                       </div>
                     </div>
                     <div className="p-2 rounded border bg-card">
                       <div className="text-muted-foreground">Agreement:</div>
                       <div className="font-semibold text-foreground mt-0.5">
-                        {vendor.agreement_status}
+                        {vendor.agreement_status || 'Not verified'}
                       </div>
                     </div>
                   </div>

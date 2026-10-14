@@ -16,14 +16,18 @@ export interface VendorContact {
 export interface Vendor {
   id: string;
   name: string;
-  tier: "Tier 1" | "Tier 2" | "Tier 3" | "Preferred";
+  tier: "Tier 1" | "Tier 2" | "Tier 3" | "Preferred" | null;
   website?: string;
   headquarters: string;
-  payment_terms: "Net 30" | "Net 45" | "Net 60" | "Immediate";
-  agreement_status: "MSA Active" | "Pending NDA" | "Standard RTR" | "No Agreement";
+  payment_terms: "Net 30" | "Net 45" | "Net 60" | "Immediate" | null;
+  agreement_status: "MSA Active" | "Pending NDA" | "Standard RTR" | "No Agreement" | null;
   specializations: string[];
-  responsiveness: "High" | "Medium" | "Low";
-  rating: number; // 1-5 stars
+  responsiveness: "High" | "Medium" | "Low" | null;
+  rating: number | null; // Unrated until staff verifies performance
+  careers_url?: string;
+  source_url?: string;
+  source_verified_at?: string;
+  public_directory_id?: string;
   total_submissions: number;
   active_interviews: number;
   placements_count: number;

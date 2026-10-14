@@ -1,3 +1,4 @@
+import {aiRequestTimeout} from './execution-window';
 import 'server-only';
 import OpenAI from 'openai';
 import { z } from 'zod';
@@ -113,6 +114,7 @@ export async function structuredAI<T>(
 
     let rawContent: string | null = null;
     async function completionAttempt(request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming) {
+      const timeout=aiRequestTimeout();
       // A format fallback is another billable attempt, including the rejected first request.
       usage = null;
       const { data: reserved, error: reserveError } = await db.rpc('reserve_ai_call', {
@@ -124,7 +126,7 @@ export async function structuredAI<T>(
       checkDb(reserveError);
       usage = reserved;
       try {
-        return await client.chat.completions.create(request);
+        return await client.chat.completions.create(request,{timeout});
       } catch (error) {
         const { error: usageError } = await db.from('provider_usage').update({ status: 'failed_or_unknown' }).eq('id', usage);
         usage = null;
@@ -193,6 +195,7 @@ export async function structuredAI<T>(
     if (usage) await db.from('provider_usage').update({ status: 'failed_or_unknown' }).eq('id', usage);
 
     if (err instanceof CaptureError) throw err;
+    if(err?.name==='APIConnectionTimeoutError')throw new CaptureError('AI provider timed out. Retry or use the separate processing worker for slower models.',502);
     if (err instanceof OpenAI.APIError) {
       if (err.status === 401) {
         throw new CaptureError('OpenAI API key is invalid or unauthorized.', 401);

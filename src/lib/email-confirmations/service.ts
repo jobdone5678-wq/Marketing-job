@@ -3,7 +3,7 @@ import { parseImportedReceipt } from './mime';
 import { analyzeReceipt } from './domain';
 import type { ReceivedEmail, ReceiptAnalysis } from './types';
 import { adminClient, CaptureError, checkDb } from './server';
-import { readAllRows } from './pagination';
+import {receiptContext} from './context';
 
 export async function importEmailReceipt(ownerId: string, raw: Buffer) {
   let message: ReceivedEmail;
@@ -17,10 +17,7 @@ export async function ingestEmailReceipt(ownerId: string, connectionId: string |
   const { data: already, error: lookupError } = await db.from('email_receipts').select('id,disposition').eq('owner_id', ownerId).eq('message_key', messageKey).maybeSingle();
   checkDb(lookupError);
   if (already) return { id: already.id as string, disposition: already.disposition as string, duplicate: true };
-  const [candidates, applications] = await Promise.all([
-    readAllRows(async (from,to) => { const {data,error}=await db.from('candidates').select('id,full_name,email').order('id').range(from,to); checkDb(error);return data || []; }),
-    readAllRows(async (from,to) => { const {data,error}=await db.from('job_submissions').select('id,candidate_id,company_name,job_title,status,submission_date').order('id').range(from,to);checkDb(error);return data || []; }),
-  ]);
+  const {candidates,applications}=await receiptContext(ownerId);
   const analysis = analyzeReceipt(message, candidates || [], applications || []);
   if (analysis.disposition === 'ignored') return { id: null, disposition: 'ignored', duplicate: false };
   const payload = { owner_id: ownerId, connection_id: connectionId, message_key: messageKey,
