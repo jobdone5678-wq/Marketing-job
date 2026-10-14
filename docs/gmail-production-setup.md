@@ -16,3 +16,8 @@ Connect from the canonical host. If you start from `www.nextkinhr.com` or a prev
 After redeployment, verify the administrator setup shows no missing/invalid values, complete Google consent, and confirm the connected mailbox appears. Sync a known receipt to verify Gmail access, token storage, and the database migrations. A failed consent callback uses a generic message to avoid exposing provider responses or tokens.
 
 This repository change does not copy credentials into hosting or deploy a production release. Those actions require access to the correct hosting project and Google OAuth configuration.
+
+
+If Connect Gmail is disabled, Google consent has not started yet. Check Administrator Gmail setup for missing names or invalid values. In particular, EMAIL_TOKEN_ENCRYPTION_KEY must encode exactly 32 bytes in base64, and APP_URL must be the public production domain. Preserve the existing encryption key if the database already contains mailbox tokens. Enter Vercel values without surrounding quotes. A copied local APP_URL pointing to localhost is rejected in production.
+
+The page now treats receipt loading and Gmail configuration as separate results: a failing receipt API cannot disable a configured Gmail connection. If the Gmail-status API itself fails, the page reports that failure and treats configuration as unknown instead of displaying a false missing-credentials warning.

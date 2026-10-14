@@ -3,12 +3,15 @@ import { database, checkDb, CaptureError } from '@/lib/db/admin';
 import { candidateInput } from '@/lib/candidate-input';
 export async function GET(request: Request) {
   return protectedRoute(request, 'candidate_or_staff', async profile => {
-    const page = Math.max(0, Number(new URL(request.url).searchParams.get('page') || 0)); if (!Number.isSafeInteger(page)) throw new CaptureError('Invalid page.');
-    let query = database().from('candidates').select('*', { count: 'exact' }).order('created_at', { ascending: false }).order('id').range(page * 100, page * 100 + 99);
+    const url = new URL(request.url);
+    const page = Math.max(0, Number(url.searchParams.get('page') || 0)); if (!Number.isSafeInteger(page)) throw new CaptureError('Invalid page.');
+    const limit = Math.min(1000, Math.max(1, Number(url.searchParams.get('limit') || 100)));
+    const offset = page * limit;
+    let query = database().from('candidates').select('*', { count: 'exact' }).order('created_at', { ascending: false }).order('id').range(offset, offset + limit - 1);
     if (profile.role === 'client') query = query.eq('user_id', profile.id);
     if (profile.role === 'recruiter') query = query.eq('assigned_recruiter_id', profile.id);
     if (profile.role === 'technical_recruiter') query = query.eq('assigned_technical_recruiter_id', profile.id);
-    const { data, error, count } = await query; checkDb(error); return { candidates: data, total: count || 0, hasMore: (page + 1) * 100 < (count || 0), role: profile.role }
+    const { data, error, count } = await query; checkDb(error); return { candidates: data, total: count || 0, hasMore: (page + 1) * limit < (count || 0), role: profile.role }
   });
 }
 export async function POST(request: Request) {

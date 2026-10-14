@@ -18,7 +18,9 @@ function readConfiguration() {
       const url = new URL(appUrl.includes('://') ? appUrl : `https://${appUrl}`);
       if (url.username || url.password || !['https:', 'http:'].includes(url.protocol) ||
         (url.protocol === 'http:' && !['localhost', '127.0.0.1'].includes(url.hostname))) throw new Error();
-      appOrigin = url.origin;
+      if(process.env.NODE_ENV==='production'&&['localhost','127.0.0.1','[::1]'].includes(url.hostname)){
+        invalid.push('Production Gmail requires APP_URL to be your public HTTPS domain, not localhost.');
+      }else appOrigin = url.origin;
     } catch {
       invalid.push('APP_URL must be a valid HTTPS URL (HTTP is allowed only for localhost).');
     }

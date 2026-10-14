@@ -24,7 +24,7 @@ export default function EmailConfirmationsPage() {
   const [connections,setConnections]=React.useState<EmailConnectionSummary[]>([]);
   const [candidates,setCandidates]=React.useState<CandidateIdentity[]>([]);
   const [applications,setApplications]=React.useState<ApplicationIdentity[]>([]);
-  const [configured,setConfigured]=React.useState(false);
+  const [configured,setConfigured]=React.useState<boolean|null>(null);
   const [gmailSetup,setGmailSetup]=React.useState<GmailSetup|null>(null);
   const [loading,setLoading]=React.useState(true);
   const [error,setError]=React.useState('');
@@ -42,17 +42,26 @@ export default function EmailConfirmationsPage() {
   const loadGeneration=React.useRef(0);
   const load=React.useCallback(async()=>{
     const generation=++loadGeneration.current;
-    setLoading(true);setError('');
+    setLoading(true);setError('');setConfigured(null);setGmailSetup(null);
     try {
-      const [data,mail]=await Promise.all([
+      const [data,mail]=await Promise.allSettled([
         api<{receipts:EmailReceiptRecord[];candidates:CandidateIdentity[];applications:ApplicationIdentity[];total:number;hasMore:boolean}>(`/api/email-confirmations?disposition=${filter}&page=${page}`),
         api<{connections:EmailConnectionSummary[];gmailConfigured:boolean;gmailSetup?:GmailSetup}>('/api/email-connections'),
       ]);
       if(generation!==loadGeneration.current) return;
-      setReceipts(data.receipts);setCandidates(data.candidates);setApplications(data.applications);
-      setTotal(data.total);setHasMore(data.hasMore);
-      setConnections(mail.connections);setConfigured(mail.gmailConfigured);
-      setGmailSetup(mail.gmailSetup??null);
+      const failures:string[]=[];
+      if(data.status==='fulfilled'){
+        setReceipts(data.value.receipts);setCandidates(data.value.candidates);setApplications(data.value.applications);
+        setTotal(data.value.total);setHasMore(data.value.hasMore);
+      }else failures.push('Receipts: '+(data.reason instanceof Error?data.reason.message:'Could not load receipts.'));
+      if(mail.status==='fulfilled'){
+        setConnections(mail.value.connections);setConfigured(mail.value.gmailConfigured);
+        setGmailSetup(mail.value.gmailSetup??null);
+      }else{
+        setConnections([]);
+        failures.push('Gmail status: '+(mail.reason instanceof Error?mail.reason.message:'Could not check mailbox configuration.'));
+      }
+      setError(failures.join(' '));
     } catch(reason) {if(generation===loadGeneration.current)setError(reason instanceof Error?reason.message:'Could not load confirmations.');}
     finally {if(generation===loadGeneration.current)setLoading(false);}
   },[filter,page]);
@@ -100,7 +109,7 @@ export default function EmailConfirmationsPage() {
           const result=await api<{url:string}>('/api/email-connections/gmail/connect',{method:'POST'});window.location.assign(result.url);
         })}>Connect Gmail</Button>
       </div>
-      {!loading&&!configured && <p className="text-sm text-amber-700 dark:text-amber-300">Gmail is not configured on this deployment. Your administrator must complete the email capture setup. Imported .eml receipts require review.</p>}
+      {!loading&&configured===false && <p className="text-sm text-amber-700 dark:text-amber-300">Gmail is not configured on this deployment. Your administrator must complete the email capture setup. Imported .eml receipts require review.</p>}
       {gmailSetup&&<details className="text-sm border rounded-lg p-3 space-y-2" open={!configured}>
         <summary className="cursor-pointer font-medium">Administrator Gmail setup</summary>
         {gmailSetup.missing.length>0&&<p>Missing server variables: <span className="font-mono break-words">{gmailSetup.missing.join(', ')}</span>.</p>}

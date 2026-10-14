@@ -1,6 +1,9 @@
 import {setTimeout as delay} from 'node:timers/promises';
-const origin=process.env.APP_URL;
-const secret=process.env.EMAIL_SYNC_SECRET;
+import {config} from 'dotenv';
+// Local defaults are optional; hosted environment variables always take precedence.
+config({path:'.env.local',override:false,quiet:true});
+const origin=process.env.APP_URL?.trim();
+const secret=process.env.EMAIL_SYNC_SECRET?.trim();
 if(!origin || !secret || secret.length<32) throw new Error('Set APP_URL and EMAIL_SYNC_SECRET (at least 32 characters) to run email sync.');
 const url=new URL(origin);
 if(url.protocol!=='https:' && !(url.protocol==='http:' && ['localhost','127.0.0.1'].includes(url.hostname))) throw new Error('APP_URL must use HTTPS or localhost.');

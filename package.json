@@ -10,7 +10,7 @@
     "lint": "eslint",
     "test": "node --experimental-strip-types --test --test-concurrency=1 tests/*.test.mjs",
     "typecheck": "tsc --noEmit",
-    "worker:email": "node --env-file=.env.local scripts/email-sync-worker.mjs",
+    "worker:email": "node scripts/email-sync-worker.mjs",
     "worker": "tsx --conditions=react-server scripts/worker.ts",
     "test:unit": "node --experimental-strip-types --test --test-concurrency=1 tests/*.test.mjs",
     "test:e2e": "node scripts/e2e.mjs",

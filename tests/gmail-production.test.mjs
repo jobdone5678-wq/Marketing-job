@@ -52,3 +52,12 @@ test('Gmail deployment URL fallback is normalized without exposing credentials',
  assert.equal(config.emailConfig().redirectUri,'https://nextkinhr.com/api/email-connections/gmail/callback');
  assert.ok(!JSON.stringify(config.gmailConfiguration()).includes('private-secret'));
 });
+
+
+test('production Gmail rejects a local callback origin even when every credential exists',t=>{
+ setup(t,{NODE_ENV:'production',APP_URL:'http://localhost:3000'});
+ const status=loader()('src/lib/email-confirmations/config.ts').gmailConfiguration();
+ assert.equal(status.configured,false);
+ assert.ok(status.invalid.some(message=>message.includes('public HTTPS')));
+ assert.equal(status.redirectUri,null);
+});
