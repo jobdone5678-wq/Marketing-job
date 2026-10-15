@@ -17,6 +17,7 @@ try {
 import { randomUUID } from 'node:crypto';
 import * as dotenv from 'dotenv';
 import * as path from 'node:path';
+import {readFileSync} from 'node:fs';
 
 try {
   dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: false });
@@ -30,6 +31,17 @@ if (typeof loadEnv === 'function') {
 }
 
 async function main() {
+  if(process.argv.includes('--check-ai')){
+    const {requireAIConfiguration}=await import('../src/lib/ai/config');
+    const {checkAITransport}=await import('../src/lib/ai/transport-diagnostics');
+    let local:Record<string,string>={};
+    try{local=dotenv.parse(readFileSync(path.resolve(process.cwd(),'.env.local')));}catch{}
+    const result=await checkAITransport(requireAIConfiguration(),local);
+    console.log('[Worker] AI connection check:',JSON.stringify(result));
+    if(result.localDifferences.length)console.log('[Worker] Inherited settings override .env.local for the listed variable names. Clear those variables in this local terminal, then restart. Hosted environment settings remain authoritative.');
+    if(!result.ok)process.exitCode=1;
+    return;
+  }
   const { database, checkDb, CaptureError } = await import('../src/lib/db/admin');
   const { handleTask } = await import('../src/lib/tasks/handlers');
   const db = database();

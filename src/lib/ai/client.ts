@@ -1,3 +1,4 @@
+import {projectAIOutput} from './output-contract';
 import {aiRequestTimeout} from './execution-window';
 import 'server-only';
 import OpenAI from 'openai';
@@ -80,7 +81,7 @@ function normalizeAIOutput(name: string, data: any, sourceText: string): any {
 
     return normalized;
   }
-  return data;
+  return projectAIOutput(name,data);
 }
 
 export async function structuredAI<T>(
@@ -95,6 +96,7 @@ export async function structuredAI<T>(
 
   const db = database();
   let usage: string | null = null;
+  let stage:'prompt'|'provider'|'output'='prompt';
 
   try {
     const client = new OpenAI({
@@ -135,6 +137,7 @@ export async function structuredAI<T>(
       }
     }
 
+    stage='provider';
     try {
       // First attempt: Chat completions with json_object format (universally supported by OpenAI & compatible endpoints)
       const completion = await completionAttempt({
@@ -168,6 +171,7 @@ export async function structuredAI<T>(
       throw new CaptureError('AI returned an empty or refused result. Review manually or retry.', 422);
     }
 
+    stage='output';
     // Strip any markdown code fences if returned by models
     const cleanedJson = rawContent
       .replace(/^```(?:json)?\s*/i, '')
@@ -195,15 +199,21 @@ export async function structuredAI<T>(
     if (usage) await db.from('provider_usage').update({ status: 'failed_or_unknown' }).eq('id', usage);
 
     if (err instanceof CaptureError) throw err;
-    if(err?.name==='APIConnectionTimeoutError')throw new CaptureError('AI provider timed out. Retry or use the separate processing worker for slower models.',502);
+    if(err instanceof z.ZodError)throw new CaptureError('AI returned JSON that does not match the required response format. Required fields are missing or invalid. Retry or use a model with reliable structured JSON output.',422);
+    // SDK transport errors inherit Error.name; timeout also inherits connection error.
+    if(err instanceof OpenAI.APIConnectionTimeoutError)throw new CaptureError('AI provider timed out. Retry or use the separate processing worker for slower models.',502);
+    if(err instanceof OpenAI.APIConnectionError)throw new CaptureError('The AI provider endpoint could not be reached. Check that the gateway is running and reachable from the service processing this task.',502);
     if (err instanceof OpenAI.APIError) {
+      if(err.status===402)throw new CaptureError('The AI provider returned Payment Required (HTTP 402). Check credits, billing status and model access with the configured AI provider, then retry.',402);
       if (err.status === 401) {
         throw new CaptureError('OpenAI API key is invalid or unauthorized.', 401);
       }
+      if(err.status===400||err.status===404)throw new CaptureError('The AI provider rejected the request settings. Check the API base URL, model name and supported JSON options.',422);
       if (err.status === 429 || (err.status || 0) >= 500) {
         throw new CaptureError('AI provider temporarily unavailable or rate limited.', 502);
       }
     }
-    throw new CaptureError('AI processing failed. Check the provider endpoint, model and worker configuration. No candidate details were confirmed.', 422);
+    if(stage==='provider')throw new CaptureError('The AI gateway failed before returning usable model output. Check the gateway model routing and upstream provider connection, then retry.',422);
+    throw new CaptureError('AI processing could not read the required response. Retry with a model that supports structured JSON output.',422);
   }
 }

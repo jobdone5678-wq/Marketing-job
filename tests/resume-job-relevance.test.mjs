@@ -9,6 +9,13 @@ const jobs = [
   { id: 'partial', title: 'Python Developer', description: 'Build APIs in Python', state: 'active' },
 ];
 
+test('recommendations use reviewed facts rather than stale editable profile columns',async()=>{
+ const {rankResumeJobs}=await import('../src/lib/jobs/relevance.ts');
+ const profile={provenance_status:'confirmed',primary_skills:'Accounting',target_job_titles:'Accountant',confirmed_facts:{primary_skills:'Python, SQL, Apache Airflow',target_job_titles:'Data Engineer'}};
+ assert.deepEqual(rankResumeJobs(jobs,profile).map(j=>j.id),['related','partial']);
+ assert.deepEqual(rankResumeJobs(jobs,{...profile,confirmed_facts:{}}),[]);
+});
+
 test('resume recommendations exclude unrelated and closed jobs and explain the ranked results', async () => {
   const { rankResumeJobs } = await import('../src/lib/jobs/relevance.ts');
   const result = rankResumeJobs(jobs, candidate);

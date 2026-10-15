@@ -63,6 +63,20 @@ for(const stale of [false,true])test(`comparison renders evidence, unknowns and 
  if(stale)await page.getByRole('alert').filter({hasText:'changed'}).waitFor();
 });
 
+test('comparison separates unknown requirements and shows each reviewed source field',async t=>{
+ const analysis={coverage:50,requirements:[{requirement:'Python and SQL',status:'met',jobEvidence:'Python and SQL',candidateField:null,candidateEvidence:'Python; SQL',candidateCitations:[{field:'primary_skills',evidence:'Python'},{field:'secondary_skills',evidence:'SQL'}]},{requirement:'5 years experience',status:'unknown',jobEvidence:'5 years experience',candidateField:null,candidateEvidence:null}],constraints:[]};
+ const page=await mount(t,"require('react-dom/client').createRoot(document.getElementById('root')).render(require('react').createElement(require('matcher').SkillMatcherDialog,{open:true,onOpenChange(){},job:{id:'job',title:'Engineer',company:'Fixture',description:'Python and SQL'}}));",{
+  '/api/candidates':{candidates:[{id:'candidate',full_name:'Reviewed candidate',provenance_status:'confirmed'}],hasMore:false},
+  '/api/matches':route=>route.fulfill({json:route.request().method()==='POST'?{tasks:[{taskId:'task'}]}:{matches:[{id:'match',job_id:'job',stale:false,data:analysis}]}}),
+  '/api/tasks/task':{task:{status:'succeeded',result:{matchId:'match'}}},
+ });
+ await page.getByLabel('Candidate for comparison').selectOption('candidate');await page.getByRole('button',{name:'Queue AI comparison (this employment type)'}).click();
+ await page.getByText('1 supported · 1 unknown',{exact:true}).waitFor({timeout:3000});
+ await page.getByText('primary skills: Python',{exact:true}).waitFor();
+ await page.getByText('secondary skills: SQL',{exact:true}).waitFor();
+ await page.getByText('Unknown means the reviewed resume does not prove this requirement; it does not mean the candidate is unqualified.',{exact:true}).waitFor();
+});
+
 test('a failed AI comparison retries the existing task instead of reusing the old failure',async t=>{
  let retried=false,queued=0;
  const page=await mount(t,"require('react-dom/client').createRoot(document.getElementById('root')).render(require('react').createElement(require('matcher').SkillMatcherDialog,{open:true,onOpenChange(){},job:{id:'job',title:'Engineer',company:'Fixture',description:'Requires SQL'}}));",{
@@ -103,4 +117,32 @@ test('resume review starts a queued extraction task once without repeated queue-
  });
  await page.getByRole('checkbox',{name:/permission to upload/}).check();await page.getByLabel('Resume file').setInputFiles({name:'synthetic.pdf',mimeType:'application/pdf',buffer:Buffer.from('synthetic fixture')});
  await page.waitForFunction(()=>window.resumeDraft?.full_name==='Resume Candidate',{timeout:6000});assert.equal(processed,1);
+});
+
+
+test('a proxy failure while reading comparison status recovers without queueing or processing twice',async t=>{
+ let reads=0,queued=0,processed=0;
+ const page=await mount(t,"require('react-dom/client').createRoot(document.getElementById('root')).render(require('react').createElement(require('matcher').SkillMatcherDialog,{open:true,onOpenChange(){},job:{id:'job',title:'Engineer',company:'Fixture',description:'SQL'}}));",{
+ '/api/candidates':{candidates:[{id:'candidate',full_name:'Candidate',provenance_status:'confirmed'}],hasMore:false},
+ '/api/matches':route=>{if(route.request().method()==='POST'){queued++;return route.fulfill({json:{tasks:[{taskId:'task'}]}});}return route.fulfill({json:{matches:[{id:'match',job_id:'job',stale:false,data:{coverage:100,requirements:[],constraints:[]}}]}});},
+ '/api/tasks/task/process':route=>{processed++;return route.fulfill({json:{status:'succeeded'}});},
+ '/api/tasks/task':route=>{reads++;return reads===1?route.abort('connectionfailed'):route.fulfill({json:{task:{status:'succeeded',result:{matchId:'match'}}}});}
+ });
+ await page.getByLabel('Candidate for comparison').selectOption('candidate');await page.getByRole('button',{name:'Queue AI comparison (this employment type)'}).click();
+ await page.getByText('100% evidence coverage',{exact:true}).waitFor({timeout:12000});assert.equal(queued,1);assert.equal(processed,1);assert.equal(reads,2);
+});
+
+test('status retry after repeated network failures resumes only the existing task',async t=>{
+ let failing=true,queued=0,processed=0;
+ const page=await mount(t,"require('react-dom/client').createRoot(document.getElementById('root')).render(require('react').createElement(require('matcher').SkillMatcherDialog,{open:true,onOpenChange(){},job:{id:'job',title:'Engineer',company:'Fixture',description:'SQL'}}));",{
+ '/api/candidates':{candidates:[{id:'candidate',full_name:'Candidate',provenance_status:'confirmed'}],hasMore:false},
+ '/api/matches':route=>{if(route.request().method()==='POST'){queued++;return route.fulfill({json:{tasks:[{taskId:'task'}]}});}return route.fulfill({json:{matches:[{id:'match',job_id:'job',stale:false,data:{coverage:100,requirements:[],constraints:[]}}]}});},
+ '/api/tasks/task/process':route=>{processed++;return route.fulfill({json:{status:'not_claimed'}});},
+ '/api/tasks/task':route=>failing?route.abort('connectionfailed'):route.fulfill({json:{task:{status:'succeeded',result:{matchId:'match'}}}})
+ });
+ await page.getByLabel('Candidate for comparison').selectOption('candidate');await page.getByRole('button',{name:'Queue AI comparison (this employment type)'}).click();
+ await page.getByRole('button',{name:'Check comparison status',exact:true}).waitFor({timeout:15000});
+ assert.equal(await page.getByRole('button',{name:'Queue AI comparison (this employment type)'}).isDisabled(),true);
+ failing=false;await page.getByRole('button',{name:'Check comparison status',exact:true}).click();
+ await page.getByText('100% evidence coverage',{exact:true}).waitFor({timeout:4000});assert.equal(queued,1);assert.equal(processed,1);
 });

@@ -5,6 +5,7 @@ export interface ResumeJobProfile {
   secondary_skills?: string | null;
   current_job_title?: string | null;
   target_job_titles?: string | null;
+  confirmed_facts?: Record<string,unknown>;
 }
 const aliases: Record<string, string[]> = {
   go: ['golang', 'go programming', 'go developer', 'go engineer'],
@@ -22,6 +23,11 @@ function terms(value?: string | null) {
 }
 export function rankResumeJobs<T extends { title: string; description?: string | null; state?: string; closes_at?: string | null }>(jobs: T[], candidate: ResumeJobProfile) {
   if (candidate.provenance_status !== 'confirmed') return [];
+  // Reviewed resume facts are authoritative; editable columns can contain stale drafts.
+  if(candidate.confirmed_facts){
+    const reviewed=candidate.confirmed_facts;
+    candidate={...candidate,...Object.fromEntries(['primary_skills','secondary_skills','current_job_title','target_job_titles'].map(field=>[field,typeof reviewed[field]==='string'?reviewed[field]:null]))};
+  }
   const skills = [...new Map([...terms(candidate.primary_skills), ...terms(candidate.secondary_skills)].map(skill => [normalize(skill), skill])).values()];
   const roles = [...terms(candidate.target_job_titles), ...terms(candidate.current_job_title)].map(role => ({
     label: role,
