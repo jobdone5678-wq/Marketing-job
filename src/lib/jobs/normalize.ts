@@ -20,23 +20,115 @@ export function employment(metadata:unknown,text:string):{type:EmploymentType;ev
  return {type,evidence:structured?String(metadata):type==='contract'?contract||null:type==='permanent'?permanent||null:type==='temporary'?temporary||null:null,arrangements:arrangements.length?arrangements:null};
 }
 export function normalizeSnapshot(source:{provider:string;company:string},input:unknown):JobSnapshot {
- const root=object(input);if(!Array.isArray(root.jobs))throw new Error('The provider returned an invalid snapshot.');
- const jobs:NormalizedJob[]=[];let invalid=false;const seen=new Set<string>();
- for(const value of root.jobs){const row=object(value);if(source.provider==='ashby'&&row.isListed===false)continue;
- const title=str(row.title),url=publicJobUrl(source.provider==='greenhouse'?row.absolute_url:row.jobUrl),apply=publicJobUrl(row.applyUrl)||url;
- if(!title||!url||!apply){invalid=true;continue;}const html=sanitize(str(row.content)||str(row.descriptionHtml)||'',{allowedTags:['p','br','ul','ol','li','strong','em','h2','h3'],allowedAttributes:{}});
- const description=(str(row.descriptionPlain)||sanitize(html,{allowedTags:[],allowedAttributes:{}})).slice(0,100000);
- const metadata=source.provider==='ashby'?row.employmentType:Array.isArray(row.metadata)?(row.metadata.map(object).find(m=>/employment type|job type/i.test(String(m.name)))?.value):null;
- const fact=employment(metadata,description);const external=source.provider==='greenhouse'&&typeof row.id==='number'?String(row.id):createHash('sha256').update(url).digest('hex');
- if(seen.has(external)){invalid=true;continue;}seen.add(external);
- const record={external_id:external,title,company:source.company,source_url:url,application_url:apply,description,description_html:html,location:str(source.provider==='greenhouse'?object(row.location).name:row.location),department:str(source.provider==='greenhouse'?(Array.isArray(row.departments)?object(row.departments[0]).name:null):row.department),employment_type:fact.type,employment_evidence:fact.evidence,arrangements:fact.arrangements,compensation:row.compensation||null};
- // Greenhouse supplies first publication; Ashby supplies last publication (including republication).
- // Neither public board API documents an application deadline. Absence is not a closing date.
- const dated={...record,posted_at:providerTimestamp(source.provider==='greenhouse'?row.first_published:row.publishedAt),closes_at:null};
- jobs.push({...dated,content_hash:createHash('sha256').update(JSON.stringify(dated)).digest('hex')});
- }
- const complete=!invalid&&(source.provider==='ashby'||object(root.meta).total===root.jobs.length);return {jobs,completeness:complete?'complete':'partial'};
+  let rawList: unknown[] = [];
+  if (Array.isArray(input)) {
+    rawList = input;
+  } else {
+    const root = object(input);
+    if (Array.isArray(root.jobs)) rawList = root.jobs;
+    else if (Array.isArray(root.content)) rawList = root.content; // SmartRecruiters
+    else if (Array.isArray(root.offers)) rawList = root.offers; // Recruitee / offers
+    else throw new Error('The provider returned an invalid snapshot.');
+  }
+
+  const jobs:NormalizedJob[]=[];let invalid=false;const seen=new Set<string>();
+  for(const value of rawList){
+    const row=object(value);
+    if(source.provider==='ashby'&&row.isListed===false)continue;
+    if(source.provider==='remoteok'&&(!row.id||!row.position))continue;
+
+    let rawTitle: unknown = row.title;
+    let rawUrl: unknown = row.absolute_url || row.jobUrl;
+    let rawApply: unknown = row.applyUrl;
+    let rawContent: unknown = row.content || row.descriptionHtml;
+    let rawPlain: unknown = row.descriptionPlain;
+    let rawLocation: unknown = row.location;
+    let rawDept: unknown = row.department;
+    let rawMetadata: unknown = null;
+    let rawPosted: unknown = null;
+
+    if (source.provider === 'lever') {
+      rawTitle = row.text;
+      rawUrl = row.hostedUrl || row.applyUrl;
+      rawApply = row.applyUrl || row.hostedUrl;
+      rawContent = row.description;
+      const cats = object(row.categories);
+      rawLocation = cats.location || cats.team;
+      rawDept = cats.department || cats.team;
+      rawMetadata = cats.commitment;
+      if (typeof row.createdAt === 'number') {
+        rawPosted = new Date(row.createdAt).toISOString();
+      }
+    } else if (source.provider === 'smartrecruiters') {
+      rawTitle = row.name;
+      rawUrl = row.refNumber ? `https://jobs.smartrecruiters.com/${source.company}/${row.id}` : `https://www.smartrecruiters.com/job/${row.id}`;
+      rawApply = rawUrl;
+      const loc = object(row.location);
+      rawLocation = loc.fullLocation || loc.city || (loc.country ? String(loc.country) : null);
+      rawDept = object(row.department).label || null;
+      rawMetadata = object(row.typeOfEmployment).label || null;
+      rawPosted = row.releasedDate;
+    } else if (source.provider === 'breezy') {
+      rawTitle = row.name;
+      rawUrl = row.url;
+      rawApply = row.url;
+      const loc = object(row.location);
+      rawLocation = loc.name || loc.city || null;
+      rawDept = row.department;
+      rawMetadata = object(row.type).name || null;
+    } else if (source.provider === 'remoteok') {
+      rawTitle = row.position;
+      rawUrl = row.url ? (String(row.url).startsWith('http') ? row.url : `https://remoteok.com${row.url}`) : null;
+      rawApply = row.apply_url || rawUrl;
+      rawContent = row.description;
+      rawLocation = row.location || 'Remote';
+      rawDept = Array.isArray(row.tags) ? row.tags.slice(0, 3).join(', ') : null;
+      rawPosted = row.date;
+    } else if (source.provider === 'greenhouse') {
+      rawLocation = object(row.location).name;
+      rawDept = Array.isArray(row.departments) ? object(row.departments[0]).name : null;
+      rawMetadata = Array.isArray(row.metadata) ? (row.metadata.map(object).find(m=>/employment type|job type/i.test(String(m.name)))?.value) : null;
+      rawPosted = row.first_published;
+    } else if (source.provider === 'ashby') {
+      rawMetadata = row.employmentType;
+      rawPosted = row.publishedAt;
+    }
+
+    const title=str(rawTitle);
+    const url=publicJobUrl(rawUrl);
+    const apply=publicJobUrl(rawApply)||url;
+    if(!title||!url||!apply){invalid=true;continue;}
+    
+    const html=sanitize(str(rawContent)||'',{allowedTags:['p','br','ul','ol','li','strong','em','h2','h3'],allowedAttributes:{}});
+    const description=(str(rawPlain)||sanitize(html,{allowedTags:[],allowedAttributes:{}})||title).slice(0,100000);
+    const fact=employment(rawMetadata,description);
+    
+    const external=source.provider==='greenhouse'&&typeof row.id==='number'?String(row.id):typeof row.id==='string'?row.id:createHash('sha256').update(url).digest('hex');
+    if(seen.has(external)){invalid=true;continue;}seen.add(external);
+    
+    const companyName = source.provider === 'remoteok' && row.company ? str(row.company) || source.company : source.company;
+    const record={
+      external_id:external,
+      title,
+      company:companyName,
+      source_url:url,
+      application_url:apply,
+      description,
+      description_html:html,
+      location:str(rawLocation),
+      department:str(rawDept),
+      employment_type:fact.type,
+      employment_evidence:fact.evidence,
+      arrangements:fact.arrangements,
+      compensation:row.compensation||null
+    };
+    
+    const dated={...record,posted_at:providerTimestamp(rawPosted),closes_at:null};
+    jobs.push({...dated,content_hash:createHash('sha256').update(JSON.stringify(dated)).digest('hex')});
+  }
+  return {jobs,completeness:invalid?'partial':'complete'};
 }
+
 
 export function isSoftwareJob(job: { title: string; department?: string | null }): boolean {
  const t = (job.title || '').toLowerCase();

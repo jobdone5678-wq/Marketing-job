@@ -11,6 +11,32 @@ after(async () => { await browser?.close(); });
 const candidate = { id: 'own', full_name: 'Alex Example', email: 'alex@example.test', phone: '5550100', current_city: 'Austin', current_state: 'Texas', authorized_in_usa: false, need_sponsorship_now: true, highest_qualification: 'Bachelor of Science', university_name: 'Example University', primary_skills: 'Python, SQL' };
 const content = await readFile(new URL('../browser-extension/content.js', import.meta.url), 'utf8');
 
+for (const match of [true, false]) {
+  test(`location combobox ${match ? 'clicks an existing result' : 'never commits a custom location'}`, async t => {
+    const page = await portal(t, { beforeContent: async page => {
+      await page.evaluate(match => {
+        document.querySelector('form').insertAdjacentHTML('beforeend', '<label for="location-choice">Current location</label><input id="location-choice" role="combobox" aria-controls="locations" aria-autocomplete="list"><div id="locations" role="listbox"></div>');
+        const input = document.querySelector('#location-choice');
+        input.addEventListener('input', () => {
+          setTimeout(() => {
+            document.querySelector('#locations').innerHTML = '<div role="option">' + (match ? 'Austin, Texas' : 'Boston, Massachusetts') + '</div><div role="option">Create custom location</div>';
+            document.querySelectorAll('#locations [role="option"]').forEach(option => option.onclick = () => { window.selectedLocation = option.textContent; input.value = option.textContent; document.querySelector('#locations').innerHTML = ''; });
+          }, 60);
+        });
+      }, match);
+    } });
+    if (match) {
+      await page.waitForFunction(() => window.selectedLocation === 'Austin, Texas', null, { timeout: 3000 });
+      assert.equal(await page.inputValue('#location-choice'), 'Austin, Texas');
+    } else {
+      await page.waitForTimeout(2300);
+      assert.equal(await page.inputValue('#location-choice'), '');
+      assert.equal(await page.evaluate(() => window.selectedLocation), undefined);
+    }
+    assert.equal(await page.evaluate(() => window.submits), 0);
+  });
+}
+
 async function portal(t, { host = 'job-boards.greenhouse.io', candidates = [candidate], intentCandidateId = null, persistedCandidateId = null, role = 'client', beforeContent, hash } = {}) {
   const page = await browser.newPage();
   t.after(() => page.close());

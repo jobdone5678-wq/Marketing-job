@@ -30,6 +30,7 @@ async function jobsPage(t, { role = 'client', requiresProfile = false } = {}) {
   const requests = [];
   const sourceWrites = [];
   const liveRequests = [];
+  const jobFilters = [];
   await page.route('https://portal.test/**', async route => {
     const url = new URL(route.request().url());
     if (url.pathname === '/api/candidates') return route.fulfill({ json: url.searchParams.get('page') === '0'
@@ -44,6 +45,7 @@ async function jobsPage(t, { role = 'client', requiresProfile = false } = {}) {
       return route.fulfill({json:{jobs:[],total:0,persistedInDb:false,fetchedAt:new Date().toISOString(),recommendation:{requiresProfile:false}}});
     }
     if (url.pathname === '/api/jobs') {
+      jobFilters.push(Object.fromEntries(url.searchParams));
       requests.push(url.searchParams.get('candidateId'));
       return route.fulfill({ json: { jobs: requiresProfile ? [] : [matchingJob], total: requiresProfile ? 0 : 1, hasMore: false,
         recommendation: { enabled: role === 'client' || url.searchParams.has('candidateId'), requiresProfile, candidateName: reviewed.full_name, candidateId: ownId } } });
@@ -53,8 +55,19 @@ async function jobsPage(t, { role = 'client', requiresProfile = false } = {}) {
   await page.goto('https://portal.test/');
   await page.evaluate(role => { window.fixtureProfile = { isRecruiter: role === 'recruiter', isTechnicalRecruiter:role==='technical_recruiter', isClient: role === 'client', loading: false }; }, role);
   await page.addScriptTag({ content: browserModuleScript(sources, "require('react-dom/client').createRoot(document.getElementById('root')).render(require('react').createElement(require('jobs-browser').JobsBrowser));") });
-  return { page, requests, sourceWrites, liveRequests };
+  return { page, requests, sourceWrites, liveRequests, jobFilters };
 }
+
+test('Public Jobs sends portal, company and location filters together with candidate context', async t => {
+  const {page,jobFilters}=await jobsPage(t);
+  await page.getByText('Python Developer',{exact:true}).waitFor();
+  await page.getByLabel('Filter by portal').selectOption('greenhouse');
+  await page.getByLabel('Filter by company').fill('Example');
+  await page.getByLabel('Filter by location').fill('Austin');
+  await page.waitForResponse(response=>{const p=new URL(response.url()).searchParams;return p.get('location')==='Austin'&&p.get('company')==='Example'&&p.get('provider')==='greenhouse';});
+  assert.ok(jobFilters.some(p=>p.provider==='greenhouse'&&p.company==='Example'&&p.location==='Austin'&&p.page==='0'));
+  assert.equal(await page.getByRole('heading',{name:'Public Jobs',exact:true}).count(),1);
+});
 
 test('public board selection fetches exact provider and staff can persist it', async t => {
   const {page, sourceWrites, liveRequests} = await jobsPage(t,{role:'recruiter'});

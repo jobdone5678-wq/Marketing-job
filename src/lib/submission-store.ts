@@ -14,12 +14,17 @@ function writeFields(input: Partial<JobSubmissionFormData>, creating = false) {
 
 export function submissionStore(client: SupabaseClient) {
   async function getSubmissions(candidateId?: string): Promise<JobSubmission[]> {
-    let query = client.from('job_submissions').select(columns)
-      .order('submission_date', { ascending: false }).order('created_at', { ascending: false });
-    if (candidateId) query = query.eq('candidate_id', candidateId);
-    const { data, error } = await query;
-    if (error) throw new Error('Unable to load submissions. Please retry.');
-    return (data || []) as JobSubmission[];
+    const rows: JobSubmission[] = [];
+    for (let offset = 0; ; offset += 500) {
+      let query = client.from('job_submissions').select(columns)
+        .order('submission_date', { ascending: false }).order('created_at', { ascending: false }).order('id');
+      if (candidateId) query = query.eq('candidate_id', candidateId);
+      const { data, error } = await query.range(offset, offset + 499);
+      if (error) throw new Error('Unable to load submissions. Please retry.');
+      rows.push(...(data || []) as JobSubmission[]);
+      if (!data || data.length < 500) break;
+    }
+    return rows;
   }
   async function getSubmissionById(id: string): Promise<JobSubmission | null> {
     const { data, error } = await client.from('job_submissions').select(columns).eq('id', id).maybeSingle();

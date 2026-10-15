@@ -16,6 +16,7 @@ export async function GET(request: Request) {
     const { candidate, recommendation } = await recommendationContext(profile, params);
     if (recommendation.requiresProfile) return { jobs: [], total: 0, hasMore: false, recommendation };
     const provider = params.get('provider');
+    if (provider && !['greenhouse','ashby'].includes(provider)) throw new CaptureError('Invalid portal filter.');
     let sourceIds: string[] | null = null;
     if (provider) {
       const { data, error } = await database().from('job_sources').select('id').eq('provider', provider);
@@ -28,6 +29,10 @@ export async function GET(request: Request) {
       if (type !== 'all') q = q.eq('employment_type', type);
       const search = params.get('search')?.trim();
       if (search) q = q.ilike('title', '%' + search.replace(/[\\%_]/g, '\\$&') + '%');
+      for (const field of ['company','location'] as const) {
+        const value = params.get(field)?.trim();
+        if (value) q = q.ilike(field, '%' + value.replace(/[\\%_]/g, '\\$&') + '%');
+      }
       if (sourceIds) q = q.in('source_id', sourceIds);
       return q;
     }

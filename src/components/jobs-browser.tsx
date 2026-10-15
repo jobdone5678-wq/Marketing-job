@@ -13,8 +13,10 @@ import type { StoredJob, NormalizedJob } from '@/lib/jobs/types';
 import { JobDates } from '@/components/job-dates';
 import { PublicJobCatalog } from '@/components/public-job-catalog';
 
+import type { SupportedJobProvider } from '@/lib/public-directory';
+
 interface LiveJob extends NormalizedJob {
-  provider: 'greenhouse' | 'ashby';
+  provider: SupportedJobProvider;
   board_slug: string;
   match_reasons?: string[];
 }
@@ -66,6 +68,12 @@ export function JobsBrowser({ provider }: { provider?: string }) {
 
   // Shared filters
   const [search, setSearch] = useState('');
+  const [portalFilter, setPortalFilter] = useState(provider || '');
+  const [companyFilter, setCompanyFilter] = useState('');
+  const [locationFilter, setLocationFilter] = useState('');
+  const savedFilters = new URLSearchParams({ company: companyFilter, location: locationFilter });
+  if (provider || portalFilter) savedFilters.set('provider', provider || portalFilter);
+  const savedFilterParam = '&' + savedFilters.toString();
   const [employmentType, setEmploymentType] = useState('all');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -118,6 +126,8 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         if (boardToUse.trim()) query.set('board', boardToUse.trim());
         if (employmentType) query.set('type', employmentType);
         if (search.trim()) query.set('search', search.trim());
+        if (companyFilter.trim()) query.set('company', companyFilter.trim());
+        if (locationFilter.trim()) query.set('location', locationFilter.trim());
         if (saveToDbOnFetch) query.set('saveToDb', 'true');
 
         const res = await api<{
@@ -139,7 +149,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           setNotice(`✅ Pulled ${res.jobs.length} software jobs and stored them in the database!`);
           void api<{ jobs: StoredJob[]; total: number; hasMore: boolean; recommendation: Recommendation }>(
             `/api/jobs?type=${employmentType}&search=${encodeURIComponent(search)}&page=0${
-              (provider ? '&provider=' + provider : '') + candidateParam
+              savedFilterParam + candidateParam
             }`
           )
             .then((dbRes) => {
@@ -157,7 +167,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         if (requestId === liveRequest.current) setLiveLoading(false);
       }
     },
-    [liveBoard, liveProvider, employmentType, search, saveToDbOnFetch, provider, candidateId, candidateParam]
+    [liveBoard, liveProvider, employmentType, search, saveToDbOnFetch, candidateId, candidateParam, companyFilter, locationFilter, savedFilterParam]
   );
 
   // Initial load for live jobs
@@ -176,7 +186,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
     queueMicrotask(() => { if (active) setDbLoading(true); });
     api<{ jobs: StoredJob[]; total: number; hasMore: boolean; recommendation: Recommendation }>(
       `/api/jobs?type=${employmentType}&search=${encodeURIComponent(search)}&page=${dbPage}${
-        (provider ? '&provider=' + provider : '') + candidateParam
+        savedFilterParam + candidateParam
       }`
     )
       .then((r) => {
@@ -194,7 +204,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
     return () => {
       active = false;
     };
-  }, [mode, employmentType, search, dbPage, provider, candidateParam, profileLoading, reload]);
+  }, [mode, employmentType, search, dbPage, savedFilterParam, candidateParam, profileLoading, reload]);
 
   // Load configured sources for recruiter
   useEffect(() => {
@@ -213,14 +223,14 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-extrabold tracking-tight">
-              {provider ? provider.toUpperCase() : 'Public'} Jobs Portal
+              {provider ? provider.toUpperCase() + ' Jobs' : 'Public Jobs'}
             </h1>
             <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-xs py-0.5">
               💻 Software & Tech Roles Only
             </Badge>
           </div>
           <p className="text-muted-foreground text-sm mt-1">
-            Browse verified technical & engineering jobs from public ATS boards, stored directly in the database.
+            Find jobs across public portals and companies. Filter by portal, company, location and employment type.
           </p>
         </div>
 
@@ -327,6 +337,10 @@ export function JobsBrowser({ provider }: { provider?: string }) {
               >
                 <option value="greenhouse">Greenhouse</option>
                 <option value="ashby">Ashby</option>
+                <option value="lever">Lever</option>
+                <option value="smartrecruiters">SmartRecruiters</option>
+                <option value="breezy">Breezy HR</option>
+                <option value="remoteok">RemoteOK</option>
               </select>
             </div>
 
@@ -380,8 +394,8 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           <Input
             aria-label="Search jobs"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search software jobs by title, department, or location..."
+            onChange={(e) => { setSearch(e.target.value); setDbPage(0); }}
+            placeholder="Search job titles..."
             className="h-9 flex-1"
           />
 
@@ -389,7 +403,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
             aria-label="Employment type"
             className="h-9 border rounded-md px-3 bg-background text-sm min-w-[150px]"
             value={employmentType}
-            onChange={(e) => setEmploymentType(e.target.value)}
+            onChange={(e) => { setEmploymentType(e.target.value); setDbPage(0); }}
           >
             <option value="all">All Types</option>
             <option value="contract">Contract (C2C/W2)</option>
@@ -415,6 +429,15 @@ export function JobsBrowser({ provider }: { provider?: string }) {
               </Button>
             </div>
           )}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {mode === 'db' && <label className="text-sm">Portal
+            <select aria-label="Filter by portal" className="mt-1 block h-9 w-full rounded-md border bg-background px-3" value={provider || portalFilter} disabled={Boolean(provider)} onChange={e => { setPortalFilter(e.target.value); setDbPage(0); }}>
+              <option value="">All portals</option><option value="greenhouse">Greenhouse</option><option value="ashby">Ashby</option>
+            </select>
+          </label>}
+          <label className="text-sm">Company<Input aria-label="Filter by company" className="mt-1 h-9" placeholder="Company name" value={companyFilter} onChange={e => { setCompanyFilter(e.target.value); setDbPage(0); }}/></label>
+          <label className="text-sm">Location<Input aria-label="Filter by location" className="mt-1 h-9" placeholder="City, state or remote" value={locationFilter} onChange={e => { setLocationFilter(e.target.value); setDbPage(0); }}/></label>
         </div>
       </section>
 
@@ -585,6 +608,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                   <p className="text-sm text-muted-foreground">
                     {j.company} - {j.location || 'Location unknown'}
                   </p>
+                  <Badge variant="outline" className="mt-1 text-xs">Portal: {j.source?.provider === 'greenhouse' ? 'Greenhouse' : j.source?.provider === 'ashby' ? 'Ashby' : j.source?.provider || 'Unknown'}</Badge>
                   <JobDates posted_at={j.posted_at} closes_at={j.closes_at} provider={j.source?.provider}/>
                   {j.match_reasons?.map(reason => <p key={reason} className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">{reason}</p>)}
                   <p className="text-xs text-muted-foreground mt-1">
@@ -671,6 +695,10 @@ export function JobsBrowser({ provider }: { provider?: string }) {
             >
               <option value="greenhouse">Greenhouse</option>
               <option value="ashby">Ashby</option>
+              <option value="lever">Lever</option>
+              <option value="smartrecruiters">SmartRecruiters</option>
+              <option value="breezy">Breezy HR</option>
+              <option value="remoteok">RemoteOK</option>
             </select>
             <Button type="submit" size="sm" className="h-9">
               Add source

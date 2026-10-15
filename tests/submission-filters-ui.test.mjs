@@ -1,0 +1,63 @@
+import test,{before,after} from 'node:test';
+import assert from 'node:assert/strict';
+import {chromium} from '@playwright/test';
+import {readFile} from 'node:fs/promises';
+import ts from 'typescript';
+import {browserReactModules,browserModuleScript} from './helpers/browser-react.mjs';
+let browser;
+before(async()=>{browser=await chromium.launch({headless:true});});
+after(async()=>{await browser?.close();});
+const sources=await browserReactModules();
+for(const [name,file] of [['page','src/app/dashboard/submissions/page.tsx'],['@/lib/submission-dates','src/lib/submission-dates.ts'],['sidebar','src/components/app-sidebar.tsx']])sources[name]=ts.transpileModule(await readFile(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
+sources['@/lib/submissions']='exports.getSubmissions=async()=>window.fixtureRows;exports.deleteSubmission=async()=>({success:true});';
+sources['@/lib/candidates']='exports.getCandidates=async()=>[];';
+sources['next/link']="module.exports=({children,...props})=>require('react').createElement('a',props,children);";
+sources['next/navigation']='exports.useRouter=()=>({push(){}});';
+sources['sonner']='exports.toast={success(){},error(){}};';
+sources['lucide-react']="module.exports=new Proxy({},{get:()=>()=>null});";
+sources['@/components/submission-status-dialog']='exports.SubmissionStatusDialog=()=>null;';
+sources['@/components/application-answer-snapshot']='exports.ApplicationAnswerSnapshot=()=>null;';
+for(const [module,components] of Object.entries({button:{Button:'button'},input:{Input:'input'},badge:{Badge:'span'},card:{Card:'div',CardAction:'div',CardDescription:'p',CardFooter:'div',CardHeader:'div',CardTitle:'h3'},table:{Table:'table',TableBody:'tbody',TableCell:'td',TableHead:'th',TableHeader:'thead',TableRow:'tr'},select:{Select:'div',SelectContent:'div',SelectItem:'span',SelectTrigger:'button',SelectValue:'span'},sidebar:{Sidebar:'aside',SidebarContent:'div',SidebarFooter:'footer',SidebarHeader:'header',SidebarMenu:'div',SidebarMenuItem:'div'}}))sources['@/components/ui/'+module]=Object.entries(components).map(([name,tag])=>`exports.${name}=({children,variant,size,render,onValueChange,collapsible,...props})=>require('react').createElement('${tag}',props,children);`).join('');
+sources['@/lib/client']='exports.createClient=()=>({auth:{getUser:async()=>({data:{user:{id:"actor",email:"fixture@example.test"}}}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})},from:()=>({select:()=>({eq:()=>({single:async()=>({data:{role:window.fixtureRole,status:"active"}})})})})});';
+sources['@/components/nav-main']="exports.NavMain=({items})=>require('react').createElement('nav',null,...items.map(item=>require('react').createElement('a',{key:item.id,href:item.url},item.title)));";
+sources['@/components/nav-secondary']='exports.NavSecondary=()=>null;';
+sources['@/components/nav-user']='exports.NavUser=()=>null;';
+
+test('submission dates filter rows, daily counts, status and exported report together',async t=>{
+ const page=await browser.newPage();t.after(()=>page.close());
+ await page.route('https://portal.test/**',route=>route.fulfill({contentType:'text/html',body:'<div id="root"></div>'}));
+ await page.goto('https://portal.test/');
+ await page.evaluate(()=>{
+  window.fixtureRows=[{id:'a',submission_date:'2026-10-14',company_name:'Alpha',status:'Applied'},{id:'b',submission_date:'2026-10-15',company_name:'Beta',status:'Applied'},{id:'c',submission_date:'2026-10-15',company_name:'Gamma',status:'Offer_Received'},{id:'d',submission_date:'2026-10-16',company_name:'Delta',status:'Applied'}];
+  Object.defineProperty(navigator,'clipboard',{value:{writeText:async text=>{window.copiedReport=text;}}});
+ });
+ await page.addScriptTag({content:browserModuleScript(sources,"require('react-dom/client').createRoot(document.getElementById('root')).render(require('react').createElement(require('page').default));")});
+ const dates=page.getByRole('region',{name:'Application date filters'});
+ await dates.getByRole('status').getByText('4',{exact:true}).waitFor();
+ await page.getByLabel('From application date').fill('2026-10-15');
+ await page.getByLabel('To application date').fill('2026-10-15');
+ await dates.getByRole('status').getByText('2',{exact:true}).waitFor();
+ assert.equal(await dates.locator('tbody tr').count(),1);
+ assert.equal(await dates.locator('tbody tr td').last().textContent(),'2');
+ await page.getByRole('button',{name:'Applied',exact:true}).first().click();
+ await dates.getByRole('status').getByText('1',{exact:true}).first().waitFor();
+ await page.getByRole('button',{name:'Daily Report',exact:true}).click();
+ const report=await page.evaluate(()=>window.copiedReport);
+ assert.ok(report.includes('Beta'));assert.ok(!report.includes('Alpha'));assert.ok(!report.includes('Gamma'));assert.ok(!report.includes('Delta'));
+ assert.ok(report.includes('2026-10-15: 1 applications'));
+ await page.getByRole('button',{name:'Clear filters',exact:true}).click();
+ await dates.getByRole('status').getByText('4',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Show applications on 2026-10-14'}).click();
+ assert.equal(await page.getByLabel('From application date').inputValue(),'2026-10-14');
+ assert.equal(await page.getByLabel('To application date').inputValue(),'2026-10-14');
+});
+
+for(const role of ['super_admin','recruiter','technical_recruiter','client'])test(`${role} sidebar has one Public Jobs link and no separate portal entries`,async t=>{
+ const page=await browser.newPage();t.after(()=>page.close());
+ await page.route('https://portal.test/**',route=>route.fulfill({contentType:'text/html',body:'<div id="root"></div>'}));await page.goto('https://portal.test/');
+ await page.evaluate(role=>{window.fixtureRole=role;},role);
+ await page.addScriptTag({content:browserModuleScript(sources,"require('react-dom/client').createRoot(document.getElementById('root')).render(require('react').createElement(require('sidebar').AppSidebar));")});
+ await page.getByRole('link',{name:'Public Jobs',exact:true}).waitFor();
+ assert.equal(await page.getByRole('link',{name:'Public Jobs',exact:true}).count(),1);
+ assert.equal(await page.getByRole('link',{name:/Greenhouse Portals|Ashby Portals|Browse Jobs/}).count(),0);
+});

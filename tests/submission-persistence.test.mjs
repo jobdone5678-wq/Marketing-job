@@ -2,6 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createClient} from '@supabase/supabase-js';
 const load=()=>import('../src/lib/submission-store.ts');
+test('submission history loads beyond database row caps without dropping daily totals',async()=>{
+ const {submissionStore}=await load();
+ const urls=[];
+ const database=createClient('https://database.example.test','synthetic-key',{auth:{persistSession:false,autoRefreshToken:false},global:{fetch:async url=>{
+  const params=new URL(url).searchParams;urls.push(params);
+  const offset=Number(params.get('offset')||0);const limit=Number(params.get('limit')||1000);
+  const rows=Array.from({length:1001},(_,id)=>({id:String(id),submission_date:'2026-10-15'}));
+  return Response.json(rows.slice(offset,offset+limit));
+ }}});
+ assert.equal((await submissionStore(database).getSubmissions('own')).length,1001);
+ assert.ok(urls.every(params=>params.get('candidate_id')==='eq.own'));
+});
 function client(response) {
   return createClient('https://database.example.test','synthetic-key',{auth:{persistSession:false,autoRefreshToken:false},global:{fetch:async()=>response.clone()}});
 }

@@ -11,6 +11,8 @@
   const editedFields = new WeakSet();
   let filling = false;
   let autofillTimer;
+  const dropdownAttempts = new WeakMap();
+  let dropdownQueue = Promise.resolve();
   let currentJobTitle = '';
   let currentCompanyName = '';
   let submissionEventKey = crypto.randomUUID();
@@ -234,7 +236,7 @@
     } catch { candidates = []; selectedCandidateId = null; }
   }
 
-  function nativeSet(el, property, value) {
+  function nativeSet(el, property, value, commit = true) {
     if (property === 'checked') {
       // React uses click events to update controlled checkbox/radio state.
       if (el.checked !== value) {
@@ -264,8 +266,10 @@
     } catch {
       el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     }
-    el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-    try { el.dispatchEvent(new Event('blur', { bubbles: true, composed: true })); } catch {}
+    if (commit) {
+      el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+      try { el.dispatchEvent(new Event('blur', { bubbles: true, composed: true })); } catch {}
+    }
     highlightField(el);
   }
 
@@ -287,16 +291,55 @@
     scheduleAutofill();
   }
 
-  // Fill known profile facts into application fields using Jobright-grade matching. Never submit.
+  // Custom controls must commit an existing portal option, not a free-text answer.
+  function selectDropdownOption(el, value) {
+    const answer = String(value);
+    if (dropdownAttempts.get(el) === answer) return;
+    dropdownAttempts.set(el, answer);
+    dropdownQueue = dropdownQueue.then(async () => {
+      if (!el.isConnected || editedFields.has(el) || String(el.value || '').trim()) return;
+      if (el.tagName === 'BUTTON' && !/^(select|choose|please select|--)/i.test(el.textContent.trim())) return;
+      const normalize = text => String(text).toLowerCase().replace(/[,()]/g, ' ').replace(/\s+/g, ' ').trim()
+        .split(' ').map(word => US_STATES[word] || word).join(' ');
+      const expected = normalize(answer);
+      let query = '';
+      let selected = false;
+      try {
+        el.click();
+        if (el.tagName === 'INPUT' && !el.readOnly) {
+          query = answer;
+          nativeSet(el, 'value', query, false);
+        }
+        const deadline = Date.now() + 1600;
+        while (Date.now() < deadline && el.isConnected && !editedFields.has(el)) {
+          const ids = (el.getAttribute('aria-controls') || el.getAttribute('aria-owns') || '').split(/\s+/).filter(Boolean);
+          const roots = ids.map(id => document.getElementById(id)).filter(Boolean);
+          // Never choose from another field's dropdown when association is absent.
+          const lists = roots;
+          const options = lists.length === 1 ? Array.from(lists[0].querySelectorAll('[role="option"]')) : [];
+          const matches = options.filter(option => option.getClientRects().length && option.getAttribute('aria-disabled') !== 'true' &&
+            !/^(create|add|use custom)\b/i.test(option.textContent.trim()) && normalize(option.textContent) === expected);
+          if (matches.length === 1) { matches[0].click(); selected = true; return; }
+          await new Promise(resolve => setTimeout(resolve, 80));
+        }
+      } finally {
+        // An unmatched search must never become a custom submitted answer.
+        if (!selected && query && !editedFields.has(el) && el.value === query) nativeSet(el, 'value', '', false);
+      }
+    }).catch(() => {});
+  }
+
+  // Fill known profile facts into application fields. Never submit.
   function autofillCandidate(candidate, force = false) {
     if (!candidate) return 0;
     let count = 0;
     const names = (candidate.full_name || '').trim().split(/\s+/);
     const norm = value => String(value || '').toLowerCase().replace(/[\*:]/g, ' ').replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
-    const controls = document.querySelectorAll('input, textarea, select');
+    const controls = document.querySelectorAll('input, textarea, select, button[role="combobox"]');
     for (const el of controls) {
-      if (el.closest('#mp-copilot-root') || el.disabled || el.readOnly || (!force && editedFields.has(el)) || !el.getClientRects().length) continue;
-      if (['hidden', 'submit', 'button', 'file', 'password', 'search', 'reset'].includes(el.type)) continue;
+      const dropdown = el.tagName !== 'SELECT' && (el.getAttribute('role') === 'combobox' || el.getAttribute('aria-autocomplete') === 'list' || el.getAttribute('aria-haspopup') === 'listbox');
+      if (el.closest('#mp-copilot-root') || el.disabled || (el.readOnly && !dropdown) || (!force && editedFields.has(el)) || !el.getClientRects().length) continue;
+      if (['hidden', 'submit', 'file', 'password', 'reset'].includes(el.type) || (['button', 'search'].includes(el.type) && !dropdown)) continue;
 
       const rawContext = getElementContext(el);
       const key = norm(rawContext);
@@ -390,6 +433,10 @@
 
       if (value === null || value === undefined || value === '') continue;
       const boolean = typeof value === 'boolean';
+      if (dropdown) {
+        selectDropdownOption(el, boolean ? (value ? 'Yes' : 'No') : value);
+        continue;
+      }
       if (['radio', 'checkbox'].includes(el.type)) {
         if (!boolean) continue;
         const group = el.name ? Array.from(document.getElementsByName(el.name)).filter(input => input.form === el.form) : [el];
@@ -778,19 +825,44 @@
     }, true);
   }
 
-  // Initialize Copilot on DOM ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', async () => {
-      await loadCandidates();
-      injectFloatingWidget();
-      if(linked)observeIntent();else observeUniversal();
-      observeAutofill();
-    });
-  } else {
+  // Initialize Copilot on DOM ready - inject widget immediately so it always displays
+  function init() {
+    injectFloatingWidget();
     loadCandidates().then(() => {
-      injectFloatingWidget();
-      if(linked)observeIntent();else observeUniversal();
-      observeAutofill();
+      const card = document.getElementById('mp-copilot-card');
+      if (card && card.style.display !== 'none') {
+        const update = card.querySelector('#mp-candidate-select');
+        if (update) {
+          const escape = text => String(text ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+          const candidateOptions = candidates.map(c => 
+            `<option value="${c.id}" ${c.id === selectedCandidateId ? 'selected' : ''}>${escape(c.full_name)}</option>`
+          ).join('');
+          update.innerHTML = `<option value="">Select a reviewed candidate</option>${candidateOptions}`;
+          update.value = selectedCandidateId || '';
+          update.disabled = Boolean(selectedCandidateId) || Boolean(linkedCandidateId) || candidateRole === 'client';
+        }
+      }
     });
+    if (linked) observeIntent(); else observeUniversal();
+    observeAutofill();
   }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+  // Also re-verify widget injection on dynamic client-side SPA navigations (Ashby, Greenhouse SPA)
+  window.addEventListener('popstate', () => setTimeout(injectFloatingWidget, 500));
+  let lastUrl = location.href;
+  new MutationObserver(() => {
+    const url = location.href;
+    if (url !== lastUrl) {
+      lastUrl = url;
+      setTimeout(injectFloatingWidget, 500);
+    } else if (!document.getElementById('mp-copilot-root')) {
+      injectFloatingWidget();
+    }
+  }).observe(document.documentElement, { childList: true, subtree: true });
 })();

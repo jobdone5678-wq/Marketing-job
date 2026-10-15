@@ -2,12 +2,12 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   getSubmissions,
   deleteSubmission,
 } from "@/lib/submissions";
 import { getCandidates } from "@/lib/candidates";
+import { dailySubmissionCounts, inSubmissionDateRange, submissionDatePreset } from "@/lib/submission-dates";
 import type { Candidate, JobSubmission, SubmissionStatus } from "@/types/database";
 import { SubmissionStatusDialog } from "@/components/submission-status-dialog";
 import { ApplicationAnswerSnapshot } from "@/components/application-answer-snapshot";
@@ -16,11 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
-  CardAction,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import {
   Table,
@@ -48,7 +43,6 @@ import {
   CheckIcon,
   AlertTriangleIcon,
   CalendarIcon,
-  VideoIcon,
   ExternalLinkIcon,
   EditIcon,
   Trash2Icon,
@@ -57,14 +51,12 @@ import {
   Building2Icon,
   BriefcaseIcon,
   ClockIcon,
-  CheckCircle2Icon,
   PhoneIcon,
   MailIcon,
   FilterIcon,
 } from "lucide-react";
 
 export default function SubmissionsPage() {
-  const router = useRouter();
   const [submissions, setSubmissions] = React.useState<JobSubmission[]>([]);
   const [candidates, setCandidates] = React.useState<Candidate[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -74,6 +66,8 @@ export default function SubmissionsPage() {
   const [selectedStatusTab, setSelectedStatusTab] = React.useState("all");
   const [selectedCandidateFilter, setSelectedCandidateFilter] = React.useState("all");
   const [selectedPortalFilter, setSelectedPortalFilter] = React.useState("all");
+  const [dateFrom, setDateFrom] = React.useState("");
+  const [dateTo, setDateTo] = React.useState("");
 
   // Modals
   const [statusDialogOpen, setStatusDialogOpen] = React.useState(false);
@@ -160,6 +154,7 @@ export default function SubmissionsPage() {
   // Filter Submissions
   const filteredSubmissions = React.useMemo(() => {
     return submissions.filter((sub) => {
+      if (!inSubmissionDateRange(sub.submission_date, dateFrom, dateTo)) return false;
       // Candidate filter
       if (
         selectedCandidateFilter !== "all" &&
@@ -223,25 +218,30 @@ export default function SubmissionsPage() {
     selectedPortalFilter,
     selectedStatusTab,
     searchQuery,
+    dateFrom,
+    dateTo,
   ]);
+
+  const dailyCounts = React.useMemo(() => dailySubmissionCounts(filteredSubmissions), [filteredSubmissions]);
+  const portalOptions = React.useMemo(() => Array.from(new Map(submissions.filter(row => row.portal_source?.trim()).map(row => [row.portal_source!.trim().toLowerCase(), row.portal_source!.trim()])).entries()).sort((a,b) => a[1].localeCompare(b[1])), [submissions]);
 
   // Statistics
   const stats = React.useMemo(() => {
-    const total = submissions.length;
-    const interviews = submissions.filter(
+    const total = filteredSubmissions.length;
+    const interviews = filteredSubmissions.filter(
       (s) =>
         s.status === "Interview_Scheduled" ||
         s.status === "Round_1" ||
         s.status === "Round_2"
     ).length;
-    const clientReview = submissions.filter(
+    const clientReview = filteredSubmissions.filter(
       (s) => s.status === "Submitted_to_Client"
     ).length;
-    const offers = submissions.filter((s) => s.status === "Offer_Received").length;
-    const duplicates = submissions.filter((s) => s.duplicate_flag).length;
+    const offers = filteredSubmissions.filter((s) => s.status === "Offer_Received").length;
+    const duplicates = filteredSubmissions.filter((s) => s.duplicate_flag).length;
 
     return { total, interviews, clientReview, offers, duplicates };
-  }, [submissions]);
+  }, [filteredSubmissions]);
 
   // Export to CSV / Excel
   const handleExportCSV = () => {
@@ -326,7 +326,9 @@ export default function SubmissionsPage() {
     let report = `DAILY RECRUITING & BENCH MARKETING REPORT (${today})\n`;
     report += `========================================================\n\n`;
     report += `📊 SUMMARY METRICS:\n`;
-    report += `• Total Active Submissions: ${stats.total}\n`;
+    report += `• Matching Submissions: ${stats.total}\n`;
+    report += `• Application dates: ${dateFrom || 'Any date'} through ${dateTo || 'Any date'}\n`;
+    report += dailyCounts.map(day => `  ${day.date}: ${day.count} applications\n`).join('');
     report += `• Active Interviews / Rounds: ${stats.interviews}\n`;
     report += `• Submitted to Client: ${stats.clientReview}\n`;
     report += `• Offers Received: ${stats.offers}\n\n`;
@@ -525,12 +527,12 @@ export default function SubmissionsPage() {
             Stage:
           </span>
           {[
-            { id: "all", label: `All (${submissions.length})` },
-            { id: "interviews", label: `Interviews (${stats.interviews})` },
-            { id: "Submitted_to_Client", label: `Client Review (${stats.clientReview})` },
+            { id: "all", label: "All stages" },
+            { id: "interviews", label: "Interviews" },
+            { id: "Submitted_to_Client", label: "Client Review" },
             { id: "Vendor_Screening", label: `Vendor Screening` },
             { id: "Applied", label: `Applied` },
-            { id: "offers", label: `Offers (${stats.offers})` },
+            { id: "offers", label: "Offers" },
             { id: "active", label: `All Active` },
             { id: "Rejected", label: `Rejected` },
           ].map((tab) => {
@@ -597,23 +599,28 @@ export default function SubmissionsPage() {
                 <SelectItem value="all" className="text-xs">
                   All Portals
                 </SelectItem>
-                <SelectItem value="Greenhouse" className="text-xs">
-                  Greenhouse
-                </SelectItem>
-                <SelectItem value="Ashby" className="text-xs">
-                  Ashby
-                </SelectItem>
-                <SelectItem value="LinkedIn" className="text-xs">
-                  LinkedIn
-                </SelectItem>
-                <SelectItem value="Direct" className="text-xs">
-                  Direct / Workday
-                </SelectItem>
+                {portalOptions.map(([value,label]) => <SelectItem key={value} value={value} className="text-xs">{label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
         </div>
       </div>
+
+      <section aria-label="Application date filters" className="rounded-xl border bg-card p-4 space-y-4">
+        <div><h2 className="font-semibold">Applications by date</h2><p className="text-sm text-muted-foreground">Filter by the application date. Both dates are included. Counts and exports follow all selected filters.</p></div>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-sm">From date<Input aria-label="From application date" type="date" value={dateFrom} max={dateTo || undefined} onChange={e => setDateFrom(e.target.value)}/></label>
+          <label className="text-sm">To date<Input aria-label="To application date" type="date" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)}/></label>
+          {([{id:'today',label:'Today'},{id:'week',label:'Last 7 days'},{id:'month',label:'This month'}] as const).map(preset => <Button key={preset.id} variant="outline" onClick={() => { const range = submissionDatePreset(preset.id); setDateFrom(range.from); setDateTo(range.to); }}>{preset.label}</Button>)}
+          <Button variant="ghost" onClick={() => {setDateFrom('');setDateTo('');setSearchQuery('');setSelectedCandidateFilter('all');setSelectedPortalFilter('all');setSelectedStatusTab('all');}}>Clear filters</Button>
+        </div>
+        {dateFrom && dateTo && dateFrom > dateTo && <p role="alert" className="text-sm text-destructive">From date must be on or before To date.</p>}
+        <p role="status" className="text-sm"><strong>{filteredSubmissions.length}</strong> matching applications across <strong>{dailyCounts.length}</strong> application dates.</p>
+        <div className="max-h-60 overflow-auto">
+          {dailyCounts.length ? <table className="w-full text-sm"><caption className="sr-only">Daily application counts for the selected filters</caption><thead><tr className="border-b"><th className="p-2 text-left">Application date</th><th className="p-2 text-right">Jobs applied</th></tr></thead><tbody>{dailyCounts.map(day => <tr key={day.date} className="border-b"><td className="p-2"><button type="button" className="underline" aria-label={`Show applications on ${day.date}`} onClick={() => {setDateFrom(day.date);setDateTo(day.date);}}>{day.date}</button></td><td className="p-2 text-right">{day.count}</td></tr>)}</tbody></table> : <p className="text-sm text-muted-foreground">No dated applications match these filters.</p>}
+        </div>
+        {filteredSubmissions.some(row => !row.submission_date) && <p className="text-xs text-muted-foreground">Applications without a recorded date are included in the total only when no date filter is selected.</p>}
+      </section>
 
       {/* THE CENTRAL EXCEL-REPLACEMENT SUBMISSIONS TABLE */}
       <div className="rounded-xl border bg-card shadow-xs overflow-hidden">

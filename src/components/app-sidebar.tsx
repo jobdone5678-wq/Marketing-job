@@ -16,7 +16,6 @@ import {
   LayoutDashboardIcon,
   BriefcaseIcon,
   Building2Icon,
-  GlobeIcon,
   Settings2Icon,
   CircleHelpIcon,
   SearchIcon,
@@ -77,18 +76,6 @@ const recruiterNavItems: NavItem[] = [
     url: "/dashboard/jobs",
     icon: <BriefcaseIcon className="size-4" />,
   },
-  {
-    id: "greenhouse",
-    title: "Greenhouse Portals",
-    url: "/dashboard/greenhouse",
-    icon: <Building2Icon className="size-4" />,
-  },
-  {
-    id: "ashby",
-    title: "Ashby Portals",
-    url: "/dashboard/ashby",
-    icon: <GlobeIcon className="size-4" />,
-  },
 ]
 
 const technicalRecruiterNavItems: NavItem[] = [
@@ -98,8 +85,6 @@ const technicalRecruiterNavItems: NavItem[] = [
   {id:"submissions",title:"Job Submissions",url:"/dashboard/submissions",icon:<SendIcon className="size-4"/>},
   {id:"placements",title:"Placements & Compensation",url:"/dashboard/placements",icon:<TrendingUpIcon className="size-4"/>},
   {id:"public-jobs",title:"Public Jobs",url:"/dashboard/jobs",icon:<BriefcaseIcon className="size-4"/>},
-  {id:"greenhouse",title:"Greenhouse Portals",url:"/dashboard/greenhouse",icon:<Building2Icon className="size-4"/>},
-  {id:"ashby",title:"Ashby Portals",url:"/dashboard/ashby",icon:<GlobeIcon className="size-4"/>},
 ]
 const adminNavItems: NavItem[] = [
   ...recruiterNavItems.map(item => item.id === "placements" ? {...item, title: "Collections & Payroll"} : item),
@@ -130,21 +115,9 @@ const candidateNavItems: NavItem[] = [
   { id:"placements", title:"My Service Fees & Placement", url:"/dashboard/placements", icon:<TrendingUpIcon className="size-4"/> },
   {
     id: "public-jobs",
-    title: "Browse Jobs",
+    title: "Public Jobs",
     url: "/dashboard/jobs",
     icon: <BriefcaseIcon className="size-4" />,
-  },
-  {
-    id: "greenhouse",
-    title: "Greenhouse Portals",
-    url: "/dashboard/greenhouse",
-    icon: <Building2Icon className="size-4" />,
-  },
-  {
-    id: "ashby",
-    title: "Ashby Portals",
-    url: "/dashboard/ashby",
-    icon: <GlobeIcon className="size-4" />,
   },
 ]
 

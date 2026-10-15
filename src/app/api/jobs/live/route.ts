@@ -8,10 +8,14 @@ import {rankResumeJobs} from '@/lib/jobs/relevance';
 import {PUBLIC_JOB_BOARDS} from '@/lib/public-directory';
 import {persistLiveJobs} from '@/lib/jobs/live-persistence';
 
+import type {SupportedJobProvider} from '@/lib/public-directory';
+
 export interface LiveJobItem extends NormalizedJob {
-  provider:'greenhouse'|'ashby';
-  board_slug:string;
+  provider: SupportedJobProvider;
+  board_slug: string;
 }
+
+const SUPPORTED_PROVIDERS: string[] = ['all', 'greenhouse', 'ashby', 'lever', 'smartrecruiters', 'breezy', 'remoteok'];
 
 export async function GET(request:Request) {
   return protectedRoute(request, 'candidate_or_staff', async profile => {
@@ -19,17 +23,20 @@ export async function GET(request:Request) {
     const {candidate,recommendation} = await recommendationContext(profile,params);
     if (recommendation.requiresProfile) return {jobs:[],total:0,fetchedAt:new Date().toISOString(),persistedInDb:false,recommendation};
     const requestedProvider = (params.get('provider') || 'all').toLowerCase();
-    if (!['all','greenhouse','ashby'].includes(requestedProvider)) throw new CaptureError('Unsupported public job provider.');
+    if (!SUPPORTED_PROVIDERS.includes(requestedProvider)) throw new CaptureError('Unsupported public job provider.');
     const requestedBoard = params.get('board')?.trim();
     const saveToDb = params.get('saveToDb') === 'true';
     type Source = {id?:string; provider:string; board_slug:string; company:string; enabled?:boolean};
     let activeSources:Source[];
     if (requestedBoard) {
-      validateBoard(requestedBoard);
-      const provider = requestedProvider === 'ashby' ? 'ashby' : 'greenhouse';
+      if (requestedProvider !== 'remoteok') {
+        validateBoard(requestedBoard);
+      }
+      const provider = (requestedProvider !== 'all' ? requestedProvider : 'greenhouse') as SupportedJobProvider;
       const catalog = PUBLIC_JOB_BOARDS.find(b => b.provider === provider && b.board_slug === requestedBoard);
       activeSources = [{provider,board_slug:requestedBoard,company:params.get('company')?.trim() || catalog?.company || requestedBoard}];
     } else {
+
       // Read disabled sources too: an intentionally disabled directory must not
       // silently fall back to fetching those companies again.
       const {data,error} = await database().from('job_sources').select('*');
@@ -53,11 +60,15 @@ export async function GET(request:Request) {
       }
     }));
     if (requestedBoard && results[0]?.error && !results[0].jobs.length) throw new CaptureError(`Failed to fetch from ${results[0].source.provider} board "${requestedBoard}": ${results[0].error}`,400);
-    const jobs:LiveJobItem[] = results.flatMap(r => r.jobs.map(job => ({...job,provider:r.source.provider as 'greenhouse'|'ashby',board_slug:r.source.board_slug})));
+    const jobs:LiveJobItem[] = results.flatMap(r => r.jobs.map(job => ({...job,provider:r.source.provider as SupportedJobProvider,board_slug:r.source.board_slug})));
     const search = params.get('search')?.trim().toLowerCase();
     const employment = params.get('type') || 'all';
+    const company = params.get('company')?.trim().toLowerCase();
+    const location = params.get('location')?.trim().toLowerCase();
     const filtered = jobs.filter(job => (!job.closes_at || !(Date.parse(job.closes_at) <= Date.now()))
       && (employment === 'all' || job.employment_type === employment)
+      && (!company || job.company?.toLowerCase().includes(company))
+      && (!location || job.location?.toLowerCase().includes(location))
       && (!search || [job.title,job.company,job.location,job.department].some(value => value?.toLowerCase().includes(search))));
     const displayed = candidate ? rankResumeJobs(filtered,candidate) : filtered;
     const persistedCount = results.reduce((sum,result) => sum + result.persisted,0);
