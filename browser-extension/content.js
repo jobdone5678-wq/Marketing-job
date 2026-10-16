@@ -2,7 +2,9 @@
 (function () {
   let linked = false;
   let sentProgress = false;
-  let lastSuccess = '';
+  // A portal often renders the same confirmation in several nested elements.
+  // Deduplicate by application attempt, not by the last element's wording.
+  const observedSuccessAttempts = new Set();
   let lastFailure = 0;
   let candidates = [];
   let selectedCandidateId = null;
@@ -724,13 +726,16 @@
       // Success confirmation detection on page
       const nodes = document.querySelectorAll('#application_confirmation, .application-confirmation, [data-testid="application-success"], [role="status"], h1, h2, h3, p');
       for (const node of nodes) {
+        if (node.closest('#mp-copilot-root, #mp-copilot-toast')) continue;
+        const successKey = submissionEventKey + ':' + Math.max(1, submissionAttempt);
         const text = (node.textContent || '').trim().slice(0, 1000);
         if (
           /(?:thank you for (?:applying|your application)|(?:your )?application (?:has been |was |is )?(?:successfully )?(?:submitted|received|sent)|we (?:have )?received your application|application submitted|applied to)/i.test(text) &&
-          lastSuccess !== text
+          selectedCandidateId && !observedSuccessAttempts.has(successKey)
         ) {
-          lastSuccess = text;
+          observedSuccessAttempts.add(successKey);
           logSubmission(text);
+          break;
         }
       }
     };
@@ -782,13 +787,17 @@
       }
       const nodes = document.querySelectorAll('#application_confirmation, .application-confirmation, [data-testid="application-success"], [role="status"], h1, h2');
       for (const node of nodes) {
+        if (node.closest('#mp-copilot-root, #mp-copilot-toast')) continue;
+        const successKey = submissionEventKey + ':' + Math.max(1, submissionAttempt);
         const text = (node.textContent || '').trim().slice(0, 1000);
         if (
           /(?:thank you for (?:applying|your application)|application (?:has been |was |is )?(?:successfully )?(?:submitted|received)|we (?:have )?received your application)/i.test(text) &&
-          lastSuccess !== text
+          !observedSuccessAttempts.has(successKey)
         ) {
-          lastSuccess = text;
+          submissionAttempt = Math.max(1, submissionAttempt);
+          observedSuccessAttempts.add(successKey);
           send('submitted', text);
+          break;
         }
       }
       if (f && Date.now() - lastFailure > 3000 && f.querySelector('[aria-invalid="true"], .field-error, [data-testid="field-error"]')) {
@@ -842,8 +851,11 @@
           update.disabled = Boolean(selectedCandidateId) || Boolean(linkedCandidateId) || candidateRole === 'client';
         }
       }
+      // Resolve the tab's intent and profile before choosing the observer. Otherwise
+      // linked applications can get an unlinked observer that subsequently does nothing.
+      if (linked) observeIntent(); else observeUniversal();
+      scheduleAutofill();
     });
-    if (linked) observeIntent(); else observeUniversal();
     observeAutofill();
   }
 

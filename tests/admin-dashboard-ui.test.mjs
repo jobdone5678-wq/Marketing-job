@@ -6,6 +6,16 @@ let browser,script;
 before(async()=>{browser=await chromium.launch({headless:true});script=await browserBundle('./src/components/admin-operations-dashboard.tsx',`createRoot(document.getElementById('root')).render(<Component.AdminOperationsDashboard/>);`);});
 after(async()=>{await browser?.close();});
 const operations={pendingStaff:[],unassignedCandidates:[{id:'candidate',full_name:'Alex Candidate',provenance_status:'confirmed',assigned_recruiter_id:null,assigned_technical_recruiter_id:'technical'}],placements:[],salaryPeriods:[],commissions:[],captureIssues:[],money:{salaryOutstanding:[{currency:'USD',amount:250},{currency:'INR',amount:10000}],salaryPaid:[],commissionOutstanding:[],commissionPaid:[]},counts:{activePlacements:0,joinsNext30Days:0,endsNext30Days:0,captureIssues:0,pendingStaff:0,assignmentReview:1}};
+test('admin overview shows recorded commission details and distinguishes unavailable collections from zero',async t=>{
+ const page=await browser.newPage();t.after(()=>page.close());page.setDefaultTimeout(4000);
+ const saved={...operations,commissions:[{id:'earned',currency:'USD',balance:425,status:'approved',profile:{full_name:'Referral Partner',email:'partner@example.test'},placement:{company:'Saved Company',role_title:'Engineer'}}]};
+ await page.route('https://portal.test/**',route=>new URL(route.request().url()).pathname==='/api/admin/operations'?route.fulfill({json:saved}):route.fulfill({body:'<div id="root"></div>',contentType:'text/html'}));
+ await page.goto('https://portal.test/');await page.addScriptTag({content:script});
+ await page.getByText('Referral Partner',{exact:true}).waitFor();
+ await page.getByText('Saved Company · Engineer',{exact:true}).waitFor();
+ await page.getByText('Service collection totals are unavailable. Refresh to retry.',{exact:true}).waitFor();
+ assert.equal(await page.getByText('0 unpaid service periods are due.',{exact:true}).count(),0);
+});
 test('admin overview explains assignment gaps and replaces overview when opening management',async t=>{
  const page=await browser.newPage();t.after(()=>page.close());
  await page.route('https://portal.test/**',route=>{const pathname=new URL(route.request().url()).pathname;const fixtures={'/api/admin/operations':operations,'/api/settings':{profile:{id:'admin',role:'super_admin'}},'/api/admin/profiles':{profiles:[]},'/api/candidates':{candidates:[],hasMore:false},'/api/admin/placements':{placements:[]},'/api/admin/staff-employments':{employments:[]},'/api/admin/payments':{payments:[]}};return pathname in fixtures?route.fulfill({json:fixtures[pathname]}):route.fulfill({body:'<div id="root"></div>',contentType:'text/html'});});

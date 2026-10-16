@@ -7,6 +7,7 @@ import {recommendationContext} from '@/lib/jobs/recommendations';
 import {rankResumeJobs} from '@/lib/jobs/relevance';
 import {PUBLIC_JOB_BOARDS} from '@/lib/public-directory';
 import {persistLiveJobs} from '@/lib/jobs/live-persistence';
+import {publicationWindow,isWithinPublicationWindow,newestPostedFirst} from '@/lib/jobs/freshness';
 
 import type {SupportedJobProvider} from '@/lib/public-directory';
 
@@ -20,6 +21,9 @@ const SUPPORTED_PROVIDERS: string[] = ['all', 'greenhouse', 'ashby', 'lever', 's
 export async function GET(request:Request) {
   return protectedRoute(request, 'candidate_or_staff', async profile => {
     const params = new URL(request.url).searchParams;
+    const postedWithin=params.get('postedWithin');
+    if(postedWithin&&!['7','30','90','all'].includes(postedWithin))throw new CaptureError('Invalid posting date filter.');
+    const window=publicationWindow(postedWithin);
     const {candidate,recommendation} = await recommendationContext(profile,params);
     if (recommendation.requiresProfile) return {jobs:[],total:0,fetchedAt:new Date().toISOString(),persistedInDb:false,recommendation};
     const requestedProvider = (params.get('provider') || 'all').toLowerCase();
@@ -41,7 +45,11 @@ export async function GET(request:Request) {
       // silently fall back to fetching those companies again.
       const {data,error} = await database().from('job_sources').select('*');
       checkDb(error);
-      activeSources = (data?.length ? data.filter(s => s.enabled) : PUBLIC_JOB_BOARDS)
+      const sources = new Map<string,Source>();
+      for (const source of PUBLIC_JOB_BOARDS) sources.set(`${source.provider}/${source.board_slug}`,source);
+      // Saved settings override catalog defaults, including explicit disables.
+      for (const source of data || []) sources.set(`${source.provider}/${source.board_slug}`,source);
+      activeSources = [...sources.values()].filter(s => s.enabled !== false)
         .filter(s => requestedProvider === 'all' || s.provider === requestedProvider);
     }
 
@@ -66,11 +74,12 @@ export async function GET(request:Request) {
     const company = params.get('company')?.trim().toLowerCase();
     const location = params.get('location')?.trim().toLowerCase();
     const filtered = jobs.filter(job => (!job.closes_at || !(Date.parse(job.closes_at) <= Date.now()))
+      && isWithinPublicationWindow(job.posted_at,window)
       && (employment === 'all' || job.employment_type === employment)
       && (!company || job.company?.toLowerCase().includes(company))
       && (!location || job.location?.toLowerCase().includes(location))
       && (!search || [job.title,job.company,job.location,job.department].some(value => value?.toLowerCase().includes(search))));
-    const displayed = candidate ? rankResumeJobs(filtered,candidate) : filtered;
+    const displayed = (candidate ? rankResumeJobs(filtered,candidate) : filtered).sort(newestPostedFirst);
     const persistedCount = results.reduce((sum,result) => sum + result.persisted,0);
     return {jobs:displayed,total:displayed.length,recommendation,unfilteredTotal:jobs.length,
       sources:results.map(r => ({company:r.source.company,board:r.source.board_slug,provider:r.source.provider,count:r.jobs.length,...(r.error ? {error:r.error} : {})})),

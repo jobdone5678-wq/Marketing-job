@@ -65,12 +65,6 @@ const recruiterNavItems: NavItem[] = [
     icon: <Building2Icon className="size-4" />,
   },
   {
-    id: "analytics",
-    title: "Analytics",
-    url: "/dashboard/analytics",
-    icon: <TrendingUpIcon className="size-4" />,
-  },
-  {
     id: "public-jobs",
     title: "Public Jobs",
     url: "/dashboard/jobs",
@@ -89,6 +83,7 @@ const technicalRecruiterNavItems: NavItem[] = [
 const adminNavItems: NavItem[] = [
   ...recruiterNavItems.map(item => item.id === "placements" ? {...item, title: "Collections & Payroll"} : item),
   {id:"team",title:"Team & Assignments",url:"/dashboard/team",icon:<UserCheckIcon className="size-4"/>},
+  {id:"job-matching",title:"JD Candidate Matching",url:"/dashboard/job-matching",icon:<UsersIcon className="size-4"/>},
 ]
 
 // Candidate Navigation Items (Tailored specifically for Candidates)

@@ -11,7 +11,9 @@ test('public catalogs contain primary source evidence and no invented commercial
   assert.ok(PUBLIC_VENDORS.length >= 5);
   assert.equal(new Set(PUBLIC_JOB_BOARDS.map(b => `${b.provider}/${b.board_slug}`)).size, PUBLIC_JOB_BOARDS.length);
   for (const board of PUBLIC_JOB_BOARDS) {
-    assert.match(board.source_url, /^https:\/\/(job-boards.greenhouse.io|jobs.ashbyhq.com)\//);
+    const hosts={greenhouse:'job-boards.greenhouse.io',ashby:'jobs.ashbyhq.com',lever:'jobs.lever.co',smartrecruiters:'careers.smartrecruiters.com',breezy:`${board.board_slug}.breezy.hr`,remoteok:'remoteok.com'};
+    const url=new URL(board.source_url);
+    assert.equal(url.protocol,'https:');assert.equal(url.hostname,hosts[board.provider]);
     assert.match(board.board_slug, /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$/);
   }
   for (const vendor of PUBLIC_VENDORS) {
@@ -65,10 +67,11 @@ test('live persistence creates catalog source IDs and surfaces database failures
   await assert.rejects(persistLiveJobs({...board,id:'saved-source'}, 'actor', [{title:'fail'}]), /database write failed/);
   writes.length = 0;
   await persistLiveJobs(board, 'candidate', Array.from({length:205},(_,id)=>({title:'Engineer',external_id:String(id)})));
-  assert.deepEqual(writes.map(write => write.table), ['jobs','jobs','jobs']);
-  assert.deepEqual(writes.map(write => write.data.length), [100,100,5]);
+  assert.deepEqual(writes.map(write => write.table), ['job_sources','jobs','jobs','jobs']);
+  assert.equal(writes[0].options.ignoreDuplicates,true);
+  assert.deepEqual(writes.slice(1).map(write => write.data.length), [100,100,5]);
   const missing = moduleLoader({'@/lib/db/admin':{database:()=>({from:()=>({select(){return this;},eq(){return this;},maybeSingle:async()=>({data:null,error:null}),upsert(){throw new Error('Unauthorized source registration');}})}),checkDb:error=>{if(error)throw error;}}})('src/lib/jobs/live-persistence.ts');
-  await assert.rejects(missing.persistLiveJobs(board,'candidate',[{title:'Engineer'}]),/Ask a recruiter/);
+  await assert.rejects(missing.persistLiveJobs({...board,board_slug:'unlisted-board'},'candidate',[{title:'Engineer'}]),/Ask a recruiter/);
 });
 
 test('public vendor API permits only authorized staff and curated company IDs', async () => {

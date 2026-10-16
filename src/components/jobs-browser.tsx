@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import {useRouter} from 'next/navigation';
 import { api } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,6 +36,8 @@ type Source = {
 };
 
 export function JobsBrowser({ provider }: { provider?: string }) {
+  const router=useRouter();
+  const [importingJob,setImportingJob]=useState('');
   const { isRecruiter,isTechnicalRecruiter, isClient, loading: profileLoading } = useUserProfile();
   const isRecruitingStaff=isRecruiter||isTechnicalRecruiter;
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -51,12 +54,13 @@ export function JobsBrowser({ provider }: { provider?: string }) {
 
   // Live Mode states
   const [liveJobs, setLiveJobs] = useState<LiveJob[]>([]);
-  const [liveBoard, setLiveBoard] = useState(provider === 'greenhouse' ? 'figma' : 'ramp');
-  const [liveProvider, setLiveProvider] = useState<string>(provider || 'ashby');
+  const [liveBoard, setLiveBoard] = useState('');
+  const [liveProvider, setLiveProvider] = useState<string>(provider || 'all');
   const [liveLoading, setLiveLoading] = useState(false);
   const [saveToDbOnFetch, setSaveToDbOnFetch] = useState(isRecruitingStaff);
   const [syncingSoftwareJobs, setSyncingSoftwareJobs] = useState(false);
   const [lastFetchedTime, setLastFetchedTime] = useState<string | null>(null);
+  const [liveSources, setLiveSources] = useState<{company:string;count:number;error?:string}[]>([]);
   const [expandedJobHash, setExpandedJobHash] = useState<string | null>(null);
 
   // Database Mode states
@@ -71,7 +75,8 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   const [portalFilter, setPortalFilter] = useState(provider || '');
   const [companyFilter, setCompanyFilter] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
-  const savedFilters = new URLSearchParams({ company: companyFilter, location: locationFilter });
+  const [postedWithin, setPostedWithin] = useState('30');
+  const savedFilters = new URLSearchParams({ company: companyFilter, location: locationFilter, postedWithin });
   if (provider || portalFilter) savedFilters.set('provider', provider || portalFilter);
   const savedFilterParam = '&' + savedFilters.toString();
   const [employmentType, setEmploymentType] = useState('all');
@@ -96,7 +101,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         persistedInDb: boolean;
         recommendation: Recommendation;
         sources?: {error?:string}[];
-      }>('/api/jobs/live?saveToDb=true');
+      }>(`/api/jobs/live?saveToDb=true&postedWithin=${postedWithin}${provider || portalFilter ? '&provider=' + encodeURIComponent(provider || portalFilter) : ''}`);
       setNotice(res.persistedInDb ? 'Public jobs refreshed and saved. Updating your related roles...' : res.recommendation.requiresProfile ? 'Review and save your resume profile before finding related roles.' : 'No complete refresh was saved. Review source errors or try another public board.');
       const failures = res.sources?.flatMap(source => source.error ? [source.error] : []);
       if (failures?.length) setError(failures.join(' '));
@@ -125,6 +130,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         if (provToUse) query.set('provider', provToUse);
         if (boardToUse.trim()) query.set('board', boardToUse.trim());
         if (employmentType) query.set('type', employmentType);
+        query.set('postedWithin',postedWithin);
         if (search.trim()) query.set('search', search.trim());
         if (companyFilter.trim()) query.set('company', companyFilter.trim());
         if (locationFilter.trim()) query.set('location', locationFilter.trim());
@@ -136,12 +142,13 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           fetchedAt: string;
           persistedInDb: boolean;
         recommendation: Recommendation;
-        sources?: {error?:string}[];
+        sources?: {company:string;count:number;error?:string}[];
         }>(`/api/jobs/live?${query.toString()}`);
 
         if (requestId !== liveRequest.current) return;
         setRecommendation(res.recommendation);
         setLiveJobs(res.jobs || []);
+        setLiveSources(res.sources || []);
         setLastFetchedTime(new Date(res.fetchedAt).toLocaleTimeString());
         const failures = res.sources?.flatMap(source => source.error ? [source.error] : []);
         if (failures?.length) setError(failures.join(' '));
@@ -167,7 +174,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         if (requestId === liveRequest.current) setLiveLoading(false);
       }
     },
-    [liveBoard, liveProvider, employmentType, search, saveToDbOnFetch, candidateId, candidateParam, companyFilter, locationFilter, savedFilterParam]
+    [liveBoard, liveProvider, employmentType, search, saveToDbOnFetch, candidateId, candidateParam, companyFilter, locationFilter, savedFilterParam, postedWithin]
   );
 
   // Initial load for live jobs
@@ -247,7 +254,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           <Button
             size="sm"
             variant={mode === 'live' ? 'default' : 'ghost'}
-            onClick={() => setMode('live')}
+            onClick={() => {setLiveProvider(provider || portalFilter || 'all');setLiveBoard('');setMode('live');}}
             className="text-xs h-8"
           >
             ⚡ Live ATS Fetch
@@ -255,8 +262,8 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         </div>
       </div>
 
-      <PublicJobCatalog provider={provider} canSave={isRecruiter} onSelect={board => {
-        setLiveBoard(board.board_slug); setLiveProvider(board.provider); setMode('live');
+      <PublicJobCatalog provider={mode === 'live' && liveProvider !== 'all' ? liveProvider : provider || portalFilter || undefined} canSave={isRecruiter} onSelect={board => {
+        setLiveBoard(board.board_slug); setLiveProvider(board.provider); setPortalFilter(board.provider); setDbPage(0); setCompanyFilter(''); setMode('live');
       }} onSaved={async () => {
         const result = await api<{sources:Source[]}>('/api/job-sources');
         setDbSources(result.sources || []);
@@ -313,15 +320,16 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div>
               <label className="text-xs font-semibold text-muted-foreground block mb-1">
-                Company Board Slug
+                Company Board Slug (optional)
               </label>
               <Input
                 aria-label="Board slug"
                 value={liveBoard}
                 onChange={(e) => setLiveBoard(e.target.value)}
-                placeholder="e.g. ramp, figma, openai, stripe"
+                placeholder="Leave empty for all companies"
                 className="h-9"
               />
+              <p className="mt-1 text-xs text-muted-foreground">Empty searches every catalog and enabled saved board for this provider.</p>
             </div>
 
             <div>
@@ -335,27 +343,24 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 onChange={(e) => {
                   const newProv = e.target.value;
                   setLiveProvider(newProv);
-                  const defaults: Record<string, string> = {
-                    greenhouse: 'figma',
-                    ashby: 'ramp',
-                    lever: 'spotify',
-                    smartrecruiters: 'BoschGroup',
-                    breezy: 'breezy',
-                    remoteok: 'remote'
-                  };
-                  if (defaults[newProv]) {
-                    setLiveBoard(defaults[newProv]);
-                  }
+                  setPortalFilter(newProv === 'all' ? '' : newProv);
+                  setDbPage(0);
+                  setLiveBoard('');
+                  setCompanyFilter('');
+                  setLiveJobs([]);
+                  setLiveSources([]);
                 }}
                 disabled={Boolean(provider)}
               >
+                <option value="all">All ATS providers</option>
                 <option value="greenhouse">Greenhouse (e.g. figma, stripe)</option>
                 <option value="ashby">Ashby (e.g. ramp, openai)</option>
-                <option value="lever">Lever (e.g. spotify, netflix)</option>
+                <option value="lever">Lever (all available company boards)</option>
                 <option value="smartrecruiters">SmartRecruiters (e.g. BoschGroup)</option>
                 <option value="breezy">Breezy HR (e.g. breezy)</option>
                 <option value="remoteok">RemoteOK (Global tech)</option>
               </select>
+              <Button size="sm" variant="ghost" onClick={()=>{setLiveBoard('');setCompanyFilter('');}}>All companies</Button>
             </div>
 
             <div className="sm:col-span-2 flex flex-wrap items-end gap-2">
@@ -384,7 +389,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                     if (found) {
                       setLiveBoard(found.board_slug);
                       setLiveProvider(found.provider);
-                      void fetchLiveJobs(found.board_slug, found.provider);
+                      setCompanyFilter('');
                     }
                   }}
                   defaultValue=""
@@ -405,6 +410,11 @@ export function JobsBrowser({ provider }: { provider?: string }) {
 
         {/* Search & Filter Bar */}
         <div className="flex flex-col sm:flex-row gap-3 pt-1 border-t">
+          <label className="text-sm">Posting date
+            <select aria-label="Posted within" className="block h-9 border rounded-md px-3 bg-background text-sm" value={postedWithin} onChange={e=>{setPostedWithin(e.target.value);setDbPage(0);}}>
+              <option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All dates (including unknown)</option>
+            </select>
+          </label>
           <Input
             aria-label="Search jobs"
             value={search}
@@ -446,7 +456,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           {mode === 'db' && <label className="text-sm">Portal
-            <select aria-label="Filter by portal" className="mt-1 block h-9 w-full rounded-md border bg-background px-3" value={provider || portalFilter} disabled={Boolean(provider)} onChange={e => { setPortalFilter(e.target.value); setDbPage(0); }}>
+            <select aria-label="Filter by portal" className="mt-1 block h-9 w-full rounded-md border bg-background px-3" value={provider || portalFilter} disabled={Boolean(provider)} onChange={e => { setPortalFilter(e.target.value); setCompanyFilter(''); setDbPage(0); }}>
               <option value="">All portals</option>
               <option value="greenhouse">Greenhouse</option>
               <option value="ashby">Ashby</option>
@@ -456,9 +466,10 @@ export function JobsBrowser({ provider }: { provider?: string }) {
               <option value="remoteok">RemoteOK</option>
             </select>
           </label>}
-          <label className="text-sm">Company<Input aria-label="Filter by company" className="mt-1 h-9" placeholder="Company name" value={companyFilter} onChange={e => { setCompanyFilter(e.target.value); setDbPage(0); }}/></label>
+          <label className="text-sm">Company (optional)<Input aria-label="Filter by company" className="mt-1 h-9" placeholder="All companies" value={companyFilter} onChange={e => { setCompanyFilter(e.target.value); setDbPage(0); }}/></label>
           <label className="text-sm">Location<Input aria-label="Filter by location" className="mt-1 h-9" placeholder="City, state or remote" value={locationFilter} onChange={e => { setLocationFilter(e.target.value); setDbPage(0); }}/></label>
         </div>
+        <p className="text-xs text-muted-foreground">Newest source posting dates first. {postedWithin==='all'?'Older postings and unknown dates are included; unknown dates appear last.':'Older postings and jobs without a source posting date are hidden. Fetching a job today does not make its posting date recent.'}</p>
       </section>
 
       {/* Messages */}
@@ -478,10 +489,11 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         <div className="space-y-4">
           <div className="flex justify-between items-center text-sm text-muted-foreground px-1">
             <span>
-              Found <strong>{liveJobs.length}</strong> live jobs on {liveBoard || 'configured boards'}.
+              Found <strong>{liveJobs.length}</strong> live jobs on {liveBoard || 'all available company boards'}.
             </span>
             <span className="text-xs">Click a job to view details or apply directly</span>
           </div>
+          {!!liveSources.length && !liveLoading && <details className="rounded-lg border p-3 text-sm"><summary>{liveSources.length} company boards checked · {liveSources.filter(source=>!!source.error).length} with errors</summary><p className="mt-2 text-xs text-muted-foreground">Coverage includes our catalog and enabled saved sources. Resume, location and other filters can reduce the displayed results.</p><ul className="mt-2 space-y-1">{liveSources.map((source,index)=><li key={index}>{source.company}: {source.count} software / tech roles{source.error?` · ${source.error}`:''}</li>)}</ul></details>}
 
           {liveLoading ? (
             <div className="p-12 text-center text-muted-foreground border rounded-xl bg-card">
@@ -491,16 +503,16 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           ) : !liveJobs.length ? (
             <div className="p-10 text-center border rounded-xl bg-card space-y-3">
               <p className="text-muted-foreground">
-                No live jobs found for board &quot;<strong>{liveBoard}</strong>&quot; with the selected filters.
+                {liveBoard?<>No live jobs found for board &quot;<strong>{liveBoard}</strong>&quot; with the selected filters.</>:'No live software jobs found across the available company boards with the selected filters.'}
               </p>
               <div className="flex justify-center gap-2">
-                <Button size="sm" variant="outline" onClick={() => {setLiveBoard('ramp'); setLiveProvider('ashby');}}>
+                <Button size="sm" variant="outline" onClick={() => {setLiveBoard('ramp'); setLiveProvider('ashby'); setCompanyFilter('');}}>
                   Try Ramp (Ashby)
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => void fetchLiveJobs('figma', 'greenhouse')}>
+                <Button size="sm" variant="outline" onClick={() => {setLiveBoard('figma');setLiveProvider('greenhouse');setCompanyFilter('');}}>
                   Try Figma (Greenhouse)
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => void fetchLiveJobs('openai', 'ashby')}>
+                <Button size="sm" variant="outline" onClick={() => {setLiveBoard('openai');setLiveProvider('ashby');setCompanyFilter('');}}>
                   Try OpenAI (Ashby)
                 </Button>
               </div>
@@ -534,6 +546,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
 
                       {/* Action buttons */}
                       <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" disabled={!!importingJob} onClick={async()=>{setImportingJob(job.content_hash);setError('');try{const result=await api<{jobId:string}>('/api/jobs/import',{method:'POST',body:JSON.stringify({provider:job.provider,board:job.board_slug,externalId:job.external_id})});router.push(`/dashboard/jobs/${result.jobId}${candidateId?'?candidateId='+encodeURIComponent(candidateId):''}`);}catch(error){setError((error as Error).message);}finally{setImportingJob('');}}}>{importingJob===job.content_hash?'Saving job…':isTechnicalRecruiter?'Review job':'Review & tailor resume'}</Button>
                         <Button
                           size="sm"
                           variant="ghost"
@@ -743,7 +756,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                         setMode('live');
                         setLiveBoard(s.board_slug);
                         setLiveProvider(s.provider);
-                        void fetchLiveJobs(s.board_slug, s.provider);
+                        setCompanyFilter('');
                       }}
                     >
                       Fetch Live

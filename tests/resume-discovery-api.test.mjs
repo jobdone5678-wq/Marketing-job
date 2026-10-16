@@ -22,6 +22,7 @@ function setup({ role = 'client', candidates, jobs = [], revoked = false, liveJo
   };
   const db = fixtureDatabase(tables);
   const load = moduleLoader({
+    '@/lib/public-directory':{PUBLIC_JOB_BOARDS:[]},
     '@/lib/jobs/adapters/native': {fetchSnapshot:async()=>({jobs:liveJobs,completeness:'complete'}),validateBoard(){}},
     '@/lib/db/admin': { database: () => db, checkDb: error => { if (error) throw error; }, CaptureError, errorResponse: error => Response.json({ error: error.message }, { status: error.status || 500 }), requireSameOrigin() {} },
     '@/lib/auth/require-profile': { requireProfile: async () => profile },
@@ -33,7 +34,7 @@ test('candidate job discovery ranks the whole feed before pagination', async () 
   const jobs = Array.from({ length: 510 }, (_, i) => ({ id: String(i).padStart(4, '0'), title: 'Java Developer', description: 'JavaScript', state: 'active', updated_at: '2026-01-01' }));
   jobs.push({ id: 'older-match', title: 'Python Developer', description: 'Python and SQL', state: 'active', updated_at: '2025-01-01' });
   const { load } = setup({ jobs });
-  const response = await load('src/app/api/jobs/route.ts').GET(new Request('https://portal.test/api/jobs'));
+  const response = await load('src/app/api/jobs/route.ts').GET(new Request('https://portal.test/api/jobs?postedWithin=all'));
   const result = await response.json();
   assert.equal(response.status, 200);
   assert.deepEqual(result.jobs.map(job => job.id), ['older-match']);
@@ -43,13 +44,13 @@ test('candidate job discovery ranks the whole feed before pagination', async () 
 
 test('candidates cannot use another candidate profile for job recommendations', async () => {
   const { load } = setup();
-  const response = await load('src/app/api/jobs/route.ts').GET(new Request('https://portal.test/api/jobs?candidateId=' + otherId));
+  const response = await load('src/app/api/jobs/route.ts').GET(new Request('https://portal.test/api/jobs?postedWithin=all&candidateId=' + otherId));
   assert.equal(response.status, 404);
 });
 
 test('candidates without reviewed profiles see an upload prompt rather than unrelated jobs', async () => {
   const { load } = setup({ candidates: [], jobs: [{ id: 'all', title: 'Anything', state: 'active' }] });
-  const response = await load('src/app/api/jobs/route.ts').GET(new Request('https://portal.test/api/jobs'));
+  const response = await load('src/app/api/jobs/route.ts').GET(new Request('https://portal.test/api/jobs?postedWithin=all'));
   const result = await response.json();
   assert.deepEqual(result.jobs, []);
   assert.equal(result.recommendation.requiresProfile, true);
@@ -58,8 +59,8 @@ test('candidates without reviewed profiles see an upload prompt rather than unre
 test('staff can browse all jobs or filter them for a selected reviewed candidate', async () => {
   const { load } = setup({ role: 'recruiter', jobs: [{ id: 'java', title: 'Java Developer', description: 'Java', state: 'active' }, { id: 'python', title: 'Python Developer', description: 'Python', state: 'active' }] });
   const { GET } = load('src/app/api/jobs/route.ts');
-  const all = await (await GET(new Request('https://portal.test/api/jobs'))).json();
-  const selected = await (await GET(new Request('https://portal.test/api/jobs?candidateId=' + ownId))).json();
+  const all = await (await GET(new Request('https://portal.test/api/jobs?postedWithin=all'))).json();
+  const selected = await (await GET(new Request('https://portal.test/api/jobs?postedWithin=all&candidateId=' + ownId))).json();
   assert.equal(all.jobs.length, 2);
   assert.deepEqual(selected.jobs.map(job => job.id), ['python']);
 });
@@ -93,7 +94,7 @@ test('a linked recruiter can retrieve the exact reviewed candidate beyond the fi
 
 test('recruiters cannot select an unassigned profile for recommendations',async()=>{
  const {load}=setup({role:'recruiter'});
- const response=await load('src/app/api/jobs/route.ts').GET(new Request('https://portal.test/api/jobs?candidateId='+otherId));
+ const response=await load('src/app/api/jobs/route.ts').GET(new Request('https://portal.test/api/jobs?postedWithin=all&candidateId='+otherId));
  assert.equal(response.status,404);
 });
 
@@ -105,14 +106,14 @@ test('candidate autofill credentials do not gain access to staff submission acti
 
 test('saved discovery excludes explicit expired deadlines before pagination and retains unknown dates',async()=>{
  const {load}=setup({jobs:[{id:'expired',title:'Python Developer',state:'active',closes_at:'2000-01-01T00:00:00Z'},{id:'unknown',title:'Python Developer',state:'active',posted_at:null,closes_at:null}]});
- const response=await load('src/app/api/jobs/route.ts').GET(new Request('https://portal.test/api/jobs'));
+ const response=await load('src/app/api/jobs/route.ts').GET(new Request('https://portal.test/api/jobs?postedWithin=all'));
  const result=await response.json();assert.equal(response.status,200);assert.deepEqual(result.jobs.map(job=>job.id),['unknown']);assert.equal(result.jobs[0].posted_at,null);
 });
 
 test('candidate live discovery never falls back to unrelated software roles',async()=>{
  const {load}=setup({liveJobs:[{title:'Java Developer',description:'Java and Spring'},{title:'Python Developer',description:'Python',posted_at:'2026-10-01T12:00:00Z',closes_at:null}]});
- const response=await load('src/app/api/jobs/live/route.ts').GET(new Request('https://portal.test/api/jobs/live'));
+ const response=await load('src/app/api/jobs/live/route.ts').GET(new Request('https://portal.test/api/jobs/live?postedWithin=all'));
  const result=await response.json();assert.equal(response.status,200);assert.deepEqual(result.jobs.map(job=>job.title),['Python Developer']);assert.equal(result.jobs[0].posted_at,'2026-10-01T12:00:00Z');
  const {load:withoutProfile}=setup({candidates:[],liveJobs:[{title:'Python Developer',description:'Python'}]});
- const unreviewed=await (await withoutProfile('src/app/api/jobs/live/route.ts').GET(new Request('https://portal.test/api/jobs/live'))).json();assert.deepEqual(unreviewed.jobs,[]);assert.equal(unreviewed.recommendation.requiresProfile,true);
+ const unreviewed=await (await withoutProfile('src/app/api/jobs/live/route.ts').GET(new Request('https://portal.test/api/jobs/live?postedWithin=all'))).json();assert.deepEqual(unreviewed.jobs,[]);assert.equal(unreviewed.recommendation.requiresProfile,true);
 });

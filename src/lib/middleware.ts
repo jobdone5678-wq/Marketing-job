@@ -60,7 +60,7 @@ export async function updateSession(request: NextRequest) {
       const url=request.nextUrl.clone();url.pathname='/';url.search='';
       return NextResponse.redirect(url);
     }
-    const adminPage=pathname.startsWith('/dashboard/team');
+    const adminPage=['/dashboard/team','/dashboard/job-matching'].some(page=>pathname===page||pathname.startsWith(page+'/'));
     const staffPage=['/dashboard/payroll','/dashboard/commissions'].some(page=>pathname.startsWith(page));
     if(pathname.startsWith('/dashboard')&&((adminPage&&profile?.role!=='super_admin')||(staffPage&&profile?.role==='client'))){
       const url=request.nextUrl.clone();url.pathname='/dashboard';url.search='';return NextResponse.redirect(url);

@@ -41,7 +41,7 @@ export function normalizeSnapshot(source:{provider:string;company:string},input:
     let rawUrl: unknown = row.absolute_url || row.jobUrl;
     let rawApply: unknown = row.applyUrl;
     let rawContent: unknown = row.content || row.descriptionHtml;
-    let rawPlain: unknown = row.descriptionPlain;
+    const rawPlain: unknown = row.descriptionPlain;
     let rawLocation: unknown = row.location;
     let rawDept: unknown = row.department;
     let rawMetadata: unknown = null;

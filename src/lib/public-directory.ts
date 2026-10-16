@@ -1,6 +1,6 @@
 import type {VendorFormData} from '@/lib/vendors';
 
-// Curated primary sources, checked 2026-10-14. Jobs are fetched from the public
+// Curated primary sources; Lever directory expanded 2026-10-16. Jobs are fetched from the public
 // ATS API at request time; the catalog itself contains no cached job postings.
 export type SupportedJobProvider = 'greenhouse' | 'ashby' | 'lever' | 'smartrecruiters' | 'breezy' | 'remoteok';
 
@@ -10,6 +10,8 @@ export const PUBLIC_JOB_BOARDS: {provider:SupportedJobProvider; board_slug:strin
   {provider:'ashby', board_slug:'openai', company:'OpenAI', source_url:'https://jobs.ashbyhq.com/openai'},
   {provider:'greenhouse', board_slug:'stripe', company:'Stripe', source_url:'https://job-boards.greenhouse.io/stripe'},
   {provider:'lever', board_slug:'spotify', company:'Spotify', source_url:'https://jobs.lever.co/spotify'},
+  {provider:'lever', board_slug:'palantir', company:'Palantir Technologies', source_url:'https://jobs.lever.co/palantir'},
+  {provider:'lever', board_slug:'zoox', company:'Zoox', source_url:'https://jobs.lever.co/zoox'},
   {provider:'greenhouse', board_slug:'cloudflare', company:'Cloudflare', source_url:'https://job-boards.greenhouse.io/cloudflare'},
   {provider:'smartrecruiters', board_slug:'BoschGroup', company:'Bosch Group', source_url:'https://careers.smartrecruiters.com/BoschGroup'},
   {provider:'greenhouse', board_slug:'canonical', company:'Canonical', source_url:'https://job-boards.greenhouse.io/canonical'},

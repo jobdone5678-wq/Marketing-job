@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   getVendors,
   deleteVendor,
@@ -14,7 +13,6 @@ import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -41,15 +39,12 @@ import {
   ShieldCheckIcon,
   SendIcon,
   StarIcon,
-  FilterIcon,
   Trash2Icon,
   CheckCircle2Icon,
   ClockIcon,
-  TrendingUpIcon,
 } from "lucide-react";
 
 export default function VendorsPage() {
-  const router = useRouter();
   const [vendors, setVendors] = React.useState<Vendor[]>([]);
   const [loading, setLoading] = React.useState(true);
 

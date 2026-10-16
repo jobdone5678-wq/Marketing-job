@@ -15,6 +15,7 @@ test('candidate accounts cannot open staff compensation or team administration p
  const update=session({role:'client',status:'active'});
  assert.equal((await update(request('/dashboard/payroll'))).status,307);
  assert.equal((await update(request('/dashboard/team'))).status,307);
+  assert.equal((await update(request('/dashboard/job-matching'))).status,307);
  assert.equal((await update(request('/dashboard/placements'))).status,200);
 });
 

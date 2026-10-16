@@ -1,1 +1,0 @@
-export function SectionCards({totalJobs=0,onSelectFilter}:{totalJobs?:number;activeFilter?:string;onSelectFilter?:(filter:string)=>void}){return <button className="rounded border p-4" onClick={()=>onSelectFilter?.('all')}>Saved jobs: {totalJobs}</button>;}

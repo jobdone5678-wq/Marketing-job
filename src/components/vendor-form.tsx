@@ -26,14 +26,8 @@ import {
 import {
   ArrowLeftIcon,
   Building2Icon,
-  BriefcaseIcon,
   UserIcon,
-  GlobeIcon,
-  MailIcon,
-  PhoneIcon,
-  DollarSignIcon,
   ShieldCheckIcon,
-  StarIcon,
   SendIcon,
 } from "lucide-react";
 

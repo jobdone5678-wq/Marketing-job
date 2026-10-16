@@ -1,1 +1,0 @@
-import {DashboardOverview} from './dashboard-overview';import type {User} from '@supabase/supabase-js';export function DashboardView(_props:{user?:User}){return <DashboardOverview/>;}

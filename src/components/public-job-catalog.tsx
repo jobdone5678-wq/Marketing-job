@@ -17,10 +17,10 @@ export function PublicJobCatalog({provider, canSave, onSelect, onSaved}: {
   const board = boards.find(b => `${b.provider}/${b.board_slug}` === selected);
   return <section className="rounded-xl border bg-card p-4 space-y-3">
     <div><h2 className="font-semibold">Explore public company boards</h2>
-      <p className="text-sm text-muted-foreground">Select an official board to fetch current technical roles. Catalog checked October 14, 2026.</p></div>
+      <p className="text-sm text-muted-foreground">Company selection is optional. Live ATS Fetch searches all available company boards for a provider unless you choose one here.</p></div>
     <div className="flex flex-wrap gap-2 items-center">
       <select aria-label="Public company board" className="border rounded-md bg-background p-2 text-sm max-w-full" value={selected} onChange={e => {setSelected(e.target.value); setMessage('');}}>
-        <option value="">Choose a company</option>
+        <option value="">Optional: choose one company</option>
         {boards.map(b => <option key={`${b.provider}/${b.board_slug}`} value={`${b.provider}/${b.board_slug}`}>{b.company} ({b.provider})</option>)}
       </select>
       <Button size="sm" disabled={!board} onClick={() => board && onSelect(board)}>Fetch selected board</Button>

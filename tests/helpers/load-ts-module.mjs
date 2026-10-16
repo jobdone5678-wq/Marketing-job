@@ -37,6 +37,8 @@ export function fixtureDatabase(tables) {
       select() { return query; },
       eq(key, value) { filters.push(row => row[key] === value); return query; },
       neq(key, value) { filters.push(row => row[key] !== value); return query; },
+      gte(key, value) { filters.push(row => row[key]!=null&&row[key]>=value); return query; },
+      lte(key, value) { filters.push(row => row[key]!=null&&row[key]<=value); return query; },
       or(expression) {
         const alternatives=expression.split(',').map(part=>{
           const [key,operator,...rest]=part.split('.');const value=rest.join('.');

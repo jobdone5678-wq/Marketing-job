@@ -18,7 +18,8 @@ export async function protectedRoute(request:Request,access:ProfileAccess,work:(
     if(!['GET','HEAD'].includes(request.method))requireSameOrigin(request);
     const profile=await requireProfile(access);
     authenticated=performance.now();
-    return timed(Response.json(await work(profile)));
+    const result=await work(profile);
+    return timed(result instanceof Response?result:Response.json(result));
   } catch(error) {if(authenticated===started)authenticated=performance.now();if(error instanceof ZodError||error instanceof SyntaxError)return timed(Response.json({error:'Invalid request. Check required fields and try again.'},{status:400}));return timed(errorResponse(error));}
   });
 }

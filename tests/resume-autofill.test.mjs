@@ -11,6 +11,32 @@ after(async () => { await browser?.close(); });
 const candidate = { id: 'own', full_name: 'Alex Example', email: 'alex@example.test', phone: '5550100', current_city: 'Austin', current_state: 'Texas', authorized_in_usa: false, need_sponsorship_now: true, highest_qualification: 'Bachelor of Science', university_name: 'Example University', primary_skills: 'Python, SQL' };
 const content = await readFile(new URL('../browser-extension/content.js', import.meta.url), 'utf8');
 
+for (const linked of [false, true]) test(`${linked ? 'linked' : 'unlinked'} multiple success messages and extension toasts log each submission attempt once`, async t => {
+  const page = await portal(t, { intentCandidateId: linked ? candidate.id : null, beforeContent: async page => {
+    await page.evaluate(() => {
+      const original = window.chrome.runtime.sendMessage;
+      window.captureCalls = [];
+      window.chrome.runtime.sendMessage = async message => {
+        if (message.type !== 'auto_submit' && message.status !== 'submitted') return original(message);
+        window.captureCalls.push(message.payload || message);
+        // Bound the pre-fix feedback loop so the regression can report a failure.
+        return window.captureCalls.length <= 6 ? { success: true } : {};
+      };
+    });
+  } });
+  await page.waitForFunction(() => document.querySelector('#email').value === 'alex@example.test');
+  await page.evaluate(() => document.querySelector('form').insertAdjacentHTML('afterend', '<div id="application_confirmation"><h2>Thank you for applying</h2><p>Your application was submitted</p></div>'));
+  await page.waitForTimeout(700);
+  assert.equal(await page.evaluate(() => window.captureCalls.length), 1);
+  await page.evaluate(() => document.body.insertAdjacentHTML('beforeend','<p>Unrelated page update</p>'));
+  await page.waitForTimeout(150);
+  assert.equal(await page.evaluate(() => window.captureCalls.length), 1);
+  await page.evaluate(() => {document.querySelector('#application_confirmation').remove();document.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));});
+  await page.evaluate(() => document.querySelector('form').insertAdjacentHTML('afterend', '<h2>Thank you for applying</h2>'));
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => window.captureCalls.length), 2);
+});
+
 for (const match of [true, false]) {
   test(`location combobox ${match ? 'clicks an existing result' : 'never commits a custom location'}`, async t => {
     const page = await portal(t, { beforeContent: async page => {

@@ -26,9 +26,6 @@ import { updateSubmissionStatus } from "@/lib/submissions";
 import type { JobSubmission, SubmissionStatus } from "@/types/database";
 import {
   CalendarIcon,
-  VideoIcon,
-  CheckCircle2Icon,
-  SparklesIcon,
 } from "lucide-react";
 
 const STATUS_OPTIONS: { label: string; value: SubmissionStatus }[] = [
