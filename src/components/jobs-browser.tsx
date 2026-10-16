@@ -54,7 +54,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   const [liveBoard, setLiveBoard] = useState(provider === 'greenhouse' ? 'figma' : 'ramp');
   const [liveProvider, setLiveProvider] = useState<string>(provider || 'ashby');
   const [liveLoading, setLiveLoading] = useState(false);
-  const [saveToDbOnFetch, setSaveToDbOnFetch] = useState(true);
+  const [saveToDbOnFetch, setSaveToDbOnFetch] = useState(isRecruitingStaff);
   const [syncingSoftwareJobs, setSyncingSoftwareJobs] = useState(false);
   const [lastFetchedTime, setLastFetchedTime] = useState<string | null>(null);
   const [expandedJobHash, setExpandedJobHash] = useState<string | null>(null);

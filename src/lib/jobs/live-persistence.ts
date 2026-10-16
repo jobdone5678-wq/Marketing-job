@@ -1,13 +1,15 @@
 import 'server-only';
 import {database,checkDb} from '@/lib/db/admin';
 import type {NormalizedJob} from './types';
+import {PUBLIC_JOB_BOARDS} from '@/lib/public-directory';
 
 export async function persistLiveJobs(source:{id?:string; provider:string; board_slug:string; company:string}, actorId:string, jobs:NormalizedJob[], canCreateSource=false) {
   if (!jobs.length) return 0;
   const db = database();
   let sourceId = source.id;
   if (!sourceId) {
-    if (canCreateSource) {
+    const isCuratedBoard = PUBLIC_JOB_BOARDS.some(b => b.provider === source.provider && b.board_slug.toLowerCase() === source.board_slug.toLowerCase());
+    if (canCreateSource || isCuratedBoard) {
       const {error} = await db.from('job_sources').upsert({provider:source.provider,board_slug:source.board_slug,company:source.company,created_by:actorId}, {onConflict:'provider,board_slug',ignoreDuplicates:true});
       checkDb(error);
     }
