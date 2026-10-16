@@ -332,15 +332,29 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 aria-label="Provider"
                 className="w-full h-9 border rounded-md px-3 bg-background text-sm"
                 value={liveProvider}
-                onChange={(e) => setLiveProvider(e.target.value)}
+                onChange={(e) => {
+                  const newProv = e.target.value;
+                  setLiveProvider(newProv);
+                  const defaults: Record<string, string> = {
+                    greenhouse: 'figma',
+                    ashby: 'ramp',
+                    lever: 'spotify',
+                    smartrecruiters: 'BoschGroup',
+                    breezy: 'breezy',
+                    remoteok: 'remote'
+                  };
+                  if (defaults[newProv]) {
+                    setLiveBoard(defaults[newProv]);
+                  }
+                }}
                 disabled={Boolean(provider)}
               >
-                <option value="greenhouse">Greenhouse</option>
-                <option value="ashby">Ashby</option>
-                <option value="lever">Lever</option>
-                <option value="smartrecruiters">SmartRecruiters</option>
-                <option value="breezy">Breezy HR</option>
-                <option value="remoteok">RemoteOK</option>
+                <option value="greenhouse">Greenhouse (e.g. figma, stripe)</option>
+                <option value="ashby">Ashby (e.g. ramp, openai)</option>
+                <option value="lever">Lever (e.g. spotify, netflix)</option>
+                <option value="smartrecruiters">SmartRecruiters (e.g. BoschGroup)</option>
+                <option value="breezy">Breezy HR (e.g. breezy)</option>
+                <option value="remoteok">RemoteOK (Global tech)</option>
               </select>
             </div>
 
@@ -433,7 +447,13 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         <div className="grid gap-3 sm:grid-cols-3">
           {mode === 'db' && <label className="text-sm">Portal
             <select aria-label="Filter by portal" className="mt-1 block h-9 w-full rounded-md border bg-background px-3" value={provider || portalFilter} disabled={Boolean(provider)} onChange={e => { setPortalFilter(e.target.value); setDbPage(0); }}>
-              <option value="">All portals</option><option value="greenhouse">Greenhouse</option><option value="ashby">Ashby</option>
+              <option value="">All portals</option>
+              <option value="greenhouse">Greenhouse</option>
+              <option value="ashby">Ashby</option>
+              <option value="lever">Lever</option>
+              <option value="smartrecruiters">SmartRecruiters</option>
+              <option value="breezy">Breezy HR</option>
+              <option value="remoteok">RemoteOK</option>
             </select>
           </label>}
           <label className="text-sm">Company<Input aria-label="Filter by company" className="mt-1 h-9" placeholder="Company name" value={companyFilter} onChange={e => { setCompanyFilter(e.target.value); setDbPage(0); }}/></label>
