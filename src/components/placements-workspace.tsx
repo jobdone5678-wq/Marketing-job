@@ -1,4 +1,5 @@
 "use client";
+import {WorkspaceSkeleton} from "@/components/workspace-ui";
 import {useEffect,useState} from 'react';
 import {api} from '@/lib/api-client';
 import {getAdminProfiles} from '@/lib/admin-profiles';
@@ -91,7 +92,7 @@ export function PlacementsWorkspace({initialPanel='placements',embedded=false,fo
  return <Root id={embedded?'operations-management':undefined} className={embedded?"space-y-5":"mx-auto w-full max-w-[1600px] space-y-5 p-4 sm:p-6"}>
  {!embedded&&<div><h1 className="text-2xl font-bold">{admin?'Collections, placements and recruiter payroll':client?'My service fees and placements':'My placements and compensation'}</h1><p className="text-sm text-muted-foreground">Candidates pay NextKinHR for job application services. NextKinHR assigns a recruiter to apply and pays that recruiter a salary. Technical recruiters bring candidates to NextKinHR and earn an agreed commission after successful placement.</p></div>}
  {error&&<p role="alert" className="text-destructive">{error}</p>}{notice&&<p role="status" className="text-sm text-primary">{notice}</p>}
- {!data&&<p>Loading placements and compensation…</p>}
+ {!data&&<WorkspaceSkeleton/>}
  {data&&<>
  {!embedded&&<nav aria-label="Compensation sections" className="flex flex-wrap gap-2">{((client?['collections','placements']:admin?['collections','placements','salary','commissions','payments']:['placements','salary','commissions','payments']) as Panel[]).map(value=><button type="button" key={value} aria-pressed={activePanel===value} className={buttonClass+(activePanel===value?' bg-primary text-primary-foreground':'')} onClick={()=>{setPanel(value);setSelected(null);setStatus('');setSearch('');}}>{value==='collections'?'Collections':value==='placements'?'Job placements':value==='salary'?'Recruiter payroll':value==='commissions'?'Commissions':admin?'Outgoing payments':'Payments'}</button>)}</nav>}
  {admin&&<aside aria-label="How NextKinHR payments work" className="grid gap-3 rounded-xl border bg-muted/30 p-4 md:grid-cols-3"><div><h2 className="text-sm font-semibold">1. Candidate pays NextKinHR</h2><p className="mt-1 text-xs text-muted-foreground">Track the candidate’s service joining date, monthly fee, next payment due date and received / outstanding amounts in Collections.</p></div><div><h2 className="text-sm font-semibold">2. NextKinHR pays the recruiter</h2><p className="mt-1 text-xs text-muted-foreground">The assigned recruiter applies for jobs. Track the recruiter’s joining date, salary period, next salary due date and paid / outstanding amounts in Recruiter payroll.</p></div><div><h2 className="text-sm font-semibold">3. Referral earns a placement commission</h2><p className="mt-1 text-xs text-muted-foreground">The technical recruiter brings the candidate to NextKinHR. Track their agreed commission after successful placement, approval and payment in Commissions.</p></div></aside>}

@@ -50,10 +50,30 @@ test('direct authenticated SQL cannot read confidential briefs or generated resu
  await assert.rejects(db.query('SELECT * FROM tailored_resumes'),/permission denied/);
  await db.exec('RESET ROLE');
 });
+
+test('candidate ownership does not grant review access to an administrator private JD resume',async()=>{
+ const result=(await db.query(`SELECT request_tailored_resume($1,$2,NULL,$3) data`,[admin,candidate,brief])).rows[0].data;
+ await db.query(`UPDATE tailored_resumes SET status='review',content='Admin private resume' WHERE id=$1`,[result.resumeId]);
+ await assert.rejects(db.query(`SELECT review_tailored_resume($1,$2,1,'Candidate edit')`,[owner,result.resumeId]),/access/i);
+ await db.query(`SELECT review_tailored_resume($1,$2,1,'Reviewed by admin')`,[admin,result.resumeId]);
+});
 test('live job content changes advance versions while duplicate refreshes preserve them',async()=>{
  const before=(await db.query('SELECT version FROM jobs WHERE id=$1',[job])).rows[0].version;
  await db.query(`UPDATE jobs SET description='Python and SQL and Kafka required',content_hash='new-hash' WHERE id=$1`,[job]);
  assert.equal((await db.query('SELECT version FROM jobs WHERE id=$1',[job])).rows[0].version,before+1);
  await db.query(`UPDATE jobs SET description='Python and SQL and Kafka required',content_hash='new-hash' WHERE id=$1`,[job]);
  assert.equal((await db.query('SELECT version FROM jobs WHERE id=$1',[job])).rows[0].version,before+1);
+});
+
+test('duplicate generation requests return bound tasks without rewriting worker-owned records',async()=>{
+ await db.exec(`CREATE FUNCTION prevent_bound_rewrite() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF OLD.task_id IS NOT NULL THEN RAISE EXCEPTION 'Duplicate rewrote a worker-owned record'; END IF; RETURN NEW; END; $$;
+ CREATE TRIGGER test_brief_rewrite BEFORE UPDATE ON job_briefs FOR EACH ROW EXECUTE FUNCTION prevent_bound_rewrite();
+ CREATE TRIGGER test_resume_rewrite BEFORE UPDATE ON tailored_resumes FOR EACH ROW EXECUTE FUNCTION prevent_bound_rewrite();`);
+ try{
+  const duplicate=(await db.query(`SELECT create_job_brief($1,gen_random_uuid(),'Role','Company','Python and SQL required',NULL,NULL,'hash') data`,[admin])).rows[0].data;
+  assert.equal(duplicate.briefId,brief);assert.ok(duplicate.taskId);
+  const existing=(await db.query(`SELECT id,task_id FROM tailored_resumes WHERE actor_id=$1 AND brief_id=$2`,[admin,brief])).rows[0];
+  const repeat=(await db.query(`SELECT request_tailored_resume($1,$2,NULL,$3) data`,[admin,candidate,brief])).rows[0].data;
+  assert.equal(repeat.resumeId,existing.id);assert.equal(repeat.taskId,existing.task_id);
+ }finally{await db.exec('DROP TRIGGER test_brief_rewrite ON job_briefs; DROP TRIGGER test_resume_rewrite ON tailored_resumes; DROP FUNCTION prevent_bound_rewrite();');}
 });

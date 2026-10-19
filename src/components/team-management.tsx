@@ -1,4 +1,5 @@
 "use client";
+import {WorkspaceSkeleton} from "@/components/workspace-ui";
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -64,7 +65,7 @@ export function TeamManagement({embedded=false,focusCandidateId,onUpdated}:{embe
   const filteredStaff=staff.filter(person=>person.role!=='client'&&`${person.full_name||''} ${person.email} ${person.role} ${person.status}`.toLowerCase().includes(staffSearch.toLowerCase()));
 
   const Root=embedded?'section':'main';
-  if(loading)return <p className="p-4 text-sm text-muted-foreground">Loading team and assignments…</p>;
+  if(loading)return <div className="portal-page"><WorkspaceSkeleton/></div>;
   return <Root className={embedded?"space-y-6":"mx-auto w-full max-w-[1600px] space-y-6 p-4 sm:p-6"}>
     <div>{embedded?<h2 className="text-xl font-semibold">Team and assignments</h2>:<h1 className="text-2xl font-semibold">Team and assignments</h1>}<p className="mt-1 text-sm text-muted-foreground">Approve staff accounts and control which candidates each staff member can access.</p></div>
     {error && <p role="alert" className="text-destructive">{error}</p>}

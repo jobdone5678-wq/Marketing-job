@@ -47,7 +47,11 @@ export async function GET(request: Request) {
         available_to_join,
         current_salary,
         expected_salary,
-        confirmed_facts
+        confirmed_facts,
+        resume_url,
+        employment_history,
+        education_history,
+        certifications
       `)
       .eq('provenance_status', 'confirmed')
       .order('updated_at', { ascending: false })

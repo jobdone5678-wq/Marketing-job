@@ -16,11 +16,12 @@ test('admin JD matching scans all active reviewed candidates, including beyond f
  assert.equal(result.totalCandidates,502);assert.equal(result.matches[0].candidateId,'best');assert.equal(result.matches[0].coverage,100);
 });
 test('tailored download requires authorized reviewed current content and returns DOCX bytes',async()=>{
- let ready=false;const resumeId='10000000-0000-4000-8000-000000000202';
- const load=moduleLoader({'@/lib/http/protected-route':{protectedRoute:(_r,_access,work)=>work({id:'owner',role:'client'})},'@/lib/tailored-resumes/repository':{getTailoredResume:async()=>({resume:{id:resumeId,status:ready?'ready':'review',revision:2,reviewed_revision:ready?2:null,stale:false,content:'Reviewed Candidate\nSKILLS\nPython'},candidate:{full_name:'Reviewed Candidate'}})},'@/lib/db/admin':{CaptureError:Error}});
+ let ready=false,stale=false;const resumeId='10000000-0000-4000-8000-000000000202';
+ const load=moduleLoader({'@/lib/http/protected-route':{protectedRoute:(_r,_access,work)=>work({id:'owner',role:'client'})},'@/lib/tailored-resumes/repository':{getTailoredResume:async()=>({resume:{id:resumeId,status:ready?'ready':'review',revision:2,reviewed_revision:ready?2:null,stale,content:'Reviewed Candidate\nSKILLS\nPython'},candidate:{full_name:'Reviewed Candidate'}})},'@/lib/db/admin':{CaptureError:Error}});
  const {GET}=load('src/app/api/tailored-resumes/[id]/download/route.ts');
  const run=()=>GET(new Request('https://portal.test/api/tailored-resumes/'+resumeId+'/download'),{params:Promise.resolve({id:resumeId})});
  await assert.rejects(run,/Review/);ready=true;
  const response=await run();assert.equal(response.headers.get('content-type'),'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
  assert.match(response.headers.get('content-disposition'),/\.docx/);assert.equal(Buffer.from(await response.arrayBuffer()).subarray(0,2).toString(),'PK');
+ stale=true;await assert.rejects(run,/changed|generate/i);
 });

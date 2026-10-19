@@ -11,12 +11,11 @@ import { dailySubmissionCounts, inSubmissionDateRange, submissionDatePreset } fr
 import type { Candidate, JobSubmission, SubmissionStatus } from "@/types/database";
 import { SubmissionStatusDialog } from "@/components/submission-status-dialog";
 import { ApplicationAnswerSnapshot } from "@/components/application-answer-snapshot";
+import {CaptureState} from "@/components/application-evidence";
+import { AppliedResumeBadge } from "@/components/applied-resume-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-} from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -33,6 +32,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import {CandidateCombobox} from "@/components/candidate-combobox";
+import {WorkspaceError,WorkspaceSkeleton} from "@/components/workspace-ui";
 import {
   SendIcon,
   PlusIcon,
@@ -60,6 +61,8 @@ export default function SubmissionsPage() {
   const [submissions, setSubmissions] = React.useState<JobSubmission[]>([]);
   const [candidates, setCandidates] = React.useState<Candidate[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [loadError,setLoadError]=React.useState("");
+  const [showDetails,setShowDetails]=React.useState(false);
 
   // Filters
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -85,7 +88,9 @@ export default function SubmissionsPage() {
       ]);
       setSubmissions(subsData);
       setCandidates(candsData);
+      setLoadError("");
     } catch {
+      setLoadError("Could not load the latest submissions. Try refreshing. Previously loaded records may be out of date.");
       toast.error("Failed to load submissions data");
     } finally {
       setLoading(false);
@@ -93,6 +98,8 @@ export default function SubmissionsPage() {
   }, []);
 
   React.useEffect(() => {
+    const candidateId=new URLSearchParams(window.location.search).get("candidateId");
+    if(candidateId)queueMicrotask(()=>setSelectedCandidateFilter(candidateId));
     void Promise.resolve().then(loadData);
   }, [loadData]);
 
@@ -103,7 +110,7 @@ export default function SubmissionsPage() {
         return (
           <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 gap-1 font-semibold">
             <SparklesIcon className="size-3 text-emerald-500" />
-            Offer Received 🎉
+            Offer Received 
           </Badge>
         );
       case "Round_1":
@@ -368,26 +375,25 @@ export default function SubmissionsPage() {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6 max-w-[1600px] w-full mx-auto">
+    <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6 max-w-[1440px] w-full mx-auto">
       {/* Page Header */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2.5">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                Job Submissions Tracker
+                Job submissions
               </h1>
               <Badge
                 variant="outline"
                 className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 gap-1 text-xs"
               >
                 <TrendingUpIcon className="size-3" />
-                Live Submissions
+                Application tracker
               </Badge>
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              Centralized USA bench submission log with vendor tracking, interview
-              pipelines, rate calculations, and 30-day client duplicate safeguards.
+              Every application, its recorded resume, and the next step — in one place.
             </p>
           </div>
 
@@ -444,79 +450,17 @@ export default function SubmissionsPage() {
           </div>
         </div>
 
-        {/* STATS METRIC CARDS */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 pt-2">
-          {/* 1. Total Submissions */}
-          <Card className="cursor-pointer hover:border-primary/40 transition-all p-3.5">
-            <div className="text-xs text-muted-foreground font-medium flex items-center justify-between">
-              <span>Total Submissions</span>
-              <SendIcon className="size-3.5 text-primary" />
-            </div>
-            <div className="text-2xl font-bold mt-1 text-foreground">
-              {stats.total}
-            </div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">
-              Across all bench roles
-            </div>
-          </Card>
-
-          {/* 2. Active Interviews */}
-          <Card className="cursor-pointer hover:border-purple-500/40 transition-all p-3.5 border-purple-500/20 bg-purple-500/5">
-            <div className="text-xs text-purple-700 dark:text-purple-300 font-medium flex items-center justify-between">
-              <span>Active Interviews</span>
-              <CalendarIcon className="size-3.5 text-purple-600" />
-            </div>
-            <div className="text-2xl font-bold mt-1 text-purple-700 dark:text-purple-300">
-              {stats.interviews}
-            </div>
-            <div className="text-[11px] text-purple-600/80 mt-0.5">
-              Round 1 / Round 2 / Scheduled
-            </div>
-          </Card>
-
-          {/* 3. Client Review */}
-          <Card className="cursor-pointer hover:border-blue-500/40 transition-all p-3.5 border-blue-500/20 bg-blue-500/5">
-            <div className="text-xs text-blue-700 dark:text-blue-300 font-medium flex items-center justify-between">
-              <span>Client Review</span>
-              <Building2Icon className="size-3.5 text-blue-600" />
-            </div>
-            <div className="text-2xl font-bold mt-1 text-blue-700 dark:text-blue-300">
-              {stats.clientReview}
-            </div>
-            <div className="text-[11px] text-blue-600/80 mt-0.5">
-              Profiles with end managers
-            </div>
-          </Card>
-
-          {/* 4. Offers Received */}
-          <Card className="cursor-pointer hover:border-emerald-500/40 transition-all p-3.5 border-emerald-500/20 bg-emerald-500/5">
-            <div className="text-xs text-emerald-700 dark:text-emerald-300 font-medium flex items-center justify-between">
-              <span>Offers Received</span>
-              <SparklesIcon className="size-3.5 text-emerald-600" />
-            </div>
-            <div className="text-2xl font-bold mt-1 text-emerald-700 dark:text-emerald-300">
-              {stats.offers}
-            </div>
-            <div className="text-[11px] text-emerald-600/80 mt-0.5">
-              Placements & negotiations
-            </div>
-          </Card>
-
-          {/* 5. Duplicate Safeguards */}
-          <Card className="cursor-pointer hover:border-amber-500/40 transition-all p-3.5 border-amber-500/20 bg-amber-500/5 col-span-2 md:col-span-1">
-            <div className="text-xs text-amber-700 dark:text-amber-300 font-medium flex items-center justify-between">
-              <span>Duplicate Alerts</span>
-              <AlertTriangleIcon className="size-3.5 text-amber-600" />
-            </div>
-            <div className="text-2xl font-bold mt-1 text-amber-700 dark:text-amber-300">
-              {stats.duplicates}
-            </div>
-            <div className="text-[11px] text-amber-600/80 mt-0.5">
-              30-day double submit flag
-            </div>
-          </Card>
-        </div>
+        <section aria-label="Application metrics" className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border/60 bg-border/60 md:grid-cols-5">
+          {[
+            {label:'Application records',value:stats.total,note:'Includes unsubmitted drafts',icon:SendIcon},
+            {label:'Active Interviews',value:stats.interviews,note:'Scheduled · Round 1 · Round 2',icon:CalendarIcon},
+            {label:'Client Review',value:stats.clientReview,note:'With end-client managers',icon:Building2Icon},
+            {label:'Offers',value:stats.offers,note:'Received & in negotiation',icon:SparklesIcon},
+            {label:'Duplicate Alerts',value:stats.duplicates,note:'30-day application safeguard',icon:AlertTriangleIcon},
+          ].map((metric,index)=><div key={metric.label} className={`bg-card p-4 ${index===4?'col-span-2 md:col-span-1':''}`}><p className="flex items-center justify-between gap-2 text-[11px] font-medium text-muted-foreground">{metric.label}<metric.icon className={`size-3.5 ${index===4&&metric.value?'text-amber-600':'text-muted-foreground'}`}/></p><p className="mt-2 text-[28px] font-semibold leading-none tracking-tight tabular-nums">{loading?'—':metric.value}</p><p className="mt-2 text-[10px] text-muted-foreground">{metric.note}</p></div>)}
+        </section>
       </div>
+      {loadError&&<WorkspaceError message={loadError}><Button variant="outline" className="mt-2" onClick={()=>void loadData()}>Try again</Button></WorkspaceError>}
 
       {/* FILTER & PIPELINE TABS TOOLBAR */}
       <div className="flex flex-col gap-3">
@@ -540,11 +484,12 @@ export default function SubmissionsPage() {
             return (
               <button
                 key={tab.id}
+                aria-pressed={isSelected}
                 type="button"
                 onClick={() => setSelectedStatusTab(tab.id)}
-                className={`px-3 py-1 text-xs rounded-full border transition-all cursor-pointer font-medium ${
+                className={`px-3 py-1.5 text-xs rounded-lg border transition-colors cursor-pointer font-medium ${
                   isSelected
-                    ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                    ? "bg-foreground text-background border-foreground shadow-xs"
                     : "bg-muted/40 hover:bg-muted text-foreground border-border/60"
                 }`}
               >
@@ -559,41 +504,24 @@ export default function SubmissionsPage() {
           <div className="relative flex-1 w-full">
             <SearchIcon className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
             <Input
-              placeholder="Search candidate, company, role, prime vendor, or notes..."
+              aria-label="Search submissions"
+              placeholder="Search company, role, vendor or notes…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-8 h-8 text-xs bg-background"
             />
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            {/* Candidate Filter */}
-            <Select
-              value={selectedCandidateFilter}
-              onValueChange={(val) => setSelectedCandidateFilter(val ?? "all")}
-            >
-              <SelectTrigger className="h-8 text-xs w-[180px] bg-background">
-                <SelectValue placeholder="All Candidates" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all" className="text-xs">
-                  All Bench Candidates
-                </SelectItem>
-                {candidates.map((c) => (
-                  <SelectItem key={c.id} value={c.id} className="text-xs">
-                    {c.full_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <CandidateCombobox candidates={candidates} value={selectedCandidateFilter} onChange={setSelectedCandidateFilter}/>
 
             {/* Portal Source Filter */}
             <Select
               value={selectedPortalFilter}
               onValueChange={(val) => setSelectedPortalFilter(val ?? "all")}
             >
-              <SelectTrigger className="h-8 text-xs w-[140px] bg-background">
-                <SelectValue placeholder="Portal Source" />
+              <SelectTrigger aria-label="Filter by portal" className="h-8 text-xs w-[140px] bg-background">
+                <SelectValue>{selectedPortalFilter==='all'?'All portals':portalOptions.find(([value])=>value===selectedPortalFilter)?.[1]||selectedPortalFilter}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all" className="text-xs">
@@ -606,8 +534,8 @@ export default function SubmissionsPage() {
         </div>
       </div>
 
-      <section aria-label="Application date filters" className="rounded-xl border bg-card p-4 space-y-4">
-        <div><h2 className="font-semibold">Applications by date</h2><p className="text-sm text-muted-foreground">Filter by the application date. Both dates are included. Counts and exports follow all selected filters.</p></div>
+      <section aria-label="Application date filters" className="rounded-xl border border-border/60 bg-card p-3 space-y-3">
+        <p className="text-xs font-medium text-muted-foreground">Application date · Counts and exports follow your filters</p>
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm">From date<Input aria-label="From application date" type="date" value={dateFrom} max={dateTo || undefined} onChange={e => setDateFrom(e.target.value)}/></label>
           <label className="text-sm">To date<Input aria-label="To application date" type="date" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)}/></label>
@@ -616,9 +544,10 @@ export default function SubmissionsPage() {
         </div>
         {dateFrom && dateTo && dateFrom > dateTo && <p role="alert" className="text-sm text-destructive">From date must be on or before To date.</p>}
         <p role="status" className="text-sm"><strong>{filteredSubmissions.length}</strong> matching applications across <strong>{dailyCounts.length}</strong> application dates.</p>
-        <div className="max-h-60 overflow-auto">
-          {dailyCounts.length ? <table className="w-full text-sm"><caption className="sr-only">Daily application counts for the selected filters</caption><thead><tr className="border-b"><th className="p-2 text-left">Application date</th><th className="p-2 text-right">Jobs applied</th></tr></thead><tbody>{dailyCounts.map(day => <tr key={day.date} className="border-b"><td className="p-2"><button type="button" className="underline" aria-label={`Show applications on ${day.date}`} onClick={() => {setDateFrom(day.date);setDateTo(day.date);}}>{day.date}</button></td><td className="p-2 text-right">{day.count}</td></tr>)}</tbody></table> : <p className="text-sm text-muted-foreground">No dated applications match these filters.</p>}
+        <details><summary className="text-xs font-medium text-muted-foreground cursor-pointer">Applications by date · {dailyCounts.length} dates</summary><div className="mt-3 max-h-60 overflow-auto">
+          {dailyCounts.length ? <table className="w-full text-sm"><caption className="sr-only">Daily application counts for the selected filters</caption><thead><tr className="border-b"><th className="p-2 text-left">Application date</th><th className="p-2 text-right">Application records</th></tr></thead><tbody>{dailyCounts.map(day => <tr key={day.date} className="border-b"><td className="p-2"><button type="button" className="underline" aria-label={`Show applications on ${day.date}`} onClick={() => {setDateFrom(day.date);setDateTo(day.date);}}>{day.date}</button></td><td className="p-2 text-right">{day.count}</td></tr>)}</tbody></table> : <p className="text-sm text-muted-foreground">No dated applications match these filters.</p>}
         </div>
+        </details>
         {filteredSubmissions.some(row => !row.submission_date) && <p className="text-xs text-muted-foreground">Applications without a recorded date are included in the total only when no date filter is selected.</p>}
       </section>
 
@@ -629,32 +558,20 @@ export default function SubmissionsPage() {
             Showing <strong className="text-foreground">{filteredSubmissions.length}</strong> of{" "}
             <strong>{submissions.length}</strong> submissions
           </div>
-          <div className="hidden sm:flex items-center gap-3">
-            <span className="flex items-center gap-1.5">
-              <span className="size-2 rounded-full bg-emerald-500" />
-              Offer Received
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="size-2 rounded-full bg-purple-500" />
-              Interview Scheduled
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="size-2 rounded-full bg-blue-500" />
-              Submitted to Client
-            </span>
-          </div>
+          <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={showDetails} onChange={event=>setShowDetails(event.target.checked)}/>Show vendor, rate and notes</label>
         </div>
 
         <div className="overflow-x-auto">
-          <Table>
+          <Table className={`submissions-table min-w-[1250px] ${showDetails?'show-details':''}`}>
             <TableHeader className="bg-muted/40">
               <TableRow>
                 <TableHead className="w-[180px]">Candidate</TableHead>
                 <TableHead className="w-[200px]">End Client & Role</TableHead>
+                <TableHead className="min-w-[220px]">Applied resume & answers</TableHead>
                 <TableHead className="w-[180px]">Vendor & Recruiter</TableHead>
                 <TableHead className="w-[110px]">Rate</TableHead>
                 <TableHead className="w-[110px]">Date</TableHead>
-                <TableHead className="w-[170px]">Pipeline Status</TableHead>
+                <TableHead className="min-w-[220px]">Recruiting stage & capture</TableHead>
                 <TableHead className="w-[220px]">Interview / Schedule / Notes</TableHead>
                 <TableHead className="w-[90px] text-right">Actions</TableHead>
               </TableRow>
@@ -663,19 +580,16 @@ export default function SubmissionsPage() {
               {loading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={9}
                     className="h-32 text-center text-muted-foreground"
                   >
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <RefreshCwIcon className="size-5 animate-spin text-primary" />
-                      <span className="text-xs">Loading submissions tracker...</span>
-                    </div>
+                    <WorkspaceSkeleton rows={4}/>
                   </TableCell>
                 </TableRow>
               ) : filteredSubmissions.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={9}
                     className="h-32 text-center text-muted-foreground text-xs"
                   >
                     <div className="flex flex-col items-center justify-center gap-2">
@@ -742,7 +656,6 @@ export default function SubmissionsPage() {
                           {sub.job_title}
                         </div>
                         {sub.capture_status === 'confirmed' && <Badge variant="outline" className="text-[9px] mt-1">Email confirmed</Badge>}
-                        <ApplicationAnswerSnapshot submissionId={sub.id} />
                         <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
                           <Badge
                             variant="secondary"
@@ -762,6 +675,16 @@ export default function SubmissionsPage() {
                             </a>
                           )}
                         </div>
+                      </TableCell>
+
+                      <TableCell className="align-top py-3">                        <AppliedResumeBadge
+                          submissionId={sub.id}
+                          candidateName={candidateName}
+                          companyName={sub.company_name}
+                          jobTitle={sub.job_title}
+                          appliedResume={sub.applied_resume}
+                        />
+                        <ApplicationAnswerSnapshot submissionId={sub.id} />
                       </TableCell>
 
                       {/* Vendor & Recruiter */}
@@ -820,6 +743,7 @@ export default function SubmissionsPage() {
                         >
                           {getStatusBadge(sub.status)}
                         </button>
+                        <div className="mt-3"><CaptureState state={sub.capture_status} confirmedAt={sub.email_confirmed_at}/></div>
                       </TableCell>
 
                       {/* Interview & Notes */}
@@ -885,6 +809,7 @@ export default function SubmissionsPage() {
                               variant="ghost"
                               size="sm"
                               className="h-7 w-7 p-0 cursor-pointer"
+                              aria-label={`Edit ${sub.company_name} submission`}
                               title="Edit Submission"
                             >
                               <EditIcon className="size-3.5" />
@@ -895,6 +820,7 @@ export default function SubmissionsPage() {
                             size="sm"
                             onClick={() => handleDelete(sub.id, sub.company_name)}
                             className="h-7 w-7 p-0 text-destructive/80 hover:text-destructive cursor-pointer"
+                            aria-label={`Delete ${sub.company_name} submission`}
                             title="Delete"
                           >
                             <Trash2Icon className="size-3.5" />

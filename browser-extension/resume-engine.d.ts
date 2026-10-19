@@ -1,0 +1,12 @@
+export type JobInput = {jobTitle?:string;companyName?:string;jobDescription?:string;jobUrl?:string};
+export type AtsReport = {score:number|null;matched:string[];missing:string[];requirements:{label:string;source:string;weight:number;matched:boolean;evidence:string;type:string}[];checks:{label:string;passed:boolean}[];warnings:string[];method:string};
+export type ResumeResult = {markdown:string;filename:string;matchScore:number|null;matchedSkills:string[];missingSkills:string[];ats:AtsReport;scopeKey:string};
+export const VERSION:string;
+export function normalizeCandidate(candidate:unknown):Record<string,unknown>|null;
+export function analyze(candidate:unknown,job:JobInput,actualResumeText?:string):AtsReport;
+export function buildResume(candidate:unknown,job:JobInput):ResumeResult;
+export function fingerprint(value:unknown):Promise<string>;
+export function scopeKey(candidate:unknown,job:JobInput):string;
+export function jobIdentity(job:JobInput):JobInput;
+export function candidateFromText(text:string,filename?:string):Record<string,unknown>;
+export function resumeDocx(content:string):Uint8Array;

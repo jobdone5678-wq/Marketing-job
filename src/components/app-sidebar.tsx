@@ -25,6 +25,7 @@ import {
   TrendingUpIcon,
   UserCheckIcon,
   MailIcon,
+  FileTextIcon, ChartNoAxesCombinedIcon, PlugZapIcon, CreditCardIcon,
 } from "lucide-react"
 import { createClient } from "@/lib/client"
 import Link from "next/link"
@@ -166,6 +167,12 @@ export function AppSidebar({
     return () => {cancelled=true;subscription.unsubscribe()}
   }, [])
   const mainItems = currentUser.role === "super_admin" ? adminNavItems : currentUser.role === "recruiter" ? recruiterNavItems : currentUser.role === "technical_recruiter" ? technicalRecruiterNavItems : currentUser.role === "client" ? candidateNavItems : []
+  const navigationItems = currentUser.role ? [...mainItems,
+    {id:'resumes',title:currentUser.role==='technical_recruiter'?'Candidate documents':'Resume workspace',url:'/dashboard/resumes',icon:<FileTextIcon className="size-4"/>},
+    {id:'analytics',title:'Analytics',url:'/dashboard/analytics',icon:<ChartNoAxesCombinedIcon className="size-4"/>},
+    {id:'integrations',title:'Integrations',url:'/dashboard/integrations',icon:<PlugZapIcon className="size-4"/>},
+    ...(currentUser.role==='super_admin'?[{id:'billing',title:'SaaS billing',url:'/dashboard/billing',icon:<CreditCardIcon className="size-4"/>}]:[]),
+  ] : []
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -178,7 +185,7 @@ export function AppSidebar({
             >
               <CommandIcon className="size-5 text-primary" />
               <div className="flex flex-col text-left">
-                <span className="text-sm font-bold tracking-tight">NextKinHR</span>
+                <span className="text-sm font-bold tracking-tight">Nextkinlife<span className="ml-1 font-normal text-muted-foreground">Recruit</span></span>
                 <span className="text-[10px] text-muted-foreground capitalize">
                   {currentUser.role === "client" ? "Candidate workspace" : currentUser.role === "super_admin" ? "Super admin workspace" : currentUser.role === "technical_recruiter" ? "Technical recruiter workspace" : currentUser.role === "recruiter" ? "Recruiter workspace" : "Account"}
                 </span>
@@ -189,7 +196,7 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         <NavMain
-          items={mainItems}
+          items={navigationItems}
           role={currentUser.role}
           activeSection={activeSection}
           onSelectSection={onSelectSection}
@@ -203,6 +210,7 @@ export function AppSidebar({
         />
       </SidebarContent>
       <SidebarFooter>
+        <p className="px-3 pb-1 text-[10px] text-muted-foreground">Owned by Nextkinlife LLC</p>
         <NavUser user={currentUser} />
       </SidebarFooter>
     </Sidebar>

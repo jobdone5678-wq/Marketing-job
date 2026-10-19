@@ -3,6 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import {MailIcon,RefreshCwIcon,UploadIcon,CheckCircle2Icon,AlertCircleIcon,ExternalLinkIcon} from 'lucide-react';
+import {WorkspaceSkeleton} from '@/components/workspace-ui';
 import {Button} from '@/components/ui/button';
 import {Badge} from '@/components/ui/badge';
 import {Input} from '@/components/ui/input';
@@ -139,8 +140,8 @@ export default function EmailConfirmationsPage() {
       <p className="text-xs text-muted-foreground">{total} receipts in this view · Page {page+1}. Automatic confirmation requires an authenticated approved sender and an unambiguous candidate and job match.</p>
       <div className="flex gap-2"><Button variant="outline" disabled={loading||!!busy||page===0} onClick={()=>setPage(value=>value-1)}>Previous page</Button>
         <Button variant="outline" disabled={loading||!!busy||!hasMore} onClick={()=>setPage(value=>value+1)}>Next page</Button></div>
-      {loading?<p className="text-sm text-muted-foreground">Loading receipts…</p>:!error && visible.length===0?<div className="border rounded-xl p-8 text-center text-muted-foreground text-sm">No receipts in this view. Connect a mailbox or import an application receipt.</div>:null}
-      {!loading&&!error&&visible.map(receipt=><article key={receipt.id} className="border rounded-xl bg-card p-4 flex flex-wrap justify-between gap-3">
+      {loading?<WorkspaceSkeleton rows={4}/>:!error && visible.length===0?<div className="border rounded-xl p-8 text-center text-muted-foreground text-sm">No receipts in this view. Connect a mailbox or import an application receipt.</div>:null}
+      {!loading&&!error&&visible.map(receipt=><article key={receipt.id} className="border-b border-border/60 py-4 flex flex-wrap justify-between gap-3">
         <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="font-medium break-words">{receipt.subject}</h3><Badge variant="outline">{receipt.disposition.replaceAll('_',' ')}</Badge></div>
           <p className="text-xs text-muted-foreground mt-1 break-words">{receipt.sender} · {new Date(receipt.received_at).toLocaleString()}</p>
           <p className="text-sm mt-2">{receipt.extracted_job_title||'Role needs review'} · {receipt.extracted_company||'Company needs review'}</p>

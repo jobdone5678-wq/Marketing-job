@@ -16,6 +16,7 @@ export async function GET(request:Request){return protectedRoute(request,'candid
  tailoringRole(profile);const params=new URL(request.url).searchParams;const candidateId=z.uuid().parse(params.get('candidateId'));
  const candidate=await candidateAccess(profile,candidateId);
  let query=database().from('tailored_resumes').select('id,candidate_id,candidate_version,job_id,brief_id,source_version,status,revision,reviewed_revision,model,task_id,created_at,data').eq('candidate_id',candidateId);
+ if(profile.role!=='super_admin')query=query.is('brief_id',null);
  if(params.get('jobId'))query=query.eq('job_id',z.uuid().parse(params.get('jobId')));
  if(params.get('briefId'))query=query.eq('brief_id',z.uuid().parse(params.get('briefId')));
  const {data,error}=await query.order('created_at',{ascending:false}).limit(50);checkWorkflowDb(error);

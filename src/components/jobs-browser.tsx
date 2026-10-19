@@ -11,6 +11,8 @@ import { useUserProfile } from '@/hooks/use-user-profile';
 import type { Candidate } from '@/types/database';
 import { getCandidates } from '@/lib/candidates';
 import type { StoredJob, NormalizedJob } from '@/lib/jobs/types';
+import {JobRoster} from '@/components/job-roster';
+import {WorkspaceSkeleton} from '@/components/workspace-ui';
 import { JobDates } from '@/components/job-dates';
 import { PublicJobCatalog } from '@/components/public-job-catalog';
 
@@ -153,7 +155,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         const failures = res.sources?.flatMap(source => source.error ? [source.error] : []);
         if (failures?.length) setError(failures.join(' '));
         if (saveToDbOnFetch && res.persistedInDb) {
-          setNotice(`✅ Pulled ${res.jobs.length} software jobs and stored them in the database!`);
+          setNotice(` Pulled ${res.jobs.length} software jobs and stored them in the database!`);
           void api<{ jobs: StoredJob[]; total: number; hasMore: boolean; recommendation: Recommendation }>(
             `/api/jobs?type=${employmentType}&search=${encodeURIComponent(search)}&page=0${
               savedFilterParam + candidateParam
@@ -224,16 +226,16 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   }, [isRecruitingStaff]);
 
   return (
-    <main className="p-6 max-w-7xl mx-auto space-y-6">
+    <main className="p-6 max-w-[1440px] mx-auto space-y-6">
       {/* Top Header & Mode Toggle */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-extrabold tracking-tight">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-semibold tracking-tight">
               {provider ? provider.toUpperCase() + ' Jobs' : 'Public Jobs'}
             </h1>
             <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-xs py-0.5">
-              💻 Software & Tech Roles Only
+               Software & Tech Roles Only
             </Badge>
           </div>
           <p className="text-muted-foreground text-sm mt-1">
@@ -242,80 +244,64 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         </div>
 
         {/* View Mode Switcher */}
-        <div className="flex items-center gap-2 bg-muted p-1 rounded-lg border">
+        <div className="flex items-center gap-1 bg-muted/40 p-1 border border-border">
           <Button
             size="sm"
             variant={mode === 'db' ? 'default' : 'ghost'}
             onClick={() => setMode('db')}
-            className="text-xs h-8"
+            className="text-xs h-7 font-medium px-2.5"
           >
-            💾 Saved Database Jobs ({dbTotal})
+            Saved jobs <span className="ml-1 font-mono tabular-nums">({dbTotal})</span>
           </Button>
           <Button
             size="sm"
             variant={mode === 'live' ? 'default' : 'ghost'}
             onClick={() => {setLiveProvider(provider || portalFilter || 'all');setLiveBoard('');setMode('live');}}
-            className="text-xs h-8"
+            className="text-xs h-7 font-medium px-2.5"
           >
-            ⚡ Live ATS Fetch
+            Live ATS Fetch
           </Button>
         </div>
       </div>
 
-      <PublicJobCatalog provider={mode === 'live' && liveProvider !== 'all' ? liveProvider : provider || portalFilter || undefined} canSave={isRecruiter} onSelect={board => {
+      <details className="border-y border-border/60 py-3"><summary className="text-xs font-medium text-muted-foreground">Company boards & source discovery</summary><div className="mt-3"><PublicJobCatalog provider={mode === 'live' && liveProvider !== 'all' ? liveProvider : provider || portalFilter || undefined} canSave={isRecruiter} onSelect={board => {
         setLiveBoard(board.board_slug); setLiveProvider(board.provider); setPortalFilter(board.provider); setDbPage(0); setCompanyFilter(''); setMode('live');
       }} onSaved={async () => {
         const result = await api<{sources:Source[]}>('/api/job-sources');
         setDbSources(result.sources || []);
-      }}/>
+      }}/></div></details>
 
-      <section className="rounded-xl border p-4 space-y-2">
+      <section className="border border-border bg-card p-4 space-y-2">
         {isRecruitingStaff && <label className="block text-sm font-medium">Find roles for a candidate
-          <select aria-label="Match jobs to candidate" className="mt-2 block w-full rounded-md border bg-background p-2" value={candidateId}
+          <select aria-label="Match jobs to candidate" className="mt-2 block w-full border border-border bg-background p-2 text-sm" value={candidateId}
             onChange={e => { setCandidateId(e.target.value); setDbPage(0); setDbJobs([]); setLiveJobs([]); setRecommendation(null); }}>
             <option value="">All saved roles</option>
             {candidates.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
           </select>
         </label>}
-        {recommendation?.requiresProfile ? <p className="text-sm">Upload, review and save your resume details to see related roles. <Link className="underline" href="/dashboard/candidates/new">Review your resume</Link></p>
-          : (isClient || candidateId) && <p className="text-sm">Roles related to {recommendation?.candidateName || 'your saved resume'}, ranked by skills and job titles. Matching helps discovery; review each job’s requirements before applying.</p>}
+        {recommendation?.requiresProfile ? <p className="text-sm">Upload, review and save your resume details to see related roles. <Link className="underline font-medium hover:text-foreground" href="/dashboard/candidates/new">Review your resume</Link></p>
+          : (isClient || candidateId) && <p className="text-sm text-muted-foreground">Roles related to <span className="font-medium text-foreground">{recommendation?.candidateName || 'your saved resume'}</span>, ranked by skills and job titles. Matching helps discovery; review each job’s requirements before applying.</p>}
       </section>
 
       {/* Mode Status Banner */}
       {mode === 'live' ? (
-        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-200 rounded-lg p-3 text-sm flex flex-wrap items-center justify-between gap-2">
+        <div className="bg-muted/30 border border-border text-foreground p-3 text-xs flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 font-medium">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-            </span>
-            Live ATS Feed Active — Strictly filtered for software & tech roles. Persisting to DB: {saveToDbOnFetch ? 'Enabled' : 'Disabled'}.
+            <span className="size-2 rounded-full bg-emerald-600 dark:bg-emerald-400"></span>
+            Live job search — Strictly filtered for software & tech roles. Save fetched jobs: {saveToDbOnFetch ? 'Enabled' : 'Disabled'}.
           </div>
           {lastFetchedTime && (
-            <span className="text-xs text-muted-foreground">
-              Last updated: <span className="font-semibold">{lastFetchedTime}</span>
+            <span className="text-xs text-muted-foreground font-mono">
+              Last updated: {lastFetchedTime}
             </span>
           )}
         </div>
       ) : (
-        <div className="bg-primary/5 border border-primary/20 text-foreground rounded-lg p-3 text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span>📁 Viewing verified software jobs stored in the Supabase database (<strong>{dbTotal}</strong> total).</span>
-            <span className="text-xs text-muted-foreground hidden sm:inline">• High-speed indexed responses</span>
-          </div>
-          <Button
-            size="sm"
-            onClick={handleSyncSoftwareJobs}
-            disabled={syncingSoftwareJobs}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs h-8 px-3"
-          >
-            {syncingSoftwareJobs ? '⏳ Syncing Software Jobs...' : '📥 Pull & Save Jobs to Database'}
-          </Button>
-        </div>
+        <p className="text-xs text-muted-foreground">{dbTotal} saved job records. Review source dates and requirements before applying.</p>
       )}
 
       {/* Controls & Search Toolbar */}
-      <section className="bg-card border rounded-xl p-4 shadow-sm space-y-4">
+      <section className="border-y border-border/60 py-4 space-y-4">
         {mode === 'live' && (
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div>
@@ -369,7 +355,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 disabled={liveLoading}
                 className="w-full sm:w-auto h-9 font-semibold"
               >
-                {liveLoading ? 'Fetching Jobs...' : '🔄 Fetch & Save Jobs'}
+                {liveLoading ? 'Fetching Jobs...' : ' Fetch & Save Jobs'}
               </Button>
               <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
                 <input
@@ -441,7 +427,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           {mode === 'db' && (
             <div className="flex gap-2">
               <Button variant="outline" className="h-9" onClick={() => { setDbPage(0); setReload(v => v + 1); }}>
-                Reload DB
+                Refresh jobs
               </Button>
               <Button
                 variant="default"
@@ -449,7 +435,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 onClick={handleSyncSoftwareJobs}
                 disabled={syncingSoftwareJobs}
               >
-                {syncingSoftwareJobs ? 'Syncing...' : '📥 Pull & Save'}
+                {syncingSoftwareJobs ? 'Syncing...' : ' Pull & Save'}
               </Button>
             </div>
           )}
@@ -545,7 +531,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                       </div>
 
                       {/* Action buttons */}
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Button size="sm" variant="outline" disabled={!!importingJob} onClick={async()=>{setImportingJob(job.content_hash);setError('');try{const result=await api<{jobId:string}>('/api/jobs/import',{method:'POST',body:JSON.stringify({provider:job.provider,board:job.board_slug,externalId:job.external_id})});router.push(`/dashboard/jobs/${result.jobId}${candidateId?'?candidateId='+encodeURIComponent(candidateId):''}`);}catch(error){setError((error as Error).message);}finally{setImportingJob('');}}}>{importingJob===job.content_hash?'Saving job…':isTechnicalRecruiter?'Review job':'Review & tailor resume'}</Button>
                         <Button
                           size="sm"
@@ -627,36 +613,12 @@ export function JobsBrowser({ provider }: { provider?: string }) {
             </span>
           </div>
 
-          {dbLoading ? <p role="status" className="p-8 text-center">Finding related jobs...</p> : !dbJobs.length ? (
+          {dbLoading ? <WorkspaceSkeleton rows={6}/> : !dbJobs.length ? (
             <p className="p-8 text-center border rounded-xl bg-card text-muted-foreground">
               {recommendation?.enabled ? 'No related roles found with these filters. Check your saved skills and target roles, or try different filters.' : 'No saved jobs found with these filters.'}
             </p>
           ) : (
-            dbJobs.map((j) => (
-              <article key={j.id} className="border rounded-xl p-4 bg-card flex justify-between items-center gap-4">
-                <div>
-                  <Link className="font-semibold underline hover:text-primary" href={`/dashboard/jobs/${j.id}${candidateId ? "?candidateId=" + encodeURIComponent(candidateId) : ""}`}>
-                    {j.title}
-                  </Link>
-                  <p className="text-sm text-muted-foreground">
-                    {j.company} - {j.location || 'Location unknown'}
-                  </p>
-                  <Badge variant="outline" className="mt-1 text-xs">Portal: {j.source?.provider === 'greenhouse' ? 'Greenhouse' : j.source?.provider === 'ashby' ? 'Ashby' : j.source?.provider || 'Unknown'}</Badge>
-                  <JobDates posted_at={j.posted_at} closes_at={j.closes_at} provider={j.source?.provider}/>
-                  {j.match_reasons?.map(reason => <p key={reason} className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">{reason}</p>)}
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {j.employment_type} - {j.state}
-                    {j.arrangements?.length ? ' - ' + j.arrangements.join(', ') : ''}
-                  </p>
-                </div>
-                <Link
-                  className="text-xs font-semibold bg-secondary text-secondary-foreground px-3 py-1.5 rounded-md hover:bg-secondary/80"
-                  href={`/dashboard/jobs/${j.id}${candidateId ? "?candidateId=" + encodeURIComponent(candidateId) : ""}`}
-                >
-                  Review and apply
-                </Link>
-              </article>
-            ))
+            <JobRoster jobs={dbJobs} candidateId={candidateId}/>
           )}
 
           <div className="flex gap-2">
@@ -672,7 +634,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
 
       {/* Recruiter Section: Public Job Sources */}
       {isRecruiter && (
-        <section className="rounded-xl border p-5 bg-card space-y-4">
+        <details className="border-t border-border/60 py-4"><summary className="text-sm font-medium">Manage saved job sources ({dbSources.length})</summary><section className="mt-4 space-y-4">
           <div>
             <h2 className="font-bold text-lg">Public Job Sources Directory</h2>
             <p className="text-sm text-muted-foreground">
@@ -766,7 +728,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
               ))}
             </div>
           )}
-        </section>
+        </section></details>
       )}
     </main>
   );

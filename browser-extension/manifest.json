@@ -1,44 +1,50 @@
 {
   "manifest_version": 3,
-  "name": "Recruiting Portal - Copilot & Application Capture",
-  "version": "2.1.0",
-  "description": "Automated application autofill, live capture, and submission logging across Dice, LinkedIn, Greenhouse, Ashby, and top ATS platforms.",
+  "name": "Recruiting Copilot — Nextkinlife LLC",
+  "version": "3.0.0",
+  "description": "Universal AI application autofill, live ATS capture, and role-tailored resume generation across all websites. Owned by Nextkinlife LLC.",
+  "author": "Nextkinlife LLC",
   "permissions": [
     "storage",
+    "unlimitedStorage",
     "alarms",
     "activeTab",
     "cookies"
   ],
   "host_permissions": [
-    "https://*/*",
-    "http://*/*"
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Recruiting Portal Copilot"
+    "default_title": "Recruiting Copilot — Nextkinlife LLC"
   },
   "content_scripts": [
     {
       "matches": [
-        "https://*.dice.com/*",
-        "https://*.linkedin.com/*",
-        "https://*.indeed.com/*",
-        "https://boards.greenhouse.io/*",
-        "https://job-boards.greenhouse.io/*",
-        "https://jobs.ashbyhq.com/*",
-        "https://jobs.lever.co/*",
-        "https://*.myworkdayjobs.com/*",
-        "https://*.smartrecruiters.com/*",
-        "https://*.icims.com/*",
-        "https://*.ziprecruiter.com/*"
+        "<all_urls>"
       ],
       "js": [
+        "resume-engine.js",
+        "resume-import.js",
         "content.js"
       ],
       "run_at": "document_idle"
+    }
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "scraping-rules.json",
+        "vendor/pdf.min.mjs",
+        "vendor/pdf.worker.min.mjs"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }

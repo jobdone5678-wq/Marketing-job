@@ -6,7 +6,7 @@ type WriteResult = { data: JobSubmission | null; error: string | null; isDuplica
 type InterviewDetails = { interview_time?: string; interview_mode?: string; interview_meeting_link?: string };
 const editableFields = ['submission_date','company_name','job_title','job_url','portal_source','job_location',
   'vendor_company','vendor_contact_name','vendor_contact_email','vendor_contact_phone','submitted_rate','client_pay_rate',
-  'status','interview_time','interview_mode','interview_meeting_link','notes'] as const;
+  'status','interview_time','interview_mode','interview_meeting_link','notes','applied_resume'] as const;
 function writeFields(input: Partial<JobSubmissionFormData>, creating = false) {
   const allowed: readonly string[] = creating ? [...editableFields,'candidate_id','job_id'] : editableFields;
   return Object.fromEntries(Object.entries(input).filter(([key,value]) => allowed.includes(key) && value !== undefined));

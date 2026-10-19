@@ -1,10 +1,13 @@
+if (typeof importScripts === 'function') importScripts('resume-engine.js','resume-workflows.js');
 let flushing;
 let serial = Promise.resolve();
 
 const supportedJobHosts = [
   'boards.greenhouse.io',
   'job-boards.greenhouse.io',
+  'greenhouse.io',
   'jobs.ashbyhq.com',
+  'ashbyhq.com',
   'dice.com',
   'www.dice.com',
   'linkedin.com',
@@ -12,17 +15,41 @@ const supportedJobHosts = [
   'indeed.com',
   'www.indeed.com',
   'jobs.lever.co',
+  'lever.co',
   'myworkdayjobs.com',
+  'workday.com',
   'smartrecruiters.com',
+  'jobs.smartrecruiters.com',
   'icims.com',
-  'ziprecruiter.com'
+  'ziprecruiter.com',
+  'bamboohr.com',
+  'workable.com',
+  'apply.workable.com',
+  'taleo.net',
+  'successfactors.com',
+  'successfactors.eu',
+  'paylocity.com',
+  'recruiting.paylocity.com',
+  'recruitingbypaycor.com',
+  'rippling-ats.com',
+  'ats.rippling.com',
+  'oraclecloud.com',
+  'clearcompany.com',
+  'breezy.hr',
+  'jobvite.com',
+  'jazzhr.com'
 ];
 
+// Universal support for all web domains (Owned by Nextkinlife LLC)
 function isSupportedHost(hostname) {
-  return supportedJobHosts.some(h => hostname === h || hostname.endsWith('.' + h));
+  if (!hostname) return false;
+  const h = String(hostname).toLowerCase();
+  if (h === 'newtab' || h.startsWith('chrome') || h.startsWith('devtools') || h.includes('extension')) return false;
+  return true;
 }
 
 function allowed(url, base) {
+  if (!url || !base) return false;
   try {
     const a = new URL(url), b = new URL(base);
     const path = b.pathname.replace(/\/application\/?$/, '').replace(/\/$/, '');
@@ -31,6 +58,7 @@ function allowed(url, base) {
     return false;
   }
 }
+
 
 async function flush() {
   if (flushing) return flushing;
@@ -132,25 +160,164 @@ async function receive(message, sender) {
     }
   }
 
+  if (message.type === 'save_uploaded_resume') {
+    if (!message.candidate || !message.candidate.full_name) return { error: 'Invalid candidate profile' };
+    const config = await chrome.storage.local.get(['uploadedCandidate','uploadedProfiles']);
+    const profiles = {...config.uploadedProfiles};
+    if (config.uploadedCandidate) profiles[config.uploadedCandidate.id] = {id:config.uploadedCandidate.id,full_name:config.uploadedCandidate.full_name,email:config.uploadedCandidate.email || ''};
+    const candidate = {...message.candidate};
+    const previous = candidate.email && Object.values(profiles).find(profile => profile.full_name.toLowerCase() === candidate.full_name.toLowerCase() && profile.email.toLowerCase() === candidate.email.toLowerCase());
+    if (previous) candidate.id = previous.id;
+    if (!String(candidate.id || '').startsWith('uploaded')) candidate.id = 'uploaded-resume-' + crypto.randomUUID();
+    profiles[candidate.id] = {id:candidate.id,full_name:candidate.full_name,email:candidate.email || ''};
+    await chrome.storage.local.set({ uploadedCandidate:candidate,uploadedProfiles:profiles });
+    return { success: true, candidate };
+  }
+
+  if (message.type === 'clear_uploaded_resume') {
+    await chrome.storage.local.remove(['uploadedCandidate']);
+    return { success: true };
+  }
+
   if (message.type === 'get_candidates') {
     if (sender?.tab && (!sender.url || !isSupportedHost(new URL(sender.url).hostname))) return { error: 'Unsupported page' };
-    const config = await chrome.storage.local.get(['origin', 'token', 'candidates', 'candidateRole', 'ownCandidateId']);
-    if (!config.token) return { error: 'Extension not connected' };
-    if (message.refresh || message.candidateId || !config.candidates || config.candidates.length === 0) {
+    const config = await chrome.storage.local.get(['origin', 'token', 'candidates', 'candidateRole', 'ownCandidateId', 'uploadedCandidate']);
+    const uploaded = config.uploadedCandidate ? [config.uploadedCandidate] : [];
+
+    // Case A: Connected to NextKinHR Recruiter Portal
+    if (config.token) {
+      if (message.refresh || message.candidateId || !config.candidates || config.candidates.length === 0) {
+        try {
+          const res = await fetch(config.origin + '/api/extension/candidates' + (message.candidateId ? '?candidateId=' + encodeURIComponent(message.candidateId) : ''), {
+            headers: { 'Authorization': 'Bearer ' + config.token }
+          });
+          const data = await res.json();
+          if (res.ok && data.candidates) {
+            const combined = [...data.candidates, ...uploaded.filter(u => !data.candidates.some(c => c.id === u.id))];
+            if (!message.candidateId) await chrome.storage.local.set({ candidates: data.candidates, candidateRole: data.role, ownCandidateId: data.ownCandidateId });
+            return { candidates: combined, role: data.role, ownCandidateId: data.ownCandidateId, connected: true };
+          }
+          await chrome.storage.local.remove(['candidates', 'candidateRole', 'ownCandidateId']);
+          return { error: data.error || 'Unable to load candidate profiles', candidates: uploaded, connected: true };
+        } catch { return { error: 'Unable to refresh candidate profiles', candidates: uploaded, connected: true }; }
+      }
+      const combined = [...(config.candidates || []), ...uploaded.filter(u => !(config.candidates || []).some(c => c.id === u.id))];
+      return { candidates: combined, role: config.candidateRole, ownCandidateId: config.ownCandidateId, connected: true };
+    }
+
+    // Case B: Standalone Mode (No NextKinHR Portal connection)
+    if (uploaded.length > 0) {
+      return {
+        candidates: uploaded,
+        role: 'standalone',
+        ownCandidateId: uploaded[0].id,
+        standalone: true,
+        connected: false
+      };
+    }
+
+    return {
+      candidates: [],
+      role: 'standalone',
+      ownCandidateId: null,
+      standalone: true,
+      connected: false,
+      message: 'Upload a resume to enable autofill & ATS matching without NextKinHR login.'
+    };
+  }
+
+  if (message.type === 'get_resume_file') {
+    const candidateId = message.candidateId;
+    if (!candidateId) return { error: 'Candidate ID is required' };
+    const config = await chrome.storage.local.get(['origin', 'token', 'uploadedCandidate']);
+
+    // Check if it's the locally uploaded resume
+    if (config.uploadedCandidate?.id === candidateId) {
+      const file = config.uploadedCandidate.resume_file;
+      if (file && file.base64) {
+        return {
+          success: true,
+          file: {
+            filename: file.filename || `${config.uploadedCandidate.full_name.replace(/[^a-zA-Z0-9]/g, '_')}_Resume.pdf`,
+            mimeType: file.mimeType || 'application/pdf',
+            base64: file.base64,
+            candidateName: config.uploadedCandidate.full_name
+          }
+        };
+      }
+      return {error:'These candidate details were provided as text. Generate a tailored DOCX for the current JD before attaching a resume.'};
+    }
+
+    if (!config.token) return { error: 'Extension not connected and no resume uploaded' };
+    try {
+      const res = await fetch(`${config.origin}/api/extension/resume-file?candidateId=${encodeURIComponent(candidateId)}`, {
+        headers: { 'Authorization': 'Bearer ' + config.token }
+      });
+      const data = await res.json();
+      if (!res.ok) return { error: data.error || 'Failed to fetch resume file' };
+      return { success: true, file: data };
+    } catch (err) {
+      return { error: err.message };
+    }
+  }
+
+  if (message.type === 'get_ai_answers') {
+    const config = await chrome.storage.local.get(['origin', 'token', 'uploadedCandidate']);
+    if (config.token) {
       try {
-        const res = await fetch(config.origin + '/api/extension/candidates' + (message.candidateId ? '?candidateId=' + encodeURIComponent(message.candidateId) : ''), {
-          headers: { 'Authorization': 'Bearer ' + config.token }
+        const res = await fetch(`${config.origin}/api/extension/ai-answers`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + config.token
+          },
+          body: JSON.stringify({
+            candidateId: message.candidateId,
+            jobTitle: message.jobTitle,
+            companyName: message.companyName,
+            jobDescription: message.jobDescription,
+            questions: message.questions
+          })
         });
         const data = await res.json();
-        if (res.ok && data.candidates) {
-          if (!message.candidateId) await chrome.storage.local.set({ candidates: data.candidates, candidateRole: data.role, ownCandidateId: data.ownCandidateId });
-          return { candidates: data.candidates, role: data.role, ownCandidateId: data.ownCandidateId };
-        }
-        await chrome.storage.local.remove(['candidates', 'candidateRole', 'ownCandidateId']);
-        return { error: data.error || 'Unable to load candidate profiles', candidates: [] };
-      } catch { return { error: 'Unable to refresh candidate profiles', candidates: [] }; }
+        if (res.ok) return data;
+      } catch (err) {}
     }
-    return { candidates: config.candidates || [], role: config.candidateRole, ownCandidateId: config.ownCandidateId };
+
+    // Standalone fallback: Answer based on uploaded candidate resume facts
+    const cand = (config.uploadedCandidate?.id === message.candidateId)
+      ? config.uploadedCandidate
+      : (config.candidates || []).find(c => c.id === message.candidateId) || config.uploadedCandidate;
+
+    if (cand && Array.isArray(message.questions)) {
+      const answers = {};
+      const exp = cand.total_experience_years || 5;
+      const skills = cand.primary_skills || 'Full stack development';
+      for (const q of message.questions) {
+        const key = q.id || q.label;
+        const lbl = (q.label || '').toLowerCase();
+        if (/year.*experience|how\s*many\s*years/i.test(lbl)) {
+          answers[key] = String(exp);
+        } else if (/sponsor|authoriz/i.test(lbl)) {
+          answers[key] = cand.authorized_in_usa ? 'Yes' : 'No';
+        } else if (/salary|compensation/i.test(lbl)) {
+          answers[key] = cand.expected_salary || 'Competitive market rate';
+        } else if (/notice|start/i.test(lbl)) {
+          answers[key] = cand.notice_period || 'Immediately';
+        } else if (/relocat/i.test(lbl)) {
+          answers[key] = cand.open_to_relocation ? 'Yes' : 'No';
+        } else {
+          answers[key] = `I have ${exp}+ years of professional experience working with ${skills}, delivering high quality scalable software solutions that align with team goals.`;
+        }
+      }
+      return { success: true, answers };
+    }
+    return { error: 'Failed to generate answers: No active candidate profile.' };
+  }
+
+  if (['tailor_resume','list_resume_versions','get_saved_resume','list_resume_profiles'].includes(message.type)) {
+    if (!globalThis.NextkinResumeWorkflows) return {error:'Reload the updated extension to enable resume generation.'};
+    return globalThis.NextkinResumeWorkflows.handle(message);
   }
 
   if (message.type === 'auto_submit') {

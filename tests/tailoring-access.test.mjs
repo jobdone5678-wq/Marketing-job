@@ -27,6 +27,16 @@ test('technical recruiters cannot generate tailored resumes through the API',asy
  const response=await load('src/app/api/tailored-resumes/route.ts').POST(new Request('https://portal.test/api/tailored-resumes',{method:'POST',body:JSON.stringify({candidateId:own,jobId:job,consent:true})}));
  assert.equal(response.status,403);assert.equal(calls.length,0);
 });
+
+test('private JD resumes cannot be listed or opened by the candidate owner',async()=>{
+ const id='10000000-0000-4000-8000-000000000304';
+ const fixture=fixtureDatabase({candidates:[{id:own,user_id:'actor',version:1}],tailored_resumes:[{id,candidate_id:own,candidate_version:1,brief_id:job,job_id:null,data:{sourceTitle:'Private brief'}},{id:job,candidate_id:own,candidate_version:1,brief_id:null,job_id:job}]});
+ const {load}=setup();
+ const privateLoad=moduleLoader({'@/lib/http/protected-route':load('src/lib/http/protected-route.ts'),'@/lib/db/admin':{database:()=>({from:fixture.from,rpc:async()=>({data:true,error:null})}),checkDb:error=>{if(error)throw error;},CaptureError,errorResponse:error=>Response.json({error:error.message},{status:error.status||500}),requireSameOrigin(){}},'@/lib/auth/require-profile':{requireProfile:async()=>({id:'actor',role:'client',status:'active'})}});
+ const list=await privateLoad('src/app/api/tailored-resumes/route.ts').GET(new Request('https://portal.test/api/tailored-resumes?candidateId='+own));
+ assert.equal((await list.json()).resumes.length,1);
+ await assert.rejects(()=>privateLoad('src/lib/tailored-resumes/repository.ts').getTailoredResume({id:'actor',role:'client'},id),/private|not found/i);
+});
 test('protected binary downloads retain bytes and response headers',async()=>{
  const {load}=setup();const {protectedRoute}=load('src/lib/http/protected-route.ts');
  const response=await protectedRoute(new Request('https://portal.test/download'),'candidate_or_staff',async()=>new Response(new Uint8Array([80,75,1,2]),{headers:{'Content-Type':'application/test'}}));

@@ -17,6 +17,10 @@ sources['sonner']='exports.toast={success(){},error(){}};';
 sources['lucide-react']="module.exports=new Proxy({},{get:()=>()=>null});";
 sources['@/components/submission-status-dialog']='exports.SubmissionStatusDialog=()=>null;';
 sources['@/components/application-answer-snapshot']='exports.ApplicationAnswerSnapshot=()=>null;';
+sources['@/components/application-evidence']='exports.CaptureState=()=>null;';
+sources['@/components/applied-resume-badge']='exports.AppliedResumeBadge=()=>null;';
+sources['@/components/candidate-combobox']='exports.CandidateCombobox=()=>null;';
+sources['@/components/workspace-ui']='exports.WorkspaceError=({children})=>require("react").createElement("div",null,children);exports.WorkspaceSkeleton=()=>null;';
 for(const [module,components] of Object.entries({button:{Button:'button'},input:{Input:'input'},badge:{Badge:'span'},card:{Card:'div',CardAction:'div',CardDescription:'p',CardFooter:'div',CardHeader:'div',CardTitle:'h3'},table:{Table:'table',TableBody:'tbody',TableCell:'td',TableHead:'th',TableHeader:'thead',TableRow:'tr'},select:{Select:'div',SelectContent:'div',SelectItem:'span',SelectTrigger:'button',SelectValue:'span'},sidebar:{Sidebar:'aside',SidebarContent:'div',SidebarFooter:'footer',SidebarHeader:'header',SidebarMenu:'div',SidebarMenuItem:'div'}}))sources['@/components/ui/'+module]=Object.entries(components).map(([name,tag])=>`exports.${name}=({children,variant,size,render,onValueChange,collapsible,...props})=>require('react').createElement('${tag}',props,children);`).join('');
 sources['@/lib/client']='exports.createClient=()=>({auth:{getUser:async()=>({data:{user:{id:"actor",email:"fixture@example.test"}}}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})},from:()=>({select:()=>({eq:()=>({single:async()=>({data:{role:window.fixtureRole,status:"active"}})})})})});';
 sources['@/components/nav-main']="exports.NavMain=({items})=>require('react').createElement('nav',null,...items.map(item=>require('react').createElement('a',{key:item.id,href:item.url},item.title)));";
@@ -37,6 +41,7 @@ test('submission dates filter rows, daily counts, status and exported report tog
  await page.getByLabel('From application date').fill('2026-10-15');
  await page.getByLabel('To application date').fill('2026-10-15');
  await dates.getByRole('status').getByText('2',{exact:true}).waitFor();
+ await dates.getByText(/Applications by date/).click();
  assert.equal(await dates.locator('tbody tr').count(),1);
  assert.equal(await dates.locator('tbody tr td').last().textContent(),'2');
  await page.getByRole('button',{name:'Applied',exact:true}).first().click();
@@ -60,5 +65,5 @@ for(const role of ['super_admin','recruiter','technical_recruiter','client'])tes
  await page.getByRole('link',{name:'Public Jobs',exact:true}).waitFor();
  assert.equal(await page.getByRole('link',{name:'Public Jobs',exact:true}).count(),1);
  assert.equal(await page.getByRole('link',{name:/Greenhouse Portals|Ashby Portals|Browse Jobs/}).count(),0);
- assert.equal(await page.getByRole('link',{name:'Analytics',exact:true}).count(),0);
+ assert.equal(await page.getByRole('link',{name:'Analytics',exact:true}).count(),1);
 });

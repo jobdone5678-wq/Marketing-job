@@ -61,7 +61,13 @@ BEGIN
  IF length(trim(p_title)) NOT BETWEEN 1 AND 200 OR length(p_description) NOT BETWEEN 20 AND 100000 THEN RAISE EXCEPTION 'Invalid JD'; END IF;
  INSERT INTO public.job_briefs(id,creator_id,title,company,description,object_path,filename,content_hash)
  VALUES(p_id,p_actor,trim(p_title),left(COALESCE(p_company,''),200),p_description,p_object_path,p_filename,p_hash)
- ON CONFLICT(creator_id,content_hash) DO UPDATE SET content_hash=EXCLUDED.content_hash RETURNING id INTO target;
+ ON CONFLICT(creator_id,content_hash) DO NOTHING RETURNING id INTO target;
+ -- Duplicate requests only read the committed binding; do not lock the brief
+ -- then its task in the opposite order from the worker's lease-checked save.
+ IF target IS NULL THEN
+  SELECT id,task_id INTO target,task FROM public.job_briefs WHERE creator_id=p_actor AND content_hash=p_hash;
+  RETURN jsonb_build_object('briefId',target,'taskId',task);
+ END IF;
  task:=public.enqueue_task(p_actor,'jd_extract',jsonb_build_object('briefId',target),'jd:'||target::text||':v1');
  UPDATE public.job_briefs SET task_id=task WHERE id=target;
  RETURN jsonb_build_object('briefId',target,'taskId',task);
@@ -104,7 +110,12 @@ BEGIN
  IF v_source_version IS NULL THEN RAISE EXCEPTION 'Job or reviewed JD unavailable'; END IF;
  INSERT INTO public.tailored_resumes(actor_id,candidate_id,candidate_version,job_id,brief_id,source_version,source_key)
  VALUES(p_actor,p_candidate,candidate.version,p_job,p_brief,v_source_version,v_source_key)
- ON CONFLICT(actor_id,candidate_id,candidate_version,source_key) DO UPDATE SET source_key=EXCLUDED.source_key RETURNING id INTO target;
+ ON CONFLICT(actor_id,candidate_id,candidate_version,source_key) DO NOTHING RETURNING id INTO target;
+ IF target IS NULL THEN
+  SELECT id,task_id INTO target,task FROM public.tailored_resumes
+   WHERE actor_id=p_actor AND candidate_id=p_candidate AND candidate_version=candidate.version AND source_key=v_source_key;
+  RETURN jsonb_build_object('resumeId',target,'taskId',task);
+ END IF;
  task:=public.enqueue_task(p_actor,'resume_tailor',jsonb_build_object('resumeId',target,'candidateId',p_candidate),'tailor:'||target::text||':v1');
  UPDATE public.tailored_resumes SET task_id=task WHERE id=target;
  RETURN jsonb_build_object('resumeId',target,'taskId',task);
@@ -141,7 +152,7 @@ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS
 DECLARE target public.tailored_resumes;
 BEGIN
  SELECT * INTO target FROM public.tailored_resumes WHERE id=p_resume FOR UPDATE;
- IF target.id IS NULL OR NOT EXISTS(SELECT 1 FROM public.profiles WHERE id=p_actor AND status='active' AND role IN('client','recruiter','super_admin')) OR NOT public.candidate_actor_can_access(p_actor,target.candidate_id) THEN RAISE EXCEPTION 'Candidate access denied'; END IF;
+ IF target.id IS NULL OR NOT EXISTS(SELECT 1 FROM public.profiles WHERE id=p_actor AND status='active' AND role IN('client','recruiter','super_admin') AND (target.brief_id IS NULL OR role='super_admin')) OR NOT public.candidate_actor_can_access(p_actor,target.candidate_id) THEN RAISE EXCEPTION 'Candidate access denied'; END IF;
  PERFORM 1 FROM public.candidates WHERE id=target.candidate_id FOR SHARE;
  IF target.job_id IS NOT NULL THEN PERFORM 1 FROM public.jobs WHERE id=target.job_id FOR SHARE; ELSE PERFORM 1 FROM public.job_briefs WHERE id=target.brief_id FOR SHARE; END IF;
  IF target.revision<>p_expected OR target.status NOT IN('review','ready') OR NOT public.tailored_resume_is_current(p_resume) THEN RAISE EXCEPTION 'Resume or source changed; reload or regenerate'; END IF;

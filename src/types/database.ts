@@ -124,12 +124,26 @@ export interface JobSubmission {
   capture_status?: 'started' | 'in_progress' | 'submit_attempted' | 'submitted' | 'confirmed' | 'failed' | null;
   email_confirmed_at?: string | null;
 
+  // Applied Resume Snapshot
+  applied_resume?: AppliedResumeSnapshot | null;
+
   created_at: string;
   updated_at: string;
 
   // Joined fields for display
   candidate?: Candidate;
   recruiter?: UserProfile;
+}
+
+export interface AppliedResumeSnapshot {
+  filename: string;
+  mimeType: string;
+  base64?: string | null;
+  markdown?: string | null;
+  isTailored?: boolean;
+  matchScore?: number | null;
+  appliedAt?: string | null;
+  resumeId?: string | null;
 }
 
 export interface CandidateStaffAssignment {

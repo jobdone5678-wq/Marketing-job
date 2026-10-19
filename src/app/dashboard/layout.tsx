@@ -23,7 +23,7 @@ export default function DashboardLayout({
       <SidebarInset className="h-svh min-h-0 min-w-0 overflow-hidden flex flex-col">
         <SiteHeader />
         <RoleNotificationHandler />
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/20">
+        <div id="workspace-content" tabIndex={-1} className="portal-workspace min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/20">
           {children}
         </div>
       </SidebarInset>

@@ -6,6 +6,20 @@ let browser,tailoring,jd;
 before(async()=>{browser=await chromium.launch({headless:true});tailoring=await browserBundle('./src/components/tailored-resume-panel.tsx',`createRoot(document.getElementById('root')).render(<Component.TailoredResumePanel candidateId="candidate" candidateName="Reviewed Candidate" jobId="job"/>);`);jd=await browserBundle('./src/components/job-briefs-workspace.tsx',`createRoot(document.getElementById('root')).render(<Component.JobBriefsWorkspace/>);`);});
 after(async()=>{await browser?.close();});
 async function pageFor(t,handler){const page=await browser.newPage();t.after(()=>page.close());await page.route('https://portal.test/**',async route=>{const path=new URL(route.request().url()).pathname;if(path.startsWith('/api/'))return handler(route,path);return route.fulfill({body:'<div id="root"></div>',contentType:'text/html'});});await page.goto('https://portal.test/');return page;}
+
+test('changing the selected candidate hides previous resume history while the new list loads',async t=>{
+ let release;const gate=new Promise(resolve=>{release=resolve;});t.after(()=>release());
+ const page=await pageFor(t,async route=>{
+  const candidate=new URL(route.request().url()).searchParams.get('candidateId');
+  if(candidate==='second')await gate;
+  return route.fulfill({json:{resumes:candidate==='first'?[{id:'resume',candidate_id:'first',job_id:'job',status:'ready',revision:2}]:[]}});
+ });
+ const bundle=await browserBundle('./src/components/tailored-resume-panel.tsx',`createRoot(document.getElementById('root')).render(<Component.TailoredResumePanel candidates={[{id:'first',full_name:'First'},{id:'second',full_name:'Second'}]} jobId="job"/>);`);
+ await page.addScriptTag({content:bundle});await page.getByLabel('Candidate for tailored resume').selectOption('first');
+ await page.getByText('Recent saved versions for this candidate and job (1)',{exact:true}).waitFor();
+ await page.getByLabel('Candidate for tailored resume').selectOption('second');
+ assert.equal(await page.getByText('Recent saved versions for this candidate and job (1)',{exact:true}).count(),0);release();
+});
 test('tailored resume requires AI consent, factual review and saved edits before DOCX download',async t=>{
  let resume={id:'resume',candidate_id:'candidate',job_id:'job',task_id:'task',status:'review',content:'Reviewed Candidate\nSKILLS\nPython',revision:1,reviewed_revision:null,stale:false,model:'test'};
  const writes=[];

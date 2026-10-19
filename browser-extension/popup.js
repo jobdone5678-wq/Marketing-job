@@ -1,3 +1,4 @@
+// Nextkinlife Recruiting Copilot - Popup Controller
 const connectedCard = document.getElementById('connected-card');
 const disconnectedCard = document.getElementById('disconnected-card');
 const userNameEl = document.getElementById('user-name');
@@ -9,6 +10,23 @@ const codeInput = document.getElementById('code-input');
 const toastEl = document.getElementById('toast');
 const manualToggle = document.getElementById('toggle-manual');
 const manualSection = document.getElementById('manual-section');
+const toggleConnectPanel = document.getElementById('toggle-connect-panel');
+const connectPanel = document.getElementById('connect-panel');
+
+// Resume Upload Elements
+const resumeDropzone = document.getElementById('resume-dropzone');
+const resumeFileInput = document.getElementById('resume-file-input');
+const candidateActiveCard = document.getElementById('candidate-active-card');
+const resumeDropzoneWrap = document.getElementById('resume-dropzone-wrap');
+const cvNameEl = document.getElementById('cv-name');
+const cvTitleEl = document.getElementById('cv-title');
+const cvContactEl = document.getElementById('cv-contact');
+const cvLocationEl = document.getElementById('cv-location');
+const cvFileEl = document.getElementById('cv-file');
+const cvSkillsEl = document.getElementById('cv-skills');
+const btnChangeResume = document.getElementById('btn-change-resume');
+const btnRemoveResume = document.getElementById('btn-remove-resume');
+const resumeModePill = document.getElementById('resume-mode-pill');
 
 function showToast(msg, isError = false) {
   toastEl.textContent = msg;
@@ -18,28 +36,106 @@ function showToast(msg, isError = false) {
   }, 5000);
 }
 
+// Client-Side Resume Text Extractor (PDF, DOCX, TXT, JSON)
+async function extractTextFromFile(file) {
+  return globalThis.NextkinResumeImport.extract(file);
+}
+
+// Convert File to Base64
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      const base64 = dataUrl.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// Process Uploaded Resume File
+async function handleResumeUpload(file) {
+  if (!file) return;
+  showToast('📄 Reading & parsing ' + file.name + '...');
+
+  try {
+    const { text } = await extractTextFromFile(file);
+    const candidate = globalThis.NextkinResume.candidateFromText(text,file.name);
+    const previous = (await chrome.storage.local.get('uploadedCandidate')).uploadedCandidate;
+    if (previous?.full_name === candidate.full_name && previous?.email === candidate.email) candidate.id = previous.id;
+    candidate.resume_file = {filename:file.name,mimeType:file.type || 'application/octet-stream',base64:await fileToBase64(file)};
+
+    // Save candidate locally
+    const saved = await chrome.runtime.sendMessage({ type: 'save_uploaded_resume', candidate });
+    if (saved?.error) throw new Error(saved.error);
+    showToast(`✨ Active resume loaded for ${candidate.full_name}!`);
+    await renderState();
+  } catch (err) {
+    console.error('Resume upload error:', err);
+    showToast('Failed to parse resume: ' + err.message, true);
+  }
+}
+
+// Render popup state
 async function renderState() {
-  const data = await chrome.storage.local.get(['origin', 'token', 'user', 'candidates']);
-  if (data.token && data.user) {
+  const data = await chrome.storage.local.get(['origin', 'token', 'user', 'candidates', 'uploadedCandidate']);
+  const isConnected = Boolean(data.token && data.user);
+  const uploaded = data.uploadedCandidate;
+
+  // 1. Resume / Candidate Card State
+  if (uploaded && uploaded.full_name) {
+    candidateActiveCard.style.display = 'block';
+    resumeDropzoneWrap.style.display = 'none';
+
+    cvNameEl.textContent = uploaded.full_name;
+    cvTitleEl.textContent = uploaded.current_job_title || 'Uploaded candidate resume';
+    cvContactEl.textContent = [uploaded.email, uploaded.phone].filter(Boolean).join(' · ') || 'No contact provided';
+    cvLocationEl.textContent = [uploaded.current_city, uploaded.current_state].filter(Boolean).join(', ') || 'Location not supplied';
+    cvFileEl.textContent = uploaded.resume_file?.filename ? `Source file: ${uploaded.resume_file.filename}` : 'Source details saved · Generate a DOCX on the job page';
+
+    const skills = uploaded.all_skills || (uploaded.primary_skills ? uploaded.primary_skills.split(/[,;]/).map(s => s.trim()) : []);
+    cvSkillsEl.replaceChildren();
+    for (const skill of skills.slice(0,7)) {const chip = document.createElement('span');chip.className = 'skill-chip';chip.textContent = skill;cvSkillsEl.appendChild(chip);}
+  } else {
+    candidateActiveCard.style.display = 'none';
+    resumeDropzoneWrap.style.display = 'block';
+  }
+
+  // 2. NextKinHR Portal Connection State
+  if (isConnected) {
     connectedCard.style.display = 'block';
     disconnectedCard.style.display = 'none';
+    resumeModePill.textContent = 'NextKinHR Connected';
+    resumeModePill.style.color = '#34d399';
+    resumeModePill.style.background = 'rgba(16, 185, 129, 0.15)';
+
     userNameEl.textContent = data.user.name || data.user.email;
     userEmailEl.textContent = data.user.email;
     portalUrlEl.textContent = data.origin || 'http://localhost:3000';
     candidateCountEl.textContent = String((data.candidates || []).length);
+
     try {
-      const status=await chrome.runtime.sendMessage({type:'get_status'});
-      document.getElementById('sync-status').textContent=status.manualReviewCount?`${status.manualReviewCount} application update(s) need manual review in the portal. Evidence is saved locally; automatic retries are paused for those updates.`:status.pendingCount?`${status.pendingCount} application update(s) waiting to sync. Reconnect to retry.`:'Application updates synced.';
+      const status = await chrome.runtime.sendMessage({ type: 'get_status' });
+      document.getElementById('sync-status').textContent = status.manualReviewCount
+        ? `${status.manualReviewCount} application update(s) need manual review in the portal.`
+        : status.pendingCount
+          ? `${status.pendingCount} application update(s) waiting to sync.`
+          : 'Application updates synced to NextKinHR.';
     } catch {
-      document.getElementById('sync-status').textContent='Sync status unavailable. Reconnect to retry.';
+      document.getElementById('sync-status').textContent = 'Sync status ready.';
     }
   } else {
     connectedCard.style.display = 'none';
     disconnectedCard.style.display = 'block';
+    resumeModePill.textContent = uploaded ? 'Standalone Active' : 'Standalone Mode';
+    resumeModePill.style.color = '#38bdf8';
+    resumeModePill.style.background = 'rgba(56, 189, 248, 0.15)';
+
     if (data.origin) {
       originInput.value = data.origin;
     } else {
-      // Auto-detect if user has the portal open in active tab
       try {
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (activeTab?.url) {
@@ -53,13 +149,55 @@ async function renderState() {
   }
 }
 
-// 1-Click Auto Connect (Directly queries portal and uses active cookies)
+// Dropzone & File Input Events
+resumeDropzone.addEventListener('click', () => resumeFileInput.click());
+btnChangeResume.addEventListener('click', () => resumeFileInput.click());
+
+resumeFileInput.addEventListener('change', (e) => {
+  if (e.target.files && e.target.files[0]) {
+    handleResumeUpload(e.target.files[0]);
+  }
+});
+
+btnRemoveResume.addEventListener('click', async () => {
+  await chrome.runtime.sendMessage({ type: 'clear_uploaded_resume' });
+  showToast('Source resume removed. Saved job versions remain in history.');
+  await renderState();
+});
+
+// Drag & Drop
+resumeDropzone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  resumeDropzone.classList.add('dragover');
+});
+resumeDropzone.addEventListener('dragleave', () => resumeDropzone.classList.remove('dragover'));
+resumeDropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  resumeDropzone.classList.remove('dragover');
+  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+    handleResumeUpload(e.dataTransfer.files[0]);
+  }
+});
+
+// Toggle Connect Portal Panel
+toggleConnectPanel.addEventListener('click', () => {
+  const current = connectPanel.style.display;
+  connectPanel.style.display = current === 'block' ? 'none' : 'block';
+  toggleConnectPanel.textContent = current === 'block' ? 'Connect Portal' : 'Hide Connect Form';
+});
+
+// Manual Pairing Toggle
+manualToggle.addEventListener('click', () => {
+  const current = manualSection.style.display;
+  manualSection.style.display = current === 'block' ? 'none' : 'block';
+});
+
+// 1-Click Auto Connect (NextKinHR)
 document.getElementById('btn-auto-connect').addEventListener('click', async () => {
   const origin = (originInput.value.trim() || 'http://localhost:3000').replace(/\/+$/, '');
   showToast('Connecting to ' + origin + '...');
 
   try {
-    // 1. Collect cookies for the portal origin
     let cookiesList = [];
     try {
       const foundCookies = await chrome.cookies.getAll({ url: origin });
@@ -68,7 +206,6 @@ document.getElementById('btn-auto-connect').addEventListener('click', async () =
       console.warn('Could not read cookies via chrome.cookies:', cookieErr);
     }
 
-    // 2. Call quick-pair endpoint
     const response = await fetch(origin + '/api/extension/quick-pair', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -81,7 +218,6 @@ document.getElementById('btn-auto-connect').addEventListener('click', async () =
       throw new Error(data.error || 'Failed to connect. Please sign in to the portal at ' + origin + ' first.');
     }
 
-    // 3. Save connection state locally
     await chrome.storage.local.set({
       origin,
       token: data.token,
@@ -89,7 +225,6 @@ document.getElementById('btn-auto-connect').addEventListener('click', async () =
       user: data.user
     });
 
-    // 4. Pre-fetch bench candidates
     try {
       const cRes = await fetch(origin + '/api/extension/candidates', {
         headers: { Authorization: 'Bearer ' + data.token }
@@ -134,17 +269,11 @@ document.getElementById('btn-open-portal').addEventListener('click', async () =>
   chrome.tabs.create({ url: origin + '/dashboard/submissions' });
 });
 
-// Disconnect
+// Disconnect NextKinHR
 document.getElementById('btn-disconnect').addEventListener('click', async () => {
   await chrome.storage.local.remove(['token', 'credentialId', 'user', 'candidates', 'candidateRole', 'ownCandidateId', 'outbox']);
-  showToast('Disconnected locally.');
+  showToast('Disconnected from NextKinHR.');
   await renderState();
-});
-
-// Manual Pairing Section Toggle
-manualToggle.addEventListener('click', () => {
-  const current = manualSection.style.display;
-  manualSection.style.display = current === 'block' ? 'none' : 'block';
 });
 
 // Manual Pairing with 5-minute code
@@ -170,17 +299,6 @@ document.getElementById('btn-manual-pair').addEventListener('click', async () =>
       credentialId: data.credentialId
     });
     codeInput.value = '';
-    // Pre-fetch profile & candidates
-    try {
-      const cRes = await fetch(origin + '/api/extension/candidates', {
-        headers: { Authorization: 'Bearer ' + data.token }
-      });
-      if (cRes.ok) {
-        const cData = await cRes.json();
-        await chrome.storage.local.set({ candidates: cData.candidates || [] });
-      }
-    } catch {}
-
     showToast('Pairing successful!');
     await renderState();
   } catch (err) {

@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { SubmissionForm } from "@/components/submission-form";
 import { getSubmissionById } from "@/lib/submissions";
 import type { JobSubmission } from "@/types/database";
-import { RefreshCwIcon } from "lucide-react";
+import {WorkspaceSkeleton} from "@/components/workspace-ui";
 import { toast } from "sonner";
 
 export default function EditSubmissionPage() {
@@ -38,10 +38,7 @@ export default function EditSubmissionPage() {
 
   if (loading) {
     return (
-      <div className="flex h-96 flex-col items-center justify-center gap-3">
-        <RefreshCwIcon className="size-6 animate-spin text-primary" />
-        <span className="text-xs text-muted-foreground">Loading submission details...</span>
-      </div>
+      <div className="portal-page"><WorkspaceSkeleton/></div>
     );
   }
 

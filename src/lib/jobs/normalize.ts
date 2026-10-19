@@ -32,6 +32,10 @@ export function normalizeSnapshot(source:{provider:string;company:string},input:
   }
 
   const jobs:NormalizedJob[]=[];let invalid=false;const seen=new Set<string>();
+  const rootObj = Array.isArray(input) ? {} : object(input);
+  if (source.provider === 'greenhouse' && rawList.length === 0 && (!rootObj.meta || typeof object(rootObj.meta).total !== 'number')) {
+    invalid = true;
+  }
   for(const value of rawList){
     const row=object(value);
     if(source.provider==='ashby'&&row.isListed===false)continue;

@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { CandidateForm } from "@/components/candidate-form";
 import { getCandidateById } from "@/lib/candidates";
 import type { Candidate } from "@/types/database";
-import { RefreshCwIcon } from "lucide-react";
+import {WorkspaceSkeleton} from "@/components/workspace-ui";
 import { toast } from "sonner";
 
 export default function EditCandidatePage() {
@@ -38,10 +38,7 @@ export default function EditCandidatePage() {
 
   if (loading) {
     return (
-      <div className="flex h-96 flex-col items-center justify-center gap-3">
-        <RefreshCwIcon className="size-6 animate-spin text-primary" />
-        <span className="text-xs text-muted-foreground">Loading candidate profile...</span>
-      </div>
+      <div className="portal-page"><WorkspaceSkeleton/></div>
     );
   }
 

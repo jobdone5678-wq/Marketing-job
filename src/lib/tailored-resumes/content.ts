@@ -24,9 +24,9 @@ export function buildTailoredContent(candidate:Profile,job:{title:string;company
  const skills=[...new Set([...selected.skillFactIds,...catalog.filter(f=>f.kind==='skill').map(f=>f.id)])].map(id=>byId.get(id)!.text);
  if(skills.length)lines.push('','SKILLS',skills.join(' · '));
  const employment=rows(facts.employment_history);
- if(employment.length){lines.push('','EXPERIENCE');for(const row of employment){lines.push([text(row.title),text(row.employer)].filter(Boolean).join(' | '),[text(row.start),text(row.end)].filter(Boolean).join(' – '));if(text(row.evidence))lines.push('- '+text(row.evidence));lines.push('');}}
+ if(employment.length){lines.push('','EXPERIENCE');for(const row of employment){lines.push([text(row.title),text(row.employer)].filter(Boolean).join(' | '));const dateRange=[text(row.start),text(row.end)].filter(Boolean).join(' – ');if(dateRange)lines.push(dateRange);if(text(row.evidence))lines.push('- '+text(row.evidence));lines.push('');}}
  const education=rows(facts.education_history);
- if(education.length){lines.push('','EDUCATION');for(const row of education){lines.push([text(row.degree),text(row.institution)].filter(Boolean).join(' | '));if(text(row.evidence))lines.push(text(row.evidence));}}
+ if(education.length){lines.push('','EDUCATION');const seen=new Set<string>();for(const row of education){const key=[text(row.degree),text(row.institution)].filter(Boolean).join('|').toLowerCase();if(seen.has(key))continue;seen.add(key);const degreeInst=[text(row.degree),text(row.institution)].filter(Boolean).join(' | ');const year=text(row.year)||text(row.graduation_year)||text(row.end);lines.push(year?`${degreeInst} | ${year}`:degreeInst);if(text(row.evidence)&&text(row.evidence).toLowerCase()!==text(row.degree).toLowerCase())lines.push(text(row.evidence));}}
  else if(text(facts.highest_qualification))lines.push('','EDUCATION',[text(facts.highest_qualification),text(facts.university_name),text(facts.graduation_year)].filter(Boolean).join(' | '));
  if(text(facts.certifications))lines.push('','CERTIFICATIONS',text(facts.certifications));
  return {content:lines.join('\n').trim(),selectedFactIds:[...new Set([...selected.summaryFactIds,...selected.skillFactIds])],facts:catalog};
