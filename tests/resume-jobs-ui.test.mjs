@@ -10,9 +10,10 @@ before(async () => { browser = await chromium.launch({ headless: true }); });
 after(async () => { await browser?.close(); });
 
 const sources = await browserReactModules();
-for (const [name, file] of [['@/components/public-job-catalog', '../src/components/public-job-catalog.tsx'], ['@/lib/public-directory', '../src/lib/public-directory.ts'], ['@/components/job-dates', '../src/components/job-dates.tsx'], ['jobs-browser', '../src/components/jobs-browser.tsx'], ['@/lib/candidates', '../src/lib/candidates.ts'], ['@/lib/api-client', '../src/lib/api-client.ts']]) {
+for (const [name, file] of [['@/components/public-job-catalog', '../src/components/public-job-catalog.tsx'], ['@/lib/public-directory', '../src/lib/public-directory.ts'], ['@/components/job-dates', '../src/components/job-dates.tsx'], ['jobs-browser', '../src/components/jobs-browser.tsx'], ['@/components/job-roster', '../src/components/job-roster.tsx'], ['@/lib/candidates', '../src/lib/candidates.ts'], ['@/lib/api-client', '../src/lib/api-client.ts']]) {
   sources[name] = ts.transpileModule(await readFile(new URL(file, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
 }
+sources['@/components/workspace-ui']='exports.WorkspaceSkeleton=()=>null;';
 sources['./api-client'] = "module.exports=require('@/lib/api-client');";
 sources['@/hooks/use-user-profile'] = 'exports.useUserProfile=()=>window.fixtureProfile;';
 sources['next/link'] = "module.exports=({children,...props})=>require('react').createElement('a',props,children);";
@@ -58,6 +59,7 @@ async function jobsPage(t, { role = 'client', requiresProfile = false, liveJob=f
   await page.goto('https://portal.test/');
   await page.evaluate(role => { window.fixtureProfile = { isRecruiter: role === 'recruiter', isTechnicalRecruiter:role==='technical_recruiter', isClient: role === 'client', loading: false }; }, role);
   await page.addScriptTag({ content: browserModuleScript(sources, "require('react-dom/client').createRoot(document.getElementById('root')).render(require('react').createElement(require('jobs-browser').JobsBrowser));") });
+  await page.getByText('Company boards & source discovery',{exact:true}).click();
   return { page, requests, sourceWrites, liveRequests, jobFilters,jobImports };
 }
 

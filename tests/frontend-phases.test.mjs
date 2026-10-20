@@ -19,26 +19,11 @@ test('application evidence separates success observation from confirmation and e
  assert.match(await page.locator('body').innerText(),/Attempt 2/);
  assert.equal(await page.getByText('Confirmed',{exact:true}).count(),0);
 });
-test('analytics uses saved record counts, exposes chart data and keeps zero denominators unknown',async t=>{
- const page=await mount(t,'./src/app/dashboard/analytics/page.tsx','createRoot(document.getElementById("root")).render(<Component.default/>);',{'/api/dashboard':{role:'recruiter',metrics:{candidates:0,submissions:0,confirmed:0,vendors:0,activity:[]}}},390);
- await page.getByRole('heading',{name:'Recruiting analytics'}).waitFor();
- await page.getByText('No saved activity in this period.',{exact:true}).waitFor();
- assert.equal(await page.getByText(/100%|NaN/).count(),0);
- assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
-});
 test('billing does not invent a subscription or payment action when no billing contract exists',async t=>{
  const page=await mount(t,'./src/app/dashboard/billing/page.tsx','createRoot(document.getElementById("root")).render(<Component.default/>);',{});
  await page.getByRole('heading',{name:'SaaS billing'}).waitFor();
  await page.getByText('Subscription data is not connected',{exact:true}).waitFor();
  assert.equal(await page.getByRole('button',{name:/pay|upgrade|checkout/i}).count(),0);
-});
-test('capture review cancellation never records a failure or submits an observation',async t=>{
- const page=await mount(t,'./src/app/dashboard/application-capture/page.tsx','createRoot(document.getElementById("root")).render(<Component.default/>);',{'/api/application-intents':{intents:[{id:'intent',submission_id:'s1',attempt:1,candidate:{full_name:'Alex Morgan'},job:{title:'Engineer',company:'Example Systems',application_url:'https://jobs.example.test/1'},submission:{capture_status:'submit_attempted',status:'Applied'}}]},'/api/extension/credentials':{credentials:[]}});
- const writes=[];page.on('request',request=>{if(request.method()==='POST')writes.push(request.url());});
- await page.getByRole('button',{name:'Review / attest outcome',exact:true}).click();
- assert.equal(await page.getByRole('dialog').count(),1);
- await page.getByRole('button',{name:'Cancel',exact:true}).click();
- assert.equal(writes.length,0);
 });
 test('technical recruiters receive candidate documents without unsupported tailoring controls',async t=>{
  const page=await mount(t,'./src/app/dashboard/resumes/page.tsx','createRoot(document.getElementById("root")).render(<Component.default/>);',{'/api/candidates':{candidates:[{id:'c1',full_name:'Alex Morgan',provenance_status:'confirmed'}],hasMore:false},'/api/settings':{profile:{role:'technical_recruiter'}},'/api/jobs':{jobs:[],hasMore:false}});

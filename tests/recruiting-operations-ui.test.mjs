@@ -5,7 +5,7 @@ import {browserBundle,browserStyles} from './helpers/browser-bundle.mjs';
 let browser;
 before(async()=>{browser=await chromium.launch({headless:true});});
 after(async()=>{await browser?.close();});
-async function mount(t,entry,fixtures){const page=await browser.newPage();t.after(()=>page.close());await page.route('https://portal.test/**',route=>{const path=new URL(route.request().url()).pathname;return path in fixtures?(typeof fixtures[path]==='function'?fixtures[path](route):route.fulfill({json:fixtures[path]})):route.fulfill({contentType:'text/html',body:'<div id="root"></div>'});});await page.goto('https://portal.test/');await page.addStyleTag({content:await browserStyles()});const component=entry.includes("require('placements')")?'./src/components/placements-workspace.tsx':'./src/app/dashboard/application-capture/page.tsx';const expression=entry.replaceAll("require('react-dom/client').createRoot",'createRoot').replaceAll("require('react').createElement",'React.createElement').replaceAll("require('placements').PlacementsWorkspace",'Component.PlacementsWorkspace').replaceAll("require('capture').default",'Component.default');await page.addScriptTag({content:await browserBundle(component,expression)});return page;}
+async function mount(t,entry,fixtures){const page=await browser.newPage();t.after(()=>page.close());await page.route('https://portal.test/**',route=>{const path=new URL(route.request().url()).pathname;return path in fixtures?(typeof fixtures[path]==='function'?fixtures[path](route):route.fulfill({json:fixtures[path]})):route.fulfill({contentType:'text/html',body:'<div id="root"></div>'});});await page.goto('https://portal.test/');await page.addStyleTag({content:await browserStyles()});const component='./src/components/placements-workspace.tsx';const expression=entry.replaceAll("require('react-dom/client').createRoot",'createRoot').replaceAll("require('react').createElement",'React.createElement').replaceAll("require('placements').PlacementsWorkspace",'Component.PlacementsWorkspace');await page.addScriptTag({content:await browserBundle(component,expression)});return page;}
 
 test('staff can see their own salary period with the inclusive end date and payment history',async t=>{
  const page=await mount(t,"require('react-dom/client').createRoot(document.getElementById('root')).render(require('react').createElement(require('placements').PlacementsWorkspace,{initialPanel:'salary'}));",{
@@ -17,16 +17,6 @@ test('staff can see their own salary period with the inclusive end date and paym
  if(await page.getByRole('button',{name:'Payments',exact:true}).count())await page.getByRole('button',{name:'Payments',exact:true}).click();
  await page.getByText('receipt-123',{exact:true}).waitFor();
  assert.equal(await page.getByRole('button',{name:'Record payment',exact:true}).count(),0);
-});
-
-test('application capture exposes the answer snapshot linked to its submission',async t=>{
- const page=await mount(t,"require('react-dom/client').createRoot(document.getElementById('root')).render(require('react').createElement(require('capture').default));",{
-  '/api/application-intents':{intents:[{id:'intent',submission_id:'submission',attempt:1,candidate:{full_name:'Candidate'},job:{title:'Engineer',company:'Fixture',application_url:'https://jobs.ashbyhq.com/fixture/role'},submission:{capture_status:'submitted',status:'Applied',email_confirmed_at:null}}]},
-  '/api/extension/credentials':{credentials:[]},
-  '/api/submissions/submission/answers':{snapshots:[{id:'snapshot',attempt:1,revision:1,portal:'jobs.ashbyhq.com',portal_url:'https://jobs.ashbyhq.com/fixture/role',observed_at:'2026-10-11T00:00:00Z',answers:[{key:'email',label:'Email',value:'final-edited@example.test'}]}]}
- });
- await page.getByText('View captured application answers',{exact:true}).click({timeout:3000});
- await page.getByText('final-edited@example.test',{exact:true}).waitFor();
 });
 
 test('admin reviews a partial salary, records external payment and refreshes dashboard data',async t=>{

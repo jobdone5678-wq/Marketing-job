@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { ArrowUpRight, BriefcaseBusiness, CalendarClock, CalendarCheck2, ClipboardList, RefreshCw } from 'lucide-react';
+import { ArrowUpRight, BriefcaseBusiness, CalendarClock, CalendarCheck2, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -32,7 +30,6 @@ function CurrencyTotals({ rows, label }: { rows: Money; label: string }) {
     return <div><p className="text-xs text-muted-foreground">{label}</p>{rows.length ? rows.map(row => <p key={row.currency} className="mt-1 text-lg font-semibold tabular-nums">{formatMoney(row.amount, row.currency)}</p>) : <p className="mt-1 text-lg font-semibold">—</p>}</div>;
 }
 export function AdminOperationsDashboard() {
-    const router = useRouter();
     const [viewVersion, setViewVersion] = useState(0);
     const [data, setData] = useState<Ops | null>(null), [error, setError] = useState(''), [busy, setBusy] = useState(''), [tab, setTab] = useState<Panel>('overview'), [updated, setUpdated] = useState<Date | null>(null), [refreshing, setRefreshing] = useState(false), [search, setSearch] = useState(''), [placementStatus, setPlacementStatus] = useState(''), [focusId, setFocusId] = useState<string | undefined>();
     async function refresh() { setRefreshing(true); try { setData(await api<Ops>('/api/admin/operations')); setUpdated(new Date()); setError(''); } catch (e) { setError((e as Error).message); } finally { setRefreshing(false); } }
@@ -49,11 +46,11 @@ export function AdminOperationsDashboard() {
         {data && <Tabs value={tab} onValueChange={value => { setFocusId(undefined); setTab(value as Panel); }} className="gap-5">
             <div className="overflow-x-auto border-b border-border"><TabsList variant="line" aria-label="Operations sections" className="h-11 gap-3">{panels.map(([value, label]) => <TabsTrigger key={value} value={value} className="px-3 pb-3">{label}{value === 'team' && (data.counts.pendingStaff ?? data.pendingStaff.length) > 0 && <span className="rounded-full bg-primary/10 px-1.5 text-xs text-primary">{data.counts.pendingStaff ?? data.pendingStaff.length}</span>}</TabsTrigger>)}</TabsList></div>
             <TabsContent value="overview" className="space-y-5">
-                <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">{[
-                    ['Active placements', data.counts.activePlacements, BriefcaseBusiness, 'placements'], ['Joining in 30 days', data.counts.joinsNext30Days, CalendarCheck2, 'placements'], ['Ending in 30 days', data.counts.endsNext30Days, CalendarClock, 'placements'], ['Capture follow-up', data.counts.captureIssues, ClipboardList, 'capture']
-                ].map(([label, value, Icon, destination]) => { const MetricIcon = Icon as typeof BriefcaseBusiness; return <button key={String(label)} className="group rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 focus-visible:outline-2 focus-visible:outline-primary" onClick={() => destination === 'capture' ? router.push('/dashboard/application-capture') : openPanel('placements')}><div className="flex items-center justify-between gap-2"><span className="text-xs font-medium text-muted-foreground">{String(label)}</span><MetricIcon className="size-4 text-primary/70" /></div><p className="mt-2 text-3xl font-semibold tabular-nums tracking-tight">{String(value)}</p><p className="mt-1 text-xs text-muted-foreground">{destination === 'capture' ? 'Review incomplete applications' : 'View candidate timelines'} <ArrowUpRight className="inline size-3" /></p></button>; })}</div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">{[
+                    ['Active placements', data.counts.activePlacements, BriefcaseBusiness, 'placements'], ['Joining in 30 days', data.counts.joinsNext30Days, CalendarCheck2, 'placements'], ['Ending in 30 days', data.counts.endsNext30Days, CalendarClock, 'placements']
+                ].map(([label, value, Icon]) => { const MetricIcon = Icon as typeof BriefcaseBusiness; return <button key={String(label)} className="group rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 focus-visible:outline-2 focus-visible:outline-primary" onClick={() => openPanel('placements')}><div className="flex items-center justify-between gap-2"><span className="text-xs font-medium text-muted-foreground">{String(label)}</span><MetricIcon className="size-4 text-primary/70" /></div><p className="mt-2 text-3xl font-semibold tabular-nums tracking-tight">{String(value)}</p><p className="mt-1 text-xs text-muted-foreground">View candidate timelines <ArrowUpRight className="inline size-3" /></p></button>; })}</div>
                 <div className="flex items-center justify-between"><h2 className="shrink-0 text-base font-semibold">Needs attention</h2><span className="hidden text-xs text-muted-foreground sm:inline">Resolve approvals and missing information</span></div>
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-4 md:grid-cols-3">
                     <OperationsCard title="Staff approvals" count={data.counts.pendingStaff ?? data.pendingStaff.length} action="Manage team" onAction={() => openPanel('team')}>
                         {data.pendingStaff.slice(0, 3).map(person => <div key={person.id} className="border-t border-border py-3 first:border-0"><p className="truncate text-sm font-medium">{person.full_name || person.email}</p><p className="mt-0.5 text-xs text-muted-foreground">{person.role.replaceAll('_', ' ')} · access pending</p><div className="mt-2 flex gap-2"><Button size="sm" disabled={!!busy} onClick={() => void decide(person.id, 'active')}>Approve</Button><Button size="sm" variant="outline" disabled={!!busy} onClick={() => void decide(person.id, 'rejected')}>Reject</Button></div></div>)}{!data.pendingStaff.length && empty('No accounts waiting for approval.')}
                     </OperationsCard>
@@ -62,9 +59,6 @@ export function AdminOperationsDashboard() {
                     </OperationsCard>
                     <OperationsCard title="Commission approvals" count={data.counts.commissionApproval ?? commissions.length} action="Review commissions" onAction={() => openPanel('commissions')}>
                         {commissions.slice(0, 3).map(row => <button key={row.id} onClick={() => openPanel('commissions', row.id)} className="block w-full border-t border-border py-3 text-left first:border-0 hover:text-primary"><p className="truncate text-sm font-medium">{row.profile.full_name || row.profile.email}</p><p className="truncate text-xs text-muted-foreground">{row.placement.company} · {formatMoney(row.balance, row.currency)}</p><p className="mt-1 text-xs text-primary">Eligible · awaiting your approval</p></button>)}{!commissions.length && empty('No eligible commissions awaiting approval.')}
-                    </OperationsCard>
-                    <OperationsCard title="Application follow-up" count={data.counts.captureIssues} href="/dashboard/application-capture" action="Review applications">
-                        {data.captureIssues.slice(0, 3).map(row => <Link key={row.id} href="/dashboard/application-capture" className="block border-t border-border py-3 first:border-0 hover:text-primary"><p className="truncate text-sm font-medium">{row.candidate?.full_name || row.company_name}</p><p className="truncate text-xs text-muted-foreground">{row.company_name} · {row.job_title}</p><div className="mt-1"><StatusLabel value={row.capture_status} /></div></Link>)}{!data.captureIssues.length && empty('No incomplete captures to follow up.')}
                     </OperationsCard>
                 </div>
                 <OperationsCard title="Candidate / client service collections" count={data.collections?.duePeriods} action="Manage collections" onAction={()=>openPanel('collections')}><p className="mb-3 text-sm text-muted-foreground">Candidates pay NextKinHR for the assigned recruiter to apply for jobs. Candidate service joining dates anchor monthly fees and payment due dates. NextKinHR pays recruiter salary separately.</p>{data.collections?<><div className="grid gap-4 sm:grid-cols-3"><CurrencyTotals label="Received externally" rows={data.collections.received}/><CurrencyTotals label="Outstanding (all billed periods)" rows={data.collections.outstanding}/><CurrencyTotals label="Due now / overdue" rows={data.collections.due}/></div><p className="mt-3 text-xs text-muted-foreground">{data.collections.duePeriods} unpaid service periods are due. Totals are separated by currency.</p></>:<p role="status" className="text-sm text-muted-foreground">Service collection totals are unavailable. Refresh to retry.</p>}</OperationsCard>

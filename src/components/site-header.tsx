@@ -7,7 +7,6 @@ import {ThemeToggle} from '@/components/theme-toggle'
 
 const titles: Record<string, string> = {
   '/dashboard/resumes':'Resume workspace',
-  '/dashboard/analytics':'Analytics',
   '/dashboard/integrations':'Integrations',
   '/dashboard/billing':'SaaS billing',
   '/dashboard': 'Dashboard',
@@ -27,7 +26,6 @@ const titles: Record<string, string> = {
   '/dashboard/placements': 'Placements & compensation',
   '/dashboard/payroll': 'Recruiter payroll',
   '/dashboard/commissions': 'Commissions',
-  '/dashboard/application-capture': 'Application capture',
   '/dashboard/email-confirmations': 'Email confirmations',
 };
 

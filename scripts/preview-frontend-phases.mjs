@@ -18,7 +18,7 @@ const stubs={
  '@/lib/submissions':`export async function getSubmissions(){return ${JSON.stringify(submissions)}};export async function deleteSubmission(){throw new Error('Visual fixture is read-only')};export async function updateSubmissionStatus(){throw new Error('Visual fixture is read-only')}`,
 };
 const [script,css]=await Promise.all([browserBundle('./tests/fixtures/frontend-phase-preview.tsx','createRoot(document.getElementById("root")).render(<Component.default/>);',stubs),browserStyles()]);
-const html='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Synthetic recruiting UI validation</title><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet"><style>'+css+'</style></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>';
+const html='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Synthetic recruiting UI validation</title><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet"><style>'+css+'</style></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>';
 const server=createServer((request,response)=>{
  const url=new URL(request.url,'http://127.0.0.1:4173');
  if(request.method!=='GET'){response.writeHead(405,{'Content-Type':'application/json'});response.end(JSON.stringify({error:'This synthetic preview is read-only.'}));return;}

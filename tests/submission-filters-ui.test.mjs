@@ -65,5 +65,6 @@ for(const role of ['super_admin','recruiter','technical_recruiter','client'])tes
  await page.getByRole('link',{name:'Public Jobs',exact:true}).waitFor();
  assert.equal(await page.getByRole('link',{name:'Public Jobs',exact:true}).count(),1);
  assert.equal(await page.getByRole('link',{name:/Greenhouse Portals|Ashby Portals|Browse Jobs/}).count(),0);
- assert.equal(await page.getByRole('link',{name:'Analytics',exact:true}).count(),1);
+ assert.equal(await page.getByRole('link',{name:'Analytics',exact:true}).count(),0);
+ assert.equal(await page.getByRole('link',{name:'Application Capture',exact:true}).count(),0);
 });
