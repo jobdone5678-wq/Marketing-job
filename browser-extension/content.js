@@ -856,7 +856,19 @@
   }
   async function tailorResumeForJob(candidate) {
     if (generatingResume) return null;
-    if (!shadowRoot?.getElementById('mp-ai-consent')?.checked) {workflowStatus('Agree to AI processing of the candidate facts and this JD before tailoring.',true);return null;}
+    if (!shadowRoot?.getElementById('mp-ai-consent')?.checked) {
+      workflowStatus('Agree to AI processing of the candidate facts and this JD before tailoring.',true);
+      showInPageToast('Please check the AI consent box above to enable tailoring.', true);
+      const consentLabel = shadowRoot?.getElementById('mp-ai-consent')?.closest('label');
+      if (consentLabel) {
+        consentLabel.style.outline = '2px solid #ef4444';
+        consentLabel.style.borderRadius = '4px';
+        consentLabel.style.padding = '4px';
+        consentLabel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        setTimeout(() => { if (consentLabel) consentLabel.style.outline = ''; }, 3000);
+      }
+      return null;
+    }
     try {globalThis.NextkinResume.buildResume(candidate,activeJob());}
     catch (error) {workflowStatus(error.message,true);return null;}
     const contextKey = resumeContextKey(candidate), epoch = ++generationEpoch;
@@ -884,7 +896,16 @@
       shadowRoot.getElementById('mp-review-accuracy').checked = false;
       shadowRoot.getElementById('mp-attach-tailored-btn').disabled = true;
       workflowStatus('Saved this job’s AI-tailored resume. Review the source-backed draft and contextual evidence before attaching.');
-      renderAtsReport();updateCardContent();return tailoredResumeFile;
+      const reviewSection = shadowRoot?.getElementById('mp-resume-review');
+      if (reviewSection) {
+        reviewSection.hidden = false;
+        reviewSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+      renderAtsReport();
+      updateCardContent();
+      downloadTailoredResume(tailoredResumeFile);
+      showInPageToast('✅ Tailored resume generated & downloaded!');
+      return tailoredResumeFile;
     } catch (error) {workflowStatus(error.message,true);return null;}
     finally {generatingResume = false;if (button) {button.disabled = false;button.textContent = 'Tailor Resume (.docx)';}}
   }
