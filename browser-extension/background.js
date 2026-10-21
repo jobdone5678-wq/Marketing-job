@@ -1,4 +1,4 @@
-if (typeof importScripts === 'function') importScripts('resume-engine.js','resume-workflows.js');
+if (typeof importScripts === 'function') importScripts('embedded-support.js','resume-engine.js', 'candidate-context.js', 'job-context.js', 'fill-session.js', 'resume-workflows.js');
 let flushing;
 let serial = Promise.resolve();
 
@@ -115,6 +115,29 @@ chrome.alarms?.onAlarm?.addListener(() => {
 });
 
 async function receive(message, sender) {
+  if(message.type==='register_embedded_form'){
+    const support=globalThis.NextkinEmbeddedSupport;
+    if(!support||!sender.tab?.id||!sender.frameId||!support.validFrame(sender.tab.url,sender.url))return {error:'Unsupported embedded form.'};
+    const job=support.stripeJob(sender.tab.url);
+    await chrome.storage.session.set({['embedded:'+sender.tab.id+':'+job.id]:{frameId:sender.frameId,url:sender.url}});return {success:true};
+  }
+  if(message.type==='embedded_form_action'){
+    const support=globalThis.NextkinEmbeddedSupport,job=support?.stripeJob(sender.url);
+    if(!job||job.kind!=='apply'||sender.frameId||!sender.tab?.id||message.jobUrl!==sender.url||!['fill','undo'].includes(message.op)||typeof message.sessionId!=='string'||message.sessionId.length>500)return {error:'Unsupported embedded application context.'};
+    const key='embedded:'+sender.tab.id+':'+job.id;let target;
+    for(let attempt=0;attempt<6;attempt++){target=(await chrome.storage.session.get(key))[key];if(target)break;await new Promise(resolve=>setTimeout(resolve,100));}
+    if(!target||!support.validFrame(sender.url,target.url))return {error:'Embedded form is not ready. Reload this job tab after updating the extension.'};
+    const latest=await chrome.tabs.get(sender.tab.id);if(latest.url!==sender.url)return {error:'Job changed. Start the fill again.'};
+    let candidate;
+    if(message.op==='fill'){
+      const result=await receive({type:'get_candidates',candidateId:message.candidateId},sender);
+      candidate=result.candidates?.find(row=>row.id===message.candidateId);
+      if(!candidate)return {error:result.error||'Select an accessible candidate first.'};
+    }
+    const current=await chrome.tabs.get(sender.tab.id);if(current.url!==sender.url)return {error:'Job changed. Start the fill again.'};
+    return chrome.tabs.sendMessage(sender.tab.id,{channel:'nextkin_embedded_v1',op:message.op,jobUrl:sender.url,sessionId:message.sessionId,candidateId:message.candidateId,...(candidate?{candidate:support.contactFacts(candidate)}:{})},{frameId:target.frameId});
+  }
+
   // Handle action/popup messages (which may not have sender.tab)
   if (message.type === 'get_status') {
     const data = await chrome.storage.local.get(['origin', 'token', 'user', 'candidates','outbox']);
@@ -264,55 +287,73 @@ async function receive(message, sender) {
   if (message.type === 'get_ai_answers') {
     const config = await chrome.storage.local.get(['origin', 'token', 'uploadedCandidate']);
     if (config.token) {
+      if(message.consent!==true)return {error:'Agree to AI processing before generating screening drafts.'};
       try {
-        const res = await fetch(`${config.origin}/api/extension/ai-answers`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + config.token
-          },
-          body: JSON.stringify({
-            candidateId: message.candidateId,
-            jobTitle: message.jobTitle,
-            companyName: message.companyName,
-            jobDescription: message.jobDescription,
-            questions: message.questions
-          })
-        });
-        const data = await res.json();
-        if (res.ok) return data;
-      } catch (err) {}
+        const uploaded=config.uploadedCandidate?.id===message.candidateId;
+        if(String(message.candidateId).startsWith('uploaded')&&!uploaded)return {error:'Select the current uploaded candidate first.'};
+        const context=JSON.stringify({candidateId:message.candidateId,jobUrl:message.jobUrl,jobDescription:message.jobDescription,questions:message.questions,sessionId:message.sessionId});
+        const key='screeningRequest:'+await globalThis.NextkinResume.fingerprint({context,origin:config.origin,token:config.token});
+        let pending=(await chrome.storage.local.get(key))[key];
+        if(!pending){pending={requestId:crypto.randomUUID()};await chrome.storage.local.set({[key]:pending});}
+        const headers={'Content-Type':'application/json',Authorization:'Bearer '+config.token};
+        const body={version:2,candidateId:uploaded?undefined:message.candidateId,...(uploaded?{candidate:{id:config.uploadedCandidate.id,source_text:config.uploadedCandidate.source_text||config.uploadedCandidate.confirmed_facts?.raw_text||''}}:{}),jobTitle:message.jobTitle,companyName:message.companyName,jobDescription:message.jobDescription,jobUrl:message.jobUrl,sessionId:message.sessionId,consent:true,requestId:pending.requestId,questions:message.questions};
+        const endpoint=config.origin+'/api/extension/answer-drafts';
+        let res=await fetch(endpoint,{method:'POST',headers,body:JSON.stringify(body),signal:AbortSignal.timeout(25000)});
+        let data=await res.json().catch(()=>({}));
+        for(let poll=0;res.ok&&data.taskId&&data.status!=='succeeded'&&poll<60;poll++){
+          await new Promise(resolve=>setTimeout(resolve,2000));
+          res=await fetch(endpoint+'?taskId='+encodeURIComponent(data.taskId),{headers,signal:AbortSignal.timeout(15000)});
+          data=await res.json().catch(()=>({}));
+        }
+        if(!res.ok){await chrome.storage.local.remove(key);return {error:data.error||`Screening service error (${res.status}).`};}
+        if(data.status!=='succeeded')return {error:'Screening is queued. Keep the AI worker running and retry to resume this request.'};
+        if(data.sessionId!==message.sessionId)return {error:'Screening context changed. No answers were used.'};
+        return data;
+      } catch(err){return {error:'Unable to reach the screening service: '+err.message};}
     }
 
-    // Standalone fallback: Answer based on uploaded candidate resume facts
+    // Standalone fallback: Answer strictly based on verified candidate facts for the EXACT candidateId requested
     const cand = (config.uploadedCandidate?.id === message.candidateId)
       ? config.uploadedCandidate
-      : (config.candidates || []).find(c => c.id === message.candidateId) || config.uploadedCandidate;
+      : (config.candidates || []).find(c => c.id === message.candidateId);
 
     if (cand && Array.isArray(message.questions)) {
+      const facts=cand.provenance_status==='confirmed'?(cand.confirmed_facts||{}):cand;
       const answers = {};
-      const exp = cand.total_experience_years || 5;
-      const skills = cand.primary_skills || 'Full stack development';
       for (const q of message.questions) {
         const key = q.id || q.label;
         const lbl = (q.label || '').toLowerCase();
-        if (/year.*experience|how\s*many\s*years/i.test(lbl)) {
-          answers[key] = String(exp);
-        } else if (/sponsor|authoriz/i.test(lbl)) {
-          answers[key] = cand.authorized_in_usa ? 'Yes' : 'No';
+        if (/total.*(?:years?|experience)|(?:years?.*total experience)/i.test(lbl)) {
+          if (facts.total_experience_years !== undefined && facts.total_experience_years !== null && facts.total_experience_years !== '') {
+            answers[key] = String(facts.total_experience_years);
+          }
+        } else if (/sponsor/i.test(lbl)) {
+          const now=facts.need_sponsorship_now,future=facts.need_sponsorship_future;
+          const sponsorNeeded=/future/i.test(lbl)&&!/now|current|or/i.test(lbl)?future:/now|current/i.test(lbl)&&!/future/i.test(lbl)?now:now===true||future===true?true:now===false&&future===false?false:null;
+          if (typeof sponsorNeeded === 'boolean') {
+            answers[key] = sponsorNeeded ? 'Yes' : 'No';
+          }
+        } else if (/authoriz/i.test(lbl) && /united states|\busa\b|\bu\.?s\.?\b/i.test(lbl)) {
+          if (typeof facts.authorized_in_usa === 'boolean') {
+            answers[key] = facts.authorized_in_usa ? 'Yes' : 'No';
+          }
         } else if (/salary|compensation/i.test(lbl)) {
-          answers[key] = cand.expected_salary || 'Competitive market rate';
+          if (facts.expected_salary) {
+            answers[key] = String(facts.expected_salary);
+          }
         } else if (/notice|start/i.test(lbl)) {
-          answers[key] = cand.notice_period || 'Immediately';
+          if (facts.notice_period || facts.available_to_join) {
+            answers[key] = String(facts.notice_period || facts.available_to_join);
+          }
         } else if (/relocat/i.test(lbl)) {
-          answers[key] = cand.open_to_relocation ? 'Yes' : 'No';
-        } else {
-          answers[key] = `I have ${exp}+ years of professional experience working with ${skills}, delivering high quality scalable software solutions that align with team goals.`;
+          if (typeof facts.open_to_relocation === 'boolean') {
+            answers[key] = facts.open_to_relocation ? 'Yes' : 'No';
+          }
         }
       }
       return { success: true, answers };
     }
-    return { error: 'Failed to generate answers: No active candidate profile.' };
+    return { error: 'Failed to generate answers: No active candidate profile matching requested candidate.' };
   }
 
   if (['tailor_resume','list_resume_versions','get_saved_resume','list_resume_profiles'].includes(message.type)) {
@@ -437,6 +478,11 @@ async function receive(message, sender) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  // AI may wait on the worker; never hold application capture or profile refresh behind it.
+  if (['tailor_resume','get_ai_answers','register_embedded_form','embedded_form_action'].includes(message.type)) {
+    Promise.resolve().then(() => receive(message,sender)).then(reply,e => reply({error:e.message}));
+    return true;
+  }
   serial = serial.then(() => receive(message, sender)).then(reply, e => reply({ error: e.message }));
   return true;
 });

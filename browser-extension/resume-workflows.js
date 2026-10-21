@@ -1,6 +1,43 @@
 /* Service-worker resume storage. Every document belongs to one candidate and job snapshot. */
 (function (root) {
   'use strict';
+  const AI_VERSION = 'contextual-v1';
+  async function generateAI(message,config,uploaded) {
+    if (message.consent !== true) return {error:'Agree to AI processing of the reviewed candidate facts and this JD before generating.'};
+    if (!config.token || !config.origin) return {error:'Connect or sign in to NextKinHR for authenticated AI access. Uploaded candidates do not need a portal candidate record.'};
+    const engine=root.NextkinResume;
+    if (!engine) return {error:'Reload the updated extension to enable AI tailoring.'};
+    if(uploaded){try{engine.buildResume(config.uploadedCandidate,message);}catch(error){return {error:error.message || 'Candidate details or job description are missing.'};}}
+    try {
+      const context=uploaded?engine.scopeKey(config.uploadedCandidate,message):JSON.stringify({candidateId:message.candidateId,job:engine.jobIdentity(message)});
+      const identity=await engine.fingerprint({version:AI_VERSION,origin:config.origin,token:config.token,context});
+      const key='resumeAIRequest:'+identity;
+      let pending=(await chrome.storage.local.get(key))[key];
+      if(!pending){pending={requestId:crypto.randomUUID()};await chrome.storage.local.set({[key]:pending});}
+      const path=uploaded?'/api/extension/tailor-upload':'/api/extension/tailor-resume';
+      const headers={'Content-Type':'application/json',Authorization:'Bearer '+config.token};
+      const job={jobTitle:message.jobTitle,companyName:message.companyName,jobDescription:message.jobDescription,jobUrl:message.jobUrl,consent:true,requestId:pending.requestId};
+      // Do not send original binary files, local credentials or unrelated profile fields.
+      const body=uploaded?{...job,candidate:{id:config.uploadedCandidate.id,full_name:config.uploadedCandidate.full_name,source_text:config.uploadedCandidate.source_text || config.uploadedCandidate.confirmed_facts?.raw_text || ''}}:{...job,candidateId:message.candidateId};
+      let response=await fetch(config.origin+path,{method:'POST',headers,body:JSON.stringify(body),signal:AbortSignal.timeout(25000)});
+      let result=await response.json();
+      for(let poll=0;response.ok && !result.docxBase64 && result.taskId && poll<120;poll++){
+        await new Promise(resolve=>setTimeout(resolve,2000));
+        response=await fetch(config.origin+path+'?taskId='+encodeURIComponent(result.taskId),{method:'GET',headers,signal:AbortSignal.timeout(15000)});
+        result=await response.json();
+      }
+      if(!response.ok){await chrome.storage.local.set({[key]:null});return {error:result.error || 'AI tailoring failed. Review the details and retry.'};}
+      if(!result.docxBase64 || !result.ai)return {error:'AI processing is still pending. Keep a configured worker running and choose Tailor Resume again to resume this request. No rules-based resume was substituted.'};
+      if(result.candidateId !== message.candidateId)return {error:'AI result belongs to another candidate. No resume was used.'};
+      if(!uploaded)return {...result,success:true};
+      const latest=(await chrome.storage.local.get('uploadedCandidate')).uploadedCandidate;
+      if(engine.scopeKey(latest,message)!==context)return {error:'Uploaded candidate details changed during AI processing. Refresh and generate again.'};
+      const resumeId=await engine.fingerprint({version:AI_VERSION,context,scopeKey:result.scopeKey});
+      const version={...result,resumeId,candidateId:message.candidateId,candidateName:config.uploadedCandidate.full_name,jobTitle:message.jobTitle,companyName:message.companyName,jobUrl:message.jobUrl,jobDescription:message.jobDescription,scopeKey:context,createdAt:new Date().toISOString(),savedToPortal:false};
+      await chrome.storage.local.set({['resumeVersion:'+resumeId]:version});
+      return {...version,success:true};
+    }catch{return {error:'Unable to reach the AI service. Reconnect and retry to resume this request; no other resume was substituted.'};}
+  }
   async function handle(message) {
     const config = await chrome.storage.local.get(['origin','token','uploadedCandidate','uploadedProfiles']);
     if (message.type === 'list_resume_profiles') {
@@ -14,6 +51,7 @@
     const uploaded = config.uploadedCandidate?.id === message.candidateId;
     if (message.type === 'tailor_resume' && !uploaded && String(message.candidateId).startsWith('uploaded')) return {error:'This uploaded source is no longer active. Re-upload this candidate to generate a new resume; previous versions remain in history.'};
     const localHistory = message.type !== 'tailor_resume' && String(message.candidateId).startsWith('uploaded');
+    if(message.type === 'tailor_resume') return generateAI(message,config,uploaded);
     if (!uploaded && !localHistory) {
       if (!config.token) return {error:'This candidate is unavailable. Upload their resume or reconnect NextKinHR.',resumes:[]};
       // Authorization and candidate freshness are checked on every connected request.
@@ -32,22 +70,6 @@
     }
     const engine = root.NextkinResume;
     if (!engine) return {error:'Reload the updated extension to enable resume generation.'};
-    if (message.type === 'tailor_resume') {
-      try {
-        const output = engine.buildResume(config.uploadedCandidate,message);
-        const resumeId = await engine.fingerprint(output.scopeKey), key = 'resumeVersion:' + resumeId;
-        const existing = (await chrome.storage.local.get(key))[key];
-        if (existing) return {...existing,success:true,cached:true};
-        const bytes = engine.resumeDocx(output.markdown);
-        let binary = '';for (let i=0;i<bytes.length;i+=8192) binary += String.fromCharCode(...bytes.subarray(i,i+8192));
-        const version = {...output,resumeId,candidateId:message.candidateId,candidateName:config.uploadedCandidate.full_name,
-          jobTitle:message.jobTitle,companyName:message.companyName,jobUrl:message.jobUrl,jobDescription:message.jobDescription,
-          docxBase64:btoa(binary),filename:output.filename.replace(/\.docx$/,'_' + resumeId.slice(0,10) + '.docx'),createdAt:new Date().toISOString(),savedToPortal:false};
-        // Separate entries avoid overwrites and any fixed application-count limit.
-        await chrome.storage.local.set({[key]:version});
-        return {...version,success:true};
-      } catch (error) { return {error:error.message || 'Resume generation failed. Check candidate details and JD.'}; }
-    }
     if (message.type === 'get_saved_resume') {
       const key = 'resumeVersion:' + String(message.resumeId || '');
       const record = (await chrome.storage.local.get(key))[key];

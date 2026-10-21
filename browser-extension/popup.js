@@ -192,6 +192,21 @@ manualToggle.addEventListener('click', () => {
   manualSection.style.display = current === 'block' ? 'none' : 'block';
 });
 
+async function parseSafeJson(response, fallbackMsg) {
+  const text = await response.text();
+  let data = null;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = null;
+  }
+  if (!response.ok) {
+    const errorMsg = data?.error || (text && text.length < 150 && !text.includes('<html') && !text.includes('<!DOCTYPE') ? text : `${fallbackMsg} (status ${response.status})`);
+    throw new Error(errorMsg);
+  }
+  return data || {};
+}
+
 // 1-Click Auto Connect (NextKinHR)
 document.getElementById('btn-auto-connect').addEventListener('click', async () => {
   const origin = (originInput.value.trim() || 'http://localhost:3000').replace(/\/+$/, '');
@@ -213,10 +228,7 @@ document.getElementById('btn-auto-connect').addEventListener('click', async () =
       body: JSON.stringify({ cookies: cookiesList })
     });
 
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to connect. Please sign in to the portal at ' + origin + ' first.');
-    }
+    const data = await parseSafeJson(response, 'Failed to connect. Please sign in to the portal at ' + origin + ' first.');
 
     await chrome.storage.local.set({
       origin,
@@ -230,7 +242,7 @@ document.getElementById('btn-auto-connect').addEventListener('click', async () =
         headers: { Authorization: 'Bearer ' + data.token }
       });
       if (cRes.ok) {
-        const cData = await cRes.json();
+        const cData = await parseSafeJson(cRes, 'Failed to fetch candidates');
         await chrome.storage.local.set({ candidates: cData.candidates || [] });
       }
     } catch {}
@@ -252,8 +264,7 @@ document.getElementById('btn-sync-candidates').addEventListener('click', async (
     const res = await fetch(origin + '/api/extension/candidates', {
       headers: { Authorization: 'Bearer ' + token }
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to fetch candidates.');
+    const data = await parseSafeJson(res, 'Failed to fetch candidates.');
 
     await chrome.storage.local.set({ candidates: data.candidates || [] });
     showToast('Synced ' + (data.candidates || []).length + ' candidates!');
@@ -291,8 +302,7 @@ document.getElementById('btn-manual-pair').addEventListener('click', async () =>
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code })
     });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || 'Pairing failed');
+    const data = await parseSafeJson(r, 'Pairing failed.');
     await chrome.storage.local.set({
       origin,
       token: data.token,

@@ -6,16 +6,17 @@ import {webcrypto} from 'node:crypto';
 const engineCode=await readFile(new URL('../browser-extension/resume-engine.js',import.meta.url),'utf8');
 const background=await readFile(new URL('../browser-extension/background.js',import.meta.url),'utf8');
 const workflows=await readFile(new URL('../browser-extension/resume-workflows.js',import.meta.url),'utf8');
-function setup(extra={},fetch=async()=>{throw new Error('Unexpected network request');}){
+function setup(extra={},fetch){
  const candidate={id:'uploaded-test',resume_engine_version:'3.0.0',full_name:'Alex Example',primary_skills:'Python, SQL',source_text:'Alex Example\nSKILLS\nPython, SQL\nEXPERIENCE\nBuilt reporting tools at Example Co.'};
- const local={uploadedCandidate:candidate,...extra};let listener;
+ const local={uploadedCandidate:candidate,origin:'https://portal.example.test',token:'fixture-credential',...extra};let listener;
  const storage=data=>({async get(keys){return keys==null?{...data}:Object.fromEntries((Array.isArray(keys)?keys:[keys]).map(key=>[key,data[key]]));},async set(value){Object.assign(data,value);},async remove(keys){for(const key of Array.isArray(keys)?keys:[keys])delete data[key];}});
  const chrome={storage:{local:storage(local),session:storage({})},runtime:{onMessage:{addListener(fn){listener=fn;}}},tabs:{onRemoved:{addListener(){}}}};
- const context=vm.createContext({chrome,fetch,URL,URLSearchParams,AbortSignal,crypto:webcrypto,Date,Promise,TextEncoder,Uint8Array,DataView,btoa:value=>Buffer.from(value,'binary').toString('base64'),console});
+ const network=fetch || (async(_url,options)=>{const input=JSON.parse(options.body);const output=context.NextkinResume.buildResume(candidate,input);return {ok:true,json:async()=>({...output,success:true,candidateId:candidate.id,docxBase64:Buffer.from(context.NextkinResume.resumeDocx(output.markdown)).toString('base64'),ai:{method:'contextual-v1'}})};});
+ const context=vm.createContext({chrome,fetch:network,setTimeout,URL,URLSearchParams,AbortSignal,crypto:webcrypto,Date,Promise,TextEncoder,Uint8Array,DataView,btoa:value=>Buffer.from(value,'binary').toString('base64'),console});
  vm.runInContext(engineCode,context);vm.runInContext(workflows,context);vm.runInContext(background,context);
  return {local,candidate,send:message=>new Promise(resolve=>listener(message,{tab:{id:1},url:'https://jobs.example.test/apply'},resolve))};
 }
-const job=i=>({type:'tailor_resume',candidateId:'uploaded-test',jobTitle:'Data Developer',companyName:'Company '+i,jobUrl:'https://jobs.example.test/'+i,jobDescription:'Required skills: Python, SQL, Kubernetes. Build reporting tools for company '+i+'.'});
+const job=i=>({type:'tailor_resume',consent:true,candidateId:'uploaded-test',jobTitle:'Data Developer',companyName:'Company '+i,jobUrl:'https://jobs.example.test/'+i,jobDescription:'Required skills: Python, SQL, Kubernetes. Build reporting tools for company '+i+'.'});
 test('25 applications retain 25 real separate DOCX files and repeat generation reuses only exact sources',async()=>{
  const {send}=setup();const generated=[];
  for(let i=0;i<25;i++){const result=await send(job(i));assert.equal(result.success,true,result.error);generated.push(result);assert.equal(Buffer.from(result.docxBase64,'base64').readUInt32LE(0),0x04034b50);}
@@ -37,7 +38,7 @@ test('portal authorization errors remain visible and never use a different uploa
  const {send}=setup({origin:'https://portal.example.test',token:'synthetic',user:{id:'actor'},candidates:[{id:'portal-candidate',full_name:'Portal Person',primary_skills:'Python'}]},async()=>({ok:false,status:403,json:async()=>({error:'Candidate access denied'})}));
  const result=await send({...job(1),candidateId:'portal-candidate'});
  assert.match(result.error,/access denied/i);assert.notEqual(result.success,true);
- const uploaded=await send(job(1));assert.equal(uploaded.success,true,'explicit uploaded resume still works when a portal is connected');
+ const uploaded=await send(job(1));assert.match(uploaded.error,/access denied/i,'AI access errors never silently use local rules');
 });
 test('generation failure cannot overwrite a previously saved job version',async()=>{
  const {send}=setup();const first=await send(job(1));assert.equal(first.success,true,first.error);

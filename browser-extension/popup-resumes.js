@@ -31,8 +31,15 @@
   function download(record) {
     const bytes = Uint8Array.from(atob(record.docxBase64),letter => letter.charCodeAt(0));
     const url = URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}));
-    const anchor = document.createElement('a');anchor.href = url;anchor.download = record.filename;anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url),1000);
+    const anchor = document.createElement('a');anchor.href = url;
+    anchor.download = record.filename || ((record.candidateName || 'Tailored_Resume').replace(/[^a-zA-Z0-9_-]+/g,'_') + '.docx');
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    setTimeout(() => {
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    },1000);
   }
   document.getElementById('btn-load-history').addEventListener('click',async () => {
     const candidateId = candidates.value;list.replaceChildren();status.textContent = '';

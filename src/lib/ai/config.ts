@@ -1,21 +1,56 @@
 import 'server-only';
 import {CaptureError} from '@/lib/db/admin';
+import fs from 'node:fs';
+import path from 'node:path';
 
 export type AIProvider='openai';
 export function getAIProvider():AIProvider{return 'openai';}
-export function getAIModel(){return process.env.OPENAI_MODEL?.trim()||'gpt-4o-mini';}
+
+function getLocalEnv(): Record<string, string> {
+  try {
+    const envPath = path.resolve(process.cwd(), '.env.local');
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, 'utf8');
+      const parsed: Record<string, string> = {};
+      for (const line of content.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx !== -1) {
+          const key = trimmed.slice(0, eqIdx).trim();
+          let val = trimmed.slice(eqIdx + 1).trim();
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.slice(1, -1);
+          }
+          parsed[key] = val;
+        }
+      }
+      return parsed;
+    }
+  } catch {}
+  return {};
+}
+
+export function getAIModel(){
+  if (process.env.NODE_ENV !== 'production') {
+    const local = getLocalEnv();
+    if (local.OPENAI_MODEL) return local.OPENAI_MODEL.trim();
+  }
+  return process.env.OPENAI_MODEL?.trim()||'gpt-4o-mini';
+}
 
 function configuration(){
- const apiKey=process.env.OPENAI_API_KEY?.trim()||'';
- const baseURL=process.env.OPENAI_BASE_URL?.trim().replace(/\/+$/,'')||undefined;
+ const local = process.env.NODE_ENV !== 'production' ? getLocalEnv() : {};
+ const apiKey=(local.OPENAI_API_KEY || process.env.OPENAI_API_KEY)?.trim()||'';
+ const baseURL=((local.OPENAI_BASE_URL || process.env.OPENAI_BASE_URL)?.trim().replace(/\/+$/,''))||undefined;
  const missing=apiKey?[]:['OPENAI_API_KEY'];
  const issues:string[]=[];
  if(baseURL){
   try{
    const url=new URL(baseURL);
-   const local=['localhost','127.0.0.1','[::1]'].includes(url.hostname);
+   const isLocal=['localhost','127.0.0.1','[::1]'].includes(url.hostname);
    if(!['https:','http:'].includes(url.protocol)||url.username||url.password||url.search||url.hash)issues.push('OPENAI_BASE_URL must be an HTTP(S) API base URL without credentials, query parameters or fragments.');
-   if(process.env.NODE_ENV==='production'&&(local||url.protocol!=='https:'))issues.push('Production AI requires a public HTTPS API endpoint. A localhost gateway runs only on your computer.');
+   if(process.env.NODE_ENV==='production'&&(isLocal||url.protocol!=='https:'))issues.push('Production AI requires a public HTTPS API endpoint. A localhost gateway runs only on your computer.');
   }catch{issues.push('OPENAI_BASE_URL must be a valid API base URL.');}
  }
  return {apiKey,baseURL,model:getAIModel(),missing,issues};

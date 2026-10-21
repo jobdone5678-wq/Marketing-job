@@ -45,6 +45,7 @@ next-env.d.ts
 
 # isolated verification and sensitive review exports
 /.next-e2e/
+/.taste-skill/
 /test-results/
 /playwright-report/
 /docs/operations/legacy-data-review.json

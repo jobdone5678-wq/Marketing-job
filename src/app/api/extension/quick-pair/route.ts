@@ -28,19 +28,26 @@ export async function POST(request: Request) {
       {
         cookies: {
           getAll() {
-            if (bodyCookies.length > 0) {
-              return bodyCookies;
-            }
-            return nextCookieStore.getAll();
+            const nextCookies = nextCookieStore.getAll();
+            const map = new Map<string, string>();
+            for (const c of nextCookies) map.set(c.name, c.value);
+            for (const c of bodyCookies) map.set(c.name, c.value);
+            return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
           },
           setAll() {},
         },
       }
     );
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    let user = null;
+    try {
+      const { data, error: uErr } = await supabase.auth.getUser();
+      if (!uErr && data?.user) {
+        user = data.user;
+      }
+    } catch (authErr) {
+      console.warn('Supabase auth.getUser() error in quick-pair:', authErr);
+    }
 
     if (!user) {
       return cors(
@@ -56,10 +63,23 @@ export async function POST(request: Request) {
       .from('profiles')
       .select('id, full_name, email, role, status')
       .eq('id', user.id)
-      .single();
-    checkDb(pErr);
+      .maybeSingle();
 
-    if (!profile || profile.status !== 'active' || !['client', 'recruiter', 'technical_recruiter', 'super_admin'].includes(profile.role)) {
+    if (pErr) {
+      console.warn('Profile fetch error in quick-pair:', pErr);
+    }
+
+    if (!profile) {
+      return cors(
+        request,
+        Response.json(
+          { error: 'Profile not found. Please log in or complete your registration on NextKinHR first.' },
+          { status: 403 }
+        )
+      );
+    }
+
+    if (profile.status !== 'active' || !['client', 'recruiter', 'technical_recruiter', 'super_admin'].includes(profile.role)) {
       return cors(
         request,
         Response.json(

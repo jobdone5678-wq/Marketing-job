@@ -1,7 +1,7 @@
 # Portal resume recovery and Jobright-style copilot
 
 Date: 2026-10-21
-Status: design approved conversationally; written specification awaiting review.
+Status: written specification approved by the user on 2026-10-21; implementation plan awaiting review.
 
 ## Intended outcome
 
@@ -16,6 +16,8 @@ Then deliver the Jobright-style extension panel shown in the user's screenshots,
 - Reading the latest failed PDF through the current standalone local reader succeeded: one page, 2,734 extracted characters. No document contents were printed or sent to an AI provider during this diagnostic. This does not prove the reader works in the deployed or Next.js-bundled runtime.
 - A synthetic PDF also passed the local reader. Investigation must compare the actual task runtime, imports, storage/download, PDF initialization, schema creation and reservation boundary before selecting a fix.
 - The AI connectivity preflight passed, but is not end-to-end extraction verification.
+- Subsequent screenshot investigation reproduced plain-text HTTP 500 `Internal Server Error` responses from local extension-candidate and resume-document endpoints. The extension displays a JSON parsing exception because it assumes every response is JSON. The development log contains Next.js package/internal-module resolution failures. These runtime failures require repair before interpreting current portal behavior.
+- The canonical `browser-extension/` directory is now absent, while portal/task modules still import its resume engine. The versioned `browser-extension-v3.2.1/` directory remains. Restore the required shared source from verified available artifacts or decouple it into an explicitly planned shared module; preserve user changes and do not silently substitute an older Git version. Recovery and dependency checks precede extraction testing.
 - The database API previously returned PGRST205 for `application_resume_versions`. Connected extension tailoring needs migration/schema-cache verification. This is a separate issue from portal extraction.
 - The extension currently accepts local uploads without login and extracts incomplete profiles with a limited parser. That differs from the requested signed-in onboarding.
 - User screenshots establish the Jobright account/profile checklist, right-side panel, Add This Job action, prominent Autofill button, expandable information/resume/cover-letter sections and custom-resume action. Generated-resume preview and expanded editors remain unobserved. No proprietary backend algorithm equivalence is claimed.
@@ -23,6 +25,8 @@ Then deliver the Jobright-style extension panel shown in the user's screenshots,
 ## 1. Portal upload recovery — first delivery
 
 Trace the existing pipeline without replacing authentication, storage, leases, AI budgets or evidence validation. Reproduce the failure through the same Next.js execution path as the portal, using synthetic files first. Add safe stage diagnostics where the current generic error hides the cause. Diagnostics identify document/task IDs and stages, never document contents, credentials or raw provider bodies.
+
+First restore a runnable development server: verify installed Next.js dependencies and required shared resume-engine imports without blanket resets or deletion of user files. Connection clients must inspect HTTP status and tolerate non-JSON server errors, presenting an actionable connection failure rather than a raw JSON exception. Do not log cookie payloads or credentials.
 
 Choose a targeted repair only after the failing stage is established. Verify PDF module/worker initialization in the installed Next.js version, runtime differences, storage reads, schema construction and shared AI reservation. Preserve specific actionable errors for unreadable files, configuration, provider transport and invalid extraction output. Do not turn an unknown internal error into a misleading provider diagnosis.
 

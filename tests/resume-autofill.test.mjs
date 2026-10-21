@@ -252,3 +252,61 @@ test('controlled React text input synchronizes via _valueTracker and triggers on
   await page.click('#react-rerender-btn');
   assert.equal(await page.inputValue('#react-name-input'), 'Alex Example');
 });
+
+test('unknown country, salary, experience and demographic fields remain blank without fabricated defaults', async t => {
+  const blankCandidate = {
+    ...candidate,
+    id: 'blank-candidate',
+    country: null,
+    confirmed_facts: {},
+    current_salary: '120000',
+    expected_salary: null,
+    total_experience_years: null
+  };
+  const page = await portal(t, {
+    candidates: [blankCandidate],
+    intentCandidateId: blankCandidate.id,
+    beforeContent: async page => {
+      await page.evaluate(() => {
+        const form = document.querySelector('form');
+        form.insertAdjacentHTML('beforeend', `
+          <label for="country-input">Country</label><input id="country-input" name="country">
+          <label for="expected-salary-input">Expected Salary</label><input id="expected-salary-input" name="expected_salary">
+          <label for="exp-years-input">Years of Experience</label><input id="exp-years-input" name="total_experience_years">
+          <label for="gender-input">Gender</label><input id="gender-input" name="gender">
+          <label for="veteran-input">Veteran Status</label><input id="veteran-input" name="veteran_status">
+        `);
+      });
+    }
+  });
+  await page.waitForFunction(() => document.querySelector('#email').value === 'alex@example.test', null, { timeout: 2500 });
+  assert.equal(await page.inputValue('#country-input'), '');
+  assert.equal(await page.inputValue('#expected-salary-input'), '');
+  assert.equal(await page.inputValue('#exp-years-input'), '');
+  assert.equal(await page.inputValue('#gender-input'), '');
+  assert.equal(await page.inputValue('#veteran-input'), '');
+});
+
+test('confirmed zero experience years is filled as 0 rather than staying blank or guessing 5', async t => {
+  const zeroExpCandidate = {
+    ...candidate,
+    id: 'zero-exp-candidate',
+    total_experience_years: 0
+  };
+  const page = await portal(t, {
+    candidates: [zeroExpCandidate],
+    intentCandidateId: zeroExpCandidate.id,
+    beforeContent: async page => {
+      await page.evaluate(() => {
+        document.querySelector('form').insertAdjacentHTML('beforeend', `
+          <label for="zero-exp-input">Years of Experience</label><input id="zero-exp-input" name="total_experience_years">
+        `);
+      });
+    }
+  });
+  await page.waitForFunction(() => document.querySelector('#zero-exp-input').value === '0', null, { timeout: 2500 });
+  assert.equal(await page.inputValue('#zero-exp-input'), '0');
+});
+test('total career years cannot answer technology-specific experience questions',async t=>{
+ const page=await portal(t,{candidates:[{...candidate,total_experience_years:12}],beforeContent:async page=>page.evaluate(()=>document.querySelector('form').insertAdjacentHTML('beforeend','<label for="java-years">How many years of Java experience do you have?</label><input id="java-years" name="java_years_experience">'))});await page.waitForFunction(()=>document.querySelector('#email').value==='alex@example.test');assert.equal(await page.inputValue('#java-years'),'');
+});

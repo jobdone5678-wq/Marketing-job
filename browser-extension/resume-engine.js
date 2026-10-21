@@ -65,15 +65,21 @@
       try {return normalizeCandidate({...candidateFromText(candidate.confirmed_facts.raw_text, candidate.confirmed_facts.filename),id:candidate.id});}
       catch {return null;}
     }
-    const facts = candidate.provenance_status === 'confirmed' ? candidate.confirmed_facts || {} : {...candidate,...candidate.confirmed_facts};
-    const skills = unique([text(facts.primary_skills),text(facts.secondary_skills),...(Array.isArray(facts.all_skills) ? facts.all_skills.map(text) : [])].flatMap(value => value.split(/[,;\n|]+/).map(text)));
+    const facts = {...candidate,...(candidate.confirmed_facts || {})};
+    const primary = text(facts.primary_skills) || text(candidate.primary_skills);
+    const secondary = text(facts.secondary_skills) || text(candidate.secondary_skills);
+    const all = Array.isArray(facts.all_skills) && facts.all_skills.length ? facts.all_skills : (Array.isArray(candidate.all_skills) ? candidate.all_skills : []);
+    const skills = unique([primary,secondary,...all.map(text)].flatMap(value => value.split(/[,;\n|]+/).map(text)));
+    const employment = rows(facts.employment_history).length ? rows(facts.employment_history) : rows(candidate.employment_history);
+    const education = rows(facts.education_history).length ? rows(facts.education_history) : rows(candidate.education_history);
+    const sourceText = text(facts.source_text) || text(facts.raw_text) || text(candidate.source_text) || text(candidate.raw_text);
     return {
       id:text(candidate.id),version:candidate.version || 0,name:text(facts.full_name) || text(candidate.full_name),
-      email:text(facts.email),phone:text(facts.phone),city:text(facts.current_city),state:text(facts.current_state),
-      linkedin:text(facts.linkedin_url),title:text(facts.current_job_title),years:text(facts.total_experience_years),
-      summary:text(facts.summary),skills,employment:rows(facts.employment_history),education:rows(facts.education_history),
-      qualification:text(facts.highest_qualification),university:text(facts.university_name),graduationYear:text(facts.graduation_year),
-      certifications:text(facts.certifications),projects:rows(facts.projects),sourceText:text(facts.source_text) || text(facts.raw_text)
+      email:text(facts.email) || text(candidate.email),phone:text(facts.phone) || text(candidate.phone),city:text(facts.current_city) || text(candidate.current_city),state:text(facts.current_state) || text(candidate.current_state),
+      linkedin:text(facts.linkedin_url) || text(candidate.linkedin_url),title:text(facts.current_job_title) || text(candidate.current_job_title),years:text(facts.total_experience_years) || text(candidate.total_experience_years),
+      summary:text(facts.summary) || text(candidate.summary),skills,employment,education,
+      qualification:text(facts.highest_qualification) || text(candidate.highest_qualification),university:text(facts.university_name) || text(candidate.university_name),graduationYear:text(facts.graduation_year) || text(candidate.graduation_year),
+      certifications:text(facts.certifications) || text(candidate.certifications),projects:rows(facts.projects).length ? rows(facts.projects) : rows(candidate.projects),sourceText
     };
   }
   function evidenceLines(candidate) {

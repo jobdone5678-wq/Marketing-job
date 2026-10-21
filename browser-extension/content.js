@@ -27,6 +27,7 @@
   let resumeNeedsNewJob = false;
   let manualJob = null;
   let detectedUrl = location.href;
+  let recruiterStartedFill = false;
   let detectionEpoch = 0;
   let generationEpoch = 0;
   let generatingResume = false;
@@ -590,6 +591,7 @@
   async function detectJobDetails() {
     if (detectedUrl !== location.href) {
       detectedUrl = location.href;
+      recruiterStartedFill=false;
       manualJob = null;
       currentJobTitle = ''; currentCompanyName = ''; currentJobDescription = '';
       invalidateTailoredResume('Job changed. Generate a separate resume for this job.');
@@ -622,8 +624,12 @@
     let company = '';
     let description = '';
 
+    const stripeJob=await globalThis.NextkinStripeJob?.load(currentUrl);
+    if(epoch!==detectionEpoch||url!==location.href)return;
+    if(stripeJob){title=stripeJob.jobTitle;company=stripeJob.companyName;description=stripeJob.jobDescription;}
+
     // 1. Try 46 Platform Scraper Rules
-    if (matchedRule) {
+    if (matchedRule && !stripeJob) {
       title = resolveXPathValue(matchedRule.jobTitlePath);
       company = resolveXPathValue(matchedRule.jobCompanyNamePath);
       description = resolveXPathValue(matchedRule.jobDescriptionPath, true);
@@ -756,6 +762,7 @@
     if (element) {element.textContent = message;element.style.color = error ? '#fca5a5' : '#cbd5e1';}
   }
   function invalidateTailoredResume(message) {
+    clearScreeningReview();
     if (tailoredResumeFile || tailoredAttachments.size) resumeNeedsNewJob = true;
     tailoredResumeFile = null; generationEpoch++;
     for (const [input,file] of tailoredAttachments) {
@@ -767,6 +774,7 @@
     tailoredAttachments.clear(); uploadedInputs = new WeakSet(); resumeAttachedToForm = false;
     const review = shadowRoot?.getElementById('mp-resume-review');if (review) review.hidden = true;
     const confirmation = shadowRoot?.getElementById('mp-review-accuracy');if (confirmation) confirmation.checked = false;
+    const consent = shadowRoot?.getElementById('mp-ai-consent');if (consent) consent.checked = false;
     workflowStatus(message);
   }
   function renderAtsReport() {
@@ -775,6 +783,18 @@
     const report = tailoredResumeFile?.ats || currentMatchInfo;
     container.replaceChildren();
     const note = document.createElement('p');note.textContent = 'ATS estimate: coverage of extracted JD requirements, not an employer score. Review the complete JD.';container.appendChild(note);
+    const ai = tailoredResumeFile?.ai;
+    if (ai) {
+      const heading=document.createElement('h4');heading.textContent='AI contextual assessment — review required';container.appendChild(heading);
+      const explanation=document.createElement('p');explanation.textContent=ai.note || 'Direct evidence, transferable experience and missing requirements are separate judgments. Transferable experience does not satisfy a required qualification.';container.appendChild(explanation);
+      for (const row of ai.requirements || []) {
+        const detail=document.createElement('details'),summary=document.createElement('summary'),reason=document.createElement('p'),jd=document.createElement('p');
+        summary.textContent=({direct:'Direct evidence',transferable:'Transferable — verify',missing:'Missing evidence'}[row.relation] || 'Review')+': '+row.requirement;
+        reason.textContent=row.reason;jd.textContent='JD: '+row.jobEvidence;detail.append(summary,reason,jd);
+        for(const fact of row.evidence || []){const proof=document.createElement('p');proof.textContent='Candidate: '+(fact.context?fact.context+' — ':'')+fact.text;detail.appendChild(proof);}
+        container.appendChild(detail);
+      }
+    }
     const candidate = candidates.find(item => item.id === selectedCandidateId);
     const extra = String(candidate?.secondary_skills || '').split(/[,;\n]/).map(value => value.trim()).filter(Boolean).filter(value => !(report.matched || []).some(skill => skill.toLowerCase() === value.toLowerCase()));
     for (const [label,values] of [['Matched core skills',report.matched || []],['Transferable technologies — review relevance',extra],['Missing competencies',(report.requirements || []).filter(row => !row.matched && row.type === 'qualification').map(row => row.label)]]) {
@@ -792,10 +812,23 @@
   function downloadTailoredResume(record) {
     const data = record?.base64 || record?.docxBase64;
     if (!data) return;
-    const bytes = Uint8Array.from(atob(data),letter => letter.charCodeAt(0));
-    const url = URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}));
-    const anchor = document.createElement('a');anchor.href = url;anchor.download = record.filename;anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url),1000);
+    try {
+      const bytes = Uint8Array.from(atob(data),letter => letter.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}));
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = record.filename || ((record.candidateName || 'Tailored_Resume').replace(/[^a-zA-Z0-9_-]+/g,'_') + '.docx');
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
+      anchor.click();
+      setTimeout(() => {
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      },1000);
+    } catch (err) {
+      console.error('Download error:', err);
+      workflowStatus('Could not download resume: ' + err.message, true);
+    }
   }
   async function showResumeHistory() {
     const box = shadowRoot.getElementById('mp-resume-history');box.replaceChildren();
@@ -823,6 +856,7 @@
   }
   async function tailorResumeForJob(candidate) {
     if (generatingResume) return null;
+    if (!shadowRoot?.getElementById('mp-ai-consent')?.checked) {workflowStatus('Agree to AI processing of the candidate facts and this JD before tailoring.',true);return null;}
     try {globalThis.NextkinResume.buildResume(candidate,activeJob());}
     catch (error) {workflowStatus(error.message,true);return null;}
     const contextKey = resumeContextKey(candidate), epoch = ++generationEpoch;
@@ -830,11 +864,11 @@
     const button = shadowRoot?.getElementById('mp-tailor-btn');if (button) {button.disabled = true;button.textContent = 'Preparing resume…';}
     workflowStatus(`Preparing a separate resume for ${currentJobTitle} at ${currentCompanyName}…`);
     try {
-      const response = await chrome.runtime.sendMessage({type:'tailor_resume',candidateId:candidate.id,...activeJob()});
+      const response = await chrome.runtime.sendMessage({type:'tailor_resume',candidateId:candidate.id,consent:true,...activeJob()});
       if (epoch !== generationEpoch || contextKey !== resumeContextKey(candidates.find(row => row.id === selectedCandidateId))) {
         workflowStatus('The job or candidate changed. The previous job version was saved separately; generate for the current job.',true);return null;
       }
-      if (!response?.success || !response.docxBase64) throw new Error(response?.error || 'No tailored DOCX was generated. Retry after checking the source details.');
+      if (!response?.success || !response.docxBase64 || !response.ai) throw new Error(response?.error || 'No AI-tailored DOCX was generated. Reconnect or update the portal service, then retry.');
       if (String(candidate.id).startsWith('uploaded') && response.scopeKey && response.scopeKey !== contextKey) {
         invalidateTailoredResume('Uploaded candidate details changed. Refresh the profile and generate again.');
         void loadCandidates();return null;
@@ -849,7 +883,7 @@
       shadowRoot.getElementById('mp-resume-review').hidden = false;
       shadowRoot.getElementById('mp-review-accuracy').checked = false;
       shadowRoot.getElementById('mp-attach-tailored-btn').disabled = true;
-      workflowStatus('Saved this job’s resume. Review the draft and confirm its accuracy before attaching.');
+      workflowStatus('Saved this job’s AI-tailored resume. Review the source-backed draft and contextual evidence before attaching.');
       renderAtsReport();updateCardContent();return tailoredResumeFile;
     } catch (error) {workflowStatus(error.message,true);return null;}
     finally {generatingResume = false;if (button) {button.disabled = false;button.textContent = 'Tailor Resume (.docx)';}}
@@ -957,6 +991,7 @@
   }
 
   function chooseCandidate(id) {
+    recruiterStartedFill = true;
     if ((linkedCandidateId && id !== linkedCandidateId) || (selectedCandidateId && id !== selectedCandidateId)) {
       showInPageToast('This application is tied to one profile. Reload the application to choose a different candidate.', true);
       return;
@@ -967,6 +1002,8 @@
       const count = autofillCandidate(candidate, true);
       if (count > 0) {
         showInPageToast(` Filled ${count} application fields for ${candidate.full_name}!`);
+      } else if(supportedEmbeddedForm()){
+        workflowStatus('Embedded application detected. Click Fill Job Form to fill its supported fields.');
       } else {
         showInPageToast(`No form fields matched resume data for ${candidate.full_name}. Review fields manually or click Autofill.`, true);
       }
@@ -1120,13 +1157,257 @@
     return false;
   }
 
+  // Session and Undo Management
+  let activeFillSession = null;
+  let pendingScreeningReviews = null;
+  let pendingScreeningContext = null;
+  let screeningRequestEpoch = 0;
+  const screeningElements = new Map();
+  const adapterReceipts = new Map();
+  let embeddedReceipt=null;
+  function screeningContext(candidate) {
+    return candidate ? (globalThis.NextkinResume ? globalThis.NextkinResume.scopeKey(candidate,activeJob()) : JSON.stringify({candidate,job:activeJob()})) : null;
+  }
+  function clearScreeningReview() {
+    pendingScreeningReviews = null;pendingScreeningContext = null;screeningRequestEpoch++;
+    hideScreeningReviewUI();
+  }
+
+  function ensureFillSession(candidate) {
+    if (!candidate?.id) return null;
+    const candContext = globalThis.NextkinCandidateContext ? globalThis.NextkinCandidateContext.create(candidate,String(candidate.id).startsWith('uploaded')?'uploaded':'connected') : null;
+    const jobContext = globalThis.NextkinJobContext ? globalThis.NextkinJobContext.create({
+      title: currentJobTitle,
+      company: currentCompanyName,
+      description: currentJobDescription,
+      url: window.location.href
+    }) : null;
+
+    if (globalThis.NextkinFillSession) {
+      const nextSession = globalThis.NextkinFillSession.create({
+        candidate: candContext,
+        job: jobContext
+      });
+      if (!activeFillSession || activeFillSession.sessionId !== nextSession.sessionId) {
+        activeFillSession = nextSession;screeningElements.clear();adapterReceipts.clear();embeddedReceipt=null;
+      }
+      updateReadinessUI();
+    }
+    return activeFillSession;
+  }
+
+  function updateUndoButtonUI() {
+    if (!shadowRoot) return;
+    const undoRow = shadowRoot.getElementById('mp-undo-row');
+    if (!undoRow) return;
+    const receipts = activeFillSession ? activeFillSession.getReceipts() : [];
+    if (receipts.length > 0) {
+      undoRow.style.display = 'flex';
+      const btn = shadowRoot.getElementById('mp-undo-btn');
+      if (btn) btn.textContent = `↩ Undo Autofill (${receipts.length})`;
+    } else {
+      undoRow.style.display = 'none';
+    }
+  }
+
+  function updateReadinessUI() {
+    if (!shadowRoot || !activeFillSession) return;
+    const checklist = shadowRoot.getElementById('mp-readiness-checklist');
+    if (!checklist) return;
+    const candItem = shadowRoot.getElementById('mp-ready-candidate');
+    const jdItem = shadowRoot.getElementById('mp-ready-jd');
+
+    if (candItem) {
+      const isCandReady = activeFillSession.candidateContext?.valid;
+      const icon = candItem.querySelector('.mp-ready-icon');
+      if (icon) {
+        icon.textContent = isCandReady ? '✓' : '○';
+        icon.style.color = isCandReady ? '#10b981' : '#f59e0b';
+      }
+    }
+    if (jdItem) {
+      const isJdReady = activeFillSession.jobContext?.valid;
+      const icon = jdItem.querySelector('.mp-ready-icon');
+      if (icon) {
+        icon.textContent = isJdReady ? '✓' : '○';
+        icon.style.color = isJdReady ? '#10b981' : '#f59e0b';
+      }
+    }
+  }
+
+  async function undoAutofill() {
+    if (!activeFillSession) {
+      showInPageToast('No active fill session to undo.', true);
+      return 0;
+    }
+    const receipts = activeFillSession.getReceipts();
+    if (!receipts.length) {
+      showInPageToast('No autofilled fields to undo.');
+      return 0;
+    }
+
+    let count = 0;
+    if(embeddedReceipt){
+      const result=await chrome.runtime.sendMessage({type:'embedded_form_action',op:'undo',jobUrl:location.href,sessionId:activeFillSession.sessionId,candidateId:embeddedReceipt.candidateId});count+=result?.count||0;
+    }
+    for (const r of receipts) {
+      if(r.fieldKey==='embedded-form')continue;
+      if(adapterReceipts.has(r.fieldKey)){
+        count+=await globalThis.NextkinFieldWriter.undo([adapterReceipts.get(r.fieldKey)],{sessionId:activeFillSession.sessionId});continue;
+      }
+      const tracked = screeningElements.get(r.fieldKey);
+      if (Array.isArray(tracked)) {
+        const checked = tracked.map(el=>el.checked);
+        if (activeFillSession.canUndo(r.fieldKey,checked)) {
+          tracked.forEach((el,index)=>{el.checked=Boolean(r.previousValue[index]);el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));});count++;
+        }
+        continue;
+      }
+      const el = tracked || (r.fieldKey && document.getElementById(r.fieldKey)) ||
+                 Array.from(document.getElementsByName(r.fieldKey)).find(el=>/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) ||
+                 Array.from(document.querySelectorAll('input, textarea, select')).find(input => {
+                   const key = String(input.id || input.name || getElementContext(input)).trim();
+                   return key === r.fieldKey;
+                 });
+      if (el) {
+        const curVal = el.type === 'checkbox' || el.type === 'radio' ? el.checked : el.value;
+        if (activeFillSession.canUndo(r.fieldKey, curVal)) {
+          if (el.type === 'checkbox' || el.type === 'radio') {
+            el.checked = Boolean(r.previousValue);
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+          } else {
+            nativeSet(el, 'value', r.previousValue ?? '');
+          }
+          count++;
+        }
+      }
+    }
+    showInPageToast(`Reverted ${count} autofilled field(s).`);
+    updateUndoButtonUI();
+    return count;
+  }
+  window.undoAutofill = undoAutofill;
+
+  function screeningControlState(q){
+    const elements=Array.isArray(q.el)?q.el:[q.el];
+    return JSON.stringify(elements.map(el=>({disabled:el.disabled,readOnly:el.readOnly,label:getElementContext(el),legend:el.closest('fieldset')?.querySelector('legend')?.textContent||'',options:el.tagName==='SELECT'?Array.from(el.options).map(o=>[o.value,o.textContent,o.disabled]):null,value:el.type==='radio'||el.type==='checkbox'?el.checked:el.value})));
+  }
+
+  function acceptScreeningReview() {
+    if (!pendingScreeningReviews || !pendingScreeningReviews.length) {
+      showInPageToast('No screening answers pending review.', true);
+      return 0;
+    }
+
+    if (pendingScreeningContext !== screeningContext(candidates.find(row=>row.id===selectedCandidateId))) {
+      clearScreeningReview();workflowStatus('Candidate or job changed. Generate new screening answers.',true);return 0;
+    }
+    let answeredCount = 0;
+    for (const item of pendingScreeningReviews) {
+      const { q, answer } = item;
+      if (Array.isArray(q.el) ? q.el.some(el=>!el.isConnected) : !q.el.isConnected) continue;
+      if(q.originalState!==screeningControlState(q))continue;
+      screeningElements.set(q.id,q.el);
+      const prevVal = q.el.type === 'checkbox' || q.el.type === 'radio' ? q.el.checked : (q.el.value || '');
+
+      if (q.kind === 'text') {
+        nativeSet(q.el, 'value', answer);
+        if(q.el.value!==String(answer))continue;
+        if (activeFillSession) activeFillSession.recordWrite(q.id, prevVal, answer);
+        answeredCount++;
+      } else if (q.kind === 'select') {
+        const target = String(answer).trim().toLowerCase();
+        let matchedIndex = -1;
+        for (let i = 0; i < q.el.options.length; i++) {
+          const opt = q.el.options[i];
+          if(opt.disabled||!opt.value)continue;
+          const text = (opt.textContent || '').trim().toLowerCase();
+          const val = (opt.value || '').trim().toLowerCase();
+          if (text === target || val === target) {
+            matchedIndex = i;
+            break;
+          }
+        }
+        if (matchedIndex >= 0) {
+          const expected=q.el.options[matchedIndex].value;
+          nativeSet(q.el,'value',expected);
+          if(q.el.value!==expected)continue;
+          if (activeFillSession) activeFillSession.recordWrite(q.id, prevVal, q.el.value);
+          answeredCount++;
+        }
+      } else if (q.kind === 'radio' && Array.isArray(q.el)) {
+        const previousGroup = q.el.map(r=>r.checked);
+        const target = String(answer).trim().toLowerCase();
+        for (const r of q.el) {
+          const parentLabel = r.closest('label');
+          const lbl = parentLabel ? parentLabel.textContent.trim().toLowerCase() : (r.value || '').toLowerCase();
+          if (!r.disabled && (lbl === target || (r.value && r.value.toLowerCase() === target))) {
+            r.checked = true;
+            r.dispatchEvent(new Event('click', { bubbles: true }));
+            r.dispatchEvent(new Event('input', { bubbles: true }));
+            r.dispatchEvent(new Event('change', { bubbles: true }));
+            if(!r.checked||q.el.filter(el=>el.checked).length!==1)break;
+            if (activeFillSession) activeFillSession.recordWrite(q.id, previousGroup, q.el.map(el=>el.checked));
+            answeredCount++;
+            break;
+          }
+        }
+      }
+    }
+
+    pendingScreeningReviews = null;
+    pendingScreeningContext = null;
+    hideScreeningReviewUI();
+    updateUndoButtonUI();
+    showInPageToast(`Applied ${answeredCount} reviewed screening answers!`);
+    return answeredCount;
+  }
+  window.acceptScreeningReview = acceptScreeningReview;
+
+  function hideScreeningReviewUI() {
+    if (!shadowRoot) return;
+    const sec = shadowRoot.getElementById('mp-screening-review');
+    if (sec) sec.hidden = true;
+  }
+
+  function showScreeningReviewUI(items) {
+    if (!shadowRoot) return;
+    const sec = shadowRoot.getElementById('mp-screening-review');
+    const list = shadowRoot.getElementById('mp-screening-list');
+    if (!sec || !list) return;
+
+    list.innerHTML = '';
+    items.forEach((item) => {
+      const container = document.createElement('div');
+      container.style.cssText = 'background:var(--cp-bg);border:1px solid var(--cp-line);padding:8px;border-radius:6px;';
+      const label = document.createElement('div');
+      label.style.cssText = 'font-size:11px;font-weight:600;margin-bottom:4px;';
+      label.textContent = item.q.label;
+      const input = document.createElement('input');
+      input.className = 'mp-text-input';
+      input.value = item.answer;
+      input.addEventListener('input', (e) => {
+        item.answer = e.target.value;
+      });
+      container.appendChild(label);
+      container.appendChild(input);
+      const evidence=document.createElement('small');evidence.textContent=item.evidence?.length?'Source: '+item.evidence.map(f=>f.text).join(' · '):'Review this answer against the candidate facts.';container.appendChild(evidence);
+      list.appendChild(container);
+    });
+    sec.hidden = false;
+  }
+
   // AI-Powered Custom Screening Question Autofill
-  async function fillAIScreeningQuestions(candidate) {
+  async function fillAIScreeningQuestions(candidate, options = {}) {
     if (!candidate?.id) return 0;
+    ensureFillSession(candidate);
+    const requestContext=screeningContext(candidate),requestEpoch=++screeningRequestEpoch;
 
     const questionControls = [];
-    const controls = document.querySelectorAll('textarea, input[type="text"]');
-    for (const el of controls) {
+
+    // 1. Text inputs & Textareas
+    const textControls = document.querySelectorAll('textarea, input[type="text"]');
+    for (const el of textControls) {
       if (el.closest('#mp-copilot-root') || el.disabled || el.readOnly || el.value.trim()) continue;
       const ctx = getElementContext(el).trim();
       if (!ctx || ctx.length < 10) continue;
@@ -1136,8 +1417,87 @@
       if (isQuestion) {
         questionControls.push({
           el,
-          id: el.name || el.id || 'q_' + questionControls.length,
-          label: ctx
+          kind: 'text',
+          id: el.name || el.id || 'q_text_' + questionControls.length,
+          label: ctx,
+          type: 'text'
+        });
+      }
+    }
+
+    // 2. Select dropdowns
+    const selectControls = document.querySelectorAll('select');
+    for (const el of selectControls) {
+      if (el.closest('#mp-copilot-root') || el.disabled || (el.value && el.selectedIndex > 0)) continue;
+      const ctx = getElementContext(el).trim();
+      if (!ctx || ctx.length < 8) continue;
+      if (/^(state|province|country)$/i.test(ctx)) continue;
+
+      const options = [];
+      for (const opt of el.options) {
+        if(opt.disabled||!opt.value)continue;
+        const text = (opt.textContent || '').trim();
+        if (text && !/^(--|select|please select|choose)/i.test(text)) {
+          options.push(text);
+        }
+      }
+      if (options.length >= 2) {
+        questionControls.push({
+          el,
+          kind: 'select',
+          id: el.name || el.id || 'q_select_' + questionControls.length,
+          label: ctx,
+          type: 'choice',
+          options
+        });
+      }
+    }
+
+    // 3. Radio groups
+    const radioInputs = document.querySelectorAll('input[type="radio"]');
+    const processedRadioGroups = new Set();
+    for (const radio of radioInputs) {
+      if (radio.closest('#mp-copilot-root') || radio.disabled) continue;
+      const groupName = radio.name;
+      if (!groupName || processedRadioGroups.has(groupName)) continue;
+      processedRadioGroups.add(groupName);
+
+      const groupRadios = Array.from(document.getElementsByName(groupName)).filter(el=>el.type==='radio'&&el.form===radio.form);
+      if (groupRadios.some(r => r.checked)) continue;
+
+      const fieldset = radio.closest('fieldset');
+      let ctx = '';
+      if (fieldset) {
+        const legend = fieldset.querySelector('legend');
+        if (legend) ctx = legend.textContent.trim();
+      }
+      if (!ctx) {
+        ctx = getElementContext(radio).trim();
+      }
+      if (!ctx || ctx.length < 8) continue;
+
+      const options = [];
+      for (const r of groupRadios) {
+        let optLabel = '';
+        const parentLabel = r.closest('label');
+        if (parentLabel) {
+          optLabel = parentLabel.textContent.trim();
+        } else if (r.id) {
+          const lbl = document.querySelector(`label[for="${r.id}"]`);
+          if (lbl) optLabel = lbl.textContent.trim();
+        }
+        if (!optLabel) optLabel = r.value || '';
+        if (optLabel) options.push(optLabel);
+      }
+
+      if (options.length >= 2) {
+        questionControls.push({
+          el: groupRadios,
+          kind: 'radio',
+          id: groupName,
+          label: ctx,
+          type: 'choice',
+          options
         });
       }
     }
@@ -1147,33 +1507,51 @@
       return 0;
     }
 
-    showInPageToast(` Generating AI answers for ${questionControls.length} screening questions...`);
+    for(const q of questionControls)q.originalState=screeningControlState(q);
+    showInPageToast(`Generating AI answers for ${questionControls.length} screening questions...`);
     try {
       const res = await chrome.runtime.sendMessage({
         type: 'get_ai_answers',
         candidateId: candidate.id,
-        jobTitle: currentJobTitle,
-        companyName: currentCompanyName,
-        jobDescription: document.body.innerText.slice(0, 3000),
-        questions: questionControls.map(q => ({ id: q.id, label: q.label }))
+        ...activeJob(),
+        consent:shadowRoot?.getElementById('mp-ai-consent')?.checked===true,
+        sessionId:activeFillSession?.sessionId||requestContext,
+        questions: questionControls.map(q => ({
+          id: q.id,
+          label: q.label,
+          type: q.type,
+          options: q.options
+        }))
       });
 
-      if (!res || !res.answers) {
-        showInPageToast('Could not generate AI answers at this time.', true);
+      if (!res || res.error || !res.answers) {
+        showInPageToast(res?.error || 'Could not generate AI answers at this time.', true);
         return 0;
       }
 
-      let answeredCount = 0;
+      if (requestEpoch!==screeningRequestEpoch || requestContext!==screeningContext(candidates.find(row=>row.id===selectedCandidateId))) {
+        workflowStatus('Candidate or job changed. Discarded outdated screening answers.',true);return 0;
+      }
+      pendingScreeningContext=requestContext;
+      const items = [];
       for (const q of questionControls) {
         const answer = res.answers[q.id] || res.answers[q.label];
         if (answer) {
-          nativeSet(q.el, 'value', answer);
-          answeredCount++;
+          items.push({ q, answer, evidence:res.decisions?.find(row=>row.questionId===q.id)?.evidence||[] });
         }
       }
 
-      showInPageToast(` AI answered ${answeredCount} screening questions!`);
-      return answeredCount;
+      if (!items.length) {
+        showInPageToast('No matching answers generated for detected questions.');
+        return 0;
+      }
+
+      ensureFillSession(candidate);
+
+      pendingScreeningReviews = items;
+      showScreeningReviewUI(items);
+      showInPageToast(`Generated ${items.length} answer(s). Review and accept; unanswered questions require your input.`);
+      return items.length;
     } catch (err) {
       console.error('Error generating AI answers:', err);
       showInPageToast('Failed to generate AI answers: ' + err.message, true);
@@ -1181,9 +1559,31 @@
     }
   }
 
+  window.triggerAIScreeningQuestions = fillAIScreeningQuestions;
+
+  function supportedEmbeddedForm(){
+    return globalThis.NextkinEmbeddedSupport?.stripeJob(location.href)?.kind==='apply'&&Array.from(document.querySelectorAll('iframe')).some(frame=>globalThis.NextkinEmbeddedSupport.validFrame(location.href,frame.src));
+  }
+  async function fillAdapterFields(candidate){
+    if(supportedEmbeddedForm())return 0;
+    if(!globalThis.NextkinForms||!globalThis.NextkinFieldMapping||!globalThis.NextkinFieldWriter)return 0;
+    const session=ensureFillSession(candidate),context=screeningContext(candidate);
+    if(!session)return 0;
+    const plans=globalThis.NextkinFieldMapping.planFill(globalThis.NextkinForms.discoverFields(document),candidate);
+    const receipts=await globalThis.NextkinFieldWriter.applyFill(plans,{sessionId:session.sessionId,isCurrent:()=>activeFillSession===session&&context===screeningContext(candidates.find(c=>c.id===selectedCandidateId))});
+    for(const receipt of receipts){session.recordWrite(receipt.fieldKey,receipt.previousValue,receipt.writtenValue);adapterReceipts.set(receipt.fieldKey,receipt);}
+    const unresolved=plans.filter(p=>p.status!=='supported'||!receipts.some(r=>r.fieldKey===p.field.key)&&!p.field.element.value).map(p=>p.field.label||p.field.scope||'Unlabelled field');
+    let note=shadowRoot?.getElementById('mp-form-review-note');
+    if(!note&&shadowRoot){note=document.createElement('p');note.id='mp-form-review-note';note.setAttribute('role','status');shadowRoot.getElementById('mp-workflow-status')?.after(note);}
+    if(note)note.textContent=unresolved.length?'Needs manual review: '+[...new Set(unresolved)].join('; '):'Mapped fields filled from candidate facts. Review the form before submission.';
+    updateUndoButtonUI();return receipts.length;
+  }
+
   // Fill known profile facts into application fields. Never submit.
   function autofillCandidate(candidate, force = false) {
-    if (!candidate) return 0;
+    if (!candidate||supportedEmbeddedForm()) return 0;
+    // Paired adapter runtime starts on profile selection, Fill Job Form, or a portal Apply launch.
+    if(globalThis.NextkinForms&&!force&&!recruiterStartedFill&&!linkedCandidateId)return 0;
     if (isPortalPage() || isExcludedDomain() || (!force && !isJobOrApplicationPage())) return 0;
     if (isAuthOrLoginPage()) {
       if (force) {
@@ -1192,9 +1592,13 @@
       return 0;
     }
     let count = 0;
+    ensureFillSession(candidate);
     const names = (candidate.full_name || '').trim().split(/\s+/);
     const norm = value => String(value || '').toLowerCase().replace(/[\*:]/g, ' ').replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
-    const controls = document.querySelectorAll('input, textarea, select, button[role="combobox"]');
+    const discovered=globalThis.NextkinForms?.discoverFields(document);
+    const adapterPlans=discovered?globalThis.NextkinFieldMapping?.planFill(discovered,candidate):[];
+    const blocked=new Set((adapterPlans||[]).filter(p=>p.field.excluded||p.field.scope&&/work|employ|experience|education|school|university/i.test(p.field.scope)||p.status==='needs_review'&&p.factKey||p.field.kind==='combobox'&&p.factKey).map(p=>p.field.element));
+    const controls = discovered?discovered.filter(f=>f.kind!=='inaccessible').flatMap(f=>f.elements||[f.element]):document.querySelectorAll('input, textarea, select, button[role="combobox"]');
 
     // Automatically trigger resume file upload in parallel (once per form unless forced)
     if (!resumeAttachedToForm && !isResumeUploading) {
@@ -1207,6 +1611,7 @@
     }
 
     for (const el of controls) {
+      if(blocked.has(el))continue;
       const dropdown = el.tagName !== 'SELECT' && (el.getAttribute('role') === 'combobox' || el.getAttribute('aria-autocomplete') === 'list' || el.getAttribute('aria-haspopup') === 'listbox');
       if (el.closest('#mp-copilot-root') || el.disabled || (el.readOnly && !dropdown) || (!force && editedFields.has(el)) || !el.getClientRects().length) continue;
       if (['hidden', 'submit', 'file', 'password', 'reset'].includes(el.type) || (['button', 'search'].includes(el.type) && !dropdown)) continue;
@@ -1242,8 +1647,9 @@
 
       let value = null;
       if (/sponsor/.test(key)) {
-        value = /future/.test(key) ? candidate.need_sponsorship_future : candidate.need_sponsorship_now;
-        if (/now.*future|future.*now/.test(key)) value = candidate.need_sponsorship_now === candidate.need_sponsorship_future ? candidate.need_sponsorship_now : null;
+        if(/\bnot\b|without|no sponsorship/.test(key))continue;
+        const now=candidate.need_sponsorship_now,future=candidate.need_sponsorship_future;
+        value=/future/.test(key)&&!/now|current/.test(key)?future:/now|current/.test(key)&&!/future/.test(key)?now:now===true||future===true?true:now===false&&future===false?false:null;
       } else if (/authoriz|eligible|legally.*work/.test(key)) {
         if (!/\b(?:usa|united states|u\.s\.?|us)\b/.test(key) || /\bnot\b|unrestricted|permanent/.test(key)) continue;
         value = candidate.authorized_in_usa;
@@ -1272,7 +1678,7 @@
       } else if (/\b(?:state|province|region|address\s*level1)\b/.test(key)) {
         value = candidate.current_state;
       } else if (/\b(?:country)\b/.test(key) && !/code|phone|prefix/.test(key)) {
-        value = candidate.confirmed_facts?.country || 'United States';
+        value = candidate.confirmed_facts?.country || candidate.country;
       } else if (/\b(?:full\s*address|street\s*address|address\s*line\s*1|\baddress\b)\b/.test(key) && !/\b(?:email|ip|web|url|level1|level2)\b/.test(key)) {
         value = candidate.full_address || candidate.current_city;
       } else if (/\b(?:zip|postal|postcode|post\s*code|pincode)\b/.test(key)) {
@@ -1296,21 +1702,24 @@
       } else if (/previous.*title|past.*title/.test(key)) {
         value = candidate.employment_history?.[1]?.title;
       } else if (/years.*experience|experience.*years|total\s*experience/.test(key)) {
+        const wording=norm([...(el.labels||[])].map(label=>label.textContent).join(' ')||ariaLabel||el.placeholder||el.name).replace(/[^a-z ]/g,' ');
+        const unexplained=wording.replace(/\b(how|many|years?|of|experience|do|you|have|total|professional|work|overall|your|in)\b/g,'').trim();
+        if(unexplained)continue;
         value = candidate.total_experience_years;
       } else if (/primary.*skills|technical.*skills|core\s*skills|key\s*skills/.test(key)) {
         value = candidate.primary_skills;
       } else if (/notice\s*period|available\s*to\s*start|start\s*date|how\s*soon\s*can\s*you\s*start|availability/.test(key)) {
         value = candidate.notice_period || candidate.available_to_join;
       } else if (/expected\s*salary|desired\s*salary|compensation\s*expectation|salary\s*expectation|desired\s*pay|target\s*salary/.test(key)) {
-        value = candidate.expected_salary || candidate.current_salary;
+        value = candidate.expected_salary;
       } else if (/gender|sex\b/.test(key)) {
-        value = candidate.confirmed_facts?.gender || 'Decline to self-identify';
+        value = candidate.confirmed_facts?.gender;
       } else if (/veteran|military\s*status/.test(key)) {
-        value = candidate.confirmed_facts?.veteran_status || 'I am not a protected veteran';
+        value = candidate.confirmed_facts?.veteran_status;
       } else if (/disability|handicap/.test(key)) {
-        value = candidate.confirmed_facts?.disability_status || 'No, I don\'t have a disability';
+        value = candidate.confirmed_facts?.disability_status;
       } else if (/ethnicity|race\b/.test(key)) {
-        value = candidate.confirmed_facts?.race || candidate.confirmed_facts?.ethnicity || 'Decline to state';
+        value = candidate.confirmed_facts?.race || candidate.confirmed_facts?.ethnicity;
       } else if (/\b(?:full\s*name|legal\s*name|candidate\s*name|applicant\s*name|your\s*name|\bname\b)\b/.test(key) || norm(el.name) === 'name' || norm(el.name) === 'systemfield name' || norm(el.name) === 'fullname' || norm(el.autocomplete) === 'name') {
         if (!/\b(?:company|employer|school|university|organization|college|user\s*name|username|file|referral|emergency|preferred)\b/.test(key) && !/\b(?:first|given|last|family|surname)\b/.test(key)) {
           value = candidate.full_name;
@@ -1318,9 +1727,12 @@
       }
 
       if (value === null || value === undefined || value === '') continue;
+      const prevVal = el.type === 'checkbox' || el.type === 'radio' ? el.checked : el.value;
+      const fieldKey = el.id || el.name || norm(rawContext);
       const boolean = typeof value === 'boolean';
       if (dropdown) {
         selectDropdownOption(el, boolean ? (value ? 'Yes' : 'No') : value);
+        if (activeFillSession) activeFillSession.recordWrite(fieldKey, prevVal, boolean ? (value ? 'Yes' : 'No') : value);
         continue;
       }
       if (['radio', 'checkbox'].includes(el.type)) {
@@ -1333,6 +1745,7 @@
           const matchesOption = answer === valNorm || labelsText === valNorm || labelsText.includes(valNorm) || (valNorm.includes('decline') && (answer.includes('decline') || labelsText.includes('decline') || labelsText.includes('wish not')));
           if (!matchesOption) continue;
           nativeSet(el, 'checked', true);
+          if (activeFillSession) activeFillSession.recordWrite(fieldKey, prevVal, true);
         } else {
           const group = el.name ? Array.from(document.getElementsByName(el.name)).filter(input => input.form === el.form) : [el];
           if (group.some(input => input.checked)) continue;
@@ -1342,6 +1755,7 @@
           const no = /^(no|false|0)$/.test(answer) || /^(no|no[,. ].*)$/.test(labelsText);
           if (!(value ? yes : no)) continue;
           nativeSet(el, 'checked', true);
+          if (activeFillSession) activeFillSession.recordWrite(fieldKey, prevVal, true);
         }
       } else if (el.tagName === 'SELECT') {
         const selected = el.selectedOptions[0];
@@ -1352,13 +1766,16 @@
           (norm(option.textContent) === answer || norm(option.value) === answer || (boolean && norm(option.value) === String(value)) || (stateAbbr && (norm(option.textContent) === stateAbbr || norm(option.value) === stateAbbr)) || (typeof value === 'string' && value.toLowerCase().includes('decline') && norm(option.textContent).includes('decline'))));
         if (!option) continue;
         nativeSet(el, 'value', option.value);
+        if (activeFillSession) activeFillSession.recordWrite(fieldKey, prevVal, option.value);
       } else {
         if (el.value.trim()) continue;
         const answer = boolean ? (value ? 'Yes' : 'No') : String(value);
         nativeSet(el, 'value', answer);
+        if (activeFillSession) activeFillSession.recordWrite(fieldKey, prevVal, answer);
       }
       count++;
     }
+    updateUndoButtonUI();
     return count;
   }
 
@@ -2343,6 +2760,17 @@
         <div class="mp-job-company" id="mp-job-company">${escapeHtml(currentCompanyName || 'Hiring company not detected')}</div>
       </div>
 
+      <div id="mp-readiness-checklist" class="mp-workflow-section" style="padding: 6px 0;">
+        <div id="mp-ready-candidate" style="display: flex; align-items: center; gap: 6px; font-size: 11px;">
+          <span class="mp-ready-icon" style="color: #f59e0b;">○</span>
+          <span class="mp-ready-text">Candidate profile selected & confirmed</span>
+        </div>
+        <div id="mp-ready-jd" style="display: flex; align-items: center; gap: 6px; font-size: 11px; margin-top: 4px;">
+          <span class="mp-ready-icon" style="color: #f59e0b;">○</span>
+          <span class="mp-ready-text">Job description detected</span>
+        </div>
+      </div>
+
       <div class="mp-field-group">
         <div style="display: flex; align-items: center; justify-content: space-between;">
           <label class="mp-field-label" for="mp-candidate-select">Candidate profile</label>
@@ -2365,6 +2793,7 @@
       <div id="mp-match-container"></div>
       <details class="mp-workflow-section"><summary>ATS evidence and checks</summary><div id="mp-ats-details"></div></details>
       <p id="mp-workflow-status" role="status" aria-live="polite"></p>
+      <label class="mp-review-label"><input type="checkbox" id="mp-ai-consent"> Use these candidate facts and this JD with the configured AI service. Processing snapshots are stored by NextKinHR. Requires connected AI access; uploads do not create a portal candidate record.</label>
       <div class="mp-btn-row">
         <button id="mp-autofill-btn" class="mp-btn mp-btn-primary" title="Autofill candidate fields and upload resume">
            Fill Job Form
@@ -2373,6 +2802,22 @@
            Tailor Resume (.docx)
         </button>
       </div>
+
+      <div class="mp-btn-row" id="mp-undo-row" style="display: none;">
+        <button id="mp-undo-btn" class="mp-btn mp-btn-slate" type="button" title="Undo all extension-filled fields">
+          ↩ Undo Autofill
+        </button>
+      </div>
+
+      <section id="mp-screening-review" class="mp-workflow-section" hidden>
+        <strong>Review AI Screening Answers</strong>
+        <p style="font-size: 11px; color: var(--cp-muted); margin: 4px 0 8px 0;">Review or edit answers before writing to the job application:</p>
+        <div id="mp-screening-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto;"></div>
+        <div class="mp-btn-row" style="margin-top: 8px;">
+          <button id="mp-accept-screening-btn" class="mp-btn mp-btn-primary" type="button">Accept & Fill Form</button>
+          <button id="mp-discard-screening-btn" class="mp-btn mp-btn-slate" type="button">Discard</button>
+        </div>
+      </section>
 
       <section id="mp-resume-review" class="mp-workflow-section" hidden>
         <strong>Resume for this job</strong>
@@ -2491,8 +2936,21 @@
         showInPageToast('Please select a candidate first.', true);
         return;
       }
-      const filledCount = autofillCandidate(candidate, true);
+      recruiterStartedFill=true;
+      const adapterCount=await fillAdapterFields(candidate);
+      let embeddedCount=0;
+      const hasSupportedFrame=supportedEmbeddedForm();
+      if(hasSupportedFrame){
+        const session=ensureFillSession(candidate),context=screeningContext(candidate);
+        const result=await chrome.runtime.sendMessage({type:'embedded_form_action',op:'fill',candidateId:candidate.id,jobUrl:location.href,sessionId:session.sessionId});
+        if(context!==screeningContext(candidates.find(c=>c.id===selectedCandidateId)))return;
+        if(result?.error){workflowStatus(result.error,true);return;}
+        embeddedCount=result?.count||0;
+        if(embeddedCount){embeddedReceipt={candidateId:candidate.id};session.recordWrite('embedded-form',null,session.sessionId);updateUndoButtonUI();}
+      }
+      const filledCount = adapterCount+embeddedCount+autofillCandidate(candidate, true);
       const attached = await uploadResumeFile(candidate);
+      if(hasSupportedFrame){workflowStatus(`Filled ${filledCount} supported fields in the embedded application. Review remaining questions and attach the reviewed resume inside the form. Submission tracking for this embedded form requires manual review.`);return;}
       workflowStatus(attached ? `Filled ${filledCount} known fields and attached the candidate resume. Review before submitting.` : `Filled ${filledCount} known fields. Generate and review this job’s tailored DOCX before attaching it.`);
     });
 
@@ -2529,23 +2987,38 @@
     });
     card.querySelector('#mp-download-tailored-btn').addEventListener('click',() => {
       const candidate = candidates.find(row => row.id === selectedCandidateId);
+      if (!tailoredResumeFile) { workflowStatus('Generate a tailored resume for this job first before downloading.', true); return; }
       if (tailoredResumeFile?.contextKey === resumeContextKey(candidate)) downloadTailoredResume(tailoredResumeFile);
       else invalidateTailoredResume('The JD or candidate changed. Generate a new version.');
     });
     card.querySelector('#mp-history-panel').addEventListener('toggle',() => {if (card.querySelector('#mp-history-panel').open) void showResumeHistory();});
 
+    // Undo button
+    const undoBtn = card.querySelector('#mp-undo-btn');
+    if (undoBtn) undoBtn.onclick = () => undoAutofill();
+
+    // Screening Review buttons
+    const acceptScreeningBtn = card.querySelector('#mp-accept-screening-btn');
+    if (acceptScreeningBtn) acceptScreeningBtn.onclick = () => acceptScreeningReview();
+
+    const discardScreeningBtn = card.querySelector('#mp-discard-screening-btn');
+    if (discardScreeningBtn) discardScreeningBtn.onclick = () => {
+      clearScreeningReview();
+    };
+
     // AI Screening Questions button
     card.querySelector('#mp-ai-btn').addEventListener('click', async () => {
+      if(!card.querySelector('#mp-ai-consent')?.checked){workflowStatus('Agree to AI processing before requesting screening drafts.',true);return;}
       if (isAuthOrLoginPage()) {
-        showInPageToast(' Screening questions require an active job application form.', true);
+        showInPageToast('Screening questions require an active job application form.', true);
         return;
       }
-      const candidate = candidates.find(c => c.id === selectedCandidateId);
+      const candidate = candidates.find(c => c.id === selectedCandidateId) || uploadedCandidate;
       if (!candidate) {
         showInPageToast('Please select a candidate first.', true);
         return;
       }
-      await fillAIScreeningQuestions(candidate);
+      await fillAIScreeningQuestions(candidate, { requireReview: true });
     });
 
     // Copy Resume button
@@ -2727,7 +3200,7 @@
         return;
       }
       if (detectedUrl !== location.href) {
-        detectedUrl = location.href;manualJob = null;
+        detectedUrl = location.href;manualJob = null;recruiterStartedFill=false;
         currentJobTitle = '';currentCompanyName = '';currentJobDescription = '';
         invalidateTailoredResume('Job changed. Provide this job description and generate a separate resume.');
       }

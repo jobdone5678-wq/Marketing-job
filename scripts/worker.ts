@@ -20,7 +20,7 @@ import * as path from 'node:path';
 import {readFileSync} from 'node:fs';
 
 try {
-  dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: false });
+  dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
 } catch {}
 
 import * as nextEnvModule from '@next/env';

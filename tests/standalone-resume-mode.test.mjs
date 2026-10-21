@@ -70,18 +70,16 @@ test('background.js: standalone mode returns uploaded candidate without NextKinH
   assert.equal(fileRes.file.filename, 'Priya_Sharma_Resume.pdf');
   assert.equal(fileRes.file.candidateName, 'Priya Sharma');
 
-  // 3. tailor_resume in standalone mode
+  // 3. Offline standalone access does not imply authenticated AI generation
   const tailorRes = await send({
-    type: 'tailor_resume',
+    type: 'tailor_resume',consent:true,
     candidateId: sampleUploadedCandidate.id,
     jobTitle: 'Senior Full Stack Engineer',
     companyName: 'Acme Corp',
     jobDescription: 'Looking for a Senior Full Stack Engineer with React, TypeScript, Node.js and AWS experience.'
   });
-  assert.equal(tailorRes.success, true);
-  assert.ok(tailorRes.matchScore >= 75);
-  assert.ok(tailorRes.markdown.includes('PRIYA SHARMA'));
-  assert.ok(tailorRes.markdown.includes('Senior Full Stack Engineer'));
+  assert.match(tailorRes.error,/connect|sign.in/i);
+  assert.notEqual(tailorRes.success,true);
 });
 
 test('background.js: NextKinHR connected mode merges both NextKinHR candidates and uploaded resume', async () => {

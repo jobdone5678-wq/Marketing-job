@@ -23,7 +23,7 @@ async function setup(t,delay=false){
   if(message.type==='tailor_resume'){
    if(delay)await new Promise(resolve=>{release=resolve;});
    const output=engine.buildResume(candidate,message);
-   return {...output,success:true,resumeId:'fixture',docxBase64:Buffer.from(engine.resumeDocx(output.markdown)).toString('base64')};
+   return {...output,ai:{method:'contextual-v1',requirements:[{requirement:'Reporting pipelines',jobEvidence:'reporting pipelines',relation:'transferable',reason:'Ingestion evidence needs review.',evidence:[{text:'Built Python reporting at Example Co.'}]}]},success:true,resumeId:'fixture',docxBase64:Buffer.from(engine.resumeDocx(output.markdown)).toString('base64')};
   }
   return {};
  });
@@ -36,10 +36,11 @@ async function setup(t,delay=false){
 test('manual JD entry, evidence report, review and genuine tailored attachment work on an external portal',async t=>{
  const {page,messages}=await setup(t);
  assert.equal(await page.locator('#mp-job-editor').count(),1,'manual job details editor is available');
- await page.locator('#mp-tailor-btn').click();
+ await page.locator('#mp-ai-consent').check();await page.locator('#mp-tailor-btn').click();
  await page.locator('#mp-resume-review').waitFor({state:'visible'});
  assert.match(await page.locator('#mp-resume-text').textContent(),/Example Co/);
  assert.match(await page.locator('#mp-ats-details').textContent(),/Kubernetes/);
+ assert.match(await page.locator('#mp-ats-details').textContent(),/AI contextual assessment|Transferable/);
  assert.equal(await page.locator('#mp-attach-tailored-btn').isDisabled(),true);
  await page.locator('#mp-review-accuracy').check();await page.locator('#mp-attach-tailored-btn').click();
  const filename=await page.locator('#resume').evaluate(el=>el.files[0]?.name);assert.match(filename,/\.docx$/);
@@ -48,13 +49,13 @@ test('manual JD entry, evidence report, review and genuine tailored attachment w
  await page.locator('#mp-manual-title').fill('Finance Analyst');await page.locator('#mp-manual-company').fill('Second Company');
  await page.locator('#mp-manual-jd').fill('Required skills: Excel, Accounting and Payroll. Reconcile financial accounts and prepare monthly reporting for the finance team.');
  await page.locator('#mp-save-jd').click();
- await page.locator('#mp-tailor-btn').click();await page.locator('#mp-resume-review').waitFor({state:'visible'});
+ await page.locator('#mp-ai-consent').check();await page.locator('#mp-tailor-btn').click();await page.locator('#mp-resume-review').waitFor({state:'visible'});
  const message=messages.filter(message=>message.type==='tailor_resume').at(-1);assert.equal(message.jobTitle,'Finance Analyst');assert.equal(message.companyName,'Second Company');assert.match(message.jobDescription,/Payroll/);
 });
 test('copilot supports keyboard collapse, an accessible ATS gauge and a factual downloadable snapshot',async t=>{
  const {page}=await setup(t);
  assert.equal(await page.locator('#mp-copilot-pill').getAttribute('role'),'button');
- await page.locator('#mp-tailor-btn').click();await page.locator('#mp-resume-review').waitFor({state:'visible'});
+ await page.locator('#mp-ai-consent').check();await page.locator('#mp-tailor-btn').click();await page.locator('#mp-resume-review').waitFor({state:'visible'});
  assert.equal(await page.getByRole('meter',{name:'Estimated ATS match'}).count(),1);
  await page.locator('#mp-copilot-card').press('Escape');
  await page.locator('#mp-copilot-pill').waitFor({state:'visible'});
@@ -69,19 +70,19 @@ test('copilot supports keyboard collapse, an accessible ATS gauge and a factual 
 });
 test('SPA job switches clear old JD, old preview and only the extension-attached tailored file',async t=>{
  const {page,messages}=await setup(t);
- await page.locator('#mp-tailor-btn').click();await page.locator('#mp-resume-review').waitFor({state:'visible'});
+ await page.locator('#mp-ai-consent').check();await page.locator('#mp-tailor-btn').click();await page.locator('#mp-resume-review').waitFor({state:'visible'});
  await page.locator('#mp-review-accuracy').check();await page.locator('#mp-attach-tailored-btn').click();
  await page.evaluate(()=>{history.pushState({},'', '/two');document.querySelector('h1').textContent='New Role';document.querySelector('.job-description').remove();document.querySelector('.company-name').textContent='Second Company';});
  await page.waitForTimeout(600);
  assert.equal(await page.locator('#resume').evaluate(el=>el.files.length),0);
  assert.equal(await page.locator('#mp-resume-review').isVisible(),false);
- await page.locator('#mp-tailor-btn').click();
+ await page.locator('#mp-ai-consent').check();await page.locator('#mp-tailor-btn').click();
  assert.equal(messages.filter(message=>message.type==='tailor_resume').length,1,'unknown JD must not reuse previous job description');
  assert.match(await page.locator('#mp-workflow-status').textContent(),/job description/i);
 });
 test('late generation response cannot become the resume for a different job',async t=>{
  const fixture=await setup(t,true),{page,messages}=fixture;
- await page.locator('#mp-tailor-btn').click();await page.waitForFunction(()=>document.querySelector('#mp-copilot-root').shadowRoot.querySelector('#mp-tailor-btn').disabled);
+ await page.locator('#mp-ai-consent').check();await page.locator('#mp-tailor-btn').click();await page.waitForFunction(()=>document.querySelector('#mp-copilot-root').shadowRoot.querySelector('#mp-tailor-btn').disabled);
  assert.equal(messages.filter(message=>message.type==='tailor_resume').length,1);
  await page.evaluate(()=>{history.pushState({},'', '/two');document.querySelector('h1').textContent='Different Role';document.querySelector('.job-description').textContent='Required: Excel and Payroll. This different job requires preparing reports for the financial team and reconciling financial accounts.';});
  await page.waitForTimeout(600);fixture.release();await page.waitForTimeout(200);
@@ -91,7 +92,7 @@ test('late generation response cannot become the resume for a different job',asy
 
 test('review panel remains within desktop and mobile viewports with scrollable controls',async t=>{
  const {page}=await setup(t);
- await page.locator('#mp-tailor-btn').click();await page.locator('#mp-resume-review').waitFor({state:'visible'});
+ await page.locator('#mp-ai-consent').check();await page.locator('#mp-tailor-btn').click();await page.locator('#mp-resume-review').waitFor({state:'visible'});
  for(const [label,width,height] of [['desktop',1280,900],['mobile',390,844]]){
   await page.setViewportSize({width,height});
   const box=await page.locator('#mp-copilot-card').boundingBox();
@@ -133,7 +134,20 @@ test('manual job details supersede an in-flight page detection',async t=>{
 test('a job-board name cannot substitute for a missing hiring company',async t=>{
  const {page,messages}=await setup(t);
  await page.locator('.company-name').evaluate(element=>element.remove());
- await page.waitForTimeout(300);await page.locator('#mp-tailor-btn').click();
+ await page.waitForTimeout(300);await page.locator('#mp-ai-consent').check();await page.locator('#mp-tailor-btn').click();
  assert.equal(messages.filter(message=>message.type==='tailor_resume').length,0);
  assert.match(await page.locator('#mp-workflow-status').textContent(),/company.*missing|company name/i);
+});
+
+test('AI processing consent is required and contextual evidence remains reviewable without attachment',async t=>{
+ const {page,messages}=await setup(t);
+ await page.locator('#mp-tailor-btn').click();
+ assert.equal(messages.filter(message=>message.type==='tailor_resume').length,0);
+ assert.match(await page.locator('#mp-workflow-status').textContent(),/Agree to AI/);
+ await page.locator('#mp-ai-consent').check();await page.locator('#mp-tailor-btn').click();await page.locator('#mp-resume-review').waitFor({state:'visible'});
+ await page.locator('summary').filter({hasText:'ATS evidence and checks'}).click();
+ await page.locator('#mp-ats-details summary').first().click();
+ assert.match(await page.locator('#mp-ats-details').textContent(),/Candidate: Built Python reporting/);
+ assert.equal(await page.locator('#mp-attach-tailored-btn').isDisabled(),true);
+ await page.screenshot({path:'docs/operations/screenshots/extension-ai-evidence-desktop.png'});
 });

@@ -18,7 +18,7 @@ await include();
 const bytes=zipSync(files,{level:6});
 const verified=unzipSync(bytes);
 const includedManifest=JSON.parse(strFromU8(verified['manifest.json']));
-for(const filename of ['background.js','resume-engine.js','resume-workflows.js','resume-import.js','popup-resumes.js','vendor/pdf.min.mjs','vendor/pdf.worker.min.mjs'])if(!verified[filename])throw new Error('Missing runtime asset: '+filename);
+for(const filename of ['background.js','resume-engine.js','candidate-context.js','job-context.js','fill-session.js','embedded-support.js','stripe-job.js','frame-agent.js','form-discovery.js','field-mapping.js','field-writer.js','adapters/generic.js','adapters/greenhouse.js','adapters/lever.js','adapters/ashby.js','adapters/workday.js','resume-workflows.js','resume-import.js','popup-resumes.js','vendor/pdf.min.mjs','vendor/pdf.worker.min.mjs'])if(!verified[filename])throw new Error('Missing runtime asset: '+filename);
 if(includedManifest.version!==manifest.version)throw new Error('Package verification failed.');
 const output=fileURLToPath(new URL(`../browser-extension-v${manifest.version}.zip`,import.meta.url));
 await writeFile(output,bytes);

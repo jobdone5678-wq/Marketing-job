@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     checkDb(targetError);
     if (!target) return NextResponse.json({ success: true, taskId: targetTaskId, status: 'not_claimed' });
     // A Vercel deployment without AI credentials must leave AI work for the configured durable worker.
-    if (['resume_extract', 'candidate_match', 'packet_generate', 'jd_extract', 'resume_tailor'].includes(target.kind) && !aiConfiguration().configured) {
+    if (['resume_extract', 'candidate_match', 'packet_generate', 'jd_extract', 'resume_tailor', 'application_answers'].includes(target.kind) && !aiConfiguration().configured) {
       return NextResponse.json({ success: true, taskId: targetTaskId, status: 'deferred_to_worker' });
     }
     const { data: claimed, error: claimError } = await db.rpc('claim_specific_task', { p_task: targetTaskId, p_lease: randomUUID() });

@@ -9,7 +9,9 @@ import {structuredAI,getAIModel} from '@/lib/ai/client';
 import {taskLease} from '@/lib/tasks/repository';
 import type {BackgroundTask} from '@/lib/tasks/types';
 import type {UserProfile} from '@/types/database';
+import {generateExtensionResume} from './extension-task';
 export async function generateTailoredResume(task:BackgroundTask){
+ if(task.payload.extensionTailoring)return generateExtensionResume(task);
  const {data:actor,error}=await database().from('profiles').select('*').eq('id',task.actor_id).single();checkDb(error);
  if(!actor||actor.status!=='active')throw new CaptureError('Account access is no longer active.',403);
  const {resume,candidate}=await getTailoredResume(actor as UserProfile,String(task.payload.resumeId||''));
