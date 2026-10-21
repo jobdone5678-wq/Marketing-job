@@ -27,14 +27,18 @@ export async function GET(request:Request){
   const resumeId=params.get('resumeId');
   if(resumeId){
    if(!z.uuid().safeParse(resumeId).success)throw new CaptureError('Invalid resume identifier.',400);
-   const {data,error}=await query.eq('id',resumeId).maybeSingle();checkDb(error);
+   const {data,error}=await query.eq('id',resumeId).maybeSingle();
+   if(error&&(error.code==='PGRST205'||error.message?.includes('application_resume_versions')))throw new CaptureError('Application resume not found.',404);
+   checkDb(error);
    if(!data)throw new CaptureError('Application resume not found.',404);
    return extensionDocument(data);
   }
   const paging=z.object({offset:z.coerce.number().int().min(0),limit:z.coerce.number().int().min(1).max(100)}).safeParse({offset:params.get('offset')||0,limit:params.get('limit')||25});
   if(!paging.success)throw new CaptureError('Invalid resume history pagination.',400);
   const {offset,limit}=paging.data;
-  const {data,error}=await query.order('created_at',{ascending:false}).order('id',{ascending:false}).range(offset,offset+limit);checkDb(error);
+  const {data,error}=await query.order('created_at',{ascending:false}).order('id',{ascending:false}).range(offset,offset+limit);
+  if(error&&(error.code==='PGRST205'||error.message?.includes('application_resume_versions')))return {success:true,resumes:[],nextOffset:null};
+  checkDb(error);
   const rows=data||[];
   return {success:true,resumes:rows.slice(0,limit).map(row=>({resumeId:row.id,candidateId:row.candidate_id,candidateVersion:row.candidate_version,jobTitle:row.job_title,companyName:row.company_name,jobUrl:row.job_url,createdAt:row.created_at,filename:row.result.filename,matchScore:row.result.matchScore,ai:!!row.result.ai})),nextOffset:rows.length>limit?offset+limit:null};
  });

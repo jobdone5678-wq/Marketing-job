@@ -41,12 +41,17 @@ export async function extensionTaskStatus(actor:UserProfile,id:string,uploaded:b
  await currentExtensionCandidate(actor,input);
  if(task.status==='failed'||task.status==='cancelled')throw new CaptureError(task.error||'AI generation failed. Generate again to retry.',422);
  if(task.status!=='succeeded')return {success:true,taskId:id,status:task.status,message:'Waiting for AI processing. A configured server or worker must be running.'};
- if(uploaded){
+ if(uploaded||!task.result?.resumeId){
   const result=task.result?.result;
   if(!result?.ai||!result.markdown)throw new CaptureError('AI resume output is unavailable. Generate again.',409);
   return {...result,success:true,status:'succeeded',taskId:id,candidateId:input.candidateId,savedToPortal:false,jobUrl:input.job.jobUrl,docxBase64:Buffer.from(resumeDocx(result.markdown)).toString('base64')};
  }
- const {data:record,error:loadError}=await database().from('application_resume_versions').select('*').eq('id',task.result?.resumeId).eq('actor_id',actor.id).eq('candidate_id',input.candidateId).eq('scope_key',input.scopeKey).maybeSingle();checkDb(loadError);
+ const {data:record,error:loadError}=await database().from('application_resume_versions').select('*').eq('id',task.result?.resumeId).eq('actor_id',actor.id).eq('candidate_id',input.candidateId).eq('scope_key',input.scopeKey).maybeSingle();
+ if(loadError&&loadError.code==='PGRST205'&&task.result?.result?.markdown){
+  const res=task.result.result;
+  return {...res,success:true,status:'succeeded',taskId:id,candidateId:input.candidateId,savedToPortal:false,jobUrl:input.job.jobUrl,docxBase64:Buffer.from(resumeDocx(res.markdown)).toString('base64')};
+ }
+ checkDb(loadError);
  if(!record)throw new CaptureError('Saved AI resume not found.',404);
  return extensionDocument(record);
 }
@@ -56,7 +61,7 @@ export async function requestExtensionAI(actor:UserProfile,candidate:Record<stri
  const scopeKey=await fingerprint({engine:EXTENSION_AI_VERSION,model:getAIModel(),candidateId:candidate.id,candidateHash,candidateVersion,job});
  if(!uploaded){
   const {data:existing,error}=await database().from('application_resume_versions').select('*').eq('actor_id',actor.id).eq('candidate_id',candidate.id).eq('scope_key',scopeKey).maybeSingle();
-  if(error)throw new CaptureError('Unable to read AI resume history. Check the application resume migration.',503);
+  if(error&&error.code!=='PGRST205'&&!error.message?.includes('application_resume_versions'))throw new CaptureError('Unable to read AI resume history. Check the application resume migration.',503);
   if(existing)return extensionDocument(existing);
  }
  const input:ExtensionResumeInput={version:EXTENSION_AI_VERSION,candidateId:String(candidate.id),candidateVersion,candidateHash,scopeKey,job,...(uploaded?{uploadedCandidate:candidate}:{})};

@@ -38,6 +38,7 @@ export async function generateExtensionResume(task:BackgroundTask){
   actor_id:actor.id,candidate_id:input.candidateId,candidate_version:input.candidateVersion,candidate_hash:input.candidateHash,scope_key:input.scopeKey,
   job_title:input.job.jobTitle,company_name:input.job.companyName,job_url:input.job.jobUrl,job_description:input.job.jobDescription,result,
  },{onConflict:'actor_id,candidate_id,scope_key'}).select('id').single();
+ if(saveError&&(saveError.code==='PGRST205'||saveError.message?.includes('application_resume_versions')))return {candidateId:input.candidateId,result};
  if(saveError||!saved)throw new CaptureError('Unable to save this AI resume. Check the application resume migration and retry.',503);
  return {candidateId:input.candidateId,resumeId:saved.id};
 }
