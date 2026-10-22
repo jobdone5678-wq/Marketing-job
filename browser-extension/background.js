@@ -356,6 +356,25 @@ async function receive(message, sender) {
     return { error: 'Failed to generate answers: No active candidate profile matching requested candidate.' };
   }
 
+  
+  if (message.type === 'download_file') {
+    const filename = message.filename || 'tailored_resume.docx';
+    const dataUrl = 'data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,' + message.base64;
+    if (chrome.downloads && typeof chrome.downloads.download === 'function') {
+      try {
+        const downloadId = await chrome.downloads.download({
+          url: dataUrl,
+          filename: filename,
+          saveAs: false
+        });
+        return { success: true, downloadId };
+      } catch (e) {
+        return { success: false, error: e.message };
+      }
+    }
+    return { success: false, fallback: true };
+  }
+
   if (['tailor_resume','list_resume_versions','get_saved_resume','list_resume_profiles'].includes(message.type)) {
     if (!globalThis.NextkinResumeWorkflows) return {error:'Reload the updated extension to enable resume generation.'};
     return globalThis.NextkinResumeWorkflows.handle(message);

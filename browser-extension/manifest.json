@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Recruiting Copilot \u2014 Nextkinlife LLC",
+  "name": "Recruiting Copilot — Nextkinlife LLC",
   "version": "3.2.1",
   "description": "Universal AI application autofill, live ATS capture, and role-tailored resume generation across all websites. Owned by Nextkinlife LLC.",
   "author": "Nextkinlife LLC",
@@ -9,7 +9,8 @@
     "unlimitedStorage",
     "alarms",
     "activeTab",
-    "cookies"
+    "cookies",
+    "downloads"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -19,7 +20,7 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Recruiting Copilot \u2014 Nextkinlife LLC"
+    "default_title": "Recruiting Copilot — Nextkinlife LLC"
   },
   "content_scripts": [
     {

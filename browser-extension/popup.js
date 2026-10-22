@@ -318,3 +318,118 @@ document.getElementById('btn-manual-pair').addEventListener('click', async () =>
 
 // Initial render
 void renderState();
+void populateCandidateDropdown();
+
+// Download active candidate resume
+document.getElementById('btn-download-active-resume')?.addEventListener('click', async () => {
+  const { uploadedCandidate, candidates } = await chrome.storage.local.get(['uploadedCandidate', 'candidates']);
+  const candidate = uploadedCandidate || (candidates && candidates[0]);
+  if (!candidate) {
+    showToast('No active candidate resume found to download.', true);
+    return;
+  }
+  showToast('Preparing DOCX download...');
+  try {
+    const engine = globalThis.NextkinResume;
+    if (!engine) throw new Error('Resume engine not loaded.');
+    const resumeObj = engine.buildResume(candidate, {
+      jobTitle: candidate.current_job_title || 'Software Professional',
+      companyName: 'General Applications',
+      jobDescription: candidate.summary || 'General applications and matching positions.'
+    });
+    const bytes = engine.resumeDocx(resumeObj.markdown);
+    const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(candidate.full_name || 'Resume').replace(/[^a-zA-Z0-9_-]+/g, '_')}_Resume.docx`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast('Downloaded ' + a.download + '!');
+  } catch (err) {
+    showToast('Download error: ' + err.message, true);
+  }
+});
+
+// Load saved resumes history
+const btnLoadHistory = document.getElementById('btn-load-history');
+const historyCandidateSelect = document.getElementById('history-candidate');
+const savedResumesList = document.getElementById('saved-resumes-list');
+const savedResumesStatus = document.getElementById('saved-resumes-status');
+
+async function populateCandidateDropdown() {
+  if (!historyCandidateSelect) return;
+  const { uploadedCandidate, candidates = [] } = await chrome.storage.local.get(['uploadedCandidate', 'candidates']);
+  historyCandidateSelect.replaceChildren();
+  if (uploadedCandidate) {
+    const opt = document.createElement('option');
+    opt.value = uploadedCandidate.id;
+    opt.textContent = `[Uploaded] ${uploadedCandidate.full_name}`;
+    historyCandidateSelect.appendChild(opt);
+  }
+  for (const c of candidates) {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.full_name;
+    historyCandidateSelect.appendChild(opt);
+  }
+}
+
+btnLoadHistory?.addEventListener('click', async () => {
+  const candidateId = historyCandidateSelect?.value;
+  if (!candidateId) {
+    savedResumesStatus.textContent = 'Select a candidate first.';
+    return;
+  }
+  savedResumesStatus.textContent = 'Loading saved versions...';
+  savedResumesList.replaceChildren();
+  try {
+    const res = await chrome.runtime.sendMessage({ type: 'list_resume_versions', candidateId });
+    if (res?.error) throw new Error(res.error);
+    const versions = res?.versions || [];
+    if (!versions.length) {
+      savedResumesStatus.textContent = 'No saved tailored resumes found for this candidate.';
+      return;
+    }
+    savedResumesStatus.textContent = `Found ${versions.length} saved version(s).`;
+    for (const v of versions) {
+      const row = document.createElement('div');
+      row.style.cssText = 'padding: 8px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 6px;';
+      const info = document.createElement('div');
+      info.innerHTML = `<strong>${v.jobTitle || 'Job Role'}</strong><div style="font-size:10.5px;color:var(--muted);">${v.companyName || ''} · Match: ${v.matchScore != null ? v.matchScore + '%' : 'N/A'}</div>`;
+      const dlBtn = document.createElement('button');
+      dlBtn.className = 'btn btn-outline';
+      dlBtn.style.cssText = 'font-size:10px;padding:3px 8px;width:auto;margin:0;';
+      dlBtn.textContent = '⬇️ DOCX';
+      dlBtn.onclick = async () => {
+        dlBtn.disabled = true;
+        dlBtn.textContent = '...';
+        try {
+          const detail = await chrome.runtime.sendMessage({ type: 'get_saved_resume', candidateId, scopeKey: v.scopeKey });
+          if (!detail?.docxBase64 && !detail?.result?.markdown) throw new Error('No resume data');
+          const engine = globalThis.NextkinResume;
+          const bytes = detail.docxBase64 ? Uint8Array.from(atob(detail.docxBase64), c => c.charCodeAt(0)) : engine.resumeDocx(detail.result.markdown);
+          const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = detail.filename || `${v.companyName || 'Tailored'}_Resume.docx`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          showToast('Downloaded ' + a.download + '!');
+        } catch (e) {
+          showToast('Failed to download: ' + e.message, true);
+        } finally {
+          dlBtn.disabled = false;
+          dlBtn.textContent = '⬇️ DOCX';
+        }
+      };
+      row.appendChild(info);
+      row.appendChild(dlBtn);
+      savedResumesList.appendChild(row);
+    }
+  } catch (err) {
+    savedResumesStatus.textContent = 'Error: ' + err.message;
+  }
+});
+

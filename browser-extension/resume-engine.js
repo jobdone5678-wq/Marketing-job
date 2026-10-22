@@ -42,6 +42,37 @@
     }
     return blocks;
   }
+  function categorizeSkills(skills) {
+    const categories = [
+      { name: 'Frontend', re: /\b(react|angular|vue|next\.?js|nuxt|svelte|html5?|css3?|javascript|typescript|tailwind|bootstrap|redux|webpack|vite|ui\b|frontend)\b/i },
+      { name: 'Backend', re: /\b(java\b|spring|spring boot|microservices|rest\b|restful|apis?|python|node\.?js|express|c#|\.net|asp\.net|go\b|golang|ruby|rails|php|laravel|django|flask|fastapi|c\+\+|graphql|grpc|backend)\b/i },
+      { name: 'Data & Messaging', re: /\b(sql|postgres|postgresql|mysql|redis|kafka|mongodb|dynamodb|oracle|snowflake|spark|cassandra|rabbitmq|elasticsearch|sqlite|database|data pipeline|etl)\b/i },
+      { name: 'Cloud & DevOps', re: /\b(aws|amazon web services|azure|gcp|google cloud|docker|kubernetes|k8s|terraform|jenkins|ci\/cd|linux|unix|ansible|git\b|github actions|helm|cloudformation)\b/i },
+      { name: 'Tools', re: /\b(git|maven|gradle|postman|jira|agile|scrum|kanban|unit testing|integration testing|jest|junit|selenium|cypress|pytest|testing)\b/i },
+      { name: 'Marketing & Analytics', re: /\b(seo|sem|google analytics|marketing|copywriting|hubspot|google ads|meta ads|social media|content)\b/i },
+      { name: 'Finance & Accounting', re: /\b(excel|quickbooks|financial|accounting|reconciliation|accounts payable|accounts receivable|payroll|bookkeeping|sap)\b/i }
+    ];
+    const assigned = new Map();
+    const unassigned = [];
+    for (const skill of skills) {
+      let matched = false;
+      for (const cat of categories) {
+        if (cat.re.test(skill)) {
+          if (!assigned.has(cat.name)) assigned.set(cat.name, []);
+          assigned.get(cat.name).push(skill);
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) unassigned.push(skill);
+    }
+    if (unassigned.length) {
+      const targetCat = assigned.size > 0 ? (assigned.has('Tools') ? 'Tools' : [...assigned.keys()][0]) : 'Core Skills';
+      if (!assigned.has(targetCat)) assigned.set(targetCat, []);
+      assigned.get(targetCat).push(...unassigned);
+    }
+    return assigned;
+  }
   function stable(value) {
     if (Array.isArray(value)) return value.map(stable);
     if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])]));
@@ -146,32 +177,70 @@
     const ats = analyze(candidate,target);
     const relevant = facts.skills.filter(skill => hasTerm(target.jobDescription,skill));
     const skills = unique([...relevant,...facts.skills]);
-    const lines = [facts.name.toUpperCase(),[facts.email,facts.phone,[facts.city,facts.state].filter(Boolean).join(', '),facts.linkedin].filter(Boolean).join(' | '),'',`Target role: ${target.jobTitle} | ${target.companyName}`];
+    const topSkills = skills.slice(0, 5).map(s => s.toUpperCase());
+    const roleTitle = (target.jobTitle || facts.title || 'SOFTWARE PROFESSIONAL').toUpperCase();
+    const subTitle = topSkills.length ? `${roleTitle}  |  ${topSkills.join(' • ')}` : roleTitle;
+    const contactParts = [[facts.city, facts.state].filter(Boolean).join(', '), facts.phone, facts.email, facts.linkedin].filter(Boolean);
+
+    const lines = [
+      facts.name.toUpperCase(),
+      subTitle,
+      contactParts.join('  |  '),
+      '',
+      `Target role: ${target.jobTitle} | ${target.companyName}`
+    ];
     if (facts.summary || facts.title || facts.years || relevant.length) {
       lines.push('','PROFESSIONAL SUMMARY');
       if (facts.summary) lines.push(facts.summary);
-      else if (facts.title) lines.push(facts.title + (facts.years ? ` · ${facts.years} years of total experience` : ''));
-      else if (facts.years) lines.push(`${facts.years} years of total experience`);
-      if (relevant.length) lines.push('Relevant skills: ' + relevant.join(', '));
+      else {
+        const summaryRole = facts.title || target.jobTitle;
+        const yrsText = facts.years ? `${facts.years}+ years of experience` : 'extensive professional experience';
+        const skillsIntro = skills.slice(0, 8).join(', ');
+        lines.push(`${summaryRole} with ${yrsText} delivering scalable solutions and high-impact features. Proficient across ${skillsIntro}. Experienced across development, testing, collaboration, and Agile delivery.`);
+      }
     }
-    if (skills.length) lines.push('','SKILLS',skills.join(' · '));
+    if (skills.length) {
+      lines.push('','TECHNICAL SKILLS');
+      const cats = categorizeSkills(skills);
+      for (const [catName, catSkills] of cats) {
+        lines.push(`| ${catName} | ${catSkills.join(', ')} |`);
+      }
+    }
     if (facts.employment.length) {
-      lines.push('','EXPERIENCE');
+      lines.push('','PROFESSIONAL EXPERIENCE');
       for (const row of facts.employment) {
-        lines.push([text(row.title) || text(row.job_title),text(row.employer) || text(row.company)].filter(Boolean).join(' | '));
+        const title = text(row.title) || text(row.job_title);
+        const employer = text(row.employer) || text(row.company);
+        const loc = text(row.location) || text(row.city);
+        const compLoc = [employer, loc].filter(Boolean).join(', ');
+        const roleComp = [title, compLoc].filter(Boolean).join('  —  ');
         const dates = [text(row.start) || text(row.start_date),text(row.end) || text(row.end_date)].filter(Boolean).join(' – ') || text(row.dates);
-        if (dates) lines.push(dates);
+        lines.push(`| ${roleComp} | ${dates} |`);
         const bullets = unique([text(row.evidence),text(row.description),...(Array.isArray(row.bullets) ? row.bullets.map(text) : [])]);
         const relevance = value => relevant.filter(skill => hasTerm(value,skill)).length;
-        bullets.sort((a,b) => relevance(b)-relevance(a)).forEach(value => lines.push('- ' + value));
+        bullets.sort((a,b) => relevance(b)-relevance(a)).forEach(value => lines.push('• ' + value));
         lines.push('');
       }
     }
+    const eduLines = [];
     if (facts.education.length) {
-      lines.push('','EDUCATION');
-      for (const row of facts.education) lines.push([text(row.degree),text(row.institution) || text(row.school),text(row.year) || text(row.end) || text(row.graduation_year)].filter(Boolean).join(' | '));
-    } else if (facts.qualification) lines.push('','EDUCATION',[facts.qualification,facts.university,facts.graduationYear].filter(Boolean).join(' | '));
-    if (facts.certifications) lines.push('','CERTIFICATIONS',facts.certifications);
+      for (const row of facts.education) {
+        const degree = text(row.degree);
+        const inst = text(row.institution) || text(row.school);
+        const yr = text(row.year) || text(row.end) || text(row.graduation_year);
+        const degInst = [degree, inst].filter(Boolean).join(' — ');
+        eduLines.push(yr ? `${degInst} | ${yr}` : degInst);
+      }
+    } else if (facts.qualification) {
+      const degInst = [facts.qualification, facts.university].filter(Boolean).join(' — ');
+      eduLines.push(facts.graduationYear ? `${degInst} | ${facts.graduationYear}` : degInst);
+    }
+    if (facts.certifications) {
+      eduLines.push(`Certifications: ${facts.certifications}`);
+    }
+    if (eduLines.length) {
+      lines.push('','EDUCATION & CERTIFICATIONS', ...eduLines);
+    }
     for (const project of facts.projects) lines.push('','PROJECT',text(project.name),text(project.description),...(Array.isArray(project.bullets) ? project.bullets.map(text) : []));
     if (facts.sourceText && !facts.employment.length) {
       const contact = new Set([facts.name,facts.email,facts.phone,facts.linkedin,[facts.city,facts.state].filter(Boolean).join(', ')].filter(Boolean).map(value => value.toLowerCase()));
@@ -215,15 +284,152 @@
     return {id:'uploaded-resume-' + Date.now(),resume_engine_version:VERSION,full_name:name,email,phone,current_city:location?.[1] || '',current_state:location?.[2] || '',full_address:location ? location[0] : '',current_job_title:'',total_experience_years:years ? Number(years) : null,summary,primary_skills:skills.join(', '),secondary_skills:'',all_skills:skills,employment_history:[],education_history:[],linkedin_url:linkedin ? (linkedin.startsWith('http') ? linkedin : 'https://' + linkedin) : '',source_text:raw,confirmed_facts:{raw_text:raw,filename}};
   }
   function resumeDocx(content) {
-    const escape = value => value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    const paragraphs = content.split('\n').map((line,index) => {
-      const heading = /^(PROFESSIONAL SUMMARY|SKILLS|EXPERIENCE|EDUCATION|CERTIFICATIONS|PROJECTS?|SOURCE RESUME)$/.test(line);
-      return '<w:p><w:pPr><w:spacing w:after="100"/>' + (heading ? '<w:keepNext/>' : '') + '</w:pPr><w:r><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:sz w:val="' + (index === 0 ? '32' : '22') + '"/>' + (heading || index === 0 ? '<w:b/>' : '') + '</w:rPr><w:t xml:space="preserve">' + escape(line) + '</w:t></w:r></w:p>';
-    }).join('');
+    const escape = value => String(value || '')
+      .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,'')
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&apos;');
+
+    const HEADINGS = /^(?:PROFESSIONAL SUMMARY|TECHNICAL SKILLS|SKILLS|CORE SKILLS|PROFESSIONAL EXPERIENCE|EXPERIENCE|EMPLOYMENT(?: HISTORY)?|EDUCATION & CERTIFICATIONS|EDUCATION|CERTIFICATIONS|PROJECTS?|PROJECT|SOURCE RESUME|ADDITIONAL INFORMATION)$/i;
+    const rawLines = content.split(/\r?\n/);
+    const elements = [];
+    let inHeading = '';
+    let i = 0;
+    let contactDividerRendered = false;
+
+    const tblPr = (w1, w2) =>
+      '<w:tblPr><w:tblW w:type="auto" w:w="0"/><w:jc w:val="center"/><w:tblLayout w:type="fixed"/><w:tblLook w:firstColumn="1" w:firstRow="1" w:lastColumn="0" w:lastRow="0" w:noHBand="0" w:noVBand="1" w:val="04A0"/><w:tblBorders><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/><w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tblBorders></w:tblPr><w:tblGrid><w:gridCol w:w="' + w1 + '"/><w:gridCol w:w="' + w2 + '"/></w:tblGrid>';
+
+    while (i < rawLines.length) {
+      const line = rawLines[i];
+      const trimmed = line.trim();
+      if (!trimmed) { i++; continue; }
+
+      if (HEADINGS.test(trimmed)) {
+        inHeading = trimmed.toUpperCase();
+        elements.push('<w:p><w:pPr><w:pStyle w:val="ResumeHeading"/><w:keepNext/><w:spacing w:before="120" w:after="40"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Aptos Display" w:hAnsi="Aptos Display" w:cs="Calibri"/><w:b/><w:color w:val="1F3752"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t xml:space="preserve">' + escape(trimmed) + '</w:t></w:r></w:p>');
+        i++;
+        continue;
+      }
+
+      if (i === 0 && !inHeading) {
+        elements.push('<w:p><w:pPr><w:spacing w:after="0"/><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Aptos Display" w:hAnsi="Aptos Display" w:cs="Calibri"/><w:b/><w:color w:val="1F3752"/><w:sz w:val="40"/><w:szCs w:val="40"/></w:rPr><w:t xml:space="preserve">' + escape(trimmed) + '</w:t></w:r></w:p>');
+        i++;
+        continue;
+      }
+
+      if (!inHeading && (trimmed.includes(' • ') || (trimmed.includes(' | ') && (trimmed === trimmed.toUpperCase() || trimmed.includes('DEVELOPER') || trimmed.includes('ENGINEER'))))) {
+        elements.push('<w:p><w:pPr><w:spacing w:before="0" w:after="20"/><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Calibri"/><w:b/><w:color w:val="555555"/><w:sz w:val="21"/><w:szCs w:val="21"/></w:rPr><w:t xml:space="preserve">' + escape(trimmed) + '</w:t></w:r></w:p>');
+        i++;
+        continue;
+      }
+
+      if (!inHeading && trimmed.includes(' | ') && (trimmed.includes('@') || /\d{3}/.test(trimmed) || trimmed.toLowerCase().includes('linkedin'))) {
+        elements.push('<w:p><w:pPr><w:spacing w:before="0" w:after="80"/><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Calibri"/><w:color w:val="555555"/><w:sz w:val="17"/><w:szCs w:val="17"/></w:rPr><w:t xml:space="preserve">' + escape(trimmed) + '</w:t></w:r></w:p>');
+        if (!contactDividerRendered) {
+          elements.push('<w:p><w:pPr><w:spacing w:before="0" w:after="0"/><w:pBdr><w:bottom w:val="single" w:sz="8" w:space="1" w:color="AEB6BF"/></w:pBdr></w:pPr></w:p>');
+          contactDividerRendered = true;
+        }
+        i++;
+        continue;
+      }
+
+      if (trimmed.startsWith('Target role:')) {
+        const roleText = trimmed.replace('Target role:', '').trim();
+        elements.push('<w:p><w:pPr><w:spacing w:before="60" w:after="40"/><w:shd w:val="clear" w:color="auto" w:fill="EBF0FF"/><w:ind w:left="120" w:right="120"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Calibri"/><w:sz w:val="18"/><w:szCs w:val="18"/><w:color w:val="666666"/></w:rPr><w:t xml:space="preserve">Target role: </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Calibri"/><w:b/><w:sz w:val="18"/><w:szCs w:val="18"/><w:color w:val="1F3752"/></w:rPr><w:t xml:space="preserve">' + escape(roleText) + '</w:t></w:r></w:p>');
+        i++;
+        continue;
+      }
+
+      if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+        const isExpRow = inHeading.includes('EXPERIENCE') || /(?:—|--|\d{4}|present)/i.test(trimmed);
+        if (isExpRow) {
+          const parts = trimmed.split('|').slice(1, -1).map(s => s.trim());
+          const leftText = parts[0] || '';
+          const rightText = parts[1] || '';
+          let titlePart = leftText;
+          let companyPart = '';
+          if (leftText.includes(' — ')) {
+            const dashIdx = leftText.indexOf(' — ');
+            titlePart = leftText.substring(0, dashIdx).trim();
+            companyPart = '  —  ' + leftText.substring(dashIdx + 3).trim();
+          } else if (leftText.includes(' - ')) {
+            const dashIdx = leftText.indexOf(' - ');
+            titlePart = leftText.substring(0, dashIdx).trim();
+            companyPart = '  —  ' + leftText.substring(dashIdx + 3).trim();
+          }
+          elements.push('<w:tbl>' + tblPr(6984, 2880) + '<w:tr><w:trPr><w:cantSplit/></w:trPr><w:tc><w:tcPr><w:tcW w:type="dxa" w:w="6984"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Calibri"/><w:b/><w:color w:val="1F3752"/><w:sz w:val="19"/><w:szCs w:val="19"/></w:rPr><w:t xml:space="preserve">' + escape(titlePart) + '</w:t></w:r>' + (companyPart ? '<w:r><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Calibri"/><w:color w:val="555555"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr><w:t xml:space="preserve">' + escape(companyPart) + '</w:t></w:r>' : '') + '</w:p></w:tc><w:tc><w:tcPr><w:tcW w:type="dxa" w:w="2880"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:spacing w:before="0" w:after="0"/><w:jc w:val="right"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Calibri"/><w:b/><w:color w:val="555555"/><w:sz w:val="17"/><w:szCs w:val="17"/></w:rPr><w:t xml:space="preserve">' + escape(rightText) + '</w:t></w:r></w:p></w:tc></w:tr></w:tbl>');
+          i++;
+          continue;
+        } else {
+          const rows = [];
+          while (i < rawLines.length && rawLines[i].trim().startsWith('|') && rawLines[i].trim().endsWith('|')) {
+            const rowParts = rawLines[i].trim().split('|').slice(1, -1).map(s => s.trim());
+            if (rowParts.length >= 2) rows.push(rowParts);
+            i++;
+          }
+          const trs = rows.map(([category, skills]) =>
+            '<w:tr><w:trPr><w:cantSplit/></w:trPr><w:tc><w:tcPr><w:tcW w:type="dxa" w:w="1728"/><w:vAlign w:val="top"/></w:tcPr><w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Calibri"/><w:b/><w:color w:val="1F3752"/><w:sz w:val="17"/><w:szCs w:val="17"/></w:rPr><w:t xml:space="preserve">' + escape(category) + '</w:t></w:r></w:p></w:tc><w:tc><w:tcPr><w:tcW w:type="dxa" w:w="8136"/><w:vAlign w:val="top"/></w:tcPr><w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Calibri"/><w:sz w:val="17"/><w:szCs w:val="17"/><w:color w:val="222222"/></w:rPr><w:t xml:space="preserve">' + escape(skills) + '</w:t></w:r></w:p></w:tc></w:tr>'
+          ).join('');
+          elements.push('<w:tbl>' + tblPr(1728, 8136) + trs + '</w:tbl>');
+          continue;
+        }
+      }
+
+      if (/^[-•*]\s/.test(trimmed)) {
+        const bulletText = trimmed.replace(/^[-•*]\s+/, '');
+        elements.push('<w:p><w:pPr><w:spacing w:after="14" w:line="228" w:lineRule="auto"/><w:ind w:left="230" w:hanging="158"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Calibri"/><w:sz w:val="18"/><w:szCs w:val="18"/><w:color w:val="333333"/></w:rPr><w:t xml:space="preserve">• ' + escape(bulletText) + '</w:t></w:r></w:p>');
+        i++;
+        continue;
+      }
+
+      if (/^Certifications:\s*/i.test(trimmed)) {
+        const certsText = trimmed.replace(/^Certifications:\s*/i, '');
+        elements.push('<w:p><w:pPr><w:spacing w:after="0"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Calibri"/><w:b/><w:color w:val="1F3752"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr><w:t xml:space="preserve">Certifications: </w:t></w:r><w:r><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Calibri"/><w:sz w:val="18"/><w:szCs w:val="18"/><w:color w:val="333333"/></w:rPr><w:t xml:space="preserve">' + escape(certsText) + '</w:t></w:r></w:p>');
+        i++;
+        continue;
+      }
+
+      if (inHeading.includes('EDUCATION') && (trimmed.includes(' — ') || trimmed.includes(' - ') || trimmed.includes(' | '))) {
+        let degree = trimmed;
+        let rest = '';
+        if (trimmed.includes(' — ')) {
+          const splitIdx = trimmed.indexOf(' — ');
+          degree = trimmed.substring(0, splitIdx);
+          rest = ' — ' + trimmed.substring(splitIdx + 3);
+        } else if (trimmed.includes(' - ')) {
+          const splitIdx = trimmed.indexOf(' - ');
+          degree = trimmed.substring(0, splitIdx);
+          rest = ' - ' + trimmed.substring(splitIdx + 3);
+        } else if (trimmed.includes(' | ')) {
+          const splitIdx = trimmed.indexOf(' | ');
+          degree = trimmed.substring(0, splitIdx);
+          rest = ' | ' + trimmed.substring(splitIdx + 3);
+        }
+        elements.push('<w:p><w:pPr><w:spacing w:after="20"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Calibri"/><w:b/><w:color w:val="1F3752"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr><w:t xml:space="preserve">' + escape(degree) + '</w:t></w:r>' + (rest ? '<w:r><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Calibri"/><w:sz w:val="18"/><w:szCs w:val="18"/><w:color w:val="333333"/></w:rPr><w:t xml:space="preserve">' + escape(rest) + '</w:t></w:r>' : '') + '</w:p>');
+        i++;
+        continue;
+      }
+
+      if (inHeading.includes('EXPERIENCE') && trimmed.includes(' | ') && !trimmed.startsWith('|')) {
+        const parts = trimmed.split(' | ');
+        elements.push('<w:tbl>' + tblPr(6984, 2880) + '<w:tr><w:trPr><w:cantSplit/></w:trPr><w:tc><w:tcPr><w:tcW w:type="dxa" w:w="6984"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Calibri"/><w:b/><w:color w:val="1F3752"/><w:sz w:val="19"/><w:szCs w:val="19"/></w:rPr><w:t xml:space="preserve">' + escape(parts[0]) + '</w:t></w:r>' + (parts[1] ? '<w:r><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Calibri"/><w:color w:val="555555"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr><w:t xml:space="preserve">  —  ' + escape(parts.slice(1).join(', ')) + '</w:t></w:r>' : '') + '</w:p></w:tc><w:tc><w:tcPr><w:tcW w:type="dxa" w:w="2880"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:spacing w:before="0" w:after="0"/><w:jc w:val="right"/></w:pPr></w:p></w:tc></w:tr></w:tbl>');
+        i++;
+        continue;
+      }
+
+      elements.push('<w:p><w:pPr><w:spacing w:after="30" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Calibri"/><w:sz w:val="18"/><w:szCs w:val="18"/><w:color w:val="333333"/></w:rPr><w:t xml:space="preserve">' + escape(trimmed) + '</w:t></w:r></w:p>');
+      i++;
+    }
+
     const files = {
-      '[Content_Types].xml':'<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+      '[Content_Types].xml':'<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>',
       '_rels/.rels':'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
-      'word/document.xml':'<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + paragraphs + '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1080" w:right="1080" w:bottom="1080" w:left="1080"/></w:sectPr></w:body></w:document>'
+      'word/_rels/document.xml.rels':'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
+      'word/document.xml':'<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + elements.join('') + '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="648" w:right="835" w:bottom="648" w:left="835"/></w:sectPr></w:body></w:document>',
+      'word/styles.xml':'<?xml version="1.0" encoding="UTF-8"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Calibri"/><w:sz w:val="18"/><w:szCs w:val="18"/><w:color w:val="333333"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="30" w:line="240" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style><w:style w:type="paragraph" w:customStyle="1" w:styleId="ResumeHeading"><w:name w:val="Resume Heading"/><w:pPr><w:spacing w:before="120" w:after="40"/></w:pPr><w:rPr><w:rFonts w:ascii="Aptos Display" w:hAnsi="Aptos Display" w:cs="Calibri"/><w:b/><w:color w:val="1F3752"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:style></w:styles>'
     };
     const encoder = new TextEncoder(), entries = [], chunks = []; let offset = 0;
     const header = size => new Uint8Array(size);
@@ -241,5 +447,5 @@
     const end = header(22), view = new DataView(end.buffer);view.setUint32(0,0x06054b50,true);view.setUint16(8,entries.length,true);view.setUint16(10,entries.length,true);view.setUint32(12,offset-centralStart,true);view.setUint32(16,centralStart,true);chunks.push(end);
     const result = new Uint8Array(offset+end.length);let pos = 0;for (const chunk of chunks) {result.set(chunk,pos);pos += chunk.length;}return result;
   }
-  return {VERSION,normalizeCandidate,analyze,buildResume,fingerprint,scopeKey,jobIdentity,candidateFromText,resumeDocx};
+  return {VERSION,normalizeCandidate,analyze,buildResume,fingerprint,scopeKey,jobIdentity,candidateFromText,resumeDocx,categorizeSkills};
 });

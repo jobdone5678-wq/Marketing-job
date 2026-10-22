@@ -809,22 +809,31 @@
     }
     for (const check of report.checks || []) {const line = document.createElement('p');line.textContent = (check.passed ? 'Pass: ' : 'Review: ') + check.label;container.appendChild(line);}
   }
-  function downloadTailoredResume(record) {
+  async function downloadTailoredResume(record) {
     const data = record?.base64 || record?.docxBase64;
     if (!data) return;
+    const filename = record.filename || ((record.candidateName || 'Tailored_Resume').replace(/[^a-zA-Z0-9_-]+/g,'_') + '.docx');
     try {
-      const bytes = Uint8Array.from(atob(data),letter => letter.charCodeAt(0));
-      const url = URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}));
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = record.filename || ((record.candidateName || 'Tailored_Resume').replace(/[^a-zA-Z0-9_-]+/g,'_') + '.docx');
-      anchor.style.display = 'none';
-      document.body.appendChild(anchor);
-      anchor.click();
-      setTimeout(() => {
-        anchor.remove();
-        URL.revokeObjectURL(url);
-      },1000);
+      let downloaded = false;
+      try {
+        const bgRes = await chrome.runtime.sendMessage({ type: 'download_file', base64: data, filename });
+        if (bgRes?.success) downloaded = true;
+      } catch (bgErr) {}
+      if (!downloaded) {
+        const bytes = Uint8Array.from(atob(data),letter => letter.charCodeAt(0));
+        const url = URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}));
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = filename;
+        anchor.style.display = 'none';
+        document.body.appendChild(anchor);
+        anchor.click();
+        setTimeout(() => {
+          anchor.remove();
+          URL.revokeObjectURL(url);
+        },1000);
+      }
+      showInPageToast('✅ Downloaded ' + filename);
     } catch (err) {
       console.error('Download error:', err);
       workflowStatus('Could not download resume: ' + err.message, true);
@@ -2822,6 +2831,9 @@
         <button id="mp-tailor-btn" class="mp-btn mp-btn-cyan" title="Generate role-tailored ATS resume and attach">
            Tailor Resume (.docx)
         </button>
+        <button id="mp-quick-download-btn" class="mp-btn mp-btn-slate" title="Download tailored resume DOCX">
+          ⬇️ Download DOCX
+        </button>
       </div>
 
       <div class="mp-btn-row" id="mp-undo-row" style="display: none;">
@@ -3006,11 +3018,25 @@
       const attached = await uploadResumeFile(candidate,true);
       workflowStatus(attached ? 'Attached the reviewed resume for this job. Review the application before submitting.' : 'No supported resume upload field was found. Download the DOCX and attach it manually.',!attached);
     });
-    card.querySelector('#mp-download-tailored-btn').addEventListener('click',() => {
+    const handleDownloadRequest = async () => {
       const candidate = candidates.find(row => row.id === selectedCandidateId);
-      if (!tailoredResumeFile) { workflowStatus('Generate a tailored resume for this job first before downloading.', true); return; }
-      if (tailoredResumeFile?.contextKey === resumeContextKey(candidate)) downloadTailoredResume(tailoredResumeFile);
-      else invalidateTailoredResume('The JD or candidate changed. Generate a new version.');
+      if (!candidate) { workflowStatus('Select or upload a candidate first.', true); return; }
+      if (!tailoredResumeFile) {
+        workflowStatus('Preparing tailored resume for this job...', false);
+        const res = await tailorResumeForJob(candidate);
+        if (res) await downloadTailoredResume(res);
+        return;
+      }
+      if (tailoredResumeFile?.contextKey === resumeContextKey(candidate)) {
+        await downloadTailoredResume(tailoredResumeFile);
+      } else {
+        workflowStatus('Job or candidate changed. Generating new tailored resume...', false);
+        const res = await tailorResumeForJob(candidate);
+        if (res) await downloadTailoredResume(res);
+      }
+    };
+    card.querySelectorAll('#mp-download-tailored-btn, #mp-quick-download-btn').forEach(btn => {
+      btn.addEventListener('click', handleDownloadRequest);
     });
     card.querySelector('#mp-history-panel').addEventListener('toggle',() => {if (card.querySelector('#mp-history-panel').open) void showResumeHistory();});
 
