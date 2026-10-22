@@ -25,8 +25,3 @@ test('billing does not invent a subscription or payment action when no billing c
  await page.getByText('Subscription data is not connected',{exact:true}).waitFor();
  assert.equal(await page.getByRole('button',{name:/pay|upgrade|checkout/i}).count(),0);
 });
-test('technical recruiters receive candidate documents without unsupported tailoring controls',async t=>{
- const page=await mount(t,'./src/app/dashboard/resumes/page.tsx','createRoot(document.getElementById("root")).render(<Component.default/>);',{'/api/candidates':{candidates:[{id:'c1',full_name:'Alex Morgan',provenance_status:'confirmed'}],hasMore:false},'/api/settings':{profile:{role:'technical_recruiter'}},'/api/jobs':{jobs:[],hasMore:false}});
- await page.getByRole('heading',{name:'Profile documents available'}).waitFor();
- assert.equal(await page.getByRole('button',{name:/Generate tailored resume/}).count(),0);
-});

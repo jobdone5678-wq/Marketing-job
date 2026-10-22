@@ -166,7 +166,7 @@
     return JSON.stringify(stable({engine:VERSION,candidate:normalizeCandidate(candidate),job:jobIdentity(job)}));
   }
   const safeName = value => value.normalize('NFKD').replace(/[^a-zA-Z0-9_-]+/g,'_').replace(/^_|_$/g,'').slice(0,60);
-  function buildResume(candidate, job) {
+function buildResume(candidate, job, rewrittenBullets) {
     const facts = normalizeCandidate(candidate);
     if (!facts?.name || /^(candidate|unknown)$/i.test(facts.name)) throw new Error('Candidate details are missing. Upload a readable resume or select a candidate and supply their name.');
     if (!facts.skills.length && !facts.employment.length && !facts.sourceText && !facts.summary) throw new Error('Candidate professional details are missing. Add reviewed skills, experience or a readable resume.');
@@ -177,17 +177,18 @@
     const ats = analyze(candidate,target);
     const relevant = facts.skills.filter(skill => hasTerm(target.jobDescription,skill));
     const skills = unique([...relevant,...facts.skills]);
-    const topSkills = skills.slice(0, 5).map(s => s.toUpperCase());
+    const topSkills = skills.slice(0, 6).map(s => s.toUpperCase());
     const roleTitle = (target.jobTitle || facts.title || 'SOFTWARE PROFESSIONAL').toUpperCase();
-    const subTitle = topSkills.length ? `${roleTitle}  |  ${topSkills.join(' • ')}` : roleTitle;
+    const subTitle = topSkills.length ? `${roleTitle}  |  ${topSkills.join(' · ')}` : roleTitle;
     const contactParts = [[facts.city, facts.state].filter(Boolean).join(', '), facts.phone, facts.email, facts.linkedin].filter(Boolean);
+    const rewrites = rewrittenBullets && typeof rewrittenBullets === 'object' ? rewrittenBullets : {};
 
     const lines = [
       facts.name.toUpperCase(),
       subTitle,
-      contactParts.join('  |  '),
+      contactParts.join('   |   '),
       '',
-      `Target role: ${target.jobTitle} | ${target.companyName}`
+      `Target role: ${target.jobTitle} at ${target.companyName}`
     ];
     if (facts.summary || facts.title || facts.years || relevant.length) {
       lines.push('','PROFESSIONAL SUMMARY');
@@ -195,8 +196,8 @@
       else {
         const summaryRole = facts.title || target.jobTitle;
         const yrsText = facts.years ? `${facts.years}+ years of experience` : 'extensive professional experience';
-        const skillsIntro = skills.slice(0, 8).join(', ');
-        lines.push(`${summaryRole} with ${yrsText} delivering scalable solutions and high-impact features. Proficient across ${skillsIntro}. Experienced across development, testing, collaboration, and Agile delivery.`);
+        const topRelevant = relevant.slice(0, 5).join(', ');
+        lines.push(`${summaryRole} with ${yrsText} specializing in ${topRelevant || 'software development'}. Proven track record of delivering high-quality solutions aligned with business objectives. Adept at cross-functional collaboration and continuous improvement.`);
       }
     }
     if (skills.length) {
@@ -208,6 +209,7 @@
     }
     if (facts.employment.length) {
       lines.push('','PROFESSIONAL EXPERIENCE');
+      let expIdx = 0;
       for (const row of facts.employment) {
         const title = text(row.title) || text(row.job_title);
         const employer = text(row.employer) || text(row.company);
@@ -216,9 +218,17 @@
         const roleComp = [title, compLoc].filter(Boolean).join('  —  ');
         const dates = [text(row.start) || text(row.start_date),text(row.end) || text(row.end_date)].filter(Boolean).join(' – ') || text(row.dates);
         lines.push(`| ${roleComp} | ${dates} |`);
-        const bullets = unique([text(row.evidence),text(row.description),...(Array.isArray(row.bullets) ? row.bullets.map(text) : [])]);
+        const rawBullets = unique([text(row.evidence),text(row.description),...(Array.isArray(row.bullets) ? row.bullets.map(text) : [])]);
         const relevance = value => relevant.filter(skill => hasTerm(value,skill)).length;
-        bullets.sort((a,b) => relevance(b)-relevance(a)).forEach(value => lines.push('• ' + value));
+        rawBullets.sort((a,b) => relevance(b)-relevance(a));
+        // Apply AI-rewritten bullets when available, falling back to original text.
+        const currentIdx = expIdx;
+        expIdx++;
+        rawBullets.forEach((value, bulletIdx) => {
+          const factId = `experience:${currentIdx}:${bulletIdx}`;
+          const improved = rewrites[factId];
+          lines.push('• ' + (improved || value));
+        });
         lines.push('');
       }
     }

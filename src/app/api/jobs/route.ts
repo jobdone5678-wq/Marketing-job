@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     const type = params.get('type') || 'all';
     if (!['all','contract','permanent','temporary','part_time','internship','unknown'].includes(type)) throw new CaptureError('Invalid job filter.');
     const { candidate, recommendation } = await recommendationContext(profile, params);
-    if (recommendation.requiresProfile) return { jobs: [], total: 0, hasMore: false, recommendation };
+    const isSuperAdmin = profile.role === 'super_admin';
     const provider = params.get('provider');
     if (provider && !['greenhouse','ashby','lever','smartrecruiters','breezy','remoteok'].includes(provider)) throw new CaptureError('Invalid portal filter.');
     let sourceIds: string[] | null = null;
@@ -27,9 +27,11 @@ export async function GET(request: Request) {
       checkDb(error);
       sourceIds = ((data || []) as {id:string}[]).map(source => source.id);
     }
+    // Broad USA location filter: matches country names, state abbreviations, and common US city patterns.
+    const usaLocationFilter = 'location.ilike.%United States%,location.ilike.%USA%,location.ilike.% US%,location.ilike.%US %,location.ilike.%Alabama%,location.ilike.%Alaska%,location.ilike.%Arizona%,location.ilike.%Arkansas%,location.ilike.%California%,location.ilike.%Colorado%,location.ilike.%Connecticut%,location.ilike.%Delaware%,location.ilike.%Florida%,location.ilike.%Georgia%,location.ilike.%Hawaii%,location.ilike.%Idaho%,location.ilike.%Illinois%,location.ilike.%Indiana%,location.ilike.%Iowa%,location.ilike.%Kansas%,location.ilike.%Kentucky%,location.ilike.%Louisiana%,location.ilike.%Maine%,location.ilike.%Maryland%,location.ilike.%Massachusetts%,location.ilike.%Michigan%,location.ilike.%Minnesota%,location.ilike.%Mississippi%,location.ilike.%Missouri%,location.ilike.%Montana%,location.ilike.%Nebraska%,location.ilike.%Nevada%,location.ilike.%New Hampshire%,location.ilike.%New Jersey%,location.ilike.%New Mexico%,location.ilike.%New York%,location.ilike.%North Carolina%,location.ilike.%North Dakota%,location.ilike.%Ohio%,location.ilike.%Oklahoma%,location.ilike.%Oregon%,location.ilike.%Pennsylvania%,location.ilike.%Rhode Island%,location.ilike.%South Carolina%,location.ilike.%South Dakota%,location.ilike.%Tennessee%,location.ilike.%Texas%,location.ilike.%Utah%,location.ilike.%Vermont%,location.ilike.%Virginia%,location.ilike.%Washington%,location.ilike.%West Virginia%,location.ilike.%Wisconsin%,location.ilike.%Wyoming%,location.ilike.%District of Columbia%,location.ilike.%Remote%';
     function query(count=false) {
       let q = database().from('jobs').select('id,external_id,title,company,location,department,description,employment_type,arrangements,compensation,source_url,application_url,version,state,updated_at,posted_at,closes_at,source:job_sources(provider,board_slug,health)', count ? { count: 'exact' } : {})
-        .neq('state', 'closed').or('closes_at.is.null,closes_at.gt.' + new Date().toISOString()).order('posted_at', { ascending: false, nullsFirst:false }).order('id');
+        .neq('state', 'closed').or('closes_at.is.null,closes_at.gt.' + new Date().toISOString()).or(usaLocationFilter).order('posted_at', { ascending: false, nullsFirst:false }).order('id');
       if(window.since)q=q.gte('posted_at',window.since).lte('posted_at',window.until);
       if (type !== 'all') q = q.eq('employment_type', type);
       const search = params.get('search')?.trim();
@@ -41,7 +43,8 @@ export async function GET(request: Request) {
       if (sourceIds) q = q.in('source_id', sourceIds);
       return q;
     }
-    if (!candidate) {
+    // Super admin always sees all USA public jobs unranked; other roles rank when a candidate is available.
+    if (!candidate || isSuperAdmin) {
       const { data, error, count } = await query(true).range(page * 50, page * 50 + 49);
       checkDb(error);
       return { jobs: data || [], total: count || 0, hasMore: (page + 1) * 50 < (count || 0), recommendation };

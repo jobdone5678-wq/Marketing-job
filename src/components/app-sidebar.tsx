@@ -25,7 +25,7 @@ import {
   TrendingUpIcon,
   UserCheckIcon,
   MailIcon,
-  FileTextIcon, PlugZapIcon, CreditCardIcon,
+  PlugZapIcon, CreditCardIcon,
 } from "lucide-react"
 import { createClient } from "@/lib/client"
 import Link from "next/link"
@@ -166,7 +166,6 @@ export function AppSidebar({
   }, [])
   const mainItems = currentUser.role === "super_admin" ? adminNavItems : currentUser.role === "recruiter" ? recruiterNavItems : currentUser.role === "technical_recruiter" ? technicalRecruiterNavItems : currentUser.role === "client" ? candidateNavItems : []
   const navigationItems = currentUser.role ? [...mainItems,
-    {id:'resumes',title:currentUser.role==='technical_recruiter'?'Candidate documents':'Resume workspace',url:'/dashboard/resumes',icon:<FileTextIcon className="size-4"/>},
     {id:'integrations',title:'Integrations',url:'/dashboard/integrations',icon:<PlugZapIcon className="size-4"/>},
     ...(currentUser.role==='super_admin'?[{id:'billing',title:'SaaS billing',url:'/dashboard/billing',icon:<CreditCardIcon className="size-4"/>}]:[]),
   ] : []

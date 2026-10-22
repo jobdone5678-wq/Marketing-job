@@ -4,7 +4,7 @@ export type ResumeResult = {markdown:string;filename:string;matchScore:number|nu
 export const VERSION:string;
 export function normalizeCandidate(candidate:unknown):Record<string,unknown>|null;
 export function analyze(candidate:unknown,job:JobInput,actualResumeText?:string):AtsReport;
-export function buildResume(candidate:unknown,job:JobInput):ResumeResult;
+export function buildResume(candidate:unknown,job:JobInput,rewrittenBullets?:Record<string,string>):ResumeResult;
 export function fingerprint(value:unknown):Promise<string>;
 export function scopeKey(candidate:unknown,job:JobInput):string;
 export function jobIdentity(job:JobInput):JobInput;

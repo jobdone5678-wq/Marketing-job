@@ -6,7 +6,6 @@ import {ChevronRight, CircleHelp, Search} from 'lucide-react'
 import {ThemeToggle} from '@/components/theme-toggle'
 
 const titles: Record<string, string> = {
-  '/dashboard/resumes':'Resume workspace',
   '/dashboard/integrations':'Integrations',
   '/dashboard/billing':'SaaS billing',
   '/dashboard': 'Dashboard',

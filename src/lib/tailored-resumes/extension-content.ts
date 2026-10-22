@@ -9,6 +9,7 @@ export const extensionSelectionSchema=z.object({
  targetRoleTitle:z.string().max(150).optional(),
  highlightSkills:z.array(z.string().max(60)).max(8).optional(),
  categorizedSkills:z.record(z.string(),z.array(z.string())).optional(),
+ rewrittenBullets:z.record(z.string(),z.string().max(500)).optional(),
  requirements:z.array(z.object({requirement:z.string().min(1).max(500),jobEvidence:z.string().min(1).max(1500),relation:z.enum(['direct','transferable','missing']),factIds:z.array(z.string().max(100)).max(8),reason:z.string().min(1).max(1000)}).strict()).max(24),
 }).strict();
 export type ExtensionFact={id:string;kind:'summary'|'skill'|'experience'|'education'|'certification'|'project'|'source';text:string;context:string};
@@ -67,7 +68,8 @@ export function buildContextualResume(candidate:unknown,job:JobInput,input:unkno
   if(row.relation==='missing'?evidence.length>0:evidence.length===0)throw Error('AI match evidence is inconsistent.');
   return {...row,evidence:evidence.map(fact=>({id:fact.id,text:fact.text,context:fact.context}))};
  });
- const baseline=buildResume(candidate,job);
+ const rewrittenBullets=selection.rewrittenBullets||{};
+ const baseline=buildResume(candidate,job,rewrittenBullets);
  let markdown=baseline.markdown;
  const summary=[...new Set(selection.summaryFactIds)].map(get).map(fact=>fact.context?`${fact.context}: ${fact.text}`:fact.text);
  if(selection.professionalSummary){

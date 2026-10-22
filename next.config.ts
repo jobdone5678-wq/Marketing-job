@@ -24,6 +24,11 @@ const nextConfig: NextConfig = {
       "@dnd-kit/sortable",
     ],
   },
+  async redirects() {
+    return [
+      { source: '/dashboard/resumes', destination: '/dashboard', permanent: false },
+    ];
+  },
   typescript: {
     ignoreBuildErrors: true,
   },
