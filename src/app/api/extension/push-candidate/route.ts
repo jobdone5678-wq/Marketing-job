@@ -14,7 +14,7 @@ export async function POST(request:Request){
   const body=await request.json().catch(()=>{throw new CaptureError('Provide a candidate and a recipient client account.',400);});
   const input=z.object({candidateId:z.uuid(),recipientId:z.uuid(),label:z.string().trim().max(120).nullable()}).safeParse(body);
   if(!input.success)throw new CaptureError('Provide a candidate and a recipient client account.',400);
-  const candidate=await candidateAccess(actor as unknown as {id:string;role:string},input.data.candidateId);
+  const candidate=await candidateAccess(actor as unknown as import('@/types/database').UserProfile,input.data.candidateId);
   if(candidate.provenance_status!=='confirmed')throw new CaptureError('Review and confirm the candidate details before sharing.',409);
   const {data,error}=await database().rpc('save_candidate_share',{p_actor:actor.id,p_candidate:input.data.candidateId,p_recipient:input.data.recipientId,p_label:input.data.label});
   checkDb(error);

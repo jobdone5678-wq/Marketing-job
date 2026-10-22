@@ -10,3 +10,4 @@ export function scopeKey(candidate:unknown,job:JobInput):string;
 export function jobIdentity(job:JobInput):JobInput;
 export function candidateFromText(text:string,filename?:string):Record<string,unknown>;
 export function resumeDocx(content:string):Uint8Array;
+export function categorizeSkills(skills: string[]): Map<string, string[]>;
