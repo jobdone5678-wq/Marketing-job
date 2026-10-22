@@ -13,10 +13,19 @@ export async function recommendationContext(profile: UserProfile, params: URLSea
     checkDb(error);
     candidate = data as Candidate | null;
   }
-  const enabled = profile.role === 'client' || Boolean(requested);
+  // Recruiting staff browse the complete public feed without a candidate
+  // profile to rank against; clients only see jobs matched to their resume.
+  const isRecruitingStaff = ['recruiter', 'technical_recruiter', 'super_admin'].includes(profile.role);
+  const enabled = profile.role === 'client' || Boolean(requested) || isRecruitingStaff;
   const ready = candidate?.provenance_status === 'confirmed';
   return {
     candidate: ready ? candidate : null,
-    recommendation: { enabled, requiresProfile: enabled && !ready, candidateId: candidate?.id || null, candidateName: candidate?.full_name || null },
+    recommendation: {
+      enabled,
+      requiresProfile: enabled && !ready,
+      staffSeeAll: isRecruitingStaff && !requested,
+      candidateId: candidate?.id || null,
+      candidateName: candidate?.full_name || null,
+    },
   };
 }

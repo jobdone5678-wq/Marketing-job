@@ -237,6 +237,9 @@ export function JobsBrowser({ provider }: { provider?: string }) {
             <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-xs py-0.5">
                Software & Tech Roles Only
             </Badge>
+            <Badge variant="outline" className="text-xs py-0.5 capitalize">
+              {isClient ? 'Candidate view' : isRecruitingStaff ? 'Recruiter view · all roles' : 'All roles'}
+            </Badge>
           </div>
           <p className="text-muted-foreground text-sm mt-1">
             Find jobs across public portals and companies. Filter by portal, company, location and employment type.

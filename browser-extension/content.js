@@ -971,6 +971,13 @@
       const res = await chrome.runtime.sendMessage({ type: 'get_candidates', refresh: true, candidateId: linkedCandidateId });
       candidates = res?.candidates || [];
       candidateRole = res?.role;
+      // Reviewed profiles pushed from the portal appear alongside the bench.
+      const shared = await chrome.runtime.sendMessage({ type: 'get_pushed_candidates' }).catch(() => null);
+      for (const share of shared?.shares || []) {
+        if (share.candidate && !candidates.some(c => c.id === share.candidate.id)) {
+          candidates.push({ ...share.candidate, _shared: true, _shareId: share.id });
+        }
+      }
       const draft=await chrome.runtime.sendMessage({type:'get_answer_draft'}).catch(()=>null);
       const id = linkedCandidateId || (candidateRole === 'client' ? res.ownCandidateId : ((candidateRole === 'standalone' && candidates.length === 1) ? candidates[0].id : draft?.candidateId));
       selectedCandidateId = candidates.some(c => c.id === id) ? id : null;

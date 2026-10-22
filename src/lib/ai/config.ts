@@ -31,18 +31,11 @@ function getLocalEnv(): Record<string, string> {
   return {};
 }
 
-export function getAIModel(){
-  if (process.env.NODE_ENV !== 'production') {
-    const local = getLocalEnv();
-    if (local.OPENAI_MODEL) return local.OPENAI_MODEL.trim();
-  }
-  return process.env.OPENAI_MODEL?.trim()||'gpt-4o-mini';
-}
+export function getAIModel(){return process.env.OPENAI_MODEL?.trim()||'gpt-4o-mini';}
 
 function configuration(){
- const local = process.env.NODE_ENV !== 'production' ? getLocalEnv() : {};
- const apiKey=(local.OPENAI_API_KEY || process.env.OPENAI_API_KEY)?.trim()||'';
- const baseURL=((local.OPENAI_BASE_URL || process.env.OPENAI_BASE_URL)?.trim().replace(/\/+$/,''))||undefined;
+ const apiKey=process.env.OPENAI_API_KEY?.trim()||'';
+ const baseURL=process.env.OPENAI_BASE_URL?.trim().replace(/\/+$/,'')||undefined;
  const missing=apiKey?[]:['OPENAI_API_KEY'];
  const issues:string[]=[];
  if(baseURL){

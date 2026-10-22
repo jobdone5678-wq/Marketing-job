@@ -25,7 +25,7 @@ export async function GET(request:Request) {
     if(postedWithin&&!['7','30','90','all'].includes(postedWithin))throw new CaptureError('Invalid posting date filter.');
     const window=publicationWindow(postedWithin);
     const {candidate,recommendation} = await recommendationContext(profile,params);
-    if (recommendation.requiresProfile) return {jobs:[],total:0,fetchedAt:new Date().toISOString(),persistedInDb:false,recommendation};
+    if (recommendation.requiresProfile && !recommendation.staffSeeAll) return {jobs:[],total:0,fetchedAt:new Date().toISOString(),persistedInDb:false,recommendation};
     const requestedProvider = (params.get('provider') || 'all').toLowerCase();
     if (!SUPPORTED_PROVIDERS.includes(requestedProvider)) throw new CaptureError('Unsupported public job provider.');
     const requestedBoard = params.get('board')?.trim();

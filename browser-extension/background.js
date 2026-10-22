@@ -249,6 +249,67 @@ async function receive(message, sender) {
     };
   }
 
+  if (message.type === 'get_pushed_candidates') {
+    const config = await chrome.storage.local.get(['origin', 'token']);
+    if (!config.token) return { error: 'Extension is not paired' };
+    try {
+      const res = await fetch(config.origin + '/api/extension/push-candidate', {
+        headers: { 'Authorization': 'Bearer ' + config.token }
+      });
+      const data = await res.json();
+      if (!res.ok) return { error: data.error || 'Unable to load shared profiles' };
+      return data;
+    } catch (err) { return { error: err.message }; }
+  }
+
+  if (message.type === 'push_candidate') {
+    const config = await chrome.storage.local.get(['origin', 'token']);
+    if (!config.token) return { error: 'Extension is not paired' };
+    try {
+      const res = await fetch(config.origin + '/api/extension/push-candidate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + config.token },
+        body: JSON.stringify(message.payload)
+      });
+      const data = await res.json();
+      if (!res.ok) return { error: data.error || 'Unable to share candidate' };
+      return data;
+    } catch (err) { return { error: err.message }; }
+  }
+
+  if (message.type === 'revoke_pushed_candidate') {
+    const config = await chrome.storage.local.get(['origin', 'token']);
+    if (!config.token) return { error: 'Extension is not paired' };
+    try {
+      const res = await fetch(config.origin + '/api/extension/push-candidate?id=' + encodeURIComponent(message.shareId), {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + config.token }
+      });
+      const data = await res.json();
+      if (!res.ok) return { error: data.error || 'Unable to revoke share' };
+      return data;
+    } catch (err) { return { error: err.message }; }
+  }
+
+  if (message.type === 'save_shared_candidate') {
+    const config = await chrome.storage.local.get(['origin', 'token']);
+    if (!config.token) return { error: 'Extension is not paired' };
+    try {
+      const res = await fetch(config.origin + '/api/extension/push-candidate?candidateId=' + encodeURIComponent(message.candidateId), {
+        headers: { 'Authorization': 'Bearer ' + config.token }
+      });
+      const data = await res.json();
+      if (!res.ok) return { error: data.error || 'Profile not available' };
+      const share = (data.shares || [])[0];
+      if (!share) return { error: 'This profile is no longer shared with you.' };
+      // A shared profile becomes the active source for autofill and ATS matching,
+      // exactly like a locally uploaded resume, while keeping its provenance.
+      const candidate = { ...share.candidate, source: 'shared', provenance_status: 'confirmed' };
+      await chrome.storage.local.set({ uploadedCandidate: candidate, sharedCandidate: candidate, sharedShareId: share.id });
+      return { success: true, candidate };
+    } catch (err) { return { error: err.message }; }
+  }
+
   if (message.type === 'get_resume_file') {
     const candidateId = message.candidateId;
     if (!candidateId) return { error: 'Candidate ID is required' };

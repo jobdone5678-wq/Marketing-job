@@ -34,6 +34,8 @@ import {
 import { toast } from "sonner";
 import {CandidateCombobox} from "@/components/candidate-combobox";
 import {WorkspaceError,WorkspaceSkeleton} from "@/components/workspace-ui";
+import {SendToExtensionButton} from "@/components/send-to-extension-button";
+import {useUserProfile} from "@/hooks/use-user-profile";
 import {
   SendIcon,
   PlusIcon,
@@ -58,6 +60,8 @@ import {
 } from "lucide-react";
 
 export default function SubmissionsPage() {
+  const { isRecruiter, isTechnicalRecruiter } = useUserProfile();
+  const canPushProfile = isRecruiter || isTechnicalRecruiter;
   const [submissions, setSubmissions] = React.useState<JobSubmission[]>([]);
   const [candidates, setCandidates] = React.useState<Candidate[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -792,6 +796,7 @@ export default function SubmissionsPage() {
                       {/* Actions */}
                       <TableCell className="align-top py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {canPushProfile && <SendToExtensionButton submission={sub} />}
                           <Button
                             variant="ghost"
                             size="sm"

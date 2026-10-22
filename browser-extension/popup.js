@@ -28,6 +28,10 @@ const btnChangeResume = document.getElementById('btn-change-resume');
 const btnRemoveResume = document.getElementById('btn-remove-resume');
 const resumeModePill = document.getElementById('resume-mode-pill');
 
+function escapeHtml(value) {
+  return String(value || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 function showToast(msg, isError = false) {
   toastEl.textContent = msg;
   toastEl.style.color = isError ? '#f87171' : '#34d399';
@@ -316,11 +320,74 @@ document.getElementById('btn-manual-pair').addEventListener('click', async () =>
   }
 });
 
+// Shared profiles pushed from NextKinHR
+const sharedProfilesList = document.getElementById('shared-profiles-list');
+const sharedProfilesStatus = document.getElementById('shared-profiles-status');
+
+async function loadSharedProfiles() {
+  if (!sharedProfilesList) return;
+  sharedProfilesStatus.textContent = 'Loading shared profiles...';
+  sharedProfilesList.replaceChildren();
+  try {
+    const res = await chrome.runtime.sendMessage({ type: 'get_pushed_candidates' });
+    if (res?.error) { sharedProfilesStatus.textContent = res.error; return; }
+    const shares = res?.shares || [];
+    if (!shares.length) { sharedProfilesStatus.textContent = 'No profiles have been shared with you yet.'; return; }
+    sharedProfilesStatus.textContent = shares.length + ' shared profile(s).';
+    for (const share of shares) {
+      const cand = share.candidate;
+      if (!cand) continue;
+      const row = document.createElement('div');
+      row.style.cssText = 'padding: 8px; border-bottom: 1px solid var(--border);';
+      const head = document.createElement('div');
+      head.style.cssText = 'display:flex; justify-content:space-between; align-items:center; gap:6px;';
+      const left = document.createElement('div');
+      left.innerHTML = `<strong style="font-size:12px;">${escapeHtml(cand.full_name || 'Candidate')}</strong>` +
+        `<div style="font-size:10.5px;color:var(--muted);">${cand.current_job_title || 'Role not recorded'} · pushed ${new Date(share.created_at).toLocaleDateString()}</div>`;
+      const useBtn = document.createElement('button');
+      useBtn.className = 'btn btn-outline';
+      useBtn.style.cssText = 'font-size:10px;padding:3px 8px;width:auto;margin:0;';
+      useBtn.textContent = 'Use this profile';
+      useBtn.onclick = async () => {
+        useBtn.disabled = true; useBtn.textContent = '...';
+        try {
+          const saved = await chrome.runtime.sendMessage({ type: 'save_shared_candidate', candidateId: cand.id });
+          if (saved?.error) { showToast(saved.error, true); return; }
+          showToast('Using ' + (saved.candidate.full_name || cand.full_name) + ' for autofill and ATS matching.');
+          await renderState(); await populateCandidateDropdown();
+        } catch (e) { showToast('Failed to use profile: ' + e.message, true); }
+        finally { useBtn.disabled = false; useBtn.textContent = 'Use this profile'; }
+      };
+      head.appendChild(left); head.appendChild(useBtn);
+      const meta = document.createElement('div');
+      meta.style.cssText = 'font-size:10.5px;color:var(--muted);margin-top:4px;';
+      const skills = cand.primary_skills ? cand.primary_skills.split(/[,;]/).map(s => s.trim()).filter(Boolean) : [];
+      meta.textContent = [cand.email, cand.phone, cand.current_city && cand.current_state ? cand.current_city + ', ' + cand.current_state : null]
+        .filter(Boolean).join(' · ');
+      const chips = document.createElement('div');
+      chips.style.cssText = 'display:flex; flex-wrap:wrap; gap:3px; margin-top:5px;';
+      for (const skill of skills.slice(0, 6)) {
+        const chip = document.createElement('span');
+        chip.className = 'skill-chip'; chip.textContent = skill;
+        chips.appendChild(chip);
+      }
+      row.append(head, meta, chips);
+      sharedProfilesList.appendChild(row);
+    }
+  } catch (err) { sharedProfilesStatus.textContent = 'Error: ' + err.message; }
+}
+
+function escapeHtml(value) {
+  return String(value || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 // Initial render
 void renderState();
 void populateCandidateDropdown();
+void loadSharedProfiles();
 
-// Download active candidate resume
+// Download active candidate resume. Prefer the most recent AI-tailored version
+// for this candidate (generated from a real JD); fall back to a general DOCX.
 document.getElementById('btn-download-active-resume')?.addEventListener('click', async () => {
   const { uploadedCandidate, candidates } = await chrome.storage.local.get(['uploadedCandidate', 'candidates']);
   const candidate = uploadedCandidate || (candidates && candidates[0]);
@@ -332,20 +399,45 @@ document.getElementById('btn-download-active-resume')?.addEventListener('click',
   try {
     const engine = globalThis.NextkinResume;
     if (!engine) throw new Error('Resume engine not loaded.');
-    const resumeObj = engine.buildResume(candidate, {
-      jobTitle: candidate.current_job_title || 'Software Professional',
-      companyName: 'General Applications',
-      jobDescription: candidate.summary || 'General applications and matching positions.'
-    });
-    const bytes = engine.resumeDocx(resumeObj.markdown);
-    const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${(candidate.full_name || 'Resume').replace(/[^a-zA-Z0-9_-]+/g, '_')}_Resume.docx`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    showToast('Downloaded ' + a.download + '!');
+
+    // Prefer a saved AI-tailored version for this candidate.
+    let downloaded = false;
+    try {
+      const history = await chrome.runtime.sendMessage({ type: 'list_resume_versions', candidateId: candidate.id, limit: 1 });
+      const latest = history?.versions?.[0];
+      if (latest) {
+        const detail = await chrome.runtime.sendMessage({ type: 'get_saved_resume', candidateId: candidate.id, scopeKey: latest.scopeKey });
+        if (detail?.docxBase64 || detail?.result?.markdown) {
+          const bytes = detail.docxBase64 ? Uint8Array.from(atob(detail.docxBase64), c => c.charCodeAt(0)) : engine.resumeDocx(detail.result.markdown);
+          const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = detail.filename || `${(latest.companyName || 'Tailored')}_Resume.docx`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          showToast('Downloaded AI-tailored resume for ' + (latest.companyName || 'this role') + '!');
+          downloaded = true;
+        }
+      }
+    } catch { /* fall through to the general build */ }
+
+    if (!downloaded) {
+      const resumeObj = engine.buildResume(candidate, {
+        jobTitle: candidate.current_job_title || 'Software Professional',
+        companyName: 'General Applications',
+        jobDescription: candidate.summary || 'General applications and matching positions.'
+      });
+      const bytes = engine.resumeDocx(resumeObj.markdown);
+      const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(candidate.full_name || 'Resume').replace(/[^a-zA-Z0-9_-]+/g, '_')}_Resume.docx`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      showToast('Downloaded general resume for ' + candidate.full_name + '! Open a job and choose Tailor Resume for an AI-tailored version.');
+    }
   } catch (err) {
     showToast('Download error: ' + err.message, true);
   }
@@ -396,7 +488,11 @@ btnLoadHistory?.addEventListener('click', async () => {
       const row = document.createElement('div');
       row.style.cssText = 'padding: 8px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 6px;';
       const info = document.createElement('div');
-      info.innerHTML = `<strong>${v.jobTitle || 'Job Role'}</strong><div style="font-size:10.5px;color:var(--muted);">${v.companyName || ''} · Match: ${v.matchScore != null ? v.matchScore + '%' : 'N/A'}</div>`;
+      const missing = (v.missingSkills || v.ats?.missing || []).slice(0, 6);
+      const missingHtml = missing.length
+        ? `<div style="font-size:10px;color:#f59e0b;margin-top:3px;">Missing: ${missing.map(s => escapeHtml(s)).join(', ')}</div>`
+        : '';
+      info.innerHTML = `<strong>${v.jobTitle || 'Job Role'}</strong><div style="font-size:10.5px;color:var(--muted);">${v.companyName || ''} · Match: ${v.matchScore != null ? v.matchScore + '%' : 'N/A'}${v.ai ? ' · AI-tailored' : ''}</div>${missingHtml}`;
       const dlBtn = document.createElement('button');
       dlBtn.className = 'btn btn-outline';
       dlBtn.style.cssText = 'font-size:10px;padding:3px 8px;width:auto;margin:0;';

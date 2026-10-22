@@ -48,7 +48,7 @@ async function main() {
   let stop = false;
   process.on('SIGTERM', () => { stop = true; });
   process.on('SIGINT', () => { stop = true; });
-  let scheduled = 0;
+  let scheduled = Date.now();
 
   console.log('[Worker] Recruiting worker started. Polling task queue...');
 
@@ -67,7 +67,7 @@ async function main() {
           } else {
             for (const source of sources || []) {
               const { error } = await db.rpc('enqueue_source_sync', { p_actor: source.created_by, p_source: source.id });
-              if (error) console.error('A source could not be scheduled:', error.message);
+              if (error && !error.message?.includes('Source access denied')) console.error('A source could not be scheduled:', error.message);
             }
           }
         }

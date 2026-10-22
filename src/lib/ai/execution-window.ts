@@ -7,5 +7,5 @@ export function aiRequestTimeout(){
  const deadline=deadlines.getStore();if(deadline===undefined)return 120000;
  const remaining=Math.floor(deadline-performance.now());
  if(remaining<=0)throw new CaptureError('AI processing exceeded the request time limit. Retry or ask your administrator to use the separate worker.',502);
- return Math.max(1000, remaining - 2000);
+ return Math.min(20000, Math.max(1000, remaining - 2000));
 }
