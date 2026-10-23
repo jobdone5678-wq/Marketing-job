@@ -82,6 +82,8 @@ export function ResumeUploadReview({
   }, [documentId, onDraft, retry]);
 
   async function upload(file: File) {
+    // Stop polling the previous document before starting another upload.
+    setId('');
     setError('');
     setProcessingNote('');
     setExtraction(null);
@@ -175,6 +177,7 @@ export function ResumeUploadReview({
               await api(`/api/resumes/${documentId}/process`, { method: 'POST', body: '{}' });
               setBusy(true);
               setError('');
+              setProcessingNote('');
               setRetry((v) => v + 1);
             } catch (e) {
               setError((e as Error).message);

@@ -1,17 +1,20 @@
 import {unzipSync,zipSync} from 'fflate';
 import mammoth from 'mammoth';
 
+// Only these controlled validation messages may be shown to an uploader.
+export class ResumeReadError extends Error {}
+
 export function hasPdfHeader(raw:Buffer):boolean {
   return raw.subarray(0,1024).indexOf(Buffer.from('%PDF-'))>=0;
 }
 
 export async function readResume(raw:Buffer,filename:string):Promise<{text:string;pages:number|null;mime:string}> {
-  if(raw.length>10*1024*1024)throw new Error('Resume must be at most 10 MiB.');
+  if(raw.length>10*1024*1024)throw new ResumeReadError('Resume must be at most 10 MiB.');
   if(/\.pdf$/i.test(filename)) {
-    if(!hasPdfHeader(raw))throw new Error('The selected file does not contain a PDF header. Choose a valid PDF file.');
-    const {getDocument}=await import('pdfjs-dist/legacy/build/pdf.mjs');
+    if(!hasPdfHeader(raw))throw new ResumeReadError('The selected file does not contain a PDF header. Choose a valid PDF file.');
     let document;let loadingTask;
     try {
+      const {getDocument}=await import('pdfjs-dist/legacy/build/pdf.mjs');
       loadingTask=getDocument({
         data:new Uint8Array(raw),
         useWorkerFetch:false,
@@ -20,7 +23,7 @@ export async function readResume(raw:Buffer,filename:string):Promise<{text:strin
         verbosity:0,
       });
       document=await loadingTask.promise;
-      if(document.numPages>20)throw new Error('Resume must contain at most 20 pages.');
+      if(document.numPages>20)throw new ResumeReadError('Resume must contain at most 20 pages.');
       const pages=[];
       for(let number=1;number<=document.numPages;number++) {
         try {
@@ -32,22 +35,25 @@ export async function readResume(raw:Buffer,filename:string):Promise<{text:strin
           pages.push('');
         }
       }
-      const text=pages.join('\n');if(text.length>500000)throw new Error('Resume text exceeds the processing limit.');
+      const text=pages.join('\n');if(text.length>500000)throw new ResumeReadError('Resume text exceeds the processing limit.');
       return {text,pages:document.numPages,mime:'application/pdf'};
     } catch(error: unknown) {
-      if(error instanceof Error && /20 pages|processing limit/.test(error.message))throw error;
+      if(error instanceof ResumeReadError)throw error;
       const message=error instanceof Error?error.message:'';
       const name=error instanceof Error?error.name:'';
       const isPassword = name === 'PasswordException' || /password/i.test(message);
       if (isPassword) {
-        throw new Error('Upload a valid PDF without password protection.');
+        throw new ResumeReadError('Upload a valid PDF without password protection.');
       }
       console.error('[readResume] PDF parse error:', error);
-      throw new Error('This PDF could not be read. Re-save or print it as a new PDF, then upload the new copy.');
-    } finally {await loadingTask?.destroy();}
+      throw new ResumeReadError('This PDF could not be read. Re-save or print it as a new PDF, then upload the new copy.');
+    } finally {
+      // Cleanup must not replace a useful parser error or discard successfully extracted text.
+      try {await loadingTask?.destroy();} catch {}
+    }
   }
   if(/\.docx$/i.test(filename)) {
-    if(raw.subarray(0,4).toString('hex')!=='504b0304')throw new Error('Upload a valid DOCX.');
+    if(raw.subarray(0,4).toString('hex')!=='504b0304')throw new ResumeReadError('Upload a valid DOCX.');
     try {
       // Inspect every ZIP entry's declared size before allowing mammoth to decompress it.
       let expanded=0;
@@ -61,7 +67,7 @@ export async function readResume(raw:Buffer,filename:string):Promise<{text:strin
       const {value:text}=await mammoth.extractRawText({buffer:Buffer.from(zipSync(entries))});
       if(!text.trim()||text.length>500000)throw new Error('No readable document text.');
       return {text,pages:null,mime:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'};
-    } catch {throw new Error('Upload a valid DOCX with readable text and no more than 20 MiB of expanded content.');}
+    } catch {throw new ResumeReadError('Upload a valid DOCX with readable text and no more than 20 MiB of expanded content.');}
   }
-  throw new Error('Upload a PDF or DOCX resume.');
+  throw new ResumeReadError('Upload a PDF or DOCX resume.');
 }

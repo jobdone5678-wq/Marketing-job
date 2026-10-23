@@ -1,7 +1,7 @@
 import 'server-only';
 import {database,checkDb,CaptureError} from '@/lib/db/admin';
 import type {BackgroundTask} from '@/lib/tasks/types';
-import {readResume} from '@/lib/resumes/validation';
+import {readResume,ResumeReadError} from '@/lib/resumes/validation';
 import {resumeSchema,validateResumeExtraction} from './schemas';
 import {structuredAI, getAIModel} from './client';
 import {taskLease} from '@/lib/tasks/repository';
@@ -18,7 +18,12 @@ export async function extractResume(task:BackgroundTask) {
   if(downloadError||!download)throw new CaptureError('Private resume download failed.',502);
   const raw=Buffer.from(await download.arrayBuffer());
   if(createHash('sha256').update(raw).digest('hex')!==document.content_hash)throw new CaptureError('Resume content changed. Upload again.',409);
-  const parsed=await readResume(raw,document.filename);
+  let parsed:Awaited<ReturnType<typeof readResume>>;
+  try {parsed=await readResume(raw,document.filename);}
+  catch(error) {
+    if(error instanceof ResumeReadError)throw new CaptureError(error.message,422);
+    throw error;
+  }
   const model=getAIModel();
   const {data:cached,error:cacheError}=await db.from('resume_extractions').select('data,document:candidate_documents!inner(owner_id,content_hash,status)')
     .eq('document.owner_id',document.owner_id).eq('document.content_hash',document.content_hash).eq('model',model).eq('prompt_version','resume-v1').limit(1).maybeSingle();checkDb(cacheError);

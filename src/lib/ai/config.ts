@@ -1,35 +1,8 @@
 import 'server-only';
 import {CaptureError} from '@/lib/db/admin';
-import fs from 'node:fs';
-import path from 'node:path';
 
 export type AIProvider='openai';
 export function getAIProvider():AIProvider{return 'openai';}
-
-function getLocalEnv(): Record<string, string> {
-  try {
-    const envPath = path.resolve(process.cwd(), '.env.local');
-    if (fs.existsSync(envPath)) {
-      const content = fs.readFileSync(envPath, 'utf8');
-      const parsed: Record<string, string> = {};
-      for (const line of content.split('\n')) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('#')) continue;
-        const eqIdx = trimmed.indexOf('=');
-        if (eqIdx !== -1) {
-          const key = trimmed.slice(0, eqIdx).trim();
-          let val = trimmed.slice(eqIdx + 1).trim();
-          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-            val = val.slice(1, -1);
-          }
-          parsed[key] = val;
-        }
-      }
-      return parsed;
-    }
-  } catch {}
-  return {};
-}
 
 export function getAIModel(){return process.env.OPENAI_MODEL?.trim()||'gpt-4o-mini';}
 

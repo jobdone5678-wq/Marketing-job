@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     try {
       result = await handleTask(task);
     } catch (error) {
-      const message = 'Task processing failed. Check server configuration and retry.';
+      const message = error instanceof CaptureError ? error.message : 'Task processing failed. Check server configuration and retry.';
       const { error: failureError } = await db.rpc('record_task_failure', {
         p_task: task.id, p_lease: task.lease_token, p_error: message,
       });

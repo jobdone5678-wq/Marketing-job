@@ -58,6 +58,14 @@ test('webhook sanitizes handler errors and checks failure finalization',async t=
  assert.equal(response.status,500);assert.ok(!JSON.stringify(await response.json()).includes('provider secret'));
  assert.ok(harness.calls.filter(([name])=>name==='record_task_failure'||name==='finish_task').every(([,args])=>!args.p_error.includes('provider secret')));
 });
+
+test('webhook preserves controlled parser errors for resume review and retry',async t=>{
+ setup(t);const message='Upload a valid PDF without password protection.';
+ const harness=load({claimed:[{id:target,kind:'resume_extract',lease_token:'lease'}],handlerError:new CaptureError(message,422)});
+ const response=await harness.loader('src/app/api/webhooks/process-task/route.ts').POST(new Request('https://nextkinhr.com/api/webhooks/process-task',{method:'POST',headers:{authorization:'Bearer test-shared-secret'},body:JSON.stringify({taskId:target})}));
+ assert.equal(response.status,422);assert.equal((await response.json()).error,message);
+ assert.ok(harness.calls.filter(([name])=>name==='record_task_failure'||name==='finish_task').every(([,args])=>args.p_error===message));
+});
 test('webhook with unavailable AI configuration leaves queued work for the separate worker',async t=>{
  setup(t);const harness=load({status:'queued',aiConfigured:false});
  const response=await harness.loader('src/app/api/webhooks/process-task/route.ts').POST(new Request('https://nextkinhr.com/api/webhooks/process-task',{method:'POST',headers:{authorization:'Bearer test-shared-secret'},body:JSON.stringify({taskId:target})}));
