@@ -12,6 +12,9 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { FileText, Clock, Globe, Copy, Check } from 'lucide-react';
+import { cleanFieldLabel } from '@/lib/clean-field-label';
+
+export { cleanFieldLabel };
 
 type Snapshot = {
   id: string;
@@ -54,7 +57,7 @@ export function ApplicationAnswerSnapshot({ submissionId }: { submissionId: stri
     if (!snapshots?.length) return;
     const text = snapshots.map(s => {
       const header = `${s.portal || 'Portal'} — Attempt ${s.attempt} · Revision ${s.revision} (${new Date(s.observed_at).toLocaleString()})`;
-      const body = s.answers.map(a => `${a.label}:\n${a.value}`).join('\n\n');
+      const body = s.answers.map(a => `${cleanFieldLabel(a.label, a.key)}:\n${a.value}`).join('\n\n');
       return `${header}\n\n${body}`;
     }).join('\n\n---\n\n');
 
@@ -127,7 +130,7 @@ export function ApplicationAnswerSnapshot({ submissionId }: { submissionId: stri
                   {snapshot.answers.map(answer => (
                     <div key={answer.key} className="space-y-1">
                       <dt className="text-xs font-semibold text-foreground">
-                        {answer.label}
+                        {cleanFieldLabel(answer.label, answer.key)}
                       </dt>
                       <dd className="rounded-md bg-muted/40 border border-border/40 px-3 py-2 text-xs text-foreground whitespace-pre-wrap break-words font-mono">
                         {answer.value || <span className="italic text-muted-foreground">(blank)</span>}

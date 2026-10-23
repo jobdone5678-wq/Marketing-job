@@ -146,6 +146,84 @@
     } catch {}
   }
 
+
+  function cleanFieldLabel(rawLabel, key) {
+    let text = String(rawLabel || '').trim();
+    text = text.replace(/_systemfield_\w+/gi, ' ');
+    text = text.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, ' ');
+    text = text.replace(/\b[0-9a-f]{16,}\b/gi, ' ');
+    text = text.replace(/\b(type\s*here|start\s*typing|pick\s*date|select|choose|enter\s*here|e\.g\.)\b\.*/gi, ' ');
+    text = text.replace(/hello@example\.com\.*/gi, ' ');
+    text = text.replace(/1-415-555-1234\.*/gi, ' ');
+    text = text.replace(/https?:\/\/\S+/gi, ' ');
+
+    const qMatch = text.match(/([A-Z0-9][^?]*\?)/i);
+    if (qMatch) {
+      const q = qMatch[1].trim().replace(/\s+/g, ' ');
+      if (q.length > 5) return q;
+    }
+
+    text = text.replace(/[\*\:…\.\,\_]+/g, ' ');
+    text = text.replace(/\s+/g, ' ').trim();
+
+    const words = text.split(' ').filter(Boolean);
+    const uniqueWords = [];
+    for (const w of words) {
+      if (!uniqueWords.some(u => u.toLowerCase() === w.toLowerCase())) {
+        uniqueWords.push(w);
+      }
+    }
+    const deduped = uniqueWords.join(' ');
+
+    const lower = deduped.toLowerCase();
+    const keyLower = String(key || '').toLowerCase();
+
+    if (/^(full\s*)?name$/i.test(lower) || /^(full_?name|name)$/i.test(keyLower)) {
+      return 'Full Name';
+    }
+    if (/^first\s*name$/i.test(lower) || /first_?name/i.test(keyLower)) {
+      return 'First Name';
+    }
+    if (/^last\s*name$/i.test(lower) || /last_?name/i.test(keyLower)) {
+      return 'Last Name';
+    }
+    if (lower.includes('email') || keyLower.includes('email')) {
+      return 'Email Address';
+    }
+    if (lower.includes('phone') || lower.includes('mobile') || keyLower.includes('phone') || keyLower.includes('mobile')) {
+      return 'Phone Number';
+    }
+    if (lower === 'location' || lower.includes('city') || keyLower.includes('location') || keyLower.includes('city')) {
+      return 'Location';
+    }
+    if (lower.includes('linkedin') || keyLower.includes('linkedin')) {
+      return 'LinkedIn Profile';
+    }
+    if (lower.includes('github') || keyLower.includes('github')) {
+      return 'GitHub Profile';
+    }
+    if (lower.includes('portfolio') || lower.includes('website') || keyLower.includes('portfolio') || keyLower.includes('website')) {
+      return 'Portfolio / Website';
+    }
+    if (lower.includes('salary') || lower.includes('compensation') || keyLower.includes('salary') || keyLower.includes('compensation')) {
+      return 'Desired Salary / Compensation';
+    }
+
+    if (deduped.length >= 2) {
+      if (deduped.length <= 50) {
+        return deduped.replace(/\b\w/g, c => c.toUpperCase());
+      }
+      return deduped.charAt(0).toUpperCase() + deduped.slice(1);
+    }
+
+    if (key) {
+      const cleanKey = key.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+      if (cleanKey && cleanKey.length > 1) return cleanKey;
+    }
+
+    return rawLabel || 'Field';
+  }
+
   function captureApplicationAnswers() {
     const answers = new Map();
     const relevant = /name|email|phone|mobile|address|city|state|zip|postal|country|location|linkedin|portfolio|website|github|skill|experience|employ|education|school|university|degree|qualif|company|title|role|position|salary|compensation|rate|availab|notice|start|relocat|sponsor|authori|work.?permit|cover.?letter|message|hear|referr|interest|project|summary/i;
@@ -153,9 +231,10 @@
     for (const el of document.querySelectorAll('input, textarea, select')) {
       if (el.closest('#mp-copilot-root') || !el.getClientRects().length || el.disabled || el.type === 'hidden' || ['password','file','submit','button','reset','image'].includes(el.type)) continue;
       const question = getElementContext(el).trim();
-      const label = (question || el.name || el.id || '').slice(0, 200);
-      const key = String(el.name || el.id || label).trim().slice(0, 160);
-      if (!key || !label || sensitive.test(`${key} ${question} ${el.name || ''} ${el.id || ''}`) || !relevant.test(`${key} ${question || label}`)) continue;
+      const rawLabel = (question || el.name || el.id || '').slice(0, 200);
+      const key = String(el.name || el.id || rawLabel).trim().slice(0, 160);
+      if (!key || !rawLabel || sensitive.test(`${key} ${question} ${el.name || ''} ${el.id || ''}`) || !relevant.test(`${key} ${question || rawLabel}`)) continue;
+      const label = cleanFieldLabel(rawLabel, key);
       const normalized=key.toLowerCase();
       const value = ['checkbox','radio'].includes(el.type)&&!el.checked?'':el.tagName==='SELECT'&&el.multiple?Array.from(el.selectedOptions).map(option=>option.textContent.trim()).join('; '):String(el.value || '').trim();
       const previous=answers.get(normalized);
