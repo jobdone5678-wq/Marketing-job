@@ -169,7 +169,7 @@ export function SignupForm() {
         if (error.status === 429 || (error as { code?: string }).code === "over_email_send_rate_limit") {
           // Free tier rate limit hit: explain clearly and still allow entering code if already sent
           setErrorMsg(
-            "Supabase email rate limit reached (free tier limit of 3 emails/hour). If you already received a 6-digit code in your email earlier, enter it below."
+            "Supabase email rate limit reached (free tier limit of 3 emails/hour). If you already received a verification code in your email earlier, enter it below."
           );
           setOtpStep(true);
         } else {
@@ -178,7 +178,7 @@ export function SignupForm() {
       } else {
         setOtpStep(true);
         setCountdown(45);
-        setSuccessMsg(`A 6-digit verification code has been sent to ${cleanEmail}. Please check your inbox or spam.`);
+        setSuccessMsg(`A verification code has been sent to ${cleanEmail}. Please check your inbox or spam.`);
       }
     } catch (err: unknown) {
       const message =
@@ -197,7 +197,7 @@ export function SignupForm() {
 
     const cleanCode = otpCode.trim();
     if (!cleanCode || cleanCode.length < 6) {
-      setErrorMsg("Please enter the complete 6-digit verification code.");
+      setErrorMsg("Please enter the complete verification code.");
       return;
     }
 
@@ -300,7 +300,7 @@ export function SignupForm() {
         setErrorMsg(error.message);
       } else {
         setCountdown(45);
-        setSuccessMsg(`New 6-digit verification code sent to ${email.trim()}.`);
+        setSuccessMsg(`New verification code sent to ${email.trim()}.`);
       }
     } catch (err) {
       const message =
@@ -427,10 +427,10 @@ export function SignupForm() {
             Email OTP Verification
           </div>
           <h1 className="text-xl font-bold tracking-tight text-foreground">
-            Enter 6-Digit Code
+            Enter Verification Code
           </h1>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            We sent a 6-digit verification code and a sign-in link to <span className="font-semibold text-foreground">{email}</span>.
+            We sent a verification code and a sign-in link to <span className="font-semibold text-foreground">{email}</span>.
             Enter the code below or click the sign-in link in your email.
           </p>
         </div>
@@ -458,8 +458,8 @@ export function SignupForm() {
                 id="otpCode"
                 type="text"
                 inputMode="numeric"
-                maxLength={6}
-                placeholder="123456"
+                maxLength={10}
+                placeholder="12345678"
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
                 required
