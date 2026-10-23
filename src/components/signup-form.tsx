@@ -137,13 +137,10 @@ export function SignupForm() {
 
     // Phone is optional
 
+    const derivedName = cleanName || cleanEmail.split("@")[0] || "User";
+
     if (!cleanEmail || !cleanEmail.includes("@")) {
       setErrorMsg("Please enter a valid email address.");
-      return;
-    }
-
-    if (!cleanName) {
-      setErrorMsg("Please enter your full name.");
       return;
     }
 
@@ -160,7 +157,7 @@ export function SignupForm() {
         options: {
           shouldCreateUser: true,
           data: {
-            full_name: cleanName,
+            full_name: derivedName,
             phone: cleanPhone || null,
             role: selectedRole,
           },
@@ -207,23 +204,35 @@ export function SignupForm() {
     setLoading(true);
 
     try {
-      // Attempt verification as 'email' OTP
+      const cleanEmail = email.trim();
+      // Supabase GoTrue issues tokens under different OTP types depending on user status:
+      // 'email', 'magiclink' (for existing accounts), or 'signup' (for new user confirmation)
       let { data, error } = await supabase.auth.verifyOtp({
-        email: email.trim(),
+        email: cleanEmail,
         token: cleanCode,
         type: "email",
       });
 
-      // If 'email' type fails, try 'signup' type in case Supabase treated it as signup confirmation
-      if (error && (error.message.includes("invalid") || error.message.includes("expired"))) {
-        const retry = await supabase.auth.verifyOtp({
-          email: email.trim(),
+      // If 'email' type fails, try 'magiclink' (used by Supabase for existing users) and 'signup' (for new user registrations)
+      if (error && (error.message.includes("invalid") || error.message.includes("expired") || error.status === 400 || error.status === 401)) {
+        const retryMagic = await supabase.auth.verifyOtp({
+          email: cleanEmail,
           token: cleanCode,
-          type: "signup",
+          type: "magiclink",
         });
-        if (!retry.error) {
-          data = retry.data;
+        if (!retryMagic.error) {
+          data = retryMagic.data;
           error = null;
+        } else {
+          const retrySignup = await supabase.auth.verifyOtp({
+            email: cleanEmail,
+            token: cleanCode,
+            type: "signup",
+          });
+          if (!retrySignup.error) {
+            data = retrySignup.data;
+            error = null;
+          }
         }
       }
 
@@ -421,8 +430,8 @@ export function SignupForm() {
             Enter 6-Digit Code
           </h1>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            We sent a verification code to <span className="font-semibold text-foreground">{email}</span>.
-            Enter the code below to sign in.
+            We sent a 6-digit verification code and a sign-in link to <span className="font-semibold text-foreground">{email}</span>.
+            Enter the code below or click the sign-in link in your email.
           </p>
         </div>
 
@@ -601,7 +610,7 @@ export function SignupForm() {
         {/* Full Name */}
         <div className="space-y-0.5">
           <Label htmlFor="name" className="text-xs font-medium">
-            Full Name <span className="text-destructive">*</span>
+            Full Name <span className="text-[10px] text-muted-foreground font-normal">(Required for new registration)</span>
           </Label>
           <div className="relative">
             <UserIcon className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
@@ -610,7 +619,6 @@ export function SignupForm() {
               placeholder="e.g. John Doe"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              required
               className="h-8.5 pl-8 text-xs"
             />
           </div>
