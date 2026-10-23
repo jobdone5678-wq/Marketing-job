@@ -1070,25 +1070,47 @@
   }
 
   function nativeSet(el, property, value, commit = true) {
+    if (!el || !el.isConnected) return;
+    if (typeof el.setCustomValidity === 'function') {
+      try { el.setCustomValidity(''); } catch {}
+    }
+
     if (property === 'checked') {
-      // React uses click events to update controlled checkbox/radio state.
-      if (el.checked !== value) {
-        filling = true;
-        try { el.click(); } finally { filling = false; }
+      const boolVal = Boolean(value);
+      if (el._valueTracker) {
+        try { el._valueTracker.setValue(boolVal ? 'false' : 'true'); } catch {}
+      }
+      const proto = HTMLInputElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(proto, 'checked')?.set;
+      if (setter) setter.call(el, boolVal); else el.checked = boolVal;
+
+      filling = true;
+      try {
+        try { el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, composed: true })); } catch {
+          try { el.click(); } catch {}
+        }
+        el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+        try { el.dispatchEvent(new FocusEvent('blur', { bubbles: true, composed: true })); } catch {}
+      } finally {
+        filling = false;
+      }
+      if (el.getAttribute?.('aria-invalid') === 'true') {
+        try { el.removeAttribute('aria-invalid'); } catch {}
       }
       highlightField(el);
       return;
     }
-    // Jobright React value tracker synchronization
+
     if (el._valueTracker) {
-      try { el._valueTracker.setValue(''); } catch {}
+      try { el._valueTracker.setValue(String(value) === '' ? '__force_diff__' : ''); } catch {}
     }
     const proto = el.tagName === 'SELECT' ? HTMLSelectElement.prototype
       : el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(proto, property)?.set;
     if (setter) setter.call(el, value); else el[property] = value;
 
-    try { el.dispatchEvent(new Event('focus', { bubbles: true, composed: true })); } catch {}
+    try { el.dispatchEvent(new FocusEvent('focus', { bubbles: true, composed: true })); } catch {}
     try {
       el.dispatchEvent(new InputEvent('input', {
         bubbles: true,
@@ -1101,7 +1123,10 @@
     }
     if (commit) {
       el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-      try { el.dispatchEvent(new Event('blur', { bubbles: true, composed: true })); } catch {}
+      try { el.dispatchEvent(new FocusEvent('blur', { bubbles: true, composed: true })); } catch {}
+      if (el.getAttribute?.('aria-invalid') === 'true') {
+        try { el.removeAttribute('aria-invalid'); } catch {}
+      }
     }
     highlightField(el);
   }
@@ -1156,7 +1181,7 @@
           const workdayRoots = Array.from(document.querySelectorAll('[data-automation-id="activeListContainer"], [role="listbox"]:not([aria-hidden="true"])'));
 
           // 3. Greenhouse Select2 / Generic open menus
-          const genericRoots = Array.from(document.querySelectorAll('.select2-drop-active, [class*="menu"][style*="block"], [class*="dropdown-menu"]'));
+          const genericRoots = Array.from(document.querySelectorAll('.select2-drop-active, [class*="menu"], [class*="dropdown"], [class*="popover"], [class*="listbox"], [role="listbox"], [class*="_menu_"], [class*="_dropdown_"]'));
 
           const allContainers = [...roots, ...workdayRoots, ...genericRoots];
           const options = allContainers.flatMap(c => Array.from(c.querySelectorAll('[role="option"], [data-automation-id="promptOption"], [data-automation-id="promptLeafNode"], .select2-results li, li')));
@@ -1178,7 +1203,9 @@
           await new Promise(resolve => setTimeout(resolve, 80));
         }
       } finally {
-        if (!selected && query && !editedFields.has(el) && el.value === query) nativeSet(el, 'value', '', false);
+        if (!selected && query && !editedFields.has(el)) {
+          nativeSet(el, 'value', query, true);
+        }
       }
     }).catch(() => {});
   }
@@ -1728,7 +1755,13 @@
 
     for (const el of controls) {
       if(blocked.has(el))continue;
-      const dropdown = el.tagName !== 'SELECT' && (el.getAttribute('role') === 'combobox' || el.getAttribute('aria-autocomplete') === 'list' || el.getAttribute('aria-haspopup') === 'listbox');
+      const dropdown = el.tagName !== 'SELECT' && (
+        el.getAttribute('role') === 'combobox' ||
+        el.getAttribute('aria-autocomplete') === 'list' ||
+        el.getAttribute('aria-haspopup') === 'listbox' ||
+        /start\s*typing/i.test(el.placeholder || '') ||
+        (el.getAttribute('autocomplete') === 'off' && /location|city|country/i.test(key))
+      );
       if (el.closest('#mp-copilot-root') || el.disabled || (el.readOnly && !dropdown) || (!force && editedFields.has(el)) || !el.getClientRects().length) continue;
       if (['hidden', 'submit', 'file', 'password', 'reset'].includes(el.type) || (['button', 'search'].includes(el.type) && !dropdown)) continue;
 
@@ -3210,8 +3243,54 @@
       subtree: true
     });
 
+  function resyncFilledFormFields(scope = document) {
+    const root = scope instanceof Element ? scope : document;
+    const inputs = root.querySelectorAll('input, textarea, select');
+    for (const el of inputs) {
+      if (el.closest('#mp-copilot-root') || el.disabled || el.type === 'hidden' || el.type === 'file') continue;
+      const isCheck = ['checkbox', 'radio'].includes(el.type);
+      const hasVal = isCheck ? el.checked : Boolean(String(el.value || '').trim());
+      if (!hasVal) continue;
+
+      if (typeof el.setCustomValidity === 'function') {
+        try { el.setCustomValidity(''); } catch {}
+      }
+
+      if (isCheck) {
+        if (el._valueTracker) {
+          try { el._valueTracker.setValue(el.checked ? 'false' : 'true'); } catch {}
+        }
+        const protoSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked')?.set;
+        if (protoSetter) {
+          try { protoSetter.call(el, el.checked); } catch {}
+        }
+      } else {
+        if (el._valueTracker) {
+          try { el._valueTracker.setValue(''); } catch {}
+        }
+        const proto = el.tagName === 'SELECT' ? HTMLSelectElement.prototype
+          : el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        const protoSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+        if (protoSetter) {
+          try { protoSetter.call(el, el.value); } catch {}
+        }
+      }
+
+      try {
+        el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+        try { el.dispatchEvent(new FocusEvent('blur', { bubbles: true, composed: true })); } catch {}
+      } catch {}
+
+      if (el.getAttribute('aria-invalid') === 'true') {
+        try { el.removeAttribute('aria-invalid'); } catch {}
+      }
+    }
+  }
+
     // Native form submit listener
-    document.addEventListener('submit', () => {
+    document.addEventListener('submit', (e) => {
+      resyncFilledFormFields(e.target instanceof Element ? e.target : document);
       if(!linked)submissionAttempt += 1;
       rememberAnswers(true);
       setTimeout(inspect, 1500);
@@ -3219,10 +3298,11 @@
 
     // Click submit button listener
     document.addEventListener('click', (e) => {
-      const btn = e.target.closest?.('button, input[type="submit"]');
-      if (btn) {
+      const btn = e.target.closest?.('button, input[type="submit"], [role="button"]');
+      if (btn && !btn.closest('#mp-copilot-root')) {
         const text = (btn.textContent || btn.value || '').trim();
-        if (/^(?:submit|apply|submit application|send application)$/i.test(text)) {
+        if (btn.type === 'submit' || /^(?:submit|apply|send|continue|next|review|finish)\b/i.test(text)) {
+          resyncFilledFormFields(btn.form || btn.closest('form') || document);
           setTimeout(inspect, 1800);
         }
       }
@@ -3290,7 +3370,13 @@
     }, true);
 
     document.addEventListener('click', (e) => {
-      const button = e.target.closest?.('button');
+      const button = e.target.closest?.('button, input[type="submit"], [role="button"]');
+      if (button && !button.closest('#mp-copilot-root')) {
+        const text = (button.textContent || button.value || '').trim();
+        if (button.type === 'submit' || /^(?:submit|apply|send|continue|next|review|finish)\b/i.test(text)) {
+          resyncFilledFormFields(button.form || button.closest('form') || document);
+        }
+      }
       if (button && form()?.contains(button) && button.type !== 'submit' && /^submit application$/i.test(button.textContent.trim())) {
         submissionAttempt += 1;
         send('submit_attempted', 'Final application Submit attempted');

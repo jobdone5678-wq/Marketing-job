@@ -1,10 +1,34 @@
 (function(root){'use strict';
  const value=field=>field.kind==='radio'?field.elements.map(el=>el.checked):field.kind==='checkbox'?field.element.checked:field.kind==='combobox'?(field.element.value||field.element.textContent.trim()):field.element.value;
  function writeNative(el,property,next){
-  if(property==='checked'){if(el.checked!==next)el.click();return el.checked===next;}
+  if(!el||!el.isConnected)return false;
+  if(typeof el.setCustomValidity==='function')try{el.setCustomValidity('');}catch{}
+  if(property==='checked'){
+   const boolVal=Boolean(next);
+   if(el._valueTracker){try{el._valueTracker.setValue(boolVal?'false':'true');}catch{}}
+   const proto=HTMLInputElement.prototype;
+   const setter=Object.getOwnPropertyDescriptor(proto,'checked')?.set;
+   if(setter)setter.call(el,boolVal);else el.checked=boolVal;
+   try{el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,composed:true}));}catch{try{el.click();}catch{}}
+   el.dispatchEvent(new Event('input',{bubbles:true,composed:true}));
+   el.dispatchEvent(new Event('change',{bubbles:true,composed:true}));
+   try{el.dispatchEvent(new FocusEvent('blur',{bubbles:true,composed:true}));}catch{}
+   if(el.getAttribute?.('aria-invalid')==='true')try{el.removeAttribute('aria-invalid');}catch{}
+   return el.checked===boolVal;
+  }
+  if(el._valueTracker){try{el._valueTracker.setValue(String(next)===''?'__force_diff__' : '');}catch{}}
   const proto=el.tagName==='SELECT'?HTMLSelectElement.prototype:el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;
   const setter=Object.getOwnPropertyDescriptor(proto,property)?.set;if(setter)setter.call(el,next);else el[property]=next;
-  el.dispatchEvent(new Event('input',{bubbles:true,composed:true}));el.dispatchEvent(new Event('change',{bubbles:true,composed:true}));return el[property]===next;
+  try{el.dispatchEvent(new FocusEvent('focus',{bubbles:true,composed:true}));}catch{}
+  try{
+   el.dispatchEvent(new InputEvent('input',{bubbles:true,composed:true,inputType:'insertText',data:String(next)}));
+  }catch{
+   el.dispatchEvent(new Event('input',{bubbles:true,composed:true}));
+  }
+  el.dispatchEvent(new Event('change',{bubbles:true,composed:true}));
+  try{el.dispatchEvent(new FocusEvent('blur',{bubbles:true,composed:true}));}catch{}
+  if(el.getAttribute?.('aria-invalid')==='true')try{el.removeAttribute('aria-invalid');}catch{}
+  return el[property]===next;
  }
  async function applyFill(plans,session){
   const receipts=[];
