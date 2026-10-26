@@ -7,7 +7,20 @@ export function getAIProvider():AIProvider{return 'openai';}
 export function getAIModel(explicitBaseURL?: string, explicitApiKey?: string){
   const raw = process.env.OPENAI_MODEL?.trim();
   const apiKey = explicitApiKey || process.env.OPENAI_API_KEY?.trim() || '';
-  const baseURL = explicitBaseURL || (apiKey.startsWith('sk-or-') ? 'https://openrouter.ai/api/v1' : apiKey.startsWith('sk-xt-') ? 'https://api.xkiro.com/v1' : process.env.OPENAI_BASE_URL?.trim() || '');
+  const baseURL = explicitBaseURL || (
+    apiKey.startsWith('AIzaSy') ? 'https://generativelanguage.googleapis.com/v1beta/openai/' :
+    apiKey.startsWith('sk-or-') ? 'https://openrouter.ai/api/v1' :
+    apiKey.startsWith('sk-xt-') ? 'https://api.xkiro.com/v1' :
+    process.env.OPENAI_BASE_URL?.trim() || ''
+  );
+
+  // Gemini mappings
+  if (apiKey.startsWith('AIzaSy') || baseURL.includes('generativelanguage.googleapis.com')) {
+    if (!raw || raw === 'gpt-4o-mini' || raw === 'auto' || !raw.startsWith('gemini-')) {
+      return 'gemini-2.5-flash';
+    }
+    return raw;
+  }
 
   // Mistral mappings
   if (raw === 'mistralai/mistral-large-4-0' || raw === 'mistral-large-4-0') {
@@ -19,7 +32,6 @@ export function getAIModel(explicitBaseURL?: string, explicitApiKey?: string){
     if (baseURL.includes('openrouter')) {
       return 'meta/muse-spark-1.3';
     }
-    // If on xkiro, muse-spark doesn't exist so route to xkiro's free mistral
     return 'mistralai/mistral-large-2512';
   }
 
@@ -35,7 +47,9 @@ function configuration(){
  let baseURL=process.env.OPENAI_BASE_URL?.trim().replace(/\/+$/,'')||undefined;
 
  // Auto-detect provider if key has a known provider prefix
- if (apiKey.startsWith('sk-or-')) {
+ if (apiKey.startsWith('AIzaSy')) {
+   baseURL = 'https://generativelanguage.googleapis.com/v1beta/openai/';
+ } else if (apiKey.startsWith('sk-or-')) {
    baseURL = 'https://openrouter.ai/api/v1';
  } else if (apiKey.startsWith('sk-xt-')) {
    baseURL = 'https://api.xkiro.com/v1';
