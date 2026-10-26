@@ -4,13 +4,26 @@ import {CaptureError} from '@/lib/db/admin';
 export type AIProvider='openai';
 export function getAIProvider():AIProvider{return 'openai';}
 
-export function getAIModel(){
+export function getAIModel(explicitBaseURL?: string, explicitApiKey?: string){
   const raw = process.env.OPENAI_MODEL?.trim();
-  const baseURL = process.env.OPENAI_BASE_URL?.trim() || '';
+  const apiKey = explicitApiKey || process.env.OPENAI_API_KEY?.trim() || '';
+  const baseURL = explicitBaseURL || (apiKey.startsWith('sk-or-') ? 'https://openrouter.ai/api/v1' : apiKey.startsWith('sk-xt-') ? 'https://api.xkiro.com/v1' : process.env.OPENAI_BASE_URL?.trim() || '');
+
+  // Mistral mappings
   if (raw === 'mistralai/mistral-large-4-0' || raw === 'mistral-large-4-0') {
     return 'mistralai/mistral-large-2512';
   }
-  if (baseURL.includes('xkiro') && (raw === 'auto' || !raw)) {
+
+  // Muse Spark mappings
+  if (raw === 'free/muse-spark-1.3' || raw === 'muse-spark-1.3') {
+    if (baseURL.includes('openrouter')) {
+      return 'meta/muse-spark-1.3';
+    }
+    // If on xkiro, muse-spark doesn't exist so route to xkiro's free mistral
+    return 'mistralai/mistral-large-2512';
+  }
+
+  if (baseURL.includes('xkiro') && (raw === 'auto' || !raw || raw.startsWith('meta/'))) {
     return 'mistralai/mistral-large-2512';
   }
   return raw || 'gpt-4o-mini';
@@ -19,7 +32,15 @@ export function getAIResponseFormat(){return process.env.OPENAI_RESPONSE_FORMAT?
 
 function configuration(){
  const apiKey=process.env.OPENAI_API_KEY?.trim()||'';
- const baseURL=process.env.OPENAI_BASE_URL?.trim().replace(/\/+$/,'')||undefined;
+ let baseURL=process.env.OPENAI_BASE_URL?.trim().replace(/\/+$/,'')||undefined;
+
+ // Auto-detect provider if key has a known provider prefix
+ if (apiKey.startsWith('sk-or-')) {
+   baseURL = 'https://openrouter.ai/api/v1';
+ } else if (apiKey.startsWith('sk-xt-')) {
+   baseURL = 'https://api.xkiro.com/v1';
+ }
+
  const missing=apiKey?[]:['OPENAI_API_KEY'];
  const issues:string[]=[];
  if(baseURL){
@@ -30,7 +51,7 @@ function configuration(){
    if(process.env.NODE_ENV==='production'&&(isLocal||url.protocol!=='https:'))issues.push('Production AI requires a public HTTPS API endpoint. A localhost gateway runs only on your computer.');
   }catch{issues.push('OPENAI_BASE_URL must be a valid API base URL.');}
  }
- return {apiKey,baseURL,model:getAIModel(),missing,issues};
+ return {apiKey,baseURL,model:getAIModel(baseURL,apiKey),missing,issues};
 }
 export function aiConfiguration(){
  const {model,missing,issues}=configuration();
