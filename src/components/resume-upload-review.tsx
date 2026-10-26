@@ -53,6 +53,7 @@ export function ResumeUploadReview({
         }
 
         if (r.task?.status === 'failed') {
+          setProcessingNote('');
           setError(r.task.error || 'Processing failed. Enter details manually or retry.');
           setBusy(false);
           return;

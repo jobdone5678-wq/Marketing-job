@@ -4,7 +4,18 @@ import {CaptureError} from '@/lib/db/admin';
 export type AIProvider='openai';
 export function getAIProvider():AIProvider{return 'openai';}
 
-export function getAIModel(){return process.env.OPENAI_MODEL?.trim()||'gpt-4o-mini';}
+export function getAIModel(){
+  const raw = process.env.OPENAI_MODEL?.trim();
+  const baseURL = process.env.OPENAI_BASE_URL?.trim() || '';
+  if (raw === 'mistralai/mistral-large-4-0' || raw === 'mistral-large-4-0') {
+    return 'mistralai/mistral-large-2512';
+  }
+  if (baseURL.includes('xkiro') && (raw === 'auto' || !raw)) {
+    return 'mistralai/mistral-large-2512';
+  }
+  return raw || 'gpt-4o-mini';
+}
+export function getAIResponseFormat(){return process.env.OPENAI_RESPONSE_FORMAT?.trim()==='json_schema'?'json_schema' as const:'json_object' as const;}
 
 function configuration(){
  const apiKey=process.env.OPENAI_API_KEY?.trim()||'';

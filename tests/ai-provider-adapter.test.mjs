@@ -6,10 +6,11 @@ import OpenAI from 'openai';
 class CaptureError extends Error {constructor(message,status=400){super(message);this.status=status;}}
 class ProviderError extends Error {constructor(message,status=400){super(message);this.status=status;}}
 const task={id:'task',lease_token:'lease'};
-function harness(t,{responses,allowance=10}){
-  const previous={key:process.env.OPENAI_API_KEY,model:process.env.OPENAI_MODEL};
+function harness(t,{responses,allowance=10,responseFormat='json_object'}){
+  const previous={key:process.env.OPENAI_API_KEY,model:process.env.OPENAI_MODEL,format:process.env.OPENAI_RESPONSE_FORMAT};
   process.env.OPENAI_API_KEY='synthetic-test-key';process.env.OPENAI_MODEL='synthetic-model';
-  t.after(()=>{for(const [name,value] of [['OPENAI_API_KEY',previous.key],['OPENAI_MODEL',previous.model]]){if(value===undefined)delete process.env[name];else process.env[name]=value;}});
+  process.env.OPENAI_RESPONSE_FORMAT=responseFormat;
+  t.after(()=>{for(const [name,value] of [['OPENAI_API_KEY',previous.key],['OPENAI_MODEL',previous.model],['OPENAI_RESPONSE_FORMAT',previous.format]]){if(value===undefined)delete process.env[name];else process.env[name]=value;}});
   const requests=[],usage=[];
   class Provider {
     static APIError=ProviderError;
@@ -37,10 +38,38 @@ function harness(t,{responses,allowance=10}){
 }
 const requirements={requirements:[{requirement:'SQL',jobEvidence:'Requires SQL'}],constraints:[]};
 
+test('strict output sends the contract as a response schema rather than input to extract',async t=>{
+ const adapter=harness(t,{responseFormat:'json_schema',responses:[requirements]});
+ const {requirementsSchema}=adapter.load('src/lib/ai/requirements-validation.ts');
+ assert.deepEqual(await adapter.structuredAI(task,requirementsSchema,'job_requirements','Extract facts.','Requires SQL'),requirements);
+ const request=adapter.requests[0];
+ assert.equal(request.response_format.type,'json_schema');
+ assert.equal(request.response_format.json_schema.strict,true);
+ assert.deepEqual(request.response_format.json_schema.schema.required,['requirements','constraints']);
+ assert.ok(!request.messages[0].content.includes('Required JSON Schema:'));
+});
+
+test('strict format rejection keeps the complete schema in the prompt-only fallback',async t=>{
+ const adapter=harness(t,{responseFormat:'json_schema',responses:[new ProviderError('json_schema not supported'),requirements]});
+ const {requirementsSchema}=adapter.load('src/lib/ai/requirements-validation.ts');
+ assert.deepEqual(await adapter.structuredAI(task,requirementsSchema,'job_requirements','Extract facts.','Requires SQL'),requirements);
+ assert.equal(adapter.requests[1].response_format,undefined);
+ assert.ok(adapter.requests[1].messages[0].content.includes('Required JSON Schema:'));
+ assert.deepEqual(adapter.usage.map(row=>row.status),['failed_or_unknown','succeeded']);
+});
+
 test('provider payment rejection explains billing rather than blaming the API key or connection',async t=>{
  const adapter=harness(t,{responses:[new ProviderError('private provider billing response',402)]});
  const {requirementsSchema}=adapter.load('src/lib/ai/requirements-validation.ts');
  await assert.rejects(adapter.structuredAI(task,requirementsSchema,'job_requirements','Extract facts.','Requires SQL'),e=>e.status===402&&/payment required/i.test(e.message)&&!e.message.includes('private'));
+ assert.equal(adapter.requests.length,1);
+ assert.deepEqual(adapter.usage.map(row=>row.status),['failed_or_unknown']);
+});
+
+test('provider model-plan rejection explains access without exposing the provider response',async t=>{
+ const adapter=harness(t,{responses:[new ProviderError('private account plan and provider body',403)]});
+ const {requirementsSchema}=adapter.load('src/lib/ai/requirements-validation.ts');
+ await assert.rejects(adapter.structuredAI(task,requirementsSchema,'job_requirements','Extract facts.','Requires SQL'),e=>e.status===403&&/account plan/i.test(e.message)&&!e.message.includes('private'));
  assert.equal(adapter.requests.length,1);
  assert.deepEqual(adapter.usage.map(row=>row.status),['failed_or_unknown']);
 });
