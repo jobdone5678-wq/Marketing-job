@@ -79,3 +79,16 @@ test('combined education heading ends work bullets and compact year ranges stay 
  assert.equal(candidate.employment_history.flatMap(row=>row.bullets).some(line=>line.includes('University')),false);
  assert.match(engine.buildResume(candidate,job).markdown,/EDUCATION & CERTIFICATIONS\nBSc Computer Science/);
 });
+
+test('target-role banner is absent from new resumes and both DOCX renderers suppress legacy banners',async()=>{
+ const output=engine.buildResume(engine.candidateFromText(source),job);
+ assert.doesNotMatch(output.markdown,/Target role:/);
+ const {resumeDocx}=moduleLoader()('src/lib/tailored-resumes/docx.ts');
+ const {default:mammoth}=await import('mammoth');
+ const legacy=output.markdown.replace('PROFESSIONAL EXPERIENCE','Target role: Senior Engineer at G2i Inc.\n\nPROFESSIONAL EXPERIENCE');
+ for(const render of [engine.resumeDocx,resumeDocx]){
+  const document=await mammoth.extractRawText({buffer:Buffer.from(render(legacy))});
+  assert.doesNotMatch(document.value,/Target role:|at G2i Inc\./);
+  assert.match(document.value,/Built Java APIs/);
+ }
+});

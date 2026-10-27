@@ -38,7 +38,7 @@ test('twenty-five jobs create distinct resume scopes and genuine DOCX documents 
   const output=buildContextualResume(candidate,target,{summaryFactIds:[],skillFactIds:[],requirements:[]});
   scopes.add(engine.scopeKey(candidate,target));
   const bytes=engine.resumeDocx(output.markdown),document=await mammoth.extractRawText({buffer:Buffer.from(bytes)});
-  assert.ok(document.value.includes('Fixture Company '+index));assert.ok(document.value.includes('Real Company'));
+  assert.ok(output.filename.includes('Fixture_Company_'+index));assert.ok(document.value.includes('Real Company'));assert.doesNotMatch(document.value,/Target role:/);
   assert.notEqual(engine.scopeKey({...candidate,id:'uploaded-other',full_name:'Other Candidate'},target),engine.scopeKey(candidate,target));
  }
  assert.equal(scopes.size,25);

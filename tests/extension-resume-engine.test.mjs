@@ -43,7 +43,7 @@ test('coverage uses word boundaries, supports nonengineering jobs and unknown re
 
 test('real DOCX package contains tailored text and remains parseable with Unicode and XML characters',()=>{
  assert.equal(typeof engine.resumeDocx,'function');
- const bytes=engine.resumeDocx('Alex & Co\nTarget role: Développeur <Principal>\n\nEXPERIENCE\n- Built Python pipelines.');
+ const bytes=engine.resumeDocx('Alex & Co\nDéveloppeur <Principal>\n\nEXPERIENCE\n- Built Python pipelines.');
  const archive=unzipSync(bytes);
  assert.ok(archive['[Content_Types].xml']);assert.ok(archive['_rels/.rels']);
  const xml=strFromU8(archive['word/document.xml']);

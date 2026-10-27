@@ -2,6 +2,13 @@
 (function (root) {
   'use strict';
   const AI_VERSION = 'contextual-v1-source-points-3.2.1';
+  function cleanDocument(record) {
+    if (!record?.markdown || !/^\s*Target role:/m.test(record.markdown)) return record;
+    const markdown=record.markdown.split(/\r?\n/).filter(line=>!/^\s*Target role:/.test(line)).join('\n');
+    const bytes=root.NextkinResume.resumeDocx(markdown);
+    let binary='';for(const byte of bytes)binary+=String.fromCharCode(byte);
+    return {...record,markdown,docxBase64:btoa(binary)};
+  }
   async function generateAI(message,config,uploaded) {
     if (message.consent !== true) return {error:'Agree to AI processing of the reviewed candidate facts and this JD before generating.'};
     if (!config.token || !config.origin) return {error:'Connect or sign in to NextKinHR for authenticated AI access. Uploaded candidates do not need a portal candidate record.'};
@@ -46,6 +53,7 @@
       if(!response.ok){await chrome.storage.local.set({[key]:null});return {error:result.error || 'AI tailoring failed. Review the details and retry.'};}
       if(!result.docxBase64 || !result.ai)return {error:'AI processing is still pending. Keep a configured worker running and choose Tailor Resume again to resume this request. No rules-based resume was substituted.'};
       if(result.candidateId !== serviceCandidateId)return {error:'AI result belongs to another candidate. No resume was used.'};
+      result=cleanDocument(result);
       if (linkedSource && !result.contentQuality?.experienceBulletCount) return {error:'The AI service needs the matching v3.2.1 resume-engine update. Redeploy the existing server/worker with the updated browser-extension source, then generate again. No heading-only resume was downloaded.'};
       if(!useSource)return {...result,success:true};
       if (linkedSource) {
@@ -87,7 +95,7 @@
           const access = await fetch(config.origin+'/api/extension/candidates?candidateId='+encodeURIComponent(message.candidateId),{headers:{Authorization:'Bearer '+config.token},signal:AbortSignal.timeout(15000)});
           const data = await access.json();
           if (!access.ok || !data.candidates?.some(row=>row.id===message.candidateId)) return {error:data.error || 'Candidate access denied.'};
-          return {...saved,success:true};
+          return {...cleanDocument(saved),success:true};
         }
         const generating = message.type === 'tailor_resume';
         const query = new URLSearchParams({candidateId:message.candidateId,limit:String(message.limit || 50),offset:String(message.offset || 0)});
@@ -100,7 +108,7 @@
         const data = await response.json();
         if (!response.ok) return {error:data.error || 'Unable to access this candidate resume. Reconnect and retry.',resumes:[]};
         if (message.type==='list_resume_versions' && !Number(message.offset)) data.resumes=[...localVersions,...(data.resumes||[])].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
-        return {...data,success:true};
+        return {...cleanDocument(data),success:true};
       } catch { return {error:'Unable to reach NextKinHR. Reconnect and retry; no other candidate resume was used.',resumes:[]}; }
     }
     const engine = root.NextkinResume;
@@ -108,7 +116,7 @@
     if (message.type === 'get_saved_resume') {
       const key = 'resumeVersion:' + String(message.resumeId || '');
       const record = (await chrome.storage.local.get(key))[key];
-      return record?.candidateId === message.candidateId ? {...record,success:true} : {error:'Saved resume not found for this candidate.'};
+      return record?.candidateId === message.candidateId ? {...cleanDocument(record),success:true} : {error:'Saved resume not found for this candidate.'};
     }
     const stored = await chrome.storage.local.get(null);
     const resumes = Object.entries(stored).filter(([key,value]) => key.startsWith('resumeVersion:') && value.candidateId === message.candidateId)

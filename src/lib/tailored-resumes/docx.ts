@@ -96,16 +96,8 @@ export function buildResumeBodyXml(content:string):string{
    continue;
   }
 
-  // Target role banner
+  // Older saved drafts may still contain this metadata; omit it from resumes.
   if(trimmed.startsWith('Target role:')){
-   const roleText=trimmed.replace('Target role:','').trim();
-   elements.push(`
-    <w:p>
-     <w:pPr><w:spacing w:before="60" w:after="40"/><w:shd w:val="clear" w:color="auto" w:fill="EBF0FF"/><w:ind w:left="120" w:right="120"/></w:pPr>
-     <w:r><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Calibri"/><w:sz w:val="18"/><w:szCs w:val="18"/><w:color w:val="666666"/></w:rPr><w:t xml:space="preserve">Target role: </w:t></w:r>
-     <w:r><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos" w:cs="Calibri"/><w:b/><w:sz w:val="18"/><w:szCs w:val="18"/><w:color w:val="1F3752"/></w:rPr><w:t xml:space="preserve">${xml(roleText)}</w:t></w:r>
-    </w:p>
-   `);
    i++;
    continue;
   }

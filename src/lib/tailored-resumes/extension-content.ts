@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {analyze,buildResume,normalizeCandidate,categorizeSkills,type JobInput} from '../../../browser-extension/resume-engine.js';
 
-export const EXTENSION_AI_VERSION='contextual-v1';
+export const EXTENSION_AI_VERSION='contextual-v1-no-target-line';
 export const extensionSelectionSchema=z.object({
  summaryFactIds:z.array(z.string().max(100)).max(6),
  skillFactIds:z.array(z.string().max(100)).max(100),
@@ -47,8 +47,7 @@ function replaceSection(content:string,heading:string,body:string){
   start=lines.findIndex(l=>/^(?:TECHNICAL SKILLS|SKILLS)$/i.test(l.trim()));
  }
  if(start<0){
-  const target=lines.findIndex(line=>line.startsWith('Target role:'));
-  lines.splice(target>=0?target+1:0,0,'',heading,body);
+  lines.splice(Math.min(3,lines.length),0,'',heading,body);
  }else{
   // Match all headings emitted by the shared source parser, preserving following sections.
   const boundary=/^(?:(?:PROFESSIONAL|WORK) EXPERIENCE|EXPERIENCE|EMPLOYMENT(?: HISTORY)?|PROFESSIONAL BACKGROUND|(?:PROFESSIONAL )?SUMMARY|PROFILE|OBJECTIVE|(?:TECHNICAL|CORE|PROFESSIONAL) SKILLS|SKILLS|EDUCATION(?: & CERTIFICATIONS)?|PROJECTS?|CERTIFICATIONS|LICENSES|AWARDS|VOLUNTEERING|PUBLICATIONS|ADDITIONAL INFORMATION)$/;
