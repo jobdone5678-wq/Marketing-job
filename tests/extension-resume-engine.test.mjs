@@ -57,7 +57,7 @@ test('uploaded resume parsing keeps raw facts without guessing employer, locatio
  assert.equal(result.authorized_in_usa,undefined);assert.equal(result.need_sponsorship_now,undefined);
  assert.equal(result.total_experience_years,null);
  const output=engine.buildResume(result,{...job,jobTitle:'Bookkeeper',jobDescription:'Required skills: Excel, Accounting. Reconcile accounts and maintain financial records.'});
- assert.match(output.markdown,/Honest Co/);assert.match(output.markdown,/2018–2022/);
+ assert.match(output.markdown,/Honest Co/);assert.match(output.markdown,/2018\s*–\s*2022/);
  assert.doesNotMatch(output.markdown,/2021|Austin|Technology Solutions|Bachelor of Science/);
 });
 
@@ -97,7 +97,7 @@ test('explicit unfamiliar skills and labeled JSON-import names remain grounded i
  const profile=engine.candidateFromText('full_name: Alex Example\nemail: alex@example.test\nSKILLS\nMIG welding, TIG welding, Blueprint Reading\nEXPERIENCE\nWelder at Example Co, 2020–2024.','resume.json');
  assert.equal(profile.full_name,'Alex Example');assert.ok(profile.all_skills.includes('MIG welding'));
  const result=engine.buildResume(profile,{...job,jobTitle:'Welder',jobDescription:'Required: MIG welding, TIG welding and Blueprint Reading. Fabricate components for industrial customers.'});
- assert.match(result.markdown,/MIG welding/);assert.match(result.markdown,/Welder at Example Co/);
+ assert.match(result.markdown,/MIG welding/);assert.match(result.markdown,/Welder\s+(?:at|—)\s+Example Co/);
 });
 
 test('unstructured work history before the first recognized section is never dropped',()=>{

@@ -1,5 +1,13 @@
 # Recruiting Copilot 3.2.1 — grounded screening and contextual AI tailoring
 
+## Resume work points patch
+
+This patch keeps manifest version **3.2.1**. For connected profiles, Tailor Resume reads the authorized original file locally and sends its complete text through the existing authenticated AI service after consent. A sparse portal profile is no longer the only source for work experience. The shared engine recovers responsibilities under their original employers, exposes them as experience facts for AI rewriting, and preserves stable fact IDs when ordering bullets by relevance. Job headings and dates are not repeated as accomplishment bullets. Explicit skills and remaining source sections are retained.
+
+The portal and worker import `browser-extension/resume-engine.js`; deploy that updated shared file with the existing service before testing the new connected-source workflow. No API keys belong in the extension, and no server API/schema or database migration is changed. Connected-source drafts are saved in local per-job history under the original candidate ID, with candidate access and version checked before and after generation. An older service without the updated content-quality metadata produces an update message instead of a heading-only download.
+
+Replace the files in Chrome’s existing v3.2.1 unpacked folder, click its Reload control, and reload the job tab. Upload the full original resume or paste its full text if the original cannot be read. AI can rewrite supported responsibilities and accomplishments; it cannot supply missing employers, qualifications, achievements or metrics. Review every draft before attaching or submitting it.
+
 Unzip the release package into a folder. In Chrome or Edge, open Extensions, enable Developer mode, choose **Load unpacked**, and select the folder containing `manifest.json`. Reload existing job tabs after installing or updating.
 
 ## Candidate details

@@ -34,3 +34,37 @@ test('AI wait never blocks candidate refresh behind the application capture queu
  const refreshed=await Promise.race([send({type:'get_candidates'}),new Promise(resolve=>setTimeout(()=>resolve({error:'blocked'}),100))]);
  assert.equal(refreshed.candidates?.[0].id,candidate.id);release({error:'synthetic cancelled response'});await pending;
 });
+
+test('connected source uses full original text, rechecks authorization and keeps the public candidate identity',async()=>{
+ const id='10000000-0000-4000-8000-000000000001',requests=[];
+ const source='Alex Example\nPROFESSIONAL EXPERIENCE\nDeveloper — Real Company\n2020 – Present\n• Built Python reporting services for customers.';
+ const {handle,local}=setup('credential',async(url,options)=>{
+  requests.push({url,options});
+  if(url.includes('/candidates?'))return {ok:true,json:async()=>({candidates:[{id,full_name:'Alex Example',version:3}]})};
+  const body=JSON.parse(options.body);
+  assert.equal(body.candidate.source_text,source);
+  assert.equal(body.candidate.id,'uploaded-linked-'+id);
+  assert.match(url,/tailor-upload$/);
+  return {ok:true,json:async()=>({candidateId:body.candidate.id,markdown:'AI draft with original work details',filename:'draft.docx',docxBase64:'UEs=',ai:{method:'contextual-v1'},contentQuality:{experienceBulletCount:1,rewrittenBulletCount:1}})};
+ });
+ const result=await handle({...message,candidateId:id,candidateVersion:3,sourceText:source});
+ assert.equal(result.success,true,result.error);assert.equal(result.candidateId,id);assert.equal(result.candidateVersion,3);
+ assert.equal(requests.length,3);assert.equal(result.savedToPortal,false);
+ assert.ok(Object.values(local).some(value=>value?.resumeId===result.resumeId));
+ const restored=await handle({type:'get_saved_resume',candidateId:id,resumeId:result.resumeId});
+ assert.equal(restored.docxBase64,result.docxBase64);
+});
+
+test('connected source refuses another person, stale profile or a heading-only AI service',async()=>{
+ const id='10000000-0000-4000-8000-000000000001';
+ const source='Alex Example\nPROFESSIONAL EXPERIENCE\nDeveloper — Real Company\n2020 – Present\n• Built Python reporting services for customers.';
+ const {handle,local}=setup('credential',async(url,options)=>{
+  if(url.includes('/candidates?'))return {ok:true,json:async()=>({candidates:[{id,full_name:'Alex Example',version:3}]})};
+  const body=JSON.parse(options.body);
+  return {ok:true,json:async()=>({candidateId:body.candidate.id,markdown:'Heading only',docxBase64:'UEs=',ai:{method:'contextual-v1'}})};
+ });
+ assert.match((await handle({...message,candidateId:id,candidateVersion:2,sourceText:source})).error,/changed/i);
+ assert.match((await handle({...message,candidateId:id,candidateVersion:3,sourceText:source.replace('Alex Example','Other Person')})).error,/name.*match/i);
+ assert.match((await handle({...message,candidateId:id,candidateVersion:3,sourceText:source})).error,/matching.*update|redeploy/i);
+ assert.ok(!Object.keys(local).some(key=>key.startsWith('resumeVersion:')));
+});

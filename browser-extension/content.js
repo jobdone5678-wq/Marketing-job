@@ -964,7 +964,21 @@
     const button = shadowRoot?.getElementById('mp-tailor-btn');if (button) {button.disabled = true;button.textContent = 'Preparing resume…';}
     workflowStatus(`Preparing a separate resume for ${currentJobTitle} at ${currentCompanyName}…`);
     try {
-      const response = await chrome.runtime.sendMessage({type:'tailor_resume',candidateId:candidate.id,consent:true,...activeJob()});
+      let sourceText = candidate.source_text || candidate.confirmed_facts?.raw_text || '';
+      if (!String(candidate.id).startsWith('uploaded') && globalThis.NextkinResumeImport) {
+        // Use the authorized original, not the sparse profile fields or a previous
+        // tailored document. Extraction stays local until the existing AI consent.
+        workflowStatus('Reading the original resume so AI can rewrite the actual work details…');
+        const originalResponse = await chrome.runtime.sendMessage({type:'get_resume_file',candidateId:candidate.id});
+        const original = originalResponse?.file;
+        if (original?.base64) {
+          const bytes = Uint8Array.from(atob(original.base64),letter => letter.charCodeAt(0));
+          const extracted = await globalThis.NextkinResumeImport.extract(new File([bytes],original.filename,{type:original.mimeType}));
+          sourceText = extracted.text;
+        } else if (!sourceText) throw new Error('Upload the original resume or paste its full text in the extension. The profile alone has no work bullets to rewrite.');
+      }
+      if (epoch !== generationEpoch || contextKey !== resumeContextKey(candidates.find(row => row.id === selectedCandidateId))) throw new Error('Candidate or job changed while reading the original resume. Generate again.');
+      const response = await chrome.runtime.sendMessage({type:'tailor_resume',candidateId:candidate.id,consent:true,...activeJob(),...(sourceText ? {sourceText,candidateVersion:candidate.version} : {})});
       if (epoch !== generationEpoch || contextKey !== resumeContextKey(candidates.find(row => row.id === selectedCandidateId))) {
         workflowStatus('The job or candidate changed. The previous job version was saved separately; generate for the current job.',true);return null;
       }
