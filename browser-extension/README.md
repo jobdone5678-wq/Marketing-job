@@ -24,6 +24,8 @@ Each candidate/job/JD snapshot has its own saved version. Repeating an identical
 
 The ATS percentage is estimated coverage of extracted JD requirements. It is not the employer's ATS score. Missing qualifications remain visible and are not added to the resume. Formatting checks cover the generated single-column DOCX. Review the full JD because automated extraction may miss requirements.
 
+After generation, **Generated resume vs JD** in the review panel shows the document’s estimated ATS match, the job/company, and expandable matched and missing requirements. This assessment uses the generated resume body rather than only the selected profile or copied target headline. The result remains tied to that candidate/JD snapshot; changing either invalidates the draft. If reliable requirements cannot be extracted, the panel shows **Score unavailable** instead of inventing a percentage. The score stays in the extension review, outside the resume document.
+
 Scanned PDFs require pasted text or a readable source document. DOCX headers/footers and unusual PDF encodings may also need manual text entry. Some websites do not allow automatic file attachment; download the reviewed DOCX and attach it manually. The extension does not submit applications.
 
 AI tailoring requires the updated NextKinHR server and configured server-side AI credentials, or an updated, configured processing worker. Keys never enter the extension. The existing daily processing budget applies. Generation returns a durable task and the extension polls its own authenticated result. If interrupted, choose Tailor Resume again to resume the same request; terminal failures can be retried. No rules-based resume is silently substituted when AI is unavailable.

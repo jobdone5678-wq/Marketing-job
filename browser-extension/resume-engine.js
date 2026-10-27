@@ -169,7 +169,11 @@
     const warnings = ['Estimated coverage of extracted JD requirements, not an employer ATS score or hiring prediction. Review the full JD for requirements this checker may miss.'];
     const result = {score:null,matched:[],missing:[],requirements:[],checks:[],warnings,method:'Weighted extracted requirement coverage; required = 2, preferred = 1. No invented score floor.'};
     if (!jd || !facts || !evidenceLines(candidate).length) return result;
-    const evidence = typeof actualResumeText === 'string' ? actualResumeText.split('\n').filter(line => line.trim() && !/^Target role:/i.test(line)) : evidenceLines(candidate);
+    let resumeLines = typeof actualResumeText === 'string' ? actualResumeText.split('\n') : [];
+    // A generated target headline repeats the posting title; it does not prove a
+    // qualification. Assess the resume body rather than copied header metadata.
+    if (resumeLines[0]?.trim().toLowerCase() === facts.name.toLowerCase()) resumeLines = resumeLines.slice(2);
+    const evidence = typeof actualResumeText === 'string' ? resumeLines.filter(line => line.trim() && !/^Target role:/i.test(line)) : evidenceLines(candidate);
     const clauses = jd.split(/\n|;|(?<=[.!?])\s+(?=[A-Z])/).map(value => value.replace(/^\s*[-•*]\s*/, '').trim()).filter(Boolean);
     const add = (label, source, matched, proof, type='skill') => {
       if (result.requirements.some(row => row.label.toLowerCase() === label.toLowerCase())) return;
@@ -185,7 +189,7 @@
     }
     const years = jd.match(/\b(\d{1,2})\+?\s*(?:-|–|to)?\s*\d*\s*years?\s+(?:of\s+)?(?:relevant\s+|professional\s+|work\s+)?experience/i);
     if (years) {
-      const shownYears = typeof actualResumeText === 'string' ? actualResumeText.match(/\b(\d+)\+?\s+years?\s+(?:of\s+)?(?:total\s+)?experience/i)?.[1] : facts.years;
+      const shownYears = typeof actualResumeText === 'string' ? evidence.join('\n').match(/\b(\d+)\+?\s+years?\s+(?:of\s+)?(?:total\s+)?experience/i)?.[1] : facts.years;
       add(years[0],years[0],!!shownYears && Number.parseFloat(shownYears) >= Number(years[1]),shownYears ? `${shownYears} years explicitly stated` : '', 'experience');
     }
     // Retain unfamiliar qualifications/responsibilities as checks instead of declaring an unexamined 100%.

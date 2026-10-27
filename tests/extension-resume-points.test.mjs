@@ -92,3 +92,11 @@ test('target-role banner is absent from new resumes and both DOCX renderers supp
   assert.match(document.value,/Built Java APIs/);
  }
 });
+
+test('copied target headlines cannot count as evidence for missing skills',()=>{
+ const candidate={full_name:'Alex Example',primary_skills:'Python'};
+ const result=engine.analyze(candidate,{jobDescription:'Required: Kubernetes for maintaining container infrastructure.'},'ALEX EXAMPLE\nKUBERNETES ENGINEER\nalex@example.test\n\nPROFESSIONAL EXPERIENCE\nBuilt Python reporting services.');
+ assert.equal(result.matched.includes('Kubernetes'),false);
+ assert.ok(result.missing.includes('Kubernetes'));
+ assert.equal(result.score,0);
+});

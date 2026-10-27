@@ -568,7 +568,9 @@
       currentMatchInfo = {score:null,matched:[],missing:[],reason:'unavailable'};
       return;
     }
-    const report = globalThis.NextkinResume.analyze(candidate,{jobDescription:currentJobDescription});
+    const report = tailoredResumeFile?.contextKey === resumeContextKey(candidate)
+      ? tailoredResumeFile.ats
+      : globalThis.NextkinResume.analyze(candidate,{jobDescription:currentJobDescription});
     currentMatchInfo = {...report,reason:'scored'};
   }
 
@@ -860,6 +862,28 @@
     const container = shadowRoot?.getElementById('mp-ats-details');
     if (!container) return;
     const report = tailoredResumeFile?.ats || currentMatchInfo;
+    const generated = shadowRoot.getElementById('mp-generated-match');
+    if (generated) {
+      generated.hidden = !tailoredResumeFile;
+      if (tailoredResumeFile) {
+        const score = report.score;
+        const requirements = report.requirements || [];
+        const supported = requirements.filter(row=>row.matched).length;
+        generated.querySelector('#mp-generated-match-score').textContent = score == null ? 'Score unavailable' : `${score}% estimated ATS match`;
+        generated.querySelector('#mp-generated-match-context').textContent = `${currentJobTitle} at ${currentCompanyName}`;
+        generated.querySelector('#mp-generated-match-summary').textContent = score == null
+          ? 'No reliable requirements were extracted. Review or paste the complete JD and generate again.'
+          : `${supported} of ${requirements.length} extracted JD requirements have evidence in the generated resume. ${requirements.length===supported ? 'All extracted requirements are covered.' : 'Review the gaps below before applying.'}`;
+        for (const [kind,matched,label] of [['matched',true,'Matched requirements'],['missing',false,'Missing requirements']]) {
+          const items = requirements.filter(row=>row.matched===matched);
+          const details = generated.querySelector(`#mp-generated-${kind}`);
+          details.querySelector('summary').textContent = `${label} (${items.length})`;
+          const list = details.querySelector('ul');list.replaceChildren();
+          for (const row of items) {const item=document.createElement('li');item.textContent=row.label;list.appendChild(item);}
+          details.hidden = score == null;
+        }
+      }
+    }
     container.replaceChildren();
     const note = document.createElement('p');note.textContent = 'ATS estimate: coverage of extracted JD requirements, not an employer score. Review the complete JD.';container.appendChild(note);
     const ai = tailoredResumeFile?.ai;
@@ -991,13 +1015,15 @@
         invalidateTailoredResume('Candidate details changed in NextKinHR. Refresh the profile and generate again.');
         void loadCandidates();return null;
       }
-      tailoredResumeFile = {...response,contextKey,base64:response.docxBase64,mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'};
-      currentMatchInfo = response.ats || {score:response.matchScore,matched:response.matchedSkills || [],missing:response.missingSkills || []};
+      const scoringCandidate = sourceText ? globalThis.NextkinResume.candidateFromText(sourceText) : candidate;
+      const generatedReport = globalThis.NextkinResume.analyze(scoringCandidate,activeJob(),response.markdown);
+      tailoredResumeFile = {...response,ats:generatedReport,matchScore:generatedReport.score,matchedSkills:generatedReport.matched,missingSkills:generatedReport.missing,contextKey,base64:response.docxBase64,mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'};
+      currentMatchInfo = generatedReport;
       const preview = shadowRoot.getElementById('mp-resume-text');preview.textContent = response.markdown;
       shadowRoot.getElementById('mp-resume-review').hidden = false;
       shadowRoot.getElementById('mp-review-accuracy').checked = false;
       shadowRoot.getElementById('mp-attach-tailored-btn').disabled = true;
-      workflowStatus('Saved this job’s AI-tailored resume. Review the source-backed draft and contextual evidence before attaching.');
+      workflowStatus(`Resume generated. ${generatedReport.score == null ? 'Match score unavailable.' : `Estimated ATS match: ${generatedReport.score}%.`} Review the resume and missing requirements before attaching.`);
       const reviewSection = shadowRoot?.getElementById('mp-resume-review');
       if (reviewSection) {
         reviewSection.hidden = false;
@@ -2308,6 +2334,7 @@
       const score = currentMatchInfo.score;
       gauge.hidden = score === null;
       if (score !== null) {gauge.setAttribute('aria-valuenow',String(score));gauge.style.setProperty('--score',String(score));gauge.querySelector('strong').textContent = `${score}%`;}
+      gauge.querySelector('b').textContent = tailoredResumeFile ? 'Generated resume & JD match' : 'Candidate profile & JD match';
     }
     renderAtsReport();
 
@@ -2852,6 +2879,13 @@
       .mp-gauge-ring strong {display:grid;place-items:center;width:44px;height:44px;background:var(--cp-bg);border-radius:50%;font-size:12px;}
       #mp-ats-details section {padding:8px 0;border-bottom:1px solid var(--cp-line);}#mp-ats-details h4 {font-size:11px;font-weight:600;}#mp-ats-details p {color:var(--cp-muted);}
       #mp-workflow-status {color:var(--cp-muted)!important;}#mp-resume-text {background:var(--cp-bg);color:var(--cp-text);border-color:var(--cp-line);}
+      #mp-generated-match {padding-block:10px;border-block-end:1px solid var(--cp-line);margin-block-end:10px;overflow-wrap:anywhere;}
+      #mp-generated-match[hidden] {display:none;}
+      #mp-generated-match h4 {font-size:12px;margin:0 0 8px;}
+      #mp-generated-match p {font-size:11px;line-height:1.5;margin:6px 0;}
+      #mp-generated-match #mp-generated-match-score {font-size:18px;font-weight:600;line-height:1.3;font-variant-numeric:tabular-nums;}
+      #mp-generated-match small {display:block;font-size:10px;line-height:1.5;color:var(--cp-muted);margin-block-start:8px;}
+      #mp-generated-match ul {margin:6px 0;padding-inline-start:18px;font-size:11px;line-height:1.5;}
       @media(prefers-color-scheme:light) {
         :host {--cp-bg:#fff;--cp-panel:#f5f7fa;--cp-line:#d9dfe8;--cp-text:#202937;--cp-muted:#526176;--cp-accent:#3268ca;color-scheme:light;}
         .mp-match-box [style*="color"],.mp-site-pill,.mp-match-score-badge,.mp-resume-status {color:var(--cp-text)!important;}
@@ -2987,6 +3021,15 @@
 
       <section id="mp-resume-review" class="mp-workflow-section" hidden>
         <strong>Resume for this job</strong>
+        <section id="mp-generated-match" aria-labelledby="mp-generated-match-heading" hidden>
+          <h4 id="mp-generated-match-heading">Generated resume vs JD</h4>
+          <p id="mp-generated-match-score"></p>
+          <p id="mp-generated-match-context"></p>
+          <p id="mp-generated-match-summary"></p>
+          <details id="mp-generated-matched"><summary>Matched requirements</summary><ul></ul></details>
+          <details id="mp-generated-missing" open><summary>Missing requirements</summary><ul></ul></details>
+          <small>Estimated coverage of extracted requirements in this JD. Not the employer’s ATS score or a hiring prediction.</small>
+        </section>
         <pre id="mp-resume-text" tabindex="0"></pre>
         <label class="mp-review-label"><input type="checkbox" id="mp-review-accuracy"> I reviewed the candidate details and confirm this draft is accurate.</label>
         <div class="mp-btn-row"><button id="mp-attach-tailored-btn" class="mp-btn mp-btn-primary" disabled>Attach reviewed DOCX</button><button id="mp-download-tailored-btn" class="mp-btn mp-btn-slate">Download DOCX</button></div>

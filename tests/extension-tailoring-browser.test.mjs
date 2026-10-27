@@ -10,7 +10,7 @@ const candidate={id:'uploaded-browser',resume_engine_version:'3.0.0',full_name:'
 let browser;
 before(async()=>{browser=await chromium.launch({headless:true});});
 after(async()=>{await browser?.close();});
-async function setup(t,delay=false){
+async function setup(t,delay=false,generatedMarkdown=null){
  const page=await browser.newPage();t.after(()=>page.close());const messages=[];let release;
  await page.route('https://jobs.example.test/**',route=>route.fulfill({contentType:'text/html',body:'<h1>Data Developer</h1><div class="company-name">First Company</div><article class="job-description">Required skills: Python, SQL, Kubernetes. Build and maintain internal reporting pipelines. You will work with the analytics team to publish reliable reports.</article><form><label for="resume">Resume</label><input type="file" id="resume"></form>'}));
  await page.goto('https://jobs.example.test/one');
@@ -23,7 +23,7 @@ async function setup(t,delay=false){
   if(message.type==='tailor_resume'){
    if(delay)await new Promise(resolve=>{release=resolve;});
    const output=engine.buildResume(candidate,message);
-   return {...output,ai:{method:'contextual-v1',requirements:[{requirement:'Reporting pipelines',jobEvidence:'reporting pipelines',relation:'transferable',reason:'Ingestion evidence needs review.',evidence:[{text:'Built Python reporting at Example Co.'}]}]},success:true,resumeId:'fixture',docxBase64:Buffer.from(engine.resumeDocx(output.markdown)).toString('base64')};
+   return {...output,...(generatedMarkdown?{markdown:generatedMarkdown,ats:{score:100,matched:['Python'],missing:[]}}:{}),ai:{method:'contextual-v1',requirements:[{requirement:'Reporting pipelines',jobEvidence:'reporting pipelines',relation:'transferable',reason:'Ingestion evidence needs review.',evidence:[{text:'Built Python reporting at Example Co.'}]}]},success:true,resumeId:'fixture',docxBase64:Buffer.from(engine.resumeDocx(generatedMarkdown||output.markdown)).toString('base64')};
   }
   return {};
  });
@@ -67,6 +67,41 @@ test('copilot supports keyboard collapse, an accessible ATS gauge and a factual 
  assert.equal(snapshot.confirmation,'Not confirmed by this snapshot');
  assert.equal(snapshot.candidate.id,candidate.id);
  assert.equal(snapshot.job.companyName,'First Company');
+});
+
+test('generated match summary scores the document, shows missing JD requirements and survives page updates',async t=>{
+ const {page}=await setup(t,false,'Alex Example\nData Developer\nalex@example.test\n\nPROFESSIONAL EXPERIENCE\nProvided customer support and managed customer tickets.');
+ assert.ok(Number(await page.locator('#mp-ats-gauge').getAttribute('aria-valuenow'))>0,'profile starts with supporting Python evidence');
+ await page.locator('#mp-ai-consent').check();await page.locator('#mp-tailor-btn').click();
+ await page.locator('#mp-generated-match').waitFor({state:'visible'});
+ assert.equal(await page.locator('#mp-generated-match-score').textContent(),'0% estimated ATS match');
+ assert.equal(await page.locator('#mp-ats-gauge').getAttribute('aria-valuenow'),'0');
+ assert.match(await page.locator('#mp-generated-match-context').textContent(),/Data Developer at First Company/);
+ assert.match(await page.locator('#mp-generated-match-summary').textContent(),/0 of \d+ extracted JD requirements/);
+ assert.match(await page.locator('#mp-generated-missing').textContent(),/Python/);
+ assert.match(await page.locator('#mp-generated-missing').textContent(),/SQL/);
+ assert.match(await page.locator('#mp-generated-missing').textContent(),/Kubernetes/);
+ assert.match(await page.locator('#mp-workflow-status').textContent(),/Estimated ATS match: 0%/);
+ await page.evaluate(()=>document.querySelector('form').appendChild(document.createElement('input')));
+ await page.waitForTimeout(800);
+ assert.equal(await page.locator('#mp-ats-gauge').getAttribute('aria-valuenow'),'0','never revert to the profile score');
+ await page.locator('#mp-generated-match').scrollIntoViewIfNeeded();
+ await page.screenshot({path:'test-results/generated-resume-match.png'});
+});
+
+test('generated score stays unavailable when no reliable JD requirements were extracted',async t=>{
+ const {page}=await setup(t);
+ await page.locator('#mp-job-editor summary').click();
+ await page.locator('#mp-manual-title').fill('Team Member');
+ await page.locator('#mp-manual-company').fill('Example Company');
+ await page.locator('#mp-manual-jd').fill('Our friendly team creates thoughtful products together. Join colleagues who care about customers and enjoy working together.');
+ await page.locator('#mp-save-jd').click();
+ await page.locator('#mp-ai-consent').check();await page.locator('#mp-tailor-btn').click();
+ await page.locator('#mp-generated-match').waitFor({state:'visible'});
+ assert.equal(await page.locator('#mp-generated-match-score').textContent(),'Score unavailable');
+ assert.match(await page.locator('#mp-generated-match-summary').textContent(),/No reliable requirements/);
+ assert.equal(await page.locator('#mp-ats-gauge').isVisible(),false);
+ assert.equal(await page.locator('#mp-generated-missing').isVisible(),false);
 });
 test('SPA job switches clear old JD, old preview and only the extension-attached tailored file',async t=>{
  const {page,messages}=await setup(t);
