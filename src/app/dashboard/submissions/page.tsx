@@ -107,6 +107,31 @@ export default function SubmissionsPage() {
     void Promise.resolve().then(loadData);
   }, [loadData]);
 
+  // Applications finish in another tab; refresh their status when returning.
+  React.useEffect(() => {
+    let active = true;
+    let refreshing = false;
+    const refreshSubmissions = async () => {
+      if (document.visibilityState !== "visible" || refreshing) return;
+      refreshing = true;
+      try {
+        const latest = await getSubmissions();
+        if (active) setSubmissions(latest);
+      } catch {
+        // Keep the current records; the existing Refresh action can retry.
+      } finally {
+        refreshing = false;
+      }
+    };
+    window.addEventListener("focus", refreshSubmissions);
+    document.addEventListener("visibilitychange", refreshSubmissions);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", refreshSubmissions);
+      document.removeEventListener("visibilitychange", refreshSubmissions);
+    };
+  }, []);
+
   // Status Badge Helper
   const getStatusBadge = (status: SubmissionStatus) => {
     switch (status) {

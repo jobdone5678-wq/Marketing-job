@@ -542,7 +542,7 @@ async function receive(message, sender) {
       observedAt: new Date().toISOString()
     };
     if(message.manualAttestation===true)event.manualAttestation=true;
-    if (!event.manualAttestation && ['submit_attempted','submitted'].includes(message.status) && Array.isArray(message.answers)) {
+    if (['submit_attempted','submitted'].includes(message.status) && Array.isArray(message.answers)) {
       event.answers = message.answers.slice(0, 100);
     }
 

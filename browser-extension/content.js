@@ -2002,7 +2002,7 @@
       submissionAttempt=Math.max(1,submissionAttempt);
       await rememberAnswers(true);
       if(linked&&manualAttestation){
-        const result=await chrome.runtime.sendMessage({status:'submitted',manualAttestation:true,evidence:evidenceText||'Applicant manually attested submission'});
+        const result=await chrome.runtime.sendMessage({status:'submitted',manualAttestation:true,evidence:evidenceText||'Applicant manually attested submission',answers:captureApplicationAnswers()});
         reportCaptureDelivery(result);
         return;
       }
@@ -2040,7 +2040,7 @@
         portalSource: detectPortalSource(),
         status: 'Applied',
         evidence: evidenceText || 'Detected form submission',
-        answers: manualAttestation?undefined:captureApplicationAnswers(),
+        answers: captureApplicationAnswers(),
         manualAttestation,
         profileVersion: candidate?.version || null,
         appliedResume
@@ -3264,18 +3264,34 @@
   }
 
 
+  // Submission confirmation is shared by linked and standalone applications.
+  function submissionConfirmations() {
+    return Array.from(document.querySelectorAll('#application_confirmation, .application-confirmation, [data-testid="application-success"], [role="status"], h1, h2, h3, p')).filter(node =>
+      node.getClientRects().length && !node.closest('#mp-copilot-root, #mp-copilot-toast') &&
+      /(?:thank you for (?:applying|your application)|(?:your )?application (?:has been |was |is )?(?:successfully )?(?:submitted|received|sent)|we (?:have )?received your application|application submitted|applied to)/i.test((node.textContent || '').trim().slice(0,1000))
+    );
+  }
+
+  function resyncFilledFormFields(scope = document) {
+    const root = scope instanceof Element ? scope : document;
+    for (const el of root.querySelectorAll('input, textarea, select')) {
+      if (el.closest('#mp-copilot-root') || el.disabled || el.readOnly || el.type === 'hidden' || el.type === 'file' || el.getAttribute('role') === 'combobox') continue;
+      const isCheck = ['checkbox', 'radio'].includes(el.type);
+      if (isCheck ? el.checked : String(el.value || '').trim()) nativeSet(el, isCheck ? 'checked' : 'value', isCheck ? el.checked : el.value);
+    }
+  }
+
   // Observe Application Submission Events
   function observeUniversal() {
     const inspect = () => {
       if(linked)return;
       // Success confirmation detection on page
-      const nodes = document.querySelectorAll('#application_confirmation, .application-confirmation, [data-testid="application-success"], [role="status"], h1, h2, h3, p');
+      const nodes = submissionConfirmations();
       for (const node of nodes) {
         if (node.closest('#mp-copilot-root, #mp-copilot-toast')) continue;
         const successKey = submissionEventKey + ':' + Math.max(1, submissionAttempt);
         const text = (node.textContent || '').trim().slice(0, 1000);
         if (
-          /(?:thank you for (?:applying|your application)|(?:your )?application (?:has been |was |is )?(?:successfully )?(?:submitted|received|sent)|we (?:have )?received your application|application submitted|applied to)/i.test(text) &&
           selectedCandidateId && !observedSuccessAttempts.has(successKey)
         ) {
           observedSuccessAttempts.add(successKey);
@@ -3290,51 +3306,6 @@
       childList: true,
       subtree: true
     });
-
-  function resyncFilledFormFields(scope = document) {
-    const root = scope instanceof Element ? scope : document;
-    const inputs = root.querySelectorAll('input, textarea, select');
-    for (const el of inputs) {
-      if (el.closest('#mp-copilot-root') || el.disabled || el.type === 'hidden' || el.type === 'file') continue;
-      const isCheck = ['checkbox', 'radio'].includes(el.type);
-      const hasVal = isCheck ? el.checked : Boolean(String(el.value || '').trim());
-      if (!hasVal) continue;
-
-      if (typeof el.setCustomValidity === 'function') {
-        try { el.setCustomValidity(''); } catch {}
-      }
-
-      if (isCheck) {
-        if (el._valueTracker) {
-          try { el._valueTracker.setValue(el.checked ? 'false' : 'true'); } catch {}
-        }
-        const protoSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked')?.set;
-        if (protoSetter) {
-          try { protoSetter.call(el, el.checked); } catch {}
-        }
-      } else {
-        if (el._valueTracker) {
-          try { el._valueTracker.setValue(''); } catch {}
-        }
-        const proto = el.tagName === 'SELECT' ? HTMLSelectElement.prototype
-          : el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-        const protoSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-        if (protoSetter) {
-          try { protoSetter.call(el, el.value); } catch {}
-        }
-      }
-
-      try {
-        el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-        try { el.dispatchEvent(new FocusEvent('blur', { bubbles: true, composed: true })); } catch {}
-      } catch {}
-
-      if (el.getAttribute('aria-invalid') === 'true') {
-        try { el.removeAttribute('aria-invalid'); } catch {}
-      }
-    }
-  }
 
     // Native form submit listener
     document.addEventListener('submit', (e) => {
@@ -3351,6 +3322,7 @@
         const text = (btn.textContent || btn.value || '').trim();
         if (btn.type === 'submit' || /^(?:submit|apply|send|continue|next|review|finish)\b/i.test(text)) {
           resyncFilledFormFields(btn.form || btn.closest('form') || document);
+          rememberAnswers(true);
           setTimeout(inspect, 1800);
         }
       }
@@ -3377,13 +3349,12 @@
         sentProgress = true;
         send('in_progress', 'Application form opened');
       }
-      const nodes = document.querySelectorAll('#application_confirmation, .application-confirmation, [data-testid="application-success"], [role="status"], h1, h2');
+      const nodes = submissionConfirmations();
       for (const node of nodes) {
         if (node.closest('#mp-copilot-root, #mp-copilot-toast')) continue;
         const successKey = submissionEventKey + ':' + Math.max(1, submissionAttempt);
         const text = (node.textContent || '').trim().slice(0, 1000);
         if (
-          /(?:thank you for (?:applying|your application)|application (?:has been |was |is )?(?:successfully )?(?:submitted|received)|we (?:have )?received your application)/i.test(text) &&
           !observedSuccessAttempts.has(successKey)
         ) {
           submissionAttempt = Math.max(1, submissionAttempt);
@@ -3407,7 +3378,7 @@
     });
 
     document.addEventListener('submit', (e) => {
-      if (e.target === form()) { submissionAttempt += 1; send('submit_attempted', 'Final application Submit attempted'); }
+      if (e.target === form()) { resyncFilledFormFields(e.target); submissionAttempt += 1; send('submit_attempted', 'Final application Submit attempted'); }
     }, true);
 
     document.addEventListener('invalid', () => {
@@ -3423,6 +3394,7 @@
         const text = (button.textContent || button.value || '').trim();
         if (button.type === 'submit' || /^(?:submit|apply|send|continue|next|review|finish)\b/i.test(text)) {
           resyncFilledFormFields(button.form || button.closest('form') || document);
+          rememberAnswers(true);
         }
       }
       if (button && form()?.contains(button) && button.type !== 'submit' && /^submit application$/i.test(button.textContent.trim())) {

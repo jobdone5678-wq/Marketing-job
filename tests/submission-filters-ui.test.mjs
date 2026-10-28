@@ -29,6 +29,18 @@ sources['@/components/nav-main']="exports.NavMain=({items})=>require('react').cr
 sources['@/components/nav-secondary']='exports.NavSecondary=()=>null;';
 sources['@/components/nav-user']='exports.NavUser=()=>null;';
 
+test('returning to submissions refreshes the existing draft row to Applied without resetting filters',async t=>{
+ const page=await browser.newPage();t.after(()=>page.close());
+ await page.route('https://portal.test/**',route=>route.fulfill({contentType:'text/html',body:'<div id="root"></div>'}));await page.goto('https://portal.test/');
+ await page.evaluate(()=>{window.fixtureRows=[{id:'existing',submission_date:'2026-10-15',company_name:'Focus Fixture',job_title:'Engineer',status:'Draft'}];});
+ await page.addScriptTag({content:browserModuleScript(sources,"require('react-dom/client').createRoot(document.getElementById('root')).render(require('react').createElement(require('page').default));")});
+ await page.getByRole('row').filter({hasText:'Focus Fixture'}).getByText('Draft',{exact:true}).waitFor();
+ await page.getByLabel('From application date').fill('2026-10-15');
+ await page.evaluate(()=>{window.fixtureRows=[{...window.fixtureRows[0],status:'Applied'}];window.dispatchEvent(new Event('focus'));});
+ await page.getByRole('row').filter({hasText:'Focus Fixture'}).getByText('Applied',{exact:true}).waitFor();
+ assert.equal(await page.getByLabel('From application date').inputValue(),'2026-10-15');
+});
+
 test('submission dates filter rows, daily counts, status and exported report together',async t=>{
  const page=await browser.newPage();t.after(()=>page.close());
  await page.route('https://portal.test/**',route=>route.fulfill({contentType:'text/html',body:'<div id="root"></div>'}));

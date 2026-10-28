@@ -28,4 +28,10 @@ test('linked extension manual recovery attests the existing application without 
  const automatic=await POST(new Request('https://portal.example.test/api/extension/events',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({intentId:intent,eventKey:'10000000-0000-4000-8000-000000000505',status:'submitted',attempt:1,evidence:'Applicant manually attested submission',url:'https://jobs.ashbyhq.com/fixture/application',observedAt:new Date().toISOString()})}));
  assert.equal(automatic.status,422,'automatic observations still require actual portal success evidence');
  assert.equal(calls.length,1);
+ const observed=[{key:'email',label:'Email',value:'observed@example.test'}];
+ const withAnswers=await POST(new Request('https://portal.example.test/api/extension/events',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({intentId:intent,eventKey:'10000000-0000-4000-8000-000000000506',status:'submitted',attempt:1,evidence:'Applicant manually attested submission',manualAttestation:true,answers:observed,url:'https://jobs.ashbyhq.com/fixture/application',observedAt:new Date().toISOString()})}));
+ assert.equal(withAnswers.status,200);
+ assert.deepEqual(calls.slice(1).map(call=>call.name),['record_browser_event','save_application_answer_snapshot']);
+ assert.deepEqual(calls.at(-1).args.p_answers,observed);
+ assert.equal(calls.at(-1).args.p_submission,submission);
 });

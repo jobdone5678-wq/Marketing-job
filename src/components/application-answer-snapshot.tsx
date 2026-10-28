@@ -35,7 +35,7 @@ export function ApplicationAnswerSnapshot({ submissionId }: { submissionId: stri
   const [copied, setCopied] = useState(false);
 
   async function load() {
-    if (snapshots) return;
+    if (loading) return;
     setLoading(true);
     setError('');
     try {

@@ -1,5 +1,11 @@
 # Recruiting Copilot 3.2.1 — grounded screening and contextual AI tailoring
 
+## Submission answers and status patch
+
+This v3.2.1 patch captures observed answers before the application form disappears, shares success-message detection between linked and standalone applications, and retains observed answers when **Log Applied** is used. Successful applications reopened without their intent parameter reuse a unique existing intent for the same actor, candidate and application URL, so its Draft becomes Applied. Ambiguous matches stay for review. The portal refreshes submissions when you return and retrieves fresh answers each time the dialog opens. Previously unrecorded answers cannot be reconstructed from a submitted form that is no longer available.
+
+Replace the files in the existing unpacked v3.2.1 folder and reload the extension and application tab before the next application. The portal/API changes must also be deployed. These changes preserve resume generation, AI screening review and undo behavior.
+
 ## Ashby form commit fix
 
 This v3.2.1 patch commits text inputs through native focus and blur, including the `focusout` event React uses to save blur-based fields. Visible Email and Phone values are also recommitted on a subsequent **Fill Job Form** action without replacing manual text. Portal-owned validation is left intact instead of hiding errors locally. Ashby Location is identified from its field wrapper; the extension searches the autocomplete and clicks a unique matching offered option. Missing or ambiguous suggestions remain marked for manual review, and an unselected query is cleared instead of pretending a location was selected.
