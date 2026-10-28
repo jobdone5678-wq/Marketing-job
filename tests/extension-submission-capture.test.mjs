@@ -10,6 +10,8 @@ async function setup(t,{linked=true,buttonOnly=false}={}){
  <label for="email">Email</label><input id="email" type="email" value="edited@example.test">
  <label for="why">Why are you interested in this role?</label><textarea id="why">My reviewed answer</textarea>
  <label for="password">Password</label><input id="password" type="password" value="never-capture">
+ <label for="resume">Resume</label><input id="resume" type="file" name="resume">
+ <label for="cover">Cover letter</label><input id="cover" type="file" name="cover_letter">
  <button type="${buttonOnly?'button':'submit'}">Submit application</button></form>`}));
  await page.goto('https://jobs.ashbyhq.com/fixture/application');
  await page.evaluate(({linked,buttonOnly})=>{
@@ -65,4 +67,28 @@ test('standalone confirmation preserves final answers after the application form
  assert.equal(payload.answers.find(a=>a.key==='why')?.value,'My reviewed answer');
  assert.equal(payload.companyName,'Fixture Company');assert.equal(payload.jobTitle,'Software Engineer');
  assert.deepEqual(errors,[]);
+});
+
+for(const linked of [true,false])test(`${linked?'linked':'standalone'} success archives the exact final selected resume, not an earlier file or cover letter`,async t=>{
+ const {page,errors}=await setup(t,{linked});
+ await page.setInputFiles('#resume',{name:'earlier.pdf',mimeType:'application/pdf',buffer:Buffer.from('earlier resume')});
+ await page.setInputFiles('#cover',{name:'cover.pdf',mimeType:'application/pdf',buffer:Buffer.from('cover letter')});
+ const bytes=Buffer.from('Exact final applied resume bytes');
+ await page.setInputFiles('#resume',{name:'final.pdf',mimeType:'application/pdf',buffer:bytes});
+ await page.click('form button');
+ await page.waitForFunction(linked=>window.messages.some(m=>linked?m.status==='submitted':m.type==='auto_submit'),linked);
+ const resume=await page.evaluate(linked=>{const m=window.messages.find(m=>linked?m.status==='submitted':m.type==='auto_submit');return (linked?m:m.payload).appliedResume;},linked);
+ assert.equal(resume.filename,'final.pdf');assert.equal(resume.isTailored,false);assert.equal(Buffer.from(resume.base64,'base64').toString(),bytes.toString());
+ assert.deepEqual(errors,[]);
+});
+
+test('manual Log Applied includes the observed file and an explicit removal clears it',async t=>{
+ const {page}=await setup(t);
+ await page.setInputFiles('#resume',{name:'reviewed.pdf',mimeType:'application/pdf',buffer:Buffer.from('observed resume')});
+ await page.locator('#mp-copilot-pill').click();await page.locator('#mp-log-btn').click();
+ await page.waitForFunction(()=>window.messages.some(m=>m.manualAttestation));
+ assert.equal(await page.evaluate(()=>window.messages.find(m=>m.manualAttestation).appliedResume.filename),'reviewed.pdf');
+ await page.setInputFiles('#resume',[]);await page.locator('#mp-log-btn').click();
+ await page.waitForFunction(()=>window.messages.filter(m=>m.manualAttestation).length===2);
+ assert.equal(await page.evaluate(()=>window.messages.filter(m=>m.manualAttestation).at(-1).appliedResume),null);
 });

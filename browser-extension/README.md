@@ -1,5 +1,11 @@
 # Recruiting Copilot 3.2.1 — grounded screening and contextual AI tailoring
 
+## Exact applied resume capture patch
+
+The selected resume file is read before the application form disappears and retained with the application draft through confirmation navigation. Replacing or removing the file updates the captured selection; separate cover letters are excluded. Linked observations, standalone logging and **Log Applied** send that file with the submission. The portal archives the original bytes on the same application after success, so its existing Applied Resume preview and download show the attached file. A candidate's latest document or regenerated DOCX is never substituted as proof of what was applied. Failed archive writes stay retryable; older submissions without a captured file still require the actual original document.
+
+Replace the existing unpacked files, reload extension v3.2.1 and reload the application tab before the next application. Deploy the accompanying portal/API changes. Resume generation, AI review and autofill behavior are unchanged.
+
 ## Submission answers and status patch
 
 This v3.2.1 patch captures observed answers before the application form disappears, shares success-message detection between linked and standalone applications, and retains observed answers when **Log Applied** is used. Successful applications reopened without their intent parameter reuse a unique existing intent for the same actor, candidate and application URL, so its Draft becomes Applied. Ambiguous matches stay for review. The portal refreshes submissions when you return and retrieves fresh answers each time the dialog opens. Previously unrecorded answers cannot be reconstructed from a submitted form that is no longer available.

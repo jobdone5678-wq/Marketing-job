@@ -47,6 +47,11 @@
   };
   let submissionEventKey = generateUUID();
   const applicationAnswers = new Map();
+  let observedAppliedResume = null;
+  let appliedResumeFile = null;
+  let appliedResumeRead = Promise.resolve(null);
+  let appliedResumeEpoch = 0;
+  let appliedResumeScope = '';
   let draftTimer;
   let shadowRoot = null;
 
@@ -245,11 +250,50 @@
     return Array.from(applicationAnswers.values()).slice(0,100);
   }
 
+  function isResumeInput(input) {
+    if (input.type !== 'file' || input.closest('#mp-copilot-root')) return false;
+    const context = getElementContext(input);
+    if (/cover.?letter|portfolio|photo|picture|transcript/i.test(context)) return false;
+    return /resume|\bcv\b|curriculum|vitae/i.test(context) || document.querySelectorAll('input[type="file"]').length === 1;
+  }
+
+  function captureAppliedResume(changedInput) {
+    const scope=selectedCandidateId+'|'+location.origin+location.pathname.replace(/\/(?:application|apply|confirmation|thank-you|success)(?:\/.*)?\/?$/i,'').replace(/\/$/,'');
+    if(scope!==appliedResumeScope){appliedResumeScope=scope;appliedResumeEpoch++;appliedResumeFile=null;observedAppliedResume=null;appliedResumeRead=Promise.resolve(null);}
+    const inputs = Array.from(document.querySelectorAll('input[type="file"]')).filter(isResumeInput);
+    if (changedInput && isResumeInput(changedInput) && !changedInput.files?.length) {
+      appliedResumeEpoch++;appliedResumeFile=null;observedAppliedResume=null;appliedResumeRead=Promise.resolve(null);
+    }
+    const selected = inputs.flatMap(input=>Array.from(input.files||[]).map(file=>({input,file})));
+    if (selected.length > 1 && !selected.every(item=>item.file===selected[0].file)) {
+      appliedResumeEpoch++;observedAppliedResume=null;appliedResumeFile=null;appliedResumeRead=Promise.resolve(null);
+      return appliedResumeRead;
+    }
+    const selection = selected[0];
+    if (!selection || selection.file === appliedResumeFile) return appliedResumeRead;
+    const {input,file}=selection,epoch=++appliedResumeEpoch;
+    appliedResumeFile=file;observedAppliedResume=null;
+    // Hold the actual File before an AJAX submit removes the form or file input.
+    const tailored=tailoredAttachments.get(input)===file&&tailoredResumeFile?.reviewed?tailoredResumeFile:null;
+    appliedResumeRead=(async()=>{
+      try {
+        const base64=await fileToBase64(file);
+        if(epoch!==appliedResumeEpoch)return observedAppliedResume;
+        const matched=tailored&&(tailored.base64||tailored.docxBase64)===base64;
+        observedAppliedResume={filename:file.name,mimeType:file.type||(/\.docx$/i.test(file.name)?'application/vnd.openxmlformats-officedocument.wordprocessingml.document':/\.pdf$/i.test(file.name)?'application/pdf':'application/octet-stream'),base64,isTailored:!!matched,appliedAt:new Date().toISOString(),...(matched?{markdown:tailored.markdown||tailored.resumeMarkdown||null,resumeId:tailored.resumeId||null,matchScore:tailored.ats?.score??tailored.matchScore??null}:{})};
+        return observedAppliedResume;
+      } catch {if(epoch===appliedResumeEpoch){appliedResumeFile=null;observedAppliedResume=null;}return null;}
+    })();
+    return appliedResumeRead;
+  }
+
   function rememberAnswers(event) {
     if(!selectedCandidateId)return;
     const answers=captureApplicationAnswers();
+    const resume=captureAppliedResume(event?.type==='change'&&event.target?.type==='file'?event.target:null);
+    const candidateId=selectedCandidateId,eventKey=submissionEventKey,jobTitle=currentJobTitle,companyName=currentCompanyName;
     clearTimeout(draftTimer);
-    const save=()=>chrome.runtime.sendMessage({type:'save_answer_draft',candidateId:selectedCandidateId,answers,eventKey:submissionEventKey,attempt:submissionAttempt,jobTitle:currentJobTitle,companyName:currentCompanyName}).catch(()=>{});
+    const save=async()=>{const appliedResume=await resume;if(candidateId!==selectedCandidateId||eventKey!==submissionEventKey)return;return chrome.runtime.sendMessage({type:'save_answer_draft',candidateId,answers,appliedResume,eventKey,attempt:submissionAttempt,jobTitle,companyName}).catch(()=>{});};
     if(event===true||event?.type==='submit')return save();
     draftTimer=setTimeout(save,100);
   }
@@ -1105,6 +1149,7 @@
         if(draft.eventKey)submissionEventKey=draft.eventKey;
         submissionAttempt=Number.isInteger(draft.attempt)?draft.attempt:0;
         currentJobTitle=draft.jobTitle||'';currentCompanyName=draft.companyName||'';
+        if(draft.appliedResume&&!Array.from(document.querySelectorAll('input[type="file"]')).filter(isResumeInput).some(input=>input.files?.length)){captureAppliedResume();observedAppliedResume=draft.appliedResume;appliedResumeRead=Promise.resolve(observedAppliedResume);}
       }
     } catch { candidates = []; selectedCandidateId = null; }
   }
@@ -2002,33 +2047,11 @@
       submissionAttempt=Math.max(1,submissionAttempt);
       await rememberAnswers(true);
       if(linked&&manualAttestation){
-        const result=await chrome.runtime.sendMessage({status:'submitted',manualAttestation:true,evidence:evidenceText||'Applicant manually attested submission',answers:captureApplicationAnswers()});
+        const result=await chrome.runtime.sendMessage({status:'submitted',manualAttestation:true,evidence:evidenceText||'Applicant manually attested submission',answers:captureApplicationAnswers(),appliedResume:await captureAppliedResume()});
         reportCaptureDelivery(result);
         return;
       }
-      let appliedResume = null;
-      if (tailoredResumeFile && (tailoredResumeFile.base64 || tailoredResumeFile.docxBase64)) {
-        appliedResume = {
-          filename: tailoredResumeFile.filename || `${(candidate?.full_name || 'Candidate').replace(/\s+/g, '_')}_Tailored_Resume.docx`,
-          mimeType: tailoredResumeFile.mimeType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          base64: tailoredResumeFile.base64 || tailoredResumeFile.docxBase64,
-          markdown: tailoredResumeFile.markdown || tailoredResumeFile.resumeMarkdown || null,
-          isTailored: true,
-          matchScore: tailoredResumeFile.ats?.score ?? tailoredResumeFile.matchScore ?? null,
-          appliedAt: new Date().toISOString(),
-          resumeId: tailoredResumeFile.resumeId || null
-        };
-      } else if (candidate?.resume_file && candidate.resume_file.base64) {
-        appliedResume = {
-          filename: candidate.resume_file.filename || `${(candidate?.full_name || 'Candidate').replace(/\s+/g, '_')}_Resume.pdf`,
-          mimeType: candidate.resume_file.mimeType || 'application/pdf',
-          base64: candidate.resume_file.base64,
-          markdown: candidate.resume_file.markdown || candidate.source_text || null,
-          isTailored: false,
-          matchScore: currentMatchInfo?.score ?? null,
-          appliedAt: new Date().toISOString()
-        };
-      }
+      const appliedResume = await captureAppliedResume();
 
       const payload = {
         candidateId: selectedCandidateId,
@@ -3338,7 +3361,7 @@
       if(status==='submit_attempted')rememberAnswers(true);
       if (!linked) return;
       try {
-        const result = await chrome.runtime.sendMessage({ status, evidence, ...(['submit_attempted','submitted'].includes(status) ? { answers: captureApplicationAnswers() } : {}) });
+        const result = await chrome.runtime.sendMessage({ status, evidence, ...(['submit_attempted','submitted'].includes(status) ? { answers: captureApplicationAnswers(), appliedResume: await captureAppliedResume() } : {}) });
         reportCaptureDelivery(result);
       } catch { reportCaptureDelivery({ error: true }); }
     }

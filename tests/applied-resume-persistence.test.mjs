@@ -118,17 +118,6 @@ test('submissionStore includes applied_resume in editableFields and writeFields'
   assert.deepEqual(insertedPayload?.applied_resume, sampleResume);
 });
 
-test('browser extension content.js defines appliedResume payload in logSubmission', async () => {
-  const contentJs = await readFile(new URL('../browser-extension/content.js', import.meta.url), 'utf8');
-
-  // Verify appliedResume is constructed and attached to payload in logSubmission
-  assert.ok(contentJs.includes('let appliedResume = null;'));
-  assert.ok(contentJs.includes('tailoredResumeFile && (tailoredResumeFile.base64 || tailoredResumeFile.docxBase64)'));
-  assert.ok(contentJs.includes('appliedResume = {'));
-  assert.ok(contentJs.includes('candidate?.resume_file && candidate.resume_file.base64'));
-  assert.ok(contentJs.includes('appliedResume\n      };') || contentJs.includes('appliedResume,') || contentJs.includes('appliedResume\r\n      };'));
-});
-
 test('GET /api/submissions/[id]/applied-resume returns JSON snapshot and supports direct file download', async () => {
   const { moduleLoader, fixtureDatabase } = await import('./helpers/load-ts-module.mjs');
   const submissionId = '30000000-0000-4000-8000-000000000001';

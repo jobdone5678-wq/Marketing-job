@@ -71,9 +71,10 @@ test('answer drafts retain application identity through confirmation navigation 
  vm.runInNewContext(await readFile(new URL('../browser-extension/background.js',import.meta.url),'utf8'),{chrome,URL,AbortSignal,crypto:{randomUUID},Date,Promise});
  const send=(path,message)=>new Promise(resolve=>listener(message,{tab:{id:1},url:'https://jobs.ashbyhq.com/fixture/'+path},resolve));
  const key=randomUUID();
- await send('role/application',{type:'save_answer_draft',candidateId:'candidate',eventKey:key,attempt:1,answers:[{key:'email',label:'Email',value:'edited@example.test'}]});
+ await send('role/application',{type:'save_answer_draft',candidateId:'candidate',eventKey:key,attempt:1,answers:[{key:'email',label:'Email',value:'edited@example.test'}],appliedResume:{filename:'exact.pdf',mimeType:'application/pdf',base64:'ZXhhY3Q='}});
  const redirected=await send('role/confirmation',{type:'get_answer_draft'});
  assert.equal(redirected.eventKey,key);assert.equal(redirected.attempt,1);assert.equal(redirected.answers[0].value,'edited@example.test');
+ assert.equal(redirected.appliedResume.filename,'exact.pdf');assert.equal(redirected.appliedResume.base64,'ZXhhY3Q=');
  assert.equal((await send('another-role/application',{type:'get_answer_draft'})).candidateId,undefined);
 });
 
@@ -118,13 +119,14 @@ test('linked manual recovery queues an attestation for the same intent and retai
  const send=message=>new Promise(resolve=>listener(message,{tab:{id:3},url:'https://jobs.ashbyhq.com/fixture/application'},resolve));
  await send({intentId:'intent',status:'submitted',evidence:'Uncertain state',answers:[{key:'email',label:'Email',value:'final@example.test'}]});
  const original=local.outbox[0];
- const result=await send({status:'submitted',manualAttestation:true,evidence:'Applicant manually attested submission'});
+ const result=await send({status:'submitted',manualAttestation:true,evidence:'Applicant manually attested submission',appliedResume:{filename:'exact.pdf',mimeType:'application/pdf',base64:'ZXhhY3Q='}});
  assert.equal(result.success,true);
  assert.equal(delivered.length,2);
  assert.ok(delivered[1].url.endsWith('/api/extension/events'));
  assert.equal(delivered[1].event.intentId,'intent');assert.equal(delivered[1].event.attempt,1);
  assert.equal(delivered[1].event.manualAttestation,true);
  assert.equal(delivered[1].event.answers,undefined);
+ assert.equal(delivered[1].event.appliedResume.filename,'exact.pdf');assert.equal(delivered[1].event.appliedResume.base64,'ZXhhY3Q=');
  assert.equal(local.outbox.length,0);assert.equal(local.captureReviewHistory[0].eventKey,original.eventKey);
  assert.equal(local.captureReviewHistory[0].answers[0].value,'final@example.test');
 });

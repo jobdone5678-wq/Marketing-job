@@ -475,7 +475,7 @@ async function receive(message, sender) {
     if(message.type==='save_answer_draft'){
       if(!message.candidateId||!Array.isArray(message.answers))return {error:'Invalid answer draft'};
       const applicationScope=draft?.candidateId===message.candidateId&&allowed(sender.url,draft.scope)?draft.scope:scope;
-      await chrome.storage.session.set({[key]:{scope:applicationScope,candidateId:message.candidateId,answers:message.answers.slice(0,100),eventKey:message.eventKey,attempt:message.attempt,jobTitle:message.jobTitle,companyName:message.companyName}});return {saved:true};
+      await chrome.storage.session.set({[key]:{scope:applicationScope,candidateId:message.candidateId,answers:message.answers.slice(0,100),appliedResume:message.appliedResume||null,eventKey:message.eventKey,attempt:message.attempt,jobTitle:message.jobTitle,companyName:message.companyName}});return {saved:true};
     }
     return draft&&allowed(sender.url,draft.scope)?draft:{};
   }
@@ -545,6 +545,7 @@ async function receive(message, sender) {
     if (['submit_attempted','submitted'].includes(message.status) && Array.isArray(message.answers)) {
       event.answers = message.answers.slice(0, 100);
     }
+    if (['submit_attempted','submitted'].includes(message.status) && message.appliedResume) event.appliedResume=message.appliedResume;
 
     const { outbox = [] } = await chrome.storage.local.get('outbox');
     if (outbox.length >= 200) return { error: 'Capture queue is full. Use the portal review action.' };
