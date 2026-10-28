@@ -1,1 +1,1 @@
-(function(root){'use strict';root.NextkinAdapters.push({id:'ashby',matches:host=>/(^|\.)ashbyhq\.com$/i.test(host),hint:el=>el.getAttribute('data-testid')||''});})(globalThis);
+(function(root){'use strict';root.NextkinAdapters.push({id:'ashby',matches:host=>/(^|\.)ashbyhq\.com$/i.test(host),hint:el=>el.getAttribute('data-testid')||el.closest('[data-field-path]')?.getAttribute('data-field-path')||'',label:el=>el.closest('[data-field-path]')?.querySelector('label.ashby-application-form-question-title,label')?.textContent?.replace(/\s*\*\s*$/,'').trim()||''});})(globalThis);

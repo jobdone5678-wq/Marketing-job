@@ -1,5 +1,11 @@
 # Recruiting Copilot 3.2.1 — grounded screening and contextual AI tailoring
 
+## Ashby form commit fix
+
+This v3.2.1 patch commits text inputs through native focus and blur, including the `focusout` event React uses to save blur-based fields. Visible Email and Phone values are also recommitted on a subsequent **Fill Job Form** action without replacing manual text. Portal-owned validation is left intact instead of hiding errors locally. Ashby Location is identified from its field wrapper; the extension searches the autocomplete and clicks a unique matching offered option. Missing or ambiguous suggestions remain marked for manual review, and an unselected query is cleared instead of pretending a location was selected.
+
+Replace the existing unpacked v3.2.1 files with this package, reload the extension in `chrome://extensions`, then reload the application tab and choose **Fill Job Form**. Verify the Location suggestion and remaining questions before submitting the application yourself. This change requires the updated extension files; a server deployment alone does not replace a script already running in an open job tab.
+
 ## Resume work points patch
 
 This patch keeps manifest version **3.2.1**. For connected profiles, Tailor Resume reads the authorized original file locally and sends its complete text through the existing authenticated AI service after consent. A sparse portal profile is no longer the only source for work experience. The shared engine recovers responsibilities under their original employers, exposes them as experience facts for AI rewriting, and preserves stable fact IDs when ordering bullets by relevance. Job headings and dates are not repeated as accomplishment bullets. Explicit skills and remaining source sections are retained.

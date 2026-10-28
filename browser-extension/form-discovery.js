@@ -12,7 +12,7 @@
     if(el.closest('#mp-copilot-root')||el.disabled||el.readOnly||!el.getClientRects().length)continue;
     if(el.tagName==='IFRAME'){fields.push({element:el,key:'frame:'+fields.length,label:'Embedded application requires manual review',kind:'inaccessible',scope:''});continue;}
     if(['hidden','file','password','submit','reset','button'].includes(el.type)&&el.getAttribute('role')!=='combobox')continue;
-    const text=label(el),hint=adapter?.hint(el)||'',group=el.closest('fieldset,[data-automation-id="workExperience"],[data-automation-id="education"]');
+    const text=adapter?.label?.(el)||label(el),hint=adapter?.hint(el)||'',group=el.closest('fieldset,[data-automation-id="workExperience"],[data-automation-id="education"]');
     const groupLabel=group?.querySelector('legend')?.textContent?.trim()||group?.getAttribute('data-automation-id')||'';
     const kind=el.getAttribute('role')==='combobox'?'combobox':el.tagName==='SELECT'?'select':el.type==='radio'?'radio':el.type==='checkbox'?'checkbox':'text';
     let elements=[el];

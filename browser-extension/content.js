@@ -1111,8 +1111,8 @@
 
   function nativeSet(el, property, value, commit = true) {
     if (!el || !el.isConnected) return;
-    if (typeof el.setCustomValidity === 'function') {
-      try { el.setCustomValidity(''); } catch {}
+    if (globalThis.NextkinFieldWriter && property==='value') {
+      globalThis.NextkinFieldWriter.writeNative(el,property,value,{commit});highlightField(el);return;
     }
 
     if (property === 'checked') {
@@ -1135,22 +1135,16 @@
       } finally {
         filling = false;
       }
-      if (el.getAttribute?.('aria-invalid') === 'true') {
-        try { el.removeAttribute('aria-invalid'); } catch {}
-      }
       highlightField(el);
       return;
     }
 
-    if (el._valueTracker) {
-      try { el._valueTracker.setValue(String(value) === '' ? '__force_diff__' : ''); } catch {}
-    }
+    try { el.focus({preventScroll:true}); } catch {}
     const proto = el.tagName === 'SELECT' ? HTMLSelectElement.prototype
       : el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(proto, property)?.set;
     if (setter) setter.call(el, value); else el[property] = value;
 
-    try { el.dispatchEvent(new FocusEvent('focus', { bubbles: true, composed: true })); } catch {}
     try {
       el.dispatchEvent(new InputEvent('input', {
         bubbles: true,
@@ -1163,10 +1157,7 @@
     }
     if (commit) {
       el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-      try { el.dispatchEvent(new FocusEvent('blur', { bubbles: true, composed: true })); } catch {}
-      if (el.getAttribute?.('aria-invalid') === 'true') {
-        try { el.removeAttribute('aria-invalid'); } catch {}
-      }
+      try { el.blur(); } catch {}
     }
     highlightField(el);
   }
@@ -1226,7 +1217,7 @@
           const allContainers = [...roots, ...workdayRoots, ...genericRoots];
           const options = allContainers.flatMap(c => Array.from(c.querySelectorAll('[role="option"], [data-automation-id="promptOption"], [data-automation-id="promptLeafNode"], .select2-results li, li')));
 
-          const visibleOptions = options.filter(option => option.getClientRects().length && option.getAttribute('aria-disabled') !== 'true' &&
+          const visibleOptions = [...new Set(options)].filter(option => option.getClientRects().length && option.getAttribute('aria-disabled') !== 'true' &&
             !/^(create|add|use custom)\b/i.test(option.textContent.trim()));
 
           const matches = visibleOptions.filter(option => {
@@ -1234,7 +1225,7 @@
             return txt === expected || txt.startsWith(expected) || expected.startsWith(txt);
           });
 
-          if (matches.length >= 1) {
+          if (matches.length === 1) {
             matches[0].click();
             selected = true;
             highlightField(el);
@@ -1243,8 +1234,8 @@
           await new Promise(resolve => setTimeout(resolve, 80));
         }
       } finally {
-        if (!selected && query && !editedFields.has(el)) {
-          nativeSet(el, 'value', query, true);
+        if (!selected && query && !editedFields.has(el) && el.value === query) {
+          nativeSet(el, 'value', '', true);
         }
       }
     }).catch(() => {});
@@ -1755,7 +1746,7 @@
     const plans=globalThis.NextkinFieldMapping.planFill(globalThis.NextkinForms.discoverFields(document),candidate);
     const receipts=await globalThis.NextkinFieldWriter.applyFill(plans,{sessionId:session.sessionId,isCurrent:()=>activeFillSession===session&&context===screeningContext(candidates.find(c=>c.id===selectedCandidateId))});
     for(const receipt of receipts){session.recordWrite(receipt.fieldKey,receipt.previousValue,receipt.writtenValue);adapterReceipts.set(receipt.fieldKey,receipt);}
-    const unresolved=plans.filter(p=>p.status!=='supported'||!receipts.some(r=>r.fieldKey===p.field.key)&&!p.field.element.value).map(p=>p.field.label||p.field.scope||'Unlabelled field');
+    const unresolved=plans.filter(p=>p.status!=='supported'||p.field.commitStatus==='needs_review'||!receipts.some(r=>r.fieldKey===p.field.key)&&!p.field.element.value).map(p=>p.field.label||p.field.scope||'Unlabelled field');
     let note=shadowRoot?.getElementById('mp-form-review-note');
     if(!note&&shadowRoot){note=document.createElement('p');note.id='mp-form-review-note';note.setAttribute('role','status');shadowRoot.getElementById('mp-workflow-status')?.after(note);}
     if(note)note.textContent=unresolved.length?'Needs manual review: '+[...new Set(unresolved)].join('; '):'Mapped fields filled from candidate facts. Review the form before submission.';
