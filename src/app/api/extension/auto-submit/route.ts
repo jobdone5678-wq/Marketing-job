@@ -4,6 +4,7 @@ import { validateApplicationAnswers } from '@/lib/capture/snapshot';
 import { allowedCaptureUrl, validateObservation } from '@/lib/capture/validation';
 import { appliedResumeSchema, saveAppliedResume } from '@/lib/capture/applied-resume';
 import { z } from 'zod';
+import {applicationUrlKey} from '@/lib/jobs/application-state';
 
 export async function OPTIONS(request: Request) { return cors(request, new Response(null, { status: 204 })); }
 
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
     if(!body.manualAttestation&&!validateObservation('submitted',body.evidence||''))throw new CaptureError('Application success was not observed. Review this application manually.',422);
     const answers = body.answers === undefined ? null : validateApplicationAnswers(body.answers);
     const {data:candidate,error:candidateError}=await database().from('candidates').select('id,version').eq('id',body.candidateId).maybeSingle();checkDb(candidateError);if(!candidate)throw new CaptureError('Selected candidate not found.',404);
-    let safeJobUrl:string|null=null;try{if(body.jobUrl){const parsed=new URL(body.jobUrl);parsed.search='';parsed.hash='';safeJobUrl=parsed.toString();}}catch{}
+    const safeJobUrl=applicationUrlKey(body.jobUrl);
 
     // Only the document observed on this application establishes what was applied.
     const finalAppliedResume = body.appliedResume || null;

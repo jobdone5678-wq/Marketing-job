@@ -15,6 +15,8 @@ import {JobRoster} from '@/components/job-roster';
 import {WorkspaceSkeleton} from '@/components/workspace-ui';
 import { JobDates } from '@/components/job-dates';
 import { PublicJobCatalog } from '@/components/public-job-catalog';
+import {AppliedJobsList} from '@/components/applied-jobs-list';
+import {withoutAppliedJobs,type AppliedJobsResponse} from '@/lib/jobs/application-state';
 
 import type { SupportedJobProvider } from '@/lib/public-directory';
 
@@ -40,8 +42,9 @@ type Source = {
 export function JobsBrowser({ provider }: { provider?: string }) {
   const router=useRouter();
   const [importingJob,setImportingJob]=useState('');
-  const { isRecruiter,isTechnicalRecruiter, isClient, loading: profileLoading } = useUserProfile();
+  const { isRecruiter,isTechnicalRecruiter,isSuperAdmin, isClient, loading: profileLoading } = useUserProfile();
   const isRecruitingStaff=isRecruiter||isTechnicalRecruiter;
+  const canSelectCandidate=isRecruitingStaff||isSuperAdmin;
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [candidateId, setCandidateId] = useState('');
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
@@ -53,6 +56,9 @@ export function JobsBrowser({ provider }: { provider?: string }) {
 
   // Mode: 'db' (fast, cached in database) vs 'live' (direct fetch from ATS)
   const [mode, setMode] = useState<'live' | 'db'>('db');
+  const [applicationView,setApplicationView]=useState<'available'|'applied'>('available');
+  const [appliedData,setAppliedData]=useState<AppliedJobsResponse|null>(null);
+  const [appliedLoading,setAppliedLoading]=useState(false);
 
   // Live Mode states
   const [liveJobs, setLiveJobs] = useState<LiveJob[]>([]);
@@ -89,6 +95,11 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   const [newCompany, setNewCompany] = useState('');
   const [newBoard, setNewBoard] = useState('');
   const [newSourceProvider, setNewSourceProvider] = useState(provider || 'greenhouse');
+
+  useEffect(()=>{
+    const selected=new URLSearchParams(window.location.search).get('candidateId');
+    if(selected)queueMicrotask(()=>setCandidateId(selected));
+  },[]);
 
   // Sync all configured software jobs to database
   const handleSyncSoftwareJobs = async () => {
@@ -183,14 +194,14 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   useEffect(() => {
     const request = liveRequest;
     const timer = setTimeout(() => {
-      if (!profileLoading && mode === 'live') void fetchLiveJobs();
+      if (!profileLoading && mode === 'live' && applicationView === 'available') void fetchLiveJobs();
     }, 0);
     return () => { clearTimeout(timer); request.current++; };
-  }, [mode, fetchLiveJobs, profileLoading]);
+  }, [mode, fetchLiveJobs, profileLoading,applicationView]);
 
   // Load database jobs if in DB mode
   useEffect(() => {
-    if (mode !== 'db' || profileLoading) return;
+    if (mode !== 'db' || profileLoading || applicationView !== 'available') return;
     let active = true;
     queueMicrotask(() => { if (active) setDbLoading(true); });
     api<{ jobs: StoredJob[]; total: number; hasMore: boolean; recommendation: Recommendation }>(
@@ -213,17 +224,47 @@ export function JobsBrowser({ provider }: { provider?: string }) {
     return () => {
       active = false;
     };
-  }, [mode, employmentType, search, dbPage, savedFilterParam, candidateParam, profileLoading, reload]);
+  }, [mode, employmentType, search, dbPage, savedFilterParam, candidateParam, profileLoading, reload,applicationView]);
+
+  useEffect(()=>{
+    if(profileLoading||applicationView!=='applied')return;
+    let active=true;
+    queueMicrotask(()=>{if(active){setAppliedLoading(true);setAppliedData(null);}});
+    void api<AppliedJobsResponse>(`/api/jobs/applications?type=${employmentType}&search=${encodeURIComponent(search)}&page=${dbPage}${savedFilterParam+candidateParam}`)
+      .then(data=>{if(active){setAppliedData(data);setError('');}})
+      .catch(error=>{if(active)setError(error.message);})
+      .finally(()=>{if(active)setAppliedLoading(false);});
+    return()=>{active=false;};
+  },[profileLoading,applicationView,employmentType,search,dbPage,savedFilterParam,candidateParam,reload]);
+
+  useEffect(()=>{
+    let active=true,refreshing=false;
+    const refresh=async()=>{
+      if(document.visibilityState!=='visible'||refreshing)return;
+      refreshing=true;setReload(value=>value+1);
+      try{
+        if(mode==='live'&&applicationView==='available'){
+          const data=await api<AppliedJobsResponse>(`/api/jobs/applications?page=0${candidateParam}`);
+          if(active)setLiveJobs(jobs=>withoutAppliedJobs(jobs,data.appliedKeys));
+        }
+      }catch(error){if(active)setError((error as Error).message);}
+      finally{refreshing=false;}
+    };
+    window.addEventListener('focus',refresh);document.addEventListener('visibilitychange',refresh);
+    return()=>{active=false;window.removeEventListener('focus',refresh);document.removeEventListener('visibilitychange',refresh);};
+  },[mode,applicationView,candidateParam]);
 
   // Load configured sources for recruiter
   useEffect(() => {
-    if (isRecruitingStaff) {
+    if (canSelectCandidate) {
       void getCandidates().then(items => setCandidates(items.filter(c => c.provenance_status === 'confirmed'))).catch(e => setError(e.message));
+    }
+    if (isRecruitingStaff) {
       void api<{ sources: Source[] }>('/api/job-sources')
         .then((r) => setDbSources(r.sources || []))
         .catch((e) => setError(e.message));
     }
-  }, [isRecruitingStaff]);
+  }, [isRecruitingStaff,canSelectCandidate]);
 
   return (
     <main className="p-6 max-w-[1440px] mx-auto space-y-6">
@@ -251,7 +292,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           <Button
             size="sm"
             variant={mode === 'db' ? 'default' : 'ghost'}
-            onClick={() => setMode('db')}
+            onClick={() => {setMode('db');setApplicationView('available');setDbPage(0);}}
             className="text-xs h-7 font-medium px-2.5"
           >
             Saved jobs <span className="ml-1 font-mono tabular-nums">({dbTotal})</span>
@@ -259,7 +300,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           <Button
             size="sm"
             variant={mode === 'live' ? 'default' : 'ghost'}
-            onClick={() => {setLiveProvider(provider || portalFilter || 'all');setLiveBoard('');setMode('live');}}
+            onClick={() => {setLiveProvider(provider || portalFilter || 'all');setLiveBoard('');setMode('live');setApplicationView('available');setDbPage(0);}}
             className="text-xs h-7 font-medium px-2.5"
           >
             Live ATS Fetch
@@ -267,27 +308,29 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         </div>
       </div>
 
-      <details className="border-y border-border/60 py-3"><summary className="text-xs font-medium text-muted-foreground">Company boards & source discovery</summary><div className="mt-3"><PublicJobCatalog provider={mode === 'live' && liveProvider !== 'all' ? liveProvider : provider || portalFilter || undefined} canSave={isRecruiter} onSelect={board => {
+      {applicationView==='available'&&<details className="border-y border-border/60 py-3"><summary className="text-xs font-medium text-muted-foreground">Company boards & source discovery</summary><div className="mt-3"><PublicJobCatalog provider={mode === 'live' && liveProvider !== 'all' ? liveProvider : provider || portalFilter || undefined} canSave={isRecruiter} onSelect={board => {
         setLiveBoard(board.board_slug); setLiveProvider(board.provider); setPortalFilter(board.provider); setDbPage(0); setCompanyFilter(''); setMode('live');
       }} onSaved={async () => {
         const result = await api<{sources:Source[]}>('/api/job-sources');
         setDbSources(result.sources || []);
-      }}/></div></details>
+      }}/></div></details>}
 
       <section className="border border-border bg-card p-4 space-y-2">
-        {isRecruitingStaff && <label className="block text-sm font-medium">Find roles for a candidate
+        {canSelectCandidate && <label className="block text-sm font-medium">Find roles for a candidate
           <select aria-label="Match jobs to candidate" className="mt-2 block w-full border border-border bg-background p-2 text-sm" value={candidateId}
-            onChange={e => { setCandidateId(e.target.value); setDbPage(0); setDbJobs([]); setLiveJobs([]); setRecommendation(null); }}>
+            onChange={e => { const id=e.target.value;setCandidateId(id);const url=new URL(window.location.href);if(id)url.searchParams.set('candidateId',id);else url.searchParams.delete('candidateId');window.history.replaceState(null,'',url);setDbPage(0); setDbJobs([]); setLiveJobs([]);setAppliedData(null); setRecommendation(null); }}>
             <option value="">All saved roles</option>
             {candidates.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
           </select>
         </label>}
-        {recommendation?.requiresProfile ? <p className="text-sm">Upload, review and save your resume details to see related roles. <Link className="underline font-medium hover:text-foreground" href="/dashboard/candidates/new">Review your resume</Link></p>
-          : (isClient || candidateId) && <p className="text-sm text-muted-foreground">Roles related to <span className="font-medium text-foreground">{recommendation?.candidateName || 'your saved resume'}</span>, ranked by skills and job titles. Matching helps discovery; review each job’s requirements before applying.</p>}
+        {applicationView==='available'&&(recommendation?.requiresProfile ? <p className="text-sm">Upload, review and save your resume details to see related roles. <Link className="underline font-medium hover:text-foreground" href="/dashboard/candidates/new">Review your resume</Link></p>
+          : (isClient || candidateId) && <p className="text-sm text-muted-foreground">Roles related to <span className="font-medium text-foreground">{recommendation?.candidateName || 'your saved resume'}</span>, ranked by skills and job titles. Matching helps discovery; review each job’s requirements before applying.</p>)}
+        <fieldset className="flex flex-wrap gap-4 pt-2 text-sm"><legend className="sr-only">Job list</legend>{(['available','applied'] as const).map(view=><label key={view} className="flex min-h-9 cursor-pointer items-center gap-2"><input type="radio" name="job-list" value={view} checked={applicationView===view} onChange={()=>{setApplicationView(view);setDbPage(0);setAppliedData(null);setError('');}}/>{view==='available'?'Available to apply':'Applied jobs'}</label>)}</fieldset>
+        <p className="text-xs text-muted-foreground">Application status belongs to the selected candidate. A job applied for one candidate stays available for other candidates.</p>
       </section>
 
       {/* Mode Status Banner */}
-      {mode === 'live' ? (
+      {applicationView==='available'&&(mode === 'live' ? (
         <div className="bg-muted/30 border border-border text-foreground p-3 text-xs flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 font-medium">
             <span className="size-2 rounded-full bg-emerald-600 dark:bg-emerald-400"></span>
@@ -301,11 +344,11 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">{dbTotal} saved job records. Review source dates and requirements before applying.</p>
-      )}
+      ))}
 
       {/* Controls & Search Toolbar */}
       <section className="border-y border-border/60 py-4 space-y-4">
-        {mode === 'live' && (
+        {mode === 'live' && applicationView==='available' && (
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div>
               <label className="text-xs font-semibold text-muted-foreground block mb-1">
@@ -400,7 +443,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         {/* Search & Filter Bar */}
         <div className="flex flex-col sm:flex-row gap-3 pt-1 border-t">
           <label className="text-sm">Posting date
-            <select aria-label="Posted within" className="block h-9 border rounded-md px-3 bg-background text-sm" value={postedWithin} onChange={e=>{setPostedWithin(e.target.value);setDbPage(0);}}>
+            <select aria-label="Posted within" disabled={applicationView==='applied'} className="block h-9 border rounded-md px-3 bg-background text-sm" value={postedWithin} onChange={e=>{setPostedWithin(e.target.value);setDbPage(0);}}>
               <option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All dates (including unknown)</option>
             </select>
           </label>
@@ -427,7 +470,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
             <option value="unknown">Unknown</option>
           </select>
 
-          {mode === 'db' && (
+          {(mode === 'db'||applicationView==='applied') && (
             <div className="flex gap-2">
               <Button variant="outline" className="h-9" onClick={() => { setDbPage(0); setReload(v => v + 1); }}>
                 Refresh jobs
@@ -436,6 +479,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 variant="default"
                 className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold"
                 onClick={handleSyncSoftwareJobs}
+                hidden={applicationView==='applied'}
                 disabled={syncingSoftwareJobs}
               >
                 {syncingSoftwareJobs ? 'Syncing...' : ' Pull & Save'}
@@ -444,7 +488,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           )}
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
-          {mode === 'db' && <label className="text-sm">Portal
+          {(mode === 'db'||applicationView==='applied') && <label className="text-sm">Portal
             <select aria-label="Filter by portal" className="mt-1 block h-9 w-full rounded-md border bg-background px-3" value={provider || portalFilter} disabled={Boolean(provider)} onChange={e => { setPortalFilter(e.target.value); setCompanyFilter(''); setDbPage(0); }}>
               <option value="">All portals</option>
               <option value="greenhouse">Greenhouse</option>
@@ -458,7 +502,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           <label className="text-sm">Company (optional)<Input aria-label="Filter by company" className="mt-1 h-9" placeholder="All companies" value={companyFilter} onChange={e => { setCompanyFilter(e.target.value); setDbPage(0); }}/></label>
           <label className="text-sm">Location<Input aria-label="Filter by location" className="mt-1 h-9" placeholder="City, state or remote" value={locationFilter} onChange={e => { setLocationFilter(e.target.value); setDbPage(0); }}/></label>
         </div>
-        <p className="text-xs text-muted-foreground">Newest source posting dates first. {postedWithin==='all'?'Older postings and unknown dates are included; unknown dates appear last.':'Older postings and jobs without a source posting date are hidden. Fetching a job today does not make its posting date recent.'}</p>
+        <p className="text-xs text-muted-foreground">{applicationView==='applied'?'Applied jobs are ordered by application date. Closed and older postings remain in application history.':<>Newest source posting dates first. {postedWithin==='all'?'Older postings and unknown dates are included; unknown dates appear last.':'Older postings and jobs without a source posting date are hidden. Fetching a job today does not make its posting date recent.'}</>}</p>
       </section>
 
       {/* Messages */}
@@ -474,7 +518,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
       )}
 
       {/* ======================= LIVE JOBS LIST ======================= */}
-      {mode === 'live' && (
+      {mode === 'live' && applicationView==='available' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center text-sm text-muted-foreground px-1">
             <span>
@@ -608,7 +652,12 @@ export function JobsBrowser({ provider }: { provider?: string }) {
       )}
 
       {/* ======================= DATABASE MODE ======================= */}
-      {mode === 'db' && (
+      {applicationView==='applied'&&<section aria-label="Applied jobs" className="space-y-4">
+        <div><h2 className="text-lg font-semibold">Applied jobs{appliedData?.candidateName?` · ${appliedData.candidateName}`:''}</h2>{appliedData&&!appliedLoading&&<p className="mt-1 text-sm text-muted-foreground">{appliedData.total} applied {appliedData.total===1?'job':'jobs'} with these filters.</p>}</div>
+        <AppliedJobsList data={appliedData} loading={appliedLoading}/>
+        {!!appliedData&&!appliedData.requiresCandidate&&<div className="flex gap-2"><Button size="sm" variant="outline" disabled={appliedLoading||!dbPage} onClick={()=>setDbPage(page=>page-1)}>Previous applied jobs</Button><Button size="sm" variant="outline" disabled={appliedLoading||!appliedData.hasMore} onClick={()=>setDbPage(page=>page+1)}>Next applied jobs</Button></div>}
+      </section>}
+      {mode === 'db' && applicationView==='available' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center text-sm text-muted-foreground px-1">
             <span>
@@ -636,7 +685,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
       )}
 
       {/* Recruiter Section: Public Job Sources */}
-      {isRecruiter && (
+      {isRecruiter && applicationView==='available' && (
         <details className="border-t border-border/60 py-4"><summary className="text-sm font-medium">Manage saved job sources ({dbSources.length})</summary><section className="mt-4 space-y-4">
           <div>
             <h2 className="font-bold text-lg">Public Job Sources Directory</h2>

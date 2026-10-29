@@ -8,6 +8,8 @@ import {rankResumeJobs} from '@/lib/jobs/relevance';
 import {PUBLIC_JOB_BOARDS} from '@/lib/public-directory';
 import {persistLiveJobs} from '@/lib/jobs/live-persistence';
 import {publicationWindow,isWithinPublicationWindow,newestPostedFirst} from '@/lib/jobs/freshness';
+import {candidateJobApplications} from '@/lib/jobs/applications';
+import {withoutAppliedJobs} from '@/lib/jobs/application-state';
 
 import type {SupportedJobProvider} from '@/lib/public-directory';
 
@@ -79,7 +81,9 @@ export async function GET(request:Request) {
       && (!company || job.company?.toLowerCase().includes(company))
       && (!location || job.location?.toLowerCase().includes(location))
       && (!search || [job.title,job.company,job.location,job.department].some(value => value?.toLowerCase().includes(search))));
-    const displayed = (candidate ? rankResumeJobs(filtered,candidate) : filtered).sort(newestPostedFirst);
+    const {appliedKeys}=await candidateJobApplications(recommendation.candidateId||candidate?.id);
+    const available=withoutAppliedJobs(filtered,appliedKeys);
+    const displayed = (candidate ? rankResumeJobs(available,candidate) : available).sort(newestPostedFirst);
     const persistedCount = results.reduce((sum,result) => sum + result.persisted,0);
     return {jobs:displayed,total:displayed.length,recommendation,unfilteredTotal:jobs.length,
       sources:results.map(r => ({company:r.source.company,board:r.source.board_slug,provider:r.source.provider,count:r.jobs.length,...(r.error ? {error:r.error} : {})})),

@@ -45,6 +45,10 @@ export function fixtureDatabase(tables) {
           const [key,operator,...rest]=part.split('.');const value=rest.join('.');
           if(operator==='is'&&value==='null')return row=>row[key]==null;
           if(operator==='gt')return row=>row[key]!=null&&Date.parse(row[key])>Date.parse(value);
+          if(operator==='ilike'){
+            const pattern=new RegExp('^'+value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/%/g,'.*').replace(/_/g,'.')+'$','i');
+            return row=>row[key]!=null&&pattern.test(String(row[key]));
+          }
           throw new Error('Unsupported fixture OR filter: '+part);
         });
         filters.push(row=>alternatives.some(filter=>filter(row)));return query;

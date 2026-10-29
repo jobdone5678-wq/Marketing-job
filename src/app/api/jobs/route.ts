@@ -4,6 +4,8 @@ import { recommendationContext } from '@/lib/jobs/recommendations';
 import { rankResumeJobs } from '@/lib/jobs/relevance';
 import type { StoredJob } from '@/lib/jobs/types';
 import {publicationWindow,newestPostedFirst} from '@/lib/jobs/freshness';
+import {candidateJobApplications} from '@/lib/jobs/applications';
+import {withoutAppliedJobs} from '@/lib/jobs/application-state';
 
 export interface PublicJob {id:string;title:string;company:string;companySlug:string;portal:'Greenhouse'|'Ashby';location:string;department:string;type:string;url:string;updatedAt:string}
 
@@ -43,8 +45,9 @@ export async function GET(request: Request) {
       if (sourceIds) q = q.in('source_id', sourceIds);
       return q;
     }
-    // Super admin always sees all USA public jobs unranked; other roles rank when a candidate is available.
-    if (!candidate || isSuperAdmin) {
+    // Without a candidate, keep the broad feed paginated. Candidate feeds remove
+    // only that candidate's applications before counting and pagination.
+    if (!recommendation.candidateId && !candidate) {
       const { data, error, count } = await query(true).range(page * 50, page * 50 + 49);
       checkDb(error);
       return { jobs: data || [], total: count || 0, hasMore: (page + 1) * 50 < (count || 0), recommendation };
@@ -57,7 +60,9 @@ export async function GET(request: Request) {
       jobs.push(...(data || []) as unknown as StoredJob[]);
       if (!data || data.length < 500) break;
     }
-    const ranked = rankResumeJobs(jobs, candidate).sort(newestPostedFirst);
+    const {appliedKeys}=await candidateJobApplications(recommendation.candidateId||candidate?.id);
+    const available=withoutAppliedJobs(jobs,appliedKeys);
+    const ranked = (candidate&&!isSuperAdmin?rankResumeJobs(available, candidate):available).sort(newestPostedFirst);
     return { jobs: ranked.slice(page * 50, page * 50 + 50), total: ranked.length, hasMore: (page + 1) * 50 < ranked.length, recommendation };
   });
 }

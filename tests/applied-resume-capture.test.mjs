@@ -63,3 +63,9 @@ test('standalone success resolves the existing draft and persists only the file 
  const response=await POST(new Request('https://portal.test/api/extension/auto-submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidateId:candidate,eventKey:'10000000-0000-4000-8000-000000000705',attempt:1,companyName:'Fixture',jobTitle:'Engineer',jobUrl:'https://jobs.ashbyhq.com/fixture/application',evidence:'Your application has been submitted',appliedResume:resume})}));
  assert.equal(response.status,200);assert.deepEqual(row.applied_resume,resume);assert.equal((await response.json()).submission.id,submission);
 });
+
+test('standalone submissions retain public posting query IDs for candidate-specific job matching',async()=>{
+ const {loadAuto,calls}=fixture(),{POST}=loadAuto('src/app/api/extension/auto-submit/route.ts');
+ const response=await POST(new Request('https://portal.test/api/extension/auto-submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({candidateId:candidate,eventKey:'10000000-0000-4000-8000-000000000706',attempt:1,companyName:'Fixture',jobTitle:'Engineer',jobUrl:'https://company.test/careers?gh_jid=123&utm_source=ignored#tracking',evidence:'Your application has been submitted'})}));
+ assert.equal(response.status,200);assert.equal(calls.find(call=>call.name==='record_extension_submission').args.p_fields.jobUrl,'https://company.test/careers?gh_jid=123');
+});
