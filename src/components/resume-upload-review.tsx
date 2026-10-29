@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { api } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import type { ResumeExtraction } from '@/lib/ai/schemas';
@@ -12,6 +12,7 @@ export function ResumeUploadReview({
   onDraft: (fields: Record<string, unknown>, documentId: string, version: number | null) => void;
 }) {
   const [consent, setConsent] = useState(false);
+  const fileInputId=useId();
   const [documentId, setId] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -127,7 +128,7 @@ export function ResumeUploadReview({
 
   return (
     <section
-      className="rounded-lg border p-5 space-y-3"
+      className="resume-upload-review rounded-lg border p-5 space-y-4"
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
@@ -138,16 +139,22 @@ export function ResumeUploadReview({
       <p className="text-sm text-muted-foreground">
         PDF or Word (.docx), up to 10 MiB and 20 PDF pages. Review the extracted facts before saving. Processing time depends on the document and provider.
       </p>
-      <label className="flex gap-2 text-sm cursor-pointer select-none">
+      <label className="resume-consent-row">
         <input
           type="checkbox"
+          className="resume-consent-checkbox"
           checked={consent}
           onChange={(e) => setConsent(e.target.checked)}
         />
-        I have permission to upload this resume and consent to processing by the configured AI provider.
+        <span>I have permission to upload this resume and consent to processing by the configured AI provider.</span>
       </label>
+      <div className="space-y-2">
+      <label htmlFor={fileInputId} className="block text-sm font-medium">Resume file</label>
       <input
+        id={fileInputId}
         aria-label="Resume file"
+        aria-describedby={`${fileInputId}-help`}
+        className="resume-file-input"
         type="file"
         accept=".pdf,.docx"
         disabled={!consent || busy}
@@ -155,6 +162,8 @@ export function ResumeUploadReview({
           if (e.target.files?.[0]) void upload(e.target.files[0]);
         }}
       />
+      <p id={`${fileInputId}-help`} className="text-xs leading-relaxed text-muted-foreground">{consent?'Choose a PDF or Word (.docx) file to upload.':'Check the permission box above to enable file selection.'}</p>
+      </div>
       {status && (
         <p role="status" className="text-sm flex items-center gap-2 font-medium">
           {busy && (

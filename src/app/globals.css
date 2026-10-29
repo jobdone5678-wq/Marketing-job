@@ -2,6 +2,27 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Keep resume consent and file selection visible without replacing native UI. */
+.resume-upload-review {color-scheme:light;}
+.dark .resume-upload-review {color-scheme:dark;}
+.resume-consent-row {position:relative;display:flex;align-items:flex-start;gap:.75rem;min-height:3rem;padding:.625rem 0;cursor:pointer;font-size:.875rem;line-height:1.5;}
+.resume-consent-checkbox {appearance:auto;flex:none;width:1.25rem;height:1.25rem;margin:.0625rem 0 0;accent-color:hsl(var(--primary));cursor:pointer;}
+.resume-consent-checkbox:focus-visible {outline:2px solid hsl(var(--ring));outline-offset:3px;}
+.resume-file-input {display:block;width:100%;min-width:0;min-height:3rem;padding:.375rem;border:1px solid hsl(var(--border));border-radius:.5rem;background:hsl(var(--background));color:hsl(var(--foreground));font-size:.875rem;line-height:1.5;cursor:pointer;}
+.resume-file-input::file-selector-button {margin-right:.875rem;border:1px solid hsl(var(--primary));border-radius:.375rem;padding:.5rem .875rem;background:hsl(var(--primary));color:hsl(var(--primary-foreground));font:inherit;font-weight:600;cursor:pointer;}
+.resume-file-input:not(:disabled):hover::file-selector-button {filter:brightness(.95);}
+.resume-file-input:focus-visible {outline:2px solid hsl(var(--ring));outline-offset:3px;}
+.resume-file-input:disabled {cursor:not-allowed;background:hsl(var(--muted)/.4);color:hsl(var(--muted-foreground));}
+.resume-file-input:disabled::file-selector-button {cursor:not-allowed;border-color:hsl(var(--border));background:hsl(var(--muted));color:hsl(var(--muted-foreground));}
+@supports not (accent-color:auto) {
+  .resume-consent-checkbox {position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;}
+  .resume-consent-checkbox + span {padding-left:2rem;}
+  .resume-consent-checkbox + span::before {content:"";position:absolute;left:0;top:.6875rem;width:1.25rem;height:1.25rem;border:2px solid hsl(var(--muted-foreground));border-radius:.25rem;background:hsl(var(--background));}
+  .resume-consent-checkbox:checked + span::before {background:hsl(var(--primary));border-color:hsl(var(--primary));}
+  .resume-consent-checkbox:checked + span::after {content:"";position:absolute;left:.4375rem;top:.875rem;width:.375rem;height:.625rem;border:solid hsl(var(--primary-foreground));border-width:0 2px 2px 0;transform:rotate(45deg);}
+  .resume-consent-checkbox:focus-visible + span::before {outline:2px solid hsl(var(--ring));outline-offset:3px;}
+}
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
