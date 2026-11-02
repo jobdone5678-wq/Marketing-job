@@ -4,6 +4,7 @@ import Link from "next/link";
 import { JobDates } from "@/components/job-dates";
 import type { StoredJob } from "@/lib/jobs/types";
 import { Badge } from "@/components/ui/badge";
+import { extractJobSkills } from "@/lib/jobs/skills-extractor";
 
 function MapPinIcon({ className }: { className?: string }) {
   return (
@@ -74,6 +75,7 @@ export function JobRoster({
           <tbody className="divide-y divide-border/60">
             {jobs.map((job) => {
               const companyInitial = (job.company || "C").charAt(0).toUpperCase();
+              const extractedSkills = extractJobSkills(job.description || '', job.title).slice(0, 4);
 
               return (
                 <tr
@@ -98,6 +100,18 @@ export function JobRoster({
                         <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground">
                           <span className="font-medium text-foreground/80">{job.company}</span>
                         </div>
+                        {extractedSkills.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {extractedSkills.map((skill) => (
+                              <span
+                                key={skill.name}
+                                className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20"
+                              >
+                                {skill.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                         {job.match_reasons && job.match_reasons.length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-1">
                             {job.match_reasons.map((reason) => (

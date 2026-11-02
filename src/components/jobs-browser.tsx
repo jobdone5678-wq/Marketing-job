@@ -17,6 +17,7 @@ import { JobDates } from '@/components/job-dates';
 import { PublicJobCatalog } from '@/components/public-job-catalog';
 import {AppliedJobsList} from '@/components/applied-jobs-list';
 import {withoutAppliedJobs,type AppliedJobsResponse} from '@/lib/jobs/application-state';
+import { extractJobSkills } from '@/lib/jobs/skills-extractor';
 
 import type { SupportedJobProvider } from '@/lib/public-directory';
 
@@ -715,6 +716,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
               {liveJobs.map((job) => {
                 const isExpanded = expandedJobHash === job.content_hash;
                 const companyInitial = (job.company || 'C').charAt(0).toUpperCase();
+                const liveSkills = extractJobSkills(job.description || '', job.title).slice(0, 5);
 
                 return (
                   <article
@@ -741,6 +743,18 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                               </>
                             )}
                           </div>
+                          {liveSkills.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {liveSkills.map((s) => (
+                                <span
+                                  key={s.name}
+                                  className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20"
+                                >
+                                  {s.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
 

@@ -47,11 +47,6 @@
   };
   let submissionEventKey = generateUUID();
   const applicationAnswers = new Map();
-  let observedAppliedResume = null;
-  let appliedResumeFile = null;
-  let appliedResumeRead = Promise.resolve(null);
-  let appliedResumeEpoch = 0;
-  let appliedResumeScope = '';
   let draftTimer;
   let shadowRoot = null;
 
@@ -250,50 +245,11 @@
     return Array.from(applicationAnswers.values()).slice(0,100);
   }
 
-  function isResumeInput(input) {
-    if (input.type !== 'file' || input.closest('#mp-copilot-root')) return false;
-    const context = getElementContext(input);
-    if (/cover.?letter|portfolio|photo|picture|transcript/i.test(context)) return false;
-    return /resume|\bcv\b|curriculum|vitae/i.test(context) || document.querySelectorAll('input[type="file"]').length === 1;
-  }
-
-  function captureAppliedResume(changedInput) {
-    const scope=selectedCandidateId+'|'+location.origin+location.pathname.replace(/\/(?:application|apply|confirmation|thank-you|success)(?:\/.*)?\/?$/i,'').replace(/\/$/,'');
-    if(scope!==appliedResumeScope){appliedResumeScope=scope;appliedResumeEpoch++;appliedResumeFile=null;observedAppliedResume=null;appliedResumeRead=Promise.resolve(null);}
-    const inputs = Array.from(document.querySelectorAll('input[type="file"]')).filter(isResumeInput);
-    if (changedInput && isResumeInput(changedInput) && !changedInput.files?.length) {
-      appliedResumeEpoch++;appliedResumeFile=null;observedAppliedResume=null;appliedResumeRead=Promise.resolve(null);
-    }
-    const selected = inputs.flatMap(input=>Array.from(input.files||[]).map(file=>({input,file})));
-    if (selected.length > 1 && !selected.every(item=>item.file===selected[0].file)) {
-      appliedResumeEpoch++;observedAppliedResume=null;appliedResumeFile=null;appliedResumeRead=Promise.resolve(null);
-      return appliedResumeRead;
-    }
-    const selection = selected[0];
-    if (!selection || selection.file === appliedResumeFile) return appliedResumeRead;
-    const {input,file}=selection,epoch=++appliedResumeEpoch;
-    appliedResumeFile=file;observedAppliedResume=null;
-    // Hold the actual File before an AJAX submit removes the form or file input.
-    const tailored=tailoredAttachments.get(input)===file&&tailoredResumeFile?.reviewed?tailoredResumeFile:null;
-    appliedResumeRead=(async()=>{
-      try {
-        const base64=await fileToBase64(file);
-        if(epoch!==appliedResumeEpoch)return observedAppliedResume;
-        const matched=tailored&&(tailored.base64||tailored.docxBase64)===base64;
-        observedAppliedResume={filename:file.name,mimeType:file.type||(/\.docx$/i.test(file.name)?'application/vnd.openxmlformats-officedocument.wordprocessingml.document':/\.pdf$/i.test(file.name)?'application/pdf':'application/octet-stream'),base64,isTailored:!!matched,appliedAt:new Date().toISOString(),...(matched?{markdown:tailored.markdown||tailored.resumeMarkdown||null,resumeId:tailored.resumeId||null,matchScore:tailored.ats?.score??tailored.matchScore??null}:{})};
-        return observedAppliedResume;
-      } catch {if(epoch===appliedResumeEpoch){appliedResumeFile=null;observedAppliedResume=null;}return null;}
-    })();
-    return appliedResumeRead;
-  }
-
   function rememberAnswers(event) {
     if(!selectedCandidateId)return;
     const answers=captureApplicationAnswers();
-    const resume=captureAppliedResume(event?.type==='change'&&event.target?.type==='file'?event.target:null);
-    const candidateId=selectedCandidateId,eventKey=submissionEventKey,jobTitle=currentJobTitle,companyName=currentCompanyName;
     clearTimeout(draftTimer);
-    const save=async()=>{const appliedResume=await resume;if(candidateId!==selectedCandidateId||eventKey!==submissionEventKey)return;return chrome.runtime.sendMessage({type:'save_answer_draft',candidateId,answers,appliedResume,eventKey,attempt:submissionAttempt,jobTitle,companyName}).catch(()=>{});};
+    const save=()=>chrome.runtime.sendMessage({type:'save_answer_draft',candidateId:selectedCandidateId,answers,eventKey:submissionEventKey,attempt:submissionAttempt,jobTitle:currentJobTitle,companyName:currentCompanyName}).catch(()=>{});
     if(event===true||event?.type==='submit')return save();
     draftTimer=setTimeout(save,100);
   }
@@ -1149,15 +1105,14 @@
         if(draft.eventKey)submissionEventKey=draft.eventKey;
         submissionAttempt=Number.isInteger(draft.attempt)?draft.attempt:0;
         currentJobTitle=draft.jobTitle||'';currentCompanyName=draft.companyName||'';
-        if(draft.appliedResume&&!Array.from(document.querySelectorAll('input[type="file"]')).filter(isResumeInput).some(input=>input.files?.length)){captureAppliedResume();observedAppliedResume=draft.appliedResume;appliedResumeRead=Promise.resolve(observedAppliedResume);}
       }
     } catch { candidates = []; selectedCandidateId = null; }
   }
 
   function nativeSet(el, property, value, commit = true) {
     if (!el || !el.isConnected) return;
-    if (globalThis.NextkinFieldWriter && property==='value') {
-      globalThis.NextkinFieldWriter.writeNative(el,property,value,{commit});highlightField(el);return;
+    if (typeof el.setCustomValidity === 'function') {
+      try { el.setCustomValidity(''); } catch {}
     }
 
     if (property === 'checked') {
@@ -1180,16 +1135,22 @@
       } finally {
         filling = false;
       }
+      if (el.getAttribute?.('aria-invalid') === 'true') {
+        try { el.removeAttribute('aria-invalid'); } catch {}
+      }
       highlightField(el);
       return;
     }
 
-    try { el.focus({preventScroll:true}); } catch {}
+    if (el._valueTracker) {
+      try { el._valueTracker.setValue(String(value) === '' ? '__force_diff__' : ''); } catch {}
+    }
     const proto = el.tagName === 'SELECT' ? HTMLSelectElement.prototype
       : el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(proto, property)?.set;
     if (setter) setter.call(el, value); else el[property] = value;
 
+    try { el.dispatchEvent(new FocusEvent('focus', { bubbles: true, composed: true })); } catch {}
     try {
       el.dispatchEvent(new InputEvent('input', {
         bubbles: true,
@@ -1202,7 +1163,10 @@
     }
     if (commit) {
       el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-      try { el.blur(); } catch {}
+      try { el.dispatchEvent(new FocusEvent('blur', { bubbles: true, composed: true })); } catch {}
+      if (el.getAttribute?.('aria-invalid') === 'true') {
+        try { el.removeAttribute('aria-invalid'); } catch {}
+      }
     }
     highlightField(el);
   }
@@ -1262,7 +1226,7 @@
           const allContainers = [...roots, ...workdayRoots, ...genericRoots];
           const options = allContainers.flatMap(c => Array.from(c.querySelectorAll('[role="option"], [data-automation-id="promptOption"], [data-automation-id="promptLeafNode"], .select2-results li, li')));
 
-          const visibleOptions = [...new Set(options)].filter(option => option.getClientRects().length && option.getAttribute('aria-disabled') !== 'true' &&
+          const visibleOptions = options.filter(option => option.getClientRects().length && option.getAttribute('aria-disabled') !== 'true' &&
             !/^(create|add|use custom)\b/i.test(option.textContent.trim()));
 
           const matches = visibleOptions.filter(option => {
@@ -1270,7 +1234,7 @@
             return txt === expected || txt.startsWith(expected) || expected.startsWith(txt);
           });
 
-          if (matches.length === 1) {
+          if (matches.length >= 1) {
             matches[0].click();
             selected = true;
             highlightField(el);
@@ -1279,8 +1243,8 @@
           await new Promise(resolve => setTimeout(resolve, 80));
         }
       } finally {
-        if (!selected && query && !editedFields.has(el) && el.value === query) {
-          nativeSet(el, 'value', '', true);
+        if (!selected && query && !editedFields.has(el)) {
+          nativeSet(el, 'value', query, true);
         }
       }
     }).catch(() => {});
@@ -1791,7 +1755,7 @@
     const plans=globalThis.NextkinFieldMapping.planFill(globalThis.NextkinForms.discoverFields(document),candidate);
     const receipts=await globalThis.NextkinFieldWriter.applyFill(plans,{sessionId:session.sessionId,isCurrent:()=>activeFillSession===session&&context===screeningContext(candidates.find(c=>c.id===selectedCandidateId))});
     for(const receipt of receipts){session.recordWrite(receipt.fieldKey,receipt.previousValue,receipt.writtenValue);adapterReceipts.set(receipt.fieldKey,receipt);}
-    const unresolved=plans.filter(p=>p.status!=='supported'||p.field.commitStatus==='needs_review'||!receipts.some(r=>r.fieldKey===p.field.key)&&!p.field.element.value).map(p=>p.field.label||p.field.scope||'Unlabelled field');
+    const unresolved=plans.filter(p=>p.status!=='supported'||!receipts.some(r=>r.fieldKey===p.field.key)&&!p.field.element.value).map(p=>p.field.label||p.field.scope||'Unlabelled field');
     let note=shadowRoot?.getElementById('mp-form-review-note');
     if(!note&&shadowRoot){note=document.createElement('p');note.id='mp-form-review-note';note.setAttribute('role','status');shadowRoot.getElementById('mp-workflow-status')?.after(note);}
     if(note)note.textContent=unresolved.length?'Needs manual review: '+[...new Set(unresolved)].join('; '):'Mapped fields filled from candidate facts. Review the form before submission.';
@@ -2047,11 +2011,33 @@
       submissionAttempt=Math.max(1,submissionAttempt);
       await rememberAnswers(true);
       if(linked&&manualAttestation){
-        const result=await chrome.runtime.sendMessage({status:'submitted',manualAttestation:true,evidence:evidenceText||'Applicant manually attested submission',answers:captureApplicationAnswers(),appliedResume:await captureAppliedResume()});
+        const result=await chrome.runtime.sendMessage({status:'submitted',manualAttestation:true,evidence:evidenceText||'Applicant manually attested submission'});
         reportCaptureDelivery(result);
         return;
       }
-      const appliedResume = await captureAppliedResume();
+      let appliedResume = null;
+      if (tailoredResumeFile && (tailoredResumeFile.base64 || tailoredResumeFile.docxBase64)) {
+        appliedResume = {
+          filename: tailoredResumeFile.filename || `${(candidate?.full_name || 'Candidate').replace(/\s+/g, '_')}_Tailored_Resume.docx`,
+          mimeType: tailoredResumeFile.mimeType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          base64: tailoredResumeFile.base64 || tailoredResumeFile.docxBase64,
+          markdown: tailoredResumeFile.markdown || tailoredResumeFile.resumeMarkdown || null,
+          isTailored: true,
+          matchScore: tailoredResumeFile.ats?.score ?? tailoredResumeFile.matchScore ?? null,
+          appliedAt: new Date().toISOString(),
+          resumeId: tailoredResumeFile.resumeId || null
+        };
+      } else if (candidate?.resume_file && candidate.resume_file.base64) {
+        appliedResume = {
+          filename: candidate.resume_file.filename || `${(candidate?.full_name || 'Candidate').replace(/\s+/g, '_')}_Resume.pdf`,
+          mimeType: candidate.resume_file.mimeType || 'application/pdf',
+          base64: candidate.resume_file.base64,
+          markdown: candidate.resume_file.markdown || candidate.source_text || null,
+          isTailored: false,
+          matchScore: currentMatchInfo?.score ?? null,
+          appliedAt: new Date().toISOString()
+        };
+      }
 
       const payload = {
         candidateId: selectedCandidateId,
@@ -2063,7 +2049,7 @@
         portalSource: detectPortalSource(),
         status: 'Applied',
         evidence: evidenceText || 'Detected form submission',
-        answers: captureApplicationAnswers(),
+        answers: manualAttestation?undefined:captureApplicationAnswers(),
         manualAttestation,
         profileVersion: candidate?.version || null,
         appliedResume
@@ -2395,50 +2381,504 @@
 
     // Stylesheet
     const style = document.createElement('style');
-    style.textContent = `*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}.mp-pill{display:flex;align-items:center;gap:8px;background:rgba(15,23,42,0.94);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);color:#f8fafc;border:1px solid rgba(255,255,255,0.16);box-shadow:0 10px 30px -5px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.08);border-radius:9999px;padding:8px 14px 8px 10px;cursor:pointer;font-size:12.5px;font-weight:600;user-select:none;transition:transform 0.2s cubic-bezier(0.16,1,0.3,1),box-shadow 0.2s;}.mp-pill:hover{transform:translateY(-2px);box-shadow:0 16px 36px -6px rgba(0,0,0,0.75),0 0 16px rgba(59,130,246,0.35);border-color:rgba(59,130,246,0.5);}.mp-drag-handle{display:flex;align-items:center;justify-content:center;color:#64748b;cursor:grab;padding:2px 2px 2px 0;}.mp-drag-handle:hover{color:#94a3b8;}.mp-drag-handle:active{cursor:grabbing;}.mp-beacon{position:relative;display:flex;align-items:center;justify-content:center;width:10px;height:10px;}.mp-beacon-ring{position:absolute;width:100%;height:100%;border-radius:50%;background:#10b981;opacity:0.75;animation:mp-pulse 2s cubic-bezier(0,0,0.2,1) infinite;}.mp-beacon-dot{position:relative;width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981;}@keyframes mp-pulse{70%,100%{transform:scale(2.4);opacity:0;}}.mp-brand-tag{background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#ffffff;font-size:10px;font-weight:800;letter-spacing:0.4px;padding:2px 6px;border-radius:4px;text-transform:uppercase;}.mp-pill-title{color:#f1f5f9;font-size:12px;font-weight:600;}.mp-pill-badge{background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);font-size:11px;font-weight:700;padding:2px 8px;border-radius:12px;display:none;align-items:center;gap:4px;}.mp-card{display:none;width:350px;max-width:92vw;max-height:calc(100dvh - 48px);overflow-y:auto;overscroll-behavior:contain;background:rgba(13,17,28,0.96);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,0.14);border-radius:16px;box-shadow:0 24px 54px -12px rgba(0,0,0,0.8),0 0 0 1px rgba(255,255,255,0.08);padding:15px;color:#f1f5f9;flex-direction:column;gap:10px;animation:mp-card-in 0.22s cubic-bezier(0.16,1,0.3,1);user-select:none;}.mp-card > *{flex-shrink:0;}#mp-resume-text{user-select:text;}@keyframes mp-card-in{from{opacity:0;transform:translateY(10px) scale(0.98);}to{opacity:1;transform:translateY(0) scale(1);}}.mp-card-header{display:flex;align-items:center;justify-content:space-between;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.08);cursor:grab;}.mp-card-header:active{cursor:grabbing;}.mp-header-left{display:flex;align-items:center;gap:7px;}.mp-header-titles{display:flex;flex-direction:column;}.mp-header-title-row{display:flex;align-items:center;gap:6px;}.mp-header-title{font-size:13.5px;font-weight:700;color:#ffffff;}.mp-header-subtitle{font-size:10px;color:#94a3b8;font-weight:500;}.mp-header-actions{display:flex;align-items:center;gap:4px;}.mp-icon-btn{background:transparent;border:none;color:#94a3b8;cursor:pointer;width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:15px;transition:all 0.15s;}.mp-icon-btn:hover{background:rgba(255,255,255,0.08);color:#ffffff;}.mp-job-box{background:rgba(30,41,59,0.7);border:1px solid rgba(255,255,255,0.08);border-radius:9px;padding:9px 11px;display:flex;flex-direction:column;gap:3px;}.mp-job-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;}.mp-site-pill{font-size:10.5px;font-weight:600;color:#38bdf8;background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.25);padding:2px 7px;border-radius:5px;display:inline-flex;align-items:center;gap:4px;}.mp-job-title{font-size:13px;font-weight:700;color:#f8fafc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}.mp-job-company{font-size:11px;color:#cbd5e1;font-weight:500;}.mp-match-box{background:rgba(24,32,51,0.85);border:1px solid rgba(255,255,255,0.08);border-left:3.5px solid #10b981;border-radius:9px;padding:9px 11px;display:flex;flex-direction:column;gap:5px;}.mp-match-header{display:flex;align-items:center;justify-content:space-between;}.mp-match-score-badge{font-size:11.5px;font-weight:700;display:inline-flex;align-items:center;gap:4px;}.mp-resume-status{font-size:10px;color:#94a3b8;font-weight:500;}.mp-chips-wrap{display:flex;flex-wrap:wrap;gap:4px;}.mp-chip-matched{background:rgba(16,185,129,0.16);color:#34d399;border:1px solid rgba(16,185,129,0.25);font-size:9.5px;font-weight:600;padding:1.5px 5px;border-radius:3px;}.mp-chip-missing{background:rgba(239,68,68,0.14);color:#fca5a5;border:1px solid rgba(239,68,68,0.2);font-size:9.5px;font-weight:600;padding:1.5px 5px;border-radius:3px;}.mp-field-group{display:flex;flex-direction:column;gap:4px;}.mp-field-label{font-size:11px;font-weight:600;color:#94a3b8;}.mp-select{width:100%;background:#090e1a;color:#f1f5f9;border:1px solid rgba(255,255,255,0.14);border-radius:7px;padding:6px 8px;font-size:11.5px;font-weight:500;outline:none;cursor:pointer;transition:border-color 0.15s;}.mp-select:focus{border-color:#3b82f6;}.mp-upload-link{background:transparent;border:none;color:#38bdf8;font-size:10px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;transition:color 0.15s;}.mp-upload-link:hover{color:#7dd3fc;}.mp-btn-row{display:flex;gap:6px;}.mp-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:4px;padding:7px 8px;border-radius:7px;font-size:11px;font-weight:600;border:none;cursor:pointer;transition:transform 0.15s,box-shadow 0.15s;color:#ffffff;}.mp-btn:hover{transform:translateY(-1px);}.mp-btn:active{transform:translateY(0);}.mp-btn-primary{background:linear-gradient(135deg,#2563eb,#3b82f6);box-shadow:0 4px 12px rgba(37,99,235,0.35);}.mp-btn-cyan{background:linear-gradient(135deg,#0891b2,#06b6d4);box-shadow:0 4px 12px rgba(8,145,178,0.3);}.mp-btn-purple{background:linear-gradient(135deg,#7c3aed,#8b5cf6);box-shadow:0 4px 12px rgba(124,58,237,0.3);}.mp-btn-slate{background:rgba(30,41,59,0.85);border:1px solid rgba(255,255,255,0.12);color:#e2e8f0;}.mp-btn-slate:hover{background:rgba(51,65,85,0.95);}.mp-btn-emerald{width:100%;background:linear-gradient(135deg,#059669,#10b981);box-shadow:0 4px 12px rgba(16,185,129,0.3);}.mp-card-footer{border-top:1px solid rgba(255,255,255,0.08);padding-top:6px;display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center;}.mp-ownership-text{font-size:10.5px;font-weight:600;color:#cbd5e1;}.mp-ownership-text strong{color:#38bdf8;}.mp-compliance-note{font-size:9px;color:#64748b;}#mp-toast-container{position:absolute;bottom:calc(100% + 10px);right:0;display:flex;flex-direction:column;gap:6px;align-items:flex-end;pointer-events:none;z-index:10000;max-width:340px;}.mp-toast{display:flex;align-items:center;gap:7px;padding:8px 12px;border-radius:7px;font-size:11.5px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,0.5);color:#ffffff;transition:opacity 0.3s ease,transform 0.3s ease;}.mp-toast-success{background:#059669;border:1px solid #10b981;}.mp-toast-error{background:#dc2626;border:1px solid #ef4444;}.mp-workflow-section{font-size:12px;color:#e2e8f0;padding:8px 0;border-top:1px solid #334155;}.mp-workflow-section summary{cursor:pointer;font-weight:600;line-height:1.6;}.mp-workflow-section label{display:block;margin:8px 0;font-size:11px;line-height:1.5;}.mp-text-input{display:block;box-sizing:border-box;width:100%;margin-top:4px;border:1px solid #475569;border-radius:4px;background:#0f172a;color:#f1f5f9;padding:8px;font:inherit;}.mp-text-input:focus-visible,.mp-history-entry:focus-visible{outline:2px solid #38bdf8;outline-offset:2px;}#mp-workflow-status{font-size:12px;line-height:1.5;margin:0;}#mp-ats-details{font-size:11px;line-height:1.5;overflow-wrap:anywhere;}#mp-ats-details p{margin:6px 0;}#mp-resume-review[hidden]{display:none;}#mp-resume-text{white-space:pre-wrap;overflow-wrap:anywhere;max-height:230px;overflow:auto;background:#0f172a;color:#e2e8f0;padding:12px;font:12px/1.5 ui-monospace,monospace;}.mp-history-entry{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #334155;background:transparent;color:#7dd3fc;font:inherit;line-height:1.5;padding:8px 0;cursor:pointer;}.mp-btn:disabled{opacity:0.5;cursor:wait;}#mp-capture-status{display:none;font-size:10.5px;color:#f1f5f9;background:#1e293b;padding:6px 8px;border-radius:6px;margin-top:4px;}`;
+    style.textContent = `
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+
+      .mp-pill {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(15, 23, 42, 0.94);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        color: #f8fafc;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+        border-radius: 9999px;
+        padding: 8px 14px 8px 10px;
+        cursor: pointer;
+        font-size: 12.5px;
+        font-weight: 600;
+        user-select: none;
+        transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s;
+      }
+      .mp-pill:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 16px 36px -6px rgba(0, 0, 0, 0.75), 0 0 16px rgba(59, 130, 246, 0.35);
+        border-color: rgba(59, 130, 246, 0.5);
+      }
+
+      .mp-drag-handle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #64748b;
+        cursor: grab;
+        padding: 2px 2px 2px 0;
+      }
+      .mp-drag-handle:hover {
+        color: #94a3b8;
+      }
+      .mp-drag-handle:active {
+        cursor: grabbing;
+      }
+
+      .mp-beacon {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 10px;
+        height: 10px;
+      }
+      .mp-beacon-ring {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        background: #10b981;
+        opacity: 0.75;
+        animation: mp-pulse 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+      }
+      .mp-beacon-dot {
+        position: relative;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #10b981;
+        box-shadow: 0 0 8px #10b981;
+      }
+      @keyframes mp-pulse {
+        70%, 100% {
+          transform: scale(2.4);
+          opacity: 0;
+        }
+      }
+
+      .mp-brand-tag {
+        background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+        color: #ffffff;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.4px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        text-transform: uppercase;
+      }
+      .mp-pill-title {
+        color: #f1f5f9;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .mp-pill-badge {
+        background: rgba(16, 185, 129, 0.15);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        font-size: 11px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 12px;
+        display: none;
+        align-items: center;
+        gap: 4px;
+      }
+
+      /* Expanded Card */
+      .mp-card {
+        display: none;
+        width: 350px;
+        max-width: 92vw;
+        max-height: calc(100dvh - 48px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        background: rgba(13, 17, 28, 0.96);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 16px;
+        box-shadow: 0 24px 54px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08);
+        padding: 15px;
+        color: #f1f5f9;
+        flex-direction: column;
+        gap: 10px;
+        animation: mp-card-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        user-select: none;
+      }
+      .mp-card > * {flex-shrink:0;}
+      #mp-resume-text {user-select:text;}
+      @keyframes mp-card-in {
+        from {
+          opacity: 0;
+          transform: translateY(10px) scale(0.98);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      .mp-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        cursor: grab;
+      }
+      .mp-card-header:active {
+        cursor: grabbing;
+      }
+      .mp-header-left {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .mp-header-titles {
+        display: flex;
+        flex-direction: column;
+      }
+      .mp-header-title-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .mp-header-title {
+        font-size: 13.5px;
+        font-weight: 700;
+        color: #ffffff;
+      }
+      .mp-header-subtitle {
+        font-size: 10px;
+        color: #94a3b8;
+        font-weight: 500;
+      }
+      .mp-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .mp-icon-btn {
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        cursor: pointer;
+        width: 24px;
+        height: 24px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 15px;
+        transition: all 0.15s;
+      }
+      .mp-icon-btn:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: #ffffff;
+      }
+
+      /* Job Info Box */
+      .mp-job-box {
+        background: rgba(30, 41, 59, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 9px;
+        padding: 9px 11px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .mp-job-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 2px;
+      }
+      .mp-site-pill {
+        font-size: 10.5px;
+        font-weight: 600;
+        color: #38bdf8;
+        background: rgba(56, 189, 248, 0.12);
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        padding: 2px 7px;
+        border-radius: 5px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .mp-job-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: #f8fafc;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .mp-job-company {
+        font-size: 11px;
+        color: #cbd5e1;
+        font-weight: 500;
+      }
+
+      /* ATS Match Box */
+      .mp-match-box {
+        background: rgba(24, 32, 51, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-left: 3.5px solid #10b981;
+        border-radius: 9px;
+        padding: 9px 11px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .mp-match-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .mp-match-score-badge {
+        font-size: 11.5px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .mp-resume-status {
+        font-size: 10px;
+        color: #94a3b8;
+        font-weight: 500;
+      }
+      .mp-chips-wrap {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      .mp-chip-matched {
+        background: rgba(16, 185, 129, 0.16);
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, 0.25);
+        font-size: 9.5px;
+        font-weight: 600;
+        padding: 1.5px 5px;
+        border-radius: 3px;
+      }
+      .mp-chip-missing {
+        background: rgba(239, 68, 68, 0.14);
+        color: #fca5a5;
+        border: 1px solid rgba(239, 68, 68, 0.2);
+        font-size: 9.5px;
+        font-weight: 600;
+        padding: 1.5px 5px;
+        border-radius: 3px;
+      }
+
+      /* Candidate Selector */
+      .mp-field-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .mp-field-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: #94a3b8;
+      }
+      .mp-select {
+        width: 100%;
+        background: #090e1a;
+        color: #f1f5f9;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 7px;
+        padding: 6px 8px;
+        font-size: 11.5px;
+        font-weight: 500;
+        outline: none;
+        cursor: pointer;
+        transition: border-color 0.15s;
+      }
+      .mp-select:focus {
+        border-color: #3b82f6;
+      }
+      .mp-upload-link {
+        background: transparent;
+        border: none;
+        color: #38bdf8;
+        font-size: 10px;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 0;
+        text-decoration: underline;
+        transition: color 0.15s;
+      }
+      .mp-upload-link:hover {
+        color: #7dd3fc;
+      }
+
+      /* Action Buttons */
+      .mp-btn-row {
+        display: flex;
+        gap: 6px;
+      }
+      .mp-btn {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: 7px 8px;
+        border-radius: 7px;
+        font-size: 11px;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        transition: transform 0.15s, box-shadow 0.15s;
+        color: #ffffff;
+      }
+      .mp-btn:hover {
+        transform: translateY(-1px);
+      }
+      .mp-btn:active {
+        transform: translateY(0);
+      }
+      .mp-btn-primary {
+        background: linear-gradient(135deg, #2563eb, #3b82f6);
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+      }
+      .mp-btn-cyan {
+        background: linear-gradient(135deg, #0891b2, #06b6d4);
+        box-shadow: 0 4px 12px rgba(8, 145, 178, 0.3);
+      }
+      .mp-btn-purple {
+        background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+        box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+      }
+      .mp-btn-slate {
+        background: rgba(30, 41, 59, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: #e2e8f0;
+      }
+      .mp-btn-slate:hover {
+        background: rgba(51, 65, 85, 0.95);
+      }
+      .mp-btn-emerald {
+        width: 100%;
+        background: linear-gradient(135deg, #059669, #10b981);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+      }
+
+      /* Footer */
+      .mp-card-footer {
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        padding-top: 6px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        text-align: center;
+      }
+      .mp-ownership-text {
+        font-size: 10.5px;
+        font-weight: 600;
+        color: #cbd5e1;
+      }
+      .mp-ownership-text strong {
+        color: #38bdf8;
+      }
+      .mp-compliance-note {
+        font-size: 9px;
+        color: #64748b;
+      }
+
+      /* Toasts */
+      #mp-toast-container {
+        position: absolute;
+        bottom: calc(100% + 10px);
+        right: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        align-items: flex-end;
+        pointer-events: none;
+        z-index: 10000;
+        max-width: 340px;
+      }
+      .mp-toast {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 12px;
+        border-radius: 7px;
+        font-size: 11.5px;
+        font-weight: 500;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        color: #ffffff;
+        transition: opacity 0.3s ease, transform 0.3s ease;
+      }
+      .mp-toast-success {
+        background: #059669;
+        border: 1px solid #10b981;
+      }
+      .mp-toast-error {
+        background: #dc2626;
+        border: 1px solid #ef4444;
+      }
+      .mp-workflow-section {font-size:12px;color:#e2e8f0;padding:8px 0;border-top:1px solid #334155;}
+      .mp-workflow-section summary {cursor:pointer;font-weight:600;line-height:1.6;}
+      .mp-workflow-section label {display:block;margin:8px 0;font-size:11px;line-height:1.5;}
+      .mp-text-input {display:block;box-sizing:border-box;width:100%;margin-top:4px;border:1px solid #475569;border-radius:4px;background:#0f172a;color:#f1f5f9;padding:8px;font:inherit;}
+      .mp-text-input:focus-visible, .mp-history-entry:focus-visible {outline:2px solid #38bdf8;outline-offset:2px;}
+      #mp-workflow-status {font-size:12px;line-height:1.5;margin:0;}
+      #mp-ats-details {font-size:11px;line-height:1.5;overflow-wrap:anywhere;}
+      #mp-ats-details p {margin:6px 0;}
+      #mp-resume-review[hidden] {display:none;}
+      #mp-resume-text {white-space:pre-wrap;overflow-wrap:anywhere;max-height:230px;overflow:auto;background:#0f172a;color:#e2e8f0;padding:12px;font:12px/1.5 ui-monospace,monospace;}
+      .mp-history-entry {display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #334155;background:transparent;color:#7dd3fc;font:inherit;line-height:1.5;padding:8px 0;cursor:pointer;}
+      .mp-btn:disabled {opacity:0.5;cursor:wait;}
+      #mp-capture-status {
+        display: none;
+        font-size: 10.5px;
+        color: #f1f5f9;
+        background: #1e293b;
+        padding: 6px 8px;
+        border-radius: 6px;
+        margin-top: 4px;
+      }
+    `;
 
 
     style.textContent += `
-      :host {--cp-bg:#090d16;--cp-panel:#111726;--cp-line:rgba(255,255,255,0.08);--cp-line-hover:rgba(59,130,246,0.35);--cp-text:#f8fafc;--cp-muted:#8492a6;--cp-accent:#3b82f6;color-scheme:dark;}
-      .mp-card,.mp-pill {background:rgba(9,13,22,0.96);color:var(--cp-text);border:1px solid var(--cp-line);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);box-shadow:0 16px 48px -8px rgba(0,0,0,0.7),0 0 0 1px rgba(255,255,255,0.06);}
-      .mp-card {width:360px;max-width:calc(100vw - 24px);border-radius:16px;padding:16px;gap:12px;user-select:text;}
-      .mp-pill {border-radius:9999px;min-height:40px;transition:all 0.2s cubic-bezier(0.16,1,0.3,1);}
-      .mp-pill:hover {transform:translateY(-2px);box-shadow:0 18px 40px -6px rgba(0,0,0,0.8),0 0 18px rgba(59,130,246,0.35);border-color:var(--cp-line-hover);}
-      .mp-brand-tag {background:linear-gradient(135deg,#2563eb,#6366f1);border:1px solid rgba(255,255,255,0.16);color:#ffffff;font-weight:700;text-transform:none;letter-spacing:0;border-radius:6px;box-shadow:0 2px 8px rgba(37,99,235,0.3);}
-      .mp-beacon-ring {position:absolute;width:100%;height:100%;border-radius:50%;background:#10b981;opacity:0.75;animation:mp-pulse 2s cubic-bezier(0,0,0.2,1) infinite;}
-      .mp-beacon-dot {position:relative;width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981;}
+      :host {--cp-bg:#15191f;--cp-panel:#1d222a;--cp-line:#343c49;--cp-text:#f1f4f8;--cp-muted:#abb6c5;--cp-accent:#83aaff;color-scheme:dark;}
+      .mp-card,.mp-pill {background:var(--cp-bg);color:var(--cp-text);border:1px solid var(--cp-line);backdrop-filter:none;box-shadow:0 12px 40px #0003;}
+      .mp-card {width:360px;max-width:calc(100vw - 24px);border-radius:12px;padding:16px;gap:12px;user-select:text;}
+      .mp-pill {border-radius:10px;min-height:40px;}
+      .mp-pill:hover {box-shadow:0 8px 24px #0003;border-color:var(--cp-accent);}
+      .mp-brand-tag {background:var(--cp-panel);border:1px solid var(--cp-line);color:var(--cp-text);font-weight:600;text-transform:none;letter-spacing:0;}
+      .mp-beacon-ring {animation:none;}.mp-beacon-dot {box-shadow:none;}
       .mp-header-title,.mp-job-title,.mp-pill-title,.mp-field-label {color:var(--cp-text);}
       .mp-header-subtitle,.mp-job-company,.mp-compliance-note,.mp-ownership-text {color:var(--cp-muted);}
       .mp-card-header {border-color:var(--cp-line);padding-bottom:12px;}
-      .mp-job-box,.mp-match-box {border:1px solid var(--cp-line);border-radius:10px;background:var(--cp-panel);box-shadow:0 2px 10px rgba(0,0,0,0.3);}
-      .mp-select,.mp-text-input {border:1px solid var(--cp-line);border-radius:8px;background:var(--cp-bg);color:var(--cp-text);font-size:12px;min-height:36px;transition:border-color 0.15s,box-shadow 0.15s;}
-      .mp-select:focus,.mp-text-input:focus {border-color:var(--cp-accent);box-shadow:0 0 0 3px rgba(59,130,246,0.25);}
+      .mp-job-box,.mp-match-box {border:1px solid var(--cp-line);border-radius:8px;background:var(--cp-panel);}
+      .mp-select,.mp-text-input {border:1px solid var(--cp-line);border-radius:7px;background:var(--cp-bg);color:var(--cp-text);font-size:12px;min-height:36px;}
       .mp-workflow-section {border-color:var(--cp-line);color:var(--cp-text);}
-      .mp-workflow-section summary {color:var(--cp-muted);padding-block:6px;font-weight:600;}
-      .mp-workflow-section summary:hover {color:var(--cp-text);}
-      .mp-btn {min-height:36px;font-size:11px;font-weight:600;border-radius:8px;transition:all 0.18s cubic-bezier(0.16,1,0.3,1);cursor:pointer;}
-      .mp-btn:active {transform:scale(0.98);}
-      .mp-btn-primary {background:linear-gradient(135deg,#2563eb,#3b82f6);color:#ffffff;box-shadow:0 4px 14px rgba(37,99,235,0.35);border:1px solid rgba(255,255,255,0.14);}
-      .mp-btn-primary:hover {background:linear-gradient(135deg,#1d4ed8,#2563eb);box-shadow:0 6px 18px rgba(37,99,235,0.45);}
-      .mp-btn-cyan {background:linear-gradient(135deg,#0891b2,#06b6d4);color:#ffffff;box-shadow:0 4px 14px rgba(8,145,178,0.3);border:1px solid rgba(255,255,255,0.14);}
-      .mp-btn-cyan:hover {background:linear-gradient(135deg,#0e7490,#0891b2);box-shadow:0 6px 18px rgba(8,145,178,0.4);}
-      .mp-btn-purple {background:linear-gradient(135deg,#7c3aed,#8b5cf6);color:#ffffff;box-shadow:0 4px 14px rgba(124,58,237,0.3);border:1px solid rgba(255,255,255,0.14);}
-      .mp-btn-purple:hover {background:linear-gradient(135deg,#6d28d9,#7c3aed);box-shadow:0 6px 18px rgba(124,58,237,0.4);}
-      .mp-btn-emerald {background:linear-gradient(135deg,#059669,#10b981);color:#ffffff;box-shadow:0 4px 14px rgba(16,185,129,0.3);border:1px solid rgba(255,255,255,0.14);}
-      .mp-btn-emerald:hover {background:linear-gradient(135deg,#047857,#059669);box-shadow:0 6px 18px rgba(16,185,129,0.4);}
-      .mp-btn-slate {background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:#e2e8f0;box-shadow:0 2px 6px rgba(0,0,0,0.2);}
-      .mp-btn-slate:hover {background:rgba(255,255,255,0.08);border-color:var(--cp-line-hover);color:#ffffff;}
-      .mp-icon-btn {color:var(--cp-muted);width:28px;height:28px;border-radius:6px;transition:all 0.15s;}
-      .mp-icon-btn:hover {background:rgba(255,255,255,0.08);color:#ffffff;}
+      .mp-workflow-section summary {color:var(--cp-muted);padding-block:5px;}
+      .mp-btn {min-height:36px;font-size:11px;border-radius:7px;transition:background-color .15s,transform .15s,box-shadow .15s;}
+      .mp-btn:active {transform:scale(.98);}
+      .mp-btn-primary,.mp-btn-cyan {background:#3268ca;color:white;box-shadow:none;border:1px solid #4779d5;}
+      .mp-btn-primary:hover,.mp-btn-cyan:hover {background:#295cb8;box-shadow:none;}
+      .mp-btn-slate,.mp-btn-purple,.mp-btn-emerald {background:var(--cp-panel);color:var(--cp-text);border:1px solid var(--cp-line);box-shadow:none;}
+      .mp-btn-slate:hover,.mp-btn-purple:hover,.mp-btn-emerald:hover {background:var(--cp-bg);box-shadow:none;}
+      .mp-icon-btn {color:var(--cp-muted);width:28px;height:28px;}
       .mp-btn:disabled {opacity:.45;cursor:not-allowed;}
       :is(button,select,input,textarea,summary,[role=button]):focus-visible {outline:2px solid var(--cp-accent);outline-offset:3px;}
       .mp-card-footer {border-color:var(--cp-line);padding-top:12px;}
-      .mp-ats-gauge {display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--cp-line);border-radius:10px;background:var(--cp-panel);}
-      .mp-ats-gauge[hidden] {display:none;}.mp-ats-gauge b {font-size:12px;font-weight:700;}.mp-ats-gauge small {display:block;color:var(--cp-muted);font-size:10px;margin-top:3px;}
-      .mp-gauge-ring {display:grid;place-items:center;width:56px;height:56px;border-radius:50%;background:conic-gradient(var(--cp-accent) calc(var(--score)*1%),var(--cp-line) 0);flex-shrink:0;box-shadow:0 0 12px rgba(59,130,246,0.2);}
-      .mp-gauge-ring strong {display:grid;place-items:center;width:44px;height:44px;background:var(--cp-bg);border-radius:50%;font-size:12px;font-weight:700;}
+      .mp-ats-gauge {display:flex;align-items:center;gap:12px;padding:10px;border:1px solid var(--cp-line);border-radius:8px;}
+      .mp-ats-gauge[hidden] {display:none;}.mp-ats-gauge b {font-size:12px;font-weight:600;}.mp-ats-gauge small {display:block;color:var(--cp-muted);font-size:10px;margin-top:3px;}
+      .mp-gauge-ring {display:grid;place-items:center;width:54px;height:54px;border-radius:50%;background:conic-gradient(var(--cp-accent) calc(var(--score)*1%),var(--cp-line) 0);flex-shrink:0;}
+      .mp-gauge-ring strong {display:grid;place-items:center;width:44px;height:44px;background:var(--cp-bg);border-radius:50%;font-size:12px;}
       #mp-ats-details section {padding:8px 0;border-bottom:1px solid var(--cp-line);}#mp-ats-details h4 {font-size:11px;font-weight:600;}#mp-ats-details p {color:var(--cp-muted);}
-      #mp-workflow-status {color:var(--cp-muted)!important;}#mp-resume-text {background:var(--cp-bg);color:var(--cp-text);border-color:var(--cp-line);border-radius:8px;}
+      #mp-workflow-status {color:var(--cp-muted)!important;}#mp-resume-text {background:var(--cp-bg);color:var(--cp-text);border-color:var(--cp-line);}
       #mp-generated-match {padding-block:10px;border-block-end:1px solid var(--cp-line);margin-block-end:10px;overflow-wrap:anywhere;}
       #mp-generated-match[hidden] {display:none;}
       #mp-generated-match h4 {font-size:12px;margin:0 0 8px;}
@@ -2833,34 +3273,18 @@
   }
 
 
-  // Submission confirmation is shared by linked and standalone applications.
-  function submissionConfirmations() {
-    return Array.from(document.querySelectorAll('#application_confirmation, .application-confirmation, [data-testid="application-success"], [role="status"], h1, h2, h3, p')).filter(node =>
-      node.getClientRects().length && !node.closest('#mp-copilot-root, #mp-copilot-toast') &&
-      /(?:thank you for (?:applying|your application)|(?:your )?application (?:has been |was |is )?(?:successfully )?(?:submitted|received|sent)|we (?:have )?received your application|application submitted|applied to)/i.test((node.textContent || '').trim().slice(0,1000))
-    );
-  }
-
-  function resyncFilledFormFields(scope = document) {
-    const root = scope instanceof Element ? scope : document;
-    for (const el of root.querySelectorAll('input, textarea, select')) {
-      if (el.closest('#mp-copilot-root') || el.disabled || el.readOnly || el.type === 'hidden' || el.type === 'file' || el.getAttribute('role') === 'combobox') continue;
-      const isCheck = ['checkbox', 'radio'].includes(el.type);
-      if (isCheck ? el.checked : String(el.value || '').trim()) nativeSet(el, isCheck ? 'checked' : 'value', isCheck ? el.checked : el.value);
-    }
-  }
-
   // Observe Application Submission Events
   function observeUniversal() {
     const inspect = () => {
       if(linked)return;
       // Success confirmation detection on page
-      const nodes = submissionConfirmations();
+      const nodes = document.querySelectorAll('#application_confirmation, .application-confirmation, [data-testid="application-success"], [role="status"], h1, h2, h3, p');
       for (const node of nodes) {
         if (node.closest('#mp-copilot-root, #mp-copilot-toast')) continue;
         const successKey = submissionEventKey + ':' + Math.max(1, submissionAttempt);
         const text = (node.textContent || '').trim().slice(0, 1000);
         if (
+          /(?:thank you for (?:applying|your application)|(?:your )?application (?:has been |was |is )?(?:successfully )?(?:submitted|received|sent)|we (?:have )?received your application|application submitted|applied to)/i.test(text) &&
           selectedCandidateId && !observedSuccessAttempts.has(successKey)
         ) {
           observedSuccessAttempts.add(successKey);
@@ -2875,6 +3299,51 @@
       childList: true,
       subtree: true
     });
+
+  function resyncFilledFormFields(scope = document) {
+    const root = scope instanceof Element ? scope : document;
+    const inputs = root.querySelectorAll('input, textarea, select');
+    for (const el of inputs) {
+      if (el.closest('#mp-copilot-root') || el.disabled || el.type === 'hidden' || el.type === 'file') continue;
+      const isCheck = ['checkbox', 'radio'].includes(el.type);
+      const hasVal = isCheck ? el.checked : Boolean(String(el.value || '').trim());
+      if (!hasVal) continue;
+
+      if (typeof el.setCustomValidity === 'function') {
+        try { el.setCustomValidity(''); } catch {}
+      }
+
+      if (isCheck) {
+        if (el._valueTracker) {
+          try { el._valueTracker.setValue(el.checked ? 'false' : 'true'); } catch {}
+        }
+        const protoSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked')?.set;
+        if (protoSetter) {
+          try { protoSetter.call(el, el.checked); } catch {}
+        }
+      } else {
+        if (el._valueTracker) {
+          try { el._valueTracker.setValue(''); } catch {}
+        }
+        const proto = el.tagName === 'SELECT' ? HTMLSelectElement.prototype
+          : el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        const protoSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+        if (protoSetter) {
+          try { protoSetter.call(el, el.value); } catch {}
+        }
+      }
+
+      try {
+        el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+        try { el.dispatchEvent(new FocusEvent('blur', { bubbles: true, composed: true })); } catch {}
+      } catch {}
+
+      if (el.getAttribute('aria-invalid') === 'true') {
+        try { el.removeAttribute('aria-invalid'); } catch {}
+      }
+    }
+  }
 
     // Native form submit listener
     document.addEventListener('submit', (e) => {
@@ -2891,7 +3360,6 @@
         const text = (btn.textContent || btn.value || '').trim();
         if (btn.type === 'submit' || /^(?:submit|apply|send|continue|next|review|finish)\b/i.test(text)) {
           resyncFilledFormFields(btn.form || btn.closest('form') || document);
-          rememberAnswers(true);
           setTimeout(inspect, 1800);
         }
       }
@@ -2907,7 +3375,7 @@
       if(status==='submit_attempted')rememberAnswers(true);
       if (!linked) return;
       try {
-        const result = await chrome.runtime.sendMessage({ status, evidence, ...(['submit_attempted','submitted'].includes(status) ? { answers: captureApplicationAnswers(), appliedResume: await captureAppliedResume() } : {}) });
+        const result = await chrome.runtime.sendMessage({ status, evidence, ...(['submit_attempted','submitted'].includes(status) ? { answers: captureApplicationAnswers() } : {}) });
         reportCaptureDelivery(result);
       } catch { reportCaptureDelivery({ error: true }); }
     }
@@ -2918,12 +3386,13 @@
         sentProgress = true;
         send('in_progress', 'Application form opened');
       }
-      const nodes = submissionConfirmations();
+      const nodes = document.querySelectorAll('#application_confirmation, .application-confirmation, [data-testid="application-success"], [role="status"], h1, h2');
       for (const node of nodes) {
         if (node.closest('#mp-copilot-root, #mp-copilot-toast')) continue;
         const successKey = submissionEventKey + ':' + Math.max(1, submissionAttempt);
         const text = (node.textContent || '').trim().slice(0, 1000);
         if (
+          /(?:thank you for (?:applying|your application)|application (?:has been |was |is )?(?:successfully )?(?:submitted|received)|we (?:have )?received your application)/i.test(text) &&
           !observedSuccessAttempts.has(successKey)
         ) {
           submissionAttempt = Math.max(1, submissionAttempt);
@@ -2947,7 +3416,7 @@
     });
 
     document.addEventListener('submit', (e) => {
-      if (e.target === form()) { resyncFilledFormFields(e.target); submissionAttempt += 1; send('submit_attempted', 'Final application Submit attempted'); }
+      if (e.target === form()) { submissionAttempt += 1; send('submit_attempted', 'Final application Submit attempted'); }
     }, true);
 
     document.addEventListener('invalid', () => {
@@ -2963,7 +3432,6 @@
         const text = (button.textContent || button.value || '').trim();
         if (button.type === 'submit' || /^(?:submit|apply|send|continue|next|review|finish)\b/i.test(text)) {
           resyncFilledFormFields(button.form || button.closest('form') || document);
-          rememberAnswers(true);
         }
       }
       if (button && form()?.contains(button) && button.type !== 'submit' && /^submit application$/i.test(button.textContent.trim())) {

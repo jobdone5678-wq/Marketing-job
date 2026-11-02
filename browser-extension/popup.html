@@ -2,384 +2,173 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Nextkinlife Recruiting Assistant v3.2.1</title>
+  <title>Nextkinlife Recruiting Copilot</title>
   <style>
     :root {
       --bg: #090d16;
-      --card: #111726;
-      --card-inner: #0b101c;
-      --border: rgba(255, 255, 255, 0.08);
-      --border-strong: rgba(255, 255, 255, 0.14);
-      --border-accent: rgba(59, 130, 246, 0.35);
-      --primary: #2563eb;
-      --primary-hover: #1d4ed8;
-      --primary-glow: rgba(37, 99, 235, 0.3);
+      --card: #131b2e;
+      --border: #22304d;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --primary-glow: rgba(59, 130, 246, 0.25);
       --success: #10b981;
-      --success-glow: rgba(16, 185, 129, 0.25);
-      --text: #f8fafc;
-      --text-dim: #cbd5e1;
-      --muted: #8492a6;
-      --ring: rgba(59, 130, 246, 0.5);
+      --text: #f1f5f9;
+      --muted: #94a3b8;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      font-size: 12px;
-      line-height: 1.5;
+      font-size: 13px;
+      line-height: 1.4;
       background: var(--bg);
       color: var(--text);
-      width: 380px;
+      width: 370px;
       padding: 16px;
-      user-select: none;
-      -webkit-font-smoothing: antialiased;
     }
-
-    /* Header */
     .header {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
-      padding-bottom: 14px;
+      gap: 10px;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
       border-bottom: 1px solid var(--border);
     }
-    .header-brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
     .logo-icon {
-      width: 34px;
-      height: 34px;
-      background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
-      border: 1px solid rgba(255, 255, 255, 0.16);
-      border-radius: 10px;
+      width: 30px;
+      height: 30px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #ffffff;
-      box-shadow: 0 4px 14px var(--primary-glow);
-      flex-shrink: 0;
-    }
-    .logo-icon svg {
-      width: 18px;
-      height: 18px;
+      font-weight: 800;
+      color: white;
+      font-size: 14px;
     }
     .title-group h1 {
-      font-size: 14px;
+      font-size: 14.5px;
       font-weight: 700;
       color: var(--text);
-      letter-spacing: -0.01em;
-      line-height: 1.2;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .version-tag {
-      font-size: 10px;
-      font-weight: 600;
-      color: #93c5fd;
-      background: rgba(59, 130, 246, 0.15);
-      border: 1px solid rgba(59, 130, 246, 0.25);
-      padding: 1px 5px;
-      border-radius: 4px;
-      letter-spacing: 0;
     }
     .title-group p {
-      font-size: 11px;
+      font-size: 10.5px;
       color: var(--muted);
-      margin-top: 1px;
     }
-
-    /* Cards */
     .card {
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 14px 15px;
-      margin-bottom: 12px;
-      box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.45);
-      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      border-radius: 10px;
+      padding: 13px;
+      margin-bottom: 11px;
     }
-    .card:hover {
-      border-color: var(--border-strong);
-    }
-
-    /* Status Badges */
     .status-badge {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      font-size: 11px;
+      font-size: 11.5px;
       font-weight: 600;
-      padding: 3px 9px;
-      border-radius: 9999px;
+      padding: 3px 8px;
+      border-radius: 12px;
       margin-bottom: 8px;
-      letter-spacing: 0.01em;
     }
     .status-connected {
-      background: rgba(16, 185, 129, 0.12);
+      background: rgba(16, 185, 129, 0.15);
       color: #34d399;
-      border: 1px solid rgba(16, 185, 129, 0.25);
+      border: 1px solid rgba(16, 185, 129, 0.3);
     }
     .status-standalone {
-      background: rgba(59, 130, 246, 0.12);
-      color: #93c5fd;
-      border: 1px solid rgba(59, 130, 246, 0.25);
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
     }
     .status-disconnected {
-      background: rgba(239, 68, 68, 0.12);
-      color: #fca5a5;
-      border: 1px solid rgba(239, 68, 68, 0.25);
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
     }
     .dot {
       width: 6px;
       height: 6px;
       border-radius: 50%;
       background: currentColor;
-      box-shadow: 0 0 6px currentColor;
     }
-
-    /* Inputs & Form Elements */
     .field {
-      margin-bottom: 12px;
+      margin-bottom: 9px;
     }
     .field label {
       display: block;
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--muted);
-      margin-bottom: 6px;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
+      margin-bottom: 4px;
     }
-    input, textarea, select {
+    input {
       width: 100%;
-      background: var(--card-inner);
-      border: 1px solid var(--border-strong);
-      border-radius: 8px;
-      padding: 8px 12px;
+      background: #0b1120;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 10px;
       color: var(--text);
-      font-size: 12px;
+      font-size: 12.5px;
       outline: none;
-      transition: border-color 0.15s, box-shadow 0.15s;
-      font-family: inherit;
+      transition: border 0.15s;
     }
-    input:focus, textarea:focus, select:focus {
+    input:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px var(--ring);
     }
-
-    /* Buttons */
     .btn {
       width: 100%;
-      padding: 8px 14px;
-      border-radius: 8px;
-      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12.5px;
       font-weight: 600;
       cursor: pointer;
-      border: 1px solid transparent;
-      display: inline-flex;
+      border: none;
+      transition: all 0.15s ease;
+      display: flex;
       align-items: center;
       justify-content: center;
       gap: 6px;
-      transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-      user-select: none;
-    }
-    .btn:active {
-      transform: scale(0.98);
     }
     .btn-primary {
-      background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
-      color: #ffffff;
-      box-shadow: 0 4px 14px var(--primary-glow);
+      background: var(--primary);
+      color: white;
+      box-shadow: 0 2px 8px var(--primary-glow);
     }
     .btn-primary:hover {
-      background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);
-      box-shadow: 0 6px 18px rgba(37, 99, 235, 0.4);
+      background: var(--primary-hover);
     }
     .btn-outline {
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid var(--border-strong);
+      background: transparent;
+      border: 1px solid var(--border);
       color: var(--text);
-      margin-top: 8px;
+      margin-top: 6px;
     }
     .btn-outline:hover {
-      background: rgba(255, 255, 255, 0.07);
-      border-color: var(--border-accent);
-      color: #ffffff;
+      background: rgba(255, 255, 255, 0.05);
+      border-color: #3b82f6;
     }
     .btn-danger {
-      background: rgba(239, 68, 68, 0.08);
-      border: 1px solid rgba(239, 68, 68, 0.25);
-      color: #fca5a5;
-      margin-top: 8px;
+      background: transparent;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #f87171;
+      margin-top: 6px;
     }
     .btn-danger:hover {
-      background: rgba(239, 68, 68, 0.16);
-      border-color: rgba(239, 68, 68, 0.4);
+      background: rgba(239, 68, 68, 0.1);
     }
     .btn-emerald {
-      background: linear-gradient(135deg, #059669 0%, #10b981 100%);
-      color: #ffffff;
-      box-shadow: 0 4px 14px var(--success-glow);
-      margin-top: 8px;
+      background: linear-gradient(135deg, #059669, #10b981);
+      color: white;
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
     }
     .btn-emerald:hover {
-      background: linear-gradient(135deg, #047857 0%, #059669 100%);
-      box-shadow: 0 6px 18px rgba(16, 185, 129, 0.4);
+      background: #059669;
     }
-
-    /* Resume Dropzone */
-    .dropzone {
-      border: 1.5px dashed var(--border-strong);
-      border-radius: 12px;
-      padding: 18px 14px;
-      text-align: center;
-      cursor: pointer;
-      background: var(--card-inner);
-      transition: all 0.2s ease;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-    }
-    .dropzone:hover, .dropzone.dragover {
-      border-color: var(--primary);
-      background: rgba(37, 99, 235, 0.06);
-      box-shadow: 0 0 20px -4px rgba(37, 99, 235, 0.25);
-    }
-    .dropzone-icon {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
-      background: rgba(59, 130, 246, 0.12);
-      color: #60a5fa;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 2px;
-    }
-    .dropzone-icon svg {
-      width: 18px;
-      height: 18px;
-    }
-    .dropzone-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text);
-    }
-    .dropzone-desc {
-      font-size: 11px;
-      color: var(--muted);
-    }
-    .format-pills {
-      display: flex;
-      gap: 4px;
-      margin-top: 4px;
-    }
-    .format-pill {
-      font-size: 9px;
-      font-weight: 700;
-      color: #94a3b8;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      padding: 1px 5px;
-      border-radius: 3px;
-    }
-
-    /* Uploaded Candidate Card */
-    .candidate-preview {
-      background: var(--card-inner);
-      border: 1px solid var(--border-strong);
-      border-radius: 10px;
-      padding: 12px 14px;
-    }
-    .candidate-name-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 3px;
-    }
-    .candidate-name {
-      font-size: 13.5px;
-      font-weight: 700;
-      color: var(--text);
-      letter-spacing: -0.01em;
-    }
-    .candidate-badge-active {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 10px;
-      color: #34d399;
-      background: rgba(16, 185, 129, 0.12);
-      border: 1px solid rgba(16, 185, 129, 0.25);
-      padding: 1px 6px;
-      border-radius: 9999px;
-      font-weight: 600;
-    }
-    .candidate-title {
-      font-size: 11.5px;
-      color: #60a5fa;
-      font-weight: 600;
-      margin-bottom: 6px;
-    }
-    .candidate-details {
-      font-size: 11px;
-      color: var(--muted);
-      line-height: 1.45;
-    }
-    .candidate-skills-wrap {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      margin-top: 8px;
-    }
-    .skill-chip {
-      background: rgba(255, 255, 255, 0.04);
-      color: var(--text-dim);
-      border: 1px solid var(--border);
-      font-size: 10px;
-      font-weight: 500;
-      padding: 2px 7px;
-      border-radius: 5px;
-    }
-
-    /* Accordion Details */
-    details.card summary {
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 12px;
-      color: var(--text);
-      list-style: none;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      user-select: none;
-    }
-    details.card summary::-webkit-details-marker {
-      display: none;
-    }
-    details.card summary::after {
-      content: "›";
-      font-size: 16px;
-      color: var(--muted);
-      transition: transform 0.2s ease;
-      line-height: 1;
-    }
-    details.card[open] summary::after {
-      transform: rotate(90deg);
-    }
-    details.card summary:hover {
-      color: #ffffff;
-    }
-
-    /* User Info & Stats */
     .user-info {
-      font-size: 11.5px;
+      font-size: 12px;
       color: var(--muted);
-      line-height: 1.6;
+      line-height: 1.5;
     }
     .user-info strong {
       color: var(--text);
@@ -387,17 +176,11 @@
     .stats-row {
       display: flex;
       justify-content: space-between;
-      margin-top: 10px;
-      padding-top: 10px;
+      margin-top: 8px;
+      padding-top: 8px;
       border-top: 1px solid var(--border);
       font-size: 11px;
-      color: var(--muted);
     }
-    .stats-row strong {
-      color: var(--text);
-    }
-
-    /* Feature List */
     .feature-list {
       list-style: none;
       font-size: 11px;
@@ -405,64 +188,121 @@
       margin-top: 8px;
     }
     .feature-list li {
-      margin-bottom: 6px;
+      margin-bottom: 4px;
       display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      line-height: 1.4;
+      align-items: center;
+      gap: 6px;
     }
-    .feature-list li .bullet {
-      color: #3b82f6;
-      font-weight: 700;
+    .feature-list li span {
+      color: var(--success);
     }
     .details-toggle {
       font-size: 11px;
-      color: #60a5fa;
+      color: var(--muted);
       cursor: pointer;
-      text-decoration: none;
-      font-weight: 500;
-      transition: color 0.15s;
-    }
-    .details-toggle:hover {
-      color: #93c5fd;
+      margin-top: 8px;
       text-decoration: underline;
+      display: inline-block;
     }
 
-    /* Toast */
+    /* Resume Upload Dropzone */
+    .dropzone {
+      border: 2px dashed rgba(59, 130, 246, 0.4);
+      border-radius: 9px;
+      padding: 16px 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: rgba(11, 17, 32, 0.6);
+    }
+    .dropzone:hover, .dropzone.dragover {
+      border-color: #3b82f6;
+      background: rgba(59, 130, 246, 0.1);
+    }
+    .dropzone-icon {
+      font-size: 24px;
+      margin-bottom: 4px;
+    }
+    .dropzone-title {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #f1f5f9;
+    }
+    .dropzone-desc {
+      font-size: 10.5px;
+      color: #94a3b8;
+      margin-top: 2px;
+    }
+
+    /* Uploaded Candidate Card */
+    .candidate-preview {
+      background: rgba(11, 17, 32, 0.8);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .candidate-name-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    .candidate-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+    .candidate-title {
+      font-size: 11px;
+      color: #38bdf8;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .candidate-details {
+      font-size: 11px;
+      color: #94a3b8;
+      line-height: 1.4;
+    }
+    .candidate-skills-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+      margin-top: 6px;
+    }
+    .skill-chip {
+      background: rgba(59, 130, 246, 0.15);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      font-size: 9.5px;
+      font-weight: 500;
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
     .toast-msg {
       font-size: 11px;
-      margin-top: 10px;
-      min-height: 18px;
+      margin-top: 6px;
+      min-height: 16px;
       color: var(--muted);
       text-align: center;
-      font-weight: 500;
-      transition: all 0.2s ease;
     }
   </style>
 </head>
 <body>
-  <!-- Header -->
   <div class="header">
-    <div class="header-brand">
-      <div class="logo-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-        </svg>
-      </div>
-      <div class="title-group">
-        <h1>Nextkinlife <span class="version-tag">v3.2.1</span></h1>
-        <p>Recruiting Copilot · Universal ATS</p>
-      </div>
+    <div class="logo-icon">NK</div>
+    <div class="title-group">
+      <h1>Nextkinlife LLC</h1>
+      <p>Universal Recruiting Copilot · Works on All Sites</p>
     </div>
   </div>
 
   <!-- Active Candidate Resume Section (Standalone / Local Upload) -->
   <div class="card" id="resume-section">
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-      <strong style="font-size: 12px; font-weight: 700; color: var(--text);">
-        Candidate Resume
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+      <strong style="font-size: 12px; color: #f1f5f9; display: flex; align-items: center; gap: 5px;">
+        <span>📄</span> Candidate Resume (Autofill & ATS)
       </strong>
-      <span id="resume-mode-pill" style="font-size: 10px; font-weight: 600; color: #93c5fd; background: rgba(50, 104, 202, 0.15); border: 1px solid rgba(50, 104, 202, 0.3); padding: 2px 7px; border-radius: 9999px;">
+      <span id="resume-mode-pill" style="font-size: 10px; font-weight: 600; color: #38bdf8; background: rgba(56, 189, 248, 0.12); padding: 1px 6px; border-radius: 4px;">
         Standalone Mode
       </span>
     </div>
@@ -472,70 +312,58 @@
       <div class="candidate-preview">
         <div class="candidate-name-row">
           <span class="candidate-name" id="cv-name">Arjun Mehta</span>
-          <span class="candidate-badge-active"><span class="dot" style="background:#34d399;box-shadow:0 0 5px #34d399;"></span> Active</span>
+          <span style="font-size: 10px; color: #34d399; font-weight: 600;">✓ Active</span>
         </div>
         <div class="candidate-title" id="cv-title">Senior Full Stack Engineer</div>
         <div class="candidate-details">
           <div id="cv-contact">arjun.mehta@example.com · (512) 555-0199</div>
-          <div id="cv-location" style="color: var(--text-dim); margin-top: 1px;">Austin, TX</div>
-          <div id="cv-file" style="margin-top: 5px; font-size: 11px; color: #93c5fd; display: flex; align-items: center; gap: 4px;">Resume document attached</div>
+          <div id="cv-location" style="color: #cbd5e1;">Austin, TX</div>
+          <div id="cv-file" style="margin-top: 4px; font-size: 10px; color: #38bdf8;">📄 Resume.pdf (Ready to attach)</div>
         </div>
         <div class="candidate-skills-wrap" id="cv-skills"></div>
       </div>
-      <div style="display: flex; gap: 8px; margin-top: 10px;">
+      <div style="display: flex; gap: 6px; margin-top: 8px;">
         <button id="btn-change-resume" class="btn btn-outline" style="flex: 1; margin-top: 0; font-size: 11px;">
-          Replace Resume
+          🔄 Replace Resume
         </button>
         <button id="btn-remove-resume" class="btn btn-danger" style="flex: 0 0 75px; margin-top: 0; font-size: 11px;">
-          Remove
+          🗑 Remove
         </button>
       </div>
-      <button id="btn-download-active-resume" class="btn btn-emerald" style="display: none;">
-        Download DOCX
+      <button id="btn-download-active-resume" class="btn btn-emerald" style="margin-top: 6px; font-size: 11px; width: 100%;">
+        ⬇️ Download Resume (.docx)
       </button>
     </div>
 
     <!-- State B: No Resume Uploaded Yet -->
     <div id="resume-dropzone-wrap">
       <div class="dropzone" id="resume-dropzone">
-        <div class="dropzone-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17 8 12 3 7 8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
-          </svg>
-        </div>
+        <div class="dropzone-icon">📁</div>
         <div class="dropzone-title">Upload Candidate Resume</div>
-        <div class="dropzone-desc">Click or drop file to import</div>
-        <div class="format-pills">
-          <span class="format-pill">PDF</span>
-          <span class="format-pill">DOCX</span>
-          <span class="format-pill">TXT</span>
-          <span class="format-pill">JSON</span>
-        </div>
+        <div class="dropzone-desc">PDF, DOCX, TXT or JSON (Click or Drag & Drop)</div>
       </div>
-      <p style="font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.4;">
-        Upload a candidate resume to enable application autofill, ATS requirement matching, and document attachment.
+      <p style="font-size: 10.5px; color: var(--muted); margin-top: 6px; line-height: 1.35;">
+        <strong>No NextKinHR login needed:</strong> Upload a resume once to enable 1-click autofill, real-time ATS match scoring, and resume attachment on any career site.
       </p>
     </div>
     <input type="file" id="resume-file-input" accept=".pdf,.docx,.txt,.json,.md" style="display: none;">
   </div>
 
   <details class="card" id="source-resume-panel">
-    <summary>Paste or review candidate details</summary>
-    <p style="font-size:11px;color:var(--muted);margin:8px 0;">Put the candidate’s name on the first line, followed by contact details, skills, work history and education.</p>
-    <label for="source-resume-text" style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Source resume text</label>
-    <textarea id="source-resume-text" rows="8" style="box-sizing:border-box;width:100%;margin-top:4px;padding:8px 12px;background:var(--card-inner);color:var(--text);border:1px solid var(--border-strong);border-radius:8px;font:12px/1.5 ui-monospace,monospace;" placeholder="Candidate name&#10;Email and phone&#10;Skills&#10;Experience and education"></textarea>
-    <button id="btn-save-source" class="btn btn-primary" type="button" style="margin-top:10px;">Use these candidate details</button>
+    <summary style="cursor:pointer;font-weight:600;font-size:12px;">Paste or review candidate details</summary>
+    <p style="font-size:11px;color:var(--muted);margin:8px 0;">Put the candidate’s name on the first line, then contact details, skills, work history and education. Include only accurate information.</p>
+    <label for="source-resume-text" style="font-size:11px;">Source resume text</label>
+    <textarea id="source-resume-text" rows="8" style="box-sizing:border-box;width:100%;margin-top:5px;padding:8px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:5px;font:12px/1.5 inherit;" placeholder="Candidate name&#10;Email and phone&#10;Skills&#10;Experience and education"></textarea>
+    <button id="btn-save-source" class="btn btn-primary" type="button">Use these candidate details</button>
   </details>
 
   <details class="card" id="saved-resumes-panel">
-    <summary>Saved resumes by job</summary>
-    <p style="font-size:11px;color:var(--muted);margin:8px 0;">Each job maintains its own resume and ATS estimate.</p>
-    <label for="history-candidate" style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Candidate</label>
-    <select id="history-candidate" style="box-sizing:border-box;width:100%;padding:8px 12px;margin-top:4px;background:var(--card-inner);color:var(--text);border:1px solid var(--border-strong);border-radius:8px;"></select>
-    <button id="btn-load-history" class="btn btn-outline" type="button" style="margin-top:10px;">Load saved versions</button>
-    <div id="saved-resumes-list" style="font-size:12px;line-height:1.5;margin-top:10px;"></div>
+    <summary style="cursor:pointer;font-weight:600;font-size:12px;">Saved resumes by job</summary>
+    <p style="font-size:11px;color:var(--muted);margin:8px 0;">Each job keeps its own resume and ATS estimate. Generate more versions from the job page; there is no fixed job-count limit.</p>
+    <label for="history-candidate" style="font-size:11px;">Candidate</label>
+    <select id="history-candidate" style="box-sizing:border-box;width:100%;padding:8px;margin-top:5px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:5px;"></select>
+    <button id="btn-load-history" class="btn btn-outline" type="button">Load saved versions</button>
+    <div id="saved-resumes-list" style="font-size:12px;line-height:1.5;"></div>
     <p id="saved-resumes-status" role="status" style="font-size:11px;color:var(--muted);margin-top:8px;"></p>
   </details>
 
@@ -551,14 +379,14 @@
     </div>
     <div class="stats-row">
       <span>Reviewed profiles: <strong id="candidate-count">0</strong></span>
-      <span>Autofill: <strong>Ready</strong></span>
+      <span>Autofill: <strong>Universal</strong></span>
     </div>
     <p id="sync-status" role="status" style="font-size: 11px; color: var(--muted); margin-top: 6px;"></p>
-    <button id="btn-sync-candidates" class="btn btn-outline" style="margin-top: 10px;">
-      Refresh NextKinHR Profiles
+    <button id="btn-sync-candidates" class="btn btn-outline" style="margin-top: 8px;">
+      🔄 Refresh NextKinHR Profiles
     </button>
     <button id="btn-open-portal" class="btn btn-outline">
-      Open Submissions
+      ↗ Open Portal Submissions
     </button>
     <button id="btn-disconnect" class="btn btn-danger">
       Disconnect NextKinHR
@@ -574,7 +402,7 @@
       <span class="details-toggle" id="toggle-connect-panel" style="margin-top: 0;">Connect Portal</span>
     </div>
 
-    <div id="connect-panel" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
+    <div id="connect-panel" style="display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);">
       <p style="font-size: 11px; color: var(--muted); margin-bottom: 8px;">
         Connect to NextKinHR to sync candidate bench profiles across your team.
       </p>
@@ -585,12 +413,12 @@
       </div>
 
       <button id="btn-auto-connect" class="btn btn-primary">
-        Connect Portal
+        ⚡ 1-Click Auto-Connect
       </button>
 
-      <p class="details-toggle" id="toggle-manual" style="margin-top: 8px; display: inline-block;">Or enter 5-minute pairing code</p>
+      <p class="details-toggle" id="toggle-manual" style="margin-top: 6px;">Or enter 5-minute pairing code</p>
 
-      <div id="manual-section" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
+      <div id="manual-section" style="display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);">
         <div class="field">
           <label for="code-input">5-Minute Pairing Code</label>
           <input id="code-input" placeholder="Paste code from Application Capture">
@@ -602,26 +430,26 @@
     </div>
   </div>
 
-  <!-- Capabilities -->
-  <div class="card">
-    <strong style="font-size: 11px; font-weight: 700; color: var(--text); display: block; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.03em;">
-      Supported Features
+  <!-- Universal Capabilities -->
+  <div class="card" style="background: rgba(19, 27, 46, 0.6); border: 1px solid rgba(59, 130, 246, 0.2);">
+    <strong style="font-size: 11.5px; color: var(--text); display: flex; align-items: center; gap: 5px; margin-bottom: 4px;">
+      <span style="color: #3b82f6;">✦</span> Universal Features (All Websites):
     </strong>
     <ul class="feature-list">
-      <li><span class="bullet">•</span> <strong>Job boards & ATS</strong> (Greenhouse, Ashby, Lever, Workday)</li>
-      <li><span class="bullet">•</span> <strong>Field Autofill & File Attachment</strong> with verified facts</li>
-      <li><span class="bullet">•</span> <strong>ATS Requirement Matching</strong> against detected JD</li>
-      <li><span class="bullet">•</span> <strong>Screening Question Drafting</strong> with evidence review</li>
+      <li><span>✓</span> <strong>Job boards and company career sites</strong> (LinkedIn, Indeed, Dice, Greenhouse, Ashby, Lever, Workday; paste the JD when detection is unavailable)</li>
+      <li><span>✓</span> <strong>Instant Autofill & Resume</strong> attachment via DataTransfer</li>
+      <li><span>✓</span> <strong>Real-Time ATS Match Scoring</strong> against active job opening</li>
+      <li><span>✓</span> <strong>Tailored ATS Resume & AI Question</strong> answers</li>
     </ul>
-    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 10px; color: var(--muted); text-align: center;">
-      NextKinHR · Evidence-backed recruiting
+    <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--border); font-size: 10px; color: var(--muted); text-align: center;">
+      Owned by <strong>Nextkinlife LLC</strong> · All Rights Reserved
     </div>
   </div>
 
   <!-- Shared Profiles from NextKinHR -->
   <details class="card" id="shared-profiles-panel">
-    <summary>Shared profiles from NextKinHR</summary>
-    <p style="font-size:11px;color:var(--muted);margin:8px 0;">Reviewed profiles pushed by recruiters. Select one to use it for autofill and ATS matching on any job page.</p>
+    <summary style="cursor:pointer;font-weight:600;font-size:12px;">Shared profiles from NextKinHR</summary>
+    <p style="font-size:11px;color:var(--muted);margin:8px 0;">Reviewed profiles pushed by your recruiter or technical recruiter. Select one to use it for autofill and ATS matching on any job page.</p>
     <div id="shared-profiles-list" style="font-size:12px;line-height:1.5;"></div>
     <p id="shared-profiles-status" role="status" style="font-size:11px;color:var(--muted);margin-top:8px;"></p>
   </details>

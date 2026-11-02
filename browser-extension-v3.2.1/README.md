@@ -1,23 +1,5 @@
 # Recruiting Copilot 3.2.1 — grounded screening and contextual AI tailoring
 
-## Exact applied resume capture patch
-
-The selected resume file is read before the application form disappears and retained with the application draft through confirmation navigation. Replacing or removing the file updates the captured selection; separate cover letters are excluded. Linked observations, standalone logging and **Log Applied** send that file with the submission. The portal archives the original bytes on the same application after success, so its existing Applied Resume preview and download show the attached file. A candidate's latest document or regenerated DOCX is never substituted as proof of what was applied. Failed archive writes stay retryable; older submissions without a captured file still require the actual original document.
-
-Replace the existing unpacked files, reload extension v3.2.1 and reload the application tab before the next application. Deploy the accompanying portal/API changes. Resume generation, AI review and autofill behavior are unchanged.
-
-## Submission answers and status patch
-
-This v3.2.1 patch captures observed answers before the application form disappears, shares success-message detection between linked and standalone applications, and retains observed answers when **Log Applied** is used. Successful applications reopened without their intent parameter reuse a unique existing intent for the same actor, candidate and application URL, so its Draft becomes Applied. Ambiguous matches stay for review. The portal refreshes submissions when you return and retrieves fresh answers each time the dialog opens. Previously unrecorded answers cannot be reconstructed from a submitted form that is no longer available.
-
-Replace the files in the existing unpacked v3.2.1 folder and reload the extension and application tab before the next application. The portal/API changes must also be deployed. These changes preserve resume generation, AI screening review and undo behavior.
-
-## Ashby form commit fix
-
-This v3.2.1 patch commits text inputs through native focus and blur, including the `focusout` event React uses to save blur-based fields. Visible Email and Phone values are also recommitted on a subsequent **Fill Job Form** action without replacing manual text. Portal-owned validation is left intact instead of hiding errors locally. Ashby Location is identified from its field wrapper; the extension searches the autocomplete and clicks a unique matching offered option. Missing or ambiguous suggestions remain marked for manual review, and an unselected query is cleared instead of pretending a location was selected.
-
-Replace the existing unpacked v3.2.1 files with this package, reload the extension in `chrome://extensions`, then reload the application tab and choose **Fill Job Form**. Verify the Location suggestion and remaining questions before submitting the application yourself. This change requires the updated extension files; a server deployment alone does not replace a script already running in an open job tab.
-
 ## Resume work points patch
 
 This patch keeps manifest version **3.2.1**. For connected profiles, Tailor Resume reads the authorized original file locally and sends its complete text through the existing authenticated AI service after consent. A sparse portal profile is no longer the only source for work experience. The shared engine recovers responsibilities under their original employers, exposes them as experience facts for AI rewriting, and preserves stable fact IDs when ordering bullets by relevance. Job headings and dates are not repeated as accomplishment bullets. Explicit skills and remaining source sections are retained.
