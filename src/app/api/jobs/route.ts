@@ -53,14 +53,20 @@ export async function GET(request: Request) {
       return { jobs: data || [], total: count || 0, hasMore: (page + 1) * 50 < (count || 0), recommendation };
     }
     // Match the entire date-filtered feed before pagination, then show newest matches first.
-    const jobs: StoredJob[] = [];
-    for (let offset = 0; ; offset += 500) {
-      const { data, error } = await query().range(offset, offset + 499);
-      checkDb(error);
-      jobs.push(...(data || []) as unknown as StoredJob[]);
-      if (!data || data.length < 500) break;
+    const [firstBatch, {appliedKeys}] = await Promise.all([
+      query().range(0, 499),
+      candidateJobApplications(recommendation.candidateId||candidate?.id)
+    ]);
+    checkDb(firstBatch.error);
+    const jobs: StoredJob[] = [...((firstBatch.data || []) as unknown as StoredJob[])];
+    if (firstBatch.data && firstBatch.data.length === 500) {
+      for (let offset = 500; ; offset += 500) {
+        const { data, error } = await query().range(offset, offset + 499);
+        checkDb(error);
+        jobs.push(...(data || []) as unknown as StoredJob[]);
+        if (!data || data.length < 500) break;
+      }
     }
-    const {appliedKeys}=await candidateJobApplications(recommendation.candidateId||candidate?.id);
     const available=withoutAppliedJobs(jobs,appliedKeys);
     const ranked = (candidate&&!isSuperAdmin?rankResumeJobs(available, candidate):available).sort(newestPostedFirst);
     return { jobs: ranked.slice(page * 50, page * 50 + 50), total: ranked.length, hasMore: (page + 1) * 50 < ranked.length, recommendation };

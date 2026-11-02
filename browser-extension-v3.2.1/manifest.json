@@ -1,0 +1,79 @@
+{
+  "manifest_version": 3,
+  "name": "Recruiting Copilot — Nextkinlife LLC",
+  "version": "3.2.1",
+  "description": "Universal AI application autofill, live ATS capture, and role-tailored resume generation across all websites. Owned by Nextkinlife LLC.",
+  "author": "Nextkinlife LLC",
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "alarms",
+    "activeTab",
+    "cookies",
+    "downloads"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Recruiting Copilot — Nextkinlife LLC"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "resume-engine.js",
+        "resume-import.js",
+        "candidate-context.js",
+        "job-context.js",
+        "fill-session.js",
+        "adapters/generic.js",
+        "adapters/greenhouse.js",
+        "adapters/lever.js",
+        "adapters/ashby.js",
+        "adapters/workday.js",
+        "form-discovery.js",
+        "field-mapping.js",
+        "field-writer.js",
+        "embedded-support.js",
+        "stripe-job.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://job-boards.greenhouse.io/embed/job_app*"
+      ],
+      "all_frames": true,
+      "js": [
+        "embedded-support.js",
+        "adapters/generic.js",
+        "adapters/greenhouse.js",
+        "form-discovery.js",
+        "field-mapping.js",
+        "field-writer.js",
+        "frame-agent.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "scraping-rules.json",
+        "vendor/pdf.min.mjs",
+        "vendor/pdf.worker.min.mjs"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
+}

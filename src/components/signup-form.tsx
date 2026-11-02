@@ -17,7 +17,6 @@ import {
   ArrowRightIcon,
   PhoneIcon,
   MailIcon,
-  UserIcon,
   KeyRoundIcon,
   RotateCcwIcon,
   ArrowLeftIcon,
@@ -25,12 +24,9 @@ import {
 
 export function SignupForm() {
   const router = useRouter();
-  const phoneInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedRole, setSelectedRole] = useState<AppRole>("recruiter");
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
 
   // OTP Verification state
   const [otpStep, setOtpStep] = useState(false);
@@ -131,13 +127,8 @@ export function SignupForm() {
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    const cleanPhone = phone.trim();
     const cleanEmail = email.trim();
-    const cleanName = name.trim();
-
-    // Phone is optional
-
-    const derivedName = cleanName || cleanEmail.split("@")[0] || "User";
+    const derivedName = cleanEmail.split("@")[0] || "User";
 
     if (!cleanEmail || !cleanEmail.includes("@")) {
       setErrorMsg("Please enter a valid email address.");
@@ -149,7 +140,7 @@ export function SignupForm() {
     try {
       const redirectUrl =
         typeof window !== "undefined"
-          ? `${window.location.origin}/auth/callback?next=/dashboard${cleanPhone ? `&phone=${encodeURIComponent(cleanPhone)}` : ''}&role=${selectedRole}`
+          ? `${window.location.origin}/auth/callback?next=/dashboard&role=${selectedRole}`
           : "";
 
       const { error } = await supabase.auth.signInWithOtp({
@@ -158,7 +149,6 @@ export function SignupForm() {
           shouldCreateUser: true,
           data: {
             full_name: derivedName,
-            phone: cleanPhone || null,
             role: selectedRole,
           },
           emailRedirectTo: redirectUrl,
@@ -239,11 +229,10 @@ export function SignupForm() {
       if (error) {
         setErrorMsg(error.message || "Invalid or expired verification code. Please check the code or request a new one.");
       } else if (data.user) {
-        const cleanPhone = phone.trim();
-        const cleanName = name.trim() || data.user.email?.split("@")[0] || "User";
+        const derivedName = data.user.email?.split("@")[0] || "User";
         const prof = await ensureSessionProfile(supabase, data.user, registrationRole(selectedRole), {
-          fullName: cleanName,
-          phone: cleanPhone || null,
+          fullName: derivedName,
+          phone: null,
         });
         ++profileRequest.current;
         setCurrentUser(data.user);
@@ -280,7 +269,7 @@ export function SignupForm() {
     try {
       const redirectUrl =
         typeof window !== "undefined"
-          ? `${window.location.origin}/auth/callback?next=/dashboard&phone=${encodeURIComponent(phone.trim())}&role=${selectedRole}`
+          ? `${window.location.origin}/auth/callback?next=/dashboard&role=${selectedRole}`
           : "";
 
       const { error } = await supabase.auth.signInWithOtp({
@@ -288,8 +277,6 @@ export function SignupForm() {
         options: {
           shouldCreateUser: true,
           data: {
-            full_name: name.trim(),
-            phone: phone.trim(),
             role: selectedRole,
           },
           emailRedirectTo: redirectUrl,
@@ -315,13 +302,9 @@ export function SignupForm() {
   const handleGoogleSignIn = async () => {
     setErrorMsg(null);
 
-    const cleanPhone = phone.trim();
-    // Phone is optional
-
     setGoogleLoading(true);
     try {
       const params = new URLSearchParams({ role: selectedRole });
-      if (cleanPhone) params.set("phone", cleanPhone);
       // OAuth needs a full browser navigation so the server can set PKCE and
       // registration cookies before redirecting to Google.
       window.location.assign(new URL(`/auth/google?${params}`, window.location.origin).href);
@@ -352,13 +335,13 @@ export function SignupForm() {
 
     const badgeColor =
       currentProfile?.role === "super_admin"
-        ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30"
+        ? "bg-foreground/10 text-foreground border-foreground/20"
         : currentProfile?.role === "recruiter"
         ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30"
         : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30";
 
     return (
-      <div className="flex flex-col gap-4 p-5 border rounded-xl border-border bg-card shadow-xs">
+      <div className="flex flex-col gap-4 p-5 sm:p-6 border rounded-2xl border-border/70 bg-card/90 backdrop-blur-xs shadow-xs">
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">Current Session</span>
           <Badge variant="outline" className={badgeColor}>
@@ -420,67 +403,77 @@ export function SignupForm() {
   // STEP 2: OTP Verification Screen
   if (otpStep) {
     return (
-      <div className="flex flex-col gap-3.5">
-        <div className="flex flex-col items-center gap-1 text-center sm:items-start sm:text-left">
-          <div className="inline-flex items-center gap-1.5 text-xs text-primary font-semibold mb-1">
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col items-center gap-1.5 text-center sm:items-start sm:text-left">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs text-primary font-semibold bg-primary/10 border border-primary/20">
             <KeyRoundIcon className="size-3.5" />
-            Email OTP Verification
+            Verification Required
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
             Enter Verification Code
           </h1>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            We sent a verification code and a sign-in link to <span className="font-semibold text-foreground">{email}</span>.
-            Enter the code below or click the sign-in link in your email.
+            We sent a verification code and a sign-in link to{" "}
+            <span className="font-semibold text-foreground underline decoration-primary/40 underline-offset-2">
+              {email}
+            </span>
+            . Enter the code below or click the sign-in link in your email.
           </p>
         </div>
 
         {errorMsg && (
-          <div className="p-2.5 text-xs rounded-md bg-destructive/10 text-destructive border border-destructive/20 leading-relaxed">
+          <div role="alert" className="p-3 text-xs rounded-xl bg-destructive/10 text-destructive border border-destructive/20 leading-relaxed">
             {errorMsg}
           </div>
         )}
 
         {successMsg && (
-          <div className="p-2.5 text-xs rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 leading-relaxed">
+          <div role="status" className="p-3 text-xs rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 leading-relaxed">
             {successMsg}
           </div>
         )}
 
-        <form onSubmit={handleVerifyOtp} className="flex flex-col gap-3">
-          <div className="space-y-1">
-            <Label htmlFor="otpCode" className="text-xs font-semibold">
+        <form onSubmit={handleVerifyOtp} className="flex flex-col gap-3.5">
+          <div className="space-y-1.5">
+            <Label htmlFor="otpCode" className="text-xs font-semibold text-foreground/90">
               Verification Code (OTP)
             </Label>
             <div className="relative">
-              <KeyRoundIcon className="absolute left-3 top-3 size-4 text-muted-foreground pointer-events-none" />
+              <KeyRoundIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/70 pointer-events-none" />
               <Input
                 id="otpCode"
                 type="text"
                 inputMode="numeric"
                 maxLength={10}
-                placeholder="12345678"
+                placeholder="123456"
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
                 required
                 autoFocus
-                className="h-10 pl-9 text-base tracking-widest font-mono text-center font-bold"
+                className="h-11 pl-10 pr-4 text-lg tracking-[0.25em] font-mono text-center font-bold bg-background/80 border-border/80 focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:border-primary rounded-xl shadow-2xs"
               />
             </div>
-            <p className="text-[11px] text-muted-foreground">
-              Contact number associated: <span className="font-medium text-foreground">{phone}</span>
-            </p>
           </div>
 
           <Button
             type="submit"
             disabled={loading || otpCode.length < 6}
-            className="w-full bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors cursor-pointer h-9 rounded-md text-xs"
+            className="w-full h-10 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs hover:shadow active:scale-[0.99] transition-all duration-150 cursor-pointer text-xs flex items-center justify-center gap-2"
           >
-            {loading ? "Verifying Code..." : "Verify & Enter Portal"}
+            {loading ? (
+              <>
+                <div className="size-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                <span>Verifying Code...</span>
+              </>
+            ) : (
+              <>
+                <span>Verify & Enter Portal</span>
+                <ArrowRightIcon className="size-3.5" />
+              </>
+            )}
           </Button>
 
-          <div className="flex items-center justify-between text-xs pt-1">
+          <div className="flex items-center justify-between text-xs pt-2 border-t border-border/40">
             <button
               type="button"
               onClick={() => {
@@ -489,9 +482,9 @@ export function SignupForm() {
                 setErrorMsg(null);
                 setSuccessMsg(null);
               }}
-              className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer text-xs font-medium"
             >
-              <ArrowLeftIcon className="size-3" />
+              <ArrowLeftIcon className="size-3.5" />
               Edit details
             </button>
 
@@ -499,13 +492,13 @@ export function SignupForm() {
               type="button"
               onClick={handleResendOtp}
               disabled={countdown > 0 || loading}
-              className={`inline-flex items-center gap-1 transition-colors cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 transition-colors cursor-pointer text-xs font-medium ${
                 countdown > 0
                   ? "text-muted-foreground cursor-not-allowed opacity-60"
-                  : "text-primary hover:underline font-medium"
+                  : "text-primary hover:underline"
               }`}
             >
-              <RotateCcwIcon className="size-3" />
+              <RotateCcwIcon className="size-3.5" />
               {countdown > 0 ? `Resend code (${countdown}s)` : "Resend code"}
             </button>
           </div>
@@ -516,142 +509,103 @@ export function SignupForm() {
 
   // STEP 1: Registration / Login Screen with Mandatory Phone & Passwordless OTP
   return (
-    <div className="flex flex-col gap-3.5">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-col items-center gap-1 text-center sm:items-start sm:text-left">
-        <h1 className="text-xl font-bold tracking-tight text-foreground">
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
           Portal Access
         </h1>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground leading-relaxed">
           Select your account role and verify your email. Both recruiter roles require administrator approval. Existing accounts keep their registered role.
         </p>
       </div>
 
       {errorMsg && (
-        <div className="p-2.5 text-xs rounded-md bg-destructive/10 text-destructive border border-destructive/20 leading-relaxed">
+        <div role="alert" className="p-3 text-xs rounded-xl bg-destructive/10 text-destructive border border-destructive/20 leading-relaxed">
           {errorMsg}
         </div>
       )}
 
       {successMsg && (
-        <div className="p-2.5 text-xs rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 leading-relaxed">
+        <div role="status" className="p-3 text-xs rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 leading-relaxed">
           {successMsg}
         </div>
       )}
 
-      <form onSubmit={handleSendOtp} className="flex flex-col gap-2.5">
+      <form onSubmit={handleSendOtp} className="flex flex-col gap-3.5">
         {/* Role Selection Tabs */}
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <Label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
             Select Your Account Role
           </Label>
           <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={() => setSelectedRole("recruiter")}
-              className={`flex flex-col items-start p-2 rounded-lg border text-left transition-all cursor-pointer ${
-                selectedRole === "recruiter"
-                  ? "border-primary bg-primary/5 ring-1 ring-primary"
-                  : "border-border hover:bg-muted/50"
-              }`}
-            >
-              <div className="flex items-center gap-1.5">
-                <BriefcaseIcon
-                  className={`size-3.5 ${
-                    selectedRole === "recruiter" ? "text-primary" : "text-muted-foreground"
+            {[
+              {
+                id: "recruiter",
+                title: "Recruiter",
+                subtitle: "Bench Sales & Submissions",
+                icon: BriefcaseIcon,
+              },
+              {
+                id: "technical_recruiter",
+                title: "Technical Recruiter",
+                subtitle: "Candidate referrals",
+                icon: ShieldCheckIcon,
+              },
+              {
+                id: "client",
+                title: "Candidate",
+                subtitle: "USA Job Seeker / Bench",
+                icon: UserCheckIcon,
+              },
+            ].map((role) => {
+              const isSelected = selectedRole === role.id;
+              const Icon = role.icon;
+              return (
+                <button
+                  key={role.id}
+                  type="button"
+                  onClick={() => setSelectedRole(role.id as AppRole)}
+                  className={`group relative flex flex-col justify-between p-2.5 rounded-xl border text-left transition-all duration-200 cursor-pointer select-none ${
+                    isSelected
+                      ? "border-primary bg-primary/[0.08] shadow-xs ring-1 ring-primary/40 text-foreground"
+                      : "border-border/70 bg-card/60 hover:bg-muted/40 hover:border-border"
                   }`}
-                />
-                <span className="text-xs font-semibold text-foreground">Recruiter</span>
-              </div>
-              <span className="text-[10px] text-muted-foreground leading-tight">
-                Bench Sales & Submissions
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setSelectedRole("technical_recruiter")}
-              className={`flex flex-col items-start p-2 rounded-lg border text-left transition-all cursor-pointer ${
-                selectedRole === "technical_recruiter"
-                  ? "border-primary bg-primary/5 ring-1 ring-primary"
-                  : "border-border hover:bg-muted/50"
-              }`}
-            >
-              <div className="flex items-center gap-1.5">
-                <ShieldCheckIcon className={`size-3.5 ${selectedRole === "technical_recruiter" ? "text-primary" : "text-muted-foreground"}`} />
-                <span className="text-xs font-semibold text-foreground">Technical Recruiter</span>
-              </div>
-              <span className="text-[10px] text-muted-foreground leading-tight">Candidate referrals</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setSelectedRole("client")}
-              className={`flex flex-col items-start p-2 rounded-lg border text-left transition-all cursor-pointer ${
-                selectedRole === "client"
-                  ? "border-primary bg-primary/5 ring-1 ring-primary"
-                  : "border-border hover:bg-muted/50"
-              }`}
-            >
-              <div className="flex items-center gap-1.5">
-                <UserCheckIcon
-                  className={`size-3.5 ${
-                    selectedRole === "client" ? "text-primary" : "text-muted-foreground"
-                  }`}
-                />
-                <span className="text-xs font-semibold text-foreground">Candidate</span>
-              </div>
-              <span className="text-[10px] text-muted-foreground leading-tight">
-                USA Job Seeker / Bench
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {/* Full Name */}
-        <div className="space-y-0.5">
-          <Label htmlFor="name" className="text-xs font-medium">
-            Full Name <span className="text-[10px] text-muted-foreground font-normal">(Required for new registration)</span>
-          </Label>
-          <div className="relative">
-            <UserIcon className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
-            <Input
-              id="name"
-              placeholder="e.g. John Doe"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="h-8.5 pl-8 text-xs"
-            />
-          </div>
-        </div>
-
-        {/* Phone / WhatsApp (Optional) */}
-        <div className="space-y-0.5">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="phone" className="text-xs font-medium">
-              Phone / WhatsApp Number <span className="text-[10px] text-muted-foreground font-normal">(Optional)</span>
-            </Label>
-          </div>
-          <div className="relative">
-            <PhoneIcon className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
-            <Input
-              ref={phoneInputRef}
-              id="phone"
-              type="tel"
-              placeholder="+1 314 357 5705 or +91 98765 43210"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="h-8.5 pl-8 text-xs font-medium"
-            />
+                >
+                  <div className="flex items-center justify-between w-full mb-1.5">
+                    <div
+                      className={`size-6 rounded-md flex items-center justify-center transition-colors ${
+                        isSelected
+                          ? "bg-primary text-primary-foreground shadow-2xs"
+                          : "bg-muted text-muted-foreground group-hover:text-foreground"
+                      }`}
+                    >
+                      <Icon className="size-3.5" />
+                    </div>
+                    {isSelected && (
+                      <span className="size-1.5 rounded-full bg-primary" />
+                    )}
+                  </div>
+                  <div>
+                    <span className="block text-xs font-semibold leading-tight text-foreground">
+                      {role.title}
+                    </span>
+                    <span className="block text-[10px] text-muted-foreground line-clamp-2 leading-tight mt-0.5">
+                      {role.subtitle}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Email Address */}
-        <div className="space-y-0.5">
-          <Label htmlFor="email" className="text-xs font-medium">
+        <div className="space-y-1">
+          <Label htmlFor="email" className="text-xs font-medium text-foreground">
             Email Address <span className="text-destructive">*</span>
           </Label>
           <div className="relative">
-            <MailIcon className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
+            <MailIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
             <Input
               id="email"
               type="email"
@@ -659,7 +613,7 @@ export function SignupForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="h-8.5 pl-8 text-xs"
+              className="h-9.5 pl-9 pr-3 text-xs bg-background border-border/80 rounded-lg shadow-2xs focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:border-primary"
             />
           </div>
         </div>
@@ -668,20 +622,24 @@ export function SignupForm() {
         <Button
           type="submit"
           disabled={loading}
-          className="w-full mt-1 bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors cursor-pointer h-9 rounded-md text-xs flex items-center justify-center gap-1.5"
+          className="w-full mt-1 h-9.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs hover:shadow active:scale-[0.99] transition-all duration-150 cursor-pointer text-xs flex items-center justify-center gap-2 group"
         >
           {loading ? (
-            "Sending Verification Code..."
+            <>
+              <div className="size-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+              <span>Sending Verification Code...</span>
+            </>
           ) : (
             <>
               <MailIcon className="size-3.5" />
               <span>Send Email OTP Code</span>
+              <ArrowRightIcon className="size-3 text-primary-foreground/70 transition-transform group-hover:translate-x-0.5" />
             </>
           )}
         </Button>
 
-        <div className="relative my-0.5 text-center text-xs after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t after:border-border">
-          <span className="relative z-10 bg-background px-2 text-[10px] text-muted-foreground">
+        <div className="relative my-0.5 text-center text-xs after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t after:border-border/60">
+          <span className="relative z-10 bg-background px-2.5 text-[10px] font-medium text-muted-foreground">
             Or continue with Google
           </span>
         </div>
@@ -692,9 +650,9 @@ export function SignupForm() {
           variant="outline"
           onClick={handleGoogleSignIn}
           disabled={googleLoading}
-          className="w-full text-foreground border-input bg-background hover:bg-muted cursor-pointer text-xs h-9 font-medium flex items-center justify-center gap-2"
+          className="w-full h-9.5 rounded-lg border-border/70 hover:border-border hover:bg-muted/50 bg-background cursor-pointer text-xs font-medium flex items-center justify-center gap-2.5 shadow-2xs active:scale-[0.99] transition-all"
         >
-          <svg className="h-4 w-4" viewBox="0 0 24 24">
+          <svg className="size-4 shrink-0" viewBox="0 0 24 24">
             <path
               d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
               fill="#4285F4"
@@ -712,10 +670,10 @@ export function SignupForm() {
               fill="#EA4335"
             />
           </svg>
-          {googleLoading ? "Connecting to Google..." : "Continue with Google"}
+          <span>{googleLoading ? "Connecting to Google..." : "Continue with Google"}</span>
         </Button>
 
-        <div className="pt-1.5 border-t text-[10px] text-muted-foreground flex items-center justify-center gap-1.5 text-center">
+        <div className="pt-2 border-t border-border/40 text-[10px] text-muted-foreground flex items-center justify-center gap-1.5 text-center">
           <ShieldCheckIcon className="size-3 text-primary shrink-0" />
           <span>Passwordless login: Secure 6-digit OTP codes sent directly to your email.</span>
         </div>

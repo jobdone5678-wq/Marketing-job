@@ -7,7 +7,9 @@ export async function GET(request: Request) {
     const page = Math.max(0, Number(url.searchParams.get('page') || 0)); if (!Number.isSafeInteger(page)) throw new CaptureError('Invalid page.');
     const limit = Math.min(1000, Math.max(1, Number(url.searchParams.get('limit') || 100)));
     const offset = page * limit;
-    let query = database().from('candidates').select('*', { count: 'exact' }).order('created_at', { ascending: false }).order('id').range(offset, offset + limit - 1);
+    const countParam = url.searchParams.get('count');
+    const countOption = countParam === 'none' ? {} : { count: 'exact' as const };
+    let query = database().from('candidates').select('*', countOption).order('created_at', { ascending: false }).order('id').range(offset, offset + limit - 1);
     if (profile.role === 'client') query = query.eq('user_id', profile.id);
     if (profile.role === 'recruiter') query = query.eq('assigned_recruiter_id', profile.id);
     if (profile.role === 'technical_recruiter') query = query.eq('assigned_technical_recruiter_id', profile.id);

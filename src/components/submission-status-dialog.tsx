@@ -171,8 +171,8 @@ export function SubmissionStatusDialog({
           </div>
 
           {isInterview && (
-            <div className="p-3 rounded-lg border border-purple-500/20 bg-purple-500/5 space-y-3">
-              <div className="flex items-center gap-1.5 font-semibold text-purple-700 dark:text-purple-300">
+            <div className="p-3 rounded-lg border border-border/80 bg-muted/40 space-y-3">
+              <div className="flex items-center gap-1.5 font-medium text-foreground">
                 <CalendarIcon className="size-3.5" />
                 Interview Details
               </div>

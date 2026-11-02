@@ -1,6 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+const middlewareProfileCache = new Map<string, { role: string; status: string; expiresAt: number }>();
+
 export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
@@ -54,8 +56,17 @@ export async function updateSession(request: NextRequest) {
 
   let profile: {role:string;status:string}|null=null;
   if(user&&(pathname==='/'||pathname.startsWith('/dashboard'))){
-    const result=await supabase.from('profiles').select('role,status').eq('id',user.id).single();
-    profile=result.error?null:result.data;
+    const isLive = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'production';
+    const cached = isLive ? middlewareProfileCache.get(user.id) : null;
+    if (cached && cached.expiresAt > Date.now()) {
+      profile = { role: cached.role, status: cached.status };
+    } else {
+      const result=await supabase.from('profiles').select('role,status').eq('id',user.id).single();
+      profile=result.error?null:result.data;
+      if (isLive && profile) {
+        middlewareProfileCache.set(user.id, { ...profile, expiresAt: Date.now() + 2500 });
+      }
+    }
     if(pathname.startsWith('/dashboard')&&profile?.status!=='active'){
       const url=request.nextUrl.clone();url.pathname='/';url.search='';
       return NextResponse.redirect(url);

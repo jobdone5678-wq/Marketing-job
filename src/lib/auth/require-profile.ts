@@ -7,6 +7,7 @@ import {profileAccess,type ProfileAccess} from './profile-access';
 import type {UserProfile} from '@/types/database';
 
 const inflightAuth = new Map<string, Promise<UserProfile>>();
+const profileCache = new Map<string, { profile: UserProfile; expiresAt: number }>();
 
 async function fetchProfile(): Promise<UserProfile> {
   const client = await createClient();
@@ -30,13 +31,28 @@ export async function requireProfile(access:ProfileAccess='candidate_or_staff'):
     // cookies() may throw outside request context
   }
 
+  const isLive = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'production';
+  const now = Date.now();
+  if (isLive && sessionKey) {
+    const cached = profileCache.get(sessionKey);
+    if (cached && cached.expiresAt > now) {
+      if(!profileAccess(cached.profile, access)) throw new CaptureError('An approved active account is required.',403);
+      return cached.profile;
+    }
+  }
+
   let profilePromise: Promise<UserProfile>;
   if (sessionKey) {
     const inflight = inflightAuth.get(sessionKey);
     if (inflight) {
       profilePromise = inflight;
     } else {
-      profilePromise = fetchProfile().finally(() => {
+      profilePromise = fetchProfile().then(profile => {
+        if (isLive && sessionKey) {
+          profileCache.set(sessionKey, { profile, expiresAt: Date.now() + 2500 });
+        }
+        return profile;
+      }).finally(() => {
         inflightAuth.delete(sessionKey);
       });
       inflightAuth.set(sessionKey, profilePromise);

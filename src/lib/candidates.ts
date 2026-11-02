@@ -23,7 +23,7 @@ export async function getCandidates(forceRefresh = false): Promise<Candidate[]> 
     let page = 0;
     const result: Candidate[] = [];
     for (;;) {
-      const data = await api<{ candidates: Candidate[]; hasMore: boolean }>(`/api/candidates?page=${page}&limit=500`);
+      const data = await api<{ candidates: Candidate[]; hasMore: boolean }>(`/api/candidates?page=${page}&limit=500&count=none`);
       result.push(...data.candidates);
       if (!data.hasMore) break;
       page++;

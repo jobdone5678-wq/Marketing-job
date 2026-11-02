@@ -22,6 +22,7 @@ export function NavSecondary({
   items,
   activeSection,
   onSelectSection,
+  className,
   ...props
 }: {
   items: SecondaryNavItem[]
@@ -31,7 +32,7 @@ export function NavSecondary({
   const pathname = usePathname()
 
   return (
-    <SidebarGroup {...props}>
+    <SidebarGroup className={cn("border-t border-border/40 pt-2", className)} {...props}>
       <SidebarGroupContent>
         <SidebarMenu className="gap-0.5">
           {items.map((item) => {
@@ -46,16 +47,16 @@ export function NavSecondary({
                   href={item.url}
                   onClick={() => onSelectSection?.(item.id)}
                   className={cn(
-                    "flex w-full items-center gap-2.5 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs outline-hidden transition-all cursor-pointer",
+                    "group flex w-full items-center gap-2.5 overflow-hidden rounded-lg px-3 py-1.5 text-left text-xs outline-hidden transition-all duration-150 cursor-pointer active:scale-[0.99]",
                     isActive
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-2xs"
-                      : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+                      ? "bg-sidebar-accent text-foreground font-semibold shadow-2xs border border-border/40"
+                      : "text-muted-foreground/80 hover:bg-sidebar-accent/50 hover:text-foreground"
                   )}
                 >
-                  <span className="size-4 shrink-0 flex items-center justify-center">
+                  <span className="size-4 shrink-0 flex items-center justify-center transition-transform duration-150 group-hover:scale-110 opacity-75 group-hover:opacity-100">
                     {item.icon}
                   </span>
-                  <span className="truncate">{item.title}</span>
+                  <span className="truncate flex-1 font-medium">{item.title}</span>
                 </Link>
               </SidebarMenuItem>
             )

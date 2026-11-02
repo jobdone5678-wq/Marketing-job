@@ -31,8 +31,8 @@ function setup({ role = 'client', candidates, jobs = [], revoked = false, liveJo
 }
 
 test('candidate job discovery ranks the whole feed before pagination', async () => {
-  const jobs = Array.from({ length: 510 }, (_, i) => ({ id: String(i).padStart(4, '0'), title: 'Java Developer', description: 'JavaScript', state: 'active', updated_at: '2026-01-01' }));
-  jobs.push({ id: 'older-match', title: 'Python Developer', description: 'Python and SQL', state: 'active', updated_at: '2025-01-01' });
+  const jobs = Array.from({ length: 510 }, (_, i) => ({ id: String(i).padStart(4, '0'), title: 'Java Developer', description: 'JavaScript', location: 'Remote', state: 'active', updated_at: '2026-01-01' }));
+  jobs.push({ id: 'older-match', title: 'Python Developer', description: 'Python and SQL', location: 'Remote', state: 'active', updated_at: '2025-01-01' });
   const { load } = setup({ jobs });
   const response = await load('src/app/api/jobs/route.ts').GET(new Request('https://portal.test/api/jobs?postedWithin=all'));
   const result = await response.json();
@@ -57,7 +57,7 @@ test('candidates without reviewed profiles see an upload prompt rather than unre
 });
 
 test('staff can browse all jobs or filter them for a selected reviewed candidate', async () => {
-  const { load } = setup({ role: 'recruiter', jobs: [{ id: 'java', title: 'Java Developer', description: 'Java', state: 'active' }, { id: 'python', title: 'Python Developer', description: 'Python', state: 'active' }] });
+  const { load } = setup({ role: 'recruiter', jobs: [{ id: 'java', title: 'Java Developer', description: 'Java', location: 'Remote', state: 'active' }, { id: 'python', title: 'Python Developer', description: 'Python', location: 'Remote', state: 'active' }] });
   const { GET } = load('src/app/api/jobs/route.ts');
   const all = await (await GET(new Request('https://portal.test/api/jobs?postedWithin=all'))).json();
   const selected = await (await GET(new Request('https://portal.test/api/jobs?postedWithin=all&candidateId=' + ownId))).json();
@@ -105,7 +105,7 @@ test('candidate autofill credentials do not gain access to staff submission acti
 });
 
 test('saved discovery excludes explicit expired deadlines before pagination and retains unknown dates',async()=>{
- const {load}=setup({jobs:[{id:'expired',title:'Python Developer',state:'active',closes_at:'2000-01-01T00:00:00Z'},{id:'unknown',title:'Python Developer',state:'active',posted_at:null,closes_at:null}]});
+ const {load}=setup({jobs:[{id:'expired',title:'Python Developer',location:'Remote',state:'active',closes_at:'2000-01-01T00:00:00Z'},{id:'unknown',title:'Python Developer',location:'Remote',state:'active',posted_at:null,closes_at:null}]});
  const response=await load('src/app/api/jobs/route.ts').GET(new Request('https://portal.test/api/jobs?postedWithin=all'));
  const result=await response.json();assert.equal(response.status,200);assert.deepEqual(result.jobs.map(job=>job.id),['unknown']);assert.equal(result.jobs[0].posted_at,null);
 });

@@ -164,7 +164,7 @@ export async function structuredAI<T>(
       refused=!!completion.choices[0]?.message?.refusal;
     } catch (chatError: any) {
       // If provider rejects response_format param, fallback to prompt-only JSON
-      if (chatError?.status === 400 && /response_format|json_object|json_schema|json mode/i.test(chatError?.message||'')) {
+      if (chatError?.status === 400 && /response_format|json_object|json_schema|json mode|unsupported|schema/i.test(chatError?.message||'')) {
         activeRequest={
           model,
           messages: [

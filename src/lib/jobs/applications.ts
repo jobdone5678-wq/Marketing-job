@@ -17,7 +17,7 @@ export async function candidateJobApplications(candidateId:string|null|undefined
  }
  const jobIds=new Set<string>(),urls=new Set<string>(),applications:CandidateJobApplication[]=[];
  for(const record of records){
-  if(!appliedStages.has(record.status)&&!['submitted','confirmed'].includes(record.capture_status||''))continue;
+  if(!appliedStages.has(record.status)&&!['started','submitted','confirmed'].includes(record.capture_status||''))continue;
   const job=Array.isArray(record.job)?record.job[0]:record.job;
   const id=record.job_id||job?.id||null;
   const keys=[record.job_url,job?.application_url,job?.source_url].map(applicationUrlKey).filter((value):value is string=>!!value);

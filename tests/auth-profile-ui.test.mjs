@@ -85,7 +85,6 @@ test('missing stored profile never masquerades as a candidate or active metadata
 for(const entry of ['signup','page'])test(`OTP role mismatch preserves the stored candidate profile (${entry})`, async t => {
   const page = await mount(t, { entry, profile: { id: 'actor', role: 'client', status: 'active', full_name: 'Existing Candidate' } });
   await page.getByRole('button', { name: 'Technical Recruiter', exact: false }).click();
-  await page.getByLabel('Full Name').fill('Test Staff');
   await page.getByLabel('Email Address').fill('staff@example.test');
   await page.getByRole('button', { name: 'Send Email OTP Code' }).click();
   await page.getByLabel('Verification Code (OTP)').fill('123456');

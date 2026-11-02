@@ -21,14 +21,31 @@ export function adminClient(): SupabaseClient<any> {
   return _adminClient;
 }
 
+const captureStaffCache = new Map<string, { profile: UserProfile; expires: number }>();
+
 export async function requireCaptureStaff() {
   const client = await createClient();
   const { data: { user }, error } = await client.auth.getUser();
   if (error || !user) throw new CaptureError('Sign in to manage email confirmations.', 401);
+
+  const isLive = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'production';
+  const now = Date.now();
+  if (isLive) {
+    const cached = captureStaffCache.get(user.id);
+    if (cached && cached.expires > now) {
+      return { client, profile: cached.profile };
+    }
+  }
+
   const { data: profile, error: profileError } = await client.from('profiles').select('*').eq('id', user.id).single();
   if (profileError || !profile || profile.status !== 'active' || !['client', 'recruiter', 'technical_recruiter', 'super_admin'].includes(profile.role)) {
     throw new CaptureError('An active candidate, recruiter or administrator account is required.', 403);
   }
+
+  if (isLive) {
+    captureStaffCache.set(user.id, { profile: profile as UserProfile, expires: now + 2500 });
+  }
+
   return { client, profile: profile as UserProfile };
 }
 

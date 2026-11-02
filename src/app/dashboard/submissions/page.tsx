@@ -137,56 +137,55 @@ export default function SubmissionsPage() {
     switch (status) {
       case "Offer_Received":
         return (
-          <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 gap-1 font-semibold">
+          <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 gap-1.5 font-semibold shadow-2xs py-1 px-2.5 rounded-full">
             <SparklesIcon className="size-3 text-emerald-500" />
-            Offer Received 
+            Offer Received
           </Badge>
         );
       case "Round_1":
       case "Round_2":
       case "Interview_Scheduled":
         return (
-          <Badge className="bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 gap-1 font-semibold">
-            <CalendarIcon className="size-3 text-purple-500" />
+          <Badge className="bg-primary/10 text-primary border-primary/25 gap-1.5 font-medium shadow-2xs py-1 px-2.5 rounded-full">
+            <CalendarIcon className="size-3 text-primary" />
             {status.replace(/_/g, " ")}
           </Badge>
         );
       case "Submitted_to_Client":
         return (
-          <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30 gap-1 font-medium">
+          <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30 gap-1.5 font-medium shadow-2xs py-1 px-2.5 rounded-full">
             <Building2Icon className="size-3 text-blue-500" />
             Client Review
           </Badge>
         );
       case "Vendor_Screening":
         return (
-          <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 gap-1 font-medium">
+          <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 gap-1.5 font-medium shadow-2xs py-1 px-2.5 rounded-full">
             <ClockIcon className="size-3 text-amber-500" />
             Vendor Screening
           </Badge>
         );
       case "Applied":
         return (
-          <Badge variant="outline" className="text-muted-foreground gap-1 font-medium">
-            <SendIcon className="size-3" />
+          <Badge variant="outline" className="border-border/80 text-foreground/80 gap-1.5 font-medium shadow-2xs py-1 px-2.5 rounded-full bg-background">
+            <SendIcon className="size-3 text-primary" />
             Applied
           </Badge>
         );
       case "Rejected":
         return (
-          <Badge variant="destructive" className="gap-1 opacity-80 text-[11px]">
+          <Badge variant="destructive" className="gap-1 font-medium shadow-2xs py-1 px-2.5 rounded-full opacity-85">
             Rejected
           </Badge>
         );
       default:
         return (
-          <Badge variant="secondary" className="text-[11px]">
+          <Badge variant="secondary" className="gap-1 shadow-2xs py-1 px-2.5 rounded-full font-medium">
             {status.replace(/_/g, " ")}
           </Badge>
         );
     }
   };
-
   // Filter Submissions
   const filteredSubmissions = React.useMemo(() => {
     return submissions.filter((sub) => {
@@ -406,7 +405,7 @@ export default function SubmissionsPage() {
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6 max-w-[1440px] w-full mx-auto">
       {/* Page Header */}
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2.5">
@@ -415,7 +414,7 @@ export default function SubmissionsPage() {
               </h1>
               <Badge
                 variant="outline"
-                className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 gap-1 text-xs"
+                className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 gap-1.5 text-xs py-0.5 px-2 rounded-full font-medium"
               >
                 <TrendingUpIcon className="size-3" />
                 Application tracker
@@ -427,14 +426,19 @@ export default function SubmissionsPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" render={<Link href="/dashboard/email-confirmations" />} className="text-xs gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              render={<Link href="/dashboard/email-confirmations" />}
+              className="h-9 text-xs gap-1.5 rounded-lg border-border/70 hover:bg-muted/50 cursor-pointer"
+            >
               <MailIcon className="size-3.5" /> Email confirmations
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={handleCopyStandupReport}
-              className="text-xs gap-1.5 cursor-pointer hover:border-primary/50"
+              className="h-9 text-xs gap-1.5 cursor-pointer rounded-lg border-border/70 hover:bg-muted/50"
             >
               {copiedReport ? (
                 <CheckIcon className="size-3.5 text-emerald-600" />
@@ -448,7 +452,7 @@ export default function SubmissionsPage() {
               variant="outline"
               size="sm"
               onClick={handleExportCSV}
-              className="text-xs gap-1.5 cursor-pointer hover:border-primary/50"
+              className="h-9 text-xs gap-1.5 cursor-pointer rounded-lg border-border/70 hover:bg-muted/50"
             >
               <DownloadIcon className="size-3.5" />
               Export to Excel (CSV)
@@ -459,7 +463,7 @@ export default function SubmissionsPage() {
               size="sm"
               onClick={loadData}
               disabled={loading}
-              className="text-xs gap-1.5 cursor-pointer"
+              className="h-9 text-xs gap-1.5 cursor-pointer rounded-lg border-border/70 hover:bg-muted/50"
             >
               <RefreshCwIcon
                 className={`size-3.5 ${loading ? "animate-spin" : ""}`}
@@ -470,7 +474,7 @@ export default function SubmissionsPage() {
             <Link href="/dashboard/submissions/new">
               <Button
                 size="sm"
-                className="text-xs gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer shadow-xs"
+                className="h-9 px-3.5 text-xs gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer rounded-lg shadow-xs hover:shadow transition-all font-semibold"
               >
                 <PlusIcon className="size-3.5" />
                 New Submission
@@ -479,65 +483,126 @@ export default function SubmissionsPage() {
           </div>
         </div>
 
-        <section aria-label="Application metrics" className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border/60 bg-border/60 md:grid-cols-5">
+        {/* 5 Elevated Metric Cards */}
+        <section aria-label="Application metrics" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {[
-            {label:'Application records',value:stats.total,note:'Includes unsubmitted drafts',icon:SendIcon},
-            {label:'Active Interviews',value:stats.interviews,note:'Scheduled · Round 1 · Round 2',icon:CalendarIcon},
-            {label:'Client Review',value:stats.clientReview,note:'With end-client managers',icon:Building2Icon},
-            {label:'Offers',value:stats.offers,note:'Received & in negotiation',icon:SparklesIcon},
-            {label:'Duplicate Alerts',value:stats.duplicates,note:'30-day application safeguard',icon:AlertTriangleIcon},
-          ].map((metric,index)=><div key={metric.label} className={`bg-card p-4 ${index===4?'col-span-2 md:col-span-1':''}`}><p className="flex items-center justify-between gap-2 text-[11px] font-medium text-muted-foreground">{metric.label}<metric.icon className={`size-3.5 ${index===4&&metric.value?'text-amber-600':'text-muted-foreground'}`}/></p><p className="mt-2 text-[28px] font-semibold leading-none tracking-tight tabular-nums">{loading?'—':metric.value}</p><p className="mt-2 text-[10px] text-muted-foreground">{metric.note}</p></div>)}
+            {
+              label: "Application records",
+              value: stats.total,
+              note: "Includes unsubmitted drafts",
+              icon: SendIcon,
+              color: "text-primary bg-primary/10 border-primary/20",
+            },
+            {
+              label: "Active Interviews",
+              value: stats.interviews,
+              note: "Scheduled · Round 1 · Round 2",
+              icon: CalendarIcon,
+              color: "text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/20",
+            },
+            {
+              label: "Client Review",
+              value: stats.clientReview,
+              note: "With end-client managers",
+              icon: Building2Icon,
+              color: "text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 border-indigo-500/20",
+            },
+            {
+              label: "Offers",
+              value: stats.offers,
+              note: "Received & in negotiation",
+              icon: SparklesIcon,
+              color: "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+            },
+            {
+              label: "Duplicate Alerts",
+              value: stats.duplicates,
+              note: "30-day application safeguard",
+              icon: AlertTriangleIcon,
+              color: stats.duplicates
+                ? "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20"
+                : "text-muted-foreground bg-muted border-border/60",
+            },
+          ].map((metric) => (
+            <div
+              key={metric.label}
+              className="p-4 rounded-2xl border border-border/70 bg-card shadow-xs hover:border-border transition-all flex flex-col justify-between"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  {metric.label}
+                </span>
+                <div className={`size-7 rounded-lg flex items-center justify-center border shadow-2xs ${metric.color}`}>
+                  <metric.icon className="size-3.5" />
+                </div>
+              </div>
+              <div className="mt-2.5">
+                <p className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-mono tabular-nums leading-none">
+                  {loading ? "—" : metric.value}
+                </p>
+                <p className="mt-1.5 text-[10px] text-muted-foreground line-clamp-1">{metric.note}</p>
+              </div>
+            </div>
+          ))}
         </section>
       </div>
-      {loadError&&<WorkspaceError message={loadError}><Button variant="outline" className="mt-2" onClick={()=>void loadData()}>Try again</Button></WorkspaceError>}
+      {loadError && (
+        <WorkspaceError message={loadError}>
+          <Button variant="outline" className="mt-2 text-xs" onClick={() => void loadData()}>
+            Try again
+          </Button>
+        </WorkspaceError>
+      )}
 
       {/* FILTER & PIPELINE TABS TOOLBAR */}
       <div className="flex flex-col gap-3">
         {/* Status Pipeline Pills */}
-        <div className="flex flex-wrap items-center gap-1.5 border-b pb-3">
-          <span className="text-xs font-medium text-muted-foreground mr-1 flex items-center gap-1">
-            <FilterIcon className="size-3" />
+        <div className="flex flex-wrap items-center gap-1.5 pb-1">
+          <span className="text-xs font-semibold text-muted-foreground mr-1 flex items-center gap-1.5">
+            <FilterIcon className="size-3.5 text-primary" />
             Stage:
           </span>
-          {[
-            { id: "all", label: "All stages" },
-            { id: "interviews", label: "Interviews" },
-            { id: "Submitted_to_Client", label: "Client Review" },
-            { id: "Vendor_Screening", label: `Vendor Screening` },
-            { id: "Applied", label: `Applied` },
-            { id: "offers", label: "Offers" },
-            { id: "active", label: `All Active` },
-            { id: "Rejected", label: `Rejected` },
-          ].map((tab) => {
-            const isSelected = selectedStatusTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                aria-pressed={isSelected}
-                type="button"
-                onClick={() => setSelectedStatusTab(tab.id)}
-                className={`px-3 py-1.5 text-xs rounded-lg border transition-colors cursor-pointer font-medium ${
-                  isSelected
-                    ? "bg-foreground text-background border-foreground shadow-xs"
-                    : "bg-muted/40 hover:bg-muted text-foreground border-border/60"
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+          <div className="inline-flex flex-wrap items-center p-1 rounded-xl bg-muted/40 border border-border/60 gap-1">
+            {[
+              { id: "all", label: "All stages" },
+              { id: "interviews", label: "Interviews" },
+              { id: "Submitted_to_Client", label: "Client Review" },
+              { id: "Vendor_Screening", label: "Vendor Screening" },
+              { id: "Applied", label: "Applied" },
+              { id: "offers", label: "Offers" },
+              { id: "active", label: "All Active" },
+              { id: "Rejected", label: "Rejected" },
+            ].map((tab) => {
+              const isSelected = selectedStatusTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  aria-pressed={isSelected}
+                  type="button"
+                  onClick={() => setSelectedStatusTab(tab.id)}
+                  className={`px-3 py-1.5 text-xs rounded-lg transition-all duration-150 cursor-pointer font-medium ${
+                    isSelected
+                      ? "bg-background text-foreground shadow-xs font-semibold ring-1 ring-border/60"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Search & Select dropdowns */}
         <div className="flex flex-col sm:flex-row items-center gap-3">
           <div className="relative flex-1 w-full">
-            <SearchIcon className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
             <Input
               aria-label="Search submissions"
               placeholder="Search company, role, vendor or notes…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 h-8 text-xs bg-background"
+              className="pl-9 h-9.5 text-xs bg-background rounded-xl border-border/70 shadow-2xs focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:border-primary"
             />
           </div>
 
@@ -549,63 +614,186 @@ export default function SubmissionsPage() {
               value={selectedPortalFilter}
               onValueChange={(val) => setSelectedPortalFilter(val ?? "all")}
             >
-              <SelectTrigger aria-label="Filter by portal" className="h-8 text-xs w-[140px] bg-background">
-                <SelectValue>{selectedPortalFilter==='all'?'All portals':portalOptions.find(([value])=>value===selectedPortalFilter)?.[1]||selectedPortalFilter}</SelectValue>
+              <SelectTrigger aria-label="Filter by portal" className="h-9.5 text-xs w-[140px] bg-background rounded-xl border-border/70 shadow-2xs">
+                <SelectValue>{selectedPortalFilter === 'all' ? 'All portals' : portalOptions.find(([value]) => value === selectedPortalFilter)?.[1] || selectedPortalFilter}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all" className="text-xs">
                   All Portals
                 </SelectItem>
-                {portalOptions.map(([value,label]) => <SelectItem key={value} value={value} className="text-xs">{label}</SelectItem>)}
+                {portalOptions.map(([value, label]) => (
+                  <SelectItem key={value} value={value} className="text-xs">
+                    {label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
         </div>
       </div>
 
-      <section aria-label="Application date filters" className="rounded-xl border border-border/60 bg-card p-3 space-y-3">
-        <p className="text-xs font-medium text-muted-foreground">Application date · Counts and exports follow your filters</p>
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="text-sm">From date<Input aria-label="From application date" type="date" value={dateFrom} max={dateTo || undefined} onChange={e => setDateFrom(e.target.value)}/></label>
-          <label className="text-sm">To date<Input aria-label="To application date" type="date" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)}/></label>
-          {([{id:'today',label:'Today'},{id:'week',label:'Last 7 days'},{id:'month',label:'This month'}] as const).map(preset => <Button key={preset.id} variant="outline" onClick={() => { const range = submissionDatePreset(preset.id); setDateFrom(range.from); setDateTo(range.to); }}>{preset.label}</Button>)}
-          <Button variant="ghost" onClick={() => {setDateFrom('');setDateTo('');setSearchQuery('');setSelectedCandidateFilter('all');setSelectedPortalFilter('all');setSelectedStatusTab('all');}}>Clear filters</Button>
+      {/* Application date filters card */}
+      <section aria-label="Application date filters" className="rounded-2xl border border-border/70 bg-card p-4 space-y-3 shadow-xs">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+            <CalendarIcon className="size-3.5 text-primary" />
+            Application date · Counts and exports follow your filters
+          </p>
         </div>
-        {dateFrom && dateTo && dateFrom > dateTo && <p role="alert" className="text-sm text-destructive">From date must be on or before To date.</p>}
-        <p role="status" className="text-sm"><strong>{filteredSubmissions.length}</strong> matching applications across <strong>{dailyCounts.length}</strong> application dates.</p>
-        <details><summary className="text-xs font-medium text-muted-foreground cursor-pointer">Applications by date · {dailyCounts.length} dates</summary><div className="mt-3 max-h-60 overflow-auto">
-          {dailyCounts.length ? <table className="w-full text-sm"><caption className="sr-only">Daily application counts for the selected filters</caption><thead><tr className="border-b"><th className="p-2 text-left">Application date</th><th className="p-2 text-right">Application records</th></tr></thead><tbody>{dailyCounts.map(day => <tr key={day.date} className="border-b"><td className="p-2"><button type="button" className="underline" aria-label={`Show applications on ${day.date}`} onClick={() => {setDateFrom(day.date);setDateTo(day.date);}}>{day.date}</button></td><td className="p-2 text-right">{day.count}</td></tr>)}</tbody></table> : <p className="text-sm text-muted-foreground">No dated applications match these filters.</p>}
+        <div className="flex flex-wrap items-end gap-2.5">
+          <label className="text-xs font-medium text-foreground space-y-1">
+            <span className="block">From date</span>
+            <Input
+              aria-label="From application date"
+              type="date"
+              value={dateFrom}
+              max={dateTo || undefined}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="h-9 text-xs rounded-lg bg-background border-border/70 shadow-2xs"
+            />
+          </label>
+          <label className="text-xs font-medium text-foreground space-y-1">
+            <span className="block">To date</span>
+            <Input
+              aria-label="To application date"
+              type="date"
+              value={dateTo}
+              min={dateFrom || undefined}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="h-9 text-xs rounded-lg bg-background border-border/70 shadow-2xs"
+            />
+          </label>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {([
+              { id: "today", label: "Today" },
+              { id: "week", label: "Last 7 days" },
+              { id: "month", label: "This month" },
+            ] as const).map((preset) => (
+              <Button
+                key={preset.id}
+                variant="outline"
+                size="sm"
+                className="h-9 rounded-lg text-xs font-medium border-border/70 hover:bg-muted/50 cursor-pointer"
+                onClick={() => {
+                  const range = submissionDatePreset(preset.id);
+                  setDateFrom(range.from);
+                  setDateTo(range.to);
+                }}
+              >
+                {preset.label}
+              </Button>
+            ))}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 cursor-pointer"
+              onClick={() => {
+                setDateFrom("");
+                setDateTo("");
+                setSearchQuery("");
+                setSelectedCandidateFilter("all");
+                setSelectedPortalFilter("all");
+                setSelectedStatusTab("all");
+              }}
+            >
+              Clear filters
+            </Button>
+          </div>
         </div>
-        </details>
-        {filteredSubmissions.some(row => !row.submission_date) && <p className="text-xs text-muted-foreground">Applications without a recorded date are included in the total only when no date filter is selected.</p>}
+
+        {dateFrom && dateTo && dateFrom > dateTo && (
+          <p role="alert" className="text-xs text-destructive rounded-lg border border-destructive/20 bg-destructive/10 p-2.5">
+            From date must be on or before To date.
+          </p>
+        )}
+
+        <div className="pt-2 border-t border-border/40 space-y-2">
+          <p role="status" className="text-xs text-muted-foreground">
+            <strong className="text-foreground font-semibold">{filteredSubmissions.length}</strong> matching applications across{" "}
+            <strong className="text-foreground font-semibold">{dailyCounts.length}</strong> application dates.
+          </p>
+          <details className="w-full">
+            <summary className="text-xs font-medium text-primary hover:underline cursor-pointer select-none">
+              Applications by date · {dailyCounts.length} dates
+            </summary>
+            <div className="mt-3 max-h-60 overflow-auto rounded-xl border border-border/60 bg-muted/20 p-2">
+              {dailyCounts.length ? (
+                <table className="w-full text-xs">
+                  <caption className="sr-only">Daily application counts for the selected filters</caption>
+                  <thead>
+                    <tr className="border-b border-border/60 text-muted-foreground">
+                      <th className="p-2 text-left font-semibold">Application date</th>
+                      <th className="p-2 text-right font-semibold">Application records</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/40">
+                    {dailyCounts.map((day) => (
+                      <tr key={day.date} className="hover:bg-muted/30">
+                        <td className="p-2 font-mono text-xs">
+                          <button
+                            type="button"
+                            className="text-primary hover:underline font-medium cursor-pointer"
+                            aria-label={`Show applications on ${day.date}`}
+                            onClick={() => {
+                              setDateFrom(day.date);
+                              setDateTo(day.date);
+                            }}
+                          >
+                            {day.date}
+                          </button>
+                        </td>
+                        <td className="p-2 text-right font-mono font-semibold">{day.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-xs text-muted-foreground p-2">No dated applications match these filters.</p>
+              )}
+            </div>
+          </details>
+        </div>
+        {filteredSubmissions.some((row) => !row.submission_date) && (
+          <p className="text-[11px] text-muted-foreground">
+            Applications without a recorded date are included in the total only when no date filter is selected.
+          </p>
+        )}
       </section>
 
       {/* THE CENTRAL EXCEL-REPLACEMENT SUBMISSIONS TABLE */}
-      <div className="rounded-xl border bg-card shadow-xs overflow-hidden">
-        <div className="p-3.5 border-b bg-muted/20 flex items-center justify-between text-xs text-muted-foreground">
+      <div className="rounded-2xl border border-border/70 bg-card shadow-xs overflow-hidden">
+        <div className="p-3.5 border-b border-border/60 bg-muted/20 flex items-center justify-between text-xs text-muted-foreground">
           <div>
-            Showing <strong className="text-foreground">{filteredSubmissions.length}</strong> of{" "}
+            Showing <strong className="text-foreground font-semibold">{filteredSubmissions.length}</strong> of{" "}
             <strong>{submissions.length}</strong> submissions
           </div>
-          <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={showDetails} onChange={event=>setShowDetails(event.target.checked)}/>Show vendor, rate and notes</label>
+          <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showDetails}
+              onChange={(event) => setShowDetails(event.target.checked)}
+              className="rounded border-border text-primary focus:ring-primary/20"
+            />
+            Show vendor, rate and notes
+          </label>
         </div>
 
         <div className="overflow-x-auto">
-          <Table className={`submissions-table min-w-[1250px] ${showDetails?'show-details':''}`}>
-            <TableHeader className="bg-muted/40">
+          <Table className={`submissions-table min-w-[1250px] ${showDetails ? "show-details" : ""}`}>
+            <TableHeader className="bg-muted/40 border-b border-border/60">
               <TableRow>
-                <TableHead className="w-[180px]">Candidate</TableHead>
-                <TableHead className="w-[200px]">End Client & Role</TableHead>
-                <TableHead className="min-w-[220px]">Applied resume & answers</TableHead>
-                <TableHead className="w-[180px]">Vendor & Recruiter</TableHead>
-                <TableHead className="w-[110px]">Rate</TableHead>
-                <TableHead className="w-[110px]">Date</TableHead>
-                <TableHead className="min-w-[220px]">Recruiting stage & capture</TableHead>
-                <TableHead className="w-[220px]">Interview / Schedule / Notes</TableHead>
-                <TableHead className="w-[90px] text-right">Actions</TableHead>
+                <TableHead className="w-[180px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Candidate</TableHead>
+                <TableHead className="w-[200px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">End Client & Role</TableHead>
+                <TableHead className="min-w-[220px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Applied resume & answers</TableHead>
+                <TableHead className="w-[180px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Vendor & Recruiter</TableHead>
+                <TableHead className="w-[110px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Rate</TableHead>
+                <TableHead className="w-[110px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Date</TableHead>
+                <TableHead className="min-w-[220px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Recruiting stage & capture</TableHead>
+                <TableHead className="w-[220px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Interview / Schedule / Notes</TableHead>
+                <TableHead className="w-[90px] text-right text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Actions</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody className="divide-y divide-border/50">
               {loading ? (
                 <TableRow>
                   <TableCell
@@ -632,7 +820,7 @@ export default function SubmissionsPage() {
                           setSearchQuery("");
                           setSelectedCandidateFilter("all");
                         }}
-                        className="text-xs mt-1"
+                        className="text-xs mt-1 cursor-pointer"
                       >
                         Reset Filters
                       </Button>
@@ -647,30 +835,39 @@ export default function SubmissionsPage() {
                     sub.candidate?.visa_status || "Not recorded";
 
                   return (
-                    <TableRow key={sub.id} className="hover:bg-muted/30">
+                    <TableRow key={sub.id} className="hover:bg-muted/30 transition-colors">
                       {/* Candidate Column */}
-                      <TableCell className="align-top py-3">
-                        <div className="font-semibold text-foreground text-xs">
-                          {candidateName}
-                        </div>
-                        <div className="flex items-center gap-1 mt-1">
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
-                          >
-                            {visaStatus}
-                          </Badge>
-                          <span className="text-[10px] text-muted-foreground truncate max-w-[90px]">
-                            {sub.candidate?.target_job_titles || "Not recorded"}
-                          </span>
+                      <TableCell className="align-top py-3.5">
+                        <div className="flex items-start gap-2.5">
+                          <div className="size-8 rounded-lg bg-gradient-to-br from-primary/15 via-primary/5 to-transparent text-primary font-bold text-xs flex items-center justify-center border border-primary/20 shadow-2xs shrink-0 mt-0.5">
+                            {candidateName.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-semibold text-foreground text-xs leading-snug">
+                              {candidateName}
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 font-medium"
+                              >
+                                {visaStatus}
+                              </Badge>
+                              <span className="text-[10px] text-muted-foreground truncate max-w-[110px]">
+                                {sub.candidate?.target_job_titles || "Not recorded"}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </TableCell>
 
                       {/* Company & Role */}
-                      <TableCell className="align-top py-3">
+                      <TableCell className="align-top py-3.5">
                         <div className="flex items-center gap-1.5 font-medium text-foreground text-xs">
-                          <Building2Icon className="size-3 text-primary shrink-0" />
-                          <span>{sub.company_name}</span>
+                          <div className="size-5 rounded flex items-center justify-center bg-primary/10 text-primary shrink-0">
+                            <Building2Icon className="size-3" />
+                          </div>
+                          <span className="font-semibold">{sub.company_name}</span>
                           {sub.duplicate_flag && (
                             <Badge
                               variant="destructive"
@@ -684,11 +881,15 @@ export default function SubmissionsPage() {
                         <div className="text-[11px] text-muted-foreground font-medium mt-0.5 line-clamp-1">
                           {sub.job_title}
                         </div>
-                        {sub.capture_status === 'confirmed' && <Badge variant="outline" className="text-[9px] mt-1">Email confirmed</Badge>}
-                        <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+                        {sub.capture_status === "confirmed" && (
+                          <Badge variant="outline" className="text-[9px] mt-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+                            Email confirmed
+                          </Badge>
+                        )}
+                        <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted-foreground flex-wrap">
                           <Badge
                             variant="secondary"
-                            className="text-[9px] px-1.5 py-0 h-4"
+                            className="text-[9px] px-1.5 py-0 h-4 font-medium"
                           >
                             {sub.portal_source || "Not recorded"}
                           </Badge>
@@ -698,7 +899,7 @@ export default function SubmissionsPage() {
                               href={sub.job_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-primary hover:underline flex items-center gap-0.5"
+                              className="text-primary hover:underline flex items-center gap-0.5 font-medium"
                             >
                               Link <ExternalLinkIcon className="size-2.5" />
                             </a>
@@ -706,7 +907,8 @@ export default function SubmissionsPage() {
                         </div>
                       </TableCell>
 
-                      <TableCell className="align-top py-3">                        <AppliedResumeBadge
+                      <TableCell className="align-top py-3.5">
+                        <AppliedResumeBadge
                           submissionId={sub.id}
                           candidateName={candidateName}
                           companyName={sub.company_name}
@@ -717,7 +919,7 @@ export default function SubmissionsPage() {
                       </TableCell>
 
                       {/* Vendor & Recruiter */}
-                      <TableCell className="align-top py-3 text-xs">
+                      <TableCell className="align-top py-3.5 text-xs">
                         <div className="font-medium text-foreground">
                           {sub.vendor_company || "Not recorded"}
                         </div>
@@ -743,44 +945,46 @@ export default function SubmissionsPage() {
                       </TableCell>
 
                       {/* Rate */}
-                      <TableCell className="align-top py-3 text-xs">
-                        <div className="font-semibold text-foreground">
+                      <TableCell className="align-top py-3.5 text-xs">
+                        <div className="font-semibold text-foreground font-mono">
                           {sub.submitted_rate || "Not recorded"}
                         </div>
                         {sub.client_pay_rate && (
-                          <div className="text-[10px] text-muted-foreground">
+                          <div className="text-[10px] text-muted-foreground font-mono">
                             Client: {sub.client_pay_rate}
                           </div>
                         )}
                       </TableCell>
 
                       {/* Date */}
-                      <TableCell className="align-top py-3 text-xs text-muted-foreground whitespace-nowrap">
+                      <TableCell className="align-top py-3.5 text-xs text-muted-foreground whitespace-nowrap font-mono">
                         {sub.submission_date}
                       </TableCell>
 
                       {/* Status */}
-                      <TableCell className="align-top py-3">
+                      <TableCell className="align-top py-3.5">
                         <button
                           type="button"
                           onClick={() => {
                             setActiveSubmissionForStatus(sub);
                             setStatusDialogOpen(true);
                           }}
-                          className="cursor-pointer hover:opacity-80 transition-opacity text-left"
+                          className="cursor-pointer hover:opacity-80 transition-opacity text-left inline-block"
                           title="Click to update status stage"
                         >
                           {getStatusBadge(sub.status)}
                         </button>
-                        <div className="mt-3"><CaptureState state={sub.capture_status} confirmedAt={sub.email_confirmed_at}/></div>
+                        <div className="mt-2.5">
+                          <CaptureState state={sub.capture_status} confirmedAt={sub.email_confirmed_at}/>
+                        </div>
                       </TableCell>
 
                       {/* Interview & Notes */}
-                      <TableCell className="align-top py-3 text-xs">
+                      <TableCell className="align-top py-3.5 text-xs">
                         {sub.interview_time ? (
-                          <div className="p-2 rounded-md border border-purple-500/20 bg-purple-500/5 mb-1 text-[11px]">
-                            <div className="flex items-center gap-1 text-purple-700 dark:text-purple-300 font-semibold">
-                              <CalendarIcon className="size-3" />
+                          <div className="p-2.5 rounded-xl border border-border/80 bg-muted/40 mb-1.5 text-xs shadow-2xs">
+                            <div className="flex items-center gap-1.5 text-foreground font-semibold">
+                              <CalendarIcon className="size-3.5 text-primary" />
                               {new Date(sub.interview_time).toLocaleDateString(undefined, {
                                 month: "short",
                                 day: "numeric",
@@ -791,7 +995,7 @@ export default function SubmissionsPage() {
                                 minute: "2-digit",
                               })}
                             </div>
-                            <div className="flex items-center justify-between gap-1 text-purple-600/90 dark:text-purple-300/80 text-[10px] mt-0.5">
+                            <div className="flex items-center justify-between gap-1 text-muted-foreground text-[10px] mt-1">
                               <span>Mode: {sub.interview_mode || "Not recorded"}</span>
                               {sub.interview_meeting_link && (
                                 <a
@@ -819,17 +1023,17 @@ export default function SubmissionsPage() {
                       </TableCell>
 
                       {/* Actions */}
-                      <TableCell className="align-top py-3 text-right">
+                      <TableCell className="align-top py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1">
                           {canPushProfile && <SendToExtensionButton submission={sub} />}
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
                             onClick={() => {
                               setActiveSubmissionForStatus(sub);
                               setStatusDialogOpen(true);
                             }}
-                            className="h-7 text-[11px] px-2 cursor-pointer"
+                            className="h-7 text-[11px] px-2.5 rounded-lg border-border/70 hover:border-primary/40 hover:bg-primary/5 hover:text-primary transition-all cursor-pointer font-medium"
                             title="Update Status"
                           >
                             Stage
@@ -838,7 +1042,7 @@ export default function SubmissionsPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-7 w-7 p-0 cursor-pointer"
+                              className="size-7 p-0 rounded-lg cursor-pointer text-muted-foreground hover:text-foreground"
                               aria-label={`Edit ${sub.company_name} submission`}
                               title="Edit Submission"
                             >
@@ -849,7 +1053,7 @@ export default function SubmissionsPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDelete(sub.id, sub.company_name)}
-                            className="h-7 w-7 p-0 text-destructive/80 hover:text-destructive cursor-pointer"
+                            className="size-7 p-0 rounded-lg text-destructive/70 hover:text-destructive hover:bg-destructive/10 cursor-pointer"
                             aria-label={`Delete ${sub.company_name} submission`}
                             title="Delete"
                           >

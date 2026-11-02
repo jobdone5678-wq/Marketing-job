@@ -250,7 +250,7 @@ export default function VendorsPage() {
 
         {/* METRICS CARDS */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 pt-2">
-          <Card className="p-3.5">
+          <Card className="p-4 border bg-card text-card-foreground">
             <div className="text-xs text-muted-foreground font-medium flex items-center justify-between">
               <span>Prime Vendors</span>
               <Building2Icon className="size-3.5 text-primary" />
@@ -259,29 +259,29 @@ export default function VendorsPage() {
             <div className="text-[11px] text-muted-foreground mt-0.5">Active partners</div>
           </Card>
 
-          <Card className="p-3.5 border-emerald-500/20 bg-emerald-500/5">
-            <div className="text-xs text-emerald-700 dark:text-emerald-300 font-medium flex items-center justify-between">
+          <Card className="p-4 border bg-card text-card-foreground">
+            <div className="text-xs text-muted-foreground font-medium flex items-center justify-between">
               <span>Tier 1 Partners</span>
-              <ShieldCheckIcon className="size-3.5 text-emerald-600" />
+              <ShieldCheckIcon className="size-3.5 text-muted-foreground" />
             </div>
-            <div className="text-2xl font-bold mt-1 text-emerald-700 dark:text-emerald-300">
+            <div className="text-2xl font-bold mt-1 text-foreground tabular-nums">
               {stats.tier1}
             </div>
-            <div className="text-[11px] text-emerald-600/80 mt-0.5">Direct prime accounts</div>
+            <div className="text-xs text-muted-foreground mt-0.5">Direct prime accounts</div>
           </Card>
 
-          <Card className="p-3.5 border-blue-500/20 bg-blue-500/5">
-            <div className="text-xs text-blue-700 dark:text-blue-300 font-medium flex items-center justify-between">
+          <Card className="p-4 border bg-card text-card-foreground">
+            <div className="text-xs text-muted-foreground font-medium flex items-center justify-between">
               <span>Preferred Partners</span>
-              <StarIcon className="size-3.5 text-blue-600" />
+              <StarIcon className="size-3.5 text-muted-foreground" />
             </div>
-            <div className="text-2xl font-bold mt-1 text-blue-700 dark:text-blue-300">
+            <div className="text-2xl font-bold mt-1 text-foreground tabular-nums">
               {stats.preferred}
             </div>
-            <div className="text-[11px] text-blue-600/80 mt-0.5">High volume accounts</div>
+            <div className="text-xs text-muted-foreground mt-0.5">High volume accounts</div>
           </Card>
 
-          <Card className="p-3.5">
+          <Card className="p-4 border bg-card text-card-foreground">
             <div className="text-xs text-muted-foreground font-medium flex items-center justify-between">
               <span>Total Submissions</span>
               <SendIcon className="size-3.5 text-muted-foreground" />
@@ -290,26 +290,26 @@ export default function VendorsPage() {
             <div className="text-[11px] text-muted-foreground mt-0.5">Across all roles</div>
           </Card>
 
-          <Card className="p-3.5 border-purple-500/20 bg-purple-500/5">
-            <div className="text-xs text-purple-700 dark:text-purple-300 font-medium flex items-center justify-between">
+          <Card className="p-4 border bg-card text-card-foreground">
+            <div className="text-xs text-muted-foreground font-medium flex items-center justify-between">
               <span>Active Interviews</span>
-              <ClockIcon className="size-3.5 text-purple-600" />
+              <ClockIcon className="size-3.5 text-muted-foreground" />
             </div>
-            <div className="text-2xl font-bold mt-1 text-purple-700 dark:text-purple-300">
+            <div className="text-2xl font-bold mt-1 text-foreground tabular-nums">
               {stats.totalInterviews}
             </div>
-            <div className="text-[11px] text-purple-600/80 mt-0.5">In vendor pipeline</div>
+            <div className="text-xs text-muted-foreground mt-0.5">In vendor pipeline</div>
           </Card>
 
-          <Card className="p-3.5 border-emerald-500/20 bg-emerald-500/5">
-            <div className="text-xs text-emerald-700 dark:text-emerald-300 font-medium flex items-center justify-between">
+          <Card className="p-4 border bg-card text-card-foreground">
+            <div className="text-xs text-muted-foreground font-medium flex items-center justify-between">
               <span>Total Placements</span>
-              <CheckCircle2Icon className="size-3.5 text-emerald-600" />
+              <CheckCircle2Icon className="size-3.5 text-muted-foreground" />
             </div>
-            <div className="text-2xl font-bold mt-1 text-emerald-700 dark:text-emerald-300">
+            <div className="text-2xl font-bold mt-1 text-foreground tabular-nums">
               {stats.totalPlacements}
             </div>
-            <div className="text-[11px] text-emerald-600/80 mt-0.5">Successful closures</div>
+            <div className="text-xs text-muted-foreground mt-0.5">Successful closures</div>
           </Card>
         </div>
       </div>
@@ -543,7 +543,7 @@ export default function VendorsPage() {
                   <div className="text-[11px] text-muted-foreground">
                     <strong className="text-foreground">{vendor.total_submissions}</strong>{" "}
                     subs •{" "}
-                    <strong className="text-purple-600 dark:text-purple-400">
+                    <strong className="text-foreground">
                       {vendor.active_interviews}
                     </strong>{" "}
                     interviews

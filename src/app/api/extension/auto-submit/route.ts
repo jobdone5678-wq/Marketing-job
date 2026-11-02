@@ -55,16 +55,41 @@ export async function POST(request: Request) {
       if (!existing) throw new CaptureError('Application draft not found.', 404);
       result = { submission: existing, duplicate: existing.duplicate_flag };
     } else {
-      const { data, error } = await database().rpc('record_extension_submission', {
-        p_actor: actor.id, p_candidate: body.candidateId, p_event_key: body.eventKey, p_attempt: body.attempt,
-        p_fields: { companyName: body.companyName, jobTitle: body.jobTitle, jobUrl: safeJobUrl,
-          portalSource: body.portalSource || 'Browser Extension', jobLocation: body.jobLocation || null,
-          notes: body.manualAttestation?'Manual attestation: '+(body.notes||body.evidence||'Applicant reports submission'):body.notes || body.evidence || 'Application submission observed by browser extension',
-          appliedResume: finalAppliedResume },
-      });
-      if (error?.message.includes('Candidate access denied')) throw new CaptureError('Candidate is not assigned to this account.', 404);
-      checkDb(error);
-      result = data as typeof result;
+      // Fallback: look for an existing submission with the same candidate and matching job_url
+      // to prevent duplicates when the intent URL matching fails (e.g. unsupported ATS host).
+      let existingSubmission: any = null;
+      if (safeJobUrl) {
+        const { data: existingSubs, error: existingSubsError } = await database().from('job_submissions')
+          .select('*').eq('candidate_id', body.candidateId).eq('owner_id', actor.id)
+          .in('status', ['Draft', 'Applied']).order('created_at', { ascending: false }).limit(50);
+        checkDb(existingSubsError);
+        existingSubmission = (existingSubs || []).find(sub => {
+          const subKey = applicationUrlKey(sub.job_url);
+          return subKey && subKey === safeJobUrl;
+        });
+      }
+
+      if (existingSubmission) {
+        // Update existing submission instead of creating a duplicate
+        const { error: updateError } = await database().from('job_submissions')
+          .update({ status: 'Applied', capture_status: 'submitted', notes: body.notes || body.evidence || existingSubmission.notes })
+          .eq('id', existingSubmission.id);
+        checkDb(updateError);
+        existingSubmission.status = 'Applied';
+        existingSubmission.capture_status = 'submitted';
+        result = { submission: existingSubmission, duplicate: false, replayed: true };
+      } else {
+        const { data, error } = await database().rpc('record_extension_submission', {
+          p_actor: actor.id, p_candidate: body.candidateId, p_event_key: body.eventKey, p_attempt: body.attempt,
+          p_fields: { companyName: body.companyName, jobTitle: body.jobTitle, jobUrl: safeJobUrl,
+            portalSource: body.portalSource || 'Browser Extension', jobLocation: body.jobLocation || null,
+            notes: body.manualAttestation?'Manual attestation: '+(body.notes||body.evidence||'Applicant reports submission'):body.notes || body.evidence || 'Application submission observed by browser extension',
+            appliedResume: finalAppliedResume },
+        });
+        if (error?.message.includes('Candidate access denied')) throw new CaptureError('Candidate is not assigned to this account.', 404);
+        checkDb(error);
+        result = data as typeof result;
+      }
     }
 
     if (finalAppliedResume) {

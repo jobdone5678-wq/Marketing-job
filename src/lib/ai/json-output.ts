@@ -2,9 +2,17 @@
 // accepting a partial nested object from a truncated response.
 export function parseAIJSON(content:string,finishReason?:string|null):unknown {
  if(finishReason==='length')throw new SyntaxError('AI JSON output was truncated.');
- const source=content.trim().replace(/^\uFEFF/,'').trim();
+ let source=content.trim().replace(/^\uFEFF/,'').trim();
  if(!source)throw new SyntaxError('AI JSON output was empty.');
  try{return JSON.parse(source);}catch{/* Check a single complete object in a formatting wrapper. */}
+ 
+ const fenceMatch = source.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+ if (fenceMatch) {
+  const fenced = fenceMatch[1].trim();
+  try { return JSON.parse(fenced); } catch {}
+  source = fenced;
+ }
+
  const stack:string[]=[];
  let start=-1,quoted=false,escaped=false,candidate:string|undefined;
  for(let index=0;index<source.length;index++){

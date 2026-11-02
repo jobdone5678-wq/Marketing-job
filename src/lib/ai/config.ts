@@ -16,8 +16,8 @@ export function getAIModel(explicitBaseURL?: string, explicitApiKey?: string){
 
   // Gemini mappings
   if (apiKey.startsWith('AIzaSy') || baseURL.includes('generativelanguage.googleapis.com')) {
-    if (!raw || raw === 'gpt-4o-mini' || raw === 'auto' || !raw.startsWith('gemini-')) {
-      return 'gemini-2.5-flash';
+    if (!raw || raw === 'gpt-4o-mini' || raw === 'auto' || !raw.startsWith('gemini-') || raw === 'gemini-2.5-flash') {
+      return 'gemini-2.0-flash';
     }
     return raw;
   }
