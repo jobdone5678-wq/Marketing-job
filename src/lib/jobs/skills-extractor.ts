@@ -133,6 +133,9 @@ const SKILL_DATABASE: { name: string; aliases: string[]; category: SkillCategory
   { name: 'PyTorch', aliases: ['torch'], category: 'Data, AI & Storage' },
   { name: 'TensorFlow', aliases: ['keras'], category: 'Data, AI & Storage' },
   { name: 'LLM & Generative AI', aliases: ['large language models', 'openai', 'langchain', 'vector database', 'rag'], category: 'Data, AI & Storage' },
+  { name: 'Agentic AI & AI Agents', aliases: ['agentic', 'ai agents', 'autonomous agents', 'multi-agent', 'langgraph', 'crewai', 'autogen', 'agent framework'], category: 'Data, AI & Storage' },
+  { name: 'Prompt Engineering', aliases: ['prompt design', 'prompt evaluation'], category: 'Data, AI & Storage' },
+  { name: 'Software Engineering', aliases: ['software development', 'software systems', 'software design'], category: 'Practices & Architecture' },
 
   // 6. Security & Compliance
   { name: 'US Government Work', aliases: ['us government', 'government work', 'dod', 'defense programs'], category: 'Security & Compliance' },
@@ -493,8 +496,7 @@ export function analyzeCandidateFit(
   const totalSkillsCount = extractedSkills.length || 1;
   const skillRatio = matchedSkills.length / totalSkillsCount;
   const reqMetRatio = requirements.filter((r) => r.status === 'met').length / (requirements.length || 1);
-  const calculatedScore = Math.min(98, Math.round((skillRatio * 0.65 + reqMetRatio * 0.35) * 100));
-  const finalScore = Math.max(35, calculatedScore);
+  const finalScore = Math.min(100, Math.round((skillRatio * 0.65 + reqMetRatio * 0.35) * 100));
 
   let verdict: CandidateFitAnalysis['verdict'] = 'Good Fit';
   if (finalScore >= 75) verdict = 'Strong Fit';

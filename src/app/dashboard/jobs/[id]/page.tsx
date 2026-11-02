@@ -633,50 +633,6 @@ export default function JobDetail({
                   </p>
                 </div>
 
-                {/* Real-time Candidate Match & Ground Truth Fit Card */}
-                {fitAnalysis && activeCandidate && (
-                  <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                          ATS Match Coverage
-                        </div>
-                        <div className="text-2xl font-black text-foreground">
-                          {fitAnalysis.matchScore}%
-                        </div>
-                      </div>
-                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-                        {fitAnalysis.verdict}
-                      </span>
-                    </div>
-
-                    <div className="space-y-1.5 pt-1 border-t border-emerald-500/20 text-xs">
-                      <div className="flex items-center justify-between text-muted-foreground">
-                        <span>Matched Skills:</span>
-                        <span className="font-bold text-foreground">{fitAnalysis.matchedSkills.length} of {structured?.skills.length || 0}</span>
-                      </div>
-                      {fitAnalysis.constraints.map((c, i) => (
-                        <div key={i} className="text-[11px] flex items-start gap-1.5 pt-1">
-                          {c.status === 'met' ? (
-                            <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                          ) : (
-                            <AlertCircleIcon className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
-                          )}
-                          <div>
-                            <span className="font-semibold text-foreground">{c.label}: </span>
-                            <span className="text-muted-foreground">{c.candidateFact}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="pt-1 text-[10px] text-muted-foreground leading-tight flex items-center gap-1 border-t border-emerald-500/20">
-                      <ShieldCheckIcon className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                      <span>Evidence verified against verified profile facts. Zero hallucination.</span>
-                    </div>
-                  </div>
-                )}
-
                 <Button
                   variant="outline"
                   className="w-full h-10 rounded-xl border-primary/25 bg-primary/5 hover:bg-primary/10 text-primary text-xs font-semibold shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-all"
