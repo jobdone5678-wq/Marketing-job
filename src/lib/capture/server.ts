@@ -1,7 +1,7 @@
 import {appliedResumeSchema,saveAppliedResume} from './applied-resume';
 import 'server-only';import {createHash} from 'node:crypto';import {database,checkDb,CaptureError,errorResponse} from '@/lib/db/admin';import {allowedCaptureUrl,validateObservation} from './validation';import {validateApplicationAnswers} from './snapshot';import {z} from 'zod';
 export const tokenHash=(value:string)=>createHash('sha256').update(value).digest('hex');
-export type ExtensionProfile = { id: string; status: string; role: 'client' | 'recruiter' | 'technical_recruiter' | 'super_admin' };
+export type ExtensionProfile = { id: string; status: string; role: 'client' | 'recruiter' | 'technical_recruiter' | 'super_admin' | 'job_seeker' };
 export async function extensionProfile(request: Request): Promise<ExtensionProfile> {
   const header = request.headers.get('authorization') || '';
   if (!/^Bearer [A-Za-z0-9_-]{40,100}$/.test(header)) throw new CaptureError('Extension authorization required.', 401);

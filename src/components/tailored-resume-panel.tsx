@@ -5,7 +5,16 @@ import {getCandidates} from '@/lib/candidates';
 import {Button} from '@/components/ui/button';
 import {WorkflowTaskStatus} from '@/components/workflow-task-status';
 import {ResumePreview} from '@/components/resume-preview';
-import type {AtsReport} from '../../browser-extension/resume-engine.js';
+export interface AtsReport {
+  score: number | null;
+  method: string;
+  matched: string[];
+  missing: string[];
+  requirements: any[];
+  checks: any[];
+  warnings: string[];
+  [key: string]: any;
+}
 type CandidateOption={id:string;full_name:string;provenance_status?:string};
 type Resume={id:string;candidate_id:string;job_id:string|null;brief_id:string|null;status:string;task_id:string;content:string;revision:number;reviewed_revision:number|null;stale:boolean;atsStale?:boolean;model:string|null;created_at?:string;data?:{sourceTitle?:string;ats?:AtsReport;facts?:{id:string;text:string;field:string}[];selectedFactIds?:string[]}};
 export function TailoredResumePanel({jobId,briefId,candidateId,candidateName,candidates}:{jobId?:string;briefId?:string;candidateId?:string;candidateName?:string;candidates?:CandidateOption[]}){
@@ -43,9 +52,9 @@ export function TailoredResumePanel({jobId,briefId,candidateId,candidateName,can
        <div><h4 className="font-medium">Supported requirements</h4><p>{current.data.ats.matched.join(', ')||'No supported requirements identified.'}</p></div>
        <div><h4 className="font-medium">Missing evidence</h4><p>{current.data.ats.missing.join(', ')||'No gaps identified in the extracted requirements.'}</p></div>
       </div>
-      <details><summary>Requirement evidence ({current.data.ats.requirements.length})</summary><ul className="mt-2 space-y-2">{current.data.ats.requirements.map(requirement=><li key={requirement.label}><strong>{requirement.label}</strong> — {requirement.matched?'Supported':'Evidence needed'}<p className="text-muted-foreground">JD: {requirement.source}</p>{requirement.evidence&&<p>Candidate evidence: {requirement.evidence}</p>}</li>)}</ul></details>
-      <div><h4 className="font-medium">Resume checks</h4><ul>{current.data.ats.checks.map(check=><li key={check.label}>{check.passed?'Pass':'Review'}: {check.label}</li>)}</ul></div>
-      <ul className="space-y-1 text-muted-foreground">{current.data.ats.warnings.map(warning=><li key={warning}>{warning}</li>)}</ul>
+      <details><summary>Requirement evidence ({current.data.ats.requirements.length})</summary><ul className="mt-2 space-y-2">{current.data.ats.requirements.map((requirement: any)=><li key={requirement.label}><strong>{requirement.label}</strong> — {requirement.matched?'Supported':'Evidence needed'}<p className="text-muted-foreground">JD: {requirement.source}</p>{requirement.evidence&&<p>Candidate evidence: {requirement.evidence}</p>}</li>)}</ul></details>
+      <div><h4 className="font-medium">Resume checks</h4><ul>{current.data.ats.checks.map((check: any)=><li key={check.label}>{check.passed?'Pass':'Review'}: {check.label}</li>)}</ul></div>
+      <ul className="space-y-1 text-muted-foreground">{current.data.ats.warnings.map((warning: any)=><li key={warning}>{warning}</li>)}</ul>
      </>}
    </section>
    <div className="flex items-center justify-between gap-3 flex-wrap">

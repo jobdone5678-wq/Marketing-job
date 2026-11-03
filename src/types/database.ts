@@ -1,4 +1,4 @@
-export type AppRole = 'super_admin' | 'recruiter' | 'technical_recruiter' | 'client';
+export type AppRole = 'super_admin' | 'recruiter' | 'technical_recruiter' | 'client' | 'job_seeker';
 export type AccountStatus = 'active' | 'pending' | 'rejected' | 'suspended';
 
 export type SubmissionStatus =

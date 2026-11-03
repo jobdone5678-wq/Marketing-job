@@ -14,7 +14,7 @@
     'React', 'Angular', 'Vue', 'Next.js', 'Node.js', 'Spring Boot', 'Django', 'Flask', 'FastAPI', '.NET',
     'SQL', 'PostgreSQL', 'MySQL', 'MongoDB', 'Redis', 'DynamoDB', 'Snowflake', 'Spark', 'Kafka',
     'AWS', 'Azure', 'GCP', 'Docker', 'Kubernetes', 'Terraform', 'Linux', 'Git', 'Jenkins', 'CI/CD',
-    'GraphQL', 'REST APIs', 'Microservices', 'HTML', 'CSS', 'Jest', 'JUnit', 'Selenium', 'Machine Learning',
+    'GraphQL', 'REST APIs', 'Microservices', 'HTML', 'CSS', 'Jest', 'JUnit', 'Selenium', 'Machine Learning', 'OpenAI Codex & Coding Agents', 'Claude Code', 'AI Model Evaluation', 'Prompt Evaluation & Debugging', 'LLM & Generative AI', 'Full Stack', 'Tailwind CSS',
     'Excel', 'Microsoft Office', 'Power BI', 'Tableau', 'Salesforce', 'SAP', 'QuickBooks', 'Accounting',
     'Payroll', 'Bookkeeping', 'Financial Reporting', 'Reconciliation', 'Accounts Payable', 'Accounts Receivable',
     'Project Management', 'Agile', 'Scrum', 'Jira', 'Customer Service', 'Customer Support', 'Sales', 'Marketing',
@@ -23,7 +23,7 @@
     'Active Directory', 'Networking', 'Troubleshooting', 'Hardware', 'Helpdesk', 'Technical Support', 'ITIL',
     'Nursing', 'Patient Care', 'CPR', 'HIPAA', 'Medical Coding', 'Logistics', 'Supply Chain', 'Inventory Management'
   ];
-  const aliases = {'AWS':['Amazon Web Services'],'GCP':['Google Cloud','Google Cloud Platform'],'React':['React.js','ReactJS'],'Node.js':['NodeJS'],'PostgreSQL':['Postgres'],'Kubernetes':['K8s'],'Excel':['Microsoft Excel'],'REST APIs':['RESTful APIs'],'Active Directory':['AD administration']};
+  const aliases = {'AWS':['Amazon Web Services'],'GCP':['Google Cloud','Google Cloud Platform'],'React':['React.js','ReactJS'],'Node.js':['NodeJS'],'PostgreSQL':['Postgres'],'Kubernetes':['K8s'],'Excel':['Microsoft Excel'],'REST APIs':['RESTful APIs'], 'OpenAI Codex & Coding Agents':['OpenAI Codex', 'Codex', 'Coding Agents'], 'Claude Code':['Claude', 'Anthropic Claude'], 'AI Model Evaluation':['Model Evaluation', 'AI Training'], 'Prompt Evaluation & Debugging':['Prompt Evaluation', 'Prompt Engineering'], 'LLM & Generative AI':['LLM', 'Generative AI', 'Large Language Models'], 'C':['C programming', 'C/C++'],'Active Directory':['AD administration']};
   function contains(source, term) {
     const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return new RegExp('(^|[^a-z0-9])' + escaped + '(?=$|[^a-z0-9+#])', 'i').test(source);

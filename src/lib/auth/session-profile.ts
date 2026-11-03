@@ -2,7 +2,7 @@ import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { AppRole, UserProfile } from "@/types/database";
 
 export function registrationRole(value: unknown): Exclude<AppRole, "super_admin"> | null {
-  return value === "recruiter" || value === "technical_recruiter" || value === "client" ? value : null;
+  return value === "recruiter" || value === "technical_recruiter" || value === "client" || value === "job_seeker" ? value : null;
 }
 
 export function roleLabel(value: unknown): string {
@@ -11,6 +11,7 @@ export function roleLabel(value: unknown): string {
     case "recruiter": return "Recruiter";
     case "technical_recruiter": return "Technical Recruiter";
     case "client": return "Candidate";
+    case "job_seeker": return "Job Seeker";
     default: return "Account role unavailable";
   }
 }
@@ -43,13 +44,16 @@ export async function ensureSessionProfile(
     full_name: details.fullName || user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split("@")[0] || "User",
     phone: details.phone || user.user_metadata?.phone || null,
     role,
-    status: role === "client" ? "active" : "pending",
+    status: (role === "client" || role === "job_seeker") ? "active" : "pending",
   }).select("*").single();
   if (error || !data) throw new Error("Unable to create your account profile. Please retry or contact an administrator.");
   return data as UserProfile;
 }
 
 export function authDestination(profile: UserProfile, requestedRole: AppRole | null, next = "/dashboard"): string {
+  if (profile.role === "job_seeker") {
+    return "/auth/jobseeker/connected";
+  }
   if (requestedRole && profile.role !== requestedRole) {
     return `/?${new URLSearchParams({ role_notice: "existing_role", current_role: profile.role, attempted_role: requestedRole })}`;
   }

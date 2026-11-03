@@ -1,5 +1,6 @@
 import {z} from 'zod';
-import {analyze,buildResume,normalizeCandidate,categorizeSkills,type JobInput} from '../../../browser-extension/resume-engine.js';
+import {analyze,buildResume,normalizeCandidate,categorizeSkills} from '../../../browser-extension/resume-engine.js';
+export interface JobInput { jobTitle?: string; companyName?: string; jobDescription?: string; jobUrl?: string; }
 
 export const EXTENSION_AI_VERSION='contextual-v1-no-target-line';
 export const extensionSelectionSchema=z.object({
