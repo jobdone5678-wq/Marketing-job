@@ -1,15 +1,18 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/client";
-import { CheckCircle2, Sparkles, ArrowRight, UploadCloud, XCircle } from "lucide-react";
+import { CheckCircle2, Sparkles, ArrowRight, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function JobseekerConnectedPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState<string>("");
   const [paired, setPaired] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState<number>(3);
 
   const supabase = useMemo(() => createClient(), []);
 
@@ -70,9 +73,32 @@ export default function JobseekerConnectedPage() {
     initPairing();
 
     return () => {
+      
       active = false;
     };
   }, [supabase]);
+
+  // Auto-redirect countdown to candidate dashboard once paired
+  useEffect(() => {
+    if (!paired) return;
+
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          router.push("/dashboard");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [paired, router]);
+
+  const handleGoToDashboard = () => {
+    router.push("/dashboard");
+  };
 
   const handleCloseTab = () => {
     if (typeof window !== "undefined") {
@@ -98,6 +124,11 @@ export default function JobseekerConnectedPage() {
           <p className="text-xs sm:text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
             Your NextKin applicant account is active. Your extension is now linked and ready to autofill job applications.
           </p>
+          {paired && (
+            <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+              Redirecting to candidate dashboard in {countdown}s...
+            </p>
+          )}
         </div>
 
         {errorMsg && (
@@ -112,7 +143,7 @@ export default function JobseekerConnectedPage() {
             <span>Next Steps on Your Job Application</span>
           </div>
           <ul className="text-xs text-muted-foreground space-y-1.5 pl-6 list-disc">
-            <li>Return to your job application tab (Greenhouse, Ashby, etc.).</li>
+            <li>Return to your job application tab (Greenhouse, Ashby, Keka, etc.).</li>
             <li>Click <strong>Autofill</strong> on the extension to apply with one click.</li>
             <li>Upload or update your resume anytime via the extension panel.</li>
           </ul>
@@ -120,11 +151,19 @@ export default function JobseekerConnectedPage() {
 
         <div className="flex flex-col sm:flex-row gap-3 pt-2">
           <Button
+            onClick={handleGoToDashboard}
+            className="flex-1 h-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs sm:text-sm shadow-md"
+          >
+            <LayoutDashboard className="size-4 mr-1.5" />
+            <span>Go to Candidate Dashboard</span>
+            <ArrowRight className="size-4 ml-1.5" />
+          </Button>
+          <Button
             onClick={handleCloseTab}
-            className="flex-1 h-11 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs sm:text-sm shadow-md"
+            variant="outline"
+            className="h-11 rounded-xl font-semibold text-xs sm:text-sm"
           >
             <span>Return to Job Application</span>
-            <ArrowRight className="size-4 ml-1.5" />
           </Button>
         </div>
       </div>

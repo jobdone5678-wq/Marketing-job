@@ -29,6 +29,7 @@ import {
   SparklesIcon,
   SlidersHorizontalIcon,
   LifeBuoyIcon,
+  FileSignatureIcon,
 } from "lucide-react"
 import { createClient } from "@/lib/client"
 import Link from "next/link"
@@ -58,6 +59,12 @@ const recruiterNavItems: NavItem[] = [
     title: "Job Submissions",
     url: "/dashboard/submissions",
     icon: <SendHorizontalIcon className="size-4 stroke-[1.8]" />,
+  },
+  {
+    id: "rtr",
+    title: "Right to Represent (RTR)",
+    url: "/dashboard/rtr",
+    icon: <FileSignatureIcon className="size-4 stroke-[1.8]" />,
   },
   {
     id: "placements",
@@ -97,6 +104,12 @@ const technicalRecruiterNavItems: NavItem[] = [
     title: "Job Submissions",
     url: "/dashboard/submissions",
     icon: <SendHorizontalIcon className="size-4 stroke-[1.8]" />,
+  },
+  {
+    id: "rtr",
+    title: "Right to Represent (RTR)",
+    url: "/dashboard/rtr",
+    icon: <FileSignatureIcon className="size-4 stroke-[1.8]" />,
   },
   {
     id: "placements",
@@ -149,6 +162,12 @@ const candidateNavItems: NavItem[] = [
     title: "My Applications",
     url: "/dashboard/submissions",
     icon: <SendHorizontalIcon className="size-4 stroke-[1.8]" />,
+  },
+  {
+    id: "rtr",
+    title: "My RTR Agreements",
+    url: "/dashboard/rtr",
+    icon: <FileSignatureIcon className="size-4 stroke-[1.8]" />,
   },
   {
     id: "email-confirmations",

@@ -13,6 +13,7 @@ import { SubmissionStatusDialog } from "@/components/submission-status-dialog";
 import { ApplicationAnswerSnapshot } from "@/components/application-answer-snapshot";
 import {CaptureState} from "@/components/application-evidence";
 import { AppliedResumeBadge } from "@/components/applied-resume-badge";
+import { RTRBadge } from "@/components/rtr-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -298,6 +299,11 @@ export default function SubmissionsPage() {
       "Vendor Contact Email",
       "Vendor Contact Phone",
       "Submitted Rate",
+      "RTR Status",
+      "RTR Type",
+      "RTR Vendor",
+      "RTR Date",
+      "RTR Expiration",
       "Status",
       "Duplicate Flag",
       "Interview Date/Time",
@@ -320,6 +326,11 @@ export default function SubmissionsPage() {
       `"${s.vendor_contact_email || ""}"`,
       `"${s.vendor_contact_phone || ""}"`,
       `"${s.submitted_rate || ""}"`,
+      `"${s.rtr_document?.rtr_status || ""}"`,
+      `"${s.rtr_document?.rtr_type || ""}"`,
+      `"${s.rtr_document?.vendor_name || ""}"`,
+      `"${s.rtr_document?.rtr_date || ""}"`,
+      `"${s.rtr_document?.expiration_date || ""}"`,
       `"${s.status}"`,
       `"${s.duplicate_flag ? "YES" : "NO"}"`,
       `"${s.interview_time || ""}"`,
@@ -372,6 +383,9 @@ export default function SubmissionsPage() {
     filteredSubmissions.forEach((s, idx) => {
       report += `${idx + 1}. [${s.status.replace(/_/g, " ")}] ${s.candidate?.full_name || "Not recorded"} → ${s.company_name} (${s.job_title})\n`;
       report += `   Vendor: ${s.vendor_company || "Direct"} | Rate: ${s.submitted_rate || "Not recorded"}\n`;
+      if (s.rtr_document) {
+        report += `   RTR: ${s.rtr_document.rtr_type} - ${s.rtr_document.rtr_status} (${s.rtr_document.vendor_name || 'Direct'}) | Date: ${s.rtr_document.rtr_date}\n`;
+      }
       if (s.interview_time) {
         report += `   Interview: ${new Date(s.interview_time).toLocaleString()} (${s.interview_mode || "Not recorded"})\n`;
       }
@@ -785,6 +799,7 @@ export default function SubmissionsPage() {
                 <TableHead className="w-[180px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Candidate</TableHead>
                 <TableHead className="w-[200px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">End Client & Role</TableHead>
                 <TableHead className="min-w-[220px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Applied resume & answers</TableHead>
+                <TableHead className="w-[160px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">RTR Document</TableHead>
                 <TableHead className="w-[180px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Vendor & Recruiter</TableHead>
                 <TableHead className="w-[110px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Rate</TableHead>
                 <TableHead className="w-[110px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Date</TableHead>
@@ -916,6 +931,16 @@ export default function SubmissionsPage() {
                           appliedResume={sub.applied_resume}
                         />
                         <ApplicationAnswerSnapshot submissionId={sub.id} />
+                      </TableCell>
+
+                      {/* RTR Document */}
+                      <TableCell className="align-top py-3.5">
+                        <RTRBadge
+                          rtrDocument={sub.rtr_document}
+                          candidateName={candidateName}
+                          companyName={sub.company_name}
+                          jobTitle={sub.job_title}
+                        />
                       </TableCell>
 
                       {/* Vendor & Recruiter */}

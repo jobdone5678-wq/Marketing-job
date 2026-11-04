@@ -28,7 +28,7 @@ export async function candidateJobApplications(candidateId:string|null|undefined
   let provider=source?.provider||record.portal_source?.toLowerCase()||'';
   if(!['greenhouse','ashby','lever','smartrecruiters','breezy','remoteok'].includes(provider)){
    let host='';try{host=new URL(record.job_url||job?.application_url||'').hostname;}catch{}
-   provider=host.includes('greenhouse.io')?'greenhouse':host.includes('ashbyhq.com')?'ashby':host.includes('lever.co')?'lever':host.includes('smartrecruiters.com')?'smartrecruiters':host.includes('breezy.hr')?'breezy':host.includes('remoteok.com')?'remoteok':'unknown';
+   provider=host.includes('greenhouse.io')?'greenhouse':host.includes('ashbyhq.com')?'ashby':host.includes('lever.co')?'lever':host.includes('smartrecruiters.com')?'smartrecruiters':host.includes('breezy.hr')?'breezy':host.includes('remoteok.com')?'remoteok':(record.portal_source||'external');
   }
   applications.push({id:record.id,candidateId:record.candidate_id,jobId:id,title:record.job_title,company:record.company_name,location:record.job_location||job?.location||null,provider,employmentType:job?.employment_type||'unknown',jobUrl:record.job_url||job?.application_url||null,status:record.status,captureStatus:record.capture_status,appliedAt:record.submission_date,jobState:job?.state||null});
  }

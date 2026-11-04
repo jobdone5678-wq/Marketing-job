@@ -21,9 +21,9 @@
     'SEO', 'Google Analytics', 'Content Writing', 'Copywriting', 'Recruiting', 'Talent Acquisition', 'HRIS',
     'Figma', 'Photoshop', 'UX Design', 'User Research', 'Product Management', 'Data Analysis', 'Data Pipelines',
     'Active Directory', 'Networking', 'Troubleshooting', 'Hardware', 'Helpdesk', 'Technical Support', 'ITIL',
-    'Nursing', 'Patient Care', 'CPR', 'HIPAA', 'Medical Coding', 'Logistics', 'Supply Chain', 'Inventory Management'
+    'Civil Engineering', 'Structural Engineering', 'Architectural Design', 'Construction Management', 'Contractor Management', 'Site Supervision', 'Vendor Management', 'Safety Compliance', 'Quality Control', 'Quality Assurance', 'Facility Operations', 'Budget Management', 'AutoCAD', 'Revit', 'BIM', 'Risk Management', 'Nursing', 'Patient Care', 'CPR', 'HIPAA', 'Medical Coding', 'Logistics', 'Supply Chain', 'Inventory Management'
   ];
-  const aliases = {'AWS':['Amazon Web Services'],'GCP':['Google Cloud','Google Cloud Platform'],'React':['React.js','ReactJS'],'Node.js':['NodeJS'],'PostgreSQL':['Postgres'],'Kubernetes':['K8s'],'Excel':['Microsoft Excel'],'REST APIs':['RESTful APIs'], 'OpenAI Codex & Coding Agents':['OpenAI Codex', 'Codex', 'Coding Agents'], 'Claude Code':['Claude', 'Anthropic Claude'], 'AI Model Evaluation':['Model Evaluation', 'AI Training'], 'Prompt Evaluation & Debugging':['Prompt Evaluation', 'Prompt Engineering'], 'LLM & Generative AI':['LLM', 'Generative AI', 'Large Language Models'], 'C':['C programming', 'C/C++'],'Active Directory':['AD administration']};
+  const aliases = {'Civil Engineering':['Civil','Civil Works','Civil Construction'],'Structural Engineering':['Structural','Structures','Structural Trades'],'Architectural Design':['Architectural','Architectural Fit Out'],'Construction Management':['Construction','Construction Delivery','Site Construction'],'Contractor Management':['General Contractors','Contractors','Subcontractors','Service Providers'],'Site Supervision':['Site Lead','On-site Coverage','Site Management'],'Safety Compliance':['Safety','Site Safety'],'Quality Assurance':['Quality','QA/QC'],'Facility Operations':['Facilities','Data Center Delivery','Data Centers'],'AWS':['Amazon Web Services'],'GCP':['Google Cloud','Google Cloud Platform'],'React':['React.js','ReactJS'],'Node.js':['NodeJS'],'PostgreSQL':['Postgres'],'Kubernetes':['K8s'],'Excel':['Microsoft Excel'],'REST APIs':['RESTful APIs'], 'OpenAI Codex & Coding Agents':['OpenAI Codex', 'Codex', 'Coding Agents'], 'Claude Code':['Claude', 'Anthropic Claude'], 'AI Model Evaluation':['Model Evaluation', 'AI Training'], 'Prompt Evaluation & Debugging':['Prompt Evaluation', 'Prompt Engineering'], 'LLM & Generative AI':['LLM', 'Generative AI', 'Large Language Models'], 'C':['C programming', 'C/C++'],'Active Directory':['AD administration']};
   function contains(source, term) {
     const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return new RegExp('(^|[^a-z0-9])' + escaped + '(?=$|[^a-z0-9+#])', 'i').test(source);
@@ -200,8 +200,13 @@
       const keyTokens = tokens(clause);
       const coveredTokens = new Set(result.requirements.filter(row => row.source === clause).flatMap(row => tokens(row.label)));
       if (keyTokens.length && keyTokens.every(token => coveredTokens.has(token))) continue;
-      const proof = evidence.find(line => !negated(line) && keyTokens.length >= 2 && keyTokens.filter(word => contains(line,word)).length / keyTokens.length >= 0.85);
-      add(clause,clause,!!proof,proof || '', 'qualification');
+      const allText = evidence.join(' ');
+      const matchedTokens = keyTokens.filter(word => contains(allText, word));
+      const substantialAcrossResume = keyTokens.length >= 2 && (matchedTokens.length / keyTokens.length >= 0.55);
+      const lineProof = evidence.find(line => !negated(line) && keyTokens.length >= 2 && keyTokens.filter(word => contains(line,word)).length / keyTokens.length >= 0.7);
+      const proof = lineProof || (substantialAcrossResume ? evidence.find(line => !negated(line) && keyTokens.some(w => contains(line, w))) : null);
+      const displayLabel = clause.length > 90 ? clause.slice(0, 87).replace(/\s+\S*$/, '') + '…' : clause;
+      add(displayLabel,clause,!!proof,proof || '', 'qualification');
     }
     const total = result.requirements.reduce((sum,row) => sum + row.weight,0);
     result.score = total ? Math.round(100 * result.requirements.filter(row => row.matched).reduce((sum,row) => sum + row.weight,0) / total) : null;

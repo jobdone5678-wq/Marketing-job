@@ -441,6 +441,31 @@ async function receive(message, sender) {
     return globalThis.NextkinResumeWorkflows.handle(message);
   }
 
+  if (message.type === 'save_external_job') {
+    if (!message.job?.title || !message.job?.company || !message.job?.jobUrl) {
+      return { error: 'Job title, company, and jobUrl are required.' };
+    }
+    const config = await chrome.storage.local.get(['origin', 'token']);
+    if (!config.token) {
+      return { error: 'Extension is not connected to portal. Cannot save outside jobs.' };
+    }
+    try {
+      const res = await fetch(config.origin + '/api/extension/save-external-job', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + config.token
+        },
+        body: JSON.stringify(message.job)
+      });
+      const data = await res.json();
+      if (!res.ok) return { error: data.error || 'Failed to save job to portal.' };
+      return { success: true, ...data };
+    } catch (err) {
+      return { error: 'Network error: ' + err.message };
+    }
+  }
+
   if (message.type === 'auto_submit') {
     if(!sender?.tab||!sender.url||!isSupportedHost(new URL(sender.url).hostname)||!allowed(sender.url,message.payload?.jobUrl))return {error:'Unsupported application page'};
     const config = await chrome.storage.local.get(['origin', 'token','outbox']);

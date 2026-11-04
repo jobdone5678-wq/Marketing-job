@@ -89,7 +89,31 @@ export function buildContextualResume(candidate:unknown,job:JobInput,input:unkno
   const heading=lines.some(l=>l.trim()==='TECHNICAL SKILLS')?'TECHNICAL SKILLS':'SKILLS';
   markdown=replaceSection(markdown,heading,tableRows.join('\n'));
  }
- const ats=analyze(candidate,job,markdown);
+ let ats: any = analyze(candidate,job,markdown);
+ if(requirements.length>0){
+  const aiReqRows=requirements.map(r=>({
+   label:r.requirement,
+   source:r.jobEvidence,
+   weight:r.relation==='direct'?2:r.relation==='transferable'?1.5:2,
+   matched:r.relation!=='missing',
+   evidence:r.reason||(r.evidence?.[0]?.text||''),
+   type:'qualification' as const,
+   relation:r.relation
+  }));
+  const totalWeight=aiReqRows.reduce((sum,r)=>sum+r.weight,0);
+  const matchedWeight=aiReqRows.filter(r=>r.matched).reduce((sum,r)=>sum+(r.relation==='direct'?r.weight:r.weight*0.75),0);
+  const aiScore=totalWeight?Math.min(100,Math.max(0,Math.round(100*matchedWeight/totalWeight))):ats.score;
+  const aiMatched=aiReqRows.filter(r=>r.matched).map(r=>r.label);
+  const aiMissing=aiReqRows.filter(r=>!r.matched).map(r=>r.label);
+  ats={
+   ...ats,
+   score:aiScore,
+   matched:[...new Set([...aiMatched,...(ats.matched||[])])],
+   missing:[...new Set([...aiMissing,...(ats.missing||[])])],
+   requirements:aiReqRows,
+   method:'AI contextual JD requirement evaluation'
+  };
+ }
  return {...baseline,markdown,ats,matchScore:ats.score,matchedSkills:ats.matched,missingSkills:ats.missing,
   ai:{method:EXTENSION_AI_VERSION,selectedFactIds:[...new Set([...selection.summaryFactIds,...selection.skillFactIds])],requirements,note:'AI relevance judgments require review. Transferable experience does not establish a required qualification. Resume wording uses supplied facts; ATS coverage is calculated separately.'}};
 }

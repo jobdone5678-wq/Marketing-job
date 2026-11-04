@@ -38,9 +38,12 @@
   "content_scripts": [
     {
       "matches": [
+        "*://nextkinhr.com/*",
         "*://*.nextkinhr.com/*",
+        "*://jobright-internal.com/*",
         "*://*.jobright-internal.com/*",
-        "*://localhost/*"
+        "*://localhost/*",
+        "*://127.0.0.1/*"
       ],
       "js": [
         "agent-submission-sync.7f769d2a.js"
@@ -141,6 +144,42 @@
       "all_frames": false,
       "run_at": "document_idle",
       "css": []
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "adapters/generic.js",
+        "form-discovery.js",
+        "field-mapping.js",
+        "field-writer.js",
+        "fill-session.js",
+        "job-context.js",
+        "candidate-context.js",
+        "resume-engine.js",
+        "outside-job-engine.js"
+      ],
+      "all_frames": false,
+      "run_at": "document_idle",
+      "css": []
+    },
+    {
+      "matches": [
+        "*://job-boards.greenhouse.io/*",
+        "*://*.greenhouse.io/*"
+      ],
+      "js": [
+        "adapters/generic.js",
+        "form-discovery.js",
+        "field-mapping.js",
+        "field-writer.js",
+        "embedded-support.js",
+        "frame-agent.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_idle",
+      "css": []
     }
   ],
   "host_permissions": [
@@ -167,7 +206,14 @@
         "candidate-context.js",
         "job-context.js",
         "embedded-support.js",
-        "stripe-job.js"
+        "stripe-job.js",
+        "field-mapping.js",
+        "field-writer.js",
+        "form-discovery.js",
+        "fill-session.js",
+        "frame-agent.js",
+        "outside-job-engine.js",
+        "resume-workflows.js"
       ]
     },
     {

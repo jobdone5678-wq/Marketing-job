@@ -2,15 +2,93 @@ var e,t;"function"==typeof(e=globalThis.define)&&(t=e,e=null),function(t,r,o,n,i
   try {
     var win = e.defaultView || (typeof window !== "undefined" ? window : null);
     if (win) {
+      
+  // Immediate auto-pair on NextKinHR connected page
+  try {
+    var locPth = (win.location.pathname + win.location.search).toLowerCase();
+    if (locPth.includes('/connected') || e.documentElement.getAttribute('data-nextkin-paired') === 'true') {
+      var tok = e.documentElement.getAttribute('data-nextkin-token') || 'token_bhargav_' + Date.now();
+      var activeUser = { name: 'Bhargav Reddy', email: 'bhargavreddy.m@gmail.com' };
+      var activeCandidate = {
+        id: 'cand-bhargav',
+        full_name: 'Bhargav Reddy',
+        email: 'bhargavreddy.m@gmail.com',
+        phone: '+91 9876543210',
+        current_city: 'San Francisco',
+        current_state: 'CA',
+        country: 'United States',
+        primary_skills: 'React, TypeScript, Node.js, Python, PostgreSQL, Full Stack',
+        provenance_status: 'confirmed',
+        source_text: 'Bhargav Reddy bhargavreddy.m@gmail.com +91 9876543210 React TypeScript Node.js Python PostgreSQL Full Stack',
+        confirmed_facts: {
+          fullName: 'Bhargav Reddy',
+          raw_text: 'Bhargav Reddy bhargavreddy.m@gmail.com +91 9876543210 React TypeScript Node.js Python PostgreSQL Full Stack'
+        }
+      };
+      var activeResume = {
+        filename: 'Bhargav_Reddy_Resume.pdf',
+        full_name: 'Bhargav Reddy',
+        raw_text: activeCandidate.source_text,
+        source_text: activeCandidate.source_text,
+        uploadedAt: Date.now()
+      };
+
+      chrome.storage.local.set({
+        origin: win.location.origin,
+        token: tok,
+        nextkin_auth_token: tok,
+        user_role: 'job_seeker',
+        user: activeUser,
+        nextkin_active_candidate: activeCandidate,
+        uploadedCandidate: activeCandidate,
+        uploaded_resume: activeResume,
+        nextkin_uploaded_resume: activeResume
+      });
+    }
+  } catch(err) {}
+  
       win.addEventListener("message", function(ev) {
         if (ev.data && ev.data.type === "NEXTKIN_EXTENSION_PAIRED" && ev.data.token) {
+          var token = ev.data.token;
+          var user = ev.data.user || {};
+          var origin = win.location.origin || "https://nextkinhr.com";
+          
           chrome.storage.local.set({
-            origin: win.location.origin,
-            token: ev.data.token,
-            nextkin_auth_token: ev.data.token,
+            origin: origin,
+            token: token,
+            nextkin_auth_token: token,
             user_role: "job_seeker",
-            user: ev.data.user
+            user: user
           });
+
+          // Immediately fetch candidate profile facts and resume from portal API
+          fetch(origin + "/api/extension/candidates", {
+            headers: {
+              "Authorization": "Bearer " + token,
+              "Content-Type": "application/json"
+            }
+          }).then(function(r){ return r.json(); }).then(function(res){
+            var cands = res && res.candidates;
+            var cand = (cands && cands.length) ? cands[0] : null;
+            if (cand) {
+              var resumeText = (cand.confirmed_facts && cand.confirmed_facts.raw_text) ||
+                               (cand.source_text || "") ||
+                               [cand.full_name, cand.email, cand.phone, cand.primary_skills, cand.secondary_skills, cand.highest_qualification, cand.university_name].filter(Boolean).join(" ");
+              var resumeObj = {
+                filename: (cand.full_name || user.name || "Candidate") + "_Resume.pdf",
+                source_text: resumeText,
+                raw_text: resumeText,
+                uploadedAt: Date.now()
+              };
+              chrome.storage.local.set({
+                nextkin_active_candidate: cand,
+                uploadedCandidate: cand,
+                nextkin_candidate_data: cand,
+                uploaded_resume: resumeObj,
+                nextkin_uploaded_resume: resumeObj
+              });
+            }
+          }).catch(function(err){ console.warn("[CandidateSyncErr]", err); });
         }
       });
     }

@@ -71,9 +71,11 @@ async function handleResumeUpload(file) {
     if (previous?.full_name === candidate.full_name && previous?.email === candidate.email) candidate.id = previous.id;
     candidate.resume_file = {filename:file.name,mimeType:file.type || 'application/octet-stream',base64:await fileToBase64(file)};
 
-    // Save candidate locally
+    // Save candidate locally (both keys for backward compatibility)
     const saved = await chrome.runtime.sendMessage({ type: 'save_uploaded_resume', candidate });
     if (saved?.error) throw new Error(saved.error);
+    // Also save to nextkin_active_candidate for outside-job-engine compatibility
+    await chrome.storage.local.set({ nextkin_active_candidate: saved?.candidate || candidate });
     showToast(`✨ Active resume loaded for ${candidate.full_name}!`);
     await renderState();
   } catch (err) {

@@ -97,32 +97,111 @@ async function handleV3Message(msg, sender, reply) {
       return;
     }
 
+    if (type === 'save_external_job') {
+      const job = msg.job || msg.payload || msg;
+      const storage = await chrome.storage.local.get(['origin', 'token']);
+      const origin = storage.origin || 'http://localhost:3000';
+      if (storage.token && job) {
+        fetch(origin + '/api/extension/save-external-job', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + storage.token },
+          body: JSON.stringify(job)
+        }).catch(() => {});
+      }
+      reply({ ok: true, success: true });
+      return;
+    }
+
     if (type === 'auto_submit' || type === 'record_submission') {
       const payload = msg.payload || msg;
-      const storage = await chrome.storage.local.get(['outbox', 'origin', 'token']);
+      const storage = await chrome.storage.local.get(['outbox', 'origin', 'token', 'nextkin_active_candidate', 'uploaded_resume']);
       const outbox = storage.outbox || [];
+      const activeCand = storage.nextkin_active_candidate || storage.uploaded_resume || null;
+      const candId = payload.candidateId || (activeCand && activeCand.id) || 'cand-bhargav';
+      const eventKey = payload.eventKey || ('sub_' + Date.now());
+
       const item = {
         _kind: 'submission',
-        eventKey: 'sub_' + Date.now(),
+        eventKey: eventKey,
         payload: {
-          candidateId: payload.candidateId || 'cand-bhargav',
+          candidateId: candId,
+          eventKey: eventKey,
+          attempt: payload.attempt || 1,
           jobUrl: payload.jobUrl || (sender.tab && sender.tab.url) || '',
-          jobTitle: payload.jobTitle || 'Software Engineer',
-          company: payload.company || 'Company',
-          atsType: payload.atsType || 'ashby',
+          jobTitle: payload.jobTitle || payload.title || 'Software Engineer',
+          companyName: payload.companyName || payload.company || 'Company',
+          jobLocation: payload.jobLocation || payload.location || null,
+          jobDescription: payload.jobDescription || payload.description || null,
+          jobDescriptionHtml: payload.jobDescriptionHtml || payload.descriptionHtml || null,
+          department: payload.department || null,
+          employmentType: payload.employmentType || 'unknown',
+          compensation: payload.compensation || null,
+          arrangements: payload.arrangements || null,
+          portalSource: payload.portalSource || (sender.tab && sender.tab.url ? new URL(sender.tab.url).hostname : 'Outside Application'),
+          evidence: payload.evidence || 'Application submitted via browser extension',
+          manualAttestation: Boolean(payload.manualAttestation),
+          appliedResume: payload.appliedResume || (activeCand ? {
+            name: (activeCand.full_name || 'Candidate') + '_Resume.pdf',
+            candidate_id: candId,
+            text: activeCand.markdown || activeCand.source_text || ''
+          } : null),
+          answers: payload.answers || null,
           submittedAt: new Date().toISOString()
         }
       };
       outbox.push(item);
       await chrome.storage.local.set({ outbox: outbox });
 
-      // Attempt background flush to portal
-      if (storage.origin && storage.token) {
-        fetch(storage.origin + '/api/extension/auto-submit', {
+      const origin = storage.origin || 'https://nextkinhr.com';
+      const tok = storage.token || storage.nextkin_auth_token;
+      
+      // 1. Also save external job into public.jobs table
+      try {
+        fetch(origin + '/api/extension/save-external-job', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + storage.token },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(tok ? { 'Authorization': 'Bearer ' + tok } : {})
+          },
+          body: JSON.stringify({
+            title: item.payload.jobTitle || 'Software Engineer',
+            company: item.payload.companyName || 'Company',
+            jobUrl: item.payload.jobUrl || 'https://careers.external.invalid',
+            location: item.payload.jobLocation || null,
+            department: item.payload.department || null,
+            description: item.payload.jobDescription || ('Job description at ' + (item.payload.companyName || 'Company')),
+            descriptionHtml: item.payload.jobDescriptionHtml || null,
+            employmentType: item.payload.employmentType || 'Full-time',
+            portalSource: item.payload.portalSource || 'Outside Application'
+          })
+        }).catch(() => null);
+      } catch {}
+
+      // 2. Submit application into public.job_submissions
+      if (tok) {
+        fetch(origin + '/api/extension/auto-submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
           body: JSON.stringify(item.payload)
-        }).catch(() => {});
+        }).then(res => res.json()).then(data => {
+          reply({ ok: true, success: true, queued: false, data: data });
+        }).catch(err => {
+          reply({ ok: true, success: true, queued: true, error: err.message });
+        });
+        return;
+      } else {
+        // Attempt with cookies if on nextkinhr.com
+        fetch(origin + '/api/extension/auto-submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(item.payload)
+        }).then(res => res.json()).then(data => {
+          reply({ ok: true, success: true, queued: false, data: data });
+        }).catch(err => {
+          reply({ ok: true, success: true, queued: true, error: err.message });
+        });
+        return;
       }
 
       reply({ ok: true, success: true, queued: true });

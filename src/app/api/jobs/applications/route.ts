@@ -10,7 +10,7 @@ export async function GET(request:Request){
   const page=Number(params.get('page')||0);
   if(!Number.isSafeInteger(page)||page<0)throw new CaptureError('Invalid page.');
   const provider=params.get('provider');
-  if(provider&&!['greenhouse','ashby','lever','smartrecruiters','breezy','remoteok'].includes(provider))throw new CaptureError('Invalid portal filter.');
+  if(provider&&provider!=='all'&&!['greenhouse','ashby','lever','smartrecruiters','breezy','remoteok','external'].includes(provider.toLowerCase()))throw new CaptureError('Invalid portal filter.');
   const {applications,appliedKeys}=await candidateJobApplications(recommendation.candidateId);
   const search=params.get('search')?.trim().toLowerCase(),company=params.get('company')?.trim().toLowerCase(),location=params.get('location')?.trim().toLowerCase(),type=params.get('type')||'all';
   if(!['all','contract','permanent','temporary','part_time','internship','unknown'].includes(type))throw new CaptureError('Invalid job filter.');

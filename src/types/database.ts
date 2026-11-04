@@ -127,6 +127,9 @@ export interface JobSubmission {
   // Applied Resume Snapshot
   applied_resume?: AppliedResumeSnapshot | null;
 
+  // RTR Document Reference
+  rtr_document?: RTRDocumentReference | null;
+
   created_at: string;
   updated_at: string;
 
@@ -179,4 +182,48 @@ export interface ExternalPayment {
 }
 
 export type CandidateFormData = Omit<Candidate, 'id' | 'created_at' | 'updated_at'>;
+export interface RTRDocument {
+  id: string;
+  submission_id: string;
+  candidate_id: string;
+  filename: string;
+  mime_type: string;
+  base64?: string | null;
+  document_url?: string | null;
+  vendor_id?: string | null;
+  vendor_name?: string | null;
+  vendor_contact_name?: string | null;
+  vendor_contact_email?: string | null;
+  vendor_contact_phone?: string | null;
+  rtr_type: 'vendor_rtr' | 'client_rtr' | 'direct_rtr';
+  rtr_status: 'received' | 'signed' | 'expired' | 'rejected';
+  rtr_date: string;
+  expiration_date?: string | null;
+  notes?: string | null;
+  uploaded_by?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RTRDocumentReference {
+  id: string;
+  filename: string;
+  mime_type: string;
+  vendor_name?: string | null;
+  vendor_contact_name?: string | null;
+  vendor_contact_email?: string | null;
+  vendor_contact_phone?: string | null;
+  rtr_type: 'vendor_rtr' | 'client_rtr' | 'direct_rtr';
+  rtr_status: 'received' | 'signed' | 'expired' | 'rejected';
+  rtr_date: string;
+  expiration_date?: string | null;
+  hourly_rate?: string | null;
+  daily_rate?: string | null;
+  weekly_rate?: string | null;
+  monthly_rate?: string | null;
+  annual_rate?: string | null;
+  currency?: string | null;
+  created_at: string;
+}
+
 export type JobSubmissionFormData = Omit<JobSubmission, 'id' | 'created_at' | 'updated_at' | 'candidate' | 'recruiter'>;

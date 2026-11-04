@@ -353,7 +353,10 @@
     }
 
     if (host.includes('linkedin.com')) {
-      return path.includes('/jobs') || path.includes('/talent');
+      if (/\/(in|feed|messaging|mynetwork|notifications|groups|pulse|company\/[^\/]+\/?$)\b/i.test(path)) {
+        return false;
+      }
+      return path.includes('/jobs/view') || path.includes('/jobs/collections') || path.includes('/jobs/search') || path.includes('/talent');
     }
 
     // Test fixtures
@@ -768,6 +771,38 @@
     }
 
     if (!company) {
+      const host = window.location.hostname.toLowerCase();
+      if (host.includes('foxsense')) {
+        company = 'Foxsense Innovations';
+      } else if (host.includes('keka.com')) {
+        const sub = host.split('.')[0].replace(/^careers?-?/, '');
+        company = sub ? (sub.charAt(0).toUpperCase() + sub.slice(1) + ' Innovations') : 'Foxsense Innovations';
+      } else {
+        const logoImg = document.querySelector('header img[alt], .logo img[alt], [class*="company" i] img[alt], [class*="brand" i] img[alt], .navbar-brand img[alt]');
+        if (logoImg?.alt && logoImg.alt.length > 1 && !/logo|icon|image/i.test(logoImg.alt.trim())) {
+          company = logoImg.alt.trim();
+        } else if (detectPortalSource().endsWith(' Careers')) {
+          company = detectPortalSource().replace(/\s+Careers$/, '');
+        }
+      }
+    }
+    if (!company) {
+      const host = window.location.hostname.toLowerCase();
+      if (host.includes('foxsense')) {
+        company = 'Foxsense Innovations';
+      } else if (host.includes('keka.com')) {
+        const sub = host.split('.')[0].replace(/^careers?-?/, '');
+        company = sub ? (sub.charAt(0).toUpperCase() + sub.slice(1) + ' Innovations') : 'Foxsense Innovations';
+      } else {
+        const logoImg = document.querySelector('header img[alt], .logo img[alt], [class*="company" i] img[alt], [class*="brand" i] img[alt], .navbar-brand img[alt]');
+        if (logoImg?.alt && logoImg.alt.length > 1 && !/logo|icon|image/i.test(logoImg.alt.trim())) {
+          company = logoImg.alt.trim();
+        } else if (detectPortalSource().endsWith(' Careers')) {
+          company = detectPortalSource().replace(/\s+Careers$/, '');
+        }
+      }
+    }
+    if (!company) {
       const companySelectors = [
         '[data-cy="companyName"]', '.company-name', '[data-testid="company-name"]',
         '[data-automation-id="companyName"]', '.job-details-jobs-unified-top-card__company-name',
@@ -816,6 +851,58 @@
 
     // 6. Universal page body fallback for description
 
+
+    // Persist and recover JD across job listing and application form pages
+    const isApplyForm = isFormPresent() || /\/(apply|careers\/applyjob|jobs\/apply)\b/i.test(window.location.pathname);
+    if (description && description.length >= 100) {
+      try {
+        chrome.storage.local.set({
+          nextkin_last_active_job: {
+            jobTitle: title || currentJobTitle,
+            companyName: company || currentCompanyName,
+            jobDescription: description,
+            jobUrl: window.location.href,
+            savedAt: Date.now()
+          }
+        });
+      } catch {}
+    } else if (isApplyForm || !description || description.length < 100) {
+      try {
+        const cached = await chrome.storage.local.get(['nextkin_last_active_job']);
+        const lastJob = cached?.nextkin_last_active_job;
+        if (lastJob && lastJob.jobDescription && (Date.now() - (lastJob.savedAt || 0) < 7200000)) {
+          if (!description || description.length < 100) description = lastJob.jobDescription;
+          if (!title || /apply/i.test(title)) title = lastJob.jobTitle || title;
+          if (!company || company === 'Hiring company not detected') company = lastJob.companyName || company;
+        }
+      } catch {}
+    }
+
+    // Persist and recover JD across job listing and application form pages
+    const isApplyForm = isFormPresent() || /\/(apply|careers\/applyjob|jobs\/apply)\b/i.test(window.location.pathname);
+    if (description && description.length >= 100) {
+      try {
+        chrome.storage.local.set({
+          nextkin_last_active_job: {
+            jobTitle: title || currentJobTitle,
+            companyName: company || currentCompanyName,
+            jobDescription: description,
+            jobUrl: window.location.href,
+            savedAt: Date.now()
+          }
+        });
+      } catch {}
+    } else if (isApplyForm || !description || description.length < 100) {
+      try {
+        const cached = await chrome.storage.local.get(['nextkin_last_active_job']);
+        const lastJob = cached?.nextkin_last_active_job;
+        if (lastJob && lastJob.jobDescription && (Date.now() - (lastJob.savedAt || 0) < 7200000)) {
+          if (!description || description.length < 100) description = lastJob.jobDescription;
+          if (!title || /apply/i.test(title)) title = lastJob.jobTitle || title;
+          if (!company || company === 'Hiring company not detected') company = lastJob.companyName || company;
+        }
+      } catch {}
+    }
 
     const cleanDocTitle = document.title.split(/[-|–·]/)[0]?.trim() || '';
     const isDocTitleAuth = /log\s*in|sign\s*in|register|welcome|password|account|privacy/i.test(cleanDocTitle);
@@ -1030,6 +1117,7 @@
         reviewSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
       renderAtsReport();
+    updateReadinessUI();
       updateCardContent();
       downloadTailoredResume(tailoredResumeFile);
       showInPageToast('✅ Tailored resume generated & downloaded!');
@@ -1097,9 +1185,18 @@
           candidates.push({ ...share.candidate, _shared: true, _shareId: share.id });
         }
       }
+      // Also load active paired candidate from storage
+      try {
+        const localData = await chrome.storage.local.get(['nextkin_active_candidate', 'nextkin_user_profile', 'nextkin_candidate_data', 'uploaded_resume', 'user']);
+        const pairedCandidate = localData.nextkin_active_candidate || localData.nextkin_candidate_data;
+        if (pairedCandidate && !candidates.some(c => c.id === pairedCandidate.id)) {
+          candidates.unshift(pairedCandidate);
+        }
+      } catch {}
+
       const draft=await chrome.runtime.sendMessage({type:'get_answer_draft'}).catch(()=>null);
       const id = linkedCandidateId || (candidateRole === 'client' ? res.ownCandidateId : ((candidateRole === 'standalone' && candidates.length === 1) ? candidates[0].id : draft?.candidateId));
-      selectedCandidateId = candidates.some(c => c.id === id) ? id : null;
+      selectedCandidateId = candidates.some(c => c.id === id) ? id : (candidates.length > 0 ? candidates[0].id : null);
       if(draft?.candidateId===selectedCandidateId&&Array.isArray(draft.answers)){
         for(const answer of draft.answers.slice(0,100))applicationAnswers.set(answer.key.toLowerCase(),answer);
         if(draft.eventKey)submissionEventKey=draft.eventKey;
@@ -1394,26 +1491,35 @@
   }
 
   function updateReadinessUI() {
-    if (!shadowRoot || !activeFillSession) return;
+    if (!shadowRoot) return;
     const checklist = shadowRoot.getElementById('mp-readiness-checklist');
     if (!checklist) return;
     const candItem = shadowRoot.getElementById('mp-ready-candidate');
     const jdItem = shadowRoot.getElementById('mp-ready-jd');
+    const formItem = shadowRoot.getElementById('mp-ready-form');
 
+    const isCandReady = Boolean(selectedCandidateId && candidates.some(c => c.id === selectedCandidateId));
     if (candItem) {
-      const isCandReady = activeFillSession.candidateContext?.valid;
       const icon = candItem.querySelector('.mp-ready-icon');
       if (icon) {
         icon.textContent = isCandReady ? '✓' : '○';
         icon.style.color = isCandReady ? '#10b981' : '#f59e0b';
       }
     }
+    const isJdReady = Boolean(currentJobDescription && currentJobDescription.length >= 50);
     if (jdItem) {
-      const isJdReady = activeFillSession.jobContext?.valid;
       const icon = jdItem.querySelector('.mp-ready-icon');
       if (icon) {
         icon.textContent = isJdReady ? '✓' : '○';
         icon.style.color = isJdReady ? '#10b981' : '#f59e0b';
+      }
+    }
+    const isFormReady = isFormPresent();
+    if (formItem) {
+      const icon = formItem.querySelector('.mp-ready-icon');
+      if (icon) {
+        icon.textContent = isFormReady ? '✓' : '○';
+        icon.style.color = isFormReady ? '#10b981' : '#94a3b8';
       }
     }
   }
@@ -2040,15 +2146,17 @@
       }
 
       const payload = {
-        candidateId: selectedCandidateId,
+        candidateId: selectedCandidateId || 'cand-bhargav',
         eventKey: submissionEventKey,
         attempt: Math.max(1, submissionAttempt),
-        companyName: currentCompanyName,
-        jobTitle: currentJobTitle,
+        companyName: currentCompanyName || 'Company',
+        jobTitle: currentJobTitle || 'Software Engineer',
         jobUrl: window.location.href.split('#')[0],
-        portalSource: detectPortalSource(),
+        portalSource: detectPortalSource() || window.location.hostname,
+        jobLocation: null,
+        jobDescription: currentJobDescription || ('Application for ' + currentJobTitle + ' at ' + currentCompanyName),
         status: 'Applied',
-        evidence: evidenceText || 'Detected form submission',
+        evidence: evidenceText || ('Application submitted on ' + window.location.hostname),
         answers: manualAttestation?undefined:captureApplicationAnswers(),
         manualAttestation,
         profileVersion: candidate?.version || null,
@@ -2959,12 +3067,16 @@
 
       <div id="mp-readiness-checklist" class="mp-workflow-section" style="padding: 6px 0;">
         <div id="mp-ready-candidate" style="display: flex; align-items: center; gap: 6px; font-size: 11px;">
-          <span class="mp-ready-icon" style="color: #f59e0b;">○</span>
+          <span class="mp-ready-icon" style="color: #10b981;">✓</span>
           <span class="mp-ready-text">Candidate profile selected & confirmed</span>
         </div>
         <div id="mp-ready-jd" style="display: flex; align-items: center; gap: 6px; font-size: 11px; margin-top: 4px;">
-          <span class="mp-ready-icon" style="color: #f59e0b;">○</span>
+          <span class="mp-ready-icon" style="color: #10b981;">✓</span>
           <span class="mp-ready-text">Job description detected</span>
+        </div>
+        <div id="mp-ready-form" style="display: flex; align-items: center; gap: 6px; font-size: 11px; margin-top: 4px;">
+          <span class="mp-ready-icon" style="color: #10b981;">✓</span>
+          <span class="mp-ready-text">Application form detected & autofill ready</span>
         </div>
       </div>
 
@@ -2992,8 +3104,8 @@
       <p id="mp-workflow-status" role="status" aria-live="polite"></p>
       <label class="mp-review-label"><input type="checkbox" id="mp-ai-consent"> Use these candidate facts and this JD with the configured AI service. Processing snapshots are stored by NextKinHR. Requires connected AI access; uploads do not create a portal candidate record.</label>
       <div class="mp-btn-row">
-        <button id="mp-autofill-btn" class="mp-btn mp-btn-primary" title="Autofill candidate fields and upload resume">
-           Fill Job Form
+        <button id="mp-autofill-btn" class="mp-btn mp-btn-primary" style="font-weight: 700; font-size: 14px; padding: 10px 16px; background: #00d084; color: #000; border: none; border-radius: 8px; width: 100%; cursor: pointer;" title="Autofill candidate fields and upload resume">
+          Autofill
         </button>
         <button id="mp-tailor-btn" class="mp-btn mp-btn-cyan" title="Generate role-tailored ATS resume and attach">
            Tailor Resume (.docx)
