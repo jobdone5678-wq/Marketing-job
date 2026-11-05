@@ -44,6 +44,10 @@ BEGIN
 END;
 $$;
 
+-- Restrict helper execution to authenticated and service_role
+REVOKE EXECUTE ON FUNCTION public.candidate_actor_can_share(uuid, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.candidate_actor_can_share(uuid, uuid) TO authenticated, service_role;
+
 -- 4. Enable Row Level Security
 ALTER TABLE public.candidate_shares ENABLE ROW LEVEL SECURITY;
 
