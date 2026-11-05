@@ -158,7 +158,7 @@
   ];
 
   const INVALID_JOB_TITLES = [
-    'gitingest', 'gitreverse', 'github', 'home', 'search', 'login', 'sign in', 'signin', 'register',
+    'gitingest', 'gitreverse', 'openclaw', 'reverse-engineered', 'github', 'home', 'search', 'login', 'sign in', 'signin', 'register',
     'summary', 'directory structure', 'files content', 'terms', 'privacy', 'about us',
     'contact', 'dashboard', 'settings', 'welcome', 'untitled', '404', 'not found',
     'overview', 'documentation', 'pricing', 'features', 'download', 'docs', 'readme', 'prompt'
