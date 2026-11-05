@@ -31,6 +31,17 @@
   if (root.__nextkinOutsideJobEngineActive) return;
   root.__nextkinOutsideJobEngineActive = true;
 
+  // Immediate unconditional purge of any lingering toast or banner elements
+  try {
+    const purgeToasts = () => {
+      document.querySelectorAll('#nextkin-copilot-toast, #mp-copilot-toast, [id*="nextkin-copilot-toast"], [id*="mp-copilot-toast"]').forEach(el => el.remove());
+    };
+    purgeToasts();
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', purgeToasts, { once: true });
+    }
+  } catch {}
+
   let currentExtractedJob = null;
   let activeCandidate = null;
   let pendingSubmission = null;
@@ -51,6 +62,7 @@
       if (existing) existing.remove();
       const mpExisting = document.getElementById('mp-copilot-toast');
       if (mpExisting) mpExisting.remove();
+      document.querySelectorAll('#nextkin-copilot-toast, #mp-copilot-toast, [id*="nextkin-copilot-toast"], [id*="mp-copilot-toast"]').forEach(el => el.remove());
     } catch {}
   }
 
@@ -69,6 +81,7 @@
   // -------------------------------------------------------------
   const BLOCKED_HOST_PATTERNS = [
     'gitingest.com',
+    'gitreverse.com',
     'github.com',
     'github.io',
     'gitlab.com',
@@ -145,10 +158,10 @@
   ];
 
   const INVALID_JOB_TITLES = [
-    'gitingest', 'github', 'home', 'search', 'login', 'sign in', 'signin', 'register',
+    'gitingest', 'gitreverse', 'github', 'home', 'search', 'login', 'sign in', 'signin', 'register',
     'summary', 'directory structure', 'files content', 'terms', 'privacy', 'about us',
     'contact', 'dashboard', 'settings', 'welcome', 'untitled', '404', 'not found',
-    'overview', 'documentation', 'pricing', 'features', 'download', 'docs', 'readme'
+    'overview', 'documentation', 'pricing', 'features', 'download', 'docs', 'readme', 'prompt'
   ];
 
   function isValidJobTitle(t) {
