@@ -134,11 +134,12 @@
     const facts = {...candidate,...(candidate.confirmed_facts || {})};
     const primary = text(facts.primary_skills) || text(candidate.primary_skills);
     const secondary = text(facts.secondary_skills) || text(candidate.secondary_skills);
-    const all = Array.isArray(facts.all_skills) && facts.all_skills.length ? facts.all_skills : (Array.isArray(candidate.all_skills) ? candidate.all_skills : []);
+    const candidateSkills = Array.isArray(facts.skills) ? facts.skills : (typeof facts.skills === 'string' ? [facts.skills] : (Array.isArray(candidate.skills) ? candidate.skills : (typeof candidate.skills === 'string' ? [candidate.skills] : [])));
+    const all = (Array.isArray(facts.all_skills) && facts.all_skills.length) ? facts.all_skills : (Array.isArray(candidate.all_skills) && candidate.all_skills.length ? candidate.all_skills : candidateSkills);
     const skills = unique([primary,secondary,...all.map(text)].flatMap(value => value.split(/[,;\n|]+/).map(text)));
     let employment = rows(facts.employment_history).length ? rows(facts.employment_history) : rows(candidate.employment_history);
     const education = rows(facts.education_history).length ? rows(facts.education_history) : rows(candidate.education_history);
-    const sourceText = text(facts.source_text) || text(facts.raw_text) || text(candidate.source_text) || text(candidate.raw_text);
+    const sourceText = text(facts.source_text) || text(facts.raw_text) || text(candidate.source_text) || text(candidate.raw_text) || text(facts.markdown) || text(candidate.markdown);
     const recovered = sourceEmployment(sourceText);
     if (!employment.length) employment = recovered;
     else {

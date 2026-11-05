@@ -2,7 +2,6 @@ import { extensionRoute, extensionProfile, cors } from '@/lib/capture/server';
 import { database, checkDb, CaptureError } from '@/lib/db/admin';
 import { applicationUrlKey } from '@/lib/jobs/application-state';
 import { z } from 'zod';
-import crypto from 'node:crypto';
 
 export async function OPTIONS(request: Request) {
   return cors(request, new Response(null, { status: 204 }));
@@ -21,6 +20,11 @@ const saveExternalJobSchema = z.object({
   compensation: z.unknown().optional(),
   arrangements: z.unknown().optional(),
   externalId: z.string().max(200).optional().nullable(),
+  matchScore: z.number().nullable().optional(),
+  matchedSkills: z.array(z.string()).optional(),
+  missingSkills: z.array(z.string()).optional(),
+  extractedSkills: z.array(z.string()).optional(),
+  atsAnalysis: z.unknown().optional(),
 });
 
 export async function POST(request: Request) {
@@ -29,82 +33,97 @@ export async function POST(request: Request) {
     const body = saveExternalJobSchema.parse(await request.json());
 
     const safeJobUrl = applicationUrlKey(body.jobUrl) || body.jobUrl;
-    const v_emp_type = ['contract', 'permanent', 'temporary', 'part_time', 'internship', 'unknown'].includes(body.employmentType || '')
-      ? body.employmentType!
-      : 'unknown';
-    const contentHash = crypto.createHash('md5').update(body.description || body.title + body.company).digest('hex');
-    const externalId = body.externalId || 'ext_' + crypto.createHash('md5').update(safeJobUrl || body.company + body.title).digest('hex');
+    const portalSource = body.portalSource || (safeJobUrl ? new URL(safeJobUrl).hostname : 'Outside Job');
 
-    // 1. Check if job already exists by URL
-    const { data: existingJobByUrl, error: urlError } = await database()
-      .from('jobs')
-      .select('id, title, company, description, is_external')
-      .ilike('application_url', safeJobUrl)
+    // 1. Check if outside job already exists by URL in outside_jobs table
+    const { data: existingByUrl, error: urlError } = await database()
+      .from('outside_jobs')
+      .select('id, title, company, description, match_score')
+      .ilike('job_url', safeJobUrl)
       .maybeSingle();
     checkDb(urlError);
 
-    if (existingJobByUrl) {
-      // Update with fresher details if needed
-      await database().from('jobs').update({
+    if (existingByUrl) {
+      const updatePayload: Record<string, any> = {
         title: body.title,
         company: body.company,
-        description: body.description.length > (existingJobByUrl.description?.length || 0) ? body.description : undefined,
+        description: body.description.length > (existingByUrl.description?.length || 0) ? body.description : undefined,
         description_html: body.descriptionHtml || undefined,
         location: body.location || undefined,
         department: body.department || undefined,
-        last_seen_at: new Date().toISOString(),
-        is_external: true,
-        portal_source: body.portalSource || 'Outside Job',
-      }).eq('id', existingJobByUrl.id);
+        employment_type: body.employmentType || undefined,
+        portal_source: portalSource,
+        match_score: body.matchScore ?? existingByUrl.match_score,
+        matched_skills: body.matchedSkills?.length ? body.matchedSkills : undefined,
+        missing_skills: body.missingSkills?.length ? body.missingSkills : undefined,
+        extracted_skills: body.extractedSkills?.length ? body.extractedSkills : undefined,
+        ats_analysis: body.atsAnalysis || undefined,
+        updated_at: new Date().toISOString(),
+      };
 
-      return { success: true, jobId: existingJobByUrl.id, updated: true };
+      await database().from('outside_jobs').update(updatePayload).eq('id', existingByUrl.id);
+      return { success: true, jobId: existingByUrl.id, updated: true, table: 'outside_jobs' };
     }
 
-    // 2. Check by company and title
-    const { data: existingJobByName, error: nameError } = await database()
-      .from('jobs')
+    // 2. Check by company and title in outside_jobs
+    const { data: existingByName, error: nameError } = await database()
+      .from('outside_jobs')
       .select('id, title, company, description')
       .ilike('company', body.company)
       .ilike('title', body.title)
       .maybeSingle();
     checkDb(nameError);
 
-    if (existingJobByName) {
-      await database().from('jobs').update({
-        application_url: safeJobUrl,
-        description: body.description.length > (existingJobByName.description?.length || 0) ? body.description : undefined,
+    if (existingByName) {
+      await database().from('outside_jobs').update({
+        job_url: safeJobUrl,
+        portal_source: portalSource,
+        description: body.description.length > (existingByName.description?.length || 0) ? body.description : undefined,
         description_html: body.descriptionHtml || undefined,
         location: body.location || undefined,
-        last_seen_at: new Date().toISOString(),
-      }).eq('id', existingJobByName.id);
+        department: body.department || undefined,
+        employment_type: body.employmentType || undefined,
+        match_score: body.matchScore ?? undefined,
+        matched_skills: body.matchedSkills?.length ? body.matchedSkills : undefined,
+        missing_skills: body.missingSkills?.length ? body.missingSkills : undefined,
+        extracted_skills: body.extractedSkills?.length ? body.extractedSkills : undefined,
+        ats_analysis: body.atsAnalysis || undefined,
+        updated_at: new Date().toISOString(),
+      }).eq('id', existingByName.id);
 
-      return { success: true, jobId: existingJobByName.id, updated: true };
+      return { success: true, jobId: existingByName.id, updated: true, table: 'outside_jobs' };
     }
 
-    // 3. Insert newly discovered outside job into public.jobs exactly like portal jobs
-    const { data: newJob, error: insertError } = await database().from('jobs').insert({
-      source_id: null,
-      external_id: externalId,
+    // 3. Insert newly discovered outside job into dedicated public.outside_jobs table
+    const insertPayload: Record<string, any> = {
       title: body.title,
       company: body.company,
-      source_url: safeJobUrl,
-      application_url: safeJobUrl,
+      job_url: safeJobUrl,
+      portal_source: portalSource,
       location: body.location || null,
       department: body.department || null,
+      employment_type: body.employmentType || 'Full-time',
       description: body.description,
-      description_html: body.descriptionHtml || '',
-      employment_type: v_emp_type,
-      compensation: body.compensation ?? null,
-      arrangements: body.arrangements ?? null,
-      content_hash: contentHash,
-      is_external: true,
-      portal_source: body.portalSource || 'Outside Job',
-      state: 'active',
-    }).select('id').single();
+      description_html: body.descriptionHtml || null,
+      match_score: body.matchScore ?? null,
+      matched_skills: body.matchedSkills || [],
+      missing_skills: body.missingSkills || [],
+      extracted_skills: body.extractedSkills || [],
+      ats_analysis: body.atsAnalysis || null,
+      status: 'Discovered',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data: newOutsideJob, error: insertError } = await database()
+      .from('outside_jobs')
+      .insert(insertPayload)
+      .select('id')
+      .single();
 
     checkDb(insertError);
-    if (!newJob) throw new CaptureError('Failed to save external job.', 500);
+    if (!newOutsideJob) throw new CaptureError('Failed to save outside job.', 500);
 
-    return { success: true, jobId: newJob.id, created: true };
+    return { success: true, jobId: newOutsideJob.id, created: true, table: 'outside_jobs' };
   });
 }

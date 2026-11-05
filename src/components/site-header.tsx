@@ -17,6 +17,7 @@ const titles: Record<string, string> = {
   '/dashboard/vendors': 'Prime vendors',
   '/dashboard/vendors/new': 'New vendor',
   '/dashboard/jobs': 'Public jobs',
+  '/dashboard/outside-jobs': 'Outside jobs',
   '/dashboard/greenhouse': 'Greenhouse portals',
   '/dashboard/ashby': 'Ashby portals',
   '/dashboard/settings': 'Settings',

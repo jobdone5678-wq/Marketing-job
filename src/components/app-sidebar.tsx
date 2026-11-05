@@ -30,6 +30,7 @@ import {
   SlidersHorizontalIcon,
   LifeBuoyIcon,
   FileSignatureIcon,
+  GlobeIcon,
 } from "lucide-react"
 import { createClient } from "@/lib/client"
 import Link from "next/link"
@@ -84,6 +85,12 @@ const recruiterNavItems: NavItem[] = [
     url: "/dashboard/jobs",
     icon: <CompassIcon className="size-4 stroke-[1.8]" />,
   },
+  {
+    id: "outside-jobs",
+    title: "Outside Jobs",
+    url: "/dashboard/outside-jobs",
+    icon: <GlobeIcon className="size-4 stroke-[1.8]" />,
+  },
 ]
 
 const technicalRecruiterNavItems: NavItem[] = [
@@ -122,6 +129,12 @@ const technicalRecruiterNavItems: NavItem[] = [
     title: "Public Jobs",
     url: "/dashboard/jobs",
     icon: <CompassIcon className="size-4 stroke-[1.8]" />,
+  },
+  {
+    id: "outside-jobs",
+    title: "Outside Jobs",
+    url: "/dashboard/outside-jobs",
+    icon: <GlobeIcon className="size-4 stroke-[1.8]" />,
   },
 ]
 
@@ -186,6 +199,12 @@ const candidateNavItems: NavItem[] = [
     title: "Public Jobs",
     url: "/dashboard/jobs",
     icon: <CompassIcon className="size-4 stroke-[1.8]" />,
+  },
+  {
+    id: "outside-jobs",
+    title: "Outside Jobs",
+    url: "/dashboard/outside-jobs",
+    icon: <GlobeIcon className="size-4 stroke-[1.8]" />,
   },
 ]
 

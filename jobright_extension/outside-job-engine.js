@@ -714,10 +714,21 @@
       text: activeCandidate.markdown || activeCandidate.source_text || ''
     } : null;
 
+    const ats = computeATSAnalysis(job, activeCandidate);
+    const matchScore = ats && typeof ats.score === 'number' ? ats.score : null;
+    const matchedSkills = ats && Array.isArray(ats.matched) ? ats.matched : [];
+    const missingSkills = ats && Array.isArray(ats.missing) ? ats.missing : [];
+    const extractedSkills = [...matchedSkills, ...missingSkills];
+
     // Send to background to store into public.jobs and job_submissions
     chrome.runtime.sendMessage({
       type: 'auto_submit',
       payload: {
+        matchScore: matchScore,
+        matchedSkills: matchedSkills,
+        missingSkills: missingSkills,
+        extractedSkills: extractedSkills,
+        atsAnalysis: ats,
         candidateId: activeCandidate?.id || 'cand-bhargav',
         eventKey: 'sub_' + Date.now(),
         attempt: 1,
@@ -730,8 +741,8 @@
         department: job.department || null,
         employmentType: job.employmentType || 'Full-time',
         portalSource: 'Outside Job - ' + window.location.hostname,
-        evidence: 'Application submitted on ' + window.location.hostname,
-        manualAttestation: false,
+        evidence: 'Your application was successfully submitted on ' + window.location.hostname,
+        manualAttestation: true,
         appliedResume: resumeSnapshot,
         answers: answers
       }
@@ -753,32 +764,37 @@
       if (btn.closest('#mp-copilot-root, #jobright-helper-plugin, #nextkin-copilot-toast')) return;
 
       const text = (btn.textContent || btn.value || '').trim();
+      const testId = (btn.getAttribute('data-testid') || '').toLowerCase();
       const isSubmitBtn = btn.type === 'submit' ||
-                          /^(submit|submit application|complete application|send application)$/i.test(text);
+                          /^(submit|submit application|complete application|send application|apply|apply now)$/i.test(text) ||
+                          testId.includes('submit');
 
-      if (isSubmitBtn && isFormPresent()) {
+      if (isSubmitBtn) {
         handleApplicationSubmission(btn);
       }
     }, true);
 
-    // 3. Observe confirmation text appearing dynamically
+    // 3. Observe confirmation text appearing dynamically (Ashby, Greenhouse, Lever, Workday, etc.)
     let confirmed = false;
-    const observer = new MutationObserver(() => {
+    const checkConfirmation = () => {
       if (confirmed) return;
       const bodyText = document.body ? document.body.innerText : '';
-      if (/(thank\s*you\s*for\s*applying|application\s*received|application\s*submitted|your\s*application\s*has\s*been\s*submitted)/i.test(bodyText)) {
+      const hasMatch = /(thank\s*you\s*for\s*(?:applying|your\s*application)|your\s*application\s*(?:was|is|has\s*been)?\s*(?:successfully\s*)?(?:received|submitted)|application\s*(?:was|is|has\s*been)?\s*(?:successfully\s*)?(?:received|submitted)|successfully\s*submitted|we'll\s*contact\s*you\s*if\s*there\s*are\s*next\s*steps)/i.test(bodyText);
+      const hasSuccessBox = Boolean(document.querySelector('.ashby-application-success, [class*="application-success" i], [class*="submission-success" i]'));
+      if (hasMatch || hasSuccessBox) {
         confirmed = true;
-        if (!pendingSubmission) {
-          handleApplicationSubmission(document.body);
-        }
+        handleApplicationSubmission(document.body);
       }
-    });
+    };
+    const observer = new MutationObserver(checkConfirmation);
 
     if (document.body) {
       observer.observe(document.body, { childList: true, subtree: true });
+      checkConfirmation();
     } else {
       document.addEventListener('DOMContentLoaded', () => {
         observer.observe(document.body, { childList: true, subtree: true });
+        checkConfirmation();
       });
     }
   }

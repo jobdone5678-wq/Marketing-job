@@ -908,6 +908,14 @@ export default function SubmissionsPage() {
                           >
                             {sub.portal_source || "Not recorded"}
                           </Badge>
+                          {Boolean(sub.portal_source?.toLowerCase().includes("outside")) && (
+                            <Badge
+                              variant="outline"
+                              className="text-[9px] px-1.5 py-0 h-4 font-semibold bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30"
+                            >
+                              Outside Portal
+                            </Badge>
+                          )}
                           <span>{sub.job_location || "Not recorded"}</span>
                           {sub.job_url && (
                             <a
@@ -931,6 +939,37 @@ export default function SubmissionsPage() {
                           appliedResume={sub.applied_resume}
                         />
                         <ApplicationAnswerSnapshot submissionId={sub.id} />
+                        {(() => {
+                          const atsMatch = sub.notes?.match(/\[ATS Match:\s*(\d+)%\]/i);
+                          const atsScore = atsMatch ? atsMatch[1] : null;
+                          const matchedMatch = sub.notes?.match(/Matched:\s*([^|\]\n]+)/i);
+                          const matchedSkillsStr = matchedMatch ? matchedMatch[1].trim() : null;
+                          const missingMatch = sub.notes?.match(/Missing:\s*([^|\]\n]+)/i);
+                          const missingSkillsStr = missingMatch ? missingMatch[1].trim() : null;
+
+                          if (!atsScore && !matchedSkillsStr) return null;
+
+                          return (
+                            <div className="mt-2 p-2 rounded-lg bg-emerald-500/5 border border-emerald-500/20 text-[11px] space-y-1">
+                              <div className="flex items-center gap-1.5 font-bold text-emerald-700 dark:text-emerald-400 text-xs">
+                                <span className="size-2 rounded-full bg-emerald-500 inline-block animate-pulse" />
+                                ATS Match: {atsScore}%
+                              </div>
+                              {matchedSkillsStr && (
+                                <div className="text-[10px] text-muted-foreground truncate max-w-[220px]" title={`Matched: ${matchedSkillsStr}`}>
+                                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold">✓ Matched: </span>
+                                  {matchedSkillsStr}
+                                </div>
+                              )}
+                              {missingSkillsStr && (
+                                <div className="text-[10px] text-muted-foreground truncate max-w-[220px]" title={`Missing: ${missingSkillsStr}`}>
+                                  <span className="text-amber-600 dark:text-amber-400 font-semibold">✗ Missing: </span>
+                                  {missingSkillsStr}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </TableCell>
 
                       {/* RTR Document */}

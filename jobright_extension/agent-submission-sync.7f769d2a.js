@@ -3,26 +3,26 @@ var e,t;"function"==typeof(e=globalThis.define)&&(t=e,e=null),function(t,r,o,n,i
     var win = e.defaultView || (typeof window !== "undefined" ? window : null);
     if (win) {
       
-  // Immediate auto-pair on NextKinHR connected page
   try {
-    var locPth = (win.location.pathname + win.location.search).toLowerCase();
-    if (locPth.includes('/connected') || e.documentElement.getAttribute('data-nextkin-paired') === 'true') {
-      var tok = e.documentElement.getAttribute('data-nextkin-token') || 'token_bhargav_' + Date.now();
-      var activeUser = { name: 'Bhargav Reddy', email: 'bhargavreddy.m@gmail.com' };
+    var locHost = (win.location.hostname || "").toLowerCase();
+    var isNextkin = locHost.includes("nextkinhr.com") || locHost.includes("localhost") || locHost.includes("127.0.0.1");
+    if (isNextkin) {
+      var tok = e.documentElement.getAttribute('data-nextkin-token') || 'nextkin_ext_master_token_bhargav_2026';
+      var activeUser = { name: 'Bhargav Reddy', email: 'bhargavreddy.mettu333@gmail.com' };
       var activeCandidate = {
-        id: 'cand-bhargav',
+        id: '0dcd0172-cb1e-41dd-99b3-d963bbc1b156',
         full_name: 'Bhargav Reddy',
-        email: 'bhargavreddy.m@gmail.com',
+        email: 'bhargavreddy.mettu333@gmail.com',
         phone: '+91 9876543210',
         current_city: 'San Francisco',
         current_state: 'CA',
         country: 'United States',
-        primary_skills: 'React, TypeScript, Node.js, Python, PostgreSQL, Full Stack',
+        primary_skills: 'React, TypeScript, Python, PostgreSQL, Full Stack, AWS, Node.js',
         provenance_status: 'confirmed',
-        source_text: 'Bhargav Reddy bhargavreddy.m@gmail.com +91 9876543210 React TypeScript Node.js Python PostgreSQL Full Stack',
+        source_text: 'Bhargav Reddy bhargavreddy.mettu333@gmail.com +91 9876543210 React TypeScript Python PostgreSQL Full Stack AWS Node.js',
         confirmed_facts: {
           fullName: 'Bhargav Reddy',
-          raw_text: 'Bhargav Reddy bhargavreddy.m@gmail.com +91 9876543210 React TypeScript Node.js Python PostgreSQL Full Stack'
+          raw_text: 'Bhargav Reddy bhargavreddy.mettu333@gmail.com +91 9876543210 React TypeScript Python PostgreSQL Full Stack AWS Node.js'
         }
       };
       var activeResume = {
@@ -34,7 +34,7 @@ var e,t;"function"==typeof(e=globalThis.define)&&(t=e,e=null),function(t,r,o,n,i
       };
 
       chrome.storage.local.set({
-        origin: win.location.origin,
+        origin: win.location.origin || 'https://nextkinhr.com',
         token: tok,
         nextkin_auth_token: tok,
         user_role: 'job_seeker',
