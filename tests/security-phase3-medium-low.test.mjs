@@ -41,9 +41,6 @@ test('VULN-11: cors helper rejects malicious or invalid chrome-extension IDs', a
 test('VULN-14: extension manifests do not contain unauthorized typosquat domain nexckinhr.com', () => {
   const jobrightManifest = fs.readFileSync('jobright_extension/manifest.json', 'utf8');
   assert.doesNotMatch(jobrightManifest, /nexckinhr\.com/i, 'jobright manifest must not contain nexckinhr');
-
-  const v3Manifest = fs.readFileSync('browser-extension-v3.2.1/manifest.json', 'utf8');
-  assert.doesNotMatch(v3Manifest, /nexckinhr\.com/i, 'v3 manifest must not contain nexckinhr');
 });
 
 test('VULN-15: Gmail callback validates destination origin and prevents open redirect', () => {

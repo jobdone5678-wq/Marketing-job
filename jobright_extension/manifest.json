@@ -161,14 +161,13 @@
         "resume-engine.js",
         "outside-job-engine.js"
       ],
-      "all_frames": false,
+      "all_frames": true,
       "run_at": "document_idle",
       "css": []
     },
     {
       "matches": [
-        "*://job-boards.greenhouse.io/*",
-        "*://*.greenhouse.io/*"
+        "<all_urls>"
       ],
       "js": [
         "adapters/generic.js",

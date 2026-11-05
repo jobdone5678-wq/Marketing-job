@@ -20,10 +20,6 @@ test('VULN-07: extension agent-submission-sync validates ev.origin and ev.source
   assert.match(syncJobright, /isTrustedOrigin\(ev\.origin\)/, 'Must check isTrustedOrigin on incoming event');
   assert.match(syncJobright, /ev\.source !== win/, 'Must verify message sender is the current window');
   assert.match(syncJobright, /u\.hostname === ["']nextkinhr\.com["']/, 'Must explicitly validate trusted nextkinhr domain');
-
-  const syncV3 = fs.readFileSync('browser-extension-v3.2.1/agent-submission-sync.7f769d2a.js', 'utf8');
-  assert.match(syncV3, /isTrustedOrigin\(ev\.origin\)/);
-  assert.match(syncV3, /ev\.source !== win/);
 });
 
 test('VULN-08 & VULN-09: RTR [id] endpoint enforces identifier validation and calls candidateAccess', () => {

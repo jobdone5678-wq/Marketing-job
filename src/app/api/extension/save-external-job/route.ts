@@ -1,6 +1,7 @@
 import { extensionRoute, extensionProfile, cors } from '@/lib/capture/server';
 import { database, checkDb, CaptureError } from '@/lib/db/admin';
 import { applicationUrlKey } from '@/lib/jobs/application-state';
+import { outsideJobsCache } from '@/lib/cache';
 import { z } from 'zod';
 
 export async function OPTIONS(request: Request) {
@@ -143,6 +144,9 @@ export async function POST(request: Request) {
         updated_at: new Date().toISOString(),
       });
     } catch {}
+
+    // Invalidate outside jobs cache to ensure fresh state
+    outsideJobsCache.clear();
 
     return { success: true, jobId: newOutsideJob.id, created: true, table: 'outside_jobs' };
   });

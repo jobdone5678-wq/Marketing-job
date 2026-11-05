@@ -242,6 +242,43 @@ async function handleV3Message(msg, sender, reply) {
       return;
     }
 
+    if (type === 'NEXTKIN_BROADCAST_AUTOFILL') {
+      const tabId = sender.tab?.id;
+      if (tabId !== undefined) {
+        try {
+          if (chrome.webNavigation?.getAllFrames) {
+            chrome.webNavigation.getAllFrames({ tabId }, (frames) => {
+              if (frames && frames.length) {
+                for (const frame of frames) {
+                  chrome.tabs.sendMessage(tabId, {
+                    type: 'NEXTKIN_TRIGGER_AUTOFILL',
+                    candidate: payload?.candidate || message.candidate
+                  }, { frameId: frame.frameId }).catch(() => {});
+                }
+              } else {
+                chrome.tabs.sendMessage(tabId, {
+                  type: 'NEXTKIN_TRIGGER_AUTOFILL',
+                  candidate: payload?.candidate || message.candidate
+                }).catch(() => {});
+              }
+            });
+          } else {
+            chrome.tabs.sendMessage(tabId, {
+              type: 'NEXTKIN_TRIGGER_AUTOFILL',
+              candidate: payload?.candidate || message.candidate
+            }).catch(() => {});
+          }
+        } catch {
+          chrome.tabs.sendMessage(tabId, {
+            type: 'NEXTKIN_TRIGGER_AUTOFILL',
+            candidate: payload?.candidate || message.candidate
+          }).catch(() => {});
+        }
+      }
+      reply({ ok: true, success: true });
+      return;
+    }
+
     if (type === 'embedded_form_action') {
       reply({ success: true });
       return;

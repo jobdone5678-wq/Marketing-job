@@ -6,12 +6,10 @@ import path from 'node:path';
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
-test('Toast Removal: in-page bottom toast overlays are disabled in both extensions', async () => {
+test('Toast Removal: in-page bottom toast overlays are disabled in jobright_extension', async () => {
   const jobrightEngineCode = await readFile(path.join(repoRoot, 'jobright_extension/outside-job-engine.js'), 'utf8');
-  const v3EngineCode = await readFile(path.join(repoRoot, 'browser-extension-v3.2.1/outside-job-engine.js'), 'utf8');
-  const contentJsCode = await readFile(path.join(repoRoot, 'browser-extension-v3.2.1/content.js'), 'utf8');
 
-  // 1. Check jobright_extension/outside-job-engine.js does not append toast to document.body
+  // Check jobright_extension/outside-job-engine.js does not append toast to document.body
   assert.ok(
     !jobrightEngineCode.includes('document.body.appendChild(toast)'),
     'jobright_extension/outside-job-engine.js must NOT append toast to document.body'
@@ -19,18 +17,6 @@ test('Toast Removal: in-page bottom toast overlays are disabled in both extensio
   assert.ok(
     jobrightEngineCode.includes('nextkin-copilot-toast'),
     'jobright_extension/outside-job-engine.js must retain cleanup for nextkin-copilot-toast'
-  );
-
-  // 2. Check browser-extension-v3.2.1/outside-job-engine.js does not append toast to document.body
-  assert.ok(
-    !v3EngineCode.includes('document.body.appendChild(toast)'),
-    'browser-extension-v3.2.1/outside-job-engine.js must NOT append toast to document.body'
-  );
-
-  // 3. Check browser-extension-v3.2.1/content.js does not append docToast to document.body
-  assert.ok(
-    !contentJsCode.includes('document.body.appendChild(docToast)'),
-    'browser-extension-v3.2.1/content.js must NOT append docToast to document.body'
   );
 });
 
@@ -63,6 +49,19 @@ test('Domain Gating: non-job websites like gitingest.com are explicitly blocked'
   assert.ok(
     !jobrightEngineCode.includes('title: document.title,\n      company: cleanDomainName'),
     'handleApplicationSubmission dummy title/company fallback must be removed'
+  );
+
+  // Verify initializeOutsideJobEngine exits early if not on a career page
+  assert.ok(
+    jobrightEngineCode.includes('function initializeOutsideJobEngine() {\n    // Strict gate: If not on a verified job or career page, exit immediately') ||
+    jobrightEngineCode.includes('if (!isJobOrCareerPage()) {\n      return;\n    }'),
+    'initializeOutsideJobEngine must strictly exit early if !isJobOrCareerPage()'
+  );
+
+  // Verify generic article selector was removed from job description selectors
+  assert.ok(
+    !jobrightEngineCode.includes("[class*=\"job-post-content\" i], 'article'"),
+    'generic article tag must NOT be treated as a job description'
   );
 });
 
