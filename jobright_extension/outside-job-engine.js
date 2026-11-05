@@ -41,50 +41,17 @@
   let monitoredPhoneField = null;
 
   // -------------------------------------------------------------
-  // 1. In-Page Floating Toast Notification
+  // 1. In-Page Floating Toast Notification (Disabled / Removed per user instruction)
   // -------------------------------------------------------------
   function showInPageToast(message, isError = false, duration = 4000) {
-    const now = Date.now();
-    if (message === lastToastMessage && (now - lastToastTime) < 3000) return;
-    lastToastMessage = message;
-    lastToastTime = now;
-
-    let existing = document.getElementById('nextkin-copilot-toast');
-    if (existing) existing.remove();
-
-    const toast = document.createElement('div');
-    toast.id = 'nextkin-copilot-toast';
-    toast.innerHTML = `
-      <div style="display:flex;align-items:center;gap:10px;">
-        <span style="font-size:16px;">${isError ? '⚠️' : '⚡'}</span>
-        <span style="font-weight:600;line-height:1.4;">${escapeHtml(message)}</span>
-      </div>
-    `;
-    toast.style.cssText = `
-      position: fixed;
-      bottom: 28px;
-      left: 50%;
-      transform: translateX(-50%) translateY(0);
-      background: ${isError ? 'linear-gradient(135deg, #dc2626, #b91c1c)' : 'linear-gradient(135deg, #0f172a, #1e293b)'};
-      color: #ffffff;
-      padding: 12px 22px;
-      border-radius: 10px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      font-size: 13.5px;
-      letter-spacing: 0.2px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.15);
-      z-index: 2147483647;
-      pointer-events: none;
-      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    `;
-
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateX(-50%) translateY(10px)';
-      setTimeout(() => toast.remove(), 350);
-    }, duration);
+    // Completely removed: do NOT inject any toast elements into page DOM.
+    // Clean up any lingering toast elements immediately.
+    try {
+      const existing = document.getElementById('nextkin-copilot-toast');
+      if (existing) existing.remove();
+      const mpExisting = document.getElementById('mp-copilot-toast');
+      if (mpExisting) mpExisting.remove();
+    } catch {}
   }
 
   function escapeHtml(str) {
@@ -95,6 +62,150 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  // -------------------------------------------------------------
+  // 1.1 Strict Job & Career Page / Domain Classifier
+  // -------------------------------------------------------------
+  const BLOCKED_HOST_PATTERNS = [
+    'gitingest.com',
+    'github.com',
+    'github.io',
+    'gitlab.com',
+    'bitbucket.org',
+    'npmjs.com',
+    'pypi.org',
+    'stackoverflow.com',
+    'stackexchange.com',
+    'codepen.io',
+    'replit.com',
+    'gist.github.com',
+    'google.com',
+    'bing.com',
+    'duckduckgo.com',
+    'yahoo.com',
+    'baidu.com',
+    'wikipedia.org',
+    'chatgpt.com',
+    'openai.com',
+    'claude.ai',
+    'anthropic.com',
+    'whatsapp.com',
+    'slack.com',
+    'discord.com',
+    'telegram.org',
+    'twitter.com',
+    'x.com',
+    'facebook.com',
+    'instagram.com',
+    'reddit.com',
+    'youtube.com',
+    'netflix.com',
+    'amazon.com'
+  ];
+
+  const KNOWN_ATS_HOSTS = [
+    'greenhouse.io',
+    'lever.co',
+    'ashbyhq.com',
+    'myworkdayjobs.com',
+    'workday.com',
+    'smartrecruiters.com',
+    'breezy.hr',
+    'workable.com',
+    'icims.com',
+    'jobvite.com',
+    'taleo.net',
+    'bamboohr.com',
+    'recruitee.com',
+    'keka.com',
+    'indeed.com',
+    'dice.com',
+    'ziprecruiter.com',
+    'monster.com',
+    'glassdoor.com',
+    'builtin.com',
+    'wellfound.com',
+    'angel.co',
+    'rippling.com',
+    'jazzhr.com',
+    'pinpointhq.com',
+    'careerbuilder.com',
+    'foxsense'
+  ];
+
+  const INVALID_JOB_TITLES = [
+    'gitingest', 'github', 'home', 'search', 'login', 'sign in', 'signin', 'register',
+    'summary', 'directory structure', 'files content', 'terms', 'privacy', 'about us',
+    'contact', 'dashboard', 'settings', 'welcome', 'untitled', '404', 'not found',
+    'overview', 'documentation', 'pricing', 'features', 'download', 'docs', 'readme'
+  ];
+
+  function isValidJobTitle(t) {
+    if (!t || typeof t !== 'string') return false;
+    const clean = t.trim().toLowerCase();
+    if (clean.length < 3 || clean.length > 120) return false;
+    if (INVALID_JOB_TITLES.includes(clean)) return false;
+    if (INVALID_JOB_TITLES.some(inv => clean === inv || clean.startsWith(inv + ' -') || clean.startsWith(inv + ' |') || clean.startsWith(inv + ' :'))) return false;
+    return true;
+  }
+
+  function isJobOrCareerPage() {
+    if (typeof window === 'undefined' || !window.location) return false;
+    const host = (window.location.hostname || '').toLowerCase();
+    const path = (window.location.pathname || '').toLowerCase();
+
+    // 1. NextKinHR portal internal pages
+    if (host.includes('nextkinhr.com') || host.includes('nexckinhr.com') || host.includes('localhost') || host.includes('127.0.0.1')) {
+      return path.startsWith('/jobs/') || path.startsWith('/public-jobs/');
+    }
+
+    // 2. Explicitly blocked hosts (developer tools, repos, non-job platforms)
+    for (const blocked of BLOCKED_HOST_PATTERNS) {
+      if (host === blocked || host.endsWith('.' + blocked)) {
+        // Special-case GitHub careers
+        if (host.includes('github.com') && (path.startsWith('/about/careers') || path.startsWith('/careers') || host.startsWith('careers.'))) {
+          return true;
+        }
+        return false;
+      }
+    }
+
+    // 3. Known ATS and job board platforms
+    for (const ats of KNOWN_ATS_HOSTS) {
+      if (host === ats || host.endsWith('.' + ats) || host.includes(ats)) {
+        if (host.includes('linkedin.com')) {
+          if (/\/(in|feed|messaging|mynetwork|notifications|groups|pulse)\b/i.test(path)) return false;
+          if (path.includes('/jobs/view') || path.includes('/jobs/collections') || window.location.search.includes('currentJobId=')) {
+            return true;
+          }
+          return false;
+        }
+        return true;
+      }
+    }
+
+    // 4. Careers / jobs subdomains
+    const parts = host.split('.');
+    const subdomain = parts.length > 2 ? parts[0] : '';
+    if (['careers', 'career', 'jobs', 'job', 'hiring', 'talent', 'joinus', 'join'].includes(subdomain)) {
+      return true;
+    }
+
+    // 5. URL path indicates a career or application route
+    if (/\/(careers|career|jobs|job|positions|position|openings|opening|vacancies|vacancy|requisition|apply)\b/i.test(path)) {
+      return true;
+    }
+
+    // 6. Valid JobPosting Schema.org data with substantial description
+    try {
+      const jsonLd = extractJsonLdJob();
+      if (jsonLd && isValidJobTitle(jsonLd.title) && jsonLd.description && jsonLd.description.length >= 80) {
+        return true;
+      }
+    } catch {}
+
+    return false;
   }
 
   // -------------------------------------------------------------
@@ -155,6 +266,10 @@
   // 3. Page State & Authentication Detector
   // -------------------------------------------------------------
   function detectPageMode() {
+    if (!isJobOrCareerPage()) {
+      return 'other';
+    }
+
     const loc = window.location;
     const pathAndQuery = (loc.pathname + loc.search + loc.hash).toLowerCase();
     const docTitle = (document.title || '').toLowerCase();
@@ -206,15 +321,25 @@
   }
 
   function isFormPresent() {
-    const inputs = document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="password"]), textarea, select');
-    let count = 0;
-    for (const el of inputs) {
-      if (el.closest('#mp-copilot-root, #jobright-helper-plugin, #nextkin-copilot-toast')) continue;
-      if (el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0) {
-        count++;
-      }
-    }
-    return count >= 2;
+    if (!isJobOrCareerPage()) return false;
+
+    // A real job application form requires either:
+    // 1. Resume / CV file upload input
+    const fileInput = document.querySelector('input[type="file"]');
+    // 2. Candidate name inputs
+    const nameInput = document.querySelector('input[name*="first_name" i], input[name*="firstName" i], input[id*="first_name" i], input[id*="firstName" i], input[name*="fullname" i], input[name*="full_name" i], input[placeholder*="full name" i], input[placeholder*="first name" i]');
+    // 3. Email input
+    const emailInput = document.querySelector('input[type="email"], input[name*="email" i], input[id*="email" i]');
+    // 4. Phone input
+    const phoneInput = document.querySelector('input[type="tel"], input[name*="phone" i], input[id*="phone" i], input[name*="mobile" i]');
+    // 5. Explicit job application form container
+    const appForm = document.querySelector('form[action*="apply" i], form[action*="job" i], form[id*="application" i], form[class*="application" i], [data-automation-id*="application" i], .ashby-application-form, #application-form, .application-form');
+
+    if (appForm) return true;
+    if (fileInput && (emailInput || nameInput || phoneInput)) return true;
+    if (nameInput && (emailInput || phoneInput)) return true;
+
+    return false;
   }
 
   // -------------------------------------------------------------
@@ -303,6 +428,8 @@
   }
 
   function scrapeJobFromDOM() {
+    if (!isJobOrCareerPage()) return null;
+
     let title = '';
     let company = '';
     let description = '';
@@ -336,7 +463,7 @@
 
     if (isFoxsense) {
       company = 'Foxsense Innovations';
-      const kTitle = document.querySelector('h1, [class*="job-title" i], [class*="jobTitle" i]');
+      const kTitle = document.querySelector('[class*="job-title" i], [class*="jobTitle" i], .job-title');
       if (kTitle && !title) title = (kTitle.textContent || '').trim();
     }
 
@@ -352,7 +479,7 @@
       department = jsonLd.department || '';
     }
 
-    // 2. Heading Selectors (Universal & Keka support)
+    // 2. Heading Selectors (Universal & Keka support) - Require specific job/career markers
     if (!title) {
       const titleSelectors = [
         'h1[data-cy="jobTitle"]', 'h1.job-title', '[data-testid="job-title"]',
@@ -360,13 +487,13 @@
         '.job-details-jobs-unified-top-card__job-title', '.top-card-layout__title',
         'h1.app-title', '.posting-headline h2', '[class*="job-title" i]',
         '[class*="jobTitle" i]', '[class*="position-title" i]', '[class*="role-title" i]',
-        '[class*="posting-title" i]', 'h1'
+        '[class*="posting-title" i]'
       ];
       for (const sel of titleSelectors) {
         const el = document.querySelector(sel);
         if (el && !el.closest('#mp-copilot-root, #jobright-helper-plugin, #nextkin-copilot-toast')) {
           const txt = (el.textContent || '').trim();
-          if (txt && txt.length > 2 && txt.length < 140 && !/sign\s*in|log\s*in|cookie|privacy/i.test(txt)) {
+          if (isValidJobTitle(txt)) {
             title = txt;
             break;
           }
@@ -410,7 +537,7 @@
         const el = document.querySelector(sel);
         if (el && !el.closest('#mp-copilot-root, #jobright-helper-plugin, #nextkin-copilot-toast')) {
           const txt = (el.innerText || el.textContent || '').trim();
-          if (txt && txt.length > 60) {
+          if (txt && txt.length > 80) {
             description = txt;
             descriptionHtml = el.innerHTML || '';
             break;
@@ -419,15 +546,15 @@
       }
     }
 
-    // 5. Title & Company Fallback
-    if (!title || !company) {
+    // 5. Title & Company Fallback only if confirmed career/job page
+    if ((!title || !company) && isJobOrCareerPage()) {
       const ogTitle = extractMetaTag(['og:title', 'twitter:title']);
       const parsed = parsePageTitle(ogTitle || document.title);
-      if (!title && parsed.title) title = parsed.title;
+      if (!title && isValidJobTitle(parsed.title)) title = parsed.title;
       if (!company && parsed.company) company = parsed.company;
     }
 
-    if (!company) {
+    if (!company && isJobOrCareerPage()) {
       company = cleanDomainName(window.location.hostname);
     }
 
@@ -446,12 +573,12 @@
       }
     }
 
-    if (!title) return null;
+    if (!title || !isValidJobTitle(title) || !description || description.length < 80) return null;
 
     return {
       title,
       company,
-      description: description || `${title} at ${company}`,
+      description,
       descriptionHtml,
       location,
       department,
@@ -461,9 +588,9 @@
     };
   }
 
-  // Proactively save external outside job to portal database
+  // Proactively save external outside job to portal database (only on verified job pages)
   async function syncOutsideJobToPortal(job) {
-    if (!job || !job.title || !job.company) return;
+    if (!isJobOrCareerPage() || !job || !isValidJobTitle(job.title) || !job.description || job.description.length < 80) return;
     try {
       chrome.runtime.sendMessage({
         type: 'save_external_job',
@@ -747,6 +874,7 @@
   // -------------------------------------------------------------
   function bindApplyButtonWatcher() {
     document.addEventListener('click', (e) => {
+      if (!isJobOrCareerPage()) return;
       const target = e.target;
       if (!target) return;
       const btn = target.closest('button, a, [role="button"], input[type="button"]');
@@ -800,17 +928,16 @@
   }
 
   function handleApplicationSubmission(triggerNode) {
+    if (!isJobOrCareerPage()) return;
     if (pendingSubmission && Date.now() - pendingSubmission.timestamp < 10000) return;
 
+    const job = currentExtractedJob || scrapeJobFromDOM();
+    if (!job || !isValidJobTitle(job.title) || !job.description || job.description.length < 80) {
+      // Abort silently: not a genuine job application
+      return;
+    }
+
     const answers = captureFormAnswers();
-    const job = currentExtractedJob || scrapeJobFromDOM() || {
-      title: document.title,
-      company: cleanDomainName(window.location.hostname),
-      description: document.body.innerText.slice(0, 500),
-      jobUrl: window.location.href,
-      location: '',
-      portalSource: window.location.hostname
-    };
 
     pendingSubmission = {
       timestamp: Date.now(),
@@ -818,9 +945,6 @@
       answers,
       status: 'submitted'
     };
-
-    // Show submission feedback toast
-    showInPageToast(`🎉 Application for ${job.title} at ${job.company} submitted! Saved to NextKinHR Portal.`, false, 6000);
 
     // Build applied resume snapshot
     const resumeSnapshot = activeCandidate ? {
@@ -867,11 +991,13 @@
   function bindSubmissionListeners() {
     // 1. Listen for form submit events
     document.addEventListener('submit', (e) => {
+      if (!isJobOrCareerPage()) return;
       handleApplicationSubmission(e.target);
     }, true);
 
     // 2. Listen for clicks on submit/apply buttons
     document.addEventListener('click', (e) => {
+      if (!isJobOrCareerPage()) return;
       const target = e.target;
       if (!target) return;
       const btn = target.closest('button, input[type="submit"], [role="button"], a');
@@ -892,6 +1018,7 @@
     // 3. Observe confirmation text appearing dynamically (Ashby, Greenhouse, Lever, Workday, etc.)
     let confirmed = false;
     const checkConfirmation = () => {
+      if (!isJobOrCareerPage()) return;
       if (confirmed) return;
       const bodyText = document.body ? document.body.innerText : '';
       const hasMatch = /(thank\s*you\s*for\s*(?:applying|your\s*application)|your\s*application\s*(?:was|is|has\s*been)?\s*(?:successfully\s*)?(?:received|submitted)|application\s*(?:was|is|has\s*been)?\s*(?:successfully\s*)?(?:received|submitted)|successfully\s*submitted|we'll\s*contact\s*you\s*if\s*there\s*are\s*next\s*steps)/i.test(bodyText);
@@ -918,21 +1045,7 @@
   // 9. Main Scanning & Announcement Loop
   // -------------------------------------------------------------
   async function performPageScan() {
-    const curHost = window.location.hostname.toLowerCase();
-    const curPth = window.location.pathname.toLowerCase();
-    
-    // Never run outside job scanner or show toasts on internal NextKinHR workspace pages (e.g. /dashboard/submissions, /dashboard)
-    const isPortalInternal = (curHost.includes('nextkinhr.com') || curHost.includes('localhost') || curHost.includes('127.0.0.1')) &&
-                             !curPth.startsWith('/jobs/') && !curPth.startsWith('/public-jobs/');
-    if (isPortalInternal) {
-      return;
-    }
-
-    // Skip non-job pages on LinkedIn (feed, profiles, messaging)
-    if (curHost.includes('linkedin.com')) {
-      if (!curPth.includes('/jobs')) return;
-      if (/\/(in|feed|messaging|mynetwork|notifications|pulse|groups)\b/i.test(curPth)) return;
-    }
+    if (!isJobOrCareerPage()) return;
 
     await loadActiveCandidate();
 
@@ -1010,6 +1123,13 @@
   }, true);
 
   function initializeOutsideJobEngine() {
+    try {
+      const existing = document.getElementById('nextkin-copilot-toast');
+      if (existing) existing.remove();
+      const mpExisting = document.getElementById('mp-copilot-toast');
+      if (mpExisting) mpExisting.remove();
+    } catch {}
+
     bindApplyButtonWatcher();
     bindSubmissionListeners();
     performPageScan();

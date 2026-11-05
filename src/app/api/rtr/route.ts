@@ -1,5 +1,6 @@
 import { protectedRoute } from "@/lib/http/protected-route";
 import { database, checkDb, CaptureError } from "@/lib/db/admin";
+import { candidateAccess } from "@/lib/resumes/repository";
 import { z } from "zod";
 
 const createRtrSchema = z.object({
@@ -35,7 +36,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const candidateId = url.searchParams.get("candidateId");
     const status = url.searchParams.get("status");
-    const search = url.searchParams.get("search")?.toLowerCase().trim();
+    const search = (url.searchParams.get("search") || "").replace(/[%_,()'"\\:]/g, ' ').trim().toLowerCase();
 
     const db = database();
     const isStaff = ["super_admin", "recruiter", "technical_recruiter"].includes(profile.role);
@@ -50,6 +51,8 @@ export async function GET(request: Request) {
         .maybeSingle();
       if (!cand) return { documents: [], total: 0 };
       candidateFilter = cand.id;
+    } else if (candidateFilter && profile.role !== "super_admin") {
+      await candidateAccess(profile, candidateFilter);
     }
 
     const items: Array<Record<string, unknown>> = [];

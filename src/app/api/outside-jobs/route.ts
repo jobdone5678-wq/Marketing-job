@@ -1,10 +1,11 @@
-import { NextResponse } from 'next/server';
-import { database, checkDb } from '@/lib/db/admin';
+import { protectedRoute } from '@/lib/http/protected-route';
+import { database, checkDb, CaptureError } from '@/lib/db/admin';
 
 export async function GET(request: Request) {
-  try {
+  return protectedRoute(request, 'candidate_or_staff', async (profile) => {
     const { searchParams } = new URL(request.url);
-    const search = searchParams.get('q')?.toLowerCase() || '';
+    const rawSearch = searchParams.get('q')?.trim() || '';
+    const safeSearch = rawSearch.replace(/[%_,()'"\\:]/g, ' ').trim();
 
     let query = database()
       .from('outside_jobs')
@@ -14,15 +15,29 @@ export async function GET(request: Request) {
       `)
       .order('created_at', { ascending: false });
 
-    if (search) {
-      query = query.or(`company.ilike.%${search}%,title.ilike.%${search}%,portal_source.ilike.%${search}%,location.ilike.%${search}%`);
+    // Enforce data isolation: candidates can only view their own outside job applications
+    if (profile.role === 'client') {
+      const { data: cand, error: candError } = await database()
+        .from('candidates')
+        .select('id')
+        .eq('user_id', profile.id)
+        .maybeSingle();
+      checkDb(candError);
+
+      if (!cand) {
+        return { success: true, outsideJobs: [] };
+      }
+      query = query.eq('candidate_id', cand.id);
+    }
+
+    if (safeSearch) {
+      const term = `%${safeSearch}%`;
+      query = query.or(`company.ilike.${term},title.ilike.${term},portal_source.ilike.${term},location.ilike.${term}`);
     }
 
     const { data, error } = await query;
     checkDb(error);
 
-    return NextResponse.json({ success: true, outsideJobs: data || [] });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
-  }
+    return { success: true, outsideJobs: data || [] };
+  });
 }

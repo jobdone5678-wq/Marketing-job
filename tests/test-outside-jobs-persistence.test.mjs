@@ -29,6 +29,7 @@ function setupOutsideJobsTest() {
       }
     ],
     jobs: [],
+    outside_jobs: [],
     job_submissions: [],
     extension_submission_events: [],
     application_intents: []

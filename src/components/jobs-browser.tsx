@@ -18,6 +18,7 @@ import { PublicJobCatalog } from '@/components/public-job-catalog';
 import {AppliedJobsList} from '@/components/applied-jobs-list';
 import {withoutAppliedJobs,type AppliedJobsResponse} from '@/lib/jobs/application-state';
 import { extractJobSkills } from '@/lib/jobs/skills-extractor';
+import { sanitizeJobHtml } from '@/lib/html-sanitizer';
 
 import type { SupportedJobProvider } from '@/lib/public-directory';
 
@@ -843,7 +844,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                         <div
                           className="prose prose-sm dark:prose-invert max-w-none text-sm text-muted-foreground max-h-96 overflow-y-auto leading-relaxed"
                           dangerouslySetInnerHTML={{
-                            __html: job.description_html || job.description.replace(/\n/g, '<br/>'),
+                            __html: sanitizeJobHtml(job.description_html || job.description.replace(/\n/g, '<br/>')),
                           }}
                         />
                         <div className="pt-2 flex justify-between items-center text-xs text-muted-foreground border-t">

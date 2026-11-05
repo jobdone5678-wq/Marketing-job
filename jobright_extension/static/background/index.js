@@ -101,34 +101,25 @@ async function handleV3Message(msg, sender, reply) {
       const { prompt, fieldLabel, candidate, jobTitle, companyName } = msg;
       (async () => {
         try {
-          const apiKey = 'sk-xt-feb0878843bac616bf98f1a1797820ed06b863167626066d';
-          const candName = candidate?.full_name || candidate?.name || 'Bhargav Reddy';
-          const skillsStr = Array.isArray(candidate?.skills) ? candidate.skills.join(', ') : 'Python, React, TypeScript, Next.js, PostgreSQL, AWS, .NET Core';
-          const resp = await fetch('https://api.xkiro.com/v1/chat/completions', {
+          const storage = await chrome.storage.local.get(['origin', 'token', 'nextkin_auth_token']);
+          let origin = storage.origin || 'https://www.nextkinhr.com';
+          if (origin === 'https://nextkinhr.com') origin = 'https://www.nextkinhr.com';
+          const tok = storage.token || storage.nextkin_auth_token || '';
+
+          const resp = await fetch(origin + '/api/extension/generate-answer', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + apiKey
+              'Authorization': 'Bearer ' + tok
             },
-            body: JSON.stringify({
-              model: 'mistralai/mistral-large-2512',
-              messages: [
-                {
-                  role: 'system',
-                  content: `You are an expert career copilot. Write a concise, professional answer (2-3 sentences, maximum 60 words) for a job application field. Write in first person ("I"). Candidate name: ${candName}, Skills: ${skillsStr}. Role applied for: ${jobTitle || 'Software Engineer'} at ${companyName || 'Company'}. Never include quotes or bullet points.`
-                },
-                {
-                  role: 'user',
-                  content: prompt || `Write a professional response for application field: "${fieldLabel}"`
-                }
-              ],
-              max_tokens: 120,
-              temperature: 0.7
-            })
+            body: JSON.stringify({ prompt, fieldLabel, candidate, jobTitle, companyName })
           });
           const data = await resp.json();
-          const answer = data.choices?.[0]?.message?.content?.trim() || '';
-          reply({ ok: true, answer: answer.replace(/^["']|["']$/g, '').trim() });
+          if (data && data.ok) {
+            reply({ ok: true, answer: data.answer });
+          } else {
+            reply({ ok: false, error: data?.error || 'Generation failed' });
+          }
         } catch (err) {
           reply({ ok: false, error: err.message });
         }
@@ -199,69 +190,8 @@ async function handleV3Message(msg, sender, reply) {
 
       let origin = storage.origin || 'https://www.nextkinhr.com';
       if (origin === 'https://nextkinhr.com') origin = 'https://www.nextkinhr.com';
-      
-      const SUPABASE_REST_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6d29ya3J0Z2JjcnNld2pzZnNnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTMzMTk4MiwiZXhwIjoyMTA2OTA3OTgyfQ.e2koARcutsrPA9dC9flPeQmTQCJL7adafRlXzep-br4';
 
-      // 1. Direct Supabase REST submission for instant, zero-delay persistence
-      try {
-        const notesStr = item.payload.evidence || 'Application submitted via browser extension';
-
-        fetch('https://yzworkrtgbcrsewjsfsg.supabase.co/rest/v1/job_submissions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': SUPABASE_REST_KEY,
-            'Authorization': 'Bearer ' + SUPABASE_REST_KEY,
-            'Prefer': 'return=representation'
-          },
-          body: JSON.stringify({
-            candidate_id: candId,
-            company_name: item.payload.companyName || 'Company',
-            job_title: item.payload.jobTitle || 'Software Engineer',
-            job_url: item.payload.jobUrl || '',
-            portal_source: item.payload.portalSource || 'Outside Job',
-            job_location: item.payload.jobLocation || null,
-            status: 'Applied',
-            capture_status: 'submitted',
-            submission_date: new Date().toISOString().split('T')[0],
-            notes: notesStr
-          })
-        }).then(r => r.json()).then(subData => {
-          const subId = Array.isArray(subData) && subData[0] ? subData[0].id : null;
-          fetch('https://yzworkrtgbcrsewjsfsg.supabase.co/rest/v1/outside_jobs', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'apikey': SUPABASE_REST_KEY,
-              'Authorization': 'Bearer ' + SUPABASE_REST_KEY,
-              'Prefer': 'return=representation'
-            },
-            body: JSON.stringify({
-              candidate_id: candId,
-              submission_id: subId,
-              title: item.payload.jobTitle || 'Software Engineer',
-              company: item.payload.companyName || 'Company',
-              job_url: item.payload.jobUrl || '',
-              portal_source: item.payload.portalSource || 'Outside Job',
-              location: item.payload.jobLocation || null,
-              department: item.payload.department || null,
-              employment_type: item.payload.employmentType || 'Full-time',
-              description: item.payload.jobDescription || null,
-              description_html: item.payload.jobDescriptionHtml || null,
-              match_score: item.payload.matchScore ?? null,
-              matched_skills: item.payload.matchedSkills || [],
-              missing_skills: item.payload.missingSkills || [],
-              extracted_skills: item.payload.extractedSkills || [],
-              ats_analysis: item.payload.atsAnalysis || null,
-              answers: item.payload.answers || null,
-              status: 'Applied',
-              applied_at: new Date().toISOString()
-            })
-          }).catch(() => null);
-        }).catch(() => null);
-      } catch (err) {}
-
-      // 2. Also forward to NextKinHR Portal API
+      // 1. Forward discovered job details to NextKinHR Portal API
       try {
         fetch(origin + '/api/extension/save-external-job', {
           method: 'POST',
@@ -288,7 +218,7 @@ async function handleV3Message(msg, sender, reply) {
         }).catch(() => null);
       } catch {}
 
-      // 3. Submit application via NextKinHR Portal API
+      // 2. Submit application via NextKinHR Portal API
       fetch(origin + '/api/extension/auto-submit', {
         method: 'POST',
         headers: {

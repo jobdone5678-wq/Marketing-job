@@ -135,6 +135,7 @@
     {
       "matches": [
         "https://nextkinhr.com/*",
+        "https://*.nextkinhr.com/*",
         "https://preprod.nextkinhr.com/*",
         "https://beta.jobright-internal.com/*"
       ],

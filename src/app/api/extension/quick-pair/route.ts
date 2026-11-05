@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies as getNextCookies } from 'next/headers';
 import { database, checkDb } from '@/lib/db/admin';
 import { cors } from '@/lib/capture/server';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 const tokenHash = (value: string) => createHash('sha256').update(value).digest('hex');
 
@@ -12,27 +13,26 @@ export async function OPTIONS(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const ip = getClientIp(request);
+    const limit = checkRateLimit(`quick-pair:${ip}`, { windowMs: 60000, max: 20 });
+    if (!limit.allowed) {
+      return cors(
+        request,
+        Response.json(
+          { error: 'Too many pairing attempts. Please wait a minute and try again.' },
+          { status: 429, headers: { 'Retry-After': String(Math.ceil(limit.resetInMs / 1000)) } }
+        )
+      );
+    }
+
     const nextCookieStore = await getNextCookies();
-    let bodyCookies: { name: string; value: string }[] = [];
-
-    try {
-      const body = await request.clone().json();
-      if (body && Array.isArray(body.cookies)) {
-        bodyCookies = body.cookies;
-      }
-    } catch {}
-
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
       {
         cookies: {
           getAll() {
-            const nextCookies = nextCookieStore.getAll();
-            const map = new Map<string, string>();
-            for (const c of nextCookies) map.set(c.name, c.value);
-            for (const c of bodyCookies) map.set(c.name, c.value);
-            return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
+            return nextCookieStore.getAll();
           },
           setAll() {},
         },

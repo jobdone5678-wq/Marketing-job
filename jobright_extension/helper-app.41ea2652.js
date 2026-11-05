@@ -2454,7 +2454,7 @@ function g(){
   // Detect Job Title & Company
   let jobTitle = e?.title || e?.jobTitle || "";
   let companyName = e?.company || e?.companyName || "";
-  let isPortalPage = (host.includes("nextkinhr.com") || host.includes("localhost") || host.includes("127.0.0.1")) &&
+  let isPortalPage = (host.includes("nextkinhr.com") || host.includes("nexckinhr.com") || host.includes("nexckin") || host.includes("nextkin") || host.includes("localhost") || host.includes("127.0.0.1")) &&
                      !pth.startsWith("/jobs/") && !pth.startsWith("/public-jobs/");
 
   let hasCandidate = true;

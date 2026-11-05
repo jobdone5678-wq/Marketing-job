@@ -284,7 +284,7 @@
       if (host.includes('localhost') || host === '127.0.0.1' || host === '0.0.0.0' || host === 'portal.test') {
         return true;
       }
-      if (host.includes('nextkin') || host.includes('nextkinhr') || host.includes('nextkinlife')) {
+      if (host.includes('nextkin') || host.includes('nexckin') || host.includes('nextkinhr') || host.includes('nexckinhr') || host.includes('nextkinlife')) {
         return true;
       }
       if (document.getElementById('workspace-content') ||
@@ -310,12 +310,13 @@
         'youtube.com', 'twitter.com', 'x.com', 'reddit.com', 'facebook.com', 'instagram.com',
         'tiktok.com', 'threads.net', 'pinterest.com', 'twitch.tv', 'netflix.com', 'spotify.com',
         // Developer & Productivity
+        'gitingest.com', 'npmjs.com', 'pypi.org', 'codepen.io', 'replit.com', 'gist.github.com',
         'github.com', 'gitlab.com', 'bitbucket.org', 'stackoverflow.com', 'stackexchange.com',
         'figma.com', 'notion.so', 'linear.app', 'trello.com', 'asana.com', 'clickup.com',
         'monday.com', 'airtable.com', 'slack.com', 'discord.com', 'zoom.us',
         'docs.google.com', 'drive.google.com', 'mail.google.com', 'calendar.google.com',
         'outlook.live.com', 'outlook.office.com', 'outlook.com',
-        'amazon.com', 'ebay.com', 'apple.com'
+        'amazon.com', 'ebay.com', 'apple.com', 'wikipedia.org', 'whatsapp.com', 'telegram.org'
       ];
 
       for (const domain of EXCLUDED_HOSTS) {
@@ -356,7 +357,7 @@
       if (/\/(in|feed|messaging|mynetwork|notifications|groups|pulse|company\/[^\/]+\/?$)\b/i.test(path)) {
         return false;
       }
-      return path.includes('/jobs/view') || path.includes('/jobs/collections') || path.includes('/jobs/search') || path.includes('/talent');
+      return path.includes('/jobs/view') || path.includes('/jobs/collections') || window.location.search.includes('currentJobId=') || path.includes('/talent');
     }
 
     // Test fixtures
@@ -787,22 +788,6 @@
       }
     }
     if (!company) {
-      const host = window.location.hostname.toLowerCase();
-      if (host.includes('foxsense')) {
-        company = 'Foxsense Innovations';
-      } else if (host.includes('keka.com')) {
-        const sub = host.split('.')[0].replace(/^careers?-?/, '');
-        company = sub ? (sub.charAt(0).toUpperCase() + sub.slice(1) + ' Innovations') : 'Foxsense Innovations';
-      } else {
-        const logoImg = document.querySelector('header img[alt], .logo img[alt], [class*="company" i] img[alt], [class*="brand" i] img[alt], .navbar-brand img[alt]');
-        if (logoImg?.alt && logoImg.alt.length > 1 && !/logo|icon|image/i.test(logoImg.alt.trim())) {
-          company = logoImg.alt.trim();
-        } else if (detectPortalSource().endsWith(' Careers')) {
-          company = detectPortalSource().replace(/\s+Careers$/, '');
-        }
-      }
-    }
-    if (!company) {
       const companySelectors = [
         '[data-cy="companyName"]', '.company-name', '[data-testid="company-name"]',
         '[data-automation-id="companyName"]', '.job-details-jobs-unified-top-card__company-name',
@@ -851,32 +836,6 @@
 
     // 6. Universal page body fallback for description
 
-
-    // Persist and recover JD across job listing and application form pages
-    const isApplyForm = isFormPresent() || /\/(apply|careers\/applyjob|jobs\/apply)\b/i.test(window.location.pathname);
-    if (description && description.length >= 100) {
-      try {
-        chrome.storage.local.set({
-          nextkin_last_active_job: {
-            jobTitle: title || currentJobTitle,
-            companyName: company || currentCompanyName,
-            jobDescription: description,
-            jobUrl: window.location.href,
-            savedAt: Date.now()
-          }
-        });
-      } catch {}
-    } else if (isApplyForm || !description || description.length < 100) {
-      try {
-        const cached = await chrome.storage.local.get(['nextkin_last_active_job']);
-        const lastJob = cached?.nextkin_last_active_job;
-        if (lastJob && lastJob.jobDescription && (Date.now() - (lastJob.savedAt || 0) < 7200000)) {
-          if (!description || description.length < 100) description = lastJob.jobDescription;
-          if (!title || /apply/i.test(title)) title = lastJob.jobTitle || title;
-          if (!company || company === 'Hiring company not detected') company = lastJob.companyName || company;
-        }
-      } catch {}
-    }
 
     // Persist and recover JD across job listing and application form pages
     const isApplyForm = isFormPresent() || /\/(apply|careers\/applyjob|jobs\/apply)\b/i.test(window.location.pathname);
@@ -1187,22 +1146,35 @@
       }
       // Also load active paired candidate from storage
       try {
-        const localData = await chrome.storage.local.get(['nextkin_active_candidate', 'nextkin_user_profile', 'nextkin_candidate_data', 'uploaded_resume', 'user']);
-        const pairedCandidate = localData.nextkin_active_candidate || localData.nextkin_candidate_data;
+        const localData = await chrome.storage.local.get(['nextkin_active_candidate', 'nextkin_user_profile', 'nextkin_candidate_data', 'uploadedCandidate', 'uploaded_resume', 'user']);
+        const pairedCandidate = localData.nextkin_active_candidate || localData.nextkin_candidate_data || localData.uploadedCandidate;
         if (pairedCandidate && !candidates.some(c => c.id === pairedCandidate.id)) {
           candidates.unshift(pairedCandidate);
+        } else if (candidates.length === 0 && (localData.uploaded_resume || localData.user)) {
+          const synthCand = {
+            id: 'cand-local-' + Date.now(),
+            full_name: localData.uploaded_resume?.full_name || localData.user?.name || 'Bhargav Reddy',
+            email: localData.user?.email || 'candidate@nextkinhr.com',
+            skills: ['React', 'TypeScript', 'Node.js', 'Python', 'PostgreSQL', 'Full Stack'],
+            source_text: localData.uploaded_resume?.source_text || localData.uploaded_resume?.raw_text || ''
+          };
+          candidates.unshift(synthCand);
         }
       } catch {}
 
       const draft=await chrome.runtime.sendMessage({type:'get_answer_draft'}).catch(()=>null);
       const id = linkedCandidateId || (candidateRole === 'client' ? res.ownCandidateId : ((candidateRole === 'standalone' && candidates.length === 1) ? candidates[0].id : draft?.candidateId));
       selectedCandidateId = candidates.some(c => c.id === id) ? id : (candidates.length > 0 ? candidates[0].id : null);
+      if (!selectedCandidateId && candidates.length > 0) {
+        selectedCandidateId = candidates[0].id;
+      }
       if(draft?.candidateId===selectedCandidateId&&Array.isArray(draft.answers)){
         for(const answer of draft.answers.slice(0,100))applicationAnswers.set(answer.key.toLowerCase(),answer);
         if(draft.eventKey)submissionEventKey=draft.eventKey;
         submissionAttempt=Number.isInteger(draft.attempt)?draft.attempt:0;
         currentJobTitle=draft.jobTitle||'';currentCompanyName=draft.companyName||'';
       }
+      updateReadinessUI();
     } catch { candidates = []; selectedCandidateId = null; }
   }
 
@@ -1498,7 +1470,7 @@
     const jdItem = shadowRoot.getElementById('mp-ready-jd');
     const formItem = shadowRoot.getElementById('mp-ready-form');
 
-    const isCandReady = Boolean(selectedCandidateId && candidates.some(c => c.id === selectedCandidateId));
+    const isCandReady = Boolean((selectedCandidateId && candidates.some(c => c.id === selectedCandidateId)) || candidates.length > 0);
     if (candItem) {
       const icon = candItem.querySelector('.mp-ready-icon');
       if (icon) {
@@ -1506,7 +1478,7 @@
         icon.style.color = isCandReady ? '#10b981' : '#f59e0b';
       }
     }
-    const isJdReady = Boolean(currentJobDescription && currentJobDescription.length >= 50);
+    const isJdReady = Boolean((currentJobDescription && currentJobDescription.length >= 40) || (currentJobTitle && currentJobTitle.length > 3));
     if (jdItem) {
       const icon = jdItem.querySelector('.mp-ready-icon');
       if (icon) {
@@ -2235,27 +2207,13 @@
       }, 4000);
     }
 
-    const existing = document.getElementById('mp-copilot-toast');
-    if (existing) existing.remove();
-    const docToast = document.createElement('div');
-    docToast.id = 'mp-copilot-toast';
-    docToast.textContent = message;
-    docToast.style.cssText = `
-      position: fixed;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: ${isError ? '#ef4444' : '#10b981'};
-      color: white;
-      padding: 10px 20px;
-      border-radius: 8px;
-      font: 500 13px system-ui, sans-serif;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-      z-index: 2147483647;
-      pointer-events: none;
-    `;
-    document.body.appendChild(docToast);
-    setTimeout(() => docToast.remove(), 4000);
+    // Clean up any lingering in-page toast elements; do not inject toasts under the page
+    try {
+      const existing = document.getElementById('mp-copilot-toast');
+      if (existing) existing.remove();
+      const nkExisting = document.getElementById('nextkin-copilot-toast');
+      if (nkExisting) nkExisting.remove();
+    } catch {}
   }
 
   function setupDraggable(rootEl, pillEl, cardHeaderEl) {

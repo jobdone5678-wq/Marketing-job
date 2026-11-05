@@ -5,39 +5,29 @@ export type ExtensionProfile = { id: string; status: string; role: 'client' | 'r
 export async function extensionProfile(request: Request): Promise<ExtensionProfile> {
   const header = request.headers.get('authorization') || '';
   if (!/^Bearer [A-Za-z0-9_-]{20,128}$/.test(header)) {
-    // Resilient fallback for authenticated user/extension sessions
-    return {
-      id: '892442fa-8b99-4ecd-865c-c5dbed1f39a6',
-      status: 'active',
-      role: 'client'
-    };
+    throw new CaptureError('Authentication required. Missing or malformed extension token.', 401);
   }
   const { data, error } = await database().from('extension_credentials').select('owner_id,expires_at,revoked_at')
     .eq('token_hash', tokenHash(header.slice(7))).maybeSingle();
   checkDb(error);
   const credential = data as {owner_id: string; expires_at: string; revoked_at: string | null} | null;
   if (!credential || credential.revoked_at || Date.parse(credential.expires_at) <= Date.now()) {
-    return {
-      id: '892442fa-8b99-4ecd-865c-c5dbed1f39a6',
-      status: 'active',
-      role: 'client'
-    };
+    throw new CaptureError('Extension session expired or revoked. Please pair again.', 401);
   }
   const { data: profileData, error: profileError } = await database().from('profiles').select('id,status,role').eq('id', credential.owner_id).single();
   checkDb(profileError);
   const profile = profileData as ExtensionProfile | null;
-  if (!profile || profile.status !== 'active' || !['client', 'recruiter', 'technical_recruiter', 'super_admin'].includes(profile.role)) {
-    return {
-      id: '892442fa-8b99-4ecd-865c-c5dbed1f39a6',
-      status: 'active',
-      role: 'client'
-    };
+  if (!profile || profile.status !== 'active') {
+    throw new CaptureError('Active user profile required to use the extension.', 403);
+  }
+  if (!['client', 'job_seeker', 'recruiter', 'technical_recruiter', 'super_admin'].includes(profile.role)) {
+    throw new CaptureError('Unauthorized role for extension access.', 403);
   }
   return profile;
 }
 export async function extensionActor(request: Request) {
   const profile = await extensionProfile(request);
-  if(profile.role==='client')throw new CaptureError('Active recruiting staff required for linked application actions.',403);
+  if(profile.role==='client'||profile.role==='job_seeker')throw new CaptureError('Active recruiting staff required for linked application actions.',403);
   return profile.id;
 }
 export async function recordObservation(actor:string,body:unknown,manual=false){const input=z.object({intentId:z.uuid(),eventKey:z.uuid(),status:z.enum(['in_progress','submit_attempted','submitted','failed']),attempt:z.number().int().min(1).max(1000),evidence:z.string().min(1).max(1000),url:z.string().url().max(2000),observedAt:z.string().datetime(),answers:z.unknown().optional(),appliedResume:appliedResumeSchema}).parse(body);const parsedUrl=new URL(input.url);parsedUrl.search='';parsedUrl.hash='';const safeUrl=parsedUrl.toString();const {data:intent,error}=await database().from('application_intents').select('*,job:jobs(application_url),candidate:candidates(version)').eq('id',input.intentId).eq('owner_id',actor).single();checkDb(error);if(!intent)throw new CaptureError('Intent not found.',404);if(!manual&&(!allowedCaptureUrl(safeUrl,intent.job.application_url)||!validateObservation(input.status,input.evidence)))throw new CaptureError('Unsupported site or insufficient application evidence. Review manually.',422);
@@ -51,4 +41,46 @@ export async function recordObservation(actor:string,body:unknown,manual=false){
  }
  return {status:data,snapshot};}
 export async function extensionRoute(request:Request,work:()=>Promise<unknown>){try{return cors(request,Response.json(await work()));}catch(e){if(e instanceof z.ZodError)return cors(request,Response.json({error:'Invalid capture request.'},{status:400}));return cors(request,errorResponse(e));}}
-export function cors(request:Request,response:Response){const origin=request.headers.get('origin');if(origin&&(origin.startsWith('chrome-extension://')||origin.startsWith('http://localhost')||origin.startsWith('http://127.0.0.1'))){response.headers.set('Access-Control-Allow-Origin',origin);response.headers.set('Vary','Origin');response.headers.set('Access-Control-Allow-Headers','Authorization, Content-Type');response.headers.set('Access-Control-Allow-Methods','GET, POST, OPTIONS, DELETE');response.headers.set('Access-Control-Allow-Credentials','true');}return response;}
+export function cors(request: Request, response: Response) {
+  const origin = request.headers.get('origin');
+  if (!origin) return response;
+
+  const allowedExtensionIds = process.env.ALLOWED_EXTENSION_IDS
+    ? process.env.ALLOWED_EXTENSION_IDS.split(',').map(s => s.trim()).filter(Boolean)
+    : null;
+
+  let isAllowed = false;
+  if (origin.startsWith('chrome-extension://')) {
+    const extId = origin.replace('chrome-extension://', '').replace(/\/.*$/, '');
+    if (allowedExtensionIds && allowedExtensionIds.length > 0) {
+      isAllowed = allowedExtensionIds.includes(extId);
+    } else {
+      // Validate well-formed 32-character Chrome extension ID
+      isAllowed = /^[a-p]{32}$/i.test(extId);
+    }
+  } else {
+    try {
+      const u = new URL(origin);
+      if (
+        (u.protocol === 'http:' || u.protocol === 'https:') &&
+        (u.hostname === 'localhost' || u.hostname === '127.0.0.1')
+      ) {
+        isAllowed = true;
+      } else if (
+        u.protocol === 'https:' &&
+        (u.hostname === 'nextkinhr.com' || u.hostname.endsWith('.nextkinhr.com'))
+      ) {
+        isAllowed = true;
+      }
+    } catch {}
+  }
+
+  if (isAllowed) {
+    response.headers.set('Access-Control-Allow-Origin', origin);
+    response.headers.set('Vary', 'Origin');
+    response.headers.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, DELETE');
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
+  }
+  return response;
+}

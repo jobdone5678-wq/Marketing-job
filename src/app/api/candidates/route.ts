@@ -1,8 +1,15 @@
 import { protectedRoute } from '@/lib/http/protected-route';
 import { database, checkDb, CaptureError } from '@/lib/db/admin';
 import { candidateInput } from '@/lib/candidate-input';
+import { checkRateLimit } from '@/lib/rate-limit';
+
 export async function GET(request: Request) {
   return protectedRoute(request, 'candidate_or_staff', async profile => {
+    const limitCheck = checkRateLimit(`candidates-lookup:${profile.id}`, { windowMs: 60000, max: 120 });
+    if (!limitCheck.allowed) {
+      throw new CaptureError('Too many candidate requests. Please wait a moment.', 429);
+    }
+
     const url = new URL(request.url);
     const page = Math.max(0, Number(url.searchParams.get('page') || 0)); if (!Number.isSafeInteger(page)) throw new CaptureError('Invalid page.');
     const limit = Math.min(1000, Math.max(1, Number(url.searchParams.get('limit') || 100)));

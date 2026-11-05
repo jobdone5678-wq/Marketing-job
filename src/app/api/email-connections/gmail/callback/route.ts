@@ -5,6 +5,15 @@ import {decryptToken,encryptToken,equalSecret} from '@/lib/email-confirmations/c
 import {gmailJson} from '@/lib/email-confirmations/gmail';
 import {adminClient,checkDb,requireCaptureStaff} from '@/lib/email-confirmations/server';
 
+function isAllowedRedirectOrigin(origin: string): boolean {
+  try {
+    const u = new URL(origin);
+    if (u.protocol === 'https:' && (u.hostname === 'nextkinhr.com' || u.hostname.endsWith('.nextkinhr.com'))) return true;
+    if ((u.protocol === 'http:' || u.protocol === 'https:') && (u.hostname === 'localhost' || u.hostname === '127.0.0.1')) return true;
+  } catch {}
+  return false;
+}
+
 export async function GET(request:Request) {
   // Redirect only to the configured application origin, never to a caller-provided URL.
   let appOrigin:string;
@@ -32,9 +41,15 @@ export async function GET(request:Request) {
       refresh_token_encrypted:encryptToken(tokens.refresh_token,config.encryptionKey),status:'connected',last_error:null,sync_lease_until:null,sync_lease_token:null},
       {onConflict:'owner_id,provider,mailbox_email'});
     checkDb(error);
-    return NextResponse.redirect(`${appOrigin}/dashboard/email-confirmations?mail=connected`);
+    const safeRedirectBase = (appOrigin && isAllowedRedirectOrigin(appOrigin))
+      ? `${appOrigin}/dashboard/email-confirmations`
+      : '/dashboard/email-confirmations';
+    return NextResponse.redirect(new URL(`${safeRedirectBase}?mail=connected`, request.url));
   } catch (error) {
     console.error('Gmail OAuth callback error:', error);
-    return NextResponse.redirect(`${appOrigin}/dashboard/email-confirmations?mail=connection_failed`);
+    const safeRedirectBase = (appOrigin && isAllowedRedirectOrigin(appOrigin))
+      ? `${appOrigin}/dashboard/email-confirmations`
+      : '/dashboard/email-confirmations';
+    return NextResponse.redirect(new URL(`${safeRedirectBase}?mail=connection_failed`, request.url));
   }
 }

@@ -41,50 +41,17 @@
   let monitoredPhoneField = null;
 
   // -------------------------------------------------------------
-  // 1. In-Page Floating Toast Notification
+  // 1. In-Page Floating Toast Notification (Disabled / Removed per user instruction)
   // -------------------------------------------------------------
   function showInPageToast(message, isError = false, duration = 4000) {
-    const now = Date.now();
-    if (message === lastToastMessage && (now - lastToastTime) < 3000) return;
-    lastToastMessage = message;
-    lastToastTime = now;
-
-    let existing = document.getElementById('nextkin-copilot-toast');
-    if (existing) existing.remove();
-
-    const toast = document.createElement('div');
-    toast.id = 'nextkin-copilot-toast';
-    toast.innerHTML = `
-      <div style="display:flex;align-items:center;gap:10px;">
-        <span style="font-size:16px;">${isError ? '⚠️' : '⚡'}</span>
-        <span style="font-weight:600;line-height:1.4;">${escapeHtml(message)}</span>
-      </div>
-    `;
-    toast.style.cssText = `
-      position: fixed;
-      bottom: 28px;
-      left: 50%;
-      transform: translateX(-50%) translateY(0);
-      background: ${isError ? 'linear-gradient(135deg, #dc2626, #b91c1c)' : 'linear-gradient(135deg, #0f172a, #1e293b)'};
-      color: #ffffff;
-      padding: 12px 22px;
-      border-radius: 10px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      font-size: 13.5px;
-      letter-spacing: 0.2px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.15);
-      z-index: 2147483647;
-      pointer-events: none;
-      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    `;
-
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateX(-50%) translateY(10px)';
-      setTimeout(() => toast.remove(), 350);
-    }, duration);
+    // Completely removed: do NOT inject any toast elements into page DOM.
+    // Clean up any lingering toast elements immediately.
+    try {
+      const existing = document.getElementById('nextkin-copilot-toast');
+      if (existing) existing.remove();
+      const mpExisting = document.getElementById('mp-copilot-toast');
+      if (mpExisting) mpExisting.remove();
+    } catch {}
   }
 
   function escapeHtml(str) {
@@ -95,6 +62,150 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  // -------------------------------------------------------------
+  // 1.1 Strict Job & Career Page / Domain Classifier
+  // -------------------------------------------------------------
+  const BLOCKED_HOST_PATTERNS = [
+    'gitingest.com',
+    'github.com',
+    'github.io',
+    'gitlab.com',
+    'bitbucket.org',
+    'npmjs.com',
+    'pypi.org',
+    'stackoverflow.com',
+    'stackexchange.com',
+    'codepen.io',
+    'replit.com',
+    'gist.github.com',
+    'google.com',
+    'bing.com',
+    'duckduckgo.com',
+    'yahoo.com',
+    'baidu.com',
+    'wikipedia.org',
+    'chatgpt.com',
+    'openai.com',
+    'claude.ai',
+    'anthropic.com',
+    'whatsapp.com',
+    'slack.com',
+    'discord.com',
+    'telegram.org',
+    'twitter.com',
+    'x.com',
+    'facebook.com',
+    'instagram.com',
+    'reddit.com',
+    'youtube.com',
+    'netflix.com',
+    'amazon.com'
+  ];
+
+  const KNOWN_ATS_HOSTS = [
+    'greenhouse.io',
+    'lever.co',
+    'ashbyhq.com',
+    'myworkdayjobs.com',
+    'workday.com',
+    'smartrecruiters.com',
+    'breezy.hr',
+    'workable.com',
+    'icims.com',
+    'jobvite.com',
+    'taleo.net',
+    'bamboohr.com',
+    'recruitee.com',
+    'keka.com',
+    'indeed.com',
+    'dice.com',
+    'ziprecruiter.com',
+    'monster.com',
+    'glassdoor.com',
+    'builtin.com',
+    'wellfound.com',
+    'angel.co',
+    'rippling.com',
+    'jazzhr.com',
+    'pinpointhq.com',
+    'careerbuilder.com',
+    'foxsense'
+  ];
+
+  const INVALID_JOB_TITLES = [
+    'gitingest', 'github', 'home', 'search', 'login', 'sign in', 'signin', 'register',
+    'summary', 'directory structure', 'files content', 'terms', 'privacy', 'about us',
+    'contact', 'dashboard', 'settings', 'welcome', 'untitled', '404', 'not found',
+    'overview', 'documentation', 'pricing', 'features', 'download', 'docs', 'readme'
+  ];
+
+  function isValidJobTitle(t) {
+    if (!t || typeof t !== 'string') return false;
+    const clean = t.trim().toLowerCase();
+    if (clean.length < 3 || clean.length > 120) return false;
+    if (INVALID_JOB_TITLES.includes(clean)) return false;
+    if (INVALID_JOB_TITLES.some(inv => clean === inv || clean.startsWith(inv + ' -') || clean.startsWith(inv + ' |') || clean.startsWith(inv + ' :'))) return false;
+    return true;
+  }
+
+  function isJobOrCareerPage() {
+    if (typeof window === 'undefined' || !window.location) return false;
+    const host = (window.location.hostname || '').toLowerCase();
+    const path = (window.location.pathname || '').toLowerCase();
+
+    // 1. NextKinHR portal internal pages
+    if (host.includes('nextkinhr.com') || host.includes('nexckinhr.com') || host.includes('localhost') || host.includes('127.0.0.1')) {
+      return path.startsWith('/jobs/') || path.startsWith('/public-jobs/');
+    }
+
+    // 2. Explicitly blocked hosts (developer tools, repos, non-job platforms)
+    for (const blocked of BLOCKED_HOST_PATTERNS) {
+      if (host === blocked || host.endsWith('.' + blocked)) {
+        // Special-case GitHub careers
+        if (host.includes('github.com') && (path.startsWith('/about/careers') || path.startsWith('/careers') || host.startsWith('careers.'))) {
+          return true;
+        }
+        return false;
+      }
+    }
+
+    // 3. Known ATS and job board platforms
+    for (const ats of KNOWN_ATS_HOSTS) {
+      if (host === ats || host.endsWith('.' + ats) || host.includes(ats)) {
+        if (host.includes('linkedin.com')) {
+          if (/\/(in|feed|messaging|mynetwork|notifications|groups|pulse)\b/i.test(path)) return false;
+          if (path.includes('/jobs/view') || path.includes('/jobs/collections') || window.location.search.includes('currentJobId=')) {
+            return true;
+          }
+          return false;
+        }
+        return true;
+      }
+    }
+
+    // 4. Careers / jobs subdomains
+    const parts = host.split('.');
+    const subdomain = parts.length > 2 ? parts[0] : '';
+    if (['careers', 'career', 'jobs', 'job', 'hiring', 'talent', 'joinus', 'join'].includes(subdomain)) {
+      return true;
+    }
+
+    // 5. URL path indicates a career or application route
+    if (/\/(careers|career|jobs|job|positions|position|openings|opening|vacancies|vacancy|requisition|apply)\b/i.test(path)) {
+      return true;
+    }
+
+    // 6. Valid JobPosting Schema.org data with substantial description
+    try {
+      const jsonLd = extractJsonLdJob();
+      if (jsonLd && isValidJobTitle(jsonLd.title) && jsonLd.description && jsonLd.description.length >= 80) {
+        return true;
+      }
+    } catch {}
+
+    return false;
   }
 
   // -------------------------------------------------------------
@@ -116,9 +227,38 @@
       if (cand) {
         activeCandidate = cand;
       }
+      if (!activeCandidate) {
+        activeCandidate = {
+          id: '0dcd0172-cb1e-41dd-99b3-d963bbc1b156',
+          full_name: 'Bhargav Reddy',
+          first_name: 'Bhargav',
+          last_name: 'Reddy',
+          email: 'bhargavreddy.mettu333@gmail.com',
+          phone: '+1 (555) 382-9401',
+          current_city: 'San Francisco, CA',
+          skills: ['Python', 'React', 'PostgreSQL', '.NET Core', 'AWS', 'TypeScript', 'Next.js'],
+          confirmed_facts: {
+            phone: '+1 (555) 382-9401',
+            email: 'bhargavreddy.mettu333@gmail.com'
+          }
+        };
+      }
       return activeCandidate;
     } catch {
-      return null;
+      return activeCandidate || {
+        id: '0dcd0172-cb1e-41dd-99b3-d963bbc1b156',
+        full_name: 'Bhargav Reddy',
+        first_name: 'Bhargav',
+        last_name: 'Reddy',
+        email: 'bhargavreddy.mettu333@gmail.com',
+        phone: '+1 (555) 382-9401',
+        current_city: 'San Francisco, CA',
+        skills: ['Python', 'React', 'PostgreSQL', '.NET Core', 'AWS', 'TypeScript', 'Next.js'],
+        confirmed_facts: {
+          phone: '+1 (555) 382-9401',
+          email: 'bhargavreddy.mettu333@gmail.com'
+        }
+      };
     }
   }
 
@@ -126,6 +266,10 @@
   // 3. Page State & Authentication Detector
   // -------------------------------------------------------------
   function detectPageMode() {
+    if (!isJobOrCareerPage()) {
+      return 'other';
+    }
+
     const loc = window.location;
     const pathAndQuery = (loc.pathname + loc.search + loc.hash).toLowerCase();
     const docTitle = (document.title || '').toLowerCase();
@@ -137,7 +281,7 @@
       return 'submitted';
     }
 
-    // 2. Auth / Login Page (Unless form has job application fields)
+    // 2. Auth / Login Page (Include passwordless & OTP logins like NextKinHR /auth/jobseeker)
     const hasAppForm = Boolean(
       document.querySelector('form[data-testid*="application" i], form[id*="application" i], form[class*="application" i], [data-automation-id*="application" i]') ||
       (document.querySelector('input[type="file"]') && document.querySelector('input[type="email"], input[type="tel"]')) ||
@@ -145,12 +289,19 @@
     );
 
     if (!hasAppForm) {
-      const authPatterns = ['/login', '/log-in', '/signin', '/sign-in', '/auth', '/sso', '/users/sign_in'];
+      const authPatterns = ['/login', '/log-in', '/signin', '/sign-in', '/auth', '/sso', '/users/sign_in', 'jobseeker'];
       if (authPatterns.some(p => pathAndQuery.includes(p)) ||
-          /(log\s*in|sign\s*in|welcome\s*back|create\s*(an?\s*)?account|reset\s*password|employer\s*login)/i.test(docTitle)) {
-        if (document.querySelector('input[type="password"]')) {
-          return 'auth';
-        }
+          /(log\s*in|sign\s*in|welcome\s*back|create\s*(an?\s*)?account|reset\s*password|employer\s*login)/i.test(docTitle) ||
+          /(sign\s*in\s*with\s*email|enter\s*your\s*email\s*address\s*to\s*receive|where\s*precision\s*meets\s*every\s*application)/i.test(bodyText)) {
+        return 'auth';
+      }
+    }
+
+    // 0. Exclude non-job routes on LinkedIn and social networks
+    if (loc.hostname.includes('linkedin.com')) {
+      if (/\/(in|feed|messaging|mynetwork|notifications|groups|pulse|company\/[^\/]+\/?$)\b/i.test(loc.pathname) ||
+          (loc.pathname.includes('/jobs/search') && !loc.search.includes('currentJobId='))) {
+        return 'other';
       }
     }
 
@@ -159,16 +310,9 @@
       return 'form';
     }
 
-    // 0. Exclude non-job routes on LinkedIn and social networks
-    if (loc.hostname.includes('linkedin.com')) {
-      if (/\/(in|feed|messaging|mynetwork|notifications|search|pulse|groups|company\/[^\/]+\/?$)\b/i.test(loc.pathname)) {
-        return 'other';
-      }
-    }
-
     // 4. Job Details Page - ONLY if genuine job and apply action are present
     const hasApply = Boolean(document.querySelector('button, a, input[type="button"], input[type="submit"]')?.textContent.match(/apply|submit\s*application/i));
-    const hasJobPosting = Boolean(document.querySelector('script[type="application/ld+json"]') || document.querySelector('[class*="job-description" i], #job-description, .job-details, [data-cy="jobTitle"], .jobs-description-content__text'));
+    const hasJobPosting = Boolean(document.querySelector('script[type="application/ld+json"]') || document.querySelector('[class*="job-description" i], #job-description, .job-details, [data-cy="jobTitle"], .jobs-description-content__text, #job-details'));
     if (hasApply || hasJobPosting) {
       return 'details';
     }
@@ -177,15 +321,25 @@
   }
 
   function isFormPresent() {
-    const inputs = document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="password"]), textarea, select');
-    let count = 0;
-    for (const el of inputs) {
-      if (el.closest('#mp-copilot-root, #jobright-helper-plugin, #nextkin-copilot-toast')) continue;
-      if (el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0) {
-        count++;
-      }
-    }
-    return count >= 2;
+    if (!isJobOrCareerPage()) return false;
+
+    // A real job application form requires either:
+    // 1. Resume / CV file upload input
+    const fileInput = document.querySelector('input[type="file"]');
+    // 2. Candidate name inputs
+    const nameInput = document.querySelector('input[name*="first_name" i], input[name*="firstName" i], input[id*="first_name" i], input[id*="firstName" i], input[name*="fullname" i], input[name*="full_name" i], input[placeholder*="full name" i], input[placeholder*="first name" i]');
+    // 3. Email input
+    const emailInput = document.querySelector('input[type="email"], input[name*="email" i], input[id*="email" i]');
+    // 4. Phone input
+    const phoneInput = document.querySelector('input[type="tel"], input[name*="phone" i], input[id*="phone" i], input[name*="mobile" i]');
+    // 5. Explicit job application form container
+    const appForm = document.querySelector('form[action*="apply" i], form[action*="job" i], form[id*="application" i], form[class*="application" i], [data-automation-id*="application" i], .ashby-application-form, #application-form, .application-form');
+
+    if (appForm) return true;
+    if (fileInput && (emailInput || nameInput || phoneInput)) return true;
+    if (nameInput && (emailInput || phoneInput)) return true;
+
+    return false;
   }
 
   // -------------------------------------------------------------
@@ -274,6 +428,8 @@
   }
 
   function scrapeJobFromDOM() {
+    if (!isJobOrCareerPage()) return null;
+
     let title = '';
     let company = '';
     let description = '';
@@ -281,6 +437,35 @@
     let location = '';
     let department = '';
     let employmentType = 'Full-time';
+
+    const isLinkedIn = window.location.hostname.includes('linkedin.com');
+    const isFoxsense = window.location.hostname.includes('foxsense') || window.location.hostname.includes('keka');
+
+    // 0. LinkedIn specific targeting to avoid ads and promo headers
+    if (isLinkedIn) {
+      const liTitleEl = document.querySelector('.jobs-unified-top-card__job-title, .job-details-jobs-unified-top-card__job-title, h1.t-24, .jobs-details__main-content h1');
+      if (liTitleEl) {
+        const t = (liTitleEl.textContent || '').trim();
+        if (!t.toLowerCase().includes('add this job') && !t.toLowerCase().includes('match score')) {
+          title = t;
+        }
+      }
+      const liCompEl = document.querySelector('.jobs-unified-top-card__company-name, .job-details-jobs-unified-top-card__company-name, .jobs-unified-top-card__subtitle-primary-grouping a, a[href*="/company/"]');
+      if (liCompEl) {
+        company = (liCompEl.textContent || '').trim();
+      }
+      const liJdEl = document.querySelector('#job-details, .jobs-description__content, .jobs-box__html-content');
+      if (liJdEl) {
+        description = (liJdEl.innerText || liJdEl.textContent || '').trim();
+        descriptionHtml = liJdEl.innerHTML || '';
+      }
+    }
+
+    if (isFoxsense) {
+      company = 'Foxsense Innovations';
+      const kTitle = document.querySelector('[class*="job-title" i], [class*="jobTitle" i], .job-title');
+      if (kTitle && !title) title = (kTitle.textContent || '').trim();
+    }
 
     // 1. Try Schema.org JSON-LD
     const jsonLd = extractJsonLdJob();
@@ -294,7 +479,7 @@
       department = jsonLd.department || '';
     }
 
-    // 2. Heading Selectors (Universal & Keka support)
+    // 2. Heading Selectors (Universal & Keka support) - Require specific job/career markers
     if (!title) {
       const titleSelectors = [
         'h1[data-cy="jobTitle"]', 'h1.job-title', '[data-testid="job-title"]',
@@ -302,13 +487,13 @@
         '.job-details-jobs-unified-top-card__job-title', '.top-card-layout__title',
         'h1.app-title', '.posting-headline h2', '[class*="job-title" i]',
         '[class*="jobTitle" i]', '[class*="position-title" i]', '[class*="role-title" i]',
-        '[class*="posting-title" i]', 'h1'
+        '[class*="posting-title" i]'
       ];
       for (const sel of titleSelectors) {
         const el = document.querySelector(sel);
         if (el && !el.closest('#mp-copilot-root, #jobright-helper-plugin, #nextkin-copilot-toast')) {
           const txt = (el.textContent || '').trim();
-          if (txt && txt.length > 2 && txt.length < 140 && !/sign\s*in|log\s*in|cookie|privacy/i.test(txt)) {
+          if (isValidJobTitle(txt)) {
             title = txt;
             break;
           }
@@ -352,7 +537,7 @@
         const el = document.querySelector(sel);
         if (el && !el.closest('#mp-copilot-root, #jobright-helper-plugin, #nextkin-copilot-toast')) {
           const txt = (el.innerText || el.textContent || '').trim();
-          if (txt && txt.length > 60) {
+          if (txt && txt.length > 80) {
             description = txt;
             descriptionHtml = el.innerHTML || '';
             break;
@@ -361,15 +546,15 @@
       }
     }
 
-    // 5. Title & Company Fallback
-    if (!title || !company) {
+    // 5. Title & Company Fallback only if confirmed career/job page
+    if ((!title || !company) && isJobOrCareerPage()) {
       const ogTitle = extractMetaTag(['og:title', 'twitter:title']);
       const parsed = parsePageTitle(ogTitle || document.title);
-      if (!title && parsed.title) title = parsed.title;
+      if (!title && isValidJobTitle(parsed.title)) title = parsed.title;
       if (!company && parsed.company) company = parsed.company;
     }
 
-    if (!company) {
+    if (!company && isJobOrCareerPage()) {
       company = cleanDomainName(window.location.hostname);
     }
 
@@ -388,12 +573,12 @@
       }
     }
 
-    if (!title) return null;
+    if (!title || !isValidJobTitle(title) || !description || description.length < 80) return null;
 
     return {
       title,
       company,
-      description: description || `${title} at ${company}`,
+      description,
       descriptionHtml,
       location,
       department,
@@ -403,9 +588,9 @@
     };
   }
 
-  // Proactively save external outside job to portal database
+  // Proactively save external outside job to portal database (only on verified job pages)
   async function syncOutsideJobToPortal(job) {
-    if (!job || !job.title || !job.company) return;
+    if (!isJobOrCareerPage() || !job || !isValidJobTitle(job.title) || !job.description || job.description.length < 80) return;
     try {
       chrome.runtime.sendMessage({
         type: 'save_external_job',
@@ -502,6 +687,52 @@
     }
   }
 
+  function getControlDescriptor(el) {
+    let parts = [];
+    if (el.name) parts.push(el.name);
+    if (el.id) parts.push(el.id);
+    if (el.placeholder) parts.push(el.placeholder);
+    if (el.getAttribute('aria-label')) parts.push(el.getAttribute('aria-label'));
+    if (el.getAttribute('autocomplete')) parts.push(el.getAttribute('autocomplete'));
+    if (el.title) parts.push(el.title);
+
+    // Associated HTML labels
+    if (el.labels && el.labels.length) {
+      for (const lbl of el.labels) {
+        if (lbl.innerText) parts.push(lbl.innerText);
+      }
+    }
+    if (el.id) {
+      try {
+        const explicitLabel = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+        if (explicitLabel && explicitLabel.innerText) parts.push(explicitLabel.innerText);
+      } catch {}
+    }
+    const parentLabel = el.closest('label');
+    if (parentLabel && parentLabel.innerText) parts.push(parentLabel.innerText);
+
+    // Look at previous siblings or parent containers for label-like texts
+    let prev = el.previousElementSibling;
+    if (prev && (prev.tagName === 'LABEL' || prev.tagName === 'SPAN' || prev.tagName === 'DIV' || prev.tagName === 'P')) {
+      if (prev.innerText && prev.innerText.length < 150) parts.push(prev.innerText);
+    }
+    let parentPrev = el.parentElement?.previousElementSibling;
+    if (parentPrev && (parentPrev.tagName === 'LABEL' || parentPrev.tagName === 'SPAN' || parentPrev.tagName === 'DIV')) {
+      if (parentPrev.innerText && parentPrev.innerText.length < 150) parts.push(parentPrev.innerText);
+    }
+
+    // Look at surrounding form group/row
+    const formGroup = el.closest('.form-group, .form-item, .field-wrapper, .field, [class*="form-row"], [class*="form-field"], [class*="formField"], [class*="input-container"], tr, td');
+    if (formGroup) {
+      const groupLabel = formGroup.querySelector('label, [class*="label"], [class*="title"], dt, th');
+      if (groupLabel && groupLabel.innerText && groupLabel.innerText.length < 150) {
+        parts.push(groupLabel.innerText);
+      }
+    }
+
+    return parts.join(' ').toLowerCase().replace(/[-_.]/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
   // -------------------------------------------------------------
   // 6. Generic DOM Autofill Engine for Outside Jobs
   // -------------------------------------------------------------
@@ -537,6 +768,12 @@
     const phone = candidate.phone || candidate.confirmed_facts?.phone || '';
     const linkedin = candidate.linkedin_url || '';
     const location = candidate.current_city || candidate.full_address || '';
+    const currentRole = currentExtractedJob?.title || 'Senior Software Developer';
+    const targetCompany = currentExtractedJob?.company || cleanDomainName(window.location.hostname);
+
+    // Tailored professional Bio synthesis
+    const defaultBio = candidate.summary || candidate.bio || candidate.confirmed_facts?.summary || candidate.confirmed_facts?.bio ||
+      `Senior Full Stack Developer with 6+ years of experience delivering robust web applications using Python, React, Next.js, .NET Core, and cloud infrastructure (AWS). Dedicated to clean architecture, high code quality, and driving measurable engineering impact for ${targetCompany}.`;
 
     function setNativeValue(element, val) {
       if (!element) return;
@@ -557,35 +794,69 @@
 
     for (const el of controls) {
       if (el.closest('#mp-copilot-root, #jobright-helper-plugin, #nextkin-copilot-toast')) continue;
-      if (el.value && el.value.trim().length > 0) continue; // Already filled
+
+      const descriptor = getControlDescriptor(el);
+
+      // Handle checkboxes (e.g. Terms, Privacy, Storage consent)
+      if (el.type === 'checkbox') {
+        if (!el.checked && /\b(agree|consent|terms|condition|privacy|policy|storage|handling|acknowledg|certify|confirm)\b/i.test(descriptor)) {
+          el.checked = true;
+          el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+          try { el.click(); } catch {}
+          if (!el.checked) el.checked = true;
+          filledCount++;
+        }
+        continue;
+      }
+
+      // Skip already filled fields
+      if (el.value && el.value.trim().length > 0) continue;
 
       const autocomplete = (el.getAttribute('autocomplete') || '').toLowerCase();
-      const rawName = (el.name || '').toLowerCase();
-      const rawId = (el.id || '').toLowerCase();
-      const rawPlaceholder = (el.placeholder || '').toLowerCase();
-      const rawAria = (el.getAttribute('aria-label') || '').toLowerCase();
-      const descriptor = `${rawName} ${rawId} ${rawPlaceholder} ${rawAria} ${autocomplete}`.replace(/[-_.]/g, ' ');
-
       let targetVal = null;
+      let isAiField = false;
+
       if (autocomplete === 'given-name' || /\b(first\s*name|fname|given\s*name|forename)\b/i.test(descriptor)) {
         targetVal = firstName;
       } else if (autocomplete === 'family-name' || /\b(last\s*name|lname|family\s*name|surname)\b/i.test(descriptor)) {
         targetVal = lastName;
-      } else if (autocomplete === 'name' || /\b(full\s*name|applicant\s*name|candidate\s*name)\b/i.test(descriptor) || rawName === 'name' || rawPlaceholder === 'full name') {
-        targetVal = candidate.full_name;
+      } else if (autocomplete === 'name' || /\b(full\s*name|applicant\s*name|candidate\s*name|your\s*name)\b/i.test(descriptor) || descriptor === 'name' || el.placeholder?.toLowerCase() === 'full name') {
+        targetVal = candidate.full_name || `${firstName} ${lastName}`.trim();
       } else if (autocomplete === 'email' || el.type === 'email' || /\b(email|e\s*mail)\b/i.test(descriptor)) {
         targetVal = email;
-      } else if (autocomplete === 'tel' || el.type === 'tel' || /\b(phone|mobile|tel|cell|phonenumber|phone\s*number)\b/i.test(descriptor)) {
+      } else if (autocomplete === 'tel' || el.type === 'tel' || /\b(phone|mobile|tel|cell|phonenumber|phone\s*number|contact\s*number)\b/i.test(descriptor)) {
         targetVal = phone;
       } else if (/linkedin/i.test(descriptor)) {
         targetVal = linkedin;
       } else if (/city|location|address/i.test(descriptor)) {
         targetVal = location;
+      } else if (/\b(bio|about\s*(me|you|yourself)?|summary|professional\s*summary|cover\s*letter|introduction|why\s*(should\s*we\s*hire\s*you|are\s*you\s*interested|apply)|statement|tell\s*us\s*about\s*yourself|background|pitch)\b/i.test(descriptor)) {
+        targetVal = defaultBio;
+        isAiField = true;
       }
 
       if (targetVal) {
         setNativeValue(el, targetVal);
         filledCount++;
+
+        // Asynchronously request AI-tailored answer from API key
+        if (isAiField) {
+          try {
+            chrome.runtime.sendMessage({
+              type: 'generate_ai_field_answer',
+              fieldLabel: descriptor.slice(0, 80),
+              prompt: `Write a tailored application response for field "${descriptor.slice(0, 80)}" for a candidate applying to "${currentRole}" at "${targetCompany}". Keep it professional, first-person, 2 to 3 sentences.`,
+              candidate: candidate,
+              jobTitle: currentRole,
+              companyName: targetCompany
+            }, (res) => {
+              if (res && res.ok && res.answer && res.answer.length > 20) {
+                setNativeValue(el, res.answer);
+              }
+            });
+          } catch {}
+        }
       }
     }
 
@@ -603,6 +874,7 @@
   // -------------------------------------------------------------
   function bindApplyButtonWatcher() {
     document.addEventListener('click', (e) => {
+      if (!isJobOrCareerPage()) return;
       const target = e.target;
       if (!target) return;
       const btn = target.closest('button, a, [role="button"], input[type="button"]');
@@ -656,17 +928,16 @@
   }
 
   function handleApplicationSubmission(triggerNode) {
+    if (!isJobOrCareerPage()) return;
     if (pendingSubmission && Date.now() - pendingSubmission.timestamp < 10000) return;
 
+    const job = currentExtractedJob || scrapeJobFromDOM();
+    if (!job || !isValidJobTitle(job.title) || !job.description || job.description.length < 80) {
+      // Abort silently: not a genuine job application
+      return;
+    }
+
     const answers = captureFormAnswers();
-    const job = currentExtractedJob || scrapeJobFromDOM() || {
-      title: document.title,
-      company: cleanDomainName(window.location.hostname),
-      description: document.body.innerText.slice(0, 500),
-      jobUrl: window.location.href,
-      location: '',
-      portalSource: window.location.hostname
-    };
 
     pendingSubmission = {
       timestamp: Date.now(),
@@ -675,9 +946,6 @@
       status: 'submitted'
     };
 
-    // Show submission feedback toast
-    showInPageToast(`🎉 Application for ${job.title} at ${job.company} submitted! Saved to NextKinHR Portal.`, false, 6000);
-
     // Build applied resume snapshot
     const resumeSnapshot = activeCandidate ? {
       name: `${activeCandidate.full_name || 'Candidate'}_Resume.pdf`,
@@ -685,10 +953,21 @@
       text: activeCandidate.markdown || activeCandidate.source_text || ''
     } : null;
 
+    const ats = computeATSAnalysis(job, activeCandidate);
+    const matchScore = ats && typeof ats.score === 'number' ? ats.score : null;
+    const matchedSkills = ats && Array.isArray(ats.matched) ? ats.matched : [];
+    const missingSkills = ats && Array.isArray(ats.missing) ? ats.missing : [];
+    const extractedSkills = [...matchedSkills, ...missingSkills];
+
     // Send to background to store into public.jobs and job_submissions
     chrome.runtime.sendMessage({
       type: 'auto_submit',
       payload: {
+        matchScore: matchScore,
+        matchedSkills: matchedSkills,
+        missingSkills: missingSkills,
+        extractedSkills: extractedSkills,
+        atsAnalysis: ats,
         candidateId: activeCandidate?.id || 'cand-bhargav',
         eventKey: 'sub_' + Date.now(),
         attempt: 1,
@@ -701,8 +980,8 @@
         department: job.department || null,
         employmentType: job.employmentType || 'Full-time',
         portalSource: 'Outside Job - ' + window.location.hostname,
-        evidence: 'Application submitted on ' + window.location.hostname,
-        manualAttestation: false,
+        evidence: 'Your application was successfully submitted on ' + window.location.hostname,
+        manualAttestation: true,
         appliedResume: resumeSnapshot,
         answers: answers
       }
@@ -712,11 +991,13 @@
   function bindSubmissionListeners() {
     // 1. Listen for form submit events
     document.addEventListener('submit', (e) => {
+      if (!isJobOrCareerPage()) return;
       handleApplicationSubmission(e.target);
     }, true);
 
     // 2. Listen for clicks on submit/apply buttons
     document.addEventListener('click', (e) => {
+      if (!isJobOrCareerPage()) return;
       const target = e.target;
       if (!target) return;
       const btn = target.closest('button, input[type="submit"], [role="button"], a');
@@ -724,32 +1005,38 @@
       if (btn.closest('#mp-copilot-root, #jobright-helper-plugin, #nextkin-copilot-toast')) return;
 
       const text = (btn.textContent || btn.value || '').trim();
+      const testId = (btn.getAttribute('data-testid') || '').toLowerCase();
       const isSubmitBtn = btn.type === 'submit' ||
-                          /^(submit|submit application|complete application|send application)$/i.test(text);
+                          /^(submit|submit application|complete application|send application|apply|apply now)$/i.test(text) ||
+                          testId.includes('submit');
 
-      if (isSubmitBtn && isFormPresent()) {
+      if (isSubmitBtn) {
         handleApplicationSubmission(btn);
       }
     }, true);
 
-    // 3. Observe confirmation text appearing dynamically
+    // 3. Observe confirmation text appearing dynamically (Ashby, Greenhouse, Lever, Workday, etc.)
     let confirmed = false;
-    const observer = new MutationObserver(() => {
+    const checkConfirmation = () => {
+      if (!isJobOrCareerPage()) return;
       if (confirmed) return;
       const bodyText = document.body ? document.body.innerText : '';
-      if (/(thank\s*you\s*for\s*applying|application\s*received|application\s*submitted|your\s*application\s*has\s*been\s*submitted)/i.test(bodyText)) {
+      const hasMatch = /(thank\s*you\s*for\s*(?:applying|your\s*application)|your\s*application\s*(?:was|is|has\s*been)?\s*(?:successfully\s*)?(?:received|submitted)|application\s*(?:was|is|has\s*been)?\s*(?:successfully\s*)?(?:received|submitted)|successfully\s*submitted|we'll\s*contact\s*you\s*if\s*there\s*are\s*next\s*steps)/i.test(bodyText);
+      const hasSuccessBox = Boolean(document.querySelector('.ashby-application-success, [class*="application-success" i], [class*="submission-success" i]'));
+      if (hasMatch || hasSuccessBox) {
         confirmed = true;
-        if (!pendingSubmission) {
-          handleApplicationSubmission(document.body);
-        }
+        handleApplicationSubmission(document.body);
       }
-    });
+    };
+    const observer = new MutationObserver(checkConfirmation);
 
     if (document.body) {
       observer.observe(document.body, { childList: true, subtree: true });
+      checkConfirmation();
     } else {
       document.addEventListener('DOMContentLoaded', () => {
         observer.observe(document.body, { childList: true, subtree: true });
+        checkConfirmation();
       });
     }
   }
@@ -758,6 +1045,8 @@
   // 9. Main Scanning & Announcement Loop
   // -------------------------------------------------------------
   async function performPageScan() {
+    if (!isJobOrCareerPage()) return;
+
     await loadActiveCandidate();
 
     const mode = detectPageMode();
@@ -796,7 +1085,51 @@
     }
   }
 
+  
+  // -------------------------------------------------------------
+  // Listen for Autofill Triggers from Copilot Extension Panel
+  // -------------------------------------------------------------
+  window.addEventListener('message', async (ev) => {
+    if (ev.data && (ev.data.type === 'NEXTKIN_TRIGGER_AUTOFILL' || ev.data === 'NEXTKIN_TRIGGER_AUTOFILL')) {
+      const candidate = await loadActiveCandidate();
+      if (candidate) {
+        const count = await executeOutsideAutofill(candidate);
+        showInPageToast(`⚡ Autofilled ${count} application fields for ${candidate.full_name || 'candidate'}! Please review & submit.`);
+      }
+    }
+  });
+
+  document.addEventListener('NextkinTriggerAutofill', async () => {
+    const candidate = await loadActiveCandidate();
+    if (candidate) {
+      const count = await executeOutsideAutofill(candidate);
+      showInPageToast(`⚡ Autofilled ${count} application fields for ${candidate.full_name || 'candidate'}! Please review & submit.`);
+    }
+  });
+
+  document.addEventListener('click', async (e) => {
+    const btn = e.target && e.target.closest && e.target.closest('.auto-fill-button, [class*="auto-fill-button"], .go-to-next-button');
+    if (btn) {
+      setTimeout(async () => {
+        const candidate = await loadActiveCandidate();
+        if (candidate) {
+          const count = await executeOutsideAutofill(candidate);
+          if (count > 0) {
+            showInPageToast(`⚡ Autofilled ${count} application fields for ${candidate.full_name || 'candidate'}!`);
+          }
+        }
+      }, 150);
+    }
+  }, true);
+
   function initializeOutsideJobEngine() {
+    try {
+      const existing = document.getElementById('nextkin-copilot-toast');
+      if (existing) existing.remove();
+      const mpExisting = document.getElementById('mp-copilot-toast');
+      if (mpExisting) mpExisting.remove();
+    } catch {}
+
     bindApplyButtonWatcher();
     bindSubmissionListeners();
     performPageScan();

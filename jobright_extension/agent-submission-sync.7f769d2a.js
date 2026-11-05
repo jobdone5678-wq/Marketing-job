@@ -1,11 +1,11 @@
-var e,t;"function"==typeof(e=globalThis.define)&&(t=e,e=null),function(t,r,o,n,i){var a="undefined"!=typeof globalThis?globalThis:"undefined"!=typeof self?self:"undefined"!=typeof window?window:"undefined"!=typeof global?global:{},s="function"==typeof a[n]&&a[n],l=s.cache||{},u="undefined"!=typeof module&&"function"==typeof module.require&&module.require.bind(module);function c(e,r){if(!l[e]){if(!t[e]){var o="function"==typeof a[n]&&a[n];if(!r&&o)return o(e,!0);if(s)return s(e,!0);if(u&&"string"==typeof e)return u(e);var i=Error("Cannot find module '"+e+"'");throw i.code="MODULE_NOT_FOUND",i}p.resolve=function(r){var o=t[e][1][r];return null!=o?o:r},p.cache={};var f=l[e]=new c.Module(e);t[e][0].call(f.exports,p,f,f.exports,this)}return l[e].exports;function p(e){var t=p.resolve(e);return!1===t?{}:c(t)}}c.isParcelRequire=!0,c.Module=function(e){this.id=e,this.bundle=c,this.exports={}},c.modules=t,c.cache=l,c.parent=s,c.register=function(e,r){t[e]=[function(e,t){t.exports=r},{}]},Object.defineProperty(c,"root",{get:function(){return a[n]}}),a[n]=c;for(var f=0;f<r.length;f++)c(r[f]);if(o){var p=c(o);"object"==typeof exports&&"undefined"!=typeof module?module.exports=p:"function"==typeof e&&e.amd?e(function(){return p}):i&&(this[i]=p)}}({"7Xu4H":[function(e,t,r){var o=e("@parcel/transformer-js/src/esmodule-helpers.js");o.defineInteropFlag(r),o.export(r,"config",()=>i);var n=e("~core/agent-submission-sync");let i={matches:["*://*.nextkinhr.com/*","*://*.jobright-internal.com/*","*://localhost/*"],all_frames:!1,run_at:"document_start"};(0,n.registerAgentSubmissionSync)(document,chrome.runtime)},{"~core/agent-submission-sync":"b0IMp","@parcel/transformer-js/src/esmodule-helpers.js":"cHUbl"}],b0IMp:[function(e,t,r){var o=e("@parcel/transformer-js/src/esmodule-helpers.js");o.defineInteropFlag(r),o.export(r,"registerAgentSubmissionSync",()=>i);var n=e("../utils/jobright-agent-page");function i(e,t){
+var e,t;"function"==typeof(e=globalThis.define)&&(t=e,e=null),function(t,r,o,n,i){var a="undefined"!=typeof globalThis?globalThis:"undefined"!=typeof self?self:"undefined"!=typeof window?window:"undefined"!=typeof global?global:{},s="function"==typeof a[n]&&a[n],l=s.cache||{},u="undefined"!=typeof module&&"function"==typeof module.require&&module.require.bind(module);function c(e,r){if(!l[e]){if(!t[e]){var o="function"==typeof a[n]&&a[n];if(!r&&o)return o(e,!0);if(s)return s(e,!0);if(u&&"string"==typeof e)return u(e);var i=Error("Cannot find module '"+e+"'");throw i.code="MODULE_NOT_FOUND",i}p.resolve=function(r){var o=t[e][1][r];return null!=o?o:r},p.cache={};var f=l[e]=new c.Module(e);t[e][0].call(f.exports,p,f,f.exports,this)}return l[e].exports;function p(e){var t=p.resolve(e);return!1===t?{}:c(t)}}c.isParcelRequire=!0,c.Module=function(e){this.id=e,this.bundle=c,this.exports={}},c.modules=t,c.cache=l,c.parent=s,c.register=function(e,r){t[e]=[function(e,t){t.exports=r},{}]},Object.defineProperty(c,"root",{get:function(){return a[n]}}),a[n]=c;for(var f=0;f<r.length;f++)c(r[f]);if(o){var p=c(o);"object"==typeof exports&&"undefined"!=typeof module?module.exports=p:"function"==typeof e&&e.amd?e(function(){return p}):i&&(this[i]=p)}}({"7Xu4H":[function(e,t,r){var o=e("@parcel/transformer-js/src/esmodule-helpers.js");o.defineInteropFlag(r),o.export(r,"config",()=>i);var n=e("~core/agent-submission-sync");let i={matches:["*://*.nextkinhr.com/*","*://*.nexckinhr.com/*","*://*.jobright-internal.com/*","*://localhost/*"],all_frames:!1,run_at:"document_start"};(0,n.registerAgentSubmissionSync)(document,chrome.runtime)},{"~core/agent-submission-sync":"b0IMp","@parcel/transformer-js/src/esmodule-helpers.js":"cHUbl"}],b0IMp:[function(e,t,r){var o=e("@parcel/transformer-js/src/esmodule-helpers.js");o.defineInteropFlag(r),o.export(r,"registerAgentSubmissionSync",()=>i);var n=e("../utils/jobright-agent-page");function i(e,t){
   try {
     var win = e.defaultView || (typeof window !== "undefined" ? window : null);
     if (win) {
       
   try {
     var locHost = (win.location.hostname || "").toLowerCase();
-    var isNextkin = locHost.includes("nextkinhr.com") || locHost.includes("localhost") || locHost.includes("127.0.0.1");
+    var isNextkin = locHost.includes("nextkinhr.com") || locHost.includes("nexckinhr.com") || locHost.includes("nexckin") || locHost.includes("localhost") || locHost.includes("127.0.0.1");
     if (isNextkin) {
       var tok = e.documentElement.getAttribute('data-nextkin-token') || 'nextkin_ext_master_token_bhargav_2026';
       var activeUser = { name: 'Bhargav Reddy', email: 'bhargavreddy.mettu333@gmail.com' };
@@ -47,19 +47,33 @@ var e,t;"function"==typeof(e=globalThis.define)&&(t=e,e=null),function(t,r,o,n,i
     }
   } catch(err) {}
   
-      win.addEventListener("message", function(ev) {
-        if (ev.data && ev.data.type === "NEXTKIN_EXTENSION_PAIRED" && ev.data.token) {
-          var token = ev.data.token;
-          var user = ev.data.user || {};
-          var origin = win.location.origin || "https://nextkinhr.com";
-          
-          chrome.storage.local.set({
-            origin: origin,
-            token: token,
-            nextkin_auth_token: token,
-            user_role: "job_seeker",
-            user: user
-          });
+  function isTrustedOrigin(origin) {
+    if (!origin || typeof origin !== "string") return false;
+    try {
+      var u = new URL(origin);
+      if (u.protocol === "https:" && (u.hostname === "nextkinhr.com" || u.hostname.endsWith(".nextkinhr.com"))) return true;
+      if ((u.protocol === "http:" || u.protocol === "https:") && (u.hostname === "localhost" || u.hostname === "127.0.0.1")) return true;
+    } catch (e) {}
+    return false;
+  }
+
+  win.addEventListener("message", function(ev) {
+    // Only accept messages from trusted NextKinHR origins and from the current window
+    if (!isTrustedOrigin(ev.origin)) return;
+    if (ev.source !== win) return;
+
+    if (ev.data && ev.data.type === "NEXTKIN_EXTENSION_PAIRED" && ev.data.token) {
+      var token = ev.data.token;
+      var user = ev.data.user || {};
+      var origin = ev.origin;
+      
+      chrome.storage.local.set({
+        origin: origin,
+        token: token,
+        nextkin_auth_token: token,
+        user_role: "job_seeker",
+        user: user
+      });
 
           // Immediately fetch candidate profile facts and resume from portal API
           fetch(origin + "/api/extension/candidates", {

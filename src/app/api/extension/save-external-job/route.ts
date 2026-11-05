@@ -124,6 +124,26 @@ export async function POST(request: Request) {
     checkDb(insertError);
     if (!newOutsideJob) throw new CaptureError('Failed to save outside job.', 500);
 
+    // Mirror to public.jobs for unified portal visibility
+    try {
+      await database().from('jobs').insert({
+        id: newOutsideJob.id,
+        title: body.title,
+        company: body.company,
+        description: body.description,
+        description_html: body.descriptionHtml || null,
+        location: body.location || null,
+        department: body.department || null,
+        employment_type: body.employmentType || 'Full-time',
+        status: 'published',
+        is_external: true,
+        source_url: safeJobUrl,
+        portal_source: portalSource,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    } catch {}
+
     return { success: true, jobId: newOutsideJob.id, created: true, table: 'outside_jobs' };
   });
 }
