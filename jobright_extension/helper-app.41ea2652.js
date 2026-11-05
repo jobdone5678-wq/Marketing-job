@@ -1772,6 +1772,13 @@ function s({entryFunction:e}){
   var topPth = ((topLoc && topLoc.pathname ? topLoc.pathname : "") + (topLoc && topLoc.search ? topLoc.search : "")).toLowerCase();
   var topHost = (topLoc && topLoc.hostname ? topLoc.hostname : "").toLowerCase();
   var isNextkinHost = topHost.includes("nextkinhr.com") || topHost.includes("localhost") || topHost.includes("127.0.0.1");
+
+  // On NextKinHR portal, only render ATS Match Card on actual job details pages (/jobs/* or /public-jobs/*).
+  // Never render on management pages like /dashboard/submissions, /dashboard, /candidates, etc.
+  if (isNextkinHost && !topPth.startsWith("/jobs/") && !topPth.startsWith("/public-jobs/")) {
+    return null;
+  }
+
   var isConn = isNextkinHost && (topPth.includes("/connected") || (topDoc && topDoc.documentElement && topDoc.documentElement.getAttribute("data-nextkin-paired") === "true"));
   var isAuthOnly = isNextkinHost && (topPth.includes("/auth") || topPth.includes("/login") || topPth.includes("/signin")) && !isConn;
 
@@ -2447,29 +2454,40 @@ function g(){
   // Detect Job Title & Company
   let jobTitle = e?.title || e?.jobTitle || "";
   let companyName = e?.company || e?.companyName || "";
-  if (!jobTitle && typeof document !== "undefined") {
-    let h1 = document.querySelector('h1[data-cy="jobTitle"], h1.job-title, [data-testid="job-title"], h1.app-title, h1');
-    if (h1) jobTitle = h1.textContent?.trim() || "";
-    if (!jobTitle) jobTitle = document.title?.replace(/\s*[-|–·].*$/, "").trim() || "";
-  }
-  if (!companyName && typeof document !== "undefined") {
-    let compEl = document.querySelector('[class*="company-name" i], [class*="companyName" i], .company, [data-cy="companyName"]');
-    if (compEl) companyName = compEl.textContent?.trim() || "";
-  }
-  if (!companyName) {
-    if (host.includes("foxsense") || host.includes("keka")) companyName = "Foxsense Innovations";
-    else if (host) {
-      let clean = host.replace(/^www\./, "").replace(/^(careers?\.|jobs?\.)/, "").split(".")[0];
-      companyName = (clean ? clean.charAt(0).toUpperCase() + clean.slice(1) : "Company") + " Innovations";
-    } else {
-      companyName = "Foxsense Innovations";
-    }
-  }
-  if (!jobTitle) jobTitle = "Senior Software Developer (Full Stack) - Python";
+  let isPortalPage = (host.includes("nextkinhr.com") || host.includes("localhost") || host.includes("127.0.0.1")) &&
+                     !pth.startsWith("/jobs/") && !pth.startsWith("/public-jobs/");
 
   let hasCandidate = true;
   let hasJd = true;
   let hasForm = true;
+
+  if (isPortalPage) {
+    siteName = "NextKinHR Workspace";
+    jobTitle = "Recruiter & Candidate Hub";
+    companyName = "Ready to assist on any outside career portal";
+    hasJd = false;
+    hasForm = false;
+  } else {
+    if (!jobTitle && typeof document !== "undefined") {
+      let h1 = document.querySelector('h1[data-cy="jobTitle"], h1.job-title, [data-testid="job-title"], h1.app-title, h1');
+      if (h1) jobTitle = h1.textContent?.trim() || "";
+      if (!jobTitle) jobTitle = document.title?.replace(/\s*[-|–·].*$/, "").trim() || "";
+    }
+    if (!companyName && typeof document !== "undefined") {
+      let compEl = document.querySelector('[class*="company-name" i], [class*="companyName" i], .company, [data-cy="companyName"]');
+      if (compEl) companyName = compEl.textContent?.trim() || "";
+    }
+    if (!companyName) {
+      if (host.includes("foxsense") || host.includes("keka")) companyName = "Foxsense Innovations";
+      else if (host) {
+        let clean = host.replace(/^www\./, "").replace(/^(careers?\.|jobs?\.)/, "").split(".")[0];
+        companyName = (clean ? clean.charAt(0).toUpperCase() + clean.slice(1) : "Company") + " Innovations";
+      } else {
+        companyName = "Foxsense Innovations";
+      }
+    }
+    if (!jobTitle) jobTitle = "Senior Software Developer (Full Stack) - Python";
+  }
 
   return (0,o.jsxs)(i.Flex,{
     className:"header",
@@ -2607,15 +2625,15 @@ function g(){
           (0,o.jsxs)("div",{
             style:{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#475569"},
             children:[
-              (0,o.jsx)("span",{style:{color:"#10b981",fontSize:13,fontWeight:"bold"},children:"●"}),
-              "Job description detected"
+              (0,o.jsx)("span",{style:{color:hasJd?"#10b981":"#94a3b8",fontSize:13,fontWeight:"bold"},children:hasJd?"●":"○"}),
+              hasJd ? "Job description detected" : "Open a job page to evaluate ATS match"
             ]
           }),
           (0,o.jsxs)("div",{
             style:{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#475569"},
             children:[
-              (0,o.jsx)("span",{style:{color:"#10b981",fontSize:13,fontWeight:"bold"},children:"●"}),
-              "Application form detected & autofill ready"
+              (0,o.jsx)("span",{style:{color:hasForm?"#10b981":"#94a3b8",fontSize:13,fontWeight:"bold"},children:hasForm?"●":"○"}),
+              hasForm ? "Application form detected & autofill ready" : "Autofill ready on application forms"
             ]
           })
         ]

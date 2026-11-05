@@ -97,6 +97,45 @@ async function handleV3Message(msg, sender, reply) {
       return;
     }
 
+    if (type === 'generate_ai_field_answer') {
+      const { prompt, fieldLabel, candidate, jobTitle, companyName } = msg;
+      (async () => {
+        try {
+          const apiKey = 'sk-xt-feb0878843bac616bf98f1a1797820ed06b863167626066d';
+          const candName = candidate?.full_name || candidate?.name || 'Bhargav Reddy';
+          const skillsStr = Array.isArray(candidate?.skills) ? candidate.skills.join(', ') : 'Python, React, TypeScript, Next.js, PostgreSQL, AWS, .NET Core';
+          const resp = await fetch('https://api.xkiro.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + apiKey
+            },
+            body: JSON.stringify({
+              model: 'mistralai/mistral-large-2512',
+              messages: [
+                {
+                  role: 'system',
+                  content: `You are an expert career copilot. Write a concise, professional answer (2-3 sentences, maximum 60 words) for a job application field. Write in first person ("I"). Candidate name: ${candName}, Skills: ${skillsStr}. Role applied for: ${jobTitle || 'Software Engineer'} at ${companyName || 'Company'}. Never include quotes or bullet points.`
+                },
+                {
+                  role: 'user',
+                  content: prompt || `Write a professional response for application field: "${fieldLabel}"`
+                }
+              ],
+              max_tokens: 120,
+              temperature: 0.7
+            })
+          });
+          const data = await resp.json();
+          const answer = data.choices?.[0]?.message?.content?.trim() || '';
+          reply({ ok: true, answer: answer.replace(/^["']|["']$/g, '').trim() });
+        } catch (err) {
+          reply({ ok: false, error: err.message });
+        }
+      })();
+      return true;
+    }
+
     if (type === 'save_external_job') {
       const job = msg.job || msg.payload || msg;
       const storage = await chrome.storage.local.get(['origin', 'token']);
@@ -165,10 +204,7 @@ async function handleV3Message(msg, sender, reply) {
 
       // 1. Direct Supabase REST submission for instant, zero-delay persistence
       try {
-        const atsText = (item.payload.matchScore !== null && item.payload.matchScore !== undefined)
-          ? `[ATS Match: ${item.payload.matchScore}%]` + (item.payload.matchedSkills?.length ? ` Matched: ${item.payload.matchedSkills.slice(0, 5).join(', ')}` : '') + (item.payload.missingSkills?.length ? ` | Missing: ${item.payload.missingSkills.slice(0, 4).join(', ')}` : '')
-          : '';
-        const notesStr = [atsText, item.payload.evidence || 'Application submitted via browser extension'].filter(Boolean).join(' • ');
+        const notesStr = item.payload.evidence || 'Application submitted via browser extension';
 
         fetch('https://yzworkrtgbcrsewjsfsg.supabase.co/rest/v1/job_submissions', {
           method: 'POST',

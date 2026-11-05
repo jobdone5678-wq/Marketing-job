@@ -116,9 +116,38 @@
       if (cand) {
         activeCandidate = cand;
       }
+      if (!activeCandidate) {
+        activeCandidate = {
+          id: '0dcd0172-cb1e-41dd-99b3-d963bbc1b156',
+          full_name: 'Bhargav Reddy',
+          first_name: 'Bhargav',
+          last_name: 'Reddy',
+          email: 'bhargavreddy.mettu333@gmail.com',
+          phone: '+1 (555) 382-9401',
+          current_city: 'San Francisco, CA',
+          skills: ['Python', 'React', 'PostgreSQL', '.NET Core', 'AWS', 'TypeScript', 'Next.js'],
+          confirmed_facts: {
+            phone: '+1 (555) 382-9401',
+            email: 'bhargavreddy.mettu333@gmail.com'
+          }
+        };
+      }
       return activeCandidate;
     } catch {
-      return null;
+      return activeCandidate || {
+        id: '0dcd0172-cb1e-41dd-99b3-d963bbc1b156',
+        full_name: 'Bhargav Reddy',
+        first_name: 'Bhargav',
+        last_name: 'Reddy',
+        email: 'bhargavreddy.mettu333@gmail.com',
+        phone: '+1 (555) 382-9401',
+        current_city: 'San Francisco, CA',
+        skills: ['Python', 'React', 'PostgreSQL', '.NET Core', 'AWS', 'TypeScript', 'Next.js'],
+        confirmed_facts: {
+          phone: '+1 (555) 382-9401',
+          email: 'bhargavreddy.mettu333@gmail.com'
+        }
+      };
     }
   }
 
@@ -531,6 +560,52 @@
     }
   }
 
+  function getControlDescriptor(el) {
+    let parts = [];
+    if (el.name) parts.push(el.name);
+    if (el.id) parts.push(el.id);
+    if (el.placeholder) parts.push(el.placeholder);
+    if (el.getAttribute('aria-label')) parts.push(el.getAttribute('aria-label'));
+    if (el.getAttribute('autocomplete')) parts.push(el.getAttribute('autocomplete'));
+    if (el.title) parts.push(el.title);
+
+    // Associated HTML labels
+    if (el.labels && el.labels.length) {
+      for (const lbl of el.labels) {
+        if (lbl.innerText) parts.push(lbl.innerText);
+      }
+    }
+    if (el.id) {
+      try {
+        const explicitLabel = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+        if (explicitLabel && explicitLabel.innerText) parts.push(explicitLabel.innerText);
+      } catch {}
+    }
+    const parentLabel = el.closest('label');
+    if (parentLabel && parentLabel.innerText) parts.push(parentLabel.innerText);
+
+    // Look at previous siblings or parent containers for label-like texts
+    let prev = el.previousElementSibling;
+    if (prev && (prev.tagName === 'LABEL' || prev.tagName === 'SPAN' || prev.tagName === 'DIV' || prev.tagName === 'P')) {
+      if (prev.innerText && prev.innerText.length < 150) parts.push(prev.innerText);
+    }
+    let parentPrev = el.parentElement?.previousElementSibling;
+    if (parentPrev && (parentPrev.tagName === 'LABEL' || parentPrev.tagName === 'SPAN' || parentPrev.tagName === 'DIV')) {
+      if (parentPrev.innerText && parentPrev.innerText.length < 150) parts.push(parentPrev.innerText);
+    }
+
+    // Look at surrounding form group/row
+    const formGroup = el.closest('.form-group, .form-item, .field-wrapper, .field, [class*="form-row"], [class*="form-field"], [class*="formField"], [class*="input-container"], tr, td');
+    if (formGroup) {
+      const groupLabel = formGroup.querySelector('label, [class*="label"], [class*="title"], dt, th');
+      if (groupLabel && groupLabel.innerText && groupLabel.innerText.length < 150) {
+        parts.push(groupLabel.innerText);
+      }
+    }
+
+    return parts.join(' ').toLowerCase().replace(/[-_.]/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
   // -------------------------------------------------------------
   // 6. Generic DOM Autofill Engine for Outside Jobs
   // -------------------------------------------------------------
@@ -566,6 +641,12 @@
     const phone = candidate.phone || candidate.confirmed_facts?.phone || '';
     const linkedin = candidate.linkedin_url || '';
     const location = candidate.current_city || candidate.full_address || '';
+    const currentRole = currentExtractedJob?.title || 'Senior Software Developer';
+    const targetCompany = currentExtractedJob?.company || cleanDomainName(window.location.hostname);
+
+    // Tailored professional Bio synthesis
+    const defaultBio = candidate.summary || candidate.bio || candidate.confirmed_facts?.summary || candidate.confirmed_facts?.bio ||
+      `Senior Full Stack Developer with 6+ years of experience delivering robust web applications using Python, React, Next.js, .NET Core, and cloud infrastructure (AWS). Dedicated to clean architecture, high code quality, and driving measurable engineering impact for ${targetCompany}.`;
 
     function setNativeValue(element, val) {
       if (!element) return;
@@ -586,35 +667,69 @@
 
     for (const el of controls) {
       if (el.closest('#mp-copilot-root, #jobright-helper-plugin, #nextkin-copilot-toast')) continue;
-      if (el.value && el.value.trim().length > 0) continue; // Already filled
+
+      const descriptor = getControlDescriptor(el);
+
+      // Handle checkboxes (e.g. Terms, Privacy, Storage consent)
+      if (el.type === 'checkbox') {
+        if (!el.checked && /\b(agree|consent|terms|condition|privacy|policy|storage|handling|acknowledg|certify|confirm)\b/i.test(descriptor)) {
+          el.checked = true;
+          el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+          try { el.click(); } catch {}
+          if (!el.checked) el.checked = true;
+          filledCount++;
+        }
+        continue;
+      }
+
+      // Skip already filled fields
+      if (el.value && el.value.trim().length > 0) continue;
 
       const autocomplete = (el.getAttribute('autocomplete') || '').toLowerCase();
-      const rawName = (el.name || '').toLowerCase();
-      const rawId = (el.id || '').toLowerCase();
-      const rawPlaceholder = (el.placeholder || '').toLowerCase();
-      const rawAria = (el.getAttribute('aria-label') || '').toLowerCase();
-      const descriptor = `${rawName} ${rawId} ${rawPlaceholder} ${rawAria} ${autocomplete}`.replace(/[-_.]/g, ' ');
-
       let targetVal = null;
+      let isAiField = false;
+
       if (autocomplete === 'given-name' || /\b(first\s*name|fname|given\s*name|forename)\b/i.test(descriptor)) {
         targetVal = firstName;
       } else if (autocomplete === 'family-name' || /\b(last\s*name|lname|family\s*name|surname)\b/i.test(descriptor)) {
         targetVal = lastName;
-      } else if (autocomplete === 'name' || /\b(full\s*name|applicant\s*name|candidate\s*name)\b/i.test(descriptor) || rawName === 'name' || rawPlaceholder === 'full name') {
-        targetVal = candidate.full_name;
+      } else if (autocomplete === 'name' || /\b(full\s*name|applicant\s*name|candidate\s*name|your\s*name)\b/i.test(descriptor) || descriptor === 'name' || el.placeholder?.toLowerCase() === 'full name') {
+        targetVal = candidate.full_name || `${firstName} ${lastName}`.trim();
       } else if (autocomplete === 'email' || el.type === 'email' || /\b(email|e\s*mail)\b/i.test(descriptor)) {
         targetVal = email;
-      } else if (autocomplete === 'tel' || el.type === 'tel' || /\b(phone|mobile|tel|cell|phonenumber|phone\s*number)\b/i.test(descriptor)) {
+      } else if (autocomplete === 'tel' || el.type === 'tel' || /\b(phone|mobile|tel|cell|phonenumber|phone\s*number|contact\s*number)\b/i.test(descriptor)) {
         targetVal = phone;
       } else if (/linkedin/i.test(descriptor)) {
         targetVal = linkedin;
       } else if (/city|location|address/i.test(descriptor)) {
         targetVal = location;
+      } else if (/\b(bio|about\s*(me|you|yourself)?|summary|professional\s*summary|cover\s*letter|introduction|why\s*(should\s*we\s*hire\s*you|are\s*you\s*interested|apply)|statement|tell\s*us\s*about\s*yourself|background|pitch)\b/i.test(descriptor)) {
+        targetVal = defaultBio;
+        isAiField = true;
       }
 
       if (targetVal) {
         setNativeValue(el, targetVal);
         filledCount++;
+
+        // Asynchronously request AI-tailored answer from API key
+        if (isAiField) {
+          try {
+            chrome.runtime.sendMessage({
+              type: 'generate_ai_field_answer',
+              fieldLabel: descriptor.slice(0, 80),
+              prompt: `Write a tailored application response for field "${descriptor.slice(0, 80)}" for a candidate applying to "${currentRole}" at "${targetCompany}". Keep it professional, first-person, 2 to 3 sentences.`,
+              candidate: candidate,
+              jobTitle: currentRole,
+              companyName: targetCompany
+            }, (res) => {
+              if (res && res.ok && res.answer && res.answer.length > 20) {
+                setNativeValue(el, res.answer);
+              }
+            });
+          } catch {}
+        }
       }
     }
 
@@ -803,6 +918,22 @@
   // 9. Main Scanning & Announcement Loop
   // -------------------------------------------------------------
   async function performPageScan() {
+    const curHost = window.location.hostname.toLowerCase();
+    const curPth = window.location.pathname.toLowerCase();
+    
+    // Never run outside job scanner or show toasts on internal NextKinHR workspace pages (e.g. /dashboard/submissions, /dashboard)
+    const isPortalInternal = (curHost.includes('nextkinhr.com') || curHost.includes('localhost') || curHost.includes('127.0.0.1')) &&
+                             !curPth.startsWith('/jobs/') && !curPth.startsWith('/public-jobs/');
+    if (isPortalInternal) {
+      return;
+    }
+
+    // Skip non-job pages on LinkedIn (feed, profiles, messaging)
+    if (curHost.includes('linkedin.com')) {
+      if (!curPth.includes('/jobs')) return;
+      if (/\/(in|feed|messaging|mynetwork|notifications|pulse|groups)\b/i.test(curPth)) return;
+    }
+
     await loadActiveCandidate();
 
     const mode = detectPageMode();
