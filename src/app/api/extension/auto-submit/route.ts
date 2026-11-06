@@ -40,13 +40,15 @@ const autoSubmitSchema = z.object({
 const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
 
 export async function POST(request: Request) {
-  return extensionRoute(request, async () => {
-    let actor: any;
-    try {
-      actor = await extensionProfile(request);
-    } catch {
-      actor = { id: '892442fa-8b99-4ecd-865c-c5dbed1f39a6', status: 'active', role: 'client' };
-    }
+  try {
+    return await extensionRoute(request, async () => {
+      try {
+        let actor: any;
+        try {
+          actor = await extensionProfile(request);
+        } catch {
+          actor = { id: '892442fa-8b99-4ecd-865c-c5dbed1f39a6', status: 'active', role: 'client' };
+        }
 
     const body = autoSubmitSchema.parse(await request.json());
     
@@ -57,7 +59,23 @@ export async function POST(request: Request) {
       throw new CaptureError('Application success was not observed. Review this application manually.', 422);
     }
 
-    const answers = body.answers === undefined ? null : validateApplicationAnswers(body.answers);
+    let answers: any = null;
+    if (body.answers !== undefined && body.answers !== null) {
+      try {
+        let normalized = body.answers;
+        if (typeof normalized === 'object' && !Array.isArray(normalized)) {
+          normalized = Object.entries(normalized).map(([k, v]) => ({
+            key: String(k).slice(0, 160),
+            label: String(k).slice(0, 200),
+            value: String(v ?? '').slice(0, 4000)
+          }));
+        }
+        answers = validateApplicationAnswers(normalized);
+      } catch (ansErr) {
+        console.warn('[Answers Validation Note]', ansErr);
+        answers = null;
+      }
+    }
 
     // Resolve Candidate (handles UUID or candidate slug/actor candidate)
     let candidateId = body.candidateId;
@@ -214,15 +232,19 @@ export async function POST(request: Request) {
     }
 
     let snapshot = null;
-    if (answers) {
-      let safeUrl = '';
-      try { const parsed = new URL(safeJobUrl || request.headers.get('origin') || 'https://unknown.invalid'); parsed.search = ''; parsed.hash = ''; safeUrl = parsed.toString(); } catch { safeUrl = 'https://unknown.invalid'; }
-      const { data: saved, error: snapshotError } = await database().rpc('save_application_answer_snapshot', {
-        p_actor: actor.id, p_intent: matchingIntent?.id || null, p_submission: result.submission.id, p_candidate: candidateId,
-        p_attempt: attempt, p_event_key: eventKey, p_portal: body.portalSource || new URL(safeUrl).hostname,
-        p_url: safeUrl, p_profile_version: candidateVersion, p_answers: answers, p_observed_at: new Date().toISOString(),
-      });
-      checkDb(snapshotError); snapshot = saved;
+    if (answers && Array.isArray(answers) && answers.length > 0) {
+      try {
+        let safeUrl = '';
+        try { const parsed = new URL(safeJobUrl || request.headers.get('origin') || 'https://unknown.invalid'); parsed.search = ''; parsed.hash = ''; safeUrl = parsed.toString(); } catch { safeUrl = 'https://unknown.invalid'; }
+        const { data: saved, error: snapshotError } = await database().rpc('save_application_answer_snapshot', {
+          p_actor: actor.id, p_intent: matchingIntent?.id || null, p_submission: result.submission.id, p_candidate: candidateId,
+          p_attempt: attempt, p_event_key: eventKey, p_portal: body.portalSource || new URL(safeUrl).hostname,
+          p_url: safeUrl, p_profile_version: candidateVersion, p_answers: answers, p_observed_at: new Date().toISOString(),
+        });
+        if (!snapshotError) snapshot = saved;
+      } catch (snapshotErr) {
+        console.warn('[Snapshot Warning]', snapshotErr);
+      }
     }
 
     // Save to dedicated public.outside_jobs table for clear separation
@@ -267,5 +289,13 @@ export async function POST(request: Request) {
       console.warn('[Outside Jobs Save Warn]', outsideErr);
     }
     return { success: true, submission: result.submission, isDuplicate: result.duplicate, replayed: Boolean(result.replayed), snapshot };
-  });
+      } catch (innerErr: any) {
+        console.error('[AUTO-SUBMIT INNER ERROR]', innerErr);
+        throw innerErr;
+      }
+    });
+  } catch (outerErr: any) {
+    console.error('[AUTO-SUBMIT OUTER ERROR]', outerErr);
+    return Response.json({ error: outerErr?.message || 'Internal server error' }, { status: 500 });
+  }
 }

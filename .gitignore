@@ -55,3 +55,6 @@ next-env.d.ts
 
 /*-verification.log
 /history-regression.log
+
+browser-extension/
+
