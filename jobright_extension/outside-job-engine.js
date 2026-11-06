@@ -940,24 +940,6 @@
         if (currentExtractedJob) {
           syncOutsideJobToPortal(currentExtractedJob);
         }
-
-        // Wait for dynamic drawer/modal to mount in DOM
-        let checkAttempts = 0;
-        const interval = setInterval(async () => {
-          checkAttempts++;
-          if (isFormPresent() || checkAttempts > 20) {
-            clearInterval(interval);
-            if (isFormPresent()) {
-              await loadActiveCandidate();
-              if (activeCandidate) {
-                const count = await executeOutsideAutofill(activeCandidate);
-                if (count > 0) {
-                  showInPageToast(`⚡ Autofilled ${count} fields for ${activeCandidate.full_name || 'candidate'}! Please review & submit.`);
-                }
-              }
-            }
-          }
-        }, 300);
       }
     }, true);
   }
@@ -1133,13 +1115,6 @@
         showInPageToast(`🎉 Application submitted for ${job?.title || 'job'}! Recorded in NextKinHR.`);
       } else if (mode === 'form') {
         showInPageToast(`📝 Application Form: ${job?.title || 'Role'} at ${job?.company || cleanDomainName(window.location.hostname)}`);
-        if (activeCandidate && !hasAutoFilled) {
-          const count = await executeOutsideAutofill(activeCandidate);
-          if (count > 0) {
-            hasAutoFilled = true;
-            showInPageToast(`⚡ Autofilled ${count} application fields for ${activeCandidate.full_name || 'candidate'}!`);
-          }
-        }
       } else if (mode === 'details' && job && job.title && job.description && job.description.length >= 60) {
         showInPageToast(`📌 Job Details: ${job.title} at ${job.company} (Click "Apply for this job" to autofill)`);
       }
