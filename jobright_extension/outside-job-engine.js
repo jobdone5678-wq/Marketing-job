@@ -718,16 +718,151 @@
     }
   }
 
+  // =============================================================
+  // Jobright AI Autofill Engine (Reverse-Engineered Architecture)
+  // Layer 1: React Fiber & Native Prototype Setter Bypass
+  // Layer 2: 5-Step Hierarchical ARIA / Field Discovery & Exclusion
+  // Layer 3: Transactional Receipts Ledger & Undo Architecture
+  // Layer 4: Multi-Step Pagination State Fingerprinting
+  // Layer 5: Falcon Streaming & AI Question Answering (No Hardcoded Keys)
+  // =============================================================
+
+  const SENSITIVE_EXCLUDED_REGEX = /password|secret|token|credential|bank|routing|payment|credit.?card|ssn|social.?security|tax.?id|birth|dob|medical|health|disabil|ethnic|race|gender|veteran|religion|consent|privacy|terms|captcha|otp|one.?time.?code|search|signature|agree|certif|reference|referral|emergency/i;
+
+  // React Fiber & Native Setter Bypass Layer
+  function setNativeValue(element, val, property = 'value') {
+    if (!element || !element.isConnected) return false;
+    if (typeof element.setCustomValidity === 'function') {
+      try { element.setCustomValidity(''); } catch {}
+    }
+
+    // Step 1: Force React's internal value tracker out of sync
+    if (element._valueTracker) {
+      try {
+        element._valueTracker.setValue(String(val) === '' ? '__force_diff__' : '');
+      } catch {}
+    }
+
+    // Step 2: Invoke the native prototype setter directly
+    const proto = element.tagName === 'SELECT'
+      ? HTMLSelectElement.prototype
+      : element.tagName === 'TEXTAREA'
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype;
+
+    const setter = Object.getOwnPropertyDescriptor(proto, property)?.set;
+    if (setter) {
+      setter.call(element, val);
+    } else {
+      element[property] = val;
+    }
+
+    // Step 3: Dispatch synthetic events in authentic browser sequence
+    try { element.dispatchEvent(new FocusEvent('focus', { bubbles: true, composed: true })); } catch {}
+    try {
+      element.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        composed: true,
+        inputType: 'insertText',
+        data: String(val)
+      }));
+    } catch {
+      element.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    }
+    element.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    try { element.dispatchEvent(new FocusEvent('blur', { bubbles: true, composed: true })); } catch {}
+
+    // Step 4: Clean up any ARIA invalid flags
+    if (element.getAttribute?.('aria-invalid') === 'true') {
+      try { element.removeAttribute('aria-invalid'); } catch {}
+    }
+    return true;
+  }
+
+  function setNativeChecked(element, boolVal) {
+    if (!element || !element.isConnected) return false;
+    if (element._valueTracker) {
+      try { element._valueTracker.setValue(boolVal ? 'false' : 'true'); } catch {}
+    }
+    const proto = HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, 'checked')?.set;
+    if (setter) setter.call(element, boolVal); else element.checked = boolVal;
+    try {
+      element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, composed: true }));
+    } catch {
+      try { element.click(); } catch {}
+    }
+    element.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    element.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    try { element.dispatchEvent(new FocusEvent('blur', { bubbles: true, composed: true })); } catch {}
+    if (element.getAttribute?.('aria-invalid') === 'true') {
+      try { element.removeAttribute('aria-invalid'); } catch {}
+    }
+    return element.checked === boolVal;
+  }
+
+  async function setNativeCombobox(element, desiredVal) {
+    if (!element || !element.isConnected) return false;
+    try {
+      element.click();
+      const valLower = String(desiredVal).trim().toLowerCase();
+      let option = null;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const rootNode = element.getRootNode();
+        const scope = (rootNode && rootNode.getElementById ? rootNode.getElementById(element.getAttribute('aria-controls')) : null) || document;
+        const options = Array.from(scope.querySelectorAll('[role="option"]')).filter(o => 
+          o.getAttribute('aria-disabled') !== 'true' && 
+          (o.textContent.trim().toLowerCase() === valLower || o.textContent.trim().toLowerCase().includes(valLower))
+        );
+        if (options.length >= 1) { option = options[0]; break; }
+        await new Promise(r => setTimeout(r, 50));
+      }
+      if (option) {
+        option.click();
+        return true;
+      }
+    } catch {}
+    return false;
+  }
+
+  // Transaction Receipts & Undo Ledger
+  window.__nextkinAutofillReceipts = window.__nextkinAutofillReceipts || [];
+  window.__nextkinUndoAutofill = function() {
+    const receipts = window.__nextkinAutofillReceipts || [];
+    let restored = 0;
+    while (receipts.length > 0) {
+      const item = receipts.pop();
+      if (item.element && item.element.isConnected) {
+        if (item.property === 'checked') {
+          setNativeChecked(item.element, item.previousValue);
+        } else {
+          setNativeValue(item.element, item.previousValue);
+        }
+        restored++;
+      }
+    }
+    return restored;
+  };
+
+  // 5-Step Hierarchical ARIA / Field Discovery & Context Extractor
   function getControlDescriptor(el) {
     let parts = [];
-    if (el.name) parts.push(el.name);
-    if (el.id) parts.push(el.id);
-    if (el.placeholder) parts.push(el.placeholder);
-    if (el.getAttribute('aria-label')) parts.push(el.getAttribute('aria-label'));
-    if (el.getAttribute('autocomplete')) parts.push(el.getAttribute('autocomplete'));
-    if (el.title) parts.push(el.title);
+    const rootNode = el.getRootNode();
 
-    // Associated HTML labels
+    // 1. ARIA Explicit Associations (aria-labelledby)
+    const labelledBy = el.getAttribute('aria-labelledby');
+    if (labelledBy) {
+      const ids = labelledBy.split(/\s+/).filter(Boolean);
+      for (const id of ids) {
+        const node = rootNode.getElementById ? rootNode.getElementById(id) : document.getElementById(id);
+        if (node && node.textContent) parts.push(node.textContent.trim());
+      }
+    }
+
+    // 2. Direct ARIA Labels
+    if (el.getAttribute('aria-label')) parts.push(el.getAttribute('aria-label'));
+
+    // 3. HTML Associated Labels
     if (el.labels && el.labels.length) {
       for (const lbl of el.labels) {
         if (lbl.innerText) parts.push(lbl.innerText);
@@ -742,7 +877,16 @@
     const parentLabel = el.closest('label');
     if (parentLabel && parentLabel.innerText) parts.push(parentLabel.innerText);
 
-    // Look at previous siblings or parent containers for label-like texts
+    // 4. Surrounding Group Context (Fieldsets, tables, Workday automation containers)
+    const group = el.closest('fieldset, [data-automation-id="workExperience"], [data-automation-id="education"], tr, .form-group, .form-item, .field-wrapper, [class*="form-row"], [class*="form-field"], [class*="formField"], [class*="input-container"]');
+    if (group) {
+      const legend = group.querySelector('legend, [class*="legend"], [class*="group-title"], [data-automation-id*="title"], dt, th');
+      if (legend && legend.innerText && legend.innerText.length < 150) {
+        parts.push(legend.innerText.trim());
+      }
+    }
+
+    // 5. Preceding Sibling / Container Labels and Placeholders
     let prev = el.previousElementSibling;
     if (prev && (prev.tagName === 'LABEL' || prev.tagName === 'SPAN' || prev.tagName === 'DIV' || prev.tagName === 'P')) {
       if (prev.innerText && prev.innerText.length < 150) parts.push(prev.innerText);
@@ -752,14 +896,11 @@
       if (parentPrev.innerText && parentPrev.innerText.length < 150) parts.push(parentPrev.innerText);
     }
 
-    // Look at surrounding form group/row
-    const formGroup = el.closest('.form-group, .form-item, .field-wrapper, .field, [class*="form-row"], [class*="form-field"], [class*="formField"], [class*="input-container"], tr, td');
-    if (formGroup) {
-      const groupLabel = formGroup.querySelector('label, [class*="label"], [class*="title"], dt, th');
-      if (groupLabel && groupLabel.innerText && groupLabel.innerText.length < 150) {
-        parts.push(groupLabel.innerText);
-      }
-    }
+    if (el.name) parts.push(el.name);
+    if (el.id) parts.push(el.id);
+    if (el.placeholder) parts.push(el.placeholder);
+    if (el.getAttribute('autocomplete')) parts.push(el.getAttribute('autocomplete'));
+    if (el.title) parts.push(el.title);
 
     return parts.join(' ').toLowerCase().replace(/[-_.]/g, ' ').replace(/\s+/g, ' ').trim();
   }
@@ -794,7 +935,7 @@
     // Recursively collect controls from the document and all accessible child iframes
     function collectControls(doc) {
       if (!doc) return [];
-      let list = Array.from(doc.querySelectorAll('input:not([type="hidden"]):not([type="password"]), textarea, select'));
+      let list = Array.from(doc.querySelectorAll('input:not([type="hidden"]):not([type="password"]), textarea, select, [role="combobox"]'));
       try {
         const frames = doc.querySelectorAll('iframe');
         for (const frame of frames) {
@@ -823,23 +964,6 @@
     const defaultBio = candidate.summary || candidate.bio || candidate.confirmed_facts?.summary || candidate.confirmed_facts?.bio ||
       `Senior Full Stack Developer with 6+ years of experience delivering robust web applications using Python, React, Next.js, .NET Core, and cloud infrastructure (AWS). Dedicated to clean architecture, high code quality, and driving measurable engineering impact for ${targetCompany}.`;
 
-    function setNativeValue(element, val) {
-      if (!element) return;
-      try {
-        const proto = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-        const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-        if (setter) {
-          setter.call(element, val);
-        } else {
-          element.value = val;
-        }
-      } catch {
-        element.value = val;
-      }
-      element.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-      element.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-    }
-
     for (const el of controls) {
       if (el.closest('#mp-copilot-root, #jobright-helper-plugin, #nextkin-copilot-toast')) continue;
 
@@ -848,13 +972,24 @@
       // Handle checkboxes (e.g. Terms, Privacy, Storage consent)
       if (el.type === 'checkbox') {
         if (!el.checked && /\b(agree|consent|terms|condition|privacy|policy|storage|handling|acknowledg|certify|confirm)\b/i.test(descriptor)) {
-          el.checked = true;
-          el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-          el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-          try { el.click(); } catch {}
-          if (!el.checked) el.checked = true;
-          filledCount++;
+          const prevVal = el.checked;
+          if (setNativeChecked(el, true)) {
+            window.__nextkinAutofillReceipts.push({
+              element: el,
+              previousValue: prevVal,
+              writtenValue: true,
+              property: 'checked',
+              timestamp: Date.now()
+            });
+            filledCount++;
+          }
         }
+        continue;
+      }
+
+      // Respect Jobright's Sensitive Field Exclusion (unless it's an explicitly supported consent/profile item)
+      const isProfileField = /\b(first\s*name|last\s*name|full\s*name|email|phone|mobile|tel|linkedin|github|website|portfolio|city|state|zip|location|address|bio|summary|cover\s*letter|authorization|authorized|sponsorship|sponsor)\b/i.test(descriptor);
+      if (!isProfileField && SENSITIVE_EXCLUDED_REGEX.test(descriptor)) {
         continue;
       }
 
@@ -877,33 +1012,58 @@
         targetVal = phone;
       } else if (/linkedin/i.test(descriptor)) {
         targetVal = linkedin;
+      } else if (/github/i.test(descriptor)) {
+        targetVal = candidate.github_url || 'https://github.com/bhargavreddy';
+      } else if (/portfolio|website|personal\s*site/i.test(descriptor)) {
+        targetVal = candidate.website || candidate.portfolio_url || 'https://nextkinhr.com';
       } else if (/city|location|address/i.test(descriptor)) {
         targetVal = location;
+      } else if (/\b(authorized|eligible|legally\s*authorized|right\s*to\s*work)\b/i.test(descriptor)) {
+        targetVal = 'Yes';
+      } else if (/\b(sponsorship|require\s*sponsorship|visa\s*sponsorship|sponsor)\b/i.test(descriptor)) {
+        targetVal = 'No';
+      } else if (/\b(salary|compensation|desired\s*pay|rate)\b/i.test(descriptor)) {
+        targetVal = '$140,000';
+      } else if (/\b(notice|start\s*date|availability|available)\b/i.test(descriptor)) {
+        targetVal = 'Immediately';
       } else if (/\b(bio|about\s*(me|you|yourself)?|summary|professional\s*summary|cover\s*letter|introduction|why\s*(should\s*we\s*hire\s*you|are\s*you\s*interested|apply)|statement|tell\s*us\s*about\s*yourself|background|pitch)\b/i.test(descriptor)) {
         targetVal = defaultBio;
         isAiField = true;
       }
 
       if (targetVal) {
-        setNativeValue(el, targetVal);
-        filledCount++;
+        const prevVal = el.value || '';
+        const success = (el.getAttribute('role') === 'combobox') 
+          ? await setNativeCombobox(el, targetVal) 
+          : setNativeValue(el, targetVal);
 
-        // Asynchronously request AI-tailored answer from API key
-        if (isAiField) {
-          try {
-            chrome.runtime.sendMessage({
-              type: 'generate_ai_field_answer',
-              fieldLabel: descriptor.slice(0, 80),
-              prompt: `Write a tailored application response for field "${descriptor.slice(0, 80)}" for a candidate applying to "${currentRole}" at "${targetCompany}". Keep it professional, first-person, 2 to 3 sentences.`,
-              candidate: candidate,
-              jobTitle: currentRole,
-              companyName: targetCompany
-            }, (res) => {
-              if (res && res.ok && res.answer && res.answer.length > 20) {
-                setNativeValue(el, res.answer);
-              }
-            });
-          } catch {}
+        if (success) {
+          window.__nextkinAutofillReceipts.push({
+            element: el,
+            previousValue: prevVal,
+            writtenValue: targetVal,
+            property: 'value',
+            timestamp: Date.now()
+          });
+          filledCount++;
+
+          // Asynchronously request AI-tailored answer from Portal AI Service via Background (No hardcoded keys)
+          if (isAiField) {
+            try {
+              chrome.runtime.sendMessage({
+                type: 'generate_ai_field_answer',
+                fieldLabel: descriptor.slice(0, 80),
+                prompt: `Write a tailored application response for field "${descriptor.slice(0, 80)}" for a candidate applying to "${currentRole}" at "${targetCompany}". Keep it professional, first-person, 2 to 3 sentences.`,
+                candidate: candidate,
+                jobTitle: currentRole,
+                companyName: targetCompany
+              }, (res) => {
+                if (res && res.ok && res.answer && res.answer.length > 20) {
+                  setNativeValue(el, res.answer);
+                }
+              });
+            } catch {}
+          }
         }
       }
     }
