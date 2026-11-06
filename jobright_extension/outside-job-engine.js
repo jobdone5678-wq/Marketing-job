@@ -1178,6 +1178,15 @@ function setNativeChecked(element, boolVal) {
     }
     autofillAborted = false;
 
+    try {
+      window.top.postMessage({ type: 'NEXTKIN_TRIGGER_AUTOFILL' }, '*');
+      window.top.dispatchEvent(new CustomEvent('NextkinTriggerAutofill'));
+      const helperFrames = document.querySelectorAll('#jobright-helper-container iframe, iframe[src*="helper-app"]');
+      helperFrames.forEach(f => {
+        try { f.contentWindow?.postMessage({ type: 'NEXTKIN_TRIGGER_AUTOFILL' }, '*'); } catch(_) {}
+      });
+    } catch (_) {}
+
     let filledCount = 0;
 
     // A. Use NextkinForms & FieldWriter if loaded
