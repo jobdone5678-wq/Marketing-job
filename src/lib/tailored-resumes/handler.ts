@@ -1,6 +1,6 @@
 import 'server-only';
 import {createHash} from 'node:crypto';
-import {analyze} from '../../../browser-extension/resume-engine.js';
+import {analyze} from '../../../jobright_extension/resume-engine.js';
 import {database,checkDb,CaptureError} from '@/lib/db/admin';
 import {getTailoredResume} from './repository';
 import {getJobBrief,checkWorkflowDb} from '@/lib/job-briefs/repository';

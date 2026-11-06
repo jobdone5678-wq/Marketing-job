@@ -19,7 +19,7 @@ export async function exportCandidateResume(candidate:Candidate,format:'docx'|'p
  const content=candidateResumeMarkdown(candidate);
  const filename=`${candidate.full_name.replace(/[^\p{L}\p{N}_-]+/gu,'_')}_Profile.${format}`;
  if(format==='docx') {
-  const {resumeDocx}=await import('../../browser-extension/resume-engine.js');
+  const {resumeDocx}=await import('../../jobright_extension/resume-engine.js');
   downloadBytes(resumeDocx(content),'application/vnd.openxmlformats-officedocument.wordprocessingml.document',filename);return;
  }
  const {PDFDocument,StandardFonts,rgb}=await import('pdf-lib');

@@ -4,7 +4,7 @@ import {candidateAccess} from '@/lib/resumes/repository';
 import {structuredAI,getAIModel} from '@/lib/ai/client';
 import {taskLease} from '@/lib/tasks/repository';
 import {buildContextualResume,extensionFactCatalog,extensionSelectionSchema,EXTENSION_AI_VERSION} from './extension-content';
-import {fingerprint,normalizeCandidate} from '../../../browser-extension/resume-engine.js';
+import {fingerprint,normalizeCandidate} from '../../../jobright_extension/resume-engine.js';
 import type {BackgroundTask} from '@/lib/tasks/types';
 import type {UserProfile} from '@/types/database';
 

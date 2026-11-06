@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {categorizeSkills} from '../../../browser-extension/resume-engine.js';
+import {categorizeSkills} from '../../../jobright_extension/resume-engine.js';
 
 type Profile={full_name:string;confirmed_facts?:Record<string,unknown>};
 export type ResumeFact={id:string;kind:'summary'|'skill';text:string;field:string};

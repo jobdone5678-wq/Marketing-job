@@ -11,7 +11,7 @@ import {withAIExecutionWindow} from '@/lib/ai/execution-window';
 import {extensionJobSchema,canonicalExtensionJob} from '@/lib/tailored-resumes/extension-service';
 import {currentExtensionCandidate,type ExtensionResumeInput} from '@/lib/tailored-resumes/extension-task';
 import {extensionFactCatalog} from '@/lib/tailored-resumes/extension-content';
-import {fingerprint,normalizeCandidate,candidateFromText} from '../../../browser-extension/resume-engine.js';
+import {fingerprint,normalizeCandidate,candidateFromText} from '../../../jobright_extension/resume-engine.js';
 import {questionSchema,screeningSelectionSchema,validateScreening,type Question} from './evidence';
 import type {BackgroundTask} from '@/lib/tasks/types';
 import type {UserProfile} from '@/types/database';

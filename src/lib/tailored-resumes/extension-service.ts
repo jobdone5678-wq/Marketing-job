@@ -10,7 +10,7 @@ import {withAIExecutionWindow} from '@/lib/ai/execution-window';
 import {resumeDocx} from './docx';
 import {EXTENSION_AI_VERSION} from './extension-content';
 import {currentExtensionCandidate,generateExtensionResume,type ExtensionResumeInput,type ExtensionJob} from './extension-task';
-import {buildResume,fingerprint,normalizeCandidate} from '../../../browser-extension/resume-engine.js';
+import {buildResume,fingerprint,normalizeCandidate} from '../../../jobright_extension/resume-engine.js';
 import type {UserProfile} from '@/types/database';
 import type {BackgroundTask} from '@/lib/tasks/types';
 

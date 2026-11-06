@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {extensionRoute,cors} from '@/lib/capture/server';
 import {CaptureError} from '@/lib/db/admin';
 import {extensionJobSchema,canonicalExtensionJob,extensionResumeActor,extensionTaskStatus,requestExtensionAI,resumeRequestBody} from '@/lib/tailored-resumes/extension-service';
-import {candidateFromText} from '../../../../../browser-extension/resume-engine.js';
+import {candidateFromText} from '../../../../../jobright_extension/resume-engine.js';
 export const runtime='nodejs';
 export const maxDuration=60;
 export async function OPTIONS(request:Request){return cors(request,new Response(null,{status:204}));}
