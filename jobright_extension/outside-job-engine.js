@@ -908,8 +908,17 @@
   // -------------------------------------------------------------
   // 6. Generic DOM Autofill Engine for Outside Jobs
   // -------------------------------------------------------------
+  let autofillAborted = false;
+  document.addEventListener('CancelAutoFill', () => { autofillAborted = true; });
+  window.addEventListener('message', (ev) => {
+    if (ev.data?.type === 'CancelAutoFill' || ev.data === 'CancelAutoFill') {
+      autofillAborted = true;
+    }
+  });
+
   async function executeOutsideAutofill(candidate) {
     if (!candidate) return 0;
+    autofillAborted = false;
 
     let filledCount = 0;
 
@@ -1117,6 +1126,11 @@
     if (phoneEl) {
       monitorAndPromptMissingPhone(phoneEl, candidate);
     }
+
+    try {
+      window.top.postMessage({ type: 'NEXTKIN_AUTOFILL_DONE', filledCount }, '*');
+      window.top.dispatchEvent(new CustomEvent('NextkinAutofillDone', { detail: { filledCount } }));
+    } catch (_) {}
 
     return filledCount;
   }
