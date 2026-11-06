@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { createClient } from "@/lib/client";
 import {
   getSubmissions,
   deleteSubmission,
@@ -107,6 +108,45 @@ export default function SubmissionsPage() {
     if(candidateId)queueMicrotask(()=>setSelectedCandidateFilter(candidateId));
     void Promise.resolve().then(loadData);
   }, [loadData]);
+
+  // Real-time updates via WebSockets (Supabase Realtime)
+  React.useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel("job_submissions_realtime_feed")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "job_submissions",
+        },
+        async (payload) => {
+          try {
+            const latest = await getSubmissions();
+            setSubmissions(latest);
+            if (payload.eventType === "INSERT") {
+              const row = payload.new as Record<string, unknown>;
+              const comp = (row?.company_name as string) || "Application";
+              const title = (row?.job_title as string) || "Role";
+              toast.success(`🎉 New application saved: ${comp} (${title})`);
+            } else if (payload.eventType === "UPDATE") {
+              const row = payload.new as Record<string, unknown>;
+              if (row?.status === "Applied" || row?.capture_status === "submitted") {
+                toast.success(`⚡ Application updated: ${(row?.company_name as string) || "Job"}`);
+              }
+            }
+          } catch (e) {
+            console.error("[Realtime Submissions Error]", e);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   // Applications finish in another tab; refresh their status when returning.
   React.useEffect(() => {

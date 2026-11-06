@@ -358,17 +358,19 @@
     // 1. Resume / CV file upload input
     const fileInput = document.querySelector('input[type="file"]');
     // 2. Candidate name inputs
-    const nameInput = document.querySelector('input[name*="first_name" i], input[name*="firstName" i], input[id*="first_name" i], input[id*="firstName" i], input[name*="fullname" i], input[name*="full_name" i], input[placeholder*="full name" i], input[placeholder*="first name" i]');
+    const nameInput = document.querySelector('input[name*="name" i], input[id*="name" i], input[placeholder*="name" i], input[aria-label*="name" i]');
     // 3. Email input
-    const emailInput = document.querySelector('input[type="email"], input[name*="email" i], input[id*="email" i]');
+    const emailInput = document.querySelector('input[type="email"], input[name*="email" i], input[id*="email" i], input[aria-label*="email" i], input[placeholder*="email" i]');
     // 4. Phone input
-    const phoneInput = document.querySelector('input[type="tel"], input[name*="phone" i], input[id*="phone" i], input[name*="mobile" i]');
+    const phoneInput = document.querySelector('input[type="tel"], input[name*="phone" i], input[id*="phone" i], input[name*="mobile" i], input[aria-label*="phone" i]');
     // 5. Explicit job application form container
-    const appForm = document.querySelector('form[action*="apply" i], form[action*="job" i], form[id*="application" i], form[class*="application" i], [data-automation-id*="application" i], .ashby-application-form, #application-form, .application-form');
+    const appForm = document.querySelector('form[action*="apply" i], form[action*="job" i], form[id*="application" i], form[class*="application" i], [data-automation-id*="application" i], .ashby-application-form, #application-form, .application-form, [role="form"]');
 
     if (appForm) return true;
     if (fileInput && (emailInput || nameInput || phoneInput)) return true;
     if (nameInput && (emailInput || phoneInput)) return true;
+    if (emailInput && (phoneInput || fileInput)) return true;
+    if (/\/apply|\/application/i.test(window.location.pathname) && document.querySelectorAll('input, textarea').length >= 3) return true;
 
     return false;
   }
@@ -577,16 +579,27 @@
       }
     }
 
-    // 5. Title & Company Fallback only if confirmed career/job page with genuine description
-    if ((!title || !company) && isJobOrCareerPage() && description && description.length >= 80) {
+    // 5. Title & Company Fallback
+    if ((!title || !company) && isJobOrCareerPage()) {
       const ogTitle = extractMetaTag(['og:title', 'twitter:title']);
       const parsed = parsePageTitle(ogTitle || document.title);
       if (!title && isValidJobTitle(parsed.title)) title = parsed.title;
       if (!company && parsed.company) company = parsed.company;
     }
 
-    if (!company && isJobOrCareerPage() && title && description && description.length >= 80) {
-      company = cleanDomainName(window.location.hostname);
+    if (!company && isJobOrCareerPage()) {
+      const pathFirst = window.location.pathname.split('/').filter(Boolean)[0];
+      const host = window.location.hostname.toLowerCase();
+      if ((host.includes('ashby') || host.includes('greenhouse') || host.includes('lever')) && pathFirst) {
+        company = pathFirst.charAt(0).toUpperCase() + pathFirst.slice(1);
+      } else {
+        company = cleanDomainName(window.location.hostname);
+      }
+    }
+
+    if (!title && isJobOrCareerPage()) {
+      const parsed = parsePageTitle(document.title);
+      if (parsed.title) title = parsed.title;
     }
 
     // 6. Location Selector
@@ -604,7 +617,13 @@
       }
     }
 
-    if (!title || !isValidJobTitle(title) || !description || description.length < 80) return null;
+    // Fallback description on application forms
+    if ((!description || description.length < 50) && isJobOrCareerPage() && (isFormPresent() || /\/apply|\/application/i.test(window.location.pathname))) {
+      description = `Job application for ${title || 'Software Engineer'} at ${company || 'Company'}. Captured by NextKin browser copilot.`;
+      descriptionHtml = `<p>Job application for <strong>${title || 'Software Engineer'}</strong> at <strong>${company || 'Company'}</strong>.</p>`;
+    }
+
+    if (!title || !isValidJobTitle(title) || !description || description.length < 30) return null;
 
     return {
       title,
@@ -621,7 +640,7 @@
 
   // Proactively save external outside job to portal database (only on verified job pages)
   async function syncOutsideJobToPortal(job) {
-    if (!isJobOrCareerPage() || !job || !isValidJobTitle(job.title) || !job.description || job.description.length < 80) return;
+    if (!isJobOrCareerPage() || !job || !isValidJobTitle(job.title)) return;
     try {
       chrome.runtime.sendMessage({
         type: 'save_external_job',
@@ -631,8 +650,8 @@
           jobUrl: job.jobUrl,
           location: job.location || null,
           department: job.department || null,
-          description: job.description,
-          descriptionHtml: job.descriptionHtml || null,
+          description: job.description || `Job application at ${job.company}`,
+          descriptionHtml: job.descriptionHtml || `<p>Job application at ${job.company}</p>`,
           employmentType: job.employmentType || 'Full-time',
           portalSource: job.portalSource
         }
@@ -1165,6 +1184,8 @@
   // -------------------------------------------------------------
   // 8. Outside Application Submission Interceptor & Capture
   // -------------------------------------------------------------
+  let lastCapturedAnswers = null;
+
   function captureFormAnswers() {
     const answers = {};
     const controls = document.querySelectorAll('input, select, textarea');
@@ -1177,27 +1198,49 @@
         answers[name] = val;
       }
     }
+    if (Object.keys(answers).length > 0) {
+      lastCapturedAnswers = answers;
+    }
     return answers;
   }
 
-  function handleApplicationSubmission(triggerNode) {
+  function handleApplicationSubmission(triggerNode, isConfirmed = false) {
     if (!isJobOrCareerPage()) return;
     if (detectPageMode() === 'auth') return;
     if (pendingSubmission && Date.now() - pendingSubmission.timestamp < 10000) return;
 
-    const answers = captureFormAnswers();
-    if (!answers || Object.keys(answers).length === 0) return;
+    let answers = captureFormAnswers();
+    if (!answers || Object.keys(answers).length === 0) {
+      answers = lastCapturedAnswers || {};
+    }
 
-    // Strict validation: Must contain at least one candidate identification field
-    const hasCandidateField = Object.keys(answers).some(k => 
-      /email|name|phone|resume|cv|first|last|education|experience|portfolio|linkedin/i.test(k)
-    );
-    if (!hasCandidateField) return;
+    if (!isConfirmed) {
+      if (!answers || Object.keys(answers).length === 0) return;
+      const hasCandidateField = Object.keys(answers).some(k => 
+        /email|name|phone|resume|cv|first|last|education|experience|portfolio|linkedin/i.test(k)
+      );
+      if (!hasCandidateField) return;
+    }
 
-    const job = currentExtractedJob || scrapeJobFromDOM();
-    if (!job || !isValidJobTitle(job.title) || !job.description || job.description.length < 80) {
-      // Abort silently: not a genuine job application
-      return;
+    let job = currentExtractedJob || scrapeJobFromDOM();
+    if (!job) {
+      const pageTitle = parsePageTitle(document.title);
+      const parsedCompany = pageTitle.company || cleanDomainName(window.location.hostname);
+      const parsedTitle = (pageTitle.title && isValidJobTitle(pageTitle.title)) ? pageTitle.title : 'Software Engineer';
+      job = {
+        title: parsedTitle,
+        company: parsedCompany,
+        description: `Job application for ${parsedTitle} at ${parsedCompany}. Captured by NextKin browser copilot.`,
+        descriptionHtml: `<p>Job application for <strong>${parsedTitle}</strong> at <strong>${parsedCompany}</strong>.</p>`,
+        location: null,
+        department: null,
+        employmentType: 'Full-time',
+        jobUrl: window.location.href,
+        portalSource: window.location.hostname
+      };
+    } else if (!job.description || job.description.length < 50) {
+      job.description = `Job application for ${job.title || 'Software Engineer'} at ${job.company || 'Company'}. Captured by NextKin browser copilot.`;
+      job.descriptionHtml = `<p>Job application for <strong>${job.title || 'Software Engineer'}</strong> at <strong>${job.company || 'Company'}</strong>.</p>`;
     }
 
     pendingSubmission = {
@@ -1241,7 +1284,7 @@
         department: job.department || null,
         employmentType: job.employmentType || 'Full-time',
         portalSource: 'Outside Job - ' + window.location.hostname,
-        evidence: 'Your application was successfully submitted on ' + window.location.hostname,
+        evidence: isConfirmed ? ('Application submission confirmed on ' + window.location.hostname) : ('Your application was successfully submitted on ' + window.location.hostname),
         manualAttestation: true,
         appliedResume: resumeSnapshot,
         answers: answers
@@ -1254,6 +1297,7 @@
     document.addEventListener('submit', (e) => {
       if (!isJobOrCareerPage()) return;
       if (detectPageMode() === 'auth') return;
+      captureFormAnswers();
       handleApplicationSubmission(e.target);
     }, true);
 
@@ -1267,11 +1311,17 @@
       if (!btn) return;
       if (btn.closest('#mp-copilot-root, #jobright-helper-plugin, #nextkin-copilot-toast')) return;
 
+      captureFormAnswers();
       const text = (btn.textContent || btn.value || '').trim();
       const testId = (btn.getAttribute('data-testid') || '').toLowerCase();
-      const isSubmitBtn = (btn.type === 'submit' && isFormPresent()) ||
-                          /^(submit\s+application|complete\s+application|send\s+application|apply\s+now)$/i.test(text) ||
-                          testId.includes('submit-application');
+      const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+      const isSubmitBtn = btn.type === 'submit' ||
+                          btn.getAttribute('role') === 'button' && /\b(?:submit|apply)\b/i.test(text) ||
+                          /\b(?:submit(?:\s+application)?|apply(?:\s+now)?|send\s+application|complete\s+application)\b/i.test(text) ||
+                          testId.includes('submit') ||
+                          testId.includes('apply') ||
+                          ariaLabel.includes('submit') ||
+                          ariaLabel.includes('apply');
 
       if (isSubmitBtn) {
         handleApplicationSubmission(btn);
@@ -1289,7 +1339,7 @@
       const hasSuccessBox = Boolean(document.querySelector('.ashby-application-success, [class*="application-success" i], [class*="submission-success" i]'));
       if (hasMatch || hasSuccessBox) {
         confirmed = true;
-        handleApplicationSubmission(document.body);
+        handleApplicationSubmission(document.body, true);
       }
     };
     const observer = new MutationObserver(checkConfirmation);

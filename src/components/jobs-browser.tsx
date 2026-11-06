@@ -44,6 +44,7 @@ type Source = {
 export function JobsBrowser({ provider }: { provider?: string }) {
   const router=useRouter();
   const [importingJob,setImportingJob]=useState('');
+  const [applyingJobHash, setApplyingJobHash] = useState('');
   const { isRecruiter,isTechnicalRecruiter,isSuperAdmin, isClient, loading: profileLoading } = useUserProfile();
   const isRecruitingStaff=isRecruiter||isTechnicalRecruiter;
   const canSelectCandidate=isRecruitingStaff||isSuperAdmin;
@@ -127,6 +128,49 @@ export function JobsBrowser({ provider }: { provider?: string }) {
       setError((err as Error).message);
     } finally {
       setSyncingSoftwareJobs(false);
+    }
+  };
+
+  const handleApplyDirectly = async (job: LiveJob) => {
+    const tab = window.open('about:blank', '_blank');
+    if (tab) tab.opener = null;
+    setApplyingJobHash(job.content_hash);
+    try {
+      let targetJobId = '';
+      try {
+        const result = await api<{ jobId: string }>('/api/jobs/import', {
+          method: 'POST',
+          body: JSON.stringify({
+            provider: job.provider,
+            board: job.board_slug,
+            externalId: job.external_id,
+          }),
+        });
+        targetJobId = result.jobId;
+      } catch {}
+
+      const activeCandId = candidateId || recommendation?.candidateId || candidates[0]?.id;
+      let appUrl = job.application_url;
+
+      if (activeCandId && targetJobId) {
+        try {
+          const r = await api<{ intent: { id: string; job: { application_url: string } } }>('/api/application-intents', {
+            method: 'POST',
+            body: JSON.stringify({ candidateId: activeCandId, jobId: targetJobId }),
+          });
+          if (r?.intent?.id) {
+            const u = new URL(r.intent.job?.application_url || appUrl);
+            u.hash = 'marketing-intent=' + r.intent.id;
+            appUrl = u.toString();
+          }
+        } catch {}
+      }
+
+      if (tab) tab.location.href = appUrl;
+    } catch {
+      if (tab) tab.location.href = job.application_url;
+    } finally {
+      setApplyingJobHash('');
     }
   };
 
@@ -804,14 +848,14 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                         >
                           {isExpanded ? 'Hide Details' : 'View Details'}
                         </Button>
-                        <a
-                          href={job.application_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center justify-center rounded-lg text-xs font-semibold bg-primary text-primary-foreground h-8 px-3.5 hover:bg-primary/90 shadow-2xs transition-all"
+                        <Button
+                          size="sm"
+                          disabled={applyingJobHash === job.content_hash}
+                          onClick={() => void handleApplyDirectly(job)}
+                          className="inline-flex items-center justify-center rounded-lg text-xs font-semibold bg-primary text-primary-foreground h-8 px-3.5 hover:bg-primary/90 shadow-2xs transition-all cursor-pointer"
                         >
-                          Apply Directly ↗
-                        </a>
+                          {applyingJobHash === job.content_hash ? 'Starting…' : 'Apply Directly ↗'}
+                        </Button>
                       </div>
                     </div>
 

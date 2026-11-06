@@ -151,6 +151,41 @@ async function handleV3Message(msg, sender, reply) {
       const tok = storage.token || storage.nextkin_auth_token || 'nextkin_ext_master_token_bhargav_2026';
       const eventKey = payload.eventKey || ('sub_' + Date.now());
 
+      let targetJobUrl = payload.jobUrl || '';
+      if (!targetJobUrl || targetJobUrl.startsWith('chrome-extension://')) {
+        targetJobUrl = (sender.tab && sender.tab.url) || '';
+      }
+
+      let targetTitle = payload.jobTitle || payload.title;
+      let targetCompany = payload.companyName || payload.company;
+
+      if (!targetTitle || targetTitle === 'Software Engineer' || !targetCompany || targetCompany === 'Company') {
+        const tabTitle = (sender.tab && sender.tab.title) || '';
+        if (tabTitle) {
+          const parts = tabTitle.split(/\s*[-|–—]\s*/);
+          if (parts.length >= 2) {
+            if (!targetTitle || targetTitle === 'Software Engineer') targetTitle = parts[0].trim();
+            if (!targetCompany || targetCompany === 'Company') targetCompany = parts[1].trim();
+          } else if (!targetTitle || targetTitle === 'Software Engineer') {
+            targetTitle = tabTitle.trim();
+          }
+        }
+        if (!targetCompany || targetCompany === 'Company') {
+          try {
+            if (targetJobUrl) {
+              const u = new URL(targetJobUrl);
+              const host = u.hostname.replace(/^www\./, '');
+              const pathFirst = u.pathname.split('/').filter(Boolean)[0];
+              if ((host.includes('ashby') || host.includes('greenhouse') || host.includes('lever')) && pathFirst) {
+                targetCompany = pathFirst.charAt(0).toUpperCase() + pathFirst.slice(1);
+              } else {
+                targetCompany = host.split('.')[0].charAt(0).toUpperCase() + host.split('.')[0].slice(1);
+              }
+            }
+          } catch {}
+        }
+      }
+
       const item = {
         _kind: 'submission',
         eventKey: eventKey,
@@ -158,18 +193,18 @@ async function handleV3Message(msg, sender, reply) {
           candidateId: candId,
           eventKey: eventKey,
           attempt: payload.attempt || 1,
-          jobUrl: payload.jobUrl || (sender.tab && sender.tab.url) || '',
-          jobTitle: payload.jobTitle || payload.title || 'Software Engineer',
-          companyName: payload.companyName || payload.company || 'Company',
+          jobUrl: targetJobUrl,
+          jobTitle: targetTitle || 'Software Engineer',
+          companyName: targetCompany || 'Company',
           jobLocation: payload.jobLocation || payload.location || null,
-          jobDescription: payload.jobDescription || payload.description || null,
-          jobDescriptionHtml: payload.jobDescriptionHtml || payload.descriptionHtml || null,
+          jobDescription: payload.jobDescription || payload.description || `Job application at ${targetCompany || 'Company'}`,
+          jobDescriptionHtml: payload.jobDescriptionHtml || payload.descriptionHtml || `<p>Job application at ${targetCompany || 'Company'}</p>`,
           department: payload.department || null,
-          employmentType: payload.employmentType || 'unknown',
+          employmentType: payload.employmentType || 'Full-time',
           compensation: payload.compensation || null,
           arrangements: payload.arrangements || null,
-          portalSource: payload.portalSource || (sender.tab && sender.tab.url ? new URL(sender.tab.url).hostname : 'Outside Application'),
-          evidence: payload.evidence || ('Your application was successfully submitted on ' + (sender.tab && sender.tab.url ? new URL(sender.tab.url).hostname : 'careers website')),
+          portalSource: payload.portalSource || (targetJobUrl ? new URL(targetJobUrl).hostname : 'Outside Application'),
+          evidence: payload.evidence || ('Your application was successfully submitted on ' + (targetJobUrl ? new URL(targetJobUrl).hostname : 'careers website')),
           manualAttestation: true,
           appliedResume: payload.appliedResume || (activeCand ? {
             name: (activeCand.full_name || 'Candidate') + '_Resume.pdf',

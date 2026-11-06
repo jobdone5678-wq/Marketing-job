@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { createClient } from "@/lib/client";
+import { toast } from "sonner";
 import {
   Building2Icon,
   ExternalLinkIcon,
@@ -73,6 +75,30 @@ export default function OutsideJobsPage() {
 
   useEffect(() => {
     fetchJobs();
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel("outside_jobs_realtime_feed")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "outside_jobs",
+        },
+        (payload) => {
+          fetchJobs();
+          if (payload.eventType === "INSERT") {
+            const row = payload.new as Record<string, unknown>;
+            toast.success(`⚡ New outside job captured: ${(row?.company as string) || "Company"}`);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const filteredJobs = jobs.filter((j) => {

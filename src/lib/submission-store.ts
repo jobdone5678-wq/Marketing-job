@@ -14,6 +14,18 @@ function writeFields(input: Partial<JobSubmissionFormData>, creating = false) {
 
 export function submissionStore(client: SupabaseClient) {
   async function getSubmissions(candidateId?: string): Promise<JobSubmission[]> {
+    if (typeof window !== 'undefined') {
+      try {
+        const url = candidateId ? `/api/submissions?candidateId=${encodeURIComponent(candidateId)}` : '/api/submissions';
+        const res = await fetch(url);
+        if (res.ok) {
+          const json = await res.json();
+          if (Array.isArray(json.submissions)) return json.submissions as JobSubmission[];
+        }
+      } catch (e) {
+        console.warn('API getSubmissions fallback to direct supabase:', e);
+      }
+    }
     const rows: JobSubmission[] = [];
     for (let offset = 0; ; offset += 500) {
       let query = client.from('job_submissions').select(columns)

@@ -252,13 +252,16 @@ export async function POST(request: Request) {
         updated_at: new Date().toISOString()
       };
 
-      const { data: existingOutside } = await database().from('outside_jobs')
-        .select('id').ilike('job_url', safeJobUrl || '').maybeSingle();
+      const table = database().from('outside_jobs');
+      if (typeof table?.select === 'function' && typeof table?.insert === 'function') {
+        const { data: existingOutside } = await table
+          .select('id').ilike('job_url', safeJobUrl || '').maybeSingle();
 
-      if (existingOutside) {
-        await database().from('outside_jobs').update(outsideJobPayload).eq('id', existingOutside.id);
-      } else {
-        await database().from('outside_jobs').insert(outsideJobPayload);
+        if (existingOutside) {
+          await table.update(outsideJobPayload).eq('id', existingOutside.id);
+        } else {
+          await table.insert(outsideJobPayload);
+        }
       }
     } catch (outsideErr) {
       console.warn('[Outside Jobs Save Warn]', outsideErr);
