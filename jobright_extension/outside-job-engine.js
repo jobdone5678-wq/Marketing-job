@@ -969,9 +969,53 @@
 
       const descriptor = getControlDescriptor(el);
 
-      // Handle checkboxes (e.g. Terms, Privacy, Storage consent)
+      // Handle checkboxes (e.g. Terms, Privacy, Storage consent, Authorization)
       if (el.type === 'checkbox') {
-        if (!el.checked && /\b(agree|consent|terms|condition|privacy|policy|storage|handling|acknowledg|certify|confirm)\b/i.test(descriptor)) {
+        let shouldCheck = false;
+        if (/\b(agree|consent|terms|condition|privacy|policy|storage|handling|acknowledg|certify|confirm)\b/i.test(descriptor)) {
+          shouldCheck = true;
+        } else if (/\b(authorized|work\s*authorization|legally\s*authorized|right\s*to\s*work|18\s*(years|or\s*older)|over\s*18)\b/i.test(descriptor)) {
+          shouldCheck = candidate.authorized_in_usa !== false;
+        } else if (/\b(sponsorship|require\s*sponsorship|visa\s*sponsorship|sponsor)\b/i.test(descriptor)) {
+          shouldCheck = Boolean(candidate.need_sponsorship_now || candidate.need_sponsorship_future || candidate.needs_sponsorship);
+        }
+
+        if (shouldCheck && !el.checked) {
+          const prevVal = el.checked;
+          if (setNativeChecked(el, true)) {
+            window.__nextkinAutofillReceipts.push({
+              element: el,
+              previousValue: prevVal,
+              writtenValue: true,
+              property: 'checked',
+              timestamp: Date.now()
+            });
+            filledCount++;
+          }
+        }
+        continue;
+      }
+
+      // Handle radio buttons (e.g. Yes/No questions for authorization, sponsorship, age, previous employment)
+      if (el.type === 'radio') {
+        const radioLabel = (el.labels?.[0]?.innerText || el.value || '').toLowerCase().trim();
+        const isYesRadio = /\b(yes|y|true)\b/i.test(radioLabel) || el.value === 'yes' || el.value === '1';
+        const isNoRadio = /\b(no|n|false)\b/i.test(radioLabel) || el.value === 'no' || el.value === '0';
+
+        let shouldSelect = null;
+        if (/\b(authorized|work\s*authorization|legally\s*authorized|right\s*to\s*work)\b/i.test(descriptor)) {
+          const authVal = candidate.authorized_in_usa !== false;
+          shouldSelect = authVal ? isYesRadio : isNoRadio;
+        } else if (/\b(sponsorship|require\s*sponsorship|visa\s*sponsorship|sponsor)\b/i.test(descriptor)) {
+          const needSponsor = Boolean(candidate.need_sponsorship_now || candidate.need_sponsorship_future || candidate.needs_sponsorship);
+          shouldSelect = needSponsor ? isYesRadio : isNoRadio;
+        } else if (/\b(18\s*(years|or\s*older)|over\s*18)\b/i.test(descriptor)) {
+          shouldSelect = isYesRadio;
+        } else if (/\b(previously\s*(employed|worked)|former\s*employee)\b/i.test(descriptor)) {
+          shouldSelect = isNoRadio;
+        }
+
+        if (shouldSelect === true && !el.checked) {
           const prevVal = el.checked;
           if (setNativeChecked(el, true)) {
             window.__nextkinAutofillReceipts.push({
@@ -1373,6 +1417,55 @@
     }
   }, true);
 
+  // -------------------------------------------------------------
+  // Multi-Step ATS Pagination & Step State Machine (Jobright Parity)
+  // -------------------------------------------------------------
+  let lastStepFingerprint = '';
+
+  function computeStepFingerprint() {
+    const controls = Array.from(document.querySelectorAll('input:not([type="hidden"]), select, textarea'));
+    const names = controls.slice(0, 20).map(c => c.name || c.id || c.placeholder || c.type).join(':');
+    const header = document.querySelector('h1, h2, h3, [class*="step"], [data-automation-id*="step"], legend')?.textContent?.trim() || '';
+    const pathname = window.location.pathname + window.location.search;
+    return `${pathname}#${header}#${controls.length}#${names}`;
+  }
+
+  function observeMultiStepPagination() {
+    if (!isJobOrCareerPage()) return;
+    lastStepFingerprint = computeStepFingerprint();
+
+    const checkStepChange = () => {
+      const currentFingerprint = computeStepFingerprint();
+      if (currentFingerprint !== lastStepFingerprint) {
+        lastStepFingerprint = currentFingerprint;
+        // Step transition detected! Reset step autofill lock so new page fields can be populated
+        hasAutoFilled = false;
+
+        // Notify extension copilot panel of step progression
+        try {
+          window.postMessage({
+            type: 'NEXTKIN_STEP_CHANGED',
+            fingerprint: currentFingerprint
+          }, '*');
+        } catch {}
+      }
+    };
+
+    // Watch DOM mutations for multi-step transitions (Workday, Ashby, Taleo, iCIMS, etc.)
+    const stepObserver = new MutationObserver(() => {
+      clearTimeout(stepObserver._timeout);
+      stepObserver._timeout = setTimeout(checkStepChange, 400);
+    });
+
+    if (document.body) {
+      stepObserver.observe(document.body, { childList: true, subtree: true });
+    }
+
+    // Watch URL popstate & hashchange for single-page steps
+    window.addEventListener('popstate', checkStepChange);
+    window.addEventListener('hashchange', checkStepChange);
+  }
+
   function initializeOutsideJobEngine() {
     // Strict gate: If not on a verified job or career page, exit immediately without attaching observers or listeners
     if (!isJobOrCareerPage()) {
@@ -1388,6 +1481,7 @@
 
     bindApplyButtonWatcher();
     bindSubmissionListeners();
+    observeMultiStepPagination();
     performPageScan();
 
     // Check periodically for Single Page Applications (SPAs)
