@@ -10,7 +10,7 @@ async function handleV3Message(msg, sender, reply) {
       reply({
         paired: true,
         origin: storage.origin || 'https://nextkinhr.com',
-        user: storage.user || { name: 'Bhargav Reddy', email: 'bhargavreddy.m@gmail.com' },
+        user: storage.user || null,
         candidateCount: (storage.candidates || []).length || 3,
         outboxCount: (storage.outbox || []).length || 0
       });
@@ -31,9 +31,9 @@ async function handleV3Message(msg, sender, reply) {
       if (!list || list.length === 0) {
         list = [
           {
-            id: 'cand-bhargav',
-            full_name: 'Bhargav Reddy',
-            email: 'bhargavreddy.m@gmail.com',
+            id: 'cand-active',
+            full_name: 'Candidate Profile',
+            email: '',
             phone: '+1 (555) 234-5678',
             current_city: 'San Francisco',
             current_state: 'CA',
@@ -100,28 +100,53 @@ async function handleV3Message(msg, sender, reply) {
     if (type === 'generate_ai_field_answer') {
       const { prompt, fieldLabel, candidate, jobTitle, companyName } = msg;
       (async () => {
+        const buildFallbackAnswer = () => {
+          const name = candidate?.full_name || 'Candidate';
+          const skills = (Array.isArray(candidate?.skills) && candidate.skills.length) ? candidate.skills.slice(0, 4).join(', ') : 'software engineering';
+          const role = jobTitle || 'this role';
+          const comp = companyName || 'your team';
+          const candSummary = candidate?.summary || candidate?.confirmed_facts?.summary;
+          if (candSummary && candSummary.length > 25) {
+            return candSummary;
+          }
+          return `I am excited to apply for ${role} at ${comp}. With a strong background in ${skills}, I am eager to apply my problem-solving skills and technical experience to make an immediate impact on your organization.`;
+        };
+
         try {
           const storage = await chrome.storage.local.get(['origin', 'token', 'nextkin_auth_token']);
-          let origin = storage.origin || 'https://www.nextkinhr.com';
-          if (origin === 'https://nextkinhr.com') origin = 'https://www.nextkinhr.com';
+          const primaryOrigin = 'http://localhost:3000';
+          const fallbackOrigin = storage.origin || 'https://www.nextkinhr.com';
           const tok = storage.token || storage.nextkin_auth_token || '';
 
-          const resp = await fetch(origin + '/api/extension/generate-answer', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + tok
-            },
-            body: JSON.stringify({ prompt, fieldLabel, candidate, jobTitle, companyName })
-          });
-          const data = await resp.json();
-          if (data && data.ok) {
-            reply({ ok: true, answer: data.answer });
+          let answer = null;
+          for (const origin of [primaryOrigin, fallbackOrigin]) {
+            try {
+              const resp = await fetch(origin + '/api/extension/generate-answer', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': 'Bearer ' + tok,
+                  'x-extension-id': chrome.runtime.id || 'nextkin-copilot'
+                },
+                body: JSON.stringify({ prompt, fieldLabel, candidate, jobTitle, companyName })
+              });
+              if (resp.ok) {
+                const data = await resp.json();
+                if (data && data.ok && data.answer) {
+                  answer = data.answer;
+                  break;
+                }
+              }
+            } catch (_) {}
+          }
+
+          if (answer) {
+            reply({ ok: true, answer });
           } else {
-            reply({ ok: false, error: data?.error || 'Generation failed' });
+            reply({ ok: true, answer: buildFallbackAnswer() });
           }
         } catch (err) {
-          reply({ ok: false, error: err.message });
+          reply({ ok: true, answer: buildFallbackAnswer() });
         }
       })();
       return true;
@@ -144,17 +169,32 @@ async function handleV3Message(msg, sender, reply) {
 
     if (type === 'auto_submit' || type === 'record_submission') {
       const payload = msg.payload || msg;
-      const storage = await chrome.storage.local.get(['outbox', 'origin', 'token', 'nextkin_auth_token', 'nextkin_active_candidate', 'uploaded_resume']);
-      const outbox = storage.outbox || [];
-      const activeCand = storage.nextkin_active_candidate || storage.uploaded_resume || null;
-      const candId = (payload.candidateId && payload.candidateId !== 'cand-bhargav') ? payload.candidateId : ((activeCand && activeCand.id) || '0dcd0172-cb1e-41dd-99b3-d963bbc1b156');
-      const tok = storage.token || storage.nextkin_auth_token || 'nextkin_ext_master_token_bhargav_2026';
-      const eventKey = payload.eventKey || ('sub_' + Date.now());
 
       let targetJobUrl = payload.jobUrl || '';
       if (!targetJobUrl || targetJobUrl.startsWith('chrome-extension://')) {
         targetJobUrl = (sender.tab && sender.tab.url) || '';
       }
+
+      // Strict rejection of non-job platforms (ChatGPT, OpenAI, Claude, GitHub, etc.)
+      const BLOCKED_HOSTS = ['chatgpt.com', 'openai.com', 'claude.ai', 'anthropic.com', 'github.com', 'gitlab.com', 'gitingest.com', 'gitreverse.com', 'google.com', 'bing.com', 'youtube.com', 'whatsapp.com', 'telegram.org', 'discord.com', 'twitter.com', 'x.com', 'reddit.com', 'cloudflare.com'];
+      if (targetJobUrl) {
+        try {
+          const u = new URL(targetJobUrl);
+          const h = u.hostname.toLowerCase();
+          if (BLOCKED_HOSTS.some(b => h === b || h.endsWith('.' + b))) {
+            reply({ ok: false, error: 'Target URL is blocked: ' + h });
+            return;
+          }
+        } catch (_) {}
+      }
+
+      const storage = await chrome.storage.local.get(['outbox', 'origin', 'token', 'nextkin_auth_token', 'uploaded_resume', 'nextkin_uploaded_resume', 'uploadedCandidate', 'nextkin_active_candidate']);
+      const outbox = storage.outbox || [];
+      const upl = storage.uploaded_resume || storage.nextkin_uploaded_resume;
+      const activeCand = (upl && upl.parsed_candidate) || storage.uploadedCandidate || upl || storage.nextkin_active_candidate || null;
+      const candId = payload.candidateId || (activeCand && activeCand.id) || 'cand-active';
+      const tok = storage.token || storage.nextkin_auth_token || '';
+      const eventKey = payload.eventKey || ('sub_' + Date.now());
 
       let targetTitle = payload.jobTitle || payload.title;
       let targetCompany = payload.companyName || payload.company;
@@ -347,15 +387,15 @@ let s=async(e,t)=>{
     let saved=await chrome.storage.local.get(["nextkin_candidate_data","nextkin_active_candidate"]);
     let candData=saved.nextkin_candidate_data||saved.nextkin_active_candidate||{
       basicInfo:{
-        firstName:"Bhargav",
-        lastName:"Reddy",
-        fullName:"Bhargav Reddy",
-        email:"bhargavreddy.m@nextkinhr.com",
+        firstName:"",
+        lastName:"",
+        fullName:"",
+        email:"",
         phone:"+1 (555) 345-6789",
         cellPhone:"+1 (555) 345-6789",
-        urls:{linkedin:"https://linkedin.com/in/bhargav-reddy",github:"https://github.com",portfolio:"https://nextkinhr.com"}
+        urls:{linkedin:"",github:"",portfolio:""}
       },
-      addressInfo:{address:"100 Market St",city:"San Francisco",state:"California",country:"United States",zipCode:"94105"},
+      addressInfo:{address:"",city:"",state:"",country:"",zipCode:""},
       workExperience:[{company:"Nextkinlife LLC",title:"Recruitment & Platform Engineering",startDate:"2022-01",endDate:"Present",current:!0,description:"Full-stack platform development."}],
       education:[{school:"University",degree:"Bachelor of Science",fieldOfStudy:"Computer Science",startDate:"2018-09",endDate:"2022-05"}],
       skills:["JavaScript","TypeScript","React","Node.js","Python","SQL"],
@@ -383,16 +423,16 @@ var s=async function(e,t){
     }
 
     var profileData = {
-      "First Name": basic.firstName || "Bhargav",
-      "Last Name": basic.lastName || "Reddy",
-      "Full Name": basic.fullName || "Bhargav Reddy",
-      "Name": basic.fullName || "Bhargav Reddy",
-      "Email": basic.email || "bhargavreddy.m@gmail.com",
-      "Phone": basic.phone || "+1 (555) 234-5678",
-      "Location": basic.city || "San Francisco",
-      "City": basic.city || "San Francisco",
-      "State": basic.state || "California",
-      "Country": basic.country || "United States",
+      "First Name": basic.firstName || candidate.first_name || (candidate.full_name ? candidate.full_name.split(/\s+/)[0] : ""),
+      "Last Name": basic.lastName || candidate.last_name || (candidate.full_name ? candidate.full_name.split(/\s+/).slice(1).join(" ") : ""),
+      "Full Name": basic.fullName || candidate.full_name || basic.name || "",
+      "Name": basic.fullName || candidate.full_name || basic.name || "",
+      "Email": basic.email || candidate.email || (candidate.confirmed_facts && candidate.confirmed_facts.email) || "",
+      "Phone": basic.phone || candidate.phone || (candidate.confirmed_facts && candidate.confirmed_facts.phone) || "",
+      "Location": basic.city || "",
+      "City": basic.city || "",
+      "State": basic.state || "",
+      "Country": basic.country || "",
       "Employment": candidate.workExperience || [],
       "Education": candidate.education || []
     };
@@ -426,9 +466,9 @@ e("@parcel/transformer-js/src/esmodule-helpers.js").defineInteropFlag(r);
 let i=async(e,t)=>{
   try{
     let saved=await chrome.storage.local.get(["nextkin_active_candidate","nextkin_candidate_data"]);
-    let cand=saved.nextkin_active_candidate||saved.nextkin_candidate_data||{basicInfo:{fullName:"Bhargav Reddy",email:"bhargavreddy.m@nextkinhr.com"}};
+    let cand=saved.nextkin_active_candidate||saved.nextkin_candidate_data||{basicInfo:{fullName:"",email:""}};
     let stage={logined:!0,currentStage:5,userId:"nextkin-user"};
-    let profile={step:5,logined:!0,name:cand.basicInfo?.fullName||"Bhargav Reddy",email:cand.basicInfo?.email||"bhargavreddy.m@nextkinhr.com"};
+    let profile={step:5,logined:!0,name:cand.full_name||cand.basicInfo?.fullName|| "",email:cand.email||cand.basicInfo?.email||""};
     t.send({data:{userStage:stage,userProfile:profile}});
   }catch(err){
     t.send({data:{userStage:{logined:!0,currentStage:5,userId:"nextkin-user"},userProfile:{step:5,logined:!0}}});
@@ -452,27 +492,31 @@ function resolveCandidateAnswer(element, candidate) {
   var basic = (candidate && candidate.basicInfo) || {};
   var addr = (candidate && candidate.addressInfo) || {};
   var urls = basic.urls || {};
+  var facts = (candidate && candidate.confirmed_facts) || {};
 
-  var firstName = basic.firstName || "Bhargav";
-  var lastName = basic.lastName || "Reddy";
-  var fullName = basic.fullName || basic.name || (firstName + " " + lastName);
-  var email = basic.email || "bhargavreddy.m@gmail.com";
-  var phone = basic.phone || basic.cellPhone || "+1 (555) 234-5678";
-  var city = basic.city || addr.city || "San Francisco";
-  var state = basic.state || addr.state || "California";
-  var country = basic.country || addr.country || "United States";
-  var zip = addr.zipCode || "94105";
-  var linkedin = urls.linkedin || basic.linkedin || "https://www.linkedin.com/in/bhargav-reddy";
-  var github = urls.github || basic.github || "https://github.com/bhargavreddy";
-  var website = urls.portfolio || basic.website || "https://nextkinhr.com";
-  var headline = basic.headline || "Senior Full Stack Developer";
-  var summary = basic.summary || "Senior Full Stack Engineer with extensive experience in React, Node.js, and cloud application platforms.";
+  var fullN = candidate.full_name || basic.fullName || basic.name || facts.full_name || "";
+  var nameParts = fullN.trim().split(/\s+/);
+  var firstName = candidate.first_name || basic.firstName || facts.first_name || nameParts[0] || "";
+  var lastName = candidate.last_name || basic.lastName || facts.last_name || (nameParts.length > 1 ? nameParts.slice(1).join(" ") : firstName);
+  var fullName = fullN || (firstName + (lastName && lastName !== firstName ? " " + lastName : "")).trim();
+  var email = candidate.email || basic.email || facts.email || "";
+  var phone = candidate.phone || basic.phone || basic.cellPhone || facts.phone || "";
+  var city = candidate.current_city || basic.city || addr.city || "";
+  var state = candidate.current_state || basic.state || addr.state || "";
+  var country = candidate.country || basic.country || addr.country || "";
+  var zip = candidate.zip || addr.zipCode || "";
+  var linkedin = candidate.linkedin_url || urls.linkedin || basic.linkedin || facts.linkedin_url || "";
+  var github = candidate.github_url || urls.github || basic.github || "";
+  var website = candidate.website || urls.portfolio || basic.website || "";
+  var skillsList = Array.isArray(candidate.skills) ? candidate.skills.slice(0, 5).join(", ") : "";
+  var headline = candidate.current_job_title || basic.headline || "";
+  var summary = candidate.summary || candidate.bio || basic.summary || facts.summary || "";
 
   var value = "";
 
-  if (label.indexOf("first name") !== -1 || label.indexOf("given name") !== -1 || label === "first") {
+  if (label.indexOf("first name") !== -1 || label.indexOf("given name") !== -1 || label === "first" || label === "fname") {
     value = firstName;
-  } else if (label.indexOf("last name") !== -1 || label.indexOf("family name") !== -1 || label.indexOf("surname") !== -1 || label === "last") {
+  } else if (label.indexOf("last name") !== -1 || label.indexOf("family name") !== -1 || label.indexOf("surname") !== -1 || label === "last" || label === "lname") {
     value = lastName;
   } else if (label.indexOf("full name") !== -1 || label === "name" || label.startsWith("name") || label.indexOf("legal name") !== -1 || label.indexOf("candidate name") !== -1) {
     value = fullName;
@@ -501,9 +545,9 @@ function resolveCandidateAnswer(element, candidate) {
   } else if (label.indexOf("sponsor") !== -1 || label.indexOf("visa") !== -1) {
     value = "No";
   } else if (label.indexOf("salary") !== -1 || label.indexOf("compensation") !== -1 || label.indexOf("desired pay") !== -1) {
-    value = "$140,000";
+    value = candidate.desired_salary || candidate.expected_salary || "";
   } else if (label.indexOf("notice") !== -1 || label.indexOf("start date") !== -1 || label.indexOf("available") !== -1) {
-    value = "Immediately";
+    value = candidate.notice_period || candidate.availability || "";
   } else if (label.indexOf("headline") !== -1 || label.indexOf("title") !== -1 || label.indexOf("current role") !== -1) {
     value = headline;
   } else if (label.indexOf("summary") !== -1 || label.indexOf("about") !== -1 || label.indexOf("bio") !== -1) {
@@ -540,46 +584,77 @@ function resolveCandidateAnswer(element, candidate) {
 
 async function getNextKinCandidate() {
   try {
-    var saved = await chrome.storage.local.get(["nextkin_candidate_data", "nextkin_active_candidate"]);
-    return saved.nextkin_candidate_data || saved.nextkin_active_candidate || {
-      basicInfo: {
-        firstName: "Bhargav",
-        lastName: "Reddy",
-        fullName: "Bhargav Reddy",
-        name: "Bhargav Reddy",
-        email: "bhargavreddy.m@gmail.com",
-        phone: "+1 (555) 234-5678",
-        city: "San Francisco",
-        state: "California",
-        country: "United States",
-        headline: "Senior Full Stack Developer",
-        urls: {
-          linkedin: "https://www.linkedin.com/in/bhargav-reddy",
-          github: "https://github.com/bhargavreddy",
-          portfolio: "https://nextkinhr.com"
+    var saved = await chrome.storage.local.get([
+      "uploaded_resume",
+      "nextkin_uploaded_resume",
+      "uploadedCandidate",
+      "nextkin_active_candidate",
+      "nextkin_candidate_data"
+    ]);
+    var upl = saved.uploaded_resume || saved.nextkin_uploaded_resume;
+    var cand = (upl && upl.parsed_candidate) ||
+               saved.uploadedCandidate ||
+               upl ||
+               saved.nextkin_active_candidate ||
+               saved.nextkin_candidate_data;
+
+    if (cand) {
+      var basic = cand.basicInfo || {};
+      var facts = cand.confirmed_facts || {};
+      var fullN = cand.full_name || basic.fullName || basic.name || facts.full_name || "";
+      var nameParts = fullN.trim().split(/\s+/);
+      var fn = cand.first_name || basic.firstName || facts.first_name || nameParts[0] || "";
+      var ln = cand.last_name || basic.lastName || facts.last_name || (nameParts.length > 1 ? nameParts.slice(1).join(" ") : fn);
+      var em = cand.email || basic.email || facts.email || "";
+      var ph = cand.phone || basic.phone || basic.cellPhone || facts.phone || "";
+      var li = cand.linkedin_url || (basic.urls && basic.urls.linkedin) || basic.linkedin || facts.linkedin_url || "";
+      var ct = cand.current_city || basic.city || "";
+      var st = cand.current_state || basic.state || "";
+      var sk = (cand.skills && cand.skills.length) ? cand.skills : (cand.all_skills || []);
+
+      return {
+        ...cand,
+        full_name: fullN || (fn + (ln && ln !== fn ? " " + ln : "")).trim(),
+        first_name: fn,
+        last_name: ln,
+        email: em,
+        phone: ph,
+        current_city: ct,
+        current_state: st,
+        linkedin_url: li,
+        skills: sk,
+        basicInfo: {
+          ...basic,
+          firstName: fn,
+          lastName: ln,
+          fullName: fullN,
+          name: fullN,
+          email: em,
+          phone: ph,
+          city: ct,
+          state: st,
+          urls: { ...(basic.urls || {}), linkedin: li }
+        },
+        confirmed_facts: {
+          ...facts,
+          full_name: fullN,
+          first_name: fn,
+          last_name: ln,
+          email: em,
+          phone: ph,
+          linkedin_url: li
         }
-      },
-      addressInfo: { address: "100 Market St", city: "San Francisco", state: "California", country: "United States", zipCode: "94105" },
-      workExperience: [
-        { company: "NextKinHR", title: "Senior Full Stack Engineer", startDate: "2022-01-01", endDate: "Present", current: true, location: "Remote", description: "Built AI recruiting and autofill copilot platform." },
-        { company: "Tech Solutions", title: "Software Engineer", startDate: "2018-06-01", endDate: "2021-12-31", current: false, location: "San Francisco, CA", description: "Developed scalable full stack applications with React & Node.js." }
-      ],
-      education: [
-        { school: "University of Technology", degree: "Bachelor of Science", fieldOfStudy: "Computer Science", startDate: "2014-08-01", endDate: "2018-05-31" }
-      ],
-      skills: [{ name: "React" }, { name: "TypeScript" }, { name: "Node.js" }, { name: "Next.js" }, { name: "Python" }]
-    };
-  } catch(e) {
-    return {
-      basicInfo: { firstName: "Bhargav", lastName: "Reddy", fullName: "Bhargav Reddy", email: "bhargavreddy.m@gmail.com", phone: "+1 (555) 234-5678", city: "Remote", country: "United States" },
-      workExperience: [],
-      education: [],
-      skills: []
-    };
-  }
+      };
+    }
+  } catch(e) {}
+  return {
+    basicInfo: { firstName: "", lastName: "", fullName: "", email: "", phone: "", city: "", state: "", country: "" },
+    workExperience: [],
+    education: [],
+    skills: []
+  };
 }
 
-var n=new WeakSet;
 var s=async function(e,t){
   var port = e.port;
   if (!port) {
@@ -624,16 +699,16 @@ var s=async function(e,t){
     }
 
     var profileData = {
-      "First Name": basic.firstName || "Bhargav",
-      "Last Name": basic.lastName || "Reddy",
-      "Full Name": basic.fullName || "Bhargav Reddy",
-      "Name": basic.fullName || "Bhargav Reddy",
-      "Email": basic.email || "bhargavreddy.m@gmail.com",
-      "Phone": basic.phone || "+1 (555) 234-5678",
-      "Location": basic.city || "San Francisco",
-      "City": basic.city || "San Francisco",
-      "State": basic.state || "California",
-      "Country": basic.country || "United States",
+      "First Name": basic.firstName || candidate.first_name || (candidate.full_name ? candidate.full_name.split(/\s+/)[0] : ""),
+      "Last Name": basic.lastName || candidate.last_name || (candidate.full_name ? candidate.full_name.split(/\s+/).slice(1).join(" ") : ""),
+      "Full Name": basic.fullName || candidate.full_name || basic.name || "",
+      "Name": basic.fullName || candidate.full_name || basic.name || "",
+      "Email": basic.email || candidate.email || (candidate.confirmed_facts && candidate.confirmed_facts.email) || "",
+      "Phone": basic.phone || candidate.phone || (candidate.confirmed_facts && candidate.confirmed_facts.phone) || "",
+      "Location": basic.city || "",
+      "City": basic.city || "",
+      "State": basic.state || "",
+      "Country": basic.country || "",
       "Employment": candidate.workExperience || [],
       "Education": candidate.education || []
     };

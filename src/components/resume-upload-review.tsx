@@ -50,6 +50,64 @@ export function ResumeUploadReview({
             r.document.candidate_version
           );
           setBusy(false);
+
+          if (typeof window !== 'undefined') {
+            try {
+              const f = r.extraction.data.fields as Record<string, unknown>;
+              const fn = String(f?.full_name || '').trim();
+              const skills = Array.isArray(f?.skills) ? f.skills : String(f?.primary_skills || '').split(/[,;]+/).map((s: string) => s.trim()).filter(Boolean);
+              const title = String(f?.current_job_title || f?.target_job_titles || '').trim();
+              const expYears = f?.total_experience_years ? `${f.total_experience_years}+ years of experience` : '';
+              const skillsSummary = skills.slice(0, 5).join(', ');
+              const dynamicBio = (title || skillsSummary) ? `${title}${expYears ? ` with ${expYears}` : ''}${skillsSummary ? ` specializing in ${skillsSummary}` : ''}. Proven track record of developing applications and delivering technical results.`.trim() : '';
+
+              const candPayload = {
+                id: documentId,
+                full_name: fn,
+                first_name: fn.split(/\s+/)[0] || '',
+                last_name: fn.split(/\s+/).slice(1).join(' ') || '',
+                email: String(f?.email || ''),
+                phone: String(f?.phone || ''),
+                current_job_title: title,
+                summary: dynamicBio,
+                bio: dynamicBio,
+                skills,
+                current_city: String(f?.current_city || f?.city || ''),
+                current_state: String(f?.current_state || f?.state || ''),
+                linkedin_url: String(f?.linkedin_url || ''),
+                source_text: ((r.extraction.data as Record<string, unknown>).rawText as string || "") || '',
+                confirmed_facts: {
+                  full_name: fn,
+                  first_name: fn.split(/\s+/)[0] || '',
+                  last_name: fn.split(/\s+/).slice(1).join(' ') || '',
+                  email: String(f?.email || ''),
+                  phone: String(f?.phone || ''),
+                  current_job_title: title,
+                  summary: dynamicBio,
+                  bio: dynamicBio,
+                  raw_text: ((r.extraction.data as Record<string, unknown>).rawText as string || "") || ''
+                }
+              };
+              window.postMessage({
+                type: 'NEXTKIN_RESUME_UPLOADED',
+                candidate: candPayload,
+                resume: {
+                  filename: fn ? `${fn}_Resume.pdf` : 'Uploaded_Resume.pdf',
+                  raw_text: candPayload.source_text,
+                  source_text: candPayload.source_text,
+                  full_name: fn,
+                  email: candPayload.email,
+                  phone: candPayload.phone,
+                  skills: candPayload.skills,
+                  summary: dynamicBio,
+                  bio: dynamicBio,
+                  uploadedAt: Date.now()
+                }
+              }, '*');
+            } catch (err) {
+              console.warn('[ResumeUploadBroadcastErr]', err);
+            }
+          }
           return;
         }
 
@@ -117,6 +175,65 @@ export function ResumeUploadReview({
         );
         setStatus('review');
         setBusy(false);
+
+        if (typeof window !== 'undefined') {
+          try {
+            const f = r.extraction.fields as Record<string, unknown>;
+            const fn = String(f?.full_name || '').trim();
+            const skills = Array.isArray(f?.skills) ? f.skills : String(f?.primary_skills || '').split(/[,;]+/).map((s: string) => s.trim()).filter(Boolean);
+            const title = String(f?.current_job_title || f?.target_job_titles || '').trim();
+            const expYears = f?.total_experience_years ? `${f.total_experience_years}+ years of experience` : '';
+            const skillsSummary = skills.slice(0, 5).join(', ');
+            const dynamicBio = (title || skillsSummary) ? `${title}${expYears ? ` with ${expYears}` : ''}${skillsSummary ? ` specializing in ${skillsSummary}` : ''}. Proven track record of developing applications and delivering technical results.`.trim() : '';
+
+            const candPayload = {
+              id: r.documentId,
+              full_name: fn,
+              first_name: fn.split(/\s+/)[0] || '',
+              last_name: fn.split(/\s+/).slice(1).join(' ') || '',
+              email: String(f?.email || ''),
+              phone: String(f?.phone || ''),
+              current_job_title: title,
+              summary: dynamicBio,
+              bio: dynamicBio,
+              skills,
+              current_city: String(f?.current_city || f?.city || ''),
+              current_state: String(f?.current_state || f?.state || ''),
+              linkedin_url: String(f?.linkedin_url || ''),
+              source_text: ((r.extraction as Record<string, unknown>).rawText as string || "") || '',
+              confirmed_facts: {
+                full_name: fn,
+                first_name: fn.split(/\s+/)[0] || '',
+                last_name: fn.split(/\s+/).slice(1).join(' ') || '',
+                email: String(f?.email || ''),
+                phone: String(f?.phone || ''),
+                current_job_title: title,
+                summary: dynamicBio,
+                bio: dynamicBio,
+                raw_text: ((r.extraction as Record<string, unknown>).rawText as string || "") || '',
+                filename: file.name
+              }
+            };
+            window.postMessage({
+              type: 'NEXTKIN_RESUME_UPLOADED',
+              candidate: candPayload,
+              resume: {
+                filename: file.name,
+                raw_text: candPayload.source_text,
+                source_text: candPayload.source_text,
+                full_name: fn,
+                email: candPayload.email,
+                phone: candPayload.phone,
+                skills: candPayload.skills,
+                summary: dynamicBio,
+                bio: dynamicBio,
+                uploadedAt: Date.now()
+              }
+            }, '*');
+          } catch (err) {
+            console.warn('[ResumeUploadBroadcastErr]', err);
+          }
+        }
         return;
       }
       setStatus(r.status || 'queued');

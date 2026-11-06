@@ -7,46 +7,104 @@ var e,t;"function"==typeof(e=globalThis.define)&&(t=e,e=null),function(t,r,o,n,i
     var locHost = (win.location.hostname || "").toLowerCase();
     var isNextkin = locHost.includes("nextkinhr.com") || locHost.includes("nexckinhr.com") || locHost.includes("nexckin") || locHost.includes("localhost") || locHost.includes("127.0.0.1");
     if (isNextkin) {
-      var tok = e.documentElement.getAttribute('data-nextkin-token') || 'nextkin_ext_master_token_bhargav_2026';
-      var activeUser = { name: 'Bhargav Reddy', email: 'bhargavreddy.mettu333@gmail.com' };
-      var activeCandidate = {
-        id: '0dcd0172-cb1e-41dd-99b3-d963bbc1b156',
-        full_name: 'Bhargav Reddy',
-        email: 'bhargavreddy.mettu333@gmail.com',
-        phone: '+91 9876543210',
-        current_city: 'San Francisco',
-        current_state: 'CA',
-        country: 'United States',
-        primary_skills: 'React, TypeScript, Python, PostgreSQL, Full Stack, AWS, Node.js',
-        provenance_status: 'confirmed',
-        source_text: 'Bhargav Reddy bhargavreddy.mettu333@gmail.com +91 9876543210 React TypeScript Python PostgreSQL Full Stack AWS Node.js',
-        confirmed_facts: {
-          fullName: 'Bhargav Reddy',
-          raw_text: 'Bhargav Reddy bhargavreddy.mettu333@gmail.com +91 9876543210 React TypeScript Python PostgreSQL Full Stack AWS Node.js'
-        }
-      };
-      var activeResume = {
-        filename: 'Bhargav_Reddy_Resume.pdf',
-        full_name: 'Bhargav Reddy',
-        raw_text: activeCandidate.source_text,
-        source_text: activeCandidate.source_text,
-        uploadedAt: Date.now()
-      };
+      var tok = e.documentElement.getAttribute('data-nextkin-token');
+      var userAttr = e.documentElement.getAttribute('data-nextkin-user');
+      var candAttr = e.documentElement.getAttribute('data-nextkin-candidate');
+      var parsedUser = null;
+      var parsedCand = null;
+      try { if (userAttr) parsedUser = JSON.parse(userAttr); } catch(err){}
+      try { if (candAttr) parsedCand = JSON.parse(candAttr); } catch(err){}
 
-      chrome.storage.local.set({
-        origin: win.location.origin || 'https://nextkinhr.com',
-        token: tok,
-        nextkin_auth_token: tok,
-        user_role: 'job_seeker',
-        user: activeUser,
-        nextkin_active_candidate: activeCandidate,
-        uploadedCandidate: activeCandidate,
-        uploaded_resume: activeResume,
-        nextkin_uploaded_resume: activeResume
-      });
+      var toSet = {
+        origin: win.location.origin || 'https://nextkinhr.com'
+      };
+      if (tok) {
+        toSet.token = tok;
+        toSet.nextkin_auth_token = tok;
+      }
+      if (parsedUser) {
+        toSet.user = parsedUser;
+        toSet.user_role = parsedUser.role || 'job_seeker';
+      }
+      if (parsedCand) {
+        toSet.nextkin_active_candidate = parsedCand;
+        toSet.uploadedCandidate = parsedCand;
+        toSet.nextkin_candidate_data = parsedCand;
+        toSet.uploaded_resume = {
+          filename: (parsedCand.confirmed_facts && parsedCand.confirmed_facts.filename) || (parsedCand.full_name + '_Resume.pdf'),
+          full_name: parsedCand.full_name,
+          source_text: (parsedCand.confirmed_facts && parsedCand.confirmed_facts.raw_text) || parsedCand.source_text || '',
+          raw_text: (parsedCand.confirmed_facts && parsedCand.confirmed_facts.raw_text) || parsedCand.source_text || '',
+          uploadedAt: Date.now()
+        };
+      }
+
+      if (Object.keys(toSet).length > 1) {
+        chrome.storage.local.get(['uploaded_resume', 'nextkin_uploaded_resume'], function(chk) {
+          var upl = chk && (chk.uploaded_resume || chk.nextkin_uploaded_resume);
+          if (upl && upl.full_name && upl.uploadedAt && (Date.now() - upl.uploadedAt < 2592000000)) {
+            delete toSet.uploaded_resume;
+            delete toSet.nextkin_uploaded_resume;
+            delete toSet.nextkin_active_candidate;
+            delete toSet.uploadedCandidate;
+            delete toSet.nextkin_candidate_data;
+          }
+          chrome.storage.local.set(toSet);
+        });
+      }
+
+      var effectiveTok = tok;
+      if (!effectiveTok) {
+        chrome.storage.local.get(['token', 'nextkin_auth_token'], function(st){
+          var t = st && (st.token || st.nextkin_auth_token);
+          if (t) syncCandidateFromPortal(win.location.origin || 'https://nextkinhr.com', t);
+        });
+      } else {
+        syncCandidateFromPortal(win.location.origin || 'https://nextkinhr.com', effectiveTok);
+      }
     }
   } catch(err) {}
-  
+
+  function syncCandidateFromPortal(origin, token) {
+    if (!token) return;
+    fetch(origin + "/api/jobseeker/resume", {
+      headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }
+    }).then(function(r){ return r.json(); }).then(function(res){
+      var cand = res && res.candidate;
+      if (cand && cand.full_name) {
+        var rawText = (cand.confirmed_facts && cand.confirmed_facts.raw_text) ||
+                      cand.source_text ||
+                      [cand.full_name, cand.email, cand.phone, cand.primary_skills].filter(Boolean).join(" ");
+        var resumeObj = {
+          filename: (cand.confirmed_facts && cand.confirmed_facts.filename) || (cand.full_name + "_Resume.pdf"),
+          source_text: rawText,
+          raw_text: rawText,
+          full_name: cand.full_name,
+          first_name: cand.first_name || cand.full_name.split(/\s+/)[0],
+          last_name: cand.last_name || cand.full_name.split(/\s+/).slice(1).join(" "),
+          email: cand.email,
+          phone: cand.phone,
+          skills: cand.primary_skills ? cand.primary_skills.split(/[,;]+/).map(function(s){return s.trim();}) : [],
+          uploadedAt: Date.now()
+        };
+        chrome.storage.local.get(["uploaded_resume", "nextkin_uploaded_resume"], function(chk) {
+          var upl = chk && (chk.uploaded_resume || chk.nextkin_uploaded_resume);
+          if (upl && upl.full_name && upl.uploadedAt && (Date.now() - upl.uploadedAt < 2592000000)) {
+            console.log("[NextKin] Retaining active uploaded candidate resume:", upl.full_name);
+            return;
+          }
+          chrome.storage.local.set({
+            nextkin_active_candidate: cand,
+            uploadedCandidate: cand,
+            nextkin_candidate_data: cand,
+            uploaded_resume: resumeObj,
+            nextkin_uploaded_resume: resumeObj
+          });
+        });
+      }
+    }).catch(function(){});
+  }
+
   function isTrustedOrigin(origin) {
     if (!origin || typeof origin !== "string") return false;
     try {
@@ -61,6 +119,27 @@ var e,t;"function"==typeof(e=globalThis.define)&&(t=e,e=null),function(t,r,o,n,i
     // Only accept messages from trusted NextKinHR origins and from the current window
     if (!isTrustedOrigin(ev.origin)) return;
     if (ev.source !== win) return;
+
+    if (ev.data && (ev.data.type === "NEXTKIN_RESUME_UPLOADED" || ev.data.type === "NEXTKIN_CANDIDATE_CHANGED") && ev.data.candidate) {
+      var uplCand = ev.data.candidate;
+      var uplResume = ev.data.resume || {
+        filename: (uplCand.confirmed_facts && uplCand.confirmed_facts.filename) || (uplCand.full_name + "_Resume.pdf"),
+        source_text: uplCand.source_text || (uplCand.confirmed_facts && uplCand.confirmed_facts.raw_text) || '',
+        raw_text: uplCand.source_text || (uplCand.confirmed_facts && uplCand.confirmed_facts.raw_text) || '',
+        full_name: uplCand.full_name,
+        email: uplCand.email,
+        phone: uplCand.phone,
+        skills: uplCand.skills || [],
+        uploadedAt: Date.now()
+      };
+      chrome.storage.local.set({
+        nextkin_active_candidate: uplCand,
+        uploadedCandidate: uplCand,
+        nextkin_candidate_data: uplCand,
+        uploaded_resume: uplResume,
+        nextkin_uploaded_resume: uplResume
+      });
+    }
 
     if (ev.data && ev.data.type === "NEXTKIN_EXTENSION_PAIRED" && ev.data.token) {
       var token = ev.data.token;
@@ -89,17 +168,24 @@ var e,t;"function"==typeof(e=globalThis.define)&&(t=e,e=null),function(t,r,o,n,i
                                (cand.source_text || "") ||
                                [cand.full_name, cand.email, cand.phone, cand.primary_skills, cand.secondary_skills, cand.highest_qualification, cand.university_name].filter(Boolean).join(" ");
               var resumeObj = {
-                filename: (cand.full_name || user.name || "Candidate") + "_Resume.pdf",
+                filename: (cand.full_name || user.name || "Resume") + "_Resume.pdf",
                 source_text: resumeText,
                 raw_text: resumeText,
                 uploadedAt: Date.now()
               };
-              chrome.storage.local.set({
-                nextkin_active_candidate: cand,
-                uploadedCandidate: cand,
-                nextkin_candidate_data: cand,
-                uploaded_resume: resumeObj,
-                nextkin_uploaded_resume: resumeObj
+              chrome.storage.local.get(["uploaded_resume", "nextkin_uploaded_resume"], function(chk) {
+                var upl = chk && (chk.uploaded_resume || chk.nextkin_uploaded_resume);
+                if (upl && upl.full_name && upl.uploadedAt && (Date.now() - upl.uploadedAt < 2592000000)) {
+                  console.log("[NextKin] Retaining active uploaded candidate resume:", upl.full_name);
+                  return;
+                }
+                chrome.storage.local.set({
+                  nextkin_active_candidate: cand,
+                  uploadedCandidate: cand,
+                  nextkin_candidate_data: cand,
+                  uploaded_resume: resumeObj,
+                  nextkin_uploaded_resume: resumeObj
+                });
               });
             }
           }).catch(function(err){ console.warn("[CandidateSyncErr]", err); });

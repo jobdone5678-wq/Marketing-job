@@ -91,7 +91,7 @@ export async function POST(request: Request) {
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
-        candidateId = fallbackCand ? fallbackCand.id : '0dcd0172-cb1e-41dd-99b3-d963bbc1b156';
+        if (fallbackCand) { candidateId = fallbackCand.id; } else { throw new CaptureError('Candidate not found. Please upload or select a valid candidate.', 404); }
         candidateVersion = fallbackCand ? fallbackCand.version ?? null : null;
       }
     } else {
@@ -100,7 +100,7 @@ export async function POST(request: Request) {
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      candidateId = fallbackCand ? fallbackCand.id : '0dcd0172-cb1e-41dd-99b3-d963bbc1b156';
+      if (fallbackCand) { candidateId = fallbackCand.id; } else { throw new CaptureError('Candidate not found. Please upload or select a valid candidate.', 404); }
       candidateVersion = fallbackCand ? fallbackCand.version ?? null : null;
     }
 
