@@ -531,28 +531,26 @@ export default function SubmissionsPage() {
               Refresh
             </Button>
 
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setRtrDialogOpen(true)}
+              className="h-9 px-3 text-xs gap-1.5 cursor-pointer rounded-lg border-primary/40 bg-primary/5 text-primary hover:bg-primary/10 transition-all font-semibold"
+            >
+              <FileSignature className="size-3.5" />
+              Add RTR Submission
+            </Button>
+
             {!isClient && (
-              <>
+              <Link href="/dashboard/submissions/new">
                 <Button
                   size="sm"
-                  variant="outline"
-                  onClick={() => setRtrDialogOpen(true)}
-                  className="h-9 px-3 text-xs gap-1.5 cursor-pointer rounded-lg border-primary/40 bg-primary/5 text-primary hover:bg-primary/10 transition-all font-semibold"
+                  className="h-9 px-3.5 text-xs gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer rounded-lg shadow-xs hover:shadow transition-all font-semibold"
                 >
-                  <FileSignature className="size-3.5" />
-                  Add RTR Submission
+                  <PlusIcon className="size-3.5" />
+                  New Submission
                 </Button>
-
-                <Link href="/dashboard/submissions/new">
-                  <Button
-                    size="sm"
-                    className="h-9 px-3.5 text-xs gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer rounded-lg shadow-xs hover:shadow transition-all font-semibold"
-                  >
-                    <PlusIcon className="size-3.5" />
-                    New Submission
-                  </Button>
-                </Link>
-              </>
+              </Link>
             )}
           </div>
         </div>

@@ -94,18 +94,43 @@ test('the agreement is uploaded as multipart form data instead of a base64 JSON 
   );
 });
 
+test('the RTR section is reachable from the navigation for every role', async t => {
+  const navItems = [
+    { id: 'dashboard', title: 'Dashboard', url: '/dashboard' },
+    { id: 'candidates', title: 'My Profile & Resume', url: '/dashboard/candidates' },
+    { id: 'submissions', title: 'My Applications', url: '/dashboard/submissions' },
+    { id: 'rtr', title: 'My RTR Agreements', url: '/dashboard/rtr' },
+    { id: 'placements', title: 'My Service Fees & Placement', url: '/dashboard/placements' },
+    { id: 'public-jobs', title: 'Public Jobs', url: '/dashboard/jobs' },
+    { id: 'outside-jobs', title: 'Outside Jobs', url: '/dashboard/outside-jobs' },
+    { id: 'email-confirmations', title: 'Email Confirmations', url: '/dashboard/email-confirmations' },
+    { id: 'integrations', title: 'Integrations', url: '/dashboard/integrations' },
+  ];
+  for (const role of ['client', 'recruiter', 'technical_recruiter', 'super_admin']) {
+    const tab = await browser.newPage();
+    t.after(() => tab.close());
+    await tab.route('https://portal.test/**', route => route.fulfill({ contentType: 'text/html', body: '<div id="root"></div>' }));
+    await tab.goto('https://portal.test/');
+    await tab.evaluate(({ items, navRole }) => { window.fixtureNavItems = items; window.fixtureNavRole = navRole; }, { items: navItems, navRole: role });
+    await tab.addScriptTag({ content: browserModuleScript(sources, "require('react-dom/client').createRoot(document.getElementById('root')).render(require('react').createElement(require('nav-main').NavMain, {items:window.fixtureNavItems,role:window.fixtureNavRole}));") });
+    const rtrLink = tab.getByRole('link', { name: /RTR/i });
+    await rtrLink.waitFor();
+    assert.equal(await rtrLink.getAttribute('href'), '/dashboard/rtr');
+  }
+});
+
 let browser;
 before(async () => { browser = await chromium.launch({ headless: true }); });
 after(async () => { await browser?.close(); });
 
 const sources = await browserReactModules();
-for (const [name, file] of [['page', 'src/app/dashboard/submissions/page.tsx'], ['@/lib/submission-dates', 'src/lib/submission-dates.ts'], ['sidebar', 'src/components/app-sidebar.tsx']]) {
+for (const [name, file] of [['page', 'src/app/dashboard/submissions/page.tsx'], ['@/lib/submission-dates', 'src/lib/submission-dates.ts'], ['sidebar', 'src/components/app-sidebar.tsx'], ['nav-main', 'src/components/nav-main.tsx']]) {
   sources[name] = ts.transpileModule(await readFile(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
 }
 sources['@/lib/submissions'] = 'exports.getSubmissions=async()=>window.fixtureRows;exports.deleteSubmission=async()=>({success:true});';
 sources['@/lib/candidates'] = 'exports.getCandidates=async()=>[];';
 sources['next/link'] = "module.exports=({children,...props})=>require('react').createElement('a',props,children);";
-sources['next/navigation'] = 'exports.useRouter=()=>({push(){}});';
+sources['next/navigation'] = 'exports.useRouter=()=>({push(){}});exports.usePathname=()=>"/dashboard/submissions";';
 sources['sonner'] = 'exports.toast={success(){},error(){}};';
 sources['lucide-react'] = "module.exports=new Proxy({},{get:()=>()=>null});";
 sources['@/components/submission-status-dialog'] = 'exports.SubmissionStatusDialog=()=>null;';
@@ -117,6 +142,7 @@ sources['@/components/rtr-submission-dialog'] = 'exports.RTRSubmissionDialog=()=
 sources['@/components/candidate-combobox'] = 'exports.CandidateCombobox=()=>null;';
 sources['@/hooks/use-user-profile'] = 'exports.useUserProfile=()=>({profile:{role:window.fixtureRole||"recruiter",status:"active"},isRecruiter:true,isClient:window.fixtureRole==="client"});';
 sources['@/components/workspace-ui'] = 'exports.WorkspaceError=({children})=>require("react").createElement("div",null,children);exports.WorkspaceSkeleton=()=>null;';
+sources['@/components/ui/sidebar'] = "const tag=({children,...props})=>require('react').createElement('div',props,children);exports.Sidebar=tag;exports.SidebarContent=tag;exports.SidebarFooter=tag;exports.SidebarHeader=tag;exports.SidebarGroup=tag;exports.SidebarGroupContent=tag;exports.SidebarGroupLabel=tag;exports.SidebarMenu=({children})=>require('react').createElement('ul',null,children);exports.SidebarMenuItem=({children})=>require('react').createElement('li',null,children);";
 for (const [module, components] of Object.entries({
   button: { Button: 'button' },
   input: { Input: 'input' },

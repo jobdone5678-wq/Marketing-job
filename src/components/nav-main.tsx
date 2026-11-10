@@ -37,12 +37,12 @@ export function NavMain({
   const sections =
     role === "client"
       ? [
-          ["My Workspace", ["dashboard", "candidates", "resumes", "submissions", "placements"]],
-          ["Opportunities", ["public-jobs"]],
+          ["My Workspace", ["dashboard", "candidates", "resumes", "submissions", "rtr", "placements"]],
+          ["Opportunities", ["public-jobs", "outside-jobs"]],
           ["Connections", ["email-confirmations", "integrations"]],
         ]
       : [
-          ["Workspace", ["dashboard", "candidates", "public-jobs", "job-matching", "resumes", "submissions"]],
+          ["Workspace", ["dashboard", "candidates", "public-jobs", "outside-jobs", "job-matching", "resumes", "submissions", "rtr"]],
           ["Communications", ["email-confirmations", "integrations"]],
           ["Operations", ["vendors", "placements"]],
           ["Administration", ["team", "billing"]],
