@@ -37,7 +37,10 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { getCandidates } from "@/lib/candidates";
+import { toIsoDate } from "@/lib/rtr-dates";
 import type { Candidate } from "@/types/database";
+
+const MAX_DOCUMENT_BYTES = 4 * 1024 * 1024;
 
 interface RTRItem {
   id: string;
@@ -88,6 +91,7 @@ export default function RTRManagementPage() {
 
   // OCR state
   const [uploadingOcr, setUploadingOcr] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
   const [ocrFile, setOcrFile] = React.useState<File | null>(null);
   const [extractedData, setExtractedData] = React.useState<Partial<RTRItem>>({});
   const [selectedCandidateId, setSelectedCandidateId] = React.useState<string>("");
@@ -119,6 +123,12 @@ export default function RTRManagementPage() {
 
   // Handle OCR File Upload & Extraction
   async function handleOcrUpload(file: File) {
+    if (file.size > MAX_DOCUMENT_BYTES) {
+      toast.error("That document is larger than 4 MB.", {
+        description: "Upload a compressed PDF or a lower resolution scan and try again.",
+      });
+      return;
+    }
     setOcrFile(file);
     setUploadingOcr(true);
     try {
@@ -134,22 +144,10 @@ export default function RTRManagementPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "OCR extraction failed.");
 
-      // Read base64
-      let fileBase64: string | null = null;
-      try {
-        fileBase64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject();
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-      } catch {}
-
       const ext = json.extracted || {};
       setExtractedData({
         filename: json.filename,
         mime_type: json.mime_type,
-        base64: fileBase64,
         candidate_name: ext.candidate_name || "",
         company_name: ext.company_name || "",
         job_title: ext.job_title || "",
@@ -159,8 +157,8 @@ export default function RTRManagementPage() {
         vendor_contact_phone: ext.vendor_contact_phone || "",
         rtr_type: ext.rtr_type || "vendor_rtr",
         rtr_status: ext.rtr_status || "received",
-        rtr_date: ext.rtr_date || new Date().toISOString().slice(0, 10),
-        expiration_date: ext.expiration_date || "",
+        rtr_date: toIsoDate(ext.rtr_date) || new Date().toISOString().slice(0, 10),
+        expiration_date: toIsoDate(ext.expiration_date) || "",
         hourly_rate: ext.hourly_rate || "",
         daily_rate: ext.daily_rate || "",
         currency: ext.currency || "USD",
@@ -187,26 +185,35 @@ export default function RTRManagementPage() {
   // Save Extracted / Form Data
   async function handleSaveRtr(e: React.FormEvent) {
     e.preventDefault();
+    if (saving) return;
     if (!extractedData.filename) {
       toast.error("Please provide or scan an RTR document.");
       return;
     }
 
+    setSaving(true);
     try {
       const payload = {
         ...extractedData,
         candidate_id: selectedCandidateId || null,
         candidate_name: extractedData.candidate_name || undefined,
+        rtr_date: toIsoDate(extractedData.rtr_date) || new Date().toISOString().slice(0, 10),
+        expiration_date: toIsoDate(extractedData.expiration_date) || null,
         create_submission: true,
       };
 
+      // The document itself is sent as multipart form data so the file is never lost in a
+      // base64 encoded JSON body.
+      const formData = new FormData();
+      formData.append("payload", JSON.stringify(payload));
+      if (ocrFile) formData.append("file", ocrFile);
+
       const res = await fetch("/api/rtr", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: formData,
       });
 
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || "Failed to save RTR document.");
 
       toast.success("RTR record saved successfully!");
@@ -216,6 +223,24 @@ export default function RTRManagementPage() {
       void fetchRtrDocuments();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Save error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Open the stored agreement file
+  async function openDocument(id: string) {
+    try {
+      const res = await fetch(`/api/rtr/${encodeURIComponent(id)}/document`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "The agreement file is not available.");
+      const url =
+        data.url ||
+        (data.base64 ? `data:${data.mime_type || "application/pdf"};base64,${data.base64}` : null);
+      if (!url) throw new Error("The agreement file is not available.");
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "The agreement file is not available.");
     }
   }
 
@@ -512,6 +537,15 @@ export default function RTRManagementPage() {
                           <Button
                             variant="ghost"
                             size="icon-xs"
+                            onClick={() => void openDocument(doc.id)}
+                            title="Open the agreement file"
+                          >
+                            <ExternalLink className="size-3.5 text-muted-foreground hover:text-foreground" />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
                             onClick={() => {
                               setSelectedDoc(doc);
                               setDetailModalOpen(true);
@@ -568,7 +602,12 @@ export default function RTRManagementPage() {
 
           {/* Upload Dropzone */}
           <div
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => {
+              if (fileInputRef.current) {
+                fileInputRef.current.value = "";
+                fileInputRef.current.click();
+              }
+            }}
             className="border-2 border-dashed border-border/80 hover:border-primary/60 rounded-xl p-6 text-center cursor-pointer transition-all bg-muted/20 hover:bg-muted/30 space-y-2"
           >
             <input
@@ -604,7 +643,7 @@ export default function RTRManagementPage() {
                   Click or drag RTR image or PDF here
                 </p>
                 <p className="text-[11px] text-muted-foreground">
-                  Supports screenshots, scanned agreements, and digital letters (PNG, JPG, PDF up to 10MB)
+                  Supports screenshots, scanned agreements, and digital letters (PNG, JPG, PDF up to 4MB)
                 </p>
               </div>
             )}
@@ -828,12 +867,13 @@ export default function RTRManagementPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setOcrModalOpen(false)}
+                disabled={saving}
                 className="text-xs"
               >
                 Cancel
               </Button>
-              <Button type="submit" size="sm" className="text-xs">
-                Save RTR Record
+              <Button type="submit" size="sm" disabled={saving || uploadingOcr} className="text-xs">
+                {saving ? "Saving..." : uploadingOcr ? "Reading Document..." : "Save RTR Record"}
               </Button>
             </div>
           </form>

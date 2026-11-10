@@ -1,7 +1,28 @@
 import { protectedRoute } from "@/lib/http/protected-route";
-import { database, checkDb, CaptureError } from "@/lib/db/admin";
+import { database, CaptureError } from "@/lib/db/admin";
 import { candidateAccess } from "@/lib/resumes/repository";
+import { ownedCandidates, ensureOwnedCandidate } from "@/lib/auth/candidate-ownership";
+import { recruitingRoles } from "@/lib/auth/profile-access";
+import { buildRtrMetadataTag, parseRtrMetadata, stripRtrMetadata } from "@/lib/rtr-metadata";
+import { toIsoDate, todayIsoDate } from "@/lib/rtr-dates";
 import { z } from "zod";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+// The agreement file travels as multipart form data, so the request body stays the size of the
+// original document instead of a base64 blob that is a third larger.
+export const MAX_RTR_DOCUMENT_BYTES = 4 * 1024 * 1024;
+
+// Database codes that mean "this table or column does not exist yet". They are recoverable by
+// falling back to the notes column, so they must not fail the whole request.
+const MISSING_SCHEMA_CODES = new Set(["42P01", "42703", "PGRST202", "PGRST204", "PGRST205"]);
+
+const isoDate = z
+  .string()
+  .nullable()
+  .optional()
+  .transform((value) => toIsoDate(value));
 
 const createRtrSchema = z.object({
   candidate_id: z
@@ -26,8 +47,8 @@ const createRtrSchema = z.object({
   base64: z.string().nullable().optional(),
   rtr_type: z.enum(["vendor_rtr", "client_rtr", "direct_rtr"]).default("vendor_rtr"),
   rtr_status: z.enum(["received", "signed", "expired", "rejected"]).default("received"),
-  rtr_date: z.string().default(() => new Date().toISOString().slice(0, 10)),
-  expiration_date: z.string().nullable().optional(),
+  rtr_date: z.string().default(() => todayIsoDate()).transform((value) => toIsoDate(value) ?? todayIsoDate()),
+  expiration_date: isoDate,
   company_name: z.string().nullable().optional(),
   job_title: z.string().nullable().optional(),
   vendor_name: z.string().nullable().optional(),
@@ -46,41 +67,124 @@ const createRtrSchema = z.object({
   create_submission: z.boolean().optional().default(false),
 });
 
+type RtrPayload = z.infer<typeof createRtrSchema>;
+
+interface UploadedDocument {
+  filename: string;
+  mimeType: string;
+  base64: string;
+}
+
+function isMissingSchemaError(error: { code?: string } | null | undefined): boolean {
+  return Boolean(error && MISSING_SCHEMA_CODES.has(error.code || ""));
+}
+
+function sanitizeFilename(name: string): string {
+  const cleaned = name.replace(/[^a-zA-Z0-9._ -]/g, "_").slice(-160);
+  return cleaned || "RTR_Document.pdf";
+}
+
+async function readRtrRequest(
+  request: Request
+): Promise<{ meta: unknown; document: UploadedDocument | null }> {
+  const contentType = request.headers.get("content-type") || "";
+  if (!contentType.includes("multipart/form-data")) {
+    return { meta: await request.json(), document: null };
+  }
+
+  const form = await request.formData();
+  const rawMeta = form.get("payload");
+  let meta: unknown = {};
+  if (typeof rawMeta === "string" && rawMeta.trim()) {
+    try {
+      meta = JSON.parse(rawMeta);
+    } catch {
+      throw new CaptureError("Invalid request. Check required fields and try again.", 400);
+    }
+  }
+
+  const file = form.get("file");
+  if (!(file instanceof File) || !file.size) return { meta, document: null };
+  if (file.size > MAX_RTR_DOCUMENT_BYTES) {
+    throw new CaptureError(
+      "The RTR document must be 4 MB or smaller. Upload a compressed copy and try again.",
+      413
+    );
+  }
+
+  const raw = Buffer.from(await file.arrayBuffer());
+  return {
+    meta,
+    document: {
+      filename: sanitizeFilename(file.name),
+      mimeType: file.type || "application/octet-stream",
+      base64: raw.toString("base64"),
+    },
+  };
+}
+
 export async function GET(request: Request) {
   return protectedRoute(request, "candidate_or_staff", async (profile) => {
     const url = new URL(request.url);
     const candidateId = url.searchParams.get("candidateId");
     const status = url.searchParams.get("status");
-    const search = (url.searchParams.get("search") || "").replace(/[%_,()'"\\:]/g, ' ').trim().toLowerCase();
+    const search = (url.searchParams.get("search") || "").replace(/[%_,()'"\\:]/g, " ").trim().toLowerCase();
 
     const db = database();
-    const isStaff = ["super_admin", "recruiter", "technical_recruiter"].includes(profile.role);
+    const isStaff = recruitingRoles.includes(profile.role);
 
     let candidateFilter = candidateId;
+    let ownedIds: string[] = [];
     if (!isStaff) {
-      // Find candidate linked to this profile user_id
-      const { data: cand } = await db
-        .from("candidates")
-        .select("id")
-        .eq("user_id", profile.id)
-        .maybeSingle();
-      if (!cand) return { documents: [], total: 0 };
-      candidateFilter = cand.id;
+      // A candidate only ever sees the agreements filed against their own record.
+      ownedIds = (await ownedCandidates(profile)).map((row) => row.id);
+      if (ownedIds.length === 0) return { documents: [], total: 0 };
     } else if (candidateFilter && profile.role !== "super_admin") {
       await candidateAccess(profile, candidateFilter);
     }
 
     const items: Array<Record<string, unknown>> = [];
+    const submissionsById = new Map<string, Record<string, unknown>>();
 
-    // 1. Query dedicated rtr_documents table if it exists
+    // 1. Applications first: they carry the RTR metadata tag and the client / role details.
+    let submissions: Array<Record<string, any>> = [];
+    try {
+      let subQuery = db
+        .from("job_submissions")
+        .select(
+          "id, candidate_id, company_name, job_title, vendor_company, vendor_contact_name, vendor_contact_email, vendor_contact_phone, submitted_rate, notes, submission_date, candidate:candidates(id, full_name, email, phone)"
+        )
+        .order("submission_date", { ascending: false });
+
+      if (isStaff) {
+        if (candidateFilter) subQuery = subQuery.eq("candidate_id", candidateFilter);
+      } else {
+        subQuery = subQuery.in("candidate_id", ownedIds);
+      }
+
+      const { data: subs } = await subQuery;
+      if (Array.isArray(subs)) {
+        submissions = subs as Array<Record<string, any>>;
+        for (const sub of submissions) submissionsById.set(sub.id as string, sub);
+      }
+    } catch (subErr) {
+      console.warn("Submissions read fallback warning:", subErr);
+    }
+
+    // 2. Dedicated agreement rows. `base64` is intentionally left out so listing agreements
+    //    never downloads the document payloads.
     try {
       let query = db
         .from("rtr_documents")
-        .select("*, candidate:candidates(id, full_name, email, phone)")
+        .select(
+          "id, submission_id, candidate_id, vendor_id, filename, mime_type, document_url, rtr_type, rtr_status, rtr_date, expiration_date, vendor_name, vendor_contact_name, vendor_contact_email, vendor_contact_phone, hourly_rate, daily_rate, monthly_rate, annual_rate, currency, notes, created_at, candidate:candidates(id, full_name, email, phone)"
+        )
         .order("rtr_date", { ascending: false });
 
-      if (candidateFilter) {
-        query = query.eq("candidate_id", candidateFilter);
+      if (isStaff) {
+        if (candidateFilter) query = query.eq("candidate_id", candidateFilter);
+      } else {
+        query = query.in("candidate_id", ownedIds);
       }
       if (status && status !== "all") {
         query = query.eq("rtr_status", status);
@@ -88,79 +192,59 @@ export async function GET(request: Request) {
 
       const { data, error } = await query;
       if (!error && Array.isArray(data)) {
-        items.push(...data);
+        for (const row of data as Array<Record<string, any>>) {
+          const submission = row.submission_id ? submissionsById.get(row.submission_id) : undefined;
+          const meta = submission ? parseRtrMetadata(submission.notes as string | null) : null;
+          items.push({
+            ...row,
+            company_name: row.company_name ?? meta?.company_name ?? submission?.company_name ?? null,
+            job_title: row.job_title ?? meta?.job_title ?? submission?.job_title ?? null,
+            candidate_name: meta?.candidate_name ?? (row.candidate as any)?.full_name ?? null,
+          });
+        }
       }
     } catch {
       // Table might not exist yet before migration is executed
     }
 
-    // 2. Also retrieve from job_submissions (supporting both rtr_document column and notes metadata)
-    try {
-      let subQuery = db
-        .from("job_submissions")
-        .select("id, candidate_id, company_name, job_title, vendor_company, vendor_contact_name, vendor_contact_email, vendor_contact_phone, submitted_rate, notes, submission_date, candidate:candidates(id, full_name, email, phone)")
-        .order("submission_date", { ascending: false });
+    // 3. Agreements that only exist as a metadata tag on the application.
+    for (const sub of submissions) {
+      const rtrRef = parseRtrMetadata(sub.notes as string | null);
+      if (!rtrRef) continue;
 
-      if (candidateFilter) {
-        subQuery = subQuery.eq("candidate_id", candidateFilter);
-      }
+      const existing = items.find(
+        (it) => it.submission_id === sub.id || it.id === rtrRef.id
+      );
+      if (existing) continue;
 
-      const { data: subs } = await subQuery;
-      if (Array.isArray(subs)) {
-        for (const sub of subs) {
-          // Parse RTR metadata from notes or rtr_document
-          let rtrRef: Record<string, unknown> | null = null;
-          if (sub.notes && typeof sub.notes === "string") {
-            const match = sub.notes.match(/<!-- RTR_METADATA:\s*(\{[\s\S]*?\})\s*-->/);
-            if (match) {
-              try {
-                rtrRef = JSON.parse(match[1]);
-              } catch {}
-            }
-          }
-          if (!rtrRef && (sub as any).rtr_document) {
-            rtrRef = (sub as any).rtr_document as Record<string, unknown>;
-          }
-          if (!rtrRef) continue;
-
-          // Avoid duplicate if already in items from rtr_documents table
-          const existing = items.find(
-            (it) => it.submission_id === sub.id || it.id === rtrRef?.id
-          );
-          if (!existing) {
-            items.push({
-              id: rtrRef.id || `sub-${sub.id}`,
-              submission_id: sub.id,
-              candidate_id: sub.candidate_id,
-              candidate: sub.candidate,
-              candidate_name: rtrRef.candidate_name || (sub.candidate as any)?.full_name || null,
-              filename: rtrRef.filename || "RTR_Document.pdf",
-              mime_type: rtrRef.mime_type || "application/pdf",
-              base64: rtrRef.base64 || null,
-              rtr_type: rtrRef.rtr_type || "vendor_rtr",
-              rtr_status: rtrRef.rtr_status || "received",
-              rtr_date: rtrRef.rtr_date || sub.submission_date,
-              expiration_date: rtrRef.expiration_date || null,
-              company_name: rtrRef.company_name || sub.company_name,
-              job_title: rtrRef.job_title || sub.job_title,
-              vendor_name: rtrRef.vendor_name || sub.vendor_company,
-              vendor_contact_name: rtrRef.vendor_contact_name || sub.vendor_contact_name,
-              vendor_contact_email: rtrRef.vendor_contact_email || sub.vendor_contact_email,
-              vendor_contact_phone: rtrRef.vendor_contact_phone || sub.vendor_contact_phone,
-              hourly_rate: rtrRef.hourly_rate || sub.submitted_rate,
-              daily_rate: rtrRef.daily_rate || null,
-              monthly_rate: rtrRef.monthly_rate || null,
-              annual_rate: rtrRef.annual_rate || null,
-              currency: rtrRef.currency || "USD",
-              representation_clause: rtrRef.representation_clause || null,
-              notes: rtrRef.notes || sub.notes?.replace(/<!-- RTR_METADATA:[\s\S]*?-->/g, '').trim() || null,
-              created_at: rtrRef.created_at || new Date().toISOString(),
-            });
-          }
-        }
-      }
-    } catch (subErr) {
-      console.warn("Submissions read fallback warning:", subErr);
+      items.push({
+        id: rtrRef.id || `sub-${sub.id}`,
+        submission_id: sub.id,
+        candidate_id: sub.candidate_id,
+        candidate: sub.candidate,
+        candidate_name: rtrRef.candidate_name || (sub.candidate as any)?.full_name || null,
+        filename: rtrRef.filename || "RTR_Document.pdf",
+        mime_type: rtrRef.mime_type || "application/pdf",
+        document_url: rtrRef.document_url || null,
+        rtr_type: rtrRef.rtr_type || "vendor_rtr",
+        rtr_status: rtrRef.rtr_status || "received",
+        rtr_date: rtrRef.rtr_date || sub.submission_date,
+        expiration_date: rtrRef.expiration_date || null,
+        company_name: rtrRef.company_name || sub.company_name,
+        job_title: rtrRef.job_title || sub.job_title,
+        vendor_name: rtrRef.vendor_name || sub.vendor_company,
+        vendor_contact_name: rtrRef.vendor_contact_name || sub.vendor_contact_name,
+        vendor_contact_email: rtrRef.vendor_contact_email || sub.vendor_contact_email,
+        vendor_contact_phone: rtrRef.vendor_contact_phone || sub.vendor_contact_phone,
+        hourly_rate: rtrRef.hourly_rate || sub.submitted_rate,
+        daily_rate: rtrRef.daily_rate || null,
+        monthly_rate: rtrRef.monthly_rate || null,
+        annual_rate: rtrRef.annual_rate || null,
+        currency: rtrRef.currency || "USD",
+        representation_clause: rtrRef.representation_clause || null,
+        notes: rtrRef.notes || stripRtrMetadata(sub.notes as string | null) || null,
+        created_at: rtrRef.created_at || sub.submission_date || new Date().toISOString(),
+      });
     }
 
     // Filter by status if requested
@@ -199,26 +283,49 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   return protectedRoute(request, "candidate_or_staff", async (profile) => {
-    const body = createRtrSchema.parse(await request.json());
+    const { meta, document } = await readRtrRequest(request);
+    const parsed = createRtrSchema.safeParse(meta);
+    if (!parsed.success) {
+      throw new CaptureError("Invalid request. Check required fields and try again.", 400);
+    }
+    const body: RtrPayload = parsed.data;
     const db = database();
+    const isCandidateUploader = profile.role === "client" || profile.role === "job_seeker";
 
-    // Auto-resolve candidate_id if user is a candidate and none was provided
-    let targetCandidateId = body.candidate_id || null;
-    let resolvedCandidateName = body.candidate_name || null;
-
-    if (!targetCandidateId && profile.role === "client") {
-      const { data: cand } = await db
-        .from("candidates")
-        .select("id, full_name")
-        .eq("user_id", profile.id)
-        .maybeSingle();
-      if (cand) {
-        targetCandidateId = cand.id;
-        resolvedCandidateName = cand.full_name;
-      }
+    // The uploaded file always wins over the form fields for the document identity.
+    const filename = document?.filename || body.filename;
+    const mimeType = document?.mimeType || body.mime_type;
+    const documentBase64 = document?.base64 ?? body.base64 ?? null;
+    if (documentBase64 && documentBase64.length > Math.ceil((MAX_RTR_DOCUMENT_BYTES * 4) / 3) + 1024) {
+      throw new CaptureError(
+        "The RTR document must be 4 MB or smaller. Upload a compressed copy and try again.",
+        413
+      );
     }
 
-    // If candidate_id is still missing but candidate_name was provided, find or create
+    // Resolve the candidate the agreement belongs to.
+    let targetCandidateId: string | null = body.candidate_id;
+    let resolvedCandidateName: string | null = body.candidate_name?.trim() || null;
+
+    if (isCandidateUploader) {
+      // A candidate always files the agreement against their own record, and that record stays
+      // linked to the account so the agreement shows up in their own applications and RTR list.
+      const owned = await ensureOwnedCandidate(profile, resolvedCandidateName);
+      if (owned) {
+        targetCandidateId = owned.id;
+        resolvedCandidateName = owned.full_name || resolvedCandidateName;
+      }
+    } else if (targetCandidateId) {
+      await candidateAccess(profile, targetCandidateId);
+      const { data: candidate } = await db
+        .from("candidates")
+        .select("id, full_name")
+        .eq("id", targetCandidateId)
+        .maybeSingle();
+      if (candidate) resolvedCandidateName = candidate.full_name;
+    }
+
+    // Staff may file against a candidate that is not linked to an account yet.
     if (!targetCandidateId && resolvedCandidateName?.trim()) {
       const trimmedName = resolvedCandidateName.trim();
       const { data: matchCand } = await db
@@ -238,7 +345,7 @@ export async function POST(request: Request) {
           .insert({
             full_name: trimmedName,
             is_active_bench: true,
-            notes: `Created via RTR Ingestion (${body.filename})`,
+            notes: `Created via RTR Ingestion (${filename})`,
           })
           .select("id, full_name")
           .maybeSingle();
@@ -258,7 +365,7 @@ export async function POST(request: Request) {
         .insert({
           full_name: defaultName,
           is_active_bench: true,
-          notes: `Created via RTR Ingestion (${body.filename})`,
+          notes: `Created via RTR Ingestion (${filename})`,
         })
         .select("id, full_name")
         .maybeSingle();
@@ -269,24 +376,67 @@ export async function POST(request: Request) {
       }
     }
 
-    const savedId: string = crypto.randomUUID();
+    if (!targetCandidateId) {
+      throw new CaptureError("The agreement could not be linked to a candidate record.", 500);
+    }
+
+    const companyName = body.company_name?.trim() || "Client";
+    const jobTitle = body.job_title?.trim() || "Consultant";
+    const agreementDate = body.rtr_date || todayIsoDate();
+
+    // An agreement that was uploaded before for the same candidate, client and role is updated
+    // instead of creating a second application row for the very same placement.
+    let targetSubmissionId: string | null = body.submission_id || null;
+    let reusedSubmission = false;
+
+    if (!targetSubmissionId) {
+      const { data: candidates } = await db
+        .from("job_submissions")
+        .select("id, notes, company_name, job_title")
+        .eq("candidate_id", targetCandidateId)
+        .eq("company_name", companyName)
+        .eq("job_title", jobTitle)
+        .limit(10);
+
+      const reusable = (candidates || []).find((row) =>
+        parseRtrMetadata(row.notes as string | null)
+      );
+      if (reusable) {
+        targetSubmissionId = reusable.id as string;
+        reusedSubmission = true;
+      }
+    }
+
+    // Keep the same agreement id when the agreement is replaced, so the document row, the
+    // metadata tag and the badge always point at the same record.
+    let savedId = crypto.randomUUID();
+    if (targetSubmissionId) {
+      const { data: existingDoc } = await db
+        .from("rtr_documents")
+        .select("id")
+        .eq("submission_id", targetSubmissionId)
+        .limit(1)
+        .maybeSingle();
+      if (existingDoc?.id) savedId = existingDoc.id as string;
+    }
 
     const rtrRef = {
       id: savedId,
       candidate_id: targetCandidateId,
       candidate_name: resolvedCandidateName,
-      filename: body.filename,
-      mime_type: body.mime_type,
+      filename,
+      mime_type: mimeType,
+      document_url: body.document_url || null,
       vendor_name: body.vendor_name || null,
       vendor_contact_name: body.vendor_contact_name || null,
       vendor_contact_email: body.vendor_contact_email || null,
       vendor_contact_phone: body.vendor_contact_phone || null,
       rtr_type: body.rtr_type,
       rtr_status: body.rtr_status,
-      rtr_date: body.rtr_date,
+      rtr_date: agreementDate,
       expiration_date: body.expiration_date || null,
-      company_name: body.company_name || null,
-      job_title: body.job_title || null,
+      company_name: companyName,
+      job_title: jobTitle,
       hourly_rate: body.hourly_rate || null,
       daily_rate: body.daily_rate || null,
       monthly_rate: body.monthly_rate || null,
@@ -297,193 +447,159 @@ export async function POST(request: Request) {
       created_at: new Date().toISOString(),
     };
 
-    const rtrTag = `<!-- RTR_METADATA: ${JSON.stringify(rtrRef)} -->`;
+    const rtrTag = buildRtrMetadataTag(rtrRef);
     const finalNotes = body.notes
       ? `${body.notes}\n\n${rtrTag}`
-      : `RTR Document: ${body.filename} (${body.rtr_status})\n\n${rtrTag}`;
+      : `RTR Document: ${filename} (${body.rtr_status})\n\n${rtrTag}`;
 
-    // Try inserting into dedicated rtr_documents table if available
-    try {
-      await db
-        .from("rtr_documents")
-        .insert({
-          id: savedId,
-          candidate_id: targetCandidateId,
-          submission_id: body.submission_id || null,
-          vendor_id: body.vendor_id || null,
-          filename: body.filename,
-          mime_type: body.mime_type,
-          document_url: body.document_url || null,
-          base64: body.base64 || null,
-          rtr_type: body.rtr_type,
-          rtr_status: body.rtr_status,
-          rtr_date: body.rtr_date,
-          expiration_date: body.expiration_date || null,
-          company_name: body.company_name || null,
-          job_title: body.job_title || null,
-          vendor_name: body.vendor_name || null,
-          vendor_contact_name: body.vendor_contact_name || null,
-          vendor_contact_email: body.vendor_contact_email || null,
-          vendor_contact_phone: body.vendor_contact_phone || null,
-          hourly_rate: body.hourly_rate || null,
-          daily_rate: body.daily_rate || null,
-          monthly_rate: body.monthly_rate || null,
-          annual_rate: body.annual_rate || null,
-          currency: body.currency,
-          ocr_raw_text: body.ocr_raw_text || null,
-          ocr_extracted_data: body.ocr_extracted_data || {},
-          notes: body.notes || null,
-          uploaded_by: profile.id,
-        });
-    } catch {
-      // rtr_documents fallback handled by job_submissions
-    }
-
-    let createdSubmissionId = body.submission_id || null;
-
-    // Clean up numeric rate for database column
     const parsedHourlyRate = body.hourly_rate
       ? parseFloat(body.hourly_rate.replace(/[^0-9.]/g, "")) || null
       : null;
 
-    // Attach to existing submission or create new job_submission record
-    if (body.submission_id) {
-      try {
-        const { data: existingSub } = await db
+    const vendorPatch = {
+      vendor_company: body.vendor_name || undefined,
+      vendor_contact_name: body.vendor_contact_name || undefined,
+      vendor_contact_email: body.vendor_contact_email || undefined,
+      vendor_contact_phone: body.vendor_contact_phone || undefined,
+      submitted_rate: body.hourly_rate ? `$${body.hourly_rate}/hr` : undefined,
+    };
+
+    // 1. Write the agreement onto the application row.
+    let submissionId = targetSubmissionId;
+    if (submissionId) {
+      const { data: existingSub } = await db
+        .from("job_submissions")
+        .select("id, notes")
+        .eq("id", submissionId)
+        .maybeSingle();
+
+      if (!existingSub) {
+        throw new CaptureError("The application this agreement belongs to no longer exists.", 404);
+      }
+
+      const cleanNotes = stripRtrMetadata(existingSub.notes as string | null);
+      const updatedNotes = cleanNotes ? `${cleanNotes}\n\n${rtrTag}` : rtrTag;
+
+      let update = await db
+        .from("job_submissions")
+        .update({ notes: updatedNotes, rtr_document: rtrRef, ...vendorPatch })
+        .eq("id", submissionId);
+
+      if (update.error && isMissingSchemaError(update.error)) {
+        update = await db
           .from("job_submissions")
-          .select("notes")
-          .eq("id", body.submission_id)
-          .maybeSingle();
-
-        const cleanNotes = (existingSub?.notes || "").replace(/<!-- RTR_METADATA:[\s\S]*?-->/g, "").trim();
-        const updatedNotes = cleanNotes ? `${cleanNotes}\n\n${rtrTag}` : rtrTag;
-
-        let updRes = await db
-          .from("job_submissions")
-          .update({
-            notes: updatedNotes,
-            rtr_document: rtrRef,
-            vendor_company: body.vendor_name || undefined,
-            vendor_contact_name: body.vendor_contact_name || undefined,
-            vendor_contact_email: body.vendor_contact_email || undefined,
-            vendor_contact_phone: body.vendor_contact_phone || undefined,
-            submitted_rate: body.hourly_rate ? `$${body.hourly_rate}/hr` : undefined,
-          })
-          .eq("id", body.submission_id);
-
-        if (updRes.error && (updRes.error.code === "42703" || updRes.error.message?.includes("does not exist"))) {
-          await db
-            .from("job_submissions")
-            .update({
-              notes: updatedNotes,
-              vendor_company: body.vendor_name || undefined,
-              vendor_contact_name: body.vendor_contact_name || undefined,
-              vendor_contact_email: body.vendor_contact_email || undefined,
-              vendor_contact_phone: body.vendor_contact_phone || undefined,
-              submitted_rate: body.hourly_rate ? `$${body.hourly_rate}/hr` : undefined,
-            })
-            .eq("id", body.submission_id);
-        }
-      } catch (err) {
-        console.warn("Could not attach RTR reference to submission:", err);
+          .update({ notes: updatedNotes, ...vendorPatch })
+          .eq("id", submissionId);
+      }
+      if (update.error) {
+        throw new CaptureError(
+          "The agreement could not be attached to the application. Nothing was saved.",
+          500
+        );
       }
     } else {
-      // Standalone RTR or new submission
-      try {
-        const rateStr = body.hourly_rate
-          ? `$${body.hourly_rate}/hr`
-          : body.daily_rate
-          ? `$${body.daily_rate}/day`
-          : body.annual_rate
-          ? `$${body.annual_rate}/yr`
-          : null;
+      // 2. Otherwise record the representation as its own application row.
+      const rateStr = body.hourly_rate
+        ? `$${body.hourly_rate}/hr`
+        : body.daily_rate
+        ? `$${body.daily_rate}/day`
+        : body.annual_rate
+        ? `$${body.annual_rate}/yr`
+        : null;
 
-        const subStatus = body.rtr_status === "signed" ? "Submitted_to_Client" : "Vendor_Screening";
+      const subStatus = body.rtr_status === "signed" ? "Submitted_to_Client" : "Vendor_Screening";
 
-        let newSubRes = await db
-          .from("job_submissions")
-          .insert({
-            candidate_id: targetCandidateId,
-            company_name: body.company_name?.trim() || "Client",
-            job_title: body.job_title?.trim() || "Consultant",
-            vendor_company: body.vendor_name?.trim() || null,
-            vendor_contact_name: body.vendor_contact_name?.trim() || null,
-            vendor_contact_email: body.vendor_contact_email?.trim() || null,
-            vendor_contact_phone: body.vendor_contact_phone?.trim() || null,
-            submitted_rate: rateStr,
-            status: subStatus,
-            submission_date: body.rtr_date || new Date().toISOString().slice(0, 10),
-            notes: finalNotes,
-            rtr_document: rtrRef,
-            recruiter_id: profile.role === "client" ? null : profile.id,
-          })
-          .select("id")
-          .single();
+      const row = {
+        candidate_id: targetCandidateId,
+        company_name: companyName,
+        job_title: jobTitle,
+        vendor_company: body.vendor_name?.trim() || null,
+        vendor_contact_name: body.vendor_contact_name?.trim() || null,
+        vendor_contact_email: body.vendor_contact_email?.trim() || null,
+        vendor_contact_phone: body.vendor_contact_phone?.trim() || null,
+        submitted_rate: rateStr,
+        status: subStatus,
+        submission_date: agreementDate,
+        notes: finalNotes,
+        rtr_document: rtrRef,
+        recruiter_id: profile.role === "client" ? null : profile.id,
+      };
 
-        if (newSubRes.error && (newSubRes.error.code === "42703" || newSubRes.error.message?.includes("does not exist"))) {
-          newSubRes = await db
-            .from("job_submissions")
-            .insert({
-              candidate_id: targetCandidateId,
-              company_name: body.company_name?.trim() || "Client",
-              job_title: body.job_title?.trim() || "Consultant",
-              vendor_company: body.vendor_name?.trim() || null,
-              vendor_contact_name: body.vendor_contact_name?.trim() || null,
-              vendor_contact_email: body.vendor_contact_email?.trim() || null,
-              vendor_contact_phone: body.vendor_contact_phone?.trim() || null,
-              submitted_rate: rateStr,
-              status: subStatus,
-              submission_date: body.rtr_date || new Date().toISOString().slice(0, 10),
-              notes: finalNotes,
-              recruiter_id: profile.role === "client" ? null : profile.id,
-            })
-            .select("id")
-            .single();
-        }
-
-        if (!newSubRes.error && newSubRes.data?.id) {
-          createdSubmissionId = newSubRes.data.id;
-        }
-      } catch (subErr) {
-        console.warn("Auto-create submission from RTR failed:", subErr);
+      let insert = await db.from("job_submissions").insert(row).select("id").single();
+      if (insert.error && isMissingSchemaError(insert.error)) {
+        const { rtr_document: _ignored, ...safeRow } = row;
+        insert = await db.from("job_submissions").insert(safeRow).select("id").single();
       }
+      if (insert.error || !insert.data?.id) {
+        throw new CaptureError(
+          "The application for this agreement could not be saved. Nothing was recorded.",
+          500
+        );
+      }
+      submissionId = insert.data.id as string;
     }
 
-    // Insert into dedicated rtr_documents table if submission and candidate exist
-    if (createdSubmissionId && targetCandidateId) {
-      try {
-        await db.from("rtr_documents").insert({
-          id: savedId,
-          candidate_id: targetCandidateId,
-          submission_id: createdSubmissionId,
-          vendor_id: body.vendor_id || null,
-          filename: body.filename,
-          mime_type: body.mime_type,
-          document_url: body.document_url || null,
-          base64: body.base64 || null,
-          rtr_type: body.rtr_type,
-          rtr_status: body.rtr_status,
-          rtr_date: body.rtr_date,
-          expiration_date: body.expiration_date || null,
-          vendor_name: body.vendor_name || null,
-          vendor_contact_name: body.vendor_contact_name || null,
-          vendor_contact_email: body.vendor_contact_email || null,
-          vendor_contact_phone: body.vendor_contact_phone || null,
-          hourly_rate: parsedHourlyRate,
-          currency: body.currency,
-          notes: body.notes || null,
-          uploaded_by: profile.id,
-        });
-      } catch (rtrDocErr) {
-        console.warn("rtr_documents insert notice (fallback on job_submissions):", rtrDocErr);
+    // 3. Store the agreement document itself.
+    const warnings: string[] = [];
+    if (submissionId) {
+      const documentRow = {
+        id: savedId,
+        candidate_id: targetCandidateId,
+        submission_id: submissionId,
+        vendor_id: body.vendor_id || null,
+        filename,
+        mime_type: mimeType,
+        document_url: body.document_url || null,
+        base64: documentBase64,
+        rtr_type: body.rtr_type,
+        rtr_status: body.rtr_status,
+        rtr_date: agreementDate,
+        expiration_date: body.expiration_date || null,
+        vendor_name: body.vendor_name || null,
+        vendor_contact_name: body.vendor_contact_name || null,
+        vendor_contact_email: body.vendor_contact_email || null,
+        vendor_contact_phone: body.vendor_contact_phone || null,
+        hourly_rate: parsedHourlyRate,
+        currency: body.currency,
+        notes: body.notes || null,
+        uploaded_by: profile.id,
+      };
+
+      const { error: firstError } = await db
+        .from("rtr_documents")
+        .upsert(
+          { ...documentRow, company_name: companyName, job_title: jobTitle },
+          { onConflict: "id" }
+        );
+      let documentError = firstError;
+      if (documentError && isMissingSchemaError(documentError)) {
+        // Older schema without the company_name / job_title columns.
+        const retry = await db.from("rtr_documents").upsert(documentRow, { onConflict: "id" });
+        documentError = retry.error;
+      }
+
+      if (documentError) {
+        if (isMissingSchemaError(documentError)) {
+          warnings.push(
+            "The agreement document was recorded as metadata only. Apply the latest database migrations to store the file itself."
+          );
+        } else {
+          throw new CaptureError(
+            "The agreement file could not be stored. Nothing was reported as saved.",
+            500
+          );
+        }
       }
     }
 
     return {
       success: true,
       id: savedId,
-      submission_id: createdSubmissionId,
+      submission_id: submissionId,
       candidate_id: targetCandidateId,
+      submission_created: !reusedSubmission && !body.submission_id,
+      submission_reused: reusedSubmission,
+      warnings,
       message: "RTR document processed and saved successfully.",
     };
   });

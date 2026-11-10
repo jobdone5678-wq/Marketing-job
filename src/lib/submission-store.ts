@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { JobSubmission, JobSubmissionFormData, SubmissionStatus } from '@/types/database';
+import { parseRtrMetadata } from '@/lib/rtr-metadata';
 
 const columns = '*,candidate:candidates(id,full_name,email,phone,visa_status,target_job_titles,primary_skills,current_city,current_state),recruiter:profiles!job_submissions_recruiter_id_fkey(id,full_name,email,role)';
 type WriteResult = { data: JobSubmission | null; error: string | null; isDuplicate?: boolean };
@@ -13,14 +14,7 @@ function writeFields(input: Partial<JobSubmissionFormData>, creating = false) {
 }
 
 function parseRtrFromNotes(notes?: string | null) {
-  if (!notes || typeof notes !== 'string') return null;
-  const match = notes.match(/<!-- RTR_METADATA:\s*(\{[\s\S]*?\})\s*-->/);
-  if (match) {
-    try {
-      return JSON.parse(match[1]);
-    } catch {}
-  }
-  return null;
+  return parseRtrMetadata(notes);
 }
 
 export function submissionStore(client: SupabaseClient) {

@@ -48,48 +48,70 @@ Added `rtr_document` JSONB column to store a reference to the latest RTR:
 
 ## API Endpoints
 
-### POST /api/rtr-documents
-Upload a new RTR document.
+### POST /api/rtr
+Save a right-to-represent agreement.
 
-**Request Body:**
+The request is sent as **multipart form data**:
+
+- `payload` — a JSON string with the agreement metadata
+- `file` — the agreement document (optional, PNG/JPG/WEBP/PDF, up to 4 MB)
+
 ```json
 {
-  "submissionId": "uuid",
-  "candidateId": "uuid",
+  "candidate_id": "uuid (optional)",
+  "candidate_name": "string",
+  "submission_id": "uuid (optional - attach to an existing application)",
   "filename": "string",
-  "mimeType": "string",
-  "base64": "string (optional)",
-  "vendorName": "string (optional)",
-  "vendorContactName": "string (optional)",
-  "vendorContactEmail": "string (optional)",
-  "vendorContactPhone": "string (optional)",
-  "rtrType": "vendor_rtr|client_rtr|direct_rtr",
-  "rtrStatus": "received|signed|expired|rejected",
-  "rtrDate": "YYYY-MM-DD",
-  "expirationDate": "YYYY-MM-DD",
+  "mime_type": "string",
+  "rtr_type": "vendor_rtr|client_rtr|direct_rtr",
+  "rtr_status": "received|signed|expired|rejected",
+  "rtr_date": "YYYY-MM-DD",
+  "expiration_date": "YYYY-MM-DD",
+  "company_name": "string",
+  "job_title": "string",
   "notes": "string"
 }
 ```
 
-### GET /api/rtr-documents
+A plain JSON body is still accepted for metadata-only records.
+
+Behaviour worth knowing:
+
+- Dates are normalised to a real `YYYY-MM-DD` calendar date before they are written. OCR
+  results such as `11/09/2026` or `Nov 9, 2026` are converted, and anything unreadable falls
+  back to today instead of failing the insert.
+- Uploading the same agreement again for the same candidate, client and role updates the
+  existing application row instead of creating a second one.
+- The response contains `submission_id`, `id`, `candidate_id`, `submission_created`,
+  `submission_reused` and a `warnings` array. A write that did not succeed is reported as an
+  error; the endpoint never reports a success for a record it could not store.
+
+### GET /api/rtr
 List RTR documents for submissions or candidates.
 
 **Query Parameters:**
-- `submissionId` - Filter by submission
 - `candidateId` - Filter by candidate
+- `status` - Filter by agreement status
+- `search` - Filter by candidate, company, vendor or file name
 
-### PATCH /api/rtr-documents/[id]
+The document payload is not part of this response. Use `GET /api/rtr/[id]/document` to fetch
+the file of a single agreement.
+
+### GET /api/rtr/[id]/document
+Return the stored file of one agreement (`url` or `base64` plus its filename and mime type).
+
+### PATCH /api/rtr/[id]
 Update RTR document status.
 
 **Request Body:**
 ```json
 {
-  "rtrStatus": "received|signed|expired|rejected",
+  "rtr_status": "received|signed|expired|rejected",
   "notes": "string"
 }
 ```
 
-### DELETE /api/rtr-documents/[id]
+### DELETE /api/rtr/[id]
 Delete an RTR document.
 
 ## Frontend Components

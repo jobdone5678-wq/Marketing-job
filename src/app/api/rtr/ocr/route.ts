@@ -2,11 +2,16 @@ import { protectedRoute } from "@/lib/http/protected-route";
 import { CaptureError } from "@/lib/db/admin";
 import { getAIModel } from "@/lib/ai/config";
 import { readResume } from "@/lib/resumes/validation";
+import { toIsoDate, todayIsoDate } from "@/lib/rtr-dates";
 import OpenAI from "openai";
 import { z } from "zod";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+// Matches the upload limit of POST /api/rtr so a document never scans successfully and then
+// fails to save.
+const MAX_DOCUMENT_BYTES = 4 * 1024 * 1024;
 
 const extractedSchema = z.object({
   candidate_name: z.string().nullable().optional(),
@@ -67,7 +72,10 @@ function regexExtractFallback(text: string, filename: string): ExtractedRtrData 
   // Look for date
   const dateRegex = /\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b|\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?\s+\d{4}\b/i;
   const dateMatch = text.match(dateRegex);
-  const foundDate = dateMatch ? dateMatch[0] : new Date().toISOString().slice(0, 10);
+  // The database column is a DATE, so the value has to be a real calendar date. The raw text of
+  // the document ("11/09/2026", "Nov 9, 2026") is normalised here instead of being written
+  // straight into the column.
+  const foundDate = toIsoDate(dateMatch ? dateMatch[0] : null) || todayIsoDate();
 
   // Check representation clause snippet
   let clause: string | null = null;
@@ -155,11 +163,11 @@ export async function POST(request: Request) {
     const file = formData.get("file");
 
     if (!(file instanceof File) || !file.size) {
-      throw new CaptureError("Upload a valid image (PNG, JPG, WEBP) or PDF file up to 10 MiB.", 400);
+      throw new CaptureError("Upload a valid image (PNG, JPG, WEBP) or PDF file up to 4 MiB.", 400);
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      throw new CaptureError("File size exceeds 10 MiB limit.", 413);
+    if (file.size > MAX_DOCUMENT_BYTES) {
+      throw new CaptureError("File size exceeds the 4 MiB limit.", 413);
     }
 
     const filename = file.name.replace(/[^a-zA-Z0-9._ -]/g, "_").slice(-160);
@@ -292,6 +300,10 @@ Return ONLY valid JSON. No markdown backticks, no commentary.`;
             .trim();
           const parsedJson = JSON.parse(cleanJson);
           extracted = extractedSchema.parse(parsedJson);
+
+          // Dates are stored in DATE columns, so they have to be real calendar dates.
+          extracted.rtr_date = toIsoDate(extracted.rtr_date) || todayIsoDate();
+          extracted.expiration_date = toIsoDate(extracted.expiration_date);
 
           // Consolidate all unique detected companies
           const allFound = new Set<string>(extracted.detected_companies || []);

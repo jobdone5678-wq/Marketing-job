@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { findCandidateMatch } from "@/components/rtr-submission-dialog";
+import { buildRtrMetadataTag, stripRtrMetadata } from "@/lib/rtr-metadata";
 
 const fields = [
   "company_name",
@@ -81,6 +82,8 @@ export function SubmissionForm({
   const [attachedRtr, setAttachedRtr] = useState<RTRDocumentReference | null>(
     (initialSubmission?.rtr_document as RTRDocumentReference) || null
   );
+  // The scanned file is kept so it can be uploaded next to the application record.
+  const [rtrFile, setRtrFile] = useState<File | null>(null);
 
   const rtrInputRef = useRef<HTMLInputElement>(null);
 
@@ -127,6 +130,7 @@ export function SubmissionForm({
   // Handle RTR Image / Document OCR
   const handleRtrScan = async (file: File) => {
     setScanningRtr(true);
+    setRtrFile(file);
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -209,8 +213,8 @@ export function SubmissionForm({
       const rtrToAttach = attachedRtr || (data.rtr_document as RTRDocumentReference | null) || null;
       let finalNotes = String(data.notes || "");
       if (rtrToAttach) {
-        const cleanNotes = finalNotes.replace(/<!-- RTR_METADATA:[\s\S]*?-->/g, "").trim();
-        const rtrTag = `<!-- RTR_METADATA: ${JSON.stringify(rtrToAttach)} -->`;
+        const cleanNotes = stripRtrMetadata(finalNotes);
+        const rtrTag = buildRtrMetadataTag(rtrToAttach as unknown as Record<string, unknown>);
         finalNotes = cleanNotes ? `${cleanNotes}\n\n${rtrTag}` : rtrTag;
       }
 
@@ -227,6 +231,42 @@ export function SubmissionForm({
       if (result.error || !result.data) {
         throw new Error(result.error || "Save failed");
       }
+
+      // Upload the agreement file itself. Without this step the application only carried the
+      // extracted metadata and the uploaded document was never stored.
+      if (rtrFile) {
+        const formData = new FormData();
+        formData.append(
+          "payload",
+          JSON.stringify({
+            submission_id: result.data.id,
+            candidate_id: result.data.candidate_id || null,
+            candidate_name: result.data.candidate?.full_name || null,
+            filename: rtrFile.name,
+            mime_type: rtrFile.type || "application/pdf",
+            rtr_type: rtrToAttach?.rtr_type || "vendor_rtr",
+            rtr_status: rtrToAttach?.rtr_status || "received",
+            rtr_date: rtrToAttach?.rtr_date || new Date().toISOString().slice(0, 10),
+            expiration_date: rtrToAttach?.expiration_date || null,
+            company_name: result.data.company_name || null,
+            job_title: result.data.job_title || null,
+            vendor_name: result.data.vendor_company || rtrToAttach?.vendor_name || null,
+            vendor_contact_name: result.data.vendor_contact_name || rtrToAttach?.vendor_contact_name || null,
+            vendor_contact_email: result.data.vendor_contact_email || rtrToAttach?.vendor_contact_email || null,
+            vendor_contact_phone: result.data.vendor_contact_phone || rtrToAttach?.vendor_contact_phone || null,
+            hourly_rate: rtrToAttach?.hourly_rate || null,
+            currency: rtrToAttach?.currency || "USD",
+            create_submission: false,
+          })
+        );
+        formData.append("file", rtrFile);
+        const upload = await fetch("/api/rtr", { method: "POST", body: formData });
+        if (!upload.ok) {
+          const uploadError = await upload.json().catch(() => ({}));
+          throw new Error(uploadError.error || "The RTR document could not be uploaded.");
+        }
+      }
+
       onSuccess?.(result.data);
       router.push(backUrl);
       router.refresh();
@@ -309,6 +349,7 @@ export function SubmissionForm({
             size="sm"
             onClick={() => {
               setAttachedRtr(null);
+              setRtrFile(null);
               setData({ ...data, rtr_document: null });
             }}
             className="h-7 text-xs text-destructive hover:bg-destructive/10"

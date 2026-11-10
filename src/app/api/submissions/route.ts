@@ -1,6 +1,7 @@
 import { protectedRoute } from '@/lib/http/protected-route';
 import { database, checkDb } from '@/lib/db/admin';
 import { candidateAccess } from '@/lib/resumes/repository';
+import { parseRtrMetadata } from '@/lib/rtr-metadata';
 import { z } from 'zod';
 
 const columns = '*,candidate:candidates(id,full_name,email,phone,visa_status,target_job_titles,primary_skills,current_city,current_state),recruiter:profiles!job_submissions_recruiter_id_fkey(id,full_name,email,role)';
@@ -40,13 +41,8 @@ export async function GET(request: Request) {
     checkDb(error);
 
     const enriched = (data || []).map((row: any) => {
-      if (!row.rtr_document && row.notes && typeof row.notes === 'string') {
-        const match = row.notes.match(/<!-- RTR_METADATA:\s*(\{[\s\S]*?\})\s*-->/);
-        if (match) {
-          try {
-            row.rtr_document = JSON.parse(match[1]);
-          } catch {}
-        }
+      if (!row.rtr_document) {
+        row.rtr_document = parseRtrMetadata(row.notes);
       }
       return row;
     });

@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createClient} from '@supabase/supabase-js';
-const load=()=>import('../src/lib/submission-store.ts');
+import {moduleLoader} from './helpers/load-ts-module.mjs';
+const load=()=>moduleLoader()('src/lib/submission-store.ts');
 test('submission history loads beyond database row caps without dropping daily totals',async()=>{
  const {submissionStore}=await load();
  const urls=[];

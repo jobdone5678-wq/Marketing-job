@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { recruitingDatabase } from './helpers/recruiting-db.mjs';
+import { moduleLoader } from './helpers/load-ts-module.mjs';
 import { readdir, readFile } from 'node:fs/promises';
 
 test('database migration adds applied_resume column and record_extension_submission persists it', async () => {
@@ -70,7 +71,7 @@ test('database migration adds applied_resume column and record_extension_submiss
 });
 
 test('submissionStore includes applied_resume in editableFields and writeFields', async () => {
-  const { submissionStore } = await import('../src/lib/submission-store.ts');
+  const { submissionStore } = moduleLoader()('src/lib/submission-store.ts');
   const { createClient } = await import('@supabase/supabase-js');
 
   let insertedPayload = null;
@@ -119,7 +120,7 @@ test('submissionStore includes applied_resume in editableFields and writeFields'
 });
 
 test('GET /api/submissions/[id]/applied-resume returns JSON snapshot and supports direct file download', async () => {
-  const { moduleLoader, fixtureDatabase } = await import('./helpers/load-ts-module.mjs');
+  const { fixtureDatabase } = await import('./helpers/load-ts-module.mjs');
   const submissionId = '30000000-0000-4000-8000-000000000001';
   const candidateId = '30000000-0000-4000-8000-000000000002';
 

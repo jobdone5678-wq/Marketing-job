@@ -1,6 +1,7 @@
 import { protectedRoute } from "@/lib/http/protected-route";
 import { database, checkDb, CaptureError } from "@/lib/db/admin";
 import { candidateAccess } from "@/lib/resumes/repository";
+import { buildRtrMetadataTag, parseRtrMetadata, stripRtrMetadata } from "@/lib/rtr-metadata";
 import { z } from "zod";
 
 const updateRtrSchema = z.object({
@@ -64,24 +65,15 @@ export async function GET(
     if (/^\d+$/.test(cleanId) || /^[0-9a-f-]{36}$/i.test(cleanId)) {
       const { data } = await db
         .from("job_submissions")
-        .select("id, candidate_id, company_name, job_title, vendor_company, vendor_contact_name, vendor_contact_email, vendor_contact_phone, submitted_rate, notes, submission_date, candidate:candidates(id, full_name, email, phone)")
+        .select("id, candidate_id, company_name, job_title, vendor_company, vendor_contact_name, vendor_contact_email, vendor_contact_phone, submitted_rate, notes, submission_date, rtr_document, candidate:candidates(id, full_name, email, phone)")
         .eq("id", cleanId)
         .maybeSingle();
       sub = data;
     }
 
-    let parsedRtr: Record<string, unknown> | null = null;
-    if (sub?.notes && typeof sub.notes === "string") {
-      const match = sub.notes.match(/<!-- RTR_METADATA:\s*(\{[\s\S]*?\})\s*-->/);
-      if (match) {
-        try {
-          parsedRtr = JSON.parse(match[1]);
-        } catch {}
-      }
-    }
-    if (!parsedRtr && sub?.rtr_document) {
-      parsedRtr = sub.rtr_document as Record<string, unknown>;
-    }
+    const metadataTag = parseRtrMetadata(sub?.notes as string | null);
+    const parsedRtr: Record<string, unknown> | null =
+      metadataTag || (sub?.rtr_document ? (sub.rtr_document as Record<string, unknown>) : null);
 
     if (parsedRtr || sub) {
       if (sub?.candidate_id) {
@@ -187,16 +179,10 @@ export async function PATCH(
           .maybeSingle();
 
         if (sub) {
-          let rtrMeta: Record<string, unknown> = {};
-          if (sub.notes && typeof sub.notes === "string") {
-            const match = sub.notes.match(/<!-- RTR_METADATA:\s*(\{[\s\S]*?\})\s*-->/);
-            if (match) {
-              try { rtrMeta = JSON.parse(match[1]); } catch {}
-            }
-          }
+          const rtrMeta: Record<string, unknown> = parseRtrMetadata(sub.notes as string | null) || {};
           const merged = { ...rtrMeta, ...body };
-          const rtrTag = `<!-- RTR_METADATA: ${JSON.stringify(merged)} -->`;
-          const cleanNotes = (sub.notes || "").replace(/<!-- RTR_METADATA:[\s\S]*?-->/g, "").trim();
+          const rtrTag = buildRtrMetadataTag(merged);
+          const cleanNotes = stripRtrMetadata(sub.notes as string | null);
           const updatedNotes = cleanNotes ? `${cleanNotes}\n\n${rtrTag}` : rtrTag;
 
           await db
@@ -272,7 +258,7 @@ export async function DELETE(
       if (/^\d+$/.test(cleanSubId) || /^[0-9a-f-]{36}$/i.test(cleanSubId)) {
         const { data: sub } = await db.from("job_submissions").select("id, notes").eq("id", cleanSubId).maybeSingle();
         if (sub?.notes) {
-          const cleanNotes = sub.notes.replace(/<!-- RTR_METADATA:[\s\S]*?-->/g, "").trim();
+          const cleanNotes = stripRtrMetadata(sub.notes as string | null);
           await db.from("job_submissions").update({ notes: cleanNotes || null }).eq("id", cleanSubId);
         }
       }

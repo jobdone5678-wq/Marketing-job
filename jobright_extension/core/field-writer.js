@@ -462,6 +462,7 @@
     undo,
     writeNative,
     pointerClick,
+    singleClick,
     dispatching,
     isFilling,
     verifyField,

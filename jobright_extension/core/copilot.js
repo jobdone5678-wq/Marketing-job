@@ -2,7 +2,7 @@
  * NextKin copilot: the user-facing autofill control surface.
  * Nextkinlife LLC
  *
- * The copilot owns the flow (candidate choice, fill, undo, review). Every write goes
+ * The copilot owns the flow (candidate choice, fill, undo, review, capture). Every write goes
  * through the shared engine (form-discovery, field-mapping, field-writer), so a portal
  * only has to be recognised - never hand-coded.
  */
@@ -24,6 +24,9 @@
     'nextkinhr.com', 'jobright-internal.com', 'localhost', '127.0.0.1'
   ];
 
+  // Answers about identity documents, money or health never leave the applicant's browser.
+  const SENSITIVE = /pass\s*word|secret|token|credential|\bssn\b|social\s*security|tax\s*id|bank|routing|payment|credit\s*card|card\s*number|medical|health|disabil|diagnos|ethnic|race|gender|veteran|religion|marital|pregnan|date\s*of\s*birth|\bdob\b|spouse|dependent|emergency|referr(er|al|ed)|reference|captcha|one[\s-]?time|\botp\b|passport|licen[cs]e\s*number/i;
+
   const state = {
     role: 'client',
     standalone: false,
@@ -38,7 +41,14 @@
     pending: null,
     eventKey: '',
     attempt: 0,
-    reported: false
+    reported: false,
+    attemptSent: false,
+    answers: new Map(),
+    draft: null,
+    draftJob: null,
+    attempted: new WeakSet(),
+    resume: null,
+    filling: null
   };
 
   const SHELL = `
@@ -233,17 +243,31 @@
     } catch { return ''; }
   }
 
-  function jobSnapshot() {
+  function cleanText(text) {
+    return String(text || '').replace(/\s+/g, ' ').trim();
+  }
+
+  // The job as the page shows it right now.
+  function liveJob() {
     const text = (doc.body?.innerText || '').slice(0, 4000);
-    const title = doc.querySelector('h1')?.textContent?.trim() || doc.title || '';
-    const company = doc.querySelector('[data-automation-id="companyName"], [class*="company-name" i], [class*="companyName" i]')?.textContent?.trim() || '';
-    const description = doc.querySelector('#job-description, .job-description, [data-automation-id="jobPostingDescription"], [class*="job-description" i]')?.textContent?.trim() || text;
+    const title = cleanText(doc.querySelector('h1')?.textContent) || doc.title || '';
+    const company = cleanText(doc.querySelector('[data-automation-id="companyName"], [class*="company-name" i], [class*="companyName" i]')?.textContent) || '';
+    const description = cleanText(doc.querySelector('#job-description, .job-description, [data-automation-id="jobPostingDescription"], [class*="job-description" i]')?.textContent) || text;
     return { title, company, description };
   }
 
+  // A submitted application keeps the job it was written for, even when the portal replaces the page.
+  function currentJob() {
+    return state.draftJob || liveJob();
+  }
+
+  function jobSnapshot() {
+    return liveJob();
+  }
+
   function jobKey() {
-    const job = jobSnapshot();
-    return `${job.title}|${job.company}|${root.location?.href || ''}`;
+    const job = liveJob();
+    return `${job.title}|${job.company}`;
   }
 
   function sessionIdFor(candidate) {
@@ -260,6 +284,154 @@
       mapping: root.NextkinFieldMapping,
       writer: root.NextkinFieldWriter
     };
+  }
+
+  // The question a control answers, when the control sits inside a group.
+  function controlScope(el) {
+    try {
+      const fieldset = el.closest('fieldset');
+      if (fieldset) {
+        const legend = fieldset.querySelector('legend');
+        if (legend && legend.textContent) return cleanText(legend.textContent);
+      }
+      const group = el.closest('[role="group"], [role="radiogroup"], [data-testid*="question" i]');
+      if (group) {
+        const title = group.querySelector('legend, [class*="label" i], [class*="title" i], [class*="question" i]');
+        if (title && title.textContent) return cleanText(title.textContent);
+      }
+    } catch { }
+    return '';
+  }
+
+  // The name a person would use for this control.
+  function controlLabel(el) {
+    const type = String(el.type || '').toLowerCase();
+    const scope = controlScope(el);
+    // A radio button names its option; the group around it names the question.
+    if (type === 'radio' && scope) return scope;
+    const aria = cleanText(el.getAttribute('aria-label'));
+    if (aria) return aria;
+    const ids = String(el.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean);
+    if (ids.length) {
+      const text = cleanText(ids.map(id => doc.getElementById(id)?.textContent || '').join(' '));
+      if (text) return text;
+    }
+    try {
+      if (el.labels && el.labels.length) {
+        const text = cleanText(Array.from(el.labels).map(l => l.textContent || '').join(' '));
+        if (text) return text;
+      }
+    } catch { }
+    if (el.id) {
+      try {
+        const lbl = doc.querySelector('label[for="' + CSS.escape(el.id) + '"]');
+        if (lbl && lbl.textContent) return cleanText(lbl.textContent);
+      } catch { }
+    }
+    const closest = el.closest ? el.closest('label') : null;
+    if (closest && closest.textContent) return cleanText(closest.textContent);
+    if (scope) return scope;
+    const placeholder = cleanText(el.getAttribute('placeholder'));
+    if (placeholder) return placeholder;
+    return el.name || el.id || '';
+  }
+
+  function controlValue(el) {
+    const type = String(el.type || '').toLowerCase();
+    if (type === 'radio') return el.checked ? cleanText(el.value) : '';
+    if (type === 'checkbox') return el.checked ? cleanText(el.value || 'Yes') : '';
+    if (el.tagName === 'SELECT') {
+      const option = el.selectedOptions && el.selectedOptions[0];
+      if (!option) return '';
+      const value = cleanText(el.value);
+      return value ? (cleanText(option.textContent) || value) : '';
+    }
+    if (el.isContentEditable) return cleanText(el.textContent);
+    return cleanText(el.value);
+  }
+
+  function isSensitiveControl(el) {
+    const name = String(el.name || '');
+    return SENSITIVE.test(controlLabel(el)) || SENSITIVE.test(controlScope(el)) || SENSITIVE.test(name);
+  }
+
+  // Answers accumulate across portal steps, so a replaced form does not lose what came before.
+  function recordControl(el) {
+    if (!el || !el.tagName) return;
+    const type = String(el.type || '').toLowerCase();
+    if (['password', 'hidden', 'file', 'submit', 'button', 'reset', 'image'].includes(type)) return;
+    const key = el.name || el.id;
+    if (!key) return;
+    if (isSensitiveControl(el)) return;
+    const value = controlValue(el);
+    if (!value) {
+      // An unchecked option of a group must not erase the answer of the checked one.
+      if (type === 'radio' || type === 'checkbox') return;
+      state.answers.delete(key);
+      return;
+    }
+    const known = state.answers.get(key);
+    state.answers.set(key, {
+      key,
+      label: known?.label || String(controlLabel(el) || key).slice(0, 120),
+      value
+    });
+  }
+
+  function harvest(scope) {
+    const target = scope || doc;
+    try {
+      if (target.tagName && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) recordControl(target);
+      if (target.querySelectorAll) {
+        for (const el of target.querySelectorAll('input, textarea, select')) recordControl(el);
+      }
+    } catch { }
+  }
+
+  function answersList() {
+    return Array.from(state.answers.values()).map(answer => ({
+      key: answer.key,
+      label: answer.label,
+      value: answer.value
+    }));
+  }
+
+  function isResumeInput(el) {
+    const text = [controlLabel(el), el.name || '', el.id || '', el.getAttribute('accept') || ''].join(' ').toLowerCase();
+    if (/cover[\s_-]*letter|coverletter|additional[\s_-]*(document|file)|transcript|portfolio/.test(text)) return false;
+    if (/resume|curriculum|\bcv\b|vitae/.test(text)) return true;
+    let total = 0;
+    try { total = doc.querySelectorAll('input[type="file"]').length; } catch { }
+    return total <= 1;
+  }
+
+  function noteResumeFile(el) {
+    if (!isResumeInput(el)) return;
+    const files = el.files ? Array.from(el.files) : [];
+    if (!files.length) {
+      state.resume = null;
+      return;
+    }
+    state.resume = { file: files[0], name: files[0].name };
+  }
+
+  async function readAppliedResume() {
+    const entry = state.resume;
+    if (!entry || !entry.file) return null;
+    try {
+      const buffer = await entry.file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      }
+      return {
+        filename: entry.file.name,
+        mimeType: entry.file.type || 'application/pdf',
+        base64: btoa(binary),
+        isTailored: false
+      };
+    } catch { return null; }
   }
 
   function questionId(field) {
@@ -286,10 +458,29 @@
     return (field.options || []).map(o => String(o.label ?? o.value ?? '').trim()).filter(Boolean);
   }
 
+  function fieldValue(field) {
+    const el = field?.element;
+    if (!el) return '';
+    if (field.kind === 'radio') {
+      const picked = (field.elements || []).find(r => r.checked);
+      return picked ? String(picked.value || '').trim() : '';
+    }
+    if (field.kind === 'choice') {
+      const picked = (field.options || []).find(o => o.element?.getAttribute?.('aria-pressed') === 'true' || o.element?.getAttribute?.('aria-checked') === 'true');
+      return picked ? String(picked.label || '').trim() : '';
+    }
+    if (field.kind === 'checkbox') {
+      const checked = el.checked !== undefined ? el.checked : el.getAttribute?.('aria-checked') === 'true';
+      return checked ? String(el.value || 'Yes').trim() : '';
+    }
+    if (el.isContentEditable) return String(el.textContent || '').trim();
+    return String(el.value || '').trim();
+  }
+
   async function resolveAiPlans(plans, candidate) {
     const aiPlans = plans.filter(p => p.status === 'ai');
     if (!aiPlans.length) return;
-    const job = jobSnapshot();
+    const job = currentJob();
     await Promise.all(aiPlans.map(async plan => {
       try {
         const res = await send({
@@ -327,20 +518,38 @@
       showStatus('The autofill engine is not loaded on this page.');
       return 0;
     }
-    const sessionId = sessionIdFor(candidate);
-    let written = 0;
-    try {
-      const fields = forms.discoverFields(doc);
-      const plans = mapping.planFill(fields, candidate);
-      if (options.resolveAi !== false) await resolveAiPlans(plans, candidate);
-      const receipts = await writer.applyFill(plans, { sessionId, isCurrent: () => true });
-      written = (receipts || []).length;
-      state.receipts.push(...(receipts || []));
-      showStatus(written ? `Filled ${written} field${written === 1 ? '' : 's'}.` : 'No empty fields needed this profile.');
-    } catch (err) {
-      showStatus('Autofill could not finish: ' + (err?.message || err));
+    if (state.filling) {
+      try { await state.filling; } catch { }
     }
-    return written;
+    const sessionId = sessionIdFor(candidate);
+    const run = (async () => {
+      let written = 0;
+      try {
+        const fields = forms.discoverFields(doc);
+        const fresh = fields.filter(field => field.element && !state.attempted.has(field.element));
+        const plans = mapping.planFill(fresh, candidate);
+        // A control is offered a value once: a portal that cannot take it must not be asked again.
+        for (const plan of plans) {
+          if ((plan.status === 'supported' || plan.status === 'ai') && plan.field?.element) {
+            state.attempted.add(plan.field.element);
+          }
+        }
+        if (options.resolveAi !== false) await resolveAiPlans(plans, candidate);
+        const receipts = await writer.applyFill(plans, { sessionId, isCurrent: () => true });
+        written = (receipts || []).length;
+        state.receipts.push(...(receipts || []));
+        showStatus(written ? `Filled ${written} field${written === 1 ? '' : 's'}.` : 'No empty fields needed this profile.');
+      } catch (err) {
+        showStatus('Autofill could not finish: ' + (err?.message || err));
+      }
+      return written;
+    })();
+    state.filling = run;
+    try {
+      return await run;
+    } finally {
+      if (state.filling === run) state.filling = null;
+    }
   }
 
   async function undoAutofill() {
@@ -349,6 +558,8 @@
     try {
       const restored = await writer.undo(state.receipts, { sessionId: state.sessionId, isCurrent: () => true });
       state.receipts = [];
+      // The controls are empty again, so they may take a value once more.
+      state.attempted = new WeakSet();
       showStatus(restored ? `Restored ${restored} field${restored === 1 ? '' : 's'}.` : 'Nothing to undo.');
       return restored;
     } catch {
@@ -385,7 +596,7 @@
   }
 
   function matchReport(candidate) {
-    const job = jobSnapshot();
+    const job = currentJob();
     const haystack = `${job.title} ${job.description}`.toLowerCase();
     const skills = String(candidate?.primary_skills || (Array.isArray(candidate?.skills) ? candidate.skills.join(', ') : candidate?.skills) || '')
       .split(/[,;\n]/).map(s => s.trim()).filter(Boolean);
@@ -401,36 +612,6 @@
     return { score, matched, missing };
   }
 
-  function collectAnswers() {
-    const answers = [];
-    const seen = new Set();
-    const { forms } = engine();
-    if (!forms) return answers;
-    for (const field of forms.discoverFields(doc)) {
-      if (!field || field.kind === 'inaccessible' || field.excluded) continue;
-      const el = field.element;
-      if (!el || !el.isConnected) continue;
-      const key = field.key || el.name || el.id;
-      if (!key || seen.has(key)) continue;
-      let value = '';
-      if (field.kind === 'radio') {
-        const picked = field.elements.find(r => r.checked);
-        value = picked ? (picked.value || '') : '';
-      } else if (field.kind === 'checkbox') {
-        value = el.checked ? (el.value || 'Yes') : '';
-      } else if (field.kind === 'choice') {
-        const picked = (field.options || []).find(o => o.element.getAttribute('aria-pressed') === 'true' || o.element.getAttribute('aria-checked') === 'true');
-        value = picked ? picked.label : '';
-      } else {
-        value = String(el.value || '').trim();
-      }
-      if (!value) continue;
-      seen.add(key);
-      answers.push({ key, label: String(field.label || key).slice(0, 120), value });
-    }
-    return answers;
-  }
-
   function eventKeyFor() {
     if (state.eventKey) return state.eventKey;
     try {
@@ -442,46 +623,134 @@
     return state.eventKey;
   }
 
-  async function saveDraft(answers) {
-    const candidate = activeCandidate();
-    await send({
+  function draftPayload(answers) {
+    const job = currentJob();
+    return {
       type: 'save_answer_draft',
-      candidateId: candidate?.id || state.linkedCandidateId || null,
-      jobTitle: jobSnapshot().title,
+      candidateId: activeCandidate()?.id || state.linkedCandidateId || null,
+      jobTitle: job.title,
+      companyName: job.company,
+      attempt: state.attempt,
+      eventKey: eventKeyFor(),
       answers
-    });
+    };
   }
 
-  async function reportSubmission({ manualAttestation = false } = {}) {
-    const answers = collectAnswers();
+  async function saveDraft(answers) {
+    try { await send(draftPayload(answers)); } catch { }
+  }
+
+  function restoreDraft(draft) {
+    if (!draft || typeof draft !== 'object') return;
+    state.draft = draft;
+    if (draft.jobTitle) state.draftJob = { title: draft.jobTitle, company: draft.companyName || '' };
+    if (typeof draft.attempt === 'number') state.attempt = draft.attempt;
+    if (draft.eventKey) {
+      state.eventKey = draft.eventKey;
+      try { root.sessionStorage?.setItem('mp_event_key', draft.eventKey); } catch { }
+    }
+    for (const answer of Array.isArray(draft.answers) ? draft.answers : []) {
+      if (!answer || !answer.key) continue;
+      state.answers.set(answer.key, {
+        key: answer.key,
+        label: String(answer.label || answer.key),
+        value: String(answer.value ?? '')
+      });
+    }
+  }
+
+  function feedbackFor(res, fallback) {
+    if (!res || typeof res !== 'object') return fallback;
+    if (res.error) return 'Needs review: ' + res.error;
+    if (res.manualReview) return 'Needs review: this application needs a manual review.';
+    if (res.queued) return 'Queued for sync.';
+    if (res.ok === false && res.success === false) return 'Needs review: the portal did not accept the capture.';
+    return fallback;
+  }
+
+  async function reportSubmission({ manualAttestation = false, status = 'submitted' } = {}) {
+    harvest(doc);
+    const answers = answersList();
     const candidate = activeCandidate();
-    const job = jobSnapshot();
+    const job = currentJob();
     const match = candidate ? matchReport(candidate) : { score: 0 };
+    const appliedResume = await readAppliedResume();
     await saveDraft(answers);
     const payload = {
       eventKey: eventKeyFor(),
       attempt: state.attempt,
       jobTitle: job.title,
       companyName: job.company,
+      jobUrl: root.location?.href || '',
       applicationUrl: root.location?.href || '',
+      portalSource: String(root.location?.hostname || ''),
       candidateId: candidate?.id || state.linkedCandidateId || null,
       matchScore: match.score,
-      answers
+      answers,
+      appliedResume
     };
-    if (state.linked || manualAttestation) {
-      await send({ status: 'submitted', ...payload, manualAttestation });
-      showCaptureStatus('Submission recorded.');
-      toast('Submission recorded.');
-    } else {
-      await send({ type: 'auto_submit', payload });
-      showCaptureStatus('Submission sent for review.');
-    }
+    const linked = state.linked || manualAttestation;
+    const res = linked
+      ? await send({ status, ...payload, manualAttestation })
+      : await send({ type: 'auto_submit', payload });
+    const feedback = feedbackFor(res, linked ? 'Submission recorded.' : 'Queued for sync.');
+    showCaptureStatus(feedback);
+    toast(feedback);
     return payload;
   }
 
   function isConfirmationPage() {
     const text = (doc.body?.innerText || '').slice(0, 3000);
     return /thank you for applying|your application has been submitted|application (has been )?submitted|application received|we have received your application|successfully submitted/i.test(text);
+  }
+
+  // The applicant pressed submit: the attempt is recorded, but nothing is sent yet.
+  async function registerSubmitAttempt() {
+    harvest(doc);
+    state.attempt += 1;
+    state.reported = false;
+    state.attemptSent = false;
+    const job = liveJob();
+    state.draftJob = { title: job.title, company: job.company };
+    const answers = answersList();
+    await saveDraft(answers);
+    if (state.linked) {
+      state.attemptSent = true;
+      await send({
+        status: 'submit_attempted',
+        eventKey: eventKeyFor(),
+        attempt: state.attempt,
+        jobTitle: job.title,
+        companyName: job.company,
+        applicationUrl: root.location?.href || '',
+        candidateId: activeCandidate()?.id || state.linkedCandidateId || null,
+        answers,
+        manualAttestation: false
+      });
+    }
+  }
+
+  // The portal confirms the application: the attempt becomes a submission.
+  async function promoteConfirmation() {
+    if (state.reported) return 0;
+    state.reported = true;
+    if (state.linked && !state.attemptSent) {
+      state.attemptSent = true;
+      const job = currentJob();
+      await send({
+        status: 'submit_attempted',
+        eventKey: eventKeyFor(),
+        attempt: state.attempt,
+        jobTitle: job.title,
+        companyName: job.company,
+        applicationUrl: root.location?.href || '',
+        candidateId: activeCandidate()?.id || state.linkedCandidateId || null,
+        answers: answersList(),
+        manualAttestation: false
+      });
+    }
+    await reportSubmission({ status: 'submitted' });
+    return 1;
   }
 
   function showScreeningReview(pending) {
@@ -506,11 +775,13 @@
   async function triggerAIScreeningQuestions(candidate, options = {}) {
     const { forms, mapping } = engine();
     if (!forms || !mapping) return 0;
+    if (!state.sessionId) sessionIdFor(candidate);
     const fields = forms.discoverFields(doc);
     const questionFields = fields.filter(field => isQuestionField(field));
     if (!questionFields.length) return 0;
 
-    const job = jobSnapshot();
+    const job = currentJob();
+    const requestedFor = jobKey();
     const res = await send({
       type: 'get_ai_answers',
       candidate,
@@ -523,6 +794,9 @@
         options: questionOptions(field)
       }))
     });
+    // The portal moved on to another job while the answers were generated.
+    if (jobKey() !== requestedFor) return 0;
+
     const answers = (res && res.answers) || {};
     const items = [];
     for (const field of questionFields) {
@@ -534,12 +808,13 @@
         id,
         label: String(field.label || id),
         labelSnapshot: String(field.label || id),
-        value: String(raw).trim()
+        value: String(raw).trim(),
+        valueSnapshot: fieldValue(field)
       });
     }
     if (!items.length) return 0;
 
-    state.pending = { items, jobKey: jobKey() };
+    state.pending = { items, jobKey: requestedFor };
     showScreeningReview(state.pending);
     if (options.autoAccept) acceptScreeningReview();
     return items.length;
@@ -566,7 +841,8 @@
         || (field.options || []).find(o => String(o.label ?? o.value ?? '').toLowerCase().trim().includes(wanted));
       if (!option) return null;
       const previousValue = field.kind === 'radio' ? field.elements.map(e => e.checked) : null;
-      writer.singleClick(option.element);
+      if (typeof writer.singleClick === 'function') writer.singleClick(option.element);
+      else option.element.click();
       const landed = field.kind === 'radio' ? field.elements.some(e => e.checked) : true;
       if (!landed) return null;
       return { fieldKey: field.key, field, element: field.element, previousValue, writtenValue: value, sessionId: state.sessionId, undoChoice: previousValue, ai: true };
@@ -595,6 +871,8 @@
       if (!current) continue;
       // A control whose question changed is a different question; the old answer no longer applies.
       if (String(current.label || '') !== item.labelSnapshot) continue;
+      // The applicant's own correction always wins over a suggested answer.
+      if (fieldValue(current) !== item.valueSnapshot) continue;
       const receipt = writeReviewedAnswer(current, item.value);
       if (!receipt) continue;
       state.receipts.push(receipt);
@@ -607,9 +885,10 @@
 
   async function resolveContext() {
     const intentId = intentFromLocation();
-    const [ctx, list] = await Promise.all([
+    const [ctx, list, draft] = await Promise.all([
       send({ type: 'get_context', intentId }),
-      send({ type: 'get_candidates' })
+      send({ type: 'get_candidates' }),
+      send({ type: 'get_answer_draft' })
     ]);
 
     state.role = (list && list.role) || 'client';
@@ -617,6 +896,8 @@
     state.ownCandidateId = (list && list.ownCandidateId) || null;
     state.linked = Boolean(ctx && ctx.linked);
     state.linkedCandidateId = (ctx && ctx.candidateId) || null;
+
+    restoreDraft(draft);
 
     let candidates = Array.isArray(list && list.candidates) ? list.candidates.filter(Boolean) : [];
     if (!candidates.length) {
@@ -632,19 +913,24 @@
     if (!selected && (state.standalone || state.role !== 'recruiter') && candidates.length === 1) selected = candidates[0];
 
     renderCandidates();
-    if (selected) {
-      setSelected(selected.id, { lock: state.linked || state.role !== 'recruiter' });
-      const candidate = activeCandidate();
-      if (candidate) {
-        matchReport(candidate);
-        // A job page without a form has no questions to answer yet.
-        if (hasApplicationForm()) await runAutofill(candidate);
-      }
-    } else {
+    if (selected) setSelected(selected.id, { lock: state.linked || state.role !== 'recruiter' });
+
+    // A confirmation page ends the application; its answers come from the saved draft.
+    if (isConfirmationPage()) {
+      await promoteConfirmation();
+      return;
+    }
+
+    const candidate = activeCandidate();
+    if (!candidate) {
       showStatus(state.role === 'recruiter'
         ? 'Choose the candidate profile this application belongs to.'
         : 'No candidate profile is available yet.');
+      return;
     }
+    matchReport(candidate);
+    // A job page without a form has no questions to answer yet.
+    if (hasApplicationForm()) await runAutofill(candidate);
   }
 
   function wireControls() {
@@ -667,6 +953,7 @@
       matchReport(candidate);
       await runAutofill(candidate);
       setSelected(state.selectedId, { lock: true });
+      await triggerAIScreeningQuestions(candidate);
     });
 
     const fill = shadow.querySelector('#mp-autofill-btn');
@@ -674,6 +961,7 @@
       const candidate = activeCandidate();
       if (!candidate) { showStatus('Choose a candidate profile first.'); return; }
       await runAutofill(candidate);
+      await triggerAIScreeningQuestions(candidate);
     });
 
     const undo = shadow.querySelector('#mp-undo-btn');
@@ -681,7 +969,8 @@
 
     const log = shadow.querySelector('#mp-log-btn');
     if (log) log.addEventListener('click', async () => {
-      await reportSubmission({ manualAttestation: state.linked });
+      state.reported = true;
+      await reportSubmission({ manualAttestation: true });
     });
 
     const accept = shadow.querySelector('#mp-accept-screening-btn');
@@ -692,21 +981,17 @@
     let timer = null;
     const schedule = () => {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(async () => {
-        timer = null;
-        const candidate = activeCandidate();
-        if (!candidate) return;
-        if (isConfirmationPage()) {
-          if (!state.reported) {
-            state.reported = true;
-            state.attempt++;
-            await reportSubmission();
-          }
-          return;
-        }
-        if (!hasApplicationForm()) return;
-        await runAutofill(candidate);
-      }, 180);
+      timer = setTimeout(() => { timer = null; void onPageChange(); }, 180);
+    };
+    const onPageChange = async () => {
+      if (isConfirmationPage()) {
+        await promoteConfirmation();
+        return;
+      }
+      const candidate = activeCandidate();
+      if (!candidate) return;
+      if (!hasApplicationForm()) return;
+      await runAutofill(candidate);
     };
 
     try {
@@ -714,34 +999,33 @@
         for (const record of records) {
           const target = record.target;
           if (target && target.nodeType === 1 && (target.id === HOST_ID || target.closest?.(`#${HOST_ID}`))) continue;
+          // A form that leaves the page still holds the answers the applicant gave.
+          for (const removed of record.removedNodes || []) harvest(removed);
           schedule();
-          return;
         }
       });
       observer.observe(doc.body || doc.documentElement, { childList: true, subtree: true });
     } catch { }
 
-    doc.addEventListener('submit', async event => {
-      const answers = collectAnswers();
-      await saveDraft(answers);
-      const candidate = activeCandidate();
-      const job = jobSnapshot();
-      const payload = {
-        eventKey: eventKeyFor(),
-        attempt: state.attempt,
-        jobTitle: job.title,
-        companyName: job.company,
-        applicationUrl: root.location?.href || '',
-        candidateId: candidate?.id || state.linkedCandidateId || null,
-        answers
-      };
-      if (state.linked) {
-        state.attempt++;
-        await send({ status: 'submit_attempted', ...payload });
-        showCaptureStatus('Submission detected. Review the answers before they are sent.');
-      } else {
-        await send({ type: 'auto_submit', payload });
-      }
+    doc.addEventListener('input', event => {
+      const el = event.target;
+      if (!el || !el.tagName) return;
+      if (el.closest?.(`#${HOST_ID}`)) return;
+      if (String(el.type || '').toLowerCase() === 'file') { noteResumeFile(el); return; }
+      recordControl(el);
+    }, true);
+
+    doc.addEventListener('change', event => {
+      const el = event.target;
+      if (!el || !el.tagName) return;
+      if (el.closest?.(`#${HOST_ID}`)) return;
+      if (String(el.type || '').toLowerCase() === 'file') { noteResumeFile(el); return; }
+      recordControl(el);
+    }, true);
+
+    doc.addEventListener('submit', () => {
+      // The capture happens before the portal replaces the form.
+      void registerSubmitAttempt();
     }, true);
   }
 
@@ -754,7 +1038,9 @@
     undoAutofill,
     resolveContext,
     triggerAIScreeningQuestions,
-    acceptScreeningReview
+    acceptScreeningReview,
+    reportSubmission,
+    collectAnswers: answersList
   };
 
   async function start() {

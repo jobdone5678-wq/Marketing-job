@@ -209,6 +209,10 @@ export interface RTRDocumentReference {
   id: string;
   filename: string;
   mime_type: string;
+  document_url?: string | null;
+  candidate_name?: string | null;
+  company_name?: string | null;
+  job_title?: string | null;
   vendor_name?: string | null;
   vendor_contact_name?: string | null;
   vendor_contact_email?: string | null;

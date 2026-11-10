@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { FileText, Download, Eye, Copy, Check, AlertCircle, Calendar } from 'lucide-react';
+import { FileText, Download, Eye, Copy, Check, AlertCircle, Calendar, Loader2 } from 'lucide-react';
 import type { RTRDocumentReference } from '@/types/database';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -23,6 +23,7 @@ function RTRBadgeView({ candidateName, companyName, jobTitle, rtrDocument }: Pro
   const rtr = rtrDocument || null;
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [opening, setOpening] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -74,6 +75,28 @@ function RTRBadgeView({ candidateName, companyName, jobTitle, rtrDocument }: Pro
     setError(rtr ? '' : 'No RTR document recorded for this application.');
   }
 
+  // The stored file is fetched on demand so listing applications never downloads the documents.
+  async function openDocument() {
+    if (!rtr?.id) return;
+    setOpening(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/rtr/${encodeURIComponent(rtr.id)}/document`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'The agreement file is not available.');
+      const url =
+        data.url ||
+        (data.base64 ? `data:${data.mime_type || 'application/pdf'};base64,${data.base64}` : null);
+      if (!url) throw new Error('The agreement file is not available.');
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'The agreement file is not available.');
+      setOpen(true);
+    } finally {
+      setOpening(false);
+    }
+  }
+
   return (
     <>
       <div className="flex max-w-[300px] flex-col items-start gap-1.5">
@@ -121,6 +144,16 @@ function RTRBadgeView({ candidateName, companyName, jobTitle, rtrDocument }: Pro
               <div className="flex gap-1">
                 <Button variant="ghost" size="icon-xs" onClick={() => void preview()} aria-label="Preview RTR document">
                   <Eye className="size-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => void openDocument()}
+                  disabled={opening}
+                  aria-label="Open RTR document"
+                  title="Open the stored agreement file"
+                >
+                  {opening ? <Loader2 className="size-3 animate-spin" /> : <Download className="size-3" />}
                 </Button>
               </div>
             </div>

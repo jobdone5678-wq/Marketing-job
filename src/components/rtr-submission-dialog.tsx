@@ -39,6 +39,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { toIsoDate } from "@/lib/rtr-dates";
 import type { Candidate } from "@/types/database";
 
 interface RTRSubmissionDialogProps {
@@ -48,6 +49,10 @@ interface RTRSubmissionDialogProps {
   defaultCandidateId?: string;
   onSuccess?: (submissionId?: string, candidateId?: string) => void;
 }
+
+// The agreement travels as multipart form data, so the request body stays the size of the
+// original document instead of a base64 blob that is a third larger.
+const MAX_DOCUMENT_BYTES = 4 * 1024 * 1024;
 
 export function findCandidateMatch(
   extractedName: string | null | undefined,
@@ -126,7 +131,6 @@ export function RTRSubmissionDialog({
 }: RTRSubmissionDialogProps) {
   const [file, setFile] = React.useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
-  const [base64, setBase64] = React.useState<string | null>(null);
   const [scanning, setScanning] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [dragOver, setDragOver] = React.useState(false);
@@ -154,6 +158,53 @@ export function RTRSubmissionDialog({
   const [extractedSummary, setExtractedSummary] = React.useState<ExtractedRTR | null>(null);
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  // Every document gets a sequence number so a slow OCR pass from an earlier document can never
+  // overwrite the values of the document that is currently on screen.
+  const requestSeq = React.useRef(0);
+  const abortRef = React.useRef<AbortController | null>(null);
+  // The scan of the current document. Saving waits for it so the extracted terms are stored.
+  const scanPromiseRef = React.useRef<Promise<ExtractedRTR | null> | null>(null);
+  // The date the dialog starts with, used to tell an untouched field from an edited one.
+  const initialRtrDateRef = React.useRef(rtrDate);
+  // Mirror of the fields the scan writes. It is reset as soon as a new document is chosen so a
+  // previous document can never leak into the record that is being saved.
+  const formRef = React.useRef({
+    selectedCandidateId,
+    candidateName,
+    companyName,
+    jobTitle,
+    vendorName,
+    vendorContactName,
+    vendorContactEmail,
+    vendorContactPhone,
+    hourlyRate,
+    rtrType,
+    rtrStatus,
+    rtrDate,
+    expirationDate,
+    representationClause,
+    notes,
+  });
+
+  React.useEffect(() => {
+    formRef.current = {
+      selectedCandidateId,
+      candidateName,
+      companyName,
+      jobTitle,
+      vendorName,
+      vendorContactName,
+      vendorContactEmail,
+      vendorContactPhone,
+      hourlyRate,
+      rtrType,
+      rtrStatus,
+      rtrDate,
+      expirationDate,
+      representationClause,
+      notes,
+    };
+  });
 
   // Sync defaultCandidateId if provided
   React.useEffect(() => {
@@ -176,12 +227,16 @@ export function RTRSubmissionDialog({
   // Reset dialog state when closed
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
+      // Cancel any OCR pass that is still running for this dialog.
+      requestSeq.current += 1;
+      abortRef.current?.abort();
+      abortRef.current = null;
+      scanPromiseRef.current = null;
       setFile(null);
       if (previewUrl && previewUrl.startsWith("blob:")) {
         URL.revokeObjectURL(previewUrl);
       }
       setPreviewUrl(null);
-      setBase64(null);
       setScanning(false);
       setSaving(false);
       setAutoMatchedCandidate(null);
@@ -190,6 +245,7 @@ export function RTRSubmissionDialog({
         setCandidateName("");
       }
       setExtractedSummary(null);
+      setDetectedCompanies([]);
       setCompanyName("");
       setJobTitle("");
       setVendorName("");
@@ -207,24 +263,21 @@ export function RTRSubmissionDialog({
     onOpenChange(nextOpen);
   };
 
-  // Convert File to Base64
-  const fileToBase64 = (f: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === "string") {
-          resolve(reader.result);
-        } else {
-          reject(new Error("Failed to encode file"));
-        }
-      };
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(f);
-    });
-  };
-
   // Process chosen RTR file
   const handleProcessFile = async (chosenFile: File) => {
+    if (chosenFile.size > MAX_DOCUMENT_BYTES) {
+      toast.error("That document is larger than 4 MB.", {
+        description: "Upload a compressed PDF or a lower resolution scan and try again.",
+      });
+      return;
+    }
+
+    // Invalidate anything that is still running for a previous document.
+    const seq = ++requestSeq.current;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setFile(chosenFile);
 
     // Setup preview
@@ -235,83 +288,115 @@ export function RTRSubmissionDialog({
       setPreviewUrl(null);
     }
 
-    // Convert to base64 for saving
-    try {
-      const b64 = await fileToBase64(chosenFile);
-      setBase64(b64);
-    } catch {
-      // Non-fatal if base64 conversion fails
-    }
+    // Clear every value that came from the previous document so a re-upload never keeps stale
+    // client, vendor or rate information.
+    setScanning(true);
+    setExtractedSummary(null);
+    setDetectedCompanies([]);
+    setCompanyName("");
+    setJobTitle("");
+    setVendorName("");
+    setVendorContactName("");
+    setVendorContactEmail("");
+    setVendorContactPhone("");
+    setHourlyRate("");
+    setRepresentationClause("");
+    setNotes("");
+    formRef.current = {
+      ...formRef.current,
+      companyName: "",
+      jobTitle: "",
+      vendorName: "",
+      vendorContactName: "",
+      vendorContactEmail: "",
+      vendorContactPhone: "",
+      hourlyRate: "",
+      representationClause: "",
+      notes: "",
+    };
 
     // Trigger AI OCR Extraction
-    setScanning(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", chosenFile);
-      if (selectedCandidateId) {
-        formData.append("candidateId", selectedCandidateId);
-      }
+    const scan = (async (): Promise<ExtractedRTR | null> => {
+      try {
+        const formData = new FormData();
+        formData.append("file", chosenFile);
+        if (selectedCandidateId) {
+          formData.append("candidateId", selectedCandidateId);
+        }
 
-      const res = await fetch("/api/rtr/ocr", {
-        method: "POST",
-        body: formData,
-      });
+        const res = await fetch("/api/rtr/ocr", {
+          method: "POST",
+          body: formData,
+          signal: controller.signal,
+        });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to scan RTR document.");
-      }
+        if (seq !== requestSeq.current) return null;
 
-      const ext: ExtractedRTR = data.extracted || {};
-      setExtractedSummary(ext);
+        const data = await res.json();
+        if (seq !== requestSeq.current) return null;
+        if (!res.ok) {
+          throw new Error(data.error || "Failed to scan RTR document.");
+        }
 
-      // Candidate matching or setting name
-      if (ext.candidate_name) {
-        setCandidateName(ext.candidate_name);
-        if (candidates.length > 0) {
-          const matched = findCandidateMatch(ext.candidate_name, candidates);
-          if (matched) {
-            setSelectedCandidateId(matched.id);
-            setAutoMatchedCandidate(matched);
-          } else {
-            setSelectedCandidateId("");
-            setAutoMatchedCandidate(null);
+        const ext: ExtractedRTR = data.extracted || {};
+        setExtractedSummary(ext);
+
+        // Candidate matching or setting name
+        if (ext.candidate_name) {
+          setCandidateName(ext.candidate_name);
+          if (candidates.length > 0) {
+            const matched = findCandidateMatch(ext.candidate_name, candidates);
+            if (matched) {
+              setSelectedCandidateId(matched.id);
+              setAutoMatchedCandidate(matched);
+            } else {
+              setSelectedCandidateId("");
+              setAutoMatchedCandidate(null);
+            }
           }
         }
+
+        // Populate all different companies detected in the image/document
+        const allDetected = new Set<string>();
+        if (Array.isArray(ext.detected_companies)) {
+          ext.detected_companies.forEach((c) => c && allDetected.add(c.trim()));
+        }
+        if (ext.company_name) allDetected.add(ext.company_name.trim());
+        if (ext.vendor_name) allDetected.add(ext.vendor_name.trim());
+        setDetectedCompanies(Array.from(allDetected).filter(Boolean));
+
+        // Populate extracted terms
+        if (ext.company_name) setCompanyName(ext.company_name);
+        if (ext.job_title) setJobTitle(ext.job_title);
+        if (ext.vendor_name) setVendorName(ext.vendor_name);
+        if (ext.vendor_contact_name) setVendorContactName(ext.vendor_contact_name);
+        if (ext.vendor_contact_email) setVendorContactEmail(ext.vendor_contact_email);
+        if (ext.vendor_contact_phone) setVendorContactPhone(ext.vendor_contact_phone);
+        if (ext.hourly_rate) setHourlyRate(ext.hourly_rate.replace(/[^0-9.]/g, ""));
+        if (ext.rtr_type) setRtrType(ext.rtr_type);
+        if (ext.rtr_status) setRtrStatus(ext.rtr_status);
+        if (ext.rtr_date) setRtrDate(toIsoDate(ext.rtr_date) || "");
+        if (ext.expiration_date) setExpirationDate(toIsoDate(ext.expiration_date) || "");
+        if (ext.representation_clause) setRepresentationClause(ext.representation_clause);
+        if (ext.notes) setNotes(ext.notes);
+
+        toast.success("RTR agreement scanned successfully!", {
+          description: `Extracted: ${ext.candidate_name || "Candidate"} at ${ext.company_name || "Company"} (${ext.hourly_rate ? `$${ext.hourly_rate}/hr` : "Rate extracted"}).`,
+        });
+        return ext;
+      } catch (err: unknown) {
+        // A cancelled request belongs to a document that was replaced. It must not show an error.
+        if (controller.signal.aborted || seq !== requestSeq.current) return null;
+        toast.error(err instanceof Error ? err.message : "Error scanning RTR document.");
+        return null;
+      } finally {
+        if (seq === requestSeq.current) {
+          setScanning(false);
+        }
       }
+    })();
 
-      // Populate all different companies detected in the image/document
-      const allDetected = new Set<string>();
-      if (Array.isArray(ext.detected_companies)) {
-        ext.detected_companies.forEach((c) => c && allDetected.add(c.trim()));
-      }
-      if (ext.company_name) allDetected.add(ext.company_name.trim());
-      if (ext.vendor_name) allDetected.add(ext.vendor_name.trim());
-      setDetectedCompanies(Array.from(allDetected).filter(Boolean));
-
-      // Populate extracted terms
-      if (ext.company_name) setCompanyName(ext.company_name);
-      if (ext.job_title) setJobTitle(ext.job_title);
-      if (ext.vendor_name) setVendorName(ext.vendor_name);
-      if (ext.vendor_contact_name) setVendorContactName(ext.vendor_contact_name);
-      if (ext.vendor_contact_email) setVendorContactEmail(ext.vendor_contact_email);
-      if (ext.vendor_contact_phone) setVendorContactPhone(ext.vendor_contact_phone);
-      if (ext.hourly_rate) setHourlyRate(ext.hourly_rate.replace(/[^0-9.]/g, ""));
-      if (ext.rtr_type) setRtrType(ext.rtr_type);
-      if (ext.rtr_status) setRtrStatus(ext.rtr_status);
-      if (ext.rtr_date) setRtrDate(ext.rtr_date);
-      if (ext.expiration_date) setExpirationDate(ext.expiration_date);
-      if (ext.representation_clause) setRepresentationClause(ext.representation_clause);
-      if (ext.notes) setNotes(ext.notes);
-
-      toast.success("RTR agreement scanned successfully!", {
-        description: `Extracted: ${ext.candidate_name || "Candidate"} at ${ext.company_name || "Company"} (${ext.hourly_rate ? `$${ext.hourly_rate}/hr` : "Rate extracted"}).`,
-      });
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Error scanning RTR document.");
-    } finally {
-      setScanning(false);
-    }
+    scanPromiseRef.current = scan;
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -320,6 +405,15 @@ export function RTRSubmissionDialog({
     const droppedFile = e.dataTransfer.files?.[0];
     if (droppedFile) {
       void handleProcessFile(droppedFile);
+    }
+  };
+
+  // Resetting the input value is what makes picking the very same file a second time fire the
+  // change event again. Without it the second upload was silently ignored.
+  const openFilePicker = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+      fileInputRef.current.click();
     }
   };
 
@@ -334,30 +428,57 @@ export function RTRSubmissionDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (saving) return;
+
     setSaving(true);
     try {
-      const candidateObj = candidates.find((c) => c.id === selectedCandidateId);
+      // The document is always attached to the request, so the agreement file is stored even when
+      // the save is triggered before the scan has finished. When a scan is still running the save
+      // waits for it so the extracted terms are part of the record.
+      let scanned: ExtractedRTR | null = null;
+      if (scanPromiseRef.current) {
+        scanned = await Promise.race([
+          scanPromiseRef.current,
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 20000)),
+        ]);
+      }
+
+      const form = formRef.current;
+      const candidateObj = candidates.find((c) => c.id === form.selectedCandidateId);
       const effectiveCandidateName =
-        candidateName.trim() ||
+        form.candidateName.trim() ||
         candidateObj?.full_name ||
         autoMatchedCandidate?.full_name ||
+        scanned?.candidate_name?.trim() ||
         "";
 
-      if (!selectedCandidateId && !effectiveCandidateName) {
+      if (!form.selectedCandidateId && !effectiveCandidateName) {
         toast.error("Please select a candidate or enter a candidate name.");
         setSaving(false);
         return;
       }
 
-      const effectiveCompany = companyName.trim() || "Client";
+      const effectiveCompany = form.companyName.trim() || scanned?.company_name?.trim() || "Client";
+      const effectiveJobTitle = form.jobTitle.trim() || scanned?.job_title?.trim() || "Consultant";
+
+      // The scan only wins for a field the recruiter has not touched yet.
+      const rtrType =
+        scanned?.rtr_type && form.rtrType === "vendor_rtr" ? scanned.rtr_type : form.rtrType;
+      const rtrStatus =
+        scanned?.rtr_status && form.rtrStatus === "signed" ? scanned.rtr_status : form.rtrStatus;
+      const rtrDate =
+        (form.rtrDate !== initialRtrDateRef.current ? toIsoDate(form.rtrDate) : null) ||
+        toIsoDate(scanned?.rtr_date) ||
+        toIsoDate(form.rtrDate) ||
+        new Date().toISOString().slice(0, 10);
 
       // Ensure valid UUID or null
       const validCandidateId =
-        selectedCandidateId &&
-        selectedCandidateId !== "none" &&
-        selectedCandidateId !== "__none__" &&
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selectedCandidateId)
-          ? selectedCandidateId
+        form.selectedCandidateId &&
+        form.selectedCandidateId !== "none" &&
+        form.selectedCandidateId !== "__none__" &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(form.selectedCandidateId)
+          ? form.selectedCandidateId
           : null;
 
       const payload = {
@@ -365,41 +486,49 @@ export function RTRSubmissionDialog({
         candidate_name: effectiveCandidateName || "Consultant",
         filename: file?.name || `RTR_${effectiveCompany.replace(/\s+/g, "_")}.pdf`,
         mime_type: file?.type || "application/pdf",
-        base64: base64 || null,
         rtr_type: rtrType,
         rtr_status: rtrStatus,
         rtr_date: rtrDate,
-        expiration_date: expirationDate || null,
+        expiration_date: toIsoDate(form.expirationDate) || toIsoDate(scanned?.expiration_date) || null,
         company_name: effectiveCompany,
-        job_title: jobTitle.trim() || "Consultant",
-        vendor_name: vendorName.trim() || null,
-        vendor_contact_name: vendorContactName.trim() || null,
-        vendor_contact_email: vendorContactEmail.trim() || null,
-        vendor_contact_phone: vendorContactPhone.trim() || null,
-        hourly_rate: hourlyRate.trim() || null,
+        job_title: effectiveJobTitle,
+        vendor_name: form.vendorName.trim() || scanned?.vendor_name?.trim() || null,
+        vendor_contact_name: form.vendorContactName.trim() || scanned?.vendor_contact_name?.trim() || null,
+        vendor_contact_email: form.vendorContactEmail.trim() || scanned?.vendor_contact_email?.trim() || null,
+        vendor_contact_phone: form.vendorContactPhone.trim() || scanned?.vendor_contact_phone?.trim() || null,
+        hourly_rate: form.hourlyRate.trim() || scanned?.hourly_rate?.replace(/[^0-9.]/g, "") || null,
         currency: "USD",
-        representation_clause: representationClause.trim() || null,
+        representation_clause:
+          form.representationClause.trim() || scanned?.representation_clause?.trim() || null,
         notes:
-          notes.trim() ||
+          form.notes.trim() ||
           `RTR Submission created for ${effectiveCandidateName || "Consultant"} at ${effectiveCompany}.`,
         create_submission: true,
       };
 
+      // The document is sent as multipart form data. Encoding it as base64 inside the JSON body
+      // made the request a third larger and dropped the file whenever the body was rejected.
+      const formData = new FormData();
+      formData.append("payload", JSON.stringify(payload));
+      if (file) formData.append("file", file);
+
       const res = await fetch("/api/rtr", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: formData,
       });
 
-      const result = await res.json();
+      const result = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(result.error || "Failed to save RTR submission.");
       }
 
+      const warnings = Array.isArray(result.warnings) ? (result.warnings as string[]) : [];
       toast.success(
         `🎉 RTR Submission recorded for ${effectiveCandidateName || "Candidate"}!`,
         {
-          description: `Logged representation at ${effectiveCompany} (${jobTitle || "Role"}) with status: ${rtrStatus}.`,
+          description: warnings.length
+            ? warnings[0]
+            : `Logged representation at ${effectiveCompany} (${effectiveJobTitle}) with status: ${payload.rtr_status}.`,
         }
       );
 
@@ -458,7 +587,7 @@ export function RTRSubmissionDialog({
                 }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={openFilePicker}
                 className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center cursor-pointer transition-all ${
                   dragOver
                     ? "border-primary bg-primary/5 scale-[0.99]"
@@ -472,7 +601,7 @@ export function RTRSubmissionDialog({
                   Drag and drop any RTR image, email screenshot, or PDF
                 </h4>
                 <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
-                  Accepts recruiter emails, vendor submittals, PDF agreements, and screenshot images (up to 10MB).
+                  Accepts recruiter emails, vendor submittals, PDF agreements, and screenshot images (up to 4MB).
                 </p>
                 <div className="mt-3 inline-flex items-center gap-2 text-xs font-medium text-primary">
                   <span>Browse files</span>
@@ -519,8 +648,8 @@ export function RTRSubmissionDialog({
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={scanning}
-                    onClick={() => fileInputRef.current?.click()}
+                    disabled={saving}
+                    onClick={openFilePicker}
                     className="h-8 text-xs gap-1.5 rounded-lg border-border/70"
                   >
                     <RefreshCw className="size-3" />
@@ -530,13 +659,27 @@ export function RTRSubmissionDialog({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    disabled={scanning}
+                    disabled={saving}
                     onClick={() => {
+                      // Remove the document and everything that was read out of it.
+                      requestSeq.current += 1;
+                      abortRef.current?.abort();
+                      abortRef.current = null;
+                      scanPromiseRef.current = null;
                       setFile(null);
                       setPreviewUrl(null);
-                      setBase64(null);
+                      setScanning(false);
                       setDetectedCompanies([]);
                       setExtractedSummary(null);
+                      setCompanyName("");
+                      setJobTitle("");
+                      setVendorName("");
+                      setVendorContactName("");
+                      setVendorContactEmail("");
+                      setVendorContactPhone("");
+                      setHourlyRate("");
+                      setRepresentationClause("");
+                      setNotes("");
                     }}
                     className="h-8 size-8 p-0 text-muted-foreground hover:text-destructive rounded-lg"
                   >
@@ -967,7 +1110,7 @@ export function RTRSubmissionDialog({
               <Button
                 type="submit"
                 size="sm"
-                disabled={saving || scanning || (!file && !companyName.trim())}
+                disabled={saving || (!file && !companyName.trim())}
                 className="h-9 text-xs px-4 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold shadow-xs rounded-lg cursor-pointer"
               >
                 {saving ? (

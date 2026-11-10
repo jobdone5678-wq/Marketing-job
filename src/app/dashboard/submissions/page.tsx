@@ -859,24 +859,24 @@ export default function SubmissionsPage() {
             <TableHeader className="bg-muted/40 border-b border-border/60">
               <TableRow>
                 {!isClient && (
-                  <TableHead className="w-[180px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Candidate</TableHead>
+                  <TableHead data-col="candidate" className="w-[180px] whitespace-normal leading-tight text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Candidate</TableHead>
                 )}
-                <TableHead className="w-[200px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">End Client & Role</TableHead>
-                <TableHead className="min-w-[220px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Applied resume & answers</TableHead>
-                <TableHead className="w-[160px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">RTR Document</TableHead>
-                <TableHead className="w-[180px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Vendor & Recruiter</TableHead>
-                <TableHead className="w-[110px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Rate</TableHead>
-                <TableHead className="w-[110px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Date</TableHead>
-                <TableHead className="min-w-[220px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Recruiting stage & capture</TableHead>
-                <TableHead className="w-[220px] text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Interview / Schedule / Notes</TableHead>
-                <TableHead className="w-[90px] text-right text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Actions</TableHead>
+                <TableHead data-col="client" className="w-[200px] whitespace-normal leading-tight text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">End Client &amp; Role</TableHead>
+                <TableHead data-col="resume" className="w-[220px] whitespace-normal leading-tight text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Applied resume &amp; answers</TableHead>
+                <TableHead data-col="rtr" className="w-[160px] whitespace-normal leading-tight text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">RTR Document</TableHead>
+                <TableHead data-col="vendor" className="w-[180px] whitespace-normal leading-tight text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Vendor &amp; Recruiter</TableHead>
+                <TableHead data-col="rate" className="w-[110px] whitespace-normal leading-tight text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Rate</TableHead>
+                <TableHead data-col="date" className="w-[110px] whitespace-normal leading-tight text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Date</TableHead>
+                <TableHead data-col="stage" className="w-[220px] whitespace-normal leading-tight text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Recruiting stage &amp; capture</TableHead>
+                <TableHead data-col="interview" className="w-[220px] whitespace-normal leading-tight text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Interview / Schedule / Notes</TableHead>
+                <TableHead data-col="actions" className="w-[90px] text-right whitespace-normal leading-tight text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="divide-y divide-border/50">
               {loading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={isClient ? 8 : 9}
+                    colSpan={isClient ? 9 : 10}
                     className="h-32 text-center text-muted-foreground"
                   >
                     <WorkspaceSkeleton rows={4}/>
@@ -885,7 +885,7 @@ export default function SubmissionsPage() {
               ) : filteredSubmissions.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={isClient ? 8 : 9}
+                    colSpan={isClient ? 9 : 10}
                     className="h-32 text-center text-muted-foreground text-xs"
                   >
                     <div className="flex flex-col items-center justify-center gap-2">
@@ -917,7 +917,7 @@ export default function SubmissionsPage() {
                     <TableRow key={sub.id} className="hover:bg-muted/30 transition-colors">
                       {/* Candidate Column */}
                       {!isClient && (
-                        <TableCell className="align-top py-3.5">
+                        <TableCell data-col="candidate" className="align-top py-3.5">
                           <div className="flex items-start gap-2.5">
                             <div className="size-8 rounded-lg bg-gradient-to-br from-primary/15 via-primary/5 to-transparent text-primary font-bold text-xs flex items-center justify-center border border-primary/20 shadow-2xs shrink-0 mt-0.5">
                               {candidateName.charAt(0).toUpperCase()}
@@ -943,7 +943,7 @@ export default function SubmissionsPage() {
                       )}
 
                       {/* Company & Role */}
-                      <TableCell className="align-top py-3.5">
+                      <TableCell data-col="client" className="align-top py-3.5">
                         <div className="flex items-center gap-1.5 font-medium text-foreground text-xs">
                           <div className="size-5 rounded flex items-center justify-center bg-primary/10 text-primary shrink-0">
                             <Building2Icon className="size-3" />
@@ -996,7 +996,7 @@ export default function SubmissionsPage() {
                         </div>
                       </TableCell>
 
-                      <TableCell className="align-top py-3.5">
+                      <TableCell data-col="resume" className="align-top py-3.5">
                         <AppliedResumeBadge
                           submissionId={sub.id}
                           candidateName={candidateName}
@@ -1008,7 +1008,7 @@ export default function SubmissionsPage() {
                       </TableCell>
 
                       {/* RTR Document */}
-                      <TableCell className="align-top py-3.5">
+                      <TableCell data-col="rtr" className="align-top py-3.5">
                         <RTRBadge
                           rtrDocument={sub.rtr_document}
                           candidateName={candidateName}
@@ -1018,7 +1018,7 @@ export default function SubmissionsPage() {
                       </TableCell>
 
                       {/* Vendor & Recruiter */}
-                      <TableCell className="align-top py-3.5 text-xs">
+                      <TableCell data-col="vendor" className="align-top py-3.5 text-xs">
                         <div className="font-medium text-foreground">
                           {sub.vendor_company || "Not recorded"}
                         </div>
@@ -1044,7 +1044,7 @@ export default function SubmissionsPage() {
                       </TableCell>
 
                       {/* Rate */}
-                      <TableCell className="align-top py-3.5 text-xs">
+                      <TableCell data-col="rate" className="align-top py-3.5 text-xs">
                         <div className="font-semibold text-foreground font-mono">
                           {sub.submitted_rate || "Not recorded"}
                         </div>
@@ -1056,12 +1056,12 @@ export default function SubmissionsPage() {
                       </TableCell>
 
                       {/* Date */}
-                      <TableCell className="align-top py-3.5 text-xs text-muted-foreground whitespace-nowrap font-mono">
+                      <TableCell data-col="date" className="align-top py-3.5 text-xs text-muted-foreground whitespace-nowrap font-mono">
                         {sub.submission_date}
                       </TableCell>
 
                       {/* Status */}
-                      <TableCell className="align-top py-3.5">
+                      <TableCell data-col="stage" className="align-top py-3.5">
                         <button
                           type="button"
                           onClick={() => {
@@ -1079,7 +1079,7 @@ export default function SubmissionsPage() {
                       </TableCell>
 
                       {/* Interview & Notes */}
-                      <TableCell className="align-top py-3.5 text-xs">
+                      <TableCell data-col="interview" className="align-top py-3.5 text-xs">
                         {sub.interview_time ? (
                           <div className="p-2.5 rounded-xl border border-border/80 bg-muted/40 mb-1.5 text-xs shadow-2xs">
                             <div className="flex items-center gap-1.5 text-foreground font-semibold">
@@ -1127,7 +1127,7 @@ export default function SubmissionsPage() {
                       </TableCell>
 
                       {/* Actions */}
-                      <TableCell className="align-top py-3.5 text-right">
+                      <TableCell data-col="actions" className="align-top py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1">
                           
                           <Button

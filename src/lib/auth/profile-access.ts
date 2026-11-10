@@ -1,6 +1,6 @@
 export type ProfileAccess = 'candidate_or_staff' | 'recruiting_staff' | 'staff' | 'admin';
 
-const recruitingRoles = ['recruiter', 'technical_recruiter', 'super_admin'];
+export const recruitingRoles = ['recruiter', 'technical_recruiter', 'super_admin'];
 
 export function profileAccess(profile: {role:string;status:string}|null, access:ProfileAccess):boolean {
   if(!profile || profile.status!=='active') return false;
