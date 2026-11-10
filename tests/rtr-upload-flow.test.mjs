@@ -119,6 +119,38 @@ test('the RTR section is reachable from the navigation for every role', async t 
   }
 });
 
+test('the vendor recruiter email is mandatory on both upload forms', async () => {
+  const managementPage = await readFile('src/app/dashboard/rtr/page.tsx', 'utf8');
+  assert.ok(managementPage.includes('Vendor recruiter email is required.'));
+  assert.ok(managementPage.includes('Enter a valid vendor recruiter email address.'));
+  assert.ok(
+    /Vendor Recruiter Email[\s\S]{0,200}required/.test(managementPage),
+    'the recruiter email field must be marked as required'
+  );
+
+  const dialog = await readFile('src/components/rtr-submission-dialog.tsx', 'utf8');
+  assert.ok(dialog.includes('Vendor recruiter email is required.'));
+  assert.ok(dialog.includes('Enter a valid vendor recruiter email address.'));
+});
+
+test('the agreement list always shows the recruiter email', async () => {
+  const managementPage = await readFile('src/app/dashboard/rtr/page.tsx', 'utf8');
+  assert.ok(
+    managementPage.includes('No recruiter email'),
+    'a missing recruiter email has to be visible in the list'
+  );
+  assert.ok(
+    !/\{selectedDoc\.vendor_contact_email && \(/.test(managementPage),
+    'the recruiter email row must not be hidden when it is empty'
+  );
+});
+
+test('the job submissions page no longer hosts the RTR upload', async () => {
+  const page = await readFile('src/app/dashboard/submissions/page.tsx', 'utf8');
+  assert.ok(!page.includes('Add RTR Submission'), 'the RTR upload button must be gone');
+  assert.ok(!page.includes('RTRSubmissionDialog'), 'the RTR upload dialog must be gone');
+});
+
 let browser;
 before(async () => { browser = await chromium.launch({ headless: true }); });
 after(async () => { await browser?.close(); });

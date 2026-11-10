@@ -461,6 +461,20 @@ export function RTRSubmissionDialog({
       const effectiveCompany = form.companyName.trim() || scanned?.company_name?.trim() || "Client";
       const effectiveJobTitle = form.jobTitle.trim() || scanned?.job_title?.trim() || "Consultant";
 
+      // The vendor recruiter email is mandatory: an agreement without a reachable agency
+      // contact cannot be followed up.
+      const recruiterEmail = form.vendorContactEmail.trim() || scanned?.vendor_contact_email?.trim() || "";
+      if (!recruiterEmail) {
+        toast.error("Vendor recruiter email is required.");
+        setSaving(false);
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(recruiterEmail)) {
+        toast.error("Enter a valid vendor recruiter email address.");
+        setSaving(false);
+        return;
+      }
+
       // The scan only wins for a field the recruiter has not touched yet.
       const rtrType =
         scanned?.rtr_type && form.rtrType === "vendor_rtr" ? scanned.rtr_type : form.rtrType;
@@ -494,7 +508,7 @@ export function RTRSubmissionDialog({
         job_title: effectiveJobTitle,
         vendor_name: form.vendorName.trim() || scanned?.vendor_name?.trim() || null,
         vendor_contact_name: form.vendorContactName.trim() || scanned?.vendor_contact_name?.trim() || null,
-        vendor_contact_email: form.vendorContactEmail.trim() || scanned?.vendor_contact_email?.trim() || null,
+        vendor_contact_email: recruiterEmail,
         vendor_contact_phone: form.vendorContactPhone.trim() || scanned?.vendor_contact_phone?.trim() || null,
         hourly_rate: form.hourlyRate.trim() || scanned?.hourly_rate?.replace(/[^0-9.]/g, "") || null,
         currency: "USD",
@@ -959,11 +973,12 @@ export function RTRSubmissionDialog({
             <div className="space-y-1.5">
               <Label htmlFor="vendorContactEmail" className="text-xs font-semibold flex items-center gap-1.5">
                 <Mail className="size-3.5 text-primary" />
-                Vendor Recruiter Email
+                Vendor Recruiter Email <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="vendorContactEmail"
                 type="email"
+                required
                 placeholder="e.g. recruiter@agency.com"
                 value={vendorContactEmail}
                 onChange={(e) => setVendorContactEmail(e.target.value)}

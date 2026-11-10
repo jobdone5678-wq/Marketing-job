@@ -38,11 +38,11 @@ export function NavMain({
     role === "client"
       ? [
           ["My Workspace", ["dashboard", "candidates", "resumes", "submissions", "rtr", "placements"]],
-          ["Opportunities", ["public-jobs", "outside-jobs"]],
+          ["Opportunities", ["public-jobs"]],
           ["Connections", ["email-confirmations", "integrations"]],
         ]
       : [
-          ["Workspace", ["dashboard", "candidates", "public-jobs", "outside-jobs", "job-matching", "resumes", "submissions", "rtr"]],
+          ["Workspace", ["dashboard", "candidates", "public-jobs", "job-matching", "resumes", "submissions", "rtr"]],
           ["Communications", ["email-confirmations", "integrations"]],
           ["Operations", ["vendors", "placements"]],
           ["Administration", ["team", "billing"]],

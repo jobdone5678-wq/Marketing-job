@@ -293,6 +293,12 @@ export async function POST(request: Request) {
     const isCandidateUploader = profile.role === "client" || profile.role === "job_seeker";
 
     // The uploaded file always wins over the form fields for the document identity.
+    // The document is always attached to the request, so the agreement file is stored even when
+    const recruiterEmail = body.vendor_contact_email?.trim() || "";
+    if (recruiterEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(recruiterEmail)) {
+      throw new CaptureError("Enter a valid vendor recruiter email address.", 400);
+    }
+
     const filename = document?.filename || body.filename;
     const mimeType = document?.mimeType || body.mime_type;
     const documentBase64 = document?.base64 ?? body.base64 ?? null;
@@ -429,7 +435,7 @@ export async function POST(request: Request) {
       document_url: body.document_url || null,
       vendor_name: body.vendor_name || null,
       vendor_contact_name: body.vendor_contact_name || null,
-      vendor_contact_email: body.vendor_contact_email || null,
+      vendor_contact_email: recruiterEmail || null,
       vendor_contact_phone: body.vendor_contact_phone || null,
       rtr_type: body.rtr_type,
       rtr_status: body.rtr_status,
@@ -557,7 +563,7 @@ export async function POST(request: Request) {
         expiration_date: body.expiration_date || null,
         vendor_name: body.vendor_name || null,
         vendor_contact_name: body.vendor_contact_name || null,
-        vendor_contact_email: body.vendor_contact_email || null,
+        vendor_contact_email: recruiterEmail || null,
         vendor_contact_phone: body.vendor_contact_phone || null,
         hourly_rate: parsedHourlyRate,
         currency: body.currency,

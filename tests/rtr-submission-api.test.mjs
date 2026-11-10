@@ -205,6 +205,48 @@ test('an agreement date that is not a calendar date is normalised before it is s
   assert.equal(tables.rtr_documents[0].rtr_date, '2026-11-09');
 });
 
+test('an invalid vendor recruiter email is rejected with a clear message', async () => {
+  const tables = {
+    candidates: [{ id: CANDIDATE_ID, full_name: 'Chandra Reddy' }],
+    job_submissions: [],
+    rtr_documents: [],
+  };
+  const { db } = createFakeDb(tables);
+  const route = loadRoute({ db });
+
+  const res = await route.POST(
+    new Request('https://portal.test/api/rtr', {
+      method: 'POST',
+      body: JSON.stringify(payload({ vendor_contact_email: 'not-an-email' })),
+    })
+  );
+  const body = await res.json();
+
+  assert.equal(res.status, 400);
+  assert.match(body.error, /email/i);
+  assert.equal(tables.job_submissions.length, 0);
+});
+
+test('a valid vendor recruiter email is stored with the agreement', async () => {
+  const tables = {
+    candidates: [{ id: CANDIDATE_ID, full_name: 'Chandra Reddy' }],
+    job_submissions: [],
+    rtr_documents: [],
+  };
+  const { db } = createFakeDb(tables);
+  const route = loadRoute({ db });
+
+  await route.POST(
+    new Request('https://portal.test/api/rtr', {
+      method: 'POST',
+      body: JSON.stringify(payload({ vendor_contact_email: 'recruiter@agency.com' })),
+    })
+  );
+
+  assert.equal(tables.rtr_documents[0].vendor_contact_email, 'recruiter@agency.com');
+  assert.equal(tables.job_submissions[0].vendor_contact_email, 'recruiter@agency.com');
+});
+
 test('the agreement file travels as multipart form data and is stored on the record', async () => {
   const tables = {
     candidates: [{ id: CANDIDATE_ID, full_name: 'Chandra Reddy' }],

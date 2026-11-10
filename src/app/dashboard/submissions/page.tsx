@@ -7,7 +7,7 @@ import {
   getSubmissions,
   deleteSubmission,
 } from "@/lib/submissions";
-import { getCandidates, invalidateCandidatesCache } from "@/lib/candidates";
+import { getCandidates } from "@/lib/candidates";
 import { dailySubmissionCounts, inSubmissionDateRange, submissionDatePreset } from "@/lib/submission-dates";
 import type { Candidate, JobSubmission, SubmissionStatus } from "@/types/database";
 import { SubmissionStatusDialog } from "@/components/submission-status-dialog";
@@ -15,7 +15,6 @@ import { ApplicationAnswerSnapshot } from "@/components/application-answer-snaps
 import {CaptureState} from "@/components/application-evidence";
 import { AppliedResumeBadge } from "@/components/applied-resume-badge";
 import { RTRBadge } from "@/components/rtr-badge";
-import { RTRSubmissionDialog } from "@/components/rtr-submission-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -53,7 +52,6 @@ import {
   Trash2Icon,
   TrendingUpIcon,
   SparklesIcon,
-  FileSignature,
   Building2Icon,
   BriefcaseIcon,
   ClockIcon,
@@ -82,7 +80,6 @@ export default function SubmissionsPage() {
   // Modals
   const [statusDialogOpen, setStatusDialogOpen] = React.useState(false);
   const [activeSubmissionForStatus, setActiveSubmissionForStatus] = React.useState<JobSubmission | null>(null);
-  const [rtrDialogOpen, setRtrDialogOpen] = React.useState(false);
 
   const [copiedReport, setCopiedReport] = React.useState(false);
 
@@ -529,16 +526,6 @@ export default function SubmissionsPage() {
                 className={`size-3.5 ${loading ? "animate-spin" : ""}`}
               />
               Refresh
-            </Button>
-
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setRtrDialogOpen(true)}
-              className="h-9 px-3 text-xs gap-1.5 cursor-pointer rounded-lg border-primary/40 bg-primary/5 text-primary hover:bg-primary/10 transition-all font-semibold"
-            >
-              <FileSignature className="size-3.5" />
-              Add RTR Submission
             </Button>
 
             {!isClient && (
@@ -1178,20 +1165,6 @@ export default function SubmissionsPage() {
         open={statusDialogOpen}
         onOpenChange={setStatusDialogOpen}
         onSuccess={() => loadData()}
-      />
-
-      {/* Add RTR Submission Dialog */}
-      <RTRSubmissionDialog
-        open={rtrDialogOpen}
-        onOpenChange={setRtrDialogOpen}
-        candidates={candidates}
-        onSuccess={async (_submissionId, candidateId) => {
-          invalidateCandidatesCache();
-          await loadData();
-          if (candidateId) {
-            setSelectedCandidateFilter("all");
-          }
-        }}
       />
     </div>
   );

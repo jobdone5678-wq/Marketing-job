@@ -191,6 +191,18 @@ export default function RTRManagementPage() {
       return;
     }
 
+    // The vendor recruiter email is mandatory: the agreement is worthless if the agency
+    // contact cannot be reached.
+    const recruiterEmail = (extractedData.vendor_contact_email || "").trim();
+    if (!recruiterEmail) {
+      toast.error("Vendor recruiter email is required.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(recruiterEmail)) {
+      toast.error("Enter a valid vendor recruiter email address.");
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = {
@@ -475,9 +487,11 @@ export default function RTRManagementPage() {
                       {/* Vendor */}
                       <td className="py-3 px-4">
                         <div className="font-medium text-foreground">{doc.vendor_name || "Direct RTR"}</div>
-                        {doc.vendor_contact_email && (
-                          <div className="text-muted-foreground text-[11px]">{doc.vendor_contact_email}</div>
-                        )}
+                        <div className="text-muted-foreground text-[11px] break-all">
+                          {doc.vendor_contact_email || (
+                            <span className="text-destructive">No recruiter email</span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Rate */}
@@ -747,9 +761,12 @@ export default function RTRManagementPage() {
 
               {/* Recruiter Email */}
               <div className="space-y-1">
-                <Label className="text-xs font-medium">Vendor Recruiter Email</Label>
+                <Label className="text-xs font-medium">
+                  Vendor Recruiter Email <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   type="email"
+                  required
                   value={extractedData.vendor_contact_email || ""}
                   onChange={(e) =>
                     setExtractedData({
@@ -760,6 +777,9 @@ export default function RTRManagementPage() {
                   placeholder="recruiter@agency.com"
                   className="h-9 text-xs"
                 />
+                <p className="text-[10px] text-muted-foreground">
+                  Required. The agency contact has to be reachable for this agreement.
+                </p>
               </div>
 
               {/* Recruiter Phone */}
@@ -929,12 +949,18 @@ export default function RTRManagementPage() {
                 </div>
                 <div className="space-y-1 text-muted-foreground">
                   <div>Vendor: <span className="text-foreground font-medium">{selectedDoc.vendor_name || "Direct"}</span></div>
-                  {selectedDoc.vendor_contact_email && (
-                    <div>Email: <span className="text-foreground">{selectedDoc.vendor_contact_email}</span></div>
-                  )}
-                  {selectedDoc.vendor_contact_phone && (
-                    <div>Phone: <span className="text-foreground">{selectedDoc.vendor_contact_phone}</span></div>
-                  )}
+                  <div>
+                    Email:{" "}
+                    <span className={selectedDoc.vendor_contact_email ? "text-foreground" : "text-destructive"}>
+                      {selectedDoc.vendor_contact_email || "Not recorded"}
+                    </span>
+                  </div>
+                  <div>
+                    Phone:{" "}
+                    <span className={selectedDoc.vendor_contact_phone ? "text-foreground" : "text-muted-foreground"}>
+                      {selectedDoc.vendor_contact_phone || "Not recorded"}
+                    </span>
+                  </div>
                 </div>
               </div>
 
