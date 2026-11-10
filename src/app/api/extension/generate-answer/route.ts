@@ -41,7 +41,8 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { prompt, fieldLabel, candidate, jobTitle, companyName } = body;
+    const { prompt, fieldLabel, candidate, jobTitle, companyName, options } = body;
+    const choiceMode = Array.isArray(options) && options.length > 0;
 
     const baseUrl = process.env.OPENAI_BASE_URL || 'https://api.xkiro.com/v1/';
     const model = process.env.OPENAI_MODEL || 'mistralai/mistral-large-2512';
@@ -58,7 +59,13 @@ export async function POST(request: Request) {
     const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
     const completionsUrl = `${cleanBaseUrl}/chat/completions`;
 
-    const systemPrompt = `You are an expert career copilot. Write a concise, compelling, first-person ("I") answer (2-3 sentences, maximum 60 words) for a job application field.
+    const systemPrompt = choiceMode
+      ? `You are a job application assistant. Select the single best answer for the candidate from the provided options, based strictly on their resume.
+Candidate: ${candName} (${candTitle})
+Key Skills: ${skillsStr}
+${resumeContext}
+Respond with ONLY the exact text of one chosen option — no explanation, no quotes, no extra words.`
+      : `You are an expert career copilot. Write a concise, compelling, first-person ("I") answer (2-3 sentences, maximum 60 words) for a job application field.
 Candidate: ${candName} (${candTitle})
 Key Skills: ${skillsStr}
 ${candSummary ? `Candidate Summary: ${candSummary}` : ''}
@@ -70,7 +77,9 @@ Strict Rules:
 - Do NOT include quotation marks, markdown headings, or bullet points.
 - Keep the response under 60 words, direct and natural.`;
 
-    const userPrompt = prompt || `Write a professional response for application field: "${fieldLabel || 'Bio / Cover Letter'}"`;
+    const userPrompt = choiceMode
+      ? `Question: "${fieldLabel || prompt || 'Application question'}". Options: ${JSON.stringify(options)}. Return exactly one option label.`
+      : (prompt || `Write a professional response for application field: "${fieldLabel || 'Bio / Cover Letter'}"`);
 
     const resp = await fetch(completionsUrl, {
       method: 'POST',
@@ -99,7 +108,13 @@ Strict Rules:
 
     const data = await resp.json();
     const rawAnswer = data.choices?.[0]?.message?.content?.trim() || '';
-    const answer = rawAnswer.replace(/^["']|["']$/g, '').trim();
+    let answer = rawAnswer.replace(/^["']|["']$/g, '').trim();
+    if (choiceMode) {
+      const lower = answer.toLowerCase();
+      const match = options.find(o => String(o).toLowerCase().trim() === lower)
+        || options.find(o => lower.includes(String(o).toLowerCase().trim()));
+      if (match) answer = String(match);
+    }
 
     return cors(
       request,

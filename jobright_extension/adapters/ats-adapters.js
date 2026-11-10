@@ -1,28 +1,84 @@
 /**
  * NextKinHR Universal ATS Portal Adapters Registry
- * Complete implementations for all 43+ major ATS & Employer Portals
- * Based on Jobright.ai reverse-engineered architecture
+ * Portal-agnostic field hints for job boards, ATS platforms and custom career sites.
+ * Nextkinlife LLC
  */
-
 (function(root) {
   'use strict';
 
   root.NextkinAdapters = root.NextkinAdapters || [];
+
+  // Canonical profile facts an adapter may point at. Field mapping turns these straight into values.
+  const CANON_RULES = [
+    ['linkedin_url', /linked\s*in/i],
+    ['github_url', /github/i],
+    ['website', /website|portfolio|homepage|personal\s*site|personal\s*url/i],
+    ['email', /e-?mail/i],
+    ['phone', /phone|mobile|cell|telephone|contact\s*number/i],
+    ['first_name', /first[\s._-]*name|given[\s._-]*name|forename|fname/i],
+    ['last_name', /last[\s._-]*name|family[\s._-]*name|surname|lname/i],
+    ['full_name', /full[\s._-]*name|applicant[\s._-]*name|candidate[\s._-]*name|your[\s._-]*name|system\s*field\s*name/i],
+    ['current_employer', /current[\s._-]*(employer|company|organization|organisation)|employer|company[\s._-]*name|organization|organisation/i],
+    ['current_title', /current[\s._-]*(job[\s._-]*)?title|job[\s._-]*title|headline|designation/i],
+    ['current_city', /\bcity\b|\btown\b|municipality|\blocation\b/i],
+    ['current_state', /\bstate\b|province|\bregion\b/i],
+    ['zip_code', /zip|postal/i],
+    ['country', /country|nationality/i],
+    ['full_address', /address|street/i],
+    ['total_experience_years', /years?[\s._-]*of[\s._-]*experience|experience[\s._-]*years/i],
+    ['primary_skills', /skills|technolog|stack|expertise|competenc/i]
+  ];
+
+  // A confirmation or repeat field is not the primary field.
+  const NOT_PRIMARY = /e?mail[\s._-]*(confirm|confirmation|retype|re-?enter|again|verify)|confirm[\s._-]*e?mail/i;
+
+  const camel = s => String(s || '').replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+
+  const descriptor = el => camel([
+    el.getAttribute('name'), el.getAttribute('id'), el.getAttribute('placeholder'),
+    el.getAttribute('aria-label'), el.getAttribute('data-testid'), el.getAttribute('data-test'),
+    el.getAttribute('data-automation-id'), el.getAttribute('data-ui'), el.getAttribute('data-field-name'),
+    el.getAttribute('title')
+  ].filter(Boolean).join(' '))
+    .replace(/[_\-.]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+  // Best-effort canonical fact for any element, used as the base for every adapter.
+  function canonicalHint(el) {
+    if (!el || !el.getAttribute) return '';
+    const desc = descriptor(el);
+    if (!desc || NOT_PRIMARY.test(desc)) return '';
+    for (const [key, re] of CANON_RULES) {
+      if (re.test(desc)) return key;
+    }
+    return '';
+  }
+
+  root.canonicalHint = canonicalHint;
+
+  const hostIs = re => host => re.test(String(host || '').toLowerCase());
 
   const adapters = [
     // 1. Ashby
     {
       id: 'ashby',
       name: 'Ashby',
-      matches: (host) => /(^|\.)ashbyhq\.com$/i.test(host),
-      hint: (el) => {
+      matches: hostIs(/(^|\.)ashbyhq\.com$/i),
+      hint: el => {
         const name = el.getAttribute('name') || '';
         if (name === '_systemfield_name') return 'full_name';
         if (name === '_systemfield_email') return 'email';
-        if (name === '_systemfield_location') return 'location';
+        if (name === '_systemfield_location') return 'current_city';
         if (name === '_systemfield_phone') return 'phone';
-        if (/urls\[([^\]]+)\]/i.test(name)) return RegExp.$1.toLowerCase();
-        return el.getAttribute('data-testid') || '';
+        if (/urls\[([^\]]+)\]/i.test(name)) {
+          const key = RegExp.$1.toLowerCase();
+          if (/linkedin/.test(key)) return 'linkedin_url';
+          if (/github/.test(key)) return 'github_url';
+          if (/twitter|portfolio|website|other|url/.test(key)) return 'website';
+        }
+        return canonicalHint(el) || el.getAttribute('data-testid') || '';
       }
     },
 
@@ -30,17 +86,17 @@
     {
       id: 'greenhouse',
       name: 'Greenhouse',
-      matches: (host) => /(^|\.)greenhouse\.io$/i.test(host),
-      hint: (el) => {
+      matches: hostIs(/(^|\.)greenhouse\.io$/i),
+      hint: el => {
         const name = (el.getAttribute('name') || '').toLowerCase();
         const id = (el.id || '').toLowerCase();
         if (id === 'first_name' || name === 'first_name') return 'first_name';
         if (id === 'last_name' || name === 'last_name') return 'last_name';
         if (id === 'email' || name === 'email') return 'email';
         if (id === 'phone' || name === 'phone') return 'phone';
-        if (/job_application\[location\]/i.test(name)) return 'location';
-        if (/job_application\[answers\]/i.test(name)) return 'custom_question';
-        return name;
+        if (/job_application\[location\]/i.test(name)) return 'current_city';
+        if (/job_application\[answers\]/i.test(name)) return '';
+        return canonicalHint(el);
       }
     },
 
@@ -48,8 +104,8 @@
     {
       id: 'lever',
       name: 'Lever',
-      matches: (host) => /(^|\.)lever\.co$/i.test(host),
-      hint: (el) => {
+      matches: hostIs(/(^|\.)lever\.co$/i),
+      hint: el => {
         const name = el.getAttribute('name') || '';
         if (name === 'name') return 'full_name';
         if (name === 'email') return 'email';
@@ -59,8 +115,8 @@
         if (/urls\[linkedin\]/i.test(name)) return 'linkedin_url';
         if (/urls\[github\]/i.test(name)) return 'github_url';
         if (/urls\[portfolio\]|urls\[website\]|urls\[other\]/i.test(name)) return 'website';
-        if (/urls\[twitter\]/i.test(name)) return 'twitter_url';
-        return name;
+        if (/urls\[twitter\]/i.test(name)) return 'website';
+        return canonicalHint(el);
       }
     },
 
@@ -68,20 +124,20 @@
     {
       id: 'workday',
       name: 'Workday',
-      matches: (host) => /(^|\.)myworkday(jobs|site)?\.com$/i.test(host),
-      hint: (el) => {
+      matches: hostIs(/(^|\.)myworkday(jobs|site)?\.com$/i),
+      hint: el => {
         const autoId = (el.getAttribute('data-automation-id') || '').toLowerCase();
         if (autoId.includes('legalname_firstname') || autoId.includes('legalnamesection_firstname')) return 'first_name';
         if (autoId.includes('legalname_lastname') || autoId.includes('legalnamesection_lastname')) return 'last_name';
         if (autoId.includes('email') || autoId.includes('emailaddress')) return 'email';
         if (autoId.includes('phone') || autoId.includes('phonenumber')) return 'phone';
-        if (autoId.includes('addresssection_addressline1')) return 'address_line_1';
-        if (autoId.includes('addresssection_city')) return 'city';
-        if (autoId.includes('addresssection_countryregion')) return 'state';
+        if (autoId.includes('addresssection_addressline1')) return 'full_address';
+        if (autoId.includes('addresssection_city')) return 'current_city';
+        if (autoId.includes('addresssection_countryregion')) return 'current_state';
         if (autoId.includes('addresssection_postalcode')) return 'zip_code';
         if (autoId.includes('countrydropdown')) return 'country';
-        if (autoId.includes('sourceprompt')) return 'source';
-        return autoId;
+        if (autoId.includes('sourceprompt')) return '';
+        return canonicalHint(el);
       }
     },
 
@@ -89,25 +145,22 @@
     {
       id: 'icims',
       name: 'iCIMS',
-      matches: (host) => /(^|\.)icims\.com$/i.test(host) || host.includes('icims'),
-      hint: (el) => {
+      matches: hostIs(/(^|\.)icims\.com$/i),
+      hint: el => {
         const id = (el.id || '').toLowerCase();
         const name = (el.getAttribute('name') || '').toLowerCase();
-        if (/firstname|first_name|fname/i.test(id || name)) return 'first_name';
-        if (/lastname|last_name|lname/i.test(id || name)) return 'last_name';
-        if (/email/i.test(id || name)) return 'email';
-        if (/phone.*type|type.*phone/i.test(id || name)) return 'phone_type';
-        if (/phone|mobile|cell|tel/i.test(id || name)) return 'phone';
-        if (/salutation|honorific|^title$/i.test(id || name)) return 'title_honorific';
-        if (/address1|street/i.test(id || name)) return 'address_line_1';
-        if (/address2|apt|suite/i.test(id || name)) return 'address_line_2';
-        if (/city/i.test(id || name)) return 'city';
-        if (/state|province/i.test(id || name)) return 'state';
-        if (/zip|postal/i.test(id || name)) return 'zip_code';
-        if (/country/i.test(id || name)) return 'country';
-        if (/consent|sms|text.*message/i.test(id || name)) return 'text_consent';
-        if (/signature/i.test(id || name)) return 'e_signature';
-        return id || name;
+        if (/firstname|first_name|fname/.test(id || name)) return 'first_name';
+        if (/lastname|last_name|lname/.test(id || name)) return 'last_name';
+        if (/email/.test(id || name)) return 'email';
+        if (/phone.*type|type.*phone/.test(id || name)) return 'phone';
+        if (/phone|mobile|cell|tel/.test(id || name)) return 'phone';
+        if (/address/.test(id || name)) return 'full_address';
+        if (/city/.test(id || name)) return 'current_city';
+        if (/state|province/.test(id || name)) return 'current_state';
+        if (/zip|postal/.test(id || name)) return 'zip_code';
+        if (/country/.test(id || name)) return 'country';
+        if (/salutation|honorific/.test(id || name)) return '';
+        return canonicalHint(el);
       }
     },
 
@@ -115,17 +168,17 @@
     {
       id: 'smartrecruiters',
       name: 'SmartRecruiters',
-      matches: (host) => /(^|\.)smartrecruiters\.com$/i.test(host),
-      hint: (el) => {
+      matches: hostIs(/(^|\.)smartrecruiters\.com$/i),
+      hint: el => {
         const name = (el.getAttribute('name') || '').toLowerCase();
         const testId = (el.getAttribute('data-test') || '').toLowerCase();
         if (name === 'firstname' || testId.includes('first-name')) return 'first_name';
         if (name === 'lastname' || testId.includes('last-name')) return 'last_name';
         if (name === 'email' || testId.includes('email')) return 'email';
         if (name === 'phonenumber' || testId.includes('phone')) return 'phone';
-        if (name.includes('city') || testId.includes('city')) return 'city';
+        if (name.includes('city') || testId.includes('city')) return 'current_city';
         if (testId.includes('country')) return 'country';
-        return name || testId;
+        return canonicalHint(el);
       }
     },
 
@@ -133,58 +186,35 @@
     {
       id: 'taleo',
       name: 'Taleo',
-      matches: (host) => /(^|\.)taleo\.net$/i.test(host) || host.includes('taleo'),
-      hint: (el) => {
-        const id = (el.id || '').toLowerCase();
-        if (id.includes('firstname')) return 'first_name';
-        if (id.includes('lastname')) return 'last_name';
-        if (id.includes('email')) return 'email';
-        if (id.includes('cellphone') || id.includes('mobilephone') || id.includes('phone')) return 'phone';
-        if (id.includes('address')) return 'address_line_1';
-        if (id.includes('city')) return 'city';
-        if (id.includes('state')) return 'state';
-        if (id.includes('zip') || id.includes('postal')) return 'zip_code';
-        if (id.includes('country')) return 'country';
-        return id;
-      }
+      matches: hostIs(/(^|\.)taleo\.net$/i),
+      hint: el => canonicalHint(el)
     },
 
     // 8. SAP SuccessFactors
     {
       id: 'successfactors',
       name: 'SuccessFactors',
-      matches: (host) => /(^|\.)(successfactors|sapsf)\.(com|eu)$/i.test(host),
-      hint: (el) => {
-        const id = (el.id || '').toLowerCase();
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        if (id.includes('fname') || name.includes('fname')) return 'first_name';
-        if (id.includes('lname') || name.includes('lname')) return 'last_name';
-        if (id.includes('email') || name.includes('email')) return 'email';
-        if (id.includes('cellphone') || id.includes('phone')) return 'phone';
-        if (id.includes('city')) return 'city';
-        if (id.includes('state')) return 'state';
-        if (id.includes('country')) return 'country';
-        return id || name;
-      }
+      matches: hostIs(/(^|\.)(successfactors|sapsf)\.(com|eu|net)$/i),
+      hint: el => canonicalHint(el)
     },
 
     // 9. BambooHR
     {
       id: 'bamboohr',
       name: 'BambooHR',
-      matches: (host) => /(^|\.)bamboohr\.com$/i.test(host),
-      hint: (el) => {
+      matches: hostIs(/(^|\.)bamboohr\.com$/i),
+      hint: el => {
         const name = (el.getAttribute('name') || '').toLowerCase();
         if (name === 'firstname') return 'first_name';
         if (name === 'lastname') return 'last_name';
         if (name === 'email') return 'email';
         if (name === 'phone') return 'phone';
-        if (name === 'streetaddress') return 'address_line_1';
-        if (name === 'city') return 'city';
-        if (name === 'state') return 'state';
+        if (name === 'streetaddress') return 'full_address';
+        if (name === 'city') return 'current_city';
+        if (name === 'state') return 'current_state';
         if (name === 'zipcode') return 'zip_code';
         if (name === 'linkedinurl') return 'linkedin_url';
-        return name;
+        return canonicalHint(el);
       }
     },
 
@@ -192,17 +222,17 @@
     {
       id: 'workable',
       name: 'Workable',
-      matches: (host) => /(^|\.)workable\.com$/i.test(host),
-      hint: (el) => {
+      matches: hostIs(/(^|\.)workable\.com$/i),
+      hint: el => {
         const name = (el.getAttribute('name') || '').toLowerCase();
         const ui = (el.getAttribute('data-ui') || '').toLowerCase();
         if (name === 'firstname' || ui.includes('firstname')) return 'first_name';
         if (name === 'lastname' || ui.includes('lastname')) return 'last_name';
         if (name === 'email' || ui.includes('email')) return 'email';
         if (name === 'phone' || ui.includes('phone')) return 'phone';
-        if (name === 'address') return 'address_line_1';
-        if (name === 'city') return 'city';
-        return name || ui;
+        if (name === 'address') return 'full_address';
+        if (name === 'city') return 'current_city';
+        return canonicalHint(el);
       }
     },
 
@@ -210,14 +240,14 @@
     {
       id: 'jobvite',
       name: 'Jobvite',
-      matches: (host) => /(^|\.)jobvite\.com$/i.test(host),
-      hint: (el) => {
+      matches: hostIs(/(^|\.)jobvite\.com$/i),
+      hint: el => {
         const name = (el.getAttribute('name') || '').toLowerCase();
         if (name.includes('jvfirstname') || name === 'firstname') return 'first_name';
         if (name.includes('jvlastname') || name === 'lastname') return 'last_name';
         if (name.includes('jvemail') || name === 'email') return 'email';
         if (name.includes('jvphone') || name === 'phone') return 'phone';
-        return name;
+        return canonicalHint(el);
       }
     },
 
@@ -225,18 +255,18 @@
     {
       id: 'jazzhr',
       name: 'JazzHR',
-      matches: (host) => /(^|\.)(jazzhr\.com|applytojob\.com)$/i.test(host),
-      hint: (el) => {
+      matches: hostIs(/(^|\.)(jazzhr\.com|applytojob\.com)$/i),
+      hint: el => {
         const name = (el.getAttribute('name') || '').toLowerCase();
         if (name.includes('applicant_first_name')) return 'first_name';
         if (name.includes('applicant_last_name')) return 'last_name';
         if (name.includes('applicant_email')) return 'email';
         if (name.includes('applicant_phone')) return 'phone';
-        if (name.includes('applicant_street_address')) return 'address_line_1';
-        if (name.includes('applicant_city')) return 'city';
-        if (name.includes('applicant_state')) return 'state';
+        if (name.includes('applicant_street_address')) return 'full_address';
+        if (name.includes('applicant_city')) return 'current_city';
+        if (name.includes('applicant_state')) return 'current_state';
         if (name.includes('applicant_zip')) return 'zip_code';
-        return name;
+        return canonicalHint(el);
       }
     },
 
@@ -244,13 +274,13 @@
     {
       id: 'breezy',
       name: 'BreezyHR',
-      matches: (host) => /(^|\.)breezy\.hr$/i.test(host),
-      hint: (el) => {
+      matches: hostIs(/(^|\.)breezy\.hr$/i),
+      hint: el => {
         const name = (el.getAttribute('name') || '').toLowerCase();
         if (name === 'name') return 'full_name';
         if (name === 'email') return 'email';
         if (name === 'phone_number' || name === 'phone') return 'phone';
-        return name;
+        return canonicalHint(el);
       }
     },
 
@@ -258,14 +288,14 @@
     {
       id: 'personio',
       name: 'Personio',
-      matches: (host) => /(^|\.)personio\.(de|com)$/i.test(host) || host.includes('personio'),
-      hint: (el) => {
+      matches: hostIs(/(^|\.)personio\.(de|com)$/i),
+      hint: el => {
         const name = (el.getAttribute('name') || '').toLowerCase();
         if (name === 'first_name') return 'first_name';
         if (name === 'last_name') return 'last_name';
         if (name === 'email') return 'email';
         if (name === 'phone') return 'phone';
-        return name;
+        return canonicalHint(el);
       }
     },
 
@@ -273,108 +303,62 @@
     {
       id: 'rippling',
       name: 'Rippling ATS',
-      matches: (host) => /(^|\.)rippling\.com$/i.test(host),
-      hint: (el) => {
-        const testId = (el.getAttribute('data-testid') || '').toLowerCase();
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        if (testId.includes('first_name') || name.includes('first_name')) return 'first_name';
-        if (testId.includes('last_name') || name.includes('last_name')) return 'last_name';
-        if (testId.includes('email') || name.includes('email')) return 'email';
-        if (testId.includes('phone') || name.includes('phone')) return 'phone';
-        return testId || name;
-      }
+      matches: hostIs(/(^|\.)rippling\.com$/i),
+      hint: el => canonicalHint(el)
     },
 
     // 16. Paylocity
     {
       id: 'paylocity',
       name: 'Paylocity',
-      matches: (host) => /(^|\.)paylocity\.com$/i.test(host),
-      hint: (el) => {
-        const id = (el.id || '').toLowerCase();
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        if (id.includes('firstname') || name.includes('firstname')) return 'first_name';
-        if (id.includes('lastname') || name.includes('lastname')) return 'last_name';
-        if (id.includes('email') || name.includes('email')) return 'email';
-        if (id.includes('phone') || name.includes('phone')) return 'phone';
-        return id || name;
-      }
+      matches: hostIs(/(^|\.)paylocity\.com$/i),
+      hint: el => canonicalHint(el)
     },
 
     // 17. Paycom
     {
       id: 'paycom',
       name: 'Paycom',
-      matches: (host) => /(^|\.)paycom(online)?\.(com|net)$/i.test(host),
-      hint: (el) => {
-        const id = (el.id || '').toLowerCase();
-        if (id.includes('firstname')) return 'first_name';
-        if (id.includes('lastname')) return 'last_name';
-        if (id.includes('email')) return 'email';
-        if (id.includes('phone')) return 'phone';
-        return id;
-      }
+      matches: hostIs(/(^|\.)paycom(online)?\.(com|net)$/i),
+      hint: el => canonicalHint(el)
     },
 
     // 18. ADP (Workforce Now & Recruiting)
     {
       id: 'adp',
       name: 'ADP',
-      matches: (host) => /(^|\.)adp\.com$/i.test(host),
-      hint: (el) => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        const id = (el.id || '').toLowerCase();
-        if (name.includes('firstname') || id.includes('firstname')) return 'first_name';
-        if (name.includes('lastname') || id.includes('lastname')) return 'last_name';
-        if (name.includes('email') || id.includes('email')) return 'email';
-        if (name.includes('phone') || id.includes('phone')) return 'phone';
-        return name || id;
-      }
+      matches: hostIs(/(^|\.)adp\.com$/i),
+      hint: el => canonicalHint(el)
     },
 
     // 19. Oracle Cloud HCM
     {
       id: 'oraclecloud',
       name: 'Oracle Cloud HCM',
-      matches: (host) => /(^|\.)oracle(cloud|govcloud)\.com$/i.test(host),
-      hint: (el) => {
-        const id = (el.id || '').toLowerCase();
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        if (id.includes('first_name') || name.includes('firstname')) return 'first_name';
-        if (id.includes('last_name') || name.includes('lastname')) return 'last_name';
-        if (id.includes('email') || name.includes('email')) return 'email';
-        if (id.includes('phone') || name.includes('phone')) return 'phone';
-        return id || name;
-      }
+      matches: hostIs(/(^|\.)oracle(cloud|govcloud)\.com$/i),
+      hint: el => canonicalHint(el)
     },
 
     // 20. IBM BrassRing
     {
       id: 'brassring',
       name: 'IBM BrassRing',
-      matches: (host) => /(^|\.)brassring\.com$/i.test(host),
-      hint: (el) => {
-        const id = (el.id || '').toLowerCase();
-        if (id.includes('first_name') || id.includes('fname')) return 'first_name';
-        if (id.includes('last_name') || id.includes('lname')) return 'last_name';
-        if (id.includes('email')) return 'email';
-        if (id.includes('phone') || id.includes('tel')) return 'phone';
-        return id;
-      }
+      matches: hostIs(/(^|\.)brassring\.com$/i),
+      hint: el => canonicalHint(el)
     },
 
     // 21. Dayforce HCM
     {
       id: 'dayforce',
       name: 'Dayforce',
-      matches: (host) => /(^|\.)dayforce(hcm)?\.com$/i.test(host),
-      hint: (el) => {
+      matches: hostIs(/(^|\.)dayforce(hcm)?\.com$/i),
+      hint: el => {
         const fieldId = (el.getAttribute('data-field-id') || el.id || '').toLowerCase();
         if (fieldId.includes('firstname')) return 'first_name';
         if (fieldId.includes('lastname')) return 'last_name';
         if (fieldId.includes('email')) return 'email';
         if (fieldId.includes('phone')) return 'phone';
-        return fieldId;
+        return canonicalHint(el);
       }
     },
 
@@ -382,75 +366,46 @@
     {
       id: 'ultipro',
       name: 'UKG / Ultipro',
-      matches: (host) => /(^|\.)(ultipro\.com|ultipro\.ca|rec\.pro\.ukg\.net)$/i.test(host),
-      hint: (el) => {
-        const auto = (el.getAttribute('data-automation') || '').toLowerCase();
-        if (auto.includes('first-name')) return 'first_name';
-        if (auto.includes('last-name')) return 'last_name';
-        if (auto.includes('email')) return 'email';
-        if (auto.includes('phone')) return 'phone';
-        return auto;
-      }
+      matches: hostIs(/(^|\.)(ultipro\.com|ultipro\.ca|rec\.pro\.ukg\.net)$/i),
+      hint: el => canonicalHint(el)
     },
 
     // 23. Eightfold AI
     {
       id: 'eightfold',
       name: 'Eightfold.ai',
-      matches: (host) => /(^|\.)eightfold\.ai$/i.test(host),
-      hint: (el) => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        if (name.includes('firstname')) return 'first_name';
-        if (name.includes('lastname')) return 'last_name';
-        if (name.includes('email')) return 'email';
-        if (name.includes('phone')) return 'phone';
-        return name;
-      }
+      matches: hostIs(/(^|\.)eightfold\.ai$/i),
+      hint: el => canonicalHint(el)
     },
 
     // 24. Phenom People
     {
       id: 'phenom',
       name: 'Phenom',
-      matches: (host) => /(^|\.)phenom(people)?\.com$/i.test(host) || host.includes('phenom'),
-      hint: (el) => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        const id = (el.id || '').toLowerCase();
-        if (name.includes('firstname') || id.includes('firstname')) return 'first_name';
-        if (name.includes('lastname') || id.includes('lastname')) return 'last_name';
-        if (name.includes('email') || id.includes('email')) return 'email';
-        if (name.includes('phone') || id.includes('phone')) return 'phone';
-        return name || id;
-      }
+      matches: hostIs(/(^|\.)phenom(people)?\.com$/i),
+      hint: el => canonicalHint(el)
     },
 
     // 25. Zoho Recruit
     {
       id: 'zohorecruit',
       name: 'Zoho Recruit',
-      matches: (host) => /(^|\.)zohorecruit\.(com|in|eu)$/i.test(host) || host.includes('zoho'),
-      hint: (el) => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        if (name.includes('first_name')) return 'first_name';
-        if (name.includes('last_name')) return 'last_name';
-        if (name.includes('email')) return 'email';
-        if (name.includes('phone') || name.includes('mobile')) return 'phone';
-        return name;
-      }
+      matches: hostIs(/(^|\.)zohorecruit\.(com|in|eu)$/i),
+      hint: el => canonicalHint(el)
     },
 
     // 26. Teamtailor
     {
       id: 'teamtailor',
       name: 'Teamtailor',
-      matches: (host) => /(^|\.)teamtailor\.com$/i.test(host),
-      hint: (el) => {
+      matches: hostIs(/(^|\.)teamtailor\.com$/i),
+      hint: el => {
         const name = (el.getAttribute('name') || '').toLowerCase();
         if (name.includes('[first_name]')) return 'first_name';
         if (name.includes('[last_name]')) return 'last_name';
         if (name.includes('[email]')) return 'email';
         if (name.includes('[phone]')) return 'phone';
-        return name;
+        return canonicalHint(el);
       }
     },
 
@@ -458,13 +413,13 @@
     {
       id: 'recruitee',
       name: 'Recruitee',
-      matches: (host) => /(^|\.)recruitee\.com$/i.test(host),
-      hint: (el) => {
+      matches: hostIs(/(^|\.)recruitee\.com$/i),
+      hint: el => {
         const name = (el.getAttribute('name') || '').toLowerCase();
         if (name.includes('[name]')) return 'full_name';
         if (name.includes('[email]')) return 'email';
         if (name.includes('[phone]')) return 'phone';
-        return name;
+        return canonicalHint(el);
       }
     },
 
@@ -472,181 +427,405 @@
     {
       id: 'pinpoint',
       name: 'Pinpoint',
-      matches: (host) => /(^|\.)pinpointhq\.com$/i.test(host),
-      hint: (el) => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        if (name.includes('first_name')) return 'first_name';
-        if (name.includes('last_name')) return 'last_name';
-        if (name.includes('email')) return 'email';
-        if (name.includes('phone')) return 'phone';
-        return name;
-      }
+      matches: hostIs(/(^|\.)pinpointhq\.com$/i),
+      hint: el => canonicalHint(el)
     },
 
     // 29. Avature
     {
       id: 'avature',
       name: 'Avature',
-      matches: (host) => /(^|\.)avature\.net$/i.test(host),
-      hint: (el) => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        if (name.includes('firstname')) return 'first_name';
-        if (name.includes('lastname')) return 'last_name';
-        if (name.includes('email')) return 'email';
-        if (name.includes('phone') || name.includes('mobile')) return 'phone';
-        return name;
-      }
+      matches: hostIs(/(^|\.)avature\.net$/i),
+      hint: el => canonicalHint(el)
     },
 
     // 30. Freshteam
     {
       id: 'freshteam',
       name: 'Freshteam',
-      matches: (host) => /(^|\.)freshteam\.com$/i.test(host),
-      hint: (el) => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        if (name.includes('first_name')) return 'first_name';
-        if (name.includes('last_name')) return 'last_name';
-        if (name.includes('email')) return 'email';
-        if (name.includes('phone')) return 'phone';
-        return name;
-      }
+      matches: hostIs(/(^|\.)freshteam\.com$/i),
+      hint: el => canonicalHint(el)
     },
 
     // 31. Comeet
     {
       id: 'comeet',
       name: 'Comeet',
-      matches: (host) => /(^|\.)comeet\.com$/i.test(host),
-      hint: (el) => {
+      matches: hostIs(/(^|\.)comeet\.com$/i),
+      hint: el => {
         const name = (el.getAttribute('name') || '').toLowerCase();
         if (name === 'name') return 'full_name';
         if (name === 'email') return 'email';
         if (name === 'phone') return 'phone';
-        return name;
+        return canonicalHint(el);
       }
     },
 
-    // 32. Gusto
-    {
-      id: 'gusto',
-      name: 'Gusto',
-      matches: (host) => /(^|\.)gusto\.com$/i.test(host),
-      hint: (el) => el.getAttribute('name') || ''
-    },
-
-    // 33. JobScore
-    {
-      id: 'jobscore',
-      name: 'JobScore',
-      matches: (host) => /(^|\.)jobscore\.com$/i.test(host),
-      hint: (el) => el.getAttribute('name') || ''
-    },
-
-    // 34. Recruiterflow
-    {
-      id: 'recruiterflow',
-      name: 'Recruiterflow',
-      matches: (host) => /(^|\.)recruiterflow\.com$/i.test(host),
-      hint: (el) => el.getAttribute('name') || ''
-    },
-
-    // 35. Trakstar
-    {
-      id: 'trakstar',
-      name: 'Trakstar',
-      matches: (host) => /(^|\.)(trakstar|recruiterbox)\.com$/i.test(host),
-      hint: (el) => el.getAttribute('name') || ''
-    },
-
-    // 36. Polymer
-    {
-      id: 'polymer',
-      name: 'Polymer',
-      matches: (host) => /(^|\.)polymer\.co$/i.test(host),
-      hint: (el) => el.getAttribute('name') || ''
-    },
-
-    // 37. CareerPlug
-    {
-      id: 'careerplug',
-      name: 'CareerPlug',
-      matches: (host) => /(^|\.)careerplug\.com$/i.test(host),
-      hint: (el) => el.getAttribute('name') || ''
-    },
-
-    // 38. HRMDirect
-    {
-      id: 'hrmdirect',
-      name: 'HRMDirect',
-      matches: (host) => /(^|\.)hrmdirect\.com$/i.test(host),
-      hint: (el) => el.getAttribute('name') || ''
-    },
-
-    // 39. HiringThing
-    {
-      id: 'hiringthing',
-      name: 'HiringThing',
-      matches: (host) => /(^|\.)hiringthing\.com$/i.test(host),
-      hint: (el) => el.getAttribute('name') || ''
-    },
-
-    // 40. JobDiva
-    {
-      id: 'jobdiva',
-      name: 'JobDiva',
-      matches: (host) => /(^|\.)jobdiva\.com$/i.test(host),
-      hint: (el) => el.getAttribute('name') || ''
-    },
-
-    // 41. Kula
-    {
-      id: 'kula',
-      name: 'Kula',
-      matches: (host) => /(^|\.)kula\.ai$/i.test(host),
-      hint: (el) => el.getAttribute('name') || ''
-    },
-
-    // 42. Keka / Foxsense
+    // 32. Keka / Foxsense
     {
       id: 'keka',
       name: 'Keka',
-      matches: (host) => /(^|\.)(keka\.com|foxsense\.com)$/i.test(host) || host.includes('keka'),
-      hint: (el) => {
+      matches: hostIs(/(^|\.)(keka\.com|foxsense\.com)$/i),
+      hint: el => {
         const formGroup = el.closest('.form-group, .keka-form-group');
         const label = formGroup ? (formGroup.querySelector('label')?.textContent || '') : '';
-        return label || el.getAttribute('name') || el.id || '';
+        return label || canonicalHint(el);
       }
     },
 
-    // 43. Big Tech Direct Platforms (Google, Amazon, Apple, Meta, Tesla, Uber, TikTok)
+    // 33. Recruit.io
+    {
+      id: 'recruitio',
+      name: 'Recruit.io',
+      matches: hostIs(/(^|\.)recruit\.io$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 34. Cruit
+    {
+      id: 'cruit',
+      name: 'Cruit',
+      matches: hostIs(/(^|\.)cruit\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 35. Crelly
+    {
+      id: 'crelly',
+      name: 'Crelly',
+      matches: hostIs(/(^|\.)crelly\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 36. Sprocket
+    {
+      id: 'sprocket',
+      name: 'Sprocket',
+      matches: hostIs(/(^|\.)sprocket\.live$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 37. Sona
+    {
+      id: 'sona',
+      name: 'Sona',
+      matches: hostIs(/(^|\.)sona\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 38. Paradox
+    {
+      id: 'paradox',
+      name: 'Paradox',
+      matches: hostIs(/(^|\.)paradox\.ai$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 39. Moka
+    {
+      id: 'moka',
+      name: 'Moka',
+      matches: hostIs(/(^|\.)moka\.io$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 40. Movio
+    {
+      id: 'movio',
+      name: 'Movio',
+      matches: hostIs(/(^|\.)movio\.co$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 41. Brax
+    {
+      id: 'brax',
+      name: 'Brax',
+      matches: hostIs(/(^|\.)brax\.(co|com)$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 42. Employment Hero
+    {
+      id: 'employmenthero',
+      name: 'Employment Hero',
+      matches: hostIs(/(^|\.)employmenthero\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 43. Paycor
+    {
+      id: 'paycor',
+      name: 'Paycor',
+      matches: hostIs(/(^|\.)paycor\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 44. isolved
+    {
+      id: 'isolved',
+      name: 'isolved',
+      matches: hostIs(/(^|\.)isolved\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 45. Vndly
+    {
+      id: 'vndly',
+      name: 'Vndly',
+      matches: hostIs(/(^|\.)vndly\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 46. Xero
+    {
+      id: 'xero',
+      name: 'Xero',
+      matches: hostIs(/(^|\.)xero\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 47. JobDiva
+    {
+      id: 'jobdiva',
+      name: 'JobDiva',
+      matches: hostIs(/(^|\.)jobdiva\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 48. LinkedIn
+    {
+      id: 'linkedin',
+      name: 'LinkedIn',
+      matches: hostIs(/(^|\.)linkedin\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const id = (el.getAttribute('id') || '').toLowerCase();
+        if (name === 'firstname' || id === 'input-first-name') return 'first_name';
+        if (name === 'lastname' || id === 'input-last-name') return 'last_name';
+        if (name === 'email' || id === 'input-email') return 'email';
+        if (name === 'phonenumber' || id === 'input-phone-number') return 'phone';
+        if (name === 'location' || id === 'input-location') return 'current_city';
+        if (name === 'company' || id === 'input-current-company') return 'current_employer';
+        if (name === 'currentposition' || id === 'input-current-position') return 'current_title';
+        if (name === 'linkedin' || id === 'input-linkedin') return 'linkedin_url';
+        if (name === 'yearsexperience' || id === 'input-years-experience') return 'total_experience_years';
+        return canonicalHint(el);
+      }
+    },
+
+    // 49. Indeed
+    {
+      id: 'indeed',
+      name: 'Indeed',
+      matches: hostIs(/(^|\.)indeed\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const id = (el.getAttribute('id') || '').toLowerCase();
+        if (name === 'fullname' || id === 'fullname') return 'full_name';
+        if (name === 'email' || id === 'email') return 'email';
+        if (name === 'phone' || id === 'phone') return 'phone';
+        if (name === 'city' || id === 'city') return 'current_city';
+        if (name === 'state' || id === 'state') return 'current_state';
+        if (name === 'street' || id === 'street') return 'full_address';
+        if (name === 'zipcode' || id === 'zipcode') return 'zip_code';
+        return canonicalHint(el);
+      }
+    },
+
+    // 50. Glassdoor
+    {
+      id: 'glassdoor',
+      name: 'Glassdoor',
+      matches: hostIs(/(^|\.)glassdoor\.(com|co\.in)$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 51. Monster
+    {
+      id: 'monster',
+      name: 'Monster',
+      matches: hostIs(/(^|\.)monster\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 52. Dice
+    {
+      id: 'dice',
+      name: 'Dice',
+      matches: hostIs(/(^|\.)dice\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 53. ZipRecruiter
+    {
+      id: 'ziprecruiter',
+      name: 'ZipRecruiter',
+      matches: hostIs(/(^|\.)ziprecruiter\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 54. BuiltIn
+    {
+      id: 'builtin',
+      name: 'BuiltIn',
+      matches: hostIs(/(^|\.)builtin\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 55. Wellfound
+    {
+      id: 'wellfound',
+      name: 'Wellfound',
+      matches: hostIs(/(^|\.)wellfound\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (name.includes('candidate[first_name]')) return 'first_name';
+        if (name.includes('candidate[last_name]')) return 'last_name';
+        if (name.includes('candidate[email]')) return 'email';
+        if (name.includes('candidate[phone]')) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 56. Naukri
+    {
+      id: 'naukri',
+      name: 'Naukri',
+      matches: hostIs(/(^|\.)naukri\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 57. Foundit (Monster India)
+    {
+      id: 'foundit',
+      name: 'Foundit',
+      matches: hostIs(/(^|\.)foundit\.in$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 58. CutShort
+    {
+      id: 'cutshort',
+      name: 'CutShort',
+      matches: hostIs(/(^|\.)cutshort\.io$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 59. Bayt
+    {
+      id: 'bayt',
+      name: 'Bayt',
+      matches: hostIs(/(^|\.)bayt\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 60. Jobstreet
+    {
+      id: 'jobstreet',
+      name: 'Jobstreet',
+      matches: hostIs(/(^|\.)jobstreet\.(com\.my|com\.ph|com\.sg)$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 61. Welcome to the Jungle / Otta
+    {
+      id: 'welcometothejungle',
+      name: 'Welcome to the Jungle',
+      matches: hostIs(/(^|\.)welcometothejungle\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 62. SEEK
+    {
+      id: 'seek',
+      name: 'SEEK',
+      matches: hostIs(/(^|\.)seek\.com\.(au|nz)$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 63. Jobserve
+    {
+      id: 'jobserve',
+      name: 'Jobserve',
+      matches: hostIs(/(^|\.)jobserve\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 64. Totaljobs
+    {
+      id: 'totaljobs',
+      name: 'Totaljobs',
+      matches: hostIs(/(^|\.)totaljobs\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 65. Reed
+    {
+      id: 'reed',
+      name: 'Reed',
+      matches: hostIs(/(^|\.)reed\.co\.uk$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 66. SimplyHired
+    {
+      id: 'simplyhired',
+      name: 'SimplyHired',
+      matches: hostIs(/(^|\.)simplyhired\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 67. LHH
+    {
+      id: 'lhh',
+      name: 'LHH',
+      matches: hostIs(/(^|\.)lhh\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 68. Ximble
+    {
+      id: 'ximble',
+      name: 'Ximble',
+      matches: hostIs(/(^|\.)ximble\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 69. Big Tech Direct Platforms (Google, Amazon, Apple, Meta, Tesla, Uber, TikTok)
     {
       id: 'bigtech',
       name: 'Enterprise Career Portals',
-      matches: (host) => /(amazon\.jobs|jobs\.apple\.com|careers\.google\.com|metacareers\.com|tesla\.com\/careers|uber\.com\/careers|careers\.tiktok\.com|jobs\.bytedance\.com)$/i.test(host),
-      hint: (el) => {
-        return el.getAttribute('aria-label') || el.getAttribute('data-automation-id') || el.getAttribute('name') || el.id || '';
-      }
+      matches: host => /(amazon\.jobs|jobs\.apple\.com|careers\.google\.com|metacareers\.com|uber\.com|careers\.tiktok\.com|jobs\.bytedance\.com)$/i.test(String(host || '').toLowerCase()),
+      hint: el => canonicalHint(el)
     }
   ];
 
-  // Register all adapters
-  for (const a of adapters) {
-    if (!root.NextkinAdapters.some(existing => existing.id === a.id)) {
-      root.NextkinAdapters.push(a);
-    }
+  // Register without duplicating: a later file for the same portal replaces the earlier entry.
+  function registerAdapter(adapter) {
+    if (!adapter || !adapter.id) return adapter;
+    const list = root.NextkinAdapters;
+    const index = list.findIndex(a => a.id === adapter.id);
+    if (index >= 0) list[index] = adapter; else list.push(adapter);
+    return adapter;
   }
 
-  // Active Adapter Resolver
+  root.registerAdapter = registerAdapter;
+
+  for (const a of adapters) registerAdapter(a);
+
+  // Active Adapter Resolver: a portal-specific adapter always wins over the generic fallback.
   root.resolveActiveAdapter = function(urlOrHost) {
     const host = (urlOrHost || (typeof window !== 'undefined' ? window.location.hostname : '')).toLowerCase();
-    for (const a of root.NextkinAdapters) {
-      if (a.id !== 'generic' && a.matches && a.matches(host)) {
-        return a;
-      }
+    const list = root.NextkinAdapters || [];
+    let generic = null;
+    for (const a of list) {
+      if (!a || typeof a.matches !== 'function') continue;
+      if (a.id === 'generic') { generic = generic || a; continue; }
+      if (a.matches(host)) return a;
     }
-    return root.NextkinAdapters.find(a => a.id === 'generic') || null;
+    return generic || null;
   };
 
-  console.info(`[NextKin Adapters] Loaded ${root.NextkinAdapters.length} portal adapters.`);
+  console.info(`[NextKin Adapters] Loaded ${(root.NextkinAdapters || []).length} portal adapters.`);
 })(typeof globalThis !== 'undefined' ? globalThis : this);

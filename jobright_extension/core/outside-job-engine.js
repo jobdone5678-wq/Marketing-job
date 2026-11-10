@@ -96,12 +96,12 @@
     try {
       const storage = await chrome.storage.local.get(['uploaded_resume', 'nextkin_uploaded_resume', 'uploadedCandidate', 'nextkin_active_candidate', 'nextkin_candidate_data', 'candidates']);
       const upl = storage.uploaded_resume || storage.nextkin_uploaded_resume;
-      let cand = upl?.parsed_candidate || null;
+      let cand = upl?.parsed_candidate || upl?.candidate || null;
       if (!cand && upl && (upl.full_name || upl.raw_text || upl.filename)) {
-        const text = upl.raw_text || upl.source_text || '', cleanedName = cleanCandidateFullName(upl.full_name || upl.filename, text), parts = cleanedName.split(/\s+/).filter(Boolean);
+        const text = upl.raw_text || upl.source_text || upl.text || '', cleanedName = cleanCandidateFullName(upl.full_name || upl.filename, text), parts = cleanedName.split(/\s+/).filter(Boolean);
         const fn = upl.first_name && !/\b(developer|engineer|talent|pool|g2i|inc)\b/i.test(upl.first_name) ? upl.first_name : (parts[0] || '');
         const ln = upl.last_name && !/\b(developer|engineer|talent|pool|g2i|inc)\b/i.test(upl.last_name) ? upl.last_name : (parts.slice(1).join(' ') || fn);
-        const em = upl.email || (text.match(/[\w.%+-]+@[\w.-]+\.[a-zA-Z]{2,}/i) || [])[0] || (fn ? `${fn.toLowerCase()}.${ln ? ln.toLowerCase().replace(/[^a-z0-9]/g, '') : 'job'}@gmail.com` : '');
+        const em = upl.email || (text.match(/[\w.%+-]+@[\w.-]+\.[a-zA-Z]{2,}/i) || [])[0] || '';
         const ph = upl.phone || (text.match(/(?:\+\d{1,3}[ -]?)?(?:\(\d{3}\)|\d{3})[ .-]\d{3}[ .-]\d{4}\b/) || [])[0] || '';
         const li = upl.linkedin_url || (text.match(/(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[\w-]+/i) || [])[0] || '';
         cand = { id: upl.candidate_id || 'cand-upl', full_name: `${fn} ${ln && ln !== fn ? ln : ''}`.trim(), first_name: fn, last_name: ln, email: em, phone: ph, linkedin_url: li, skills: upl.skills || [], raw_text: text, confirmed_facts: { full_name: `${fn} ${ln}`.trim(), first_name: fn, last_name: ln, email: em, phone: ph, linkedin_url: li } };
@@ -114,9 +114,6 @@
           const parts = (cand.full_name || '').split(/\s+/).filter(Boolean);
           cand.first_name = parts[0] || 'Candidate';
           cand.last_name = parts.slice(1).join(' ') || parts[0] || '';
-        }
-        if (!cand.email && cand.first_name) {
-          cand.email = `${cand.first_name.toLowerCase()}.${(cand.last_name || 'job').toLowerCase().replace(/[^a-z0-9]/g, '')}@gmail.com`;
         }
       }
       if (!cand && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
@@ -339,16 +336,11 @@
     } catch { return false; }
   }
 
-  function setNativeChecked(el, checked) {
-    try {
-      el.focus();
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked')?.set;
-      if (setter) setter.call(el, checked); else el.checked = checked;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-      return true;
-    } catch { return false; }
-  }
+  const sameValue = (a, b) => {
+    const x = String(a ?? '').trim().toLowerCase(), y = String(b ?? '').trim().toLowerCase();
+    if (!x) return false;
+    return x === y || x.includes(y) || y.includes(x);
+  };
 
   async function setNativeCombobox(el, val) {
     try {
@@ -370,6 +362,30 @@
     try { return await _executeOutsideAutofillInner(candidate); } finally { isAutofilling = false; }
   }
 
+  async function resolveAiPlans(plans, candidate) {
+    const aiPlans = plans.filter(p => p.status === 'ai');
+    if (!aiPlans.length) return;
+    let enabled = true;
+    try { const s = await chrome.storage.local.get(['nextkin_ai_answers']); enabled = s.nextkin_ai_answers !== false; } catch {}
+    if (!enabled) { aiPlans.forEach(p => { p.status = 'needs_review'; p.reason = 'AI answers are turned off.'; }); return; }
+    const job = currentExtractedJob || scrapeJobFromDOM();
+    await Promise.all(aiPlans.map(async p => {
+      try {
+        const res = await chrome.runtime.sendMessage({ type: 'generate_ai_field_answer', fieldLabel: p.field.label, prompt: p.aiPrompt || p.field.label, options: p.options || [], candidate, jobTitle: job?.title, companyName: job?.company });
+        const ans = res?.answer;
+        if (ans && String(ans).trim()) {
+          let val = String(ans).trim();
+          if (p.options && p.options.length) {
+            const match = p.options.find(o => o.toLowerCase().trim() === val.toLowerCase().trim()) || p.options.find(o => val.toLowerCase().includes(o.toLowerCase().trim()));
+            if (!match) { p.status = 'needs_review'; p.reason = 'AI answer did not match an option.'; return; }
+            val = match;
+          }
+          p.value = val; p.status = 'supported'; p.ai = true;
+        } else { p.status = 'needs_review'; p.reason = 'No AI answer available.'; }
+      } catch { p.status = 'needs_review'; p.reason = 'AI answer failed.'; }
+    }));
+  }
+
   async function _executeOutsideAutofillInner(candidate) {
     if (!candidate || (!candidate.full_name && !candidate.name)) return 0;
     activeCandidate = candidate;
@@ -380,40 +396,55 @@
     } catch (_) {}
 
     let filledCount = 0;
+    let totalDetectedFields = 0;
     const filledLabelsList = [];
-    const aiFieldPromises = [];
 
     // Check NextkinForms modular pipeline first
     if (root.NextkinForms && root.NextkinFieldMapping && root.NextkinFieldWriter) {
       try {
         const fields = root.NextkinForms.discoverFields(document);
+        totalDetectedFields = fields.filter(f => f.kind !== 'inaccessible').length;
         if (fields?.length) {
           const plans = root.NextkinFieldMapping.planFill(fields, candidate);
+          await resolveAiPlans(plans, candidate);
           const written = await root.NextkinFieldWriter.applyFill(plans, { sessionId: 'out_' + Date.now(), isCurrent: () => true });
-          if (written?.length) filledCount += written.length;
+          for (const receipt of (written || [])) {
+            const value = receipt.writtenValue;
+            const hasValue = Array.isArray(value) ? value.some(Boolean) : String(value ?? '').trim().length > 0;
+            if (!hasValue) continue;
+            try { receipt.field?.element?.setAttribute('data-nextkin-filled', 'true'); if (receipt.ai) receipt.field?.element?.setAttribute('data-nextkin-ai', 'true'); } catch {}
+            filledCount++;
+            filledLabelsList.push({ key: receipt.field?.label || 'Field', label: String(receipt.field?.label || 'Field').slice(0, 45), value: Array.isArray(value) ? 'Selected' : String(value), ai: !!receipt.ai });
+          }
         }
-      } catch {}
+      } catch (err) {
+        console.error('[NextkinAutofill] Modular fill pipeline failed; using direct DOM fallback.', err);
+      }
     }
 
     // Direct DOM Autofill for Ashby, Greenhouse, Lever, Workday, etc.
     const controls = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="password"]), textarea, select, [role="combobox"], [role="checkbox"], [aria-haspopup="listbox"], button[class*="select" i], [data-testid*="select" i]'));
 
     // Step 1: Handle ATS Yes/No Button Groups (Ashby, Greenhouse, Lever)
-    for (const group of document.querySelectorAll('fieldset, [role="group"], .application-question, [class*="application-question"], [class*="question"], div[data-testid*="question"]')) {
+    for (const group of document.querySelectorAll('fieldset, [role="group"], .application-question, [class*="application-question"], [class*="question"], div[data-testid*="question"], [class*="yesno"]')) {
+      if (group.getAttribute('data-nextkin-filled') === 'true') continue;
+      if (group.closest('[data-nextkin-filled="true"]')) continue;
       const buttons = Array.from(group.querySelectorAll('button')).filter(b => /^(yes|no)$/i.test((b.textContent || '').trim()));
       if (buttons.length >= 2) {
         const qText = (group.textContent || '').toLowerCase();
+        const question = (group.closest('[class*="field-entry"], [class*="fieldEntry"], .application-question, [class*="application-question"], [class*="question"]')?.querySelector('label, legend, [class*="question-title"], [class*="title"], [class*="label"]')?.textContent || '').toLowerCase();
         let chooseYes = null;
-        if (/based in the united states|permanently based|us or canada|resident of|eligible|authorized|18 years|over 18/i.test(qText)) chooseYes = true;
-        else if (/sponsorship|require.*visa|visa.*sponsorship|require.*sponsorship/i.test(qText)) chooseYes = false;
+        if (/based in the united states|permanently based|us or canada|resident of|eligible|authorized|18 years|over 18/i.test(qText + ' ' + question)) chooseYes = true;
+        else if (/sponsorship|require.*visa|visa.*sponsorship|require.*sponsorship/i.test(qText + ' ' + question)) chooseYes = false;
 
         if (chooseYes !== null) {
           const target = buttons.find(b => (b.textContent || '').trim().toLowerCase() === (chooseYes ? 'yes' : 'no'));
-          if (target && !target.classList.contains('selected') && target.getAttribute('aria-pressed') !== 'true') {
+          const already = target && (target.getAttribute('aria-pressed') === 'true' || target.getAttribute('aria-checked') === 'true' || target.classList.contains('selected'));
+          if (target && !already) {
             target.focus(); target.click();
-            target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            if (target.getAttribute('aria-pressed') !== 'true' && target.getAttribute('aria-checked') !== 'true' && !target.classList.contains('selected')) continue;
             filledCount++;
-            const labelText = group.querySelector('legend, h2, h3, h4, strong, [class*="title" i], [class*="label" i]')?.innerText || (chooseYes ? 'Based in US/Canada' : 'Visa Sponsorship');
+            const labelText = group.closest('[class*="field-entry"], [class*="fieldEntry"], .application-question, [class*="application-question"], [class*="question"]')?.querySelector('label, legend, [class*="question-title"], [class*="title"], [class*="label"]')?.innerText || (chooseYes ? 'Based in US/Canada' : 'Visa Sponsorship');
             filledLabelsList.push({ key: chooseYes ? 'authorized' : 'sponsorship', label: labelText.slice(0, 45), value: chooseYes ? 'Yes' : 'No' });
           }
         }
@@ -426,19 +457,19 @@
     const lastName = candidate.last_name || nameParts.slice(1).join(' ') || firstName;
     const phone = (candidate.phone || candidate.confirmed_facts?.phone || '').replace(/\D/g, '').slice(-10);
     const email = candidate.email || candidate.confirmed_facts?.email || '';
-    const location = candidate.current_city ? `${candidate.current_city}, ${candidate.current_state || ''}`.trim() : (candidate.location || 'San Francisco, CA');
+    const location = candidate.current_city ? `${candidate.current_city}, ${candidate.current_state || ''}`.replace(/,\s*$/, '').trim() : (candidate.location || '');
     const linkedin = candidate.linkedin_url || candidate.confirmed_facts?.linkedin_url || '';
-    const skills = Array.isArray(candidate.skills) ? candidate.skills.join(', ') : (candidate.skills || 'TypeScript, React, Node.js');
+    const skills = Array.isArray(candidate.skills) ? candidate.skills.join(', ') : (candidate.skills || '');
 
     const FIELD_MAP = [
       { key: 'First Name', re: /\b(first\s*name|fname|given\s*name)\b/i, val: firstName },
       { key: 'Last Name', re: /\b(last\s*name|lname|family\s*name|surname)\b/i, val: lastName },
-      { key: 'Full Name', re: /\b(full\s*name|applicant\s*name|candidate\s*name|^name$)\b/i, exclude: /\b(middle|first|last|company|referr)/i, val: candidate.full_name || `${firstName} ${lastName}` },
+      { key: 'Full Name', re: /\b(full\s*name|applicant\s*name|candidate\s*name|your\s*name|name)\b/i, exclude: /\b(middle|first|last|company|preferred|referr|user|login|screen|file)\b/i, val: candidate.full_name || `${firstName} ${lastName}`.trim() },
       { key: 'Email', re: /\b(email|e-mail)\b/i, val: email },
       { key: 'Phone', re: /\b(phone|mobile|cell|tel|contact\s*number)\b/i, val: phone },
       { key: 'Current Location', re: /\b(location|city|address|current\s*location)\b/i, val: location },
       { key: 'LinkedIn', re: /\b(linkedin|linked\s*in)\b/i, val: linkedin },
-      { key: 'Current Company', re: /\b(company|employer|current\s*company)\b/i, exclude: /\b(salary|drawn|exp)/i, val: candidate.current_company || 'UST' },
+      { key: 'Current Company', re: /\b(company|employer|current\s*company)\b/i, exclude: /\b(salary|drawn|exp)/i, val: candidate.current_company || '' },
       { key: 'Ideal Tech Stack', re: /tech.*stack|languages.*frameworks|technologies|skills/i, val: skills },
       { key: 'Work Authorization', re: /authorized|right\s*to\s*work|work\s*authorization/i, val: 'Yes' },
       { key: 'Visa Sponsorship', re: /sponsorship|require.*visa|sponsor/i, val: 'No' }
@@ -446,20 +477,13 @@
 
     for (const el of controls) {
       if (el.closest('#mp-copilot-root, #jobright-helper-plugin, #nextkin-copilot-toast')) continue;
+      if (el.getAttribute('data-nextkin-filled') === 'true') continue;
+      if (!el.getClientRects().length) continue;
+      if (el.type !== 'checkbox' && el.getAttribute('role') !== 'checkbox' && (el.value || '').trim()) continue;
       const desc = getControlDescriptor(el);
 
-      // Checkboxes: affirmative / consent terms
-      if (el.type === 'checkbox' || el.getAttribute('role') === 'checkbox') {
-        if (/agree|consent|terms|policy|privacy|authorized|certify|declare/i.test(desc) && !/opt.*out|never/i.test(desc)) {
-          if (!el.checked && el.getAttribute('aria-checked') !== 'true') {
-            setNativeChecked(el, true);
-            filledCount++;
-            filledLabelsList.push({ key: 'consent', label: desc.slice(0, 40), value: 'Checked' });
-            highlightFieldBeingFilled(el);
-          }
-        }
-        continue;
-      }
+      // Legal acknowledgements belong to the candidate; the modular pipeline fills fact-backed checkboxes.
+      if (el.type === 'checkbox' || el.getAttribute('role') === 'checkbox') continue;
 
       // Match against mapping table
       let target = null;
@@ -474,7 +498,8 @@
         const prev = el.value || '';
         const isCombo = el.getAttribute('role') === 'combobox' || el.getAttribute('aria-haspopup') === 'listbox';
         const ok = isCombo ? await setNativeCombobox(el, target.val) : setNativeValue(el, target.val);
-        if (ok) {
+        const landed = isCombo ? (el.value || '').trim().length > 0 : sameValue(el.value, target.val);
+        if (ok && landed) {
           el.setAttribute('data-nextkin-filled', 'true');
           el.setAttribute('data-nextkin-label', target.key);
           filledCount++;
@@ -485,12 +510,15 @@
     }
 
     // Step 3: Broadcast verified checklist to Copilot sidebar
-    const resultPayload = filledLabelsList.map(item => ({ label: typeof item === 'object' && item.label ? String(item.label) : String(item), filled: true, verified: true }));
+    const donePayload = { type: 'NEXTKIN_AUTOFILL_DONE', filledCount, totalCount: totalDetectedFields || filledCount, filledFields: filledLabelsList };
     try {
-      chrome.runtime.sendMessage({ type: 'autoFillResultFromIframe', data: resultPayload });
+      chrome.runtime.sendMessage({ type: 'autoFillResultFromIframe', data: donePayload });
     } catch {}
     try {
-      window.postMessage({ type: 'NEXTKIN_AUTOFILL_DONE', filledCount, filledFields: filledLabelsList }, '*');
+      window.postMessage(donePayload, '*');
+    } catch {}
+    try {
+      document.dispatchEvent(new CustomEvent('NextkinAutofillDone', { detail: donePayload }));
     } catch {}
 
     return filledCount;

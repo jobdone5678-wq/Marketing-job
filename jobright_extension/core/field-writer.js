@@ -22,8 +22,10 @@
     if (!el) return false;
     const b = el.closest('button, a, input[type=submit], input[type=image], [role=button], [role=link]');
     if (!b) return false;
-    if (b instanceof HTMLInputElement && b.type === 'submit') return true;
-    if (b instanceof HTMLButtonElement && b.type === 'submit' && !b.hasAttribute('aria-haspopup') && !b.hasAttribute('aria-expanded')) return true;
+    if (b instanceof HTMLInputElement && (b.type === 'submit' || b.type === 'image')) return true;
+    // <button> reports type=submit even when the app never declared it, so only a declared
+    // submit type is treated as off limits; the text check below still catches real submits.
+    if (b instanceof HTMLButtonElement && b.getAttribute('type') === 'submit') return true;
     const txt = (b.textContent || '').trim();
     const aria = b.getAttribute('aria-label') || '';
     return RE_FORBIDDEN_CLICK.test(txt) || RE_FORBIDDEN_CLICK.test(aria);
@@ -40,6 +42,14 @@
     return t || el;
   }
 
+  // A <button> inside a form without an explicit type submits that form when clicked.
+  function withoutImplicitSubmit(el, fn) {
+    const btn = el instanceof HTMLButtonElement ? el : null;
+    if (!btn || btn.hasAttribute('type') || !btn.form) return fn();
+    try { btn.setAttribute('type', 'button'); } catch { return fn(); }
+    try { return fn(); } finally { try { btn.removeAttribute('type'); } catch { } }
+  }
+
   // Authentic pointer click event sequence
   function pointerClick(el, at) {
     if (isForbiddenClick(el)) return;
@@ -51,7 +61,7 @@
     const m = type => new MouseEvent(type, base);
     const t = innermost(el);
 
-    dispatching(() => {
+    withoutImplicitSubmit(t, () => dispatching(() => {
       try { t.dispatchEvent(p('pointerover')); } catch { }
       try { t.dispatchEvent(p('pointerenter')); } catch { }
       try { t.dispatchEvent(m('mouseover')); } catch { }
@@ -65,7 +75,18 @@
       try { t.dispatchEvent(m('click')); } catch {
         try { el.click(); } catch { }
       }
-    });
+    }));
+  }
+
+  // A single click event: toggle-style controls must not receive two clicks or they flip back.
+  function singleClick(el) {
+    if (!el || isForbiddenClick(el)) return;
+    withoutImplicitSubmit(el, () => dispatching(() => {
+      try { el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true, cancelable: true, button: 0, isPrimary: true, pointerId: 1, pointerType: 'mouse' })); } catch { }
+      try { el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, composed: true, cancelable: true, button: 0, view: window })); } catch { }
+      try { el.focus?.({ preventScroll: true }); } catch { }
+      try { el.click(); } catch { }
+    }));
   }
 
   // React Fiber & Native Setter Bypass with event cascade
@@ -79,32 +100,46 @@
       const boolVal = Boolean(next);
       const isInput = el instanceof HTMLInputElement;
       if (isInput) {
-        if (el._valueTracker) {
-          try { el._valueTracker.setValue(boolVal ? 'false' : 'true'); } catch { }
-        }
-        const proto = HTMLInputElement.prototype;
-        const setter = Object.getOwnPropertyDescriptor(proto, 'checked')?.set;
-        try {
-          if (setter) setter.call(el, boolVal); else el.checked = boolVal;
-        } catch {
-          el.checked = boolVal;
+        // A real click is what frameworks listen to for checkboxes; a bare property write is
+        // reverted on their next render, so the box would look untouched while we report it filled.
+        if (el.checked !== boolVal) {
+          try { el.click(); } catch { }
+          if (el.checked !== boolVal) {
+            const checkedSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked')?.set;
+            try { if (checkedSetter) checkedSetter.call(el, boolVal); else el.checked = boolVal; } catch { el.checked = boolVal; }
+          }
         }
       }
       if (el.getAttribute?.('role') === 'checkbox' || el.hasAttribute?.('aria-checked')) {
         el.setAttribute('aria-checked', String(boolVal));
       }
 
-      dispatching(() => {
-        try { pointerClick(el); } catch { }
-        el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-        try { el.dispatchEvent(new FocusEvent('blur', { bubbles: true, composed: true })); } catch { }
-      });
+      if (!(isInput && el.checked === boolVal)) {
+        dispatching(() => {
+          el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+          try { el.dispatchEvent(new FocusEvent('blur', { bubbles: true, composed: true })); } catch { }
+        });
+      }
 
       if (el.getAttribute?.('aria-invalid') === 'true') {
         try { el.removeAttribute('aria-invalid'); } catch { }
       }
       return isInput ? el.checked === boolVal : (el.getAttribute('aria-checked') === String(boolVal));
+    }
+
+    // Rich text editors have no value property; the text they hold is their content.
+    if (el.getAttribute?.('contenteditable') === '' || el.getAttribute?.('contenteditable') === 'true') {
+      el.textContent = String(next);
+      dispatching(() => {
+        try {
+          el.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'insertText', data: String(next) }));
+        } catch {
+          el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+        }
+        el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+      });
+      return el.textContent.trim() === String(next).trim();
     }
 
     // Force React valueTracker out of sync
@@ -183,10 +218,28 @@
     return null;
   }
 
+  const isSelectedState = el => el.getAttribute('aria-pressed') === 'true' || el.getAttribute('aria-checked') === 'true' ||
+    el.getAttribute('aria-selected') === 'true' || el.getAttribute('data-selected') === 'true' ||
+    /(^|[\s_-])(active|selected)([\s_-]|$)/i.test(String(el.getAttribute('class') || ''));
+
+  function selectedOption(field) {
+    const opts = field.options || [];
+    const exposesState = opts.some(o => o.element.hasAttribute('aria-pressed') || o.element.hasAttribute('aria-checked') ||
+      o.element.hasAttribute('aria-selected') || o.element.hasAttribute('data-selected') ||
+      /(^|[\s_-])(active|selected)([\s_-]|$)/i.test(String(o.element.getAttribute('class') || '')));
+    if (!exposesState) return { known: false, option: null };
+    return { known: true, option: opts.find(o => isSelectedState(o.element)) || null };
+  }
+
   function value(field) {
+    if (field.kind === 'choice') {
+      const sel = selectedOption(field).option;
+      return sel ? (sel.label || sel.element.textContent || '').trim() : '';
+    }
     if (field.kind === 'radio') return field.elements.map(el => el.checked);
     if (field.kind === 'checkbox') return field.element.checked !== undefined ? field.element.checked : (field.element.getAttribute('aria-checked') === 'true');
     if (field.kind === 'combobox') return field.element.value || field.element.textContent.trim();
+    if (field.element?.isContentEditable) return field.element.textContent || '';
     return field.element.value;
   }
 
@@ -198,6 +251,68 @@
     const currStr = String(current || '').trim().toLowerCase();
     const expStr = String(expected || '').trim().toLowerCase();
     return currStr === expStr || currStr.includes(expStr) || expStr.includes(currStr);
+  }
+
+  const sameish = (a, b) => {
+    const x = String(a ?? '').trim().toLowerCase(), y = String(b ?? '').trim().toLowerCase();
+    if (!x) return false;
+    return x === y || x.includes(y) || y.includes(x);
+  };
+
+  // Options offered by an autocomplete, best match first. The list is often fetched
+  // asynchronously, so it may still be empty on the first pass.
+  function comboboxOptions(el, desired) {
+    const rootNode = el.getRootNode ? el.getRootNode() : document;
+    const scope = rootNode.getElementById?.(el.getAttribute('aria-controls')) || document;
+    const want = String(desired ?? '').trim().toLowerCase();
+    const candidates = Array.from(scope.querySelectorAll('[role="option"], [role="listbox"] li, .select2-results__option, li[data-value], div[class*="option"]'))
+      .filter(o => o.getAttribute('aria-disabled') !== 'true' && o.getClientRects().length);
+    const rank = t => (t === want ? 0 : t.startsWith(want) ? 1 : 2);
+    return candidates
+      .map(o => ({ o, text: o.textContent.trim(), t: o.textContent.trim().toLowerCase() }))
+      .filter(x => x.text && (x.t === want || x.t.startsWith(want) || x.t.includes(want)))
+      .sort((a, b) => rank(a.t) - rank(b.t))
+      .map(x => x.o);
+  }
+
+  // The option that clears a dropdown. Portals mark it with a placeholder attribute or wording.
+  function resetOption(el) {
+    const rootNode = el.getRootNode ? el.getRootNode() : document;
+    const scope = rootNode.getElementById?.(el.getAttribute('aria-controls')) || document;
+    const options = Array.from(scope.querySelectorAll('[role="option"], [role="listbox"] li, .select2-results__option, li[data-value]'));
+    return options.find(o => o.hasAttribute('data-placeholder'))
+      || options.find(o => /^(select|choose|please select|clear|none|no selection|--|\-)/i.test(o.textContent.trim()))
+      || null;
+  }
+
+  // A dropdown whose reset is disabled would leave the candidate unable to clear our answer.
+  function resetIsLocked(el) {
+    const reset = resetOption(el);
+    return Boolean(reset && reset.getAttribute('aria-disabled') === 'true');
+  }
+
+  // True when the value the plan asked for is actually present in the page.
+  function writeLanded(field, expected, optionEl) {
+    if (field.kind === 'checkbox') return Boolean(field.element.checked) === Boolean(expected);
+    if (field.kind === 'radio') {
+      const target = Array.isArray(expected) ? expected.indexOf(true) : -1;
+      return field.elements.some((el, i) => el.checked && (target < 0 || i === target));
+    }
+    if (field.kind === 'choice') {
+      const sel = selectedOption(field);
+      if (!sel.known) return true;
+      return Boolean(sel.option) && sameish(sel.option.label, expected);
+    }
+    if (field.kind === 'combobox') {
+      const v = String(value(field) || '').trim().toLowerCase();
+      const e = String(expected || '').trim().toLowerCase();
+      if (!v) return false;
+      if (v === e) return true;
+      // The app may display its own wording; a selected option still proves the choice landed.
+      return Boolean(optionEl && optionEl.getAttribute('aria-selected') === 'true');
+    }
+    if (field.element?.isContentEditable) return sameish(field.element.textContent, expected);
+    return sameish(field.element.value, expected);
   }
 
   async function applyFill(plans, session) {
@@ -215,42 +330,37 @@
       const previousValue = value(field);
       let expected = String(plan.value);
       let undoChoice = null;
+      let pickedOption = null;
 
       if (Array.isArray(previousValue) ? previousValue.some(Boolean) : (previousValue && String(previousValue).trim().length > 0)) {
         continue;
       }
 
       if (field.kind === 'combobox') {
+        // A dropdown whose reset is disabled would leave the candidate unable to clear our answer.
+        if (el.tagName !== 'INPUT' && resetIsLocked(el)) continue;
         pointerClick(el);
         if (el.tagName === 'INPUT') {
           writeNative(el, 'value', String(plan.value));
         }
         let option = null;
-        for (let attempt = 0; attempt < 10 && session.isCurrent(); attempt++) {
-          const rootNode = el.getRootNode ? el.getRootNode() : document;
-          const scope = rootNode.getElementById?.(el.getAttribute('aria-controls')) || document;
-          const options = Array.from(scope.querySelectorAll('[role="option"], [role="listbox"] li, .select2-results__option, li[data-value], div[class*="option"]')).filter(o =>
-            o.getAttribute('aria-disabled') !== 'true' &&
-            (o.textContent.trim().toLowerCase() === String(plan.value).toLowerCase() || o.textContent.trim().toLowerCase().includes(String(plan.value).toLowerCase()))
-          );
+        for (let attempt = 0; attempt < 20 && session.isCurrent(); attempt++) {
+          const options = comboboxOptions(el, plan.value);
           if (options.length >= 1) {
             option = options[0];
             break;
           }
-          await new Promise(r => setTimeout(r, 60));
+          await new Promise(r => setTimeout(r, 80));
         }
 
-        if (option) {
-          pointerClick(option);
-          try { option.click(); } catch { }
-          expected = option.textContent.trim();
-        } else {
-          if (el.tagName === 'INPUT') {
-            writeNative(el, 'value', String(plan.value));
-            try { el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true })); } catch(e) {}
-          }
+        if (!option) {
+          // No suggestion matched: the typed value is ours, so the control goes back to how it was.
+          if (el.tagName === 'INPUT') writeNative(el, 'value', previousValue || '');
           continue;
         }
+        singleClick(option);
+        expected = option.textContent.trim();
+        pickedOption = option;
       } else if (field.kind === 'select') {
         const valLower = String(plan.value).toLowerCase().trim();
         const stateCode = STATE_MAP[valLower] || null;
@@ -278,14 +388,25 @@
         const boolVal = typeof plan.value === 'boolean' ? plan.value : (plan.value === 'true' || plan.value === 'Yes' || plan.value === '1');
         expected = boolVal;
         writeNative(el, 'checked', boolVal);
+      } else if (field.kind === 'choice') {
+        const valLower = String(plan.value).toLowerCase().trim();
+        const opt = (field.options || []).find(o => o.label.toLowerCase().trim() === valLower || o.value.toLowerCase().trim() === valLower)
+          || (field.options || []).find(o => o.label.toLowerCase().includes(valLower) || valLower.includes(o.label.toLowerCase().trim()));
+        if (!opt) continue;
+        undoChoice = previousValue || null;
+        singleClick(opt.element);
+        expected = opt.label;
       } else {
         writeNative(el, 'value', String(plan.value));
       }
 
-      await new Promise(r => setTimeout(r, 10));
-
-      // Post-fill verification
-      const writtenValue = value(field);
+      // Post-fill verification: a write that did not land must not be reported as filled.
+      let writtenValue = value(field);
+      if (!writeLanded(field, expected, pickedOption)) {
+        await new Promise(r => setTimeout(r, 120));
+        writtenValue = value(field);
+        if (!writeLanded(field, expected, pickedOption)) continue;
+      }
       if (!session.isCurrent()) continue;
 
       receipts.push({
@@ -295,7 +416,8 @@
         previousValue,
         writtenValue,
         sessionId: session.sessionId,
-        undoChoice
+        undoChoice,
+        ai: !!plan.ai
       });
     }
     return receipts;
@@ -308,11 +430,15 @@
       if (receipt.sessionId !== session.sessionId || !field.element || !field.element.isConnected) continue;
       if (field.kind === 'combobox') {
         if (field.element.tagName === 'INPUT') writeNative(field.element, 'value', receipt.previousValue || '');
-        else if (receipt.undoChoice) {
+        else if (receipt.previousValue) {
           pointerClick(field.element);
           await new Promise(r => setTimeout(r, 60));
           const scope = field.element.getRootNode().getElementById?.(field.element.getAttribute('aria-controls')) || document;
-          const reset = Array.from(scope.querySelectorAll('[role="option"]')).find(o => o.textContent.trim() === receipt.undoChoice);
+          const reset = Array.from(scope.querySelectorAll('[role="option"]')).find(o => o.textContent.trim() === receipt.previousValue);
+          if (reset) pointerClick(reset);
+        } else {
+          // The dropdown held nothing before; its reset option is how the choice is cleared.
+          const reset = resetOption(field.element);
           if (reset) pointerClick(reset);
         }
       } else if (field.kind === 'radio') {
@@ -320,6 +446,9 @@
           el.checked = receipt.previousValue[i] || false;
           el.dispatchEvent(new Event('change', { bubbles: true }));
         });
+      } else if (field.kind === 'choice') {
+        const prior = (field.options || []).find(o => o.label === receipt.previousValue);
+        if (prior) singleClick(prior.element);
       } else {
         writeNative(field.element, field.kind === 'checkbox' ? 'checked' : 'value', receipt.previousValue);
       }
@@ -334,6 +463,7 @@
     writeNative,
     pointerClick,
     dispatching,
+    isFilling,
     verifyField,
     parseDateSegments,
     isForbiddenClick

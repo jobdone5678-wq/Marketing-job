@@ -851,8 +851,8 @@
     let handleDone = (ev) => {
       let data = ev.data || ev.detail;
       if (data && (data.type === 'NEXTKIN_AUTOFILL_DONE' || ev.type === 'NextkinAutofillDone' || data.type === 'autoFillResultFromIframe')) {
-        let count = data.filledCount || (Array.isArray(data.filledFields) ? data.filledFields.length : (data.data && Array.isArray(data.data.filledFields) ? data.data.filledFields.length : 14));
-        let total = data.totalCount || 16;
+        let count = typeof data.filledCount === 'number' ? data.filledCount : (Array.isArray(data.filledFields) ? data.filledFields.length : (data.data && Array.isArray(data.data.filledFields) ? data.data.filledFields.length : 0));
+        let total = data.totalCount || (data.data && data.data.totalCount) || count;
         let fields = data.filledFields || (data.data && data.data.filledFields) || [];
         setAutofillDoneData({ count, total, fields });
       }
@@ -906,6 +906,10 @@
     }
   };
 
+  let [aiAnswersOn, setAiAnswersOn] = (0,d.useState)(true);
+  (0,d.useEffect)(() => { try { chrome.storage.local.get(['nextkin_ai_answers']).then(s => setAiAnswersOn(s.nextkin_ai_answers !== false)).catch(() => {}); } catch(e) {} }, []);
+  const toggleAiAnswers = () => setAiAnswersOn(prev => { const next = !prev; try { chrome.storage.local.set({ nextkin_ai_answers: next }); } catch(e) {} return next; });
+
   const btnLabel = isConnected
     ? "Go to Candidate Dashboard"
     : isAuthPage
@@ -922,11 +926,6 @@
         disabled: g || (isAuthPage && !isConnected),
         loading: g,
         onClick: (evt) => {
-          if (!isPortalPage && !isAuthPage && !isConnected) {
-            setTimeout(() => {
-              setAutofillDoneData(prev => prev || { count: 14, total: 16, fields: [] });
-            }, 1800);
-          }
           handleBtnClick(evt);
         },
         style: {
@@ -948,6 +947,14 @@
         },
         children: btnLabel
       }),
+      (!isPortalPage && !isAuthPage) ? (0,o.jsxs)("label", {
+        style: { display: "flex", alignItems: "center", gap: 8, margin: "10px 0 0", fontSize: 12, color: "#334155", cursor: "pointer", userSelect: "none" },
+        children: [
+          (0,o.jsx)("input", { type: "checkbox", checked: aiAnswersOn, onChange: toggleAiAnswers, style: { width: 15, height: 15, accentColor: "#7c3aed", cursor: "pointer" } }),
+          (0,o.jsx)("span", { children: "Use AI for bio & screening questions" }),
+          (0,o.jsx)("span", { style: { fontSize: 9, fontWeight: 700, color: "#7c3aed", background: "#ede9fe", border: "1px solid #ddd6fe", borderRadius: 999, padding: "0 6px" }, children: "AI" })
+        ]
+      }) : null,
       (!isPortalPage && !isAuthPage && autofillDoneData) ? (0,o.jsxs)("div", {
         style: {
           margin: "12px 0 0",
@@ -967,9 +974,9 @@
                 style: { fontSize: 13, fontWeight: 700, color: "#15803d", display: "flex", alignItems: "center", gap: 5 },
                 children: [
                   "🎉 Filled ",
-                  autofillDoneData.count || 14,
+                  autofillDoneData.count || 0,
                   " out of ",
-                  autofillDoneData.total || 16,
+                  autofillDoneData.total || autofillDoneData.count || 0,
                   " fields"
                 ]
               }),
@@ -995,22 +1002,7 @@
               borderRadius: 8,
               border: "1px solid #dcfce7"
             },
-            children: ((autofillDoneData.fields && autofillDoneData.fields.length > 0) ? autofillDoneData.fields : [
-              { name: "Full Name", value: "Bhargav Reddy" },
-              { name: "Email", value: "bhargav.reddy@gmail.com" },
-              { name: "Current Company", value: "UST" },
-              { name: "Current Location", value: "San Francisco, CA" },
-              { name: "Based in US / Canada", value: "Yes" },
-              { name: "Visa Sponsorship", value: "No" },
-              { name: "Ideal Tech Stack", value: "TypeScript, React, Node.js, Next.js, PostgreSQL" },
-              { name: "Work Authorization", value: "Authorized in US" },
-              { name: "LinkedIn URL", value: "https://linkedin.com/in/bhargav-reddy" },
-              { name: "GitHub URL", value: "https://github.com/bhargav-reddy" },
-              { name: "Website / Portfolio", value: "https://linkedin.com/in/bhargav-reddy" },
-              { name: "Years of Experience", value: "5+ Years" },
-              { name: "Resume Upload", value: "Bhargav_Reddy_Resume.pdf" },
-              { name: "Equal Opportunity (EEOC)", value: "Completed / Self-identified" }
-            ]).map(function(item, idx) {
+            children: ((autofillDoneData.fields && autofillDoneData.fields.length > 0) ? autofillDoneData.fields : []).map(function(item, idx) {
               var label = typeof item === "string" ? item : (item.name || item.label || ("Field " + (idx + 1)));
               var val = typeof item === "object" && item.value ? (" — " + String(item.value)) : "";
               return (0,o.jsxs)("div", {
@@ -1022,7 +1014,8 @@
                     style: { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
                     children: [
                       (0,o.jsx)("strong", { style: { color: "#0f172a" }, children: label }),
-                      (0,o.jsx)("span", { style: { color: "#64748b" }, children: val })
+                      (0,o.jsx)("span", { style: { color: "#64748b" }, children: val }),
+                      (item && item.ai) ? (0,o.jsx)("span", { style: { marginLeft: 6, fontSize: 9, fontWeight: 700, color: "#7c3aed", background: "#ede9fe", border: "1px solid #ddd6fe", borderRadius: 999, padding: "0 6px" }, children: "AI" }) : null
                     ]
                   })
                 ]
@@ -3034,6 +3027,7 @@ function g(){
       if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
         chrome.runtime.sendMessage({
           type: 'save_uploaded_resume',
+          candidate: candidate,
           resume: { name: file.name, filename: file.name, text: text, candidate: candidate }
         }, function(){});
       }
@@ -3049,7 +3043,7 @@ function g(){
   let [isFilling, setIsFilling] = (0,p.useState)(!1);
   let [filledStatus, setFilledStatus] = (0,p.useState)(null);
   let [filledFieldsList, setFilledFieldsList] = (0,p.useState)([]);
-  let [totalDetectedFields, setTotalDetectedFields] = (0,p.useState)(16);
+  let [totalDetectedFields, setTotalDetectedFields] = (0,p.useState)(0);
 
   (0,p.useEffect)(function(){
     var onMsg = function(ev){
@@ -3059,7 +3053,7 @@ function g(){
           setFilledStatus(null);
         } else if(ev.data.type === 'NEXTKIN_AUTOFILL_DONE' || ev.data.type === 'autoFillResultFromIframe' || ev.data.type === 'autoFillCompleteFromIframe'){
           setIsFilling(!1);
-          var count = typeof ev.data.filledCount === "number" ? ev.data.filledCount : (ev.data.data && Array.isArray(ev.data.data.filledFields) ? ev.data.data.filledFields.length : (Array.isArray(ev.data.filledFields) ? ev.data.filledFields.length : 14));
+          var count = typeof ev.data.filledCount === "number" ? ev.data.filledCount : (ev.data.data && Array.isArray(ev.data.data.filledFields) ? ev.data.data.filledFields.length : (Array.isArray(ev.data.filledFields) ? ev.data.filledFields.length : 0));
           setFilledStatus(count);
           var flds = ev.data.filledFields || (ev.data.data && ev.data.data.filledFields) || [];
           if (Array.isArray(flds) && flds.length) setFilledFieldsList(flds);
@@ -3069,7 +3063,7 @@ function g(){
     };
     var onDone = function(ev){
       setIsFilling(!1);
-      var count = typeof ev.detail?.filledCount === "number" ? ev.detail.filledCount : (Array.isArray(ev.detail?.filledFields) ? ev.detail.filledFields.length : 14);
+      var count = typeof ev.detail?.filledCount === "number" ? ev.detail.filledCount : (Array.isArray(ev.detail?.filledFields) ? ev.detail.filledFields.length : 0);
       setFilledStatus(count);
       var flds = ev.detail?.filledFields || [];
       if (Array.isArray(flds) && flds.length) setFilledFieldsList(flds);

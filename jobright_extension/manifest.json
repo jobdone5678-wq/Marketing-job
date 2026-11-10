@@ -382,7 +382,8 @@
         "core/job-context.js",
         "core/candidate-context.js",
         "core/resume-engine.js",
-        "core/outside-job-engine.js"
+        "core/outside-job-engine.js",
+        "content.js"
       ],
       "all_frames": true,
       "run_at": "document_idle",
@@ -565,6 +566,7 @@
         "frame-agent.js",
         "core/outside-job-engine.js",
         "outside-job-engine.js",
+        "content.js",
         "core/resume-workflows.js",
         "resume-workflows.js"
       ]

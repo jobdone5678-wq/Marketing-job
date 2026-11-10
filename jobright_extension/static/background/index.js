@@ -79,7 +79,7 @@ async function handleV3Message(msg, sender, reply) {
     }
 
     if (type === 'save_uploaded_resume') {
-      const cand = msg.candidate;
+      const cand = msg.candidate || msg.resume?.candidate || msg.resume?.parsed_candidate;
       if (cand) {
         await chrome.storage.local.set({
           uploaded_resume: cand,
@@ -108,7 +108,7 @@ async function handleV3Message(msg, sender, reply) {
     }
 
     if (type === 'generate_ai_field_answer') {
-      const { prompt, fieldLabel, candidate, jobTitle, companyName } = msg;
+      const { prompt, fieldLabel, candidate, jobTitle, companyName, options } = msg;
       (async () => {
         const buildFallbackAnswer = () => {
           const name = candidate?.full_name || 'Candidate';
@@ -138,7 +138,7 @@ async function handleV3Message(msg, sender, reply) {
                   'Authorization': 'Bearer ' + tok,
                   'x-extension-id': chrome.runtime.id || 'nextkin-copilot'
                 },
-                body: JSON.stringify({ prompt, fieldLabel, candidate, jobTitle, companyName })
+                body: JSON.stringify({ prompt, fieldLabel, candidate, jobTitle, companyName, options })
               });
               if (resp.ok) {
                 const data = await resp.json();
@@ -165,36 +165,23 @@ async function handleV3Message(msg, sender, reply) {
     if (type === 'get_ai_answers') {
       (async () => {
         try {
-          const directApiKey = 'sk-xt-feb0878843bac616bf98f1a1797820ed06b863167626066d';
-          const directUrl = 'https://api.xkiro.com/v1/chat/completions';
-          const storage = await chrome.storage.local.get(['uploaded_resume', 'uploadedCandidate', 'nextkin_active_candidate', 'candidates']);
-          const cand = storage.uploaded_resume?.parsed_candidate || storage.uploadedCandidate || (storage.candidates || []).find(c => c.id === message.candidateId) || {};
-          const candName = cand.full_name || cand.name || 'Applicant';
-          const skillsStr = (Array.isArray(cand.skills) && cand.skills.length) ? cand.skills.join(', ') : (cand.primary_skills || '');
+          const storage = await chrome.storage.local.get(['origin', 'token', 'nextkin_auth_token', 'uploaded_resume', 'uploadedCandidate', 'nextkin_active_candidate', 'candidates']);
+          const cand = storage.uploaded_resume?.candidate || storage.uploaded_resume?.parsed_candidate || storage.uploadedCandidate || (storage.candidates || []).find(c => c.id === message.candidateId) || {};
+          const origin = storage.origin || 'http://localhost:3000';
+          const tok = storage.token || storage.nextkin_auth_token || '';
           const answers = {};
-
-          if (Array.isArray(message.questions)) {
-            for (const q of message.questions) {
-              const qId = q.id || q.label;
-              const prompt = `Candidate: ${candName}. Skills: ${skillsStr}. Job: ${message.jobTitle || ''} at ${message.companyName || ''}. Question: "${q.label}". If multiple choice options are provided: ${JSON.stringify(q.options || [])}, pick the best match. Otherwise write a concise first-person answer (1-2 sentences).`;
-              try {
-                const resp = await fetch(directUrl, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + directApiKey },
-                  body: JSON.stringify({
-                    model: 'mistralai/mistral-large-2512',
-                    messages: [{ role: 'system', content: 'You are a job applicant assistant. Respond concisely and professionally.' }, { role: 'user', content: prompt }],
-                    max_tokens: 100,
-                    temperature: 0.5
-                  })
-                });
-                if (resp.ok) {
-                  const data = await resp.json();
-                  const txt = (data.choices?.[0]?.message?.content?.trim() || '').replace(/^["']|["']$/g, '');
-                  if (txt) answers[qId] = txt;
-                }
-              } catch (_) {}
-            }
+          for (const q of (Array.isArray(message.questions) ? message.questions : [])) {
+            try {
+              const resp = await fetch(origin + '/api/extension/generate-answer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok, 'x-extension-id': chrome.runtime.id || 'nextkin-copilot' },
+                body: JSON.stringify({ fieldLabel: q.label, prompt: q.label, options: q.options || [], candidate: cand, jobTitle: message.jobTitle, companyName: message.companyName })
+              });
+              if (resp.ok) {
+                const data = await resp.json();
+                if (data && data.ok && data.answer) answers[q.id || q.label] = data.answer;
+              }
+            } catch (_) {}
           }
           reply({ ok: true, answers });
         } catch (err) {
