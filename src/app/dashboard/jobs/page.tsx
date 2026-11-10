@@ -1,0 +1,1 @@
+import {JobsBrowser} from '@/components/jobs-browser';export default function JobsPage(){return <JobsBrowser/>;}

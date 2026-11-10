@@ -1,0 +1,1 @@
+import {defineConfig} from '@playwright/test';export default defineConfig({testDir:'tests/e2e',fullyParallel:false,workers:1,timeout:60000,use:{baseURL:'http://127.0.0.1:3100',headless:true},expect:{timeout:15000},webServer:{command:'node scripts/e2e-server.mjs',url:'http://127.0.0.1:3100',timeout:180000,reuseExistingServer:false},reporter:'list'});

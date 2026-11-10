@@ -1,0 +1,157 @@
+﻿node.exe : npm notice run app@0.1.0 build
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\bharg\AppData\Roaming\ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (npm notice run app@0.1.0 build:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+npm notice run next build --webpack
+Γû▓ Next.js 16.4.5 (webpack)
+- Environments: .env.local
+Γùç injected env (0) from .env.local // tip: Γîü auth for agents [www.vestauth.com]
+Γ£ô Running next.config.ts took 280ms
+- Experiments (use with caution):
+  ┬╖ optimizePackageImports
+
+  Creating an optimized production build ...
+Γùç injected env (0) from .env.local // tip: Γîÿ custom filepath { path: '/custom/path/.env' }
+Γùç injected env (0) from .env.local // tip: Γîü auth for agents [www.vestauth.com]
+Γùç injected env (0) from .env.local // tip: Γùê encrypted .env [www.dotenvx.com]
+Γ£ô Compiled successfully in 21.9s
+  Skipping validation of types
+  Finished TypeScript config validation in 12ms ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/87) ...
+  Generating static pages using 7 workers (21/87) 
+  Generating static pages using 7 workers (43/87) 
+  Generating static pages using 7 workers (65/87) 
+Γ£ô Generating static pages using 7 workers (87/87) in 4.4s
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+Γöî Γùï /
+Γö£ Γùï /_not-found
+Γö£ ╞Æ /api/admin/assignments
+Γö£ ╞Æ /api/admin/audit
+Γö£ ╞Æ /api/admin/commissions/[id]
+Γö£ ╞Æ /api/admin/job-briefs
+Γö£ ╞Æ /api/admin/job-briefs/[id]
+Γö£ ╞Æ /api/admin/job-briefs/[id]/matches
+Γö£ ╞Æ /api/admin/operations
+Γö£ ╞Æ /api/admin/payments
+Γö£ ╞Æ /api/admin/placements
+Γö£ ╞Æ /api/admin/placements/[id]
+Γö£ ╞Æ /api/admin/placements/[id]/months
+Γö£ ╞Æ /api/admin/profiles
+Γö£ ╞Æ /api/admin/salary-periods/[id]
+Γö£ ╞Æ /api/admin/service-collections
+Γö£ ╞Æ /api/admin/service-receipts
+Γö£ ╞Æ /api/admin/staff-employments
+Γö£ ╞Æ /api/application-intents
+Γö£ ╞Æ /api/application-intents/[id]/events
+Γö£ ╞Æ /api/candidates
+Γö£ ╞Æ /api/candidates/[id]
+Γö£ ╞Æ /api/candidates/[id]/documents
+Γö£ ╞Æ /api/dashboard
+Γö£ ╞Æ /api/email-confirmations
+Γö£ ╞Æ /api/email-confirmations/[id]/review
+Γö£ ╞Æ /api/email-confirmations/import
+Γö£ ╞Æ /api/email-confirmations/sync
+Γö£ ╞Æ /api/email-connections
+Γö£ ╞Æ /api/email-connections/[id]
+Γö£ ╞Æ /api/email-connections/[id]/sync
+Γö£ ╞Æ /api/email-connections/gmail/callback
+Γö£ ╞Æ /api/email-connections/gmail/connect
+Γö£ ╞Æ /api/extension/ai-answers
+Γö£ ╞Æ /api/extension/answer-drafts
+Γö£ ╞Æ /api/extension/auto-submit
+Γö£ ╞Æ /api/extension/candidates
+Γö£ ╞Æ /api/extension/config
+Γö£ ╞Æ /api/extension/credentials
+Γö£ ╞Æ /api/extension/events
+Γö£ ╞Æ /api/extension/generate-answer
+Γö£ ╞Æ /api/extension/intents/[id]
+Γö£ ╞Æ /api/extension/pair
+Γö£ ╞Æ /api/extension/pair-code
+Γö£ ╞Æ /api/extension/push-candidate
+Γö£ ╞Æ /api/extension/quick-pair
+Γö£ ╞Æ /api/extension/resume-file
+Γö£ ╞Æ /api/extension/save-external-job
+Γö£ ╞Æ /api/extension/tailor-resume
+Γö£ ╞Æ /api/extension/tailor-upload
+Γö£ ╞Æ /api/greenhouse
+Γö£ ╞Æ /api/job-sources
+Γö£ ╞Æ /api/job-sources/[id]
+Γö£ ╞Æ /api/job-sources/[id]/sync
+Γö£ ╞Æ /api/jobs
+Γö£ ╞Æ /api/jobs/[id]
+Γö£ ╞Æ /api/jobs/applications
+Γö£ ╞Æ /api/jobs/import
+Γö£ ╞Æ /api/jobs/live
+Γö£ ╞Æ /api/jobseeker/resume
+Γö£ ╞Æ /api/matches
+Γö£ ╞Æ /api/outside-jobs
+Γö£ ╞Æ /api/packets
+Γö£ ╞Æ /api/placements
+Γö£ ╞Æ /api/resumes
+Γö£ ╞Æ /api/resumes/[id]
+Γö£ ╞Æ /api/resumes/[id]/confirm
+Γö£ ╞Æ /api/resumes/[id]/download
+Γö£ ╞Æ /api/resumes/[id]/process
+Γö£ ╞Æ /api/rtr
+Γö£ ╞Æ /api/rtr/[id]
+Γö£ ╞Æ /api/rtr/ocr
+Γö£ ╞Æ /api/service-collections
+Γö£ ╞Æ /api/settings
+Γö£ ╞Æ /api/submissions
+Γö£ ╞Æ /api/submissions/[id]/answers
+Γö£ ╞Æ /api/submissions/[id]/applied-resume
+Γö£ ╞Æ /api/tailored-resumes
+Γö£ ╞Æ /api/tailored-resumes/[id]
+Γö£ ╞Æ /api/tailored-resumes/[id]/download
+Γö£ ╞Æ /api/tasks/[id]
+Γö£ ╞Æ /api/tasks/[id]/process
+Γö£ ╞Æ /api/tasks/[id]/retry
+Γö£ ╞Æ /api/vendors
+Γö£ ╞Æ /api/vendors/[id]
+Γö£ ╞Æ /api/vendors/import-public
+Γö£ ╞Æ /api/webhooks/process-task
+Γö£ ╞Æ /auth/callback
+Γö£ ╞Æ /auth/confirm
+Γö£ ╞Æ /auth/google
+Γö£ Γùï /auth/jobseeker
+Γö£ Γùï /auth/jobseeker/connected
+Γö£ ╞Æ /dashboard
+Γö£ Γùï /dashboard/ashby
+Γö£ Γùï /dashboard/billing
+Γö£ Γùï /dashboard/candidates
+Γö£ ╞Æ /dashboard/candidates/[id]
+Γö£ ╞Æ /dashboard/candidates/[id]/edit
+Γö£ Γùï /dashboard/candidates/new
+Γö£ Γùï /dashboard/commissions
+Γö£ Γùï /dashboard/email-confirmations
+Γö£ Γùï /dashboard/greenhouse
+Γö£ Γùï /dashboard/help
+Γö£ Γùï /dashboard/integrations
+Γö£ ╞Æ /dashboard/job-matching
+Γö£ Γùï /dashboard/jobs
+Γö£ ╞Æ /dashboard/jobs/[id]
+Γö£ Γùï /dashboard/outside-jobs
+Γö£ Γùï /dashboard/payroll
+Γö£ Γùï /dashboard/placements
+Γö£ Γùï /dashboard/rtr
+Γö£ Γùï /dashboard/settings
+Γö£ Γùï /dashboard/submissions
+Γö£ ╞Æ /dashboard/submissions/[id]/edit
+Γö£ Γùï /dashboard/submissions/new
+Γö£ Γùï /dashboard/team
+Γö£ Γùï /dashboard/vendors
+Γöö Γùï /dashboard/vendors/new
+
+
+╞Æ Proxy (Middleware)
+
+Γùï  (Static)   prerendered as static content
+╞Æ  (Dynamic)  server-rendered on demand
+

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Lead Platform Engineer at Retool</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 40px; max-width: 720px; margin: 0 auto; color: #111827; }
+    #application { background: #ffffff; }
+    .nav-brand { margin-bottom: 24px; display: flex; align-items: center; gap: 8px; }
+    h1.ashby-job-posting-heading { font-size: 32px; font-weight: 700; margin-bottom: 8px; color: #111827; }
+    .location { font-size: 15px; color: #4b5563; margin-bottom: 24px; }
+    #overview { font-size: 16px; line-height: 1.6; color: #374151; margin-bottom: 32px; border-bottom: 1px solid #e5e7eb; padding-bottom: 24px; }
+    .field { margin-bottom: 16px; }
+    label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; color: #374151; }
+    input[type="text"], input[type="email"], input[type="tel"] {
+      width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 15px; box-sizing: border-box;
+    }
+    input:focus { outline: none; border-color: #2563eb; ring: 2px solid #2563eb; }
+    button[type="submit"] {
+      background: #111827; color: white; padding: 12px 28px; border: none; border-radius: 6px; font-weight: 600; font-size: 15px; cursor: pointer;
+    }
+    button[type="submit"]:hover { background: #1f2937; }
+  </style>
+</head>
+<body>
+  <div id="application">
+    <div class="nav-brand">
+      <img class="_navLogoWordmarkImage_" src="/retool-logo.svg" alt="Retool" height="28" />
+      <span class="company-name" style="display:none;">Retool</span>
+    </div>
+
+    <h1 class="_title_ ashby-job-posting-heading">Lead Platform Engineer</h1>
+    <div class="location">San Francisco, CA &bull; Full-time</div>
+
+    <div id="overview" class="job-description">
+      <div class="descriptionText">
+        <p>Retool is the fast way to build internal tools. We are looking for a Lead Platform Engineer to direct our foundational services, Kubernetes runtime, and real-time synchronization architecture.</p>
+        <p>In this role, you will scale our developer runtime to support millions of queries per minute while maintaining five-nines reliability across cloud and on-prem deployments.</p>
+        <p>You will collaborate closely with product teams, design engineers, and security specialists to deliver resilient platform capabilities.</p>
+      </div>
+    </div>
+
+    <form id="ashby-form" action="javascript:void(0);" onsubmit="event.preventDefault();">
+      <h2>Submit your application</h2>
+
+      <div class="field">
+        <label for="fullName">Full Name *</label>
+        <div class="ashby-input-wrapper">
+          <input id="fullName" name="name" placeholder="Full Name" type="text" required />
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="email">Email Address *</label>
+        <div class="ashby-input-wrapper">
+          <input id="email" name="email" placeholder="Email Address" type="email" required />
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="phoneNumber">Phone Number *</label>
+        <div class="ashby-input-wrapper">
+          <input id="phoneNumber" name="phoneNumber" placeholder="Phone Number" type="tel" required />
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="linkedin">LinkedIn Profile</label>
+        <div class="ashby-input-wrapper">
+          <input id="linkedin" name="urls.LinkedIn" placeholder="LinkedIn Profile" type="text" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Resume / CV</label>
+        <div class="resume-box" style="padding: 12px; border: 1px dashed #d1d5db; border-radius: 6px; text-align: center; color: #4b5563;">
+          Attached via NextKin Extension
+        </div>
+      </div>
+
+      <div class="field" style="margin-top: 24px;">
+        <button type="submit" id="submit-btn">Submit Application</button>
+      </div>
+    </form>
+  </div>
+</body>
+</html>

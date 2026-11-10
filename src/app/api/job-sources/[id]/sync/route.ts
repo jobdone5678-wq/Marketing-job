@@ -1,0 +1,2 @@
+import {protectedRoute} from '@/lib/http/protected-route';import {database,checkDb} from '@/lib/db/admin';import {z} from 'zod';
+export async function POST(request:Request,context:{params:Promise<{id:string}>}){return protectedRoute(request,'staff',async p=>{const {id}=await context.params;z.uuid().parse(id);const {data,error}=await database().rpc('enqueue_source_sync',{p_actor:p.id,p_source:id});checkDb(error);return {taskId:data};});}

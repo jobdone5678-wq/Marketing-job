@@ -1,0 +1,2268 @@
+﻿node.exe : npm notice run app@0.1.0 test
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\bharg\AppData\Roaming\ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (npm notice run app@0.1.0 test:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+npm notice run node --experimental-strip-types --test --test-concurrency=1 tests/*.test.mjs
+Γ£û admin layout remains readable at mobile, tablet, desktop and dark mode with one main scroll region (18816.771ms)
+Γ£ö admin overview shows recorded commission details and distinguishes unavailable collections from zero (1696.5629ms)
+Γ£ö admin overview explains assignment gaps and replaces overview when opening management (1785.3395ms)
+Γ£ö admin can correct an affected account then separately approve its staff access (1730.1674ms)
+Γ£ö management selectors load older staff and clients after the first profile page (63.4463ms)
+Γ£ö a broken page cursor fails visibly instead of looping or claiming the team is complete (6.6488ms)
+Γ£ö web processing bounds provider time while durable worker retains the longer timeout (61.7685ms)
+Γ£ö decodes plain JSON without changing source values (1.7225ms)
+Γ£ö decodes leading whitespace and JSON fences without changing source values (1.5185ms)
+Γ£ö decodes a BOM and formatting prose without changing source values (0.8796ms)
+Γ£ö decodes uppercase code fence without changing source values (0.224ms)
+Γ£ö rejects malformed, incomplete or ambiguous output: "" (0.4305ms)
+Γ£ö rejects malformed, incomplete or ambiguous output: "No JSON result." (0.1437ms)
+Γ£ö rejects malformed, incomplete or ambiguous output: "{\"name\":\"Alex\",}" (0.3971ms)
+Γ£ö rejects malformed, incomplete or ambiguous output: "{\"outer\":{\"name\":\"Alex\"}" (0.1633ms)
+Γ£ö rejects malformed, incomplete or ambiguous output: "{\"name\":\"unterminated}" (0.1629ms)
+Γ£ö rejects malformed, incomplete or ambiguous output: "{\"array\":[1,2}" (0.2408ms)
+Γ£ö rejects malformed, incomplete or ambiguous output: "{}\n{}" (0.1235ms)
+Γ£ö rejects malformed, incomplete or ambiguous output: "```json\n{\"bad\":}\n```" (0.1313ms)
+Γ£ö a truncation finish reason rejects even syntactically valid partial results (0.1499ms)
+(node:20152) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/ai/match-validation.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö zero overlap has no fabricated high baseline and unknowns count (6.3373ms)
+Γ£ö unsupported job requirements are removed; no evidence produces null (0.5068ms)
+Γ£ö supported facts and explicit conflicts are separate (1.173ms)
+Γ£ö a literal reviewed skill supports a prose requirement with alternatives (1.0467ms)
+Γ£ö AND requirements need every skill and can cite separate reviewed fields (1.592ms)
+Γ£ö skill aliases work without confusing JavaScript with Java or inventing years of experience (1.1148ms)
+Γ£ö no reviewed professional facts is insufficient evidence, not a zero qualification score (0.2961ms)
+Γ£ö strict output sends the contract as a response schema rather than input to extract (409.0954ms)
+Γ£ö strict format rejection keeps the complete schema in the prompt-only fallback (71.2212ms)
+Γ£ö provider payment rejection explains billing rather than blaming the API key or connection (51.533ms)
+Γ£ö provider model-plan rejection explains access without exposing the provider response (42.6831ms)
+Γ£ö JSON fallback reserves and records each provider attempt separately (42.1855ms)
+Γ£ö an exhausted allowance prevents the fallback provider request (42.031ms)
+Γ£ö unrelated provider validation errors do not consume a second billed attempt (45.1527ms)
+Γ£ö job_requirements sends its complete validated output shape to the provider (35.2625ms)
+Γ£ö candidate_match sends its complete validated output shape to the provider (77.4096ms)
+Γ£ö resume parsing keeps compatible legacy output, unknown fields and supported evidence (41.7235ms)
+Γ£ö job_requirements ignores extra provider metadata without trusting supplied scores (32.9081ms)
+Γ£ö candidate_match ignores extra provider metadata without trusting supplied scores (51.0505ms)
+Γ£ö malformed required AI fields remain rejected with a safe schema error (52.2283ms)
+Γ£ö wrapped valid JSON recovers without a second billed request (43.9164ms)
+Γ£ö invalid JSON receives one fresh generation with separate allowance accounting (39.5918ms)
+Γ£ö truncated valid JSON is regenerated instead of accepting an incomplete result (38.3766ms)
+Γ£ö JSON recovery retains prompt-only mode when the provider rejected response_format (62.1755ms)
+Γ£ö JSON recovery cannot exceed the daily allowance (54.0771ms)
+Γ£ö JSON recovery cannot start a provider request after the execution deadline (43.2512ms)
+Γ£ö repeated malformed JSON stops after one recovery and never exposes provider text (33.154ms)
+Γ£ö refused output is not retried as a JSON failure (47.6726ms)
+Γ£ö unexpected gateway failures are distinguished from invalid model output without leaking details (27.5364ms)
+Γ£ö SDK connection errors are classified by type rather than inherited Error name (27.4646ms)
+Γ£ö SDK timeout errors are classified by type rather than inherited Error name (28.4143ms)
+Γ£ö transport check detects inherited settings differing from local defaults without disclosing values (73.9839ms)
+Γ£ö HTTP 401 has a safe status and category (11.7236ms)
+Γ£ö HTTP 402 has a safe status and category (7.9189ms)
+Γ£ö HTTP 403 has a safe status and category (6.2273ms)
+Γ£ö HTTP 400 has a safe status and category (8.0343ms)
+Γ£ö HTTP 404 has a safe status and category (5.6159ms)
+Γ£ö HTTP 429 has a safe status and category (5.3139ms)
+Γ£ö HTTP 502 has a safe status and category (5.1698ms)
+Γ£ö transport check returns safe nested refusal code without raw upstream details (6.0931ms)
+Γ£ö API helper distinguishes browser connectivity failure from HTTP application errors (85.4131ms)
+Γ£ö salary refresh batches and deduplicates IDs instead of one HTTP request per employment (77.0879ms)
+Γ£ö staff finances start before placement maintenance and candidates cannot see private compensation (43.4473ms)
+Γ£ö batch refresh only falls back for an unapplied migration, never hides database failures (21.4939ms)
+Γ£ö large refreshes use bounded batches without exceeding SQL payload limits (8.9438ms)
+Γ£ö protected routes expose authentication and handler durations on successful and failed requests (128.7609ms)
+Γ£ö super admin dashboard skips unused general metrics while other roles keep their metrics (3.1588ms)
+Γ£ö reopening captured answers retrieves snapshots delivered after the first empty result (2337.0733ms)
+Γ£û capture uses accessible question names and excludes sensitive fieldset answers (299.4632ms)
+Γ£û linked capture displays actionable delivery feedback: {"queued":true} (95.3939ms)
+Γ£û linked capture displays actionable delivery feedback: {"error":"Capture queue is full. Use the portal review action."} (99.8259ms)
+Γ£û linked capture displays actionable delivery feedback: {"error":"Application needs manual review.","manualReview":true} (117.8025ms)
+Γ£û final captured answers retain earlier steps and applicant edits after the form disappears (139.9449ms)
+Γ£û confirmation reload retains the submission key, final answers and original role (106.3789ms)
+Γ£û linked confirmation waits for saved multi-step answers before reporting success (222.3524ms)
+Γ£û the manual action on a linked application uses its intent instead of creating an unlinked submission (167.0821ms)
+(node:4540) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/clean-field-label.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö cleanFieldLabel handles Ashby systemfield and placeholder concatenation (3.2794ms)
+Γ£ö cleanFieldLabel formats common job application fields cleanly (0.36ms)
+Γ£ö application resume migration restricts access to service role and supports arbitrary distinct job snapshots (2911.3977ms)
+Γ£ö the portal shows the recorded applied filename and downloads the archived file without regeneration (2559.8962ms)
+Γ£ö linked confirmation stores the selected file on the same submission and the portal downloads identical bytes (392.0075ms)
+Γ£ö a submit attempt retains its draft without labeling an unsubmitted file as applied (54.0753ms)
+Γ£ö failed resume persistence is reported and the same observation can retry successfully (49.9698ms)
+Γ£ö a candidate-wide latest resume cannot substitute for an unrecorded applied file (7.2088ms)
+Γ£ö invalid resume payloads cannot mutate the application status (48.9357ms)
+Γ£ö standalone success resolves the existing draft and persists only the file sent from that application (90.5059ms)
+Γ£ö standalone submissions retain public posting query IDs for candidate-specific job matching (57.0405ms)
+(node:14548) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/submission-store.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö database migration adds applied_resume column and record_extension_submission persists it (3228.8337ms)
+Γ£ö submissionStore includes applied_resume in editableFields and writeFields (421.1366ms)
+Γ£ö GET /api/submissions/[id]/applied-resume returns JSON snapshot and supports direct file download (630.9831ms)
+Γ£ö the root page preserves an authoritative-role notice instead of sending an existing candidate into dashboard (252.422ms)
+Γ£ö missing stored profile never masquerades as a candidate or active metadata role (216.5493ms)
+Γ£ö OTP role mismatch preserves the stored candidate profile (signup) (631.4246ms)
+Γ£ö OTP role mismatch preserves the stored candidate profile (page) (462.5154ms)
+Γ£ö profile load errors in current session disable dashboard access and show recovery (324.7106ms)
+Γ£ö technical recruiter mismatch notification uses the actual role name (191.3363ms)
+Γ£ö existing candidate selecting technical recruiter gets an explicit mismatch without a role write (80.7185ms)
+Γ£ö an approved technical recruiter keeps their stored role when callback has no role selection (32.7985ms)
+Γ£ö new recruiter registration stays pending before workspace access (33.2189ms)
+Γ£ö new technical_recruiter registration stays pending before workspace access (33.1435ms)
+Γ£ö profile lookup failure does not invent a new role or open the dashboard (30.4974ms)
+Γ£ö profile creation failure stays on sign-in with an actionable error (28.5267ms)
+Γ£ö auth callback refuses external destinations (31.7664ms)
+Γ£ö expired or tampered Google registration intent cannot silently open a candidate portal (26.8687ms)
+Γ£ö new Google technical staff completes signed registration and stays on approval screen (27.685ms)
+Γ£ö existing Google candidate keeps its role even with a valid signed technical registration (27.9829ms)
+Γ£ö missing Google staff database registration reports setup failure without opening a candidate portal (23.9382ms)
+Γ£ö expired signed Google intent asks the user to restart role selection (19.6743ms)
+Γ£ö Google intent requires its own callback nonce and PKCE code before any registration (61.1177ms)
+Γ£ö Google initiation signs the database intent and binds its nonce to the PKCE callback (15.2487ms)
+Γ£ö Google registration cannot sign an intent without the server secret (0.6347ms)
+Γ£ö administrator correction sends the authenticated actor and keeps approval a separate operation (166.608ms)
+Γ£ö administrator can page beyond the first 500 profiles without losing older staff (18.1208ms)
+Γ£û autofilled fields update framework state and submit without required field errors (854.9968ms)
+(node:20984) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/capture/validation.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+node:internal/modules/package_json_reader:301
+  throw new ERR_MODULE_NOT_FOUND(packageName, fileURLToPath(base), null);
+        ^
+
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@/lib' imported from C:\Users\bharg\OneDrive\Desktop\marketing portal\src\lib\capture\validation.ts
+    at Object.getPackageJSONURL (node:internal/modules/package_json_reader:301:9)
+    at packageResolve (node:internal/modules/esm/resolve:768:81)
+    at moduleResolve (node:internal/modules/esm/resolve:859:18)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at #cachedDefaultResolve (node:internal/modules/esm/loader:701:20)
+    at #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:721:38)
+    at ModuleLoader.resolveSync (node:internal/modules/esm/loader:759:56)
+    at #resolve (node:internal/modules/esm/loader:683:17)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:603:35)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v24.19.0
+Γ£û tests\browser-capture.test.mjs (218.161ms)
+Γ£û linked capture preserves evidence and reports HTTP 408 delivery failures (12.8181ms)
+Γ£û linked capture preserves evidence and reports HTTP 401 delivery failures (4.7609ms)
+Γ£û linked capture preserves evidence and reports HTTP 403 delivery failures (2.6481ms)
+Γ£û linked capture preserves evidence and reports HTTP 422 delivery failures (3.0496ms)
+Γ£û linked capture preserves evidence and reports HTTP 400 delivery failures (2.8598ms)
+Γ£û extension keeps candidate intents separate per tab and retries offline events with the same key (3.6227ms)
+Γ£û unlinked answer submissions retry offline with their original submission key (3.2545ms)
+Γ£û answer drafts retain application identity through confirmation navigation and stay job-scoped (3.0283ms)
+Γ£û explicit manual review recovers a paused automatic submission without losing evidence or identity (3.7274ms)
+Γ£û linked manual recovery queues an attestation for the same intent and retains rejected automatic evidence (2.8778ms)
+Γ£ö active candidate can manage their mailbox; suspended candidates are denied (284.075ms)
+Γ£ö receipt matching context includes only owned or assigned candidates and their applications (19.7679ms)
+Γ£ö recruiter matching cannot inspect unassigned candidates or their applications (14.76ms)
+Γ£ö candidate and recruiter mailbox receipts link one owned application without leaking other candidates (3052.529ms)
+(node:21484) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/candidate-resume-export.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö candidate exports contain only reviewed facts and never invented default experience (1.6806ms)
+Γ£ö resume intake warns about a permitted matching contact without blocking confirmation (988.9171ms)
+Γ£ö contact checks exclude the current profile and recognize formatted phone duplicates (439.4271ms)
+Γ£ö comparison renders evidence, unknowns and conflicts for the selected job (stale=false) (414.2289ms)
+Γ£ö comparison renders evidence, unknowns and conflicts for the selected job (stale=true) (399.7304ms)
+Γ£ö comparison separates unknown requirements and shows each reviewed source field (414.5018ms)
+Γ£ö a failed AI comparison retries the existing task instead of reusing the old failure (412.3178ms)
+Γ£ö queueing an AI comparison starts authorized targeted processing (348.0819ms)
+Γ£ö resume review starts a queued extraction task once without repeated queue-only requests (1848.6779ms)
+Γ£ö a proxy failure while reading comparison status recovers without queueing or processing twice (1734.081ms)
+Γ£ö status retry after repeated network failures resumes only the existing task (3799.0559ms)
+(node:13060) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/jobs/application-state.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö saved jobs move only for the candidate who applied, with Drafts still available (355.0204ms)
+Γ£ö live jobs move only for the candidate who applied, with Drafts still available (64.4221ms)
+Γ£ö recruiter sees the same candidate-specific applied history, including closed jobs (31.1033ms)
+Γ£ö technical_recruiter sees the same candidate-specific applied history, including closed jobs (36.8428ms)
+Γ£ö super_admin sees the same candidate-specific applied history, including closed jobs (29.9135ms)
+Γ£ö client sees the same candidate-specific applied history, including closed jobs (37.0506ms)
+Γ£ö clients and staff cannot read applications for another inaccessible candidate (170.6487ms)
+Γ£ö super admin can inspect a candidate outside recruiter assignments (23.1178ms)
+Γ£ö legacy extension URLs match the precise posting and do not hide another portal with the same title or external ID (34.9608ms)
+Γ£ö filtering applied records happens before pagination and totals; completing a Draft updates the next read (50.0658ms)
+Γ£ö applied history deduplicates retries and never requires a new feed posting or current resume match (20.519ms)
+Γ£ö query-based posting identities remain distinct while tracking parameters are ignored (0.8421ms)
+Γ£ö candidate application history is read completely beyond one database page (37.2644ms)
+Γ£ö submission chart starts with valid dimensions and follows resize and visibility changes (2834.6112ms)
+Γ£ö shared chart container starts with valid dimensions and follows resize and visibility changes (464.1252ms)
+Γ£ö pending staff cannot open dashboard pages and the public page does not redirect them back (144.2172ms)
+Γ£ö candidate accounts cannot open staff compensation or team administration pages (16.0017ms)
+Γ£ö active users can read authoritative-role mismatch and callback errors on sign-in page (11.2139ms)
+Γ£ö client dashboard displays saved counts with accurate role and no global job count (2288.5219ms)
+Γ£ö recruiter dashboard displays saved counts with accurate role and no global job count (537.611ms)
+Γ£ö technical_recruiter dashboard displays saved counts with accurate role and no global job count (647.3566ms)
+Γ£ö dashboard refresh reads changed saved counts without inventing a value on failure (793.2979ms)
+Γ£ö failed initial dashboard load shows an error and retry rather than fabricated zero counts (641.6587ms)
+Γ£ö database timing stays isolated between concurrent requests and counts failed calls (108.9376ms)
+(node:8584) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/email-confirmations/domain.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö receipt with exact candidate and explicit job facts can create a confirmed record (49.7464ms)
+Γ£ö a sent vendor pitch is not an application receipt (0.3582ms)
+Γ£ö an interview invitation does not become an initial application confirmation (0.3365ms)
+Γ£ö missing job facts require review rather than fabricated company or title (0.5335ms)
+Γ£ö a recruiter mailbox address alone cannot identify the candidate (0.294ms)
+Γ£ö an explicit applicant address conflicting with the recipient requires review (0.345ms)
+Γ£ö interview and rejection followups cannot create initial confirmations (0.5748ms)
+Γ£ö unapproved or unauthenticated senders cannot auto-confirm (0.3931ms)
+Γ£ö two candidates sharing an address require review (0.3466ms)
+Γ£ö user-imported or forwarded evidence cannot auto-confirm itself (0.5774ms)
+Γ£ö a receipt matches a unique existing application without downgrading its pipeline status (0.4159ms)
+Γ£ö repeated identical job applications are ambiguous without a receipt link (0.2759ms)
+Γ£ö company and role text in quoted outreach does not confirm an application (0.1783ms)
+Γ£ö contradictory rejection evidence cannot be auto-confirmed (0.1817ms)
+Γ£ö late submit errors cannot downgrade a confirmed application (0.2016ms)
+Γ£ö common receipt subject captures the role and company without generic defaults (0.219ms)
+Γ£ö token encryption detects tampering and incorrect keys (11.932ms)
+Γ£ö a confirmation retry creates one application and one event atomically (2633.5296ms)
+Γ£ö receipts for the same existing application preserve interview status (5.9218ms)
+Γ£ö another recruiter cannot confirm someone else's receipt (3.1967ms)
+Γ£ö candidate mismatch rolls back without confirming the receipt (3.3279ms)
+Γ£ö RLS hides other recruiters' private receipts and prevents secret reads (5.9805ms)
+Γ£ö an ordinary profile write cannot grant admin privilege (2.4954ms)
+Γ£ö one worker holds the mailbox lease and another cannot claim concurrently (3.5782ms)
+Γ£ö self-selected recruiter signup requires approval before mailbox access (3.1448ms)
+Γ£ö pending staff cannot read candidates or submissions through existing policies (2.7975ms)
+Γ£ö staff cannot forge confirmation fields through a browser database write (2.8967ms)
+Γ£ö confirmed application evidence survives attempted submission deletion (2.4025ms)
+Γ£ö mailbox ingestion requires the live lease and stops after disconnect (11.5358ms)
+Γ£ö scheduler rotates failed attempts and excludes inactive or leased mailboxes (9.3363ms)
+(node:2456) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/email-confirmations/gmail.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö Gmail decoded receipt has authenticated sender and exact recipient (52.5915ms)
+Γ£ö a sender-supplied authentication result is not trusted (18.0175ms)
+Γ£ö an unrelated DKIM signing domain does not authenticate the sender (0.4842ms)
+Γ£ö a longer DKIM domain cannot impersonate an approved sender domain (0.3655ms)
+Γ£ö attached resumes and quoted HTML do not become application evidence (1.0687ms)
+Γ£ö provider access failures are surfaced without provider body or tokens (26.5648ms)
+(node:13480) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/email-confirmations/mime.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö a real MIME receipt decodes into user-imported review evidence (922.2964ms)
+Γ£ö oversized and unreadable emails are rejected before receipt ingestion (4.0916ms)
+(node:2816) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/email-confirmations/pagination.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö matching reads identities beyond a database response page (3.1652ms)
+Γ£ö a later page failure is not treated as a complete candidate list (1.2553ms)
+Γ£ö email migration integrates with actual prior schema and closes pending staff access (2985.1916ms)
+node:internal/fs/promises:697
+  return new FileHandle(await PromisePrototypeThen(
+                        ^
+
+Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-workflows.js'
+    at async open (node:internal/fs/promises:697:25)
+    at async readFile (node:internal/fs/promises:1348:14)
+    at async file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-ai-workflow.test.mjs:6:16 {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-workflows.js'
+}
+
+Node.js v24.19.0
+Γ£û tests\extension-ai-workflow.test.mjs (95.0556ms)
+Γ£ö screening kind is durable, actor scoped and rechecks candidate ownership (3243.0379ms)
+Γ£ö uploaded drafts stay task-owner scoped; quota reservation and lease recovery apply (21.0824ms)
+Γ£ö screening output rejects invented facts and exact option mismatches (237.0216ms)
+Γ£ö sensitive and unsupported legal or numeric questions stay manual (0.4336ms)
+Γ£ö missing answers remain explicitly unknown and duplicate model decisions fail (0.3627ms)
+Γ£û installed extension commits React email, phone and a real Ashby location option before a local test submission (32007.7413ms)
+Γ£û Ashby absent location options never become a fake selected location (1283.7821ms)
+Γ£û Ashby ambiguous location options never become a fake selected location (484.985ms)
+Γ£û field writer leaves portal validation messages for the portal to clear (423.5003ms)
+Γ£û Wrong-candidate fallback bug: candidate A receiving 403 must NEVER return candidate B uploaded facts (5.8349ms)
+Γ£û Sponsorship vs Work-Authorization: sponsorship question must NOT use work-authorization value (2.3481ms)
+Γ£û Unknown authorization or sponsorship must NOT default to No in offline fallback (1.4486ms)
+Γ£û connected screening polls read-only results and reuses the same request identity (2.503ms)
+Γ£û no consent prevents any provider-service request (1.3954ms)
+Γ£ö AI can contextualize experience without exact keyword overlap and cannot add an unsupported skill (391.8948ms)
+Γ£ö AI explanations must reference actual JD excerpts and candidate facts; model percentages are rejected (136.5941ms)
+Γ£û tailoring preserves every original source section including professional experience and licenses (0.616ms)
+Γ£ö AI can inspect reviewed degrees, certifications and projects even without source text (97.4794ms)
+Γ£û twenty-five jobs create distinct resume scopes and genuine DOCX documents without a fixed cap (81.5796ms)
+node:internal/test_runner/harness:124
+      throw err;
+      ^
+
+Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\content.js'
+    at async open (node:internal/fs/promises:697:25)
+    at async readFile (node:internal/fs/promises:1348:14)
+    at async file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-domain-exclusions.test.mjs:20:23 {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\content.js'
+}
+
+Node.js v24.19.0
+Γ£û tests\extension-domain-exclusions.test.mjs (806.5589ms)
+Γ£û FillSession reports not ready when candidate or JD is missing (5.4039ms)
+Γ£û FillSession reports not ready when candidate facts are unconfirmed (2.669ms)
+Γ£û FillSession reports ready when reviewed candidate and complete JD exist (1.7207ms)
+Γ£û FillSession tracks written receipts and enables safe undo only when value matches writtenValue (1.822ms)
+Γ£û Two distinct job postings with the same title produce distinct job keys and session IDs (1.5665ms)
+Γ£û adapter contracts discover scoped fields, preserve existing values and verify undo (811.9858ms)
+Γ£û controlled fields, delayed combobox options, duplicates and stale sessions fail safely (298.0647ms)
+Γ£û reference, emergency and consent fields are excluded even under generic labels (362.9455ms)
+Γ£û platform contract fixtures work at desktop, tablet and mobile widths (366.7425ms)
+Γ£û custom combobox undo restores the prior state; disabled resets prevent a write (367.0217ms)
+Γ£û installed adapter path waits for recruiter action before filling a selected profile (421.9425ms)
+Γ£û installed Manifest V3 extension imports PDF, generates a genuine per-job DOCX and lists history (30938.0543ms)
+Γ£ö linked extension manual recovery attests the existing application without replacing its captured answers (489.7196ms)
+Γ£û popup saves pasted candidate details and downloads the selected per-job version safely (244.3969ms)
+Γ£û generation refuses missing candidate or JD instead of inventing defaults (2.0937ms)
+Γ£û tailoring preserves supplied claims and never turns target requirements into candidate facts (0.3326ms)
+Γ£û coverage uses word boundaries, supports nonengineering jobs and unknown requirements (0.2627ms)
+Γ£û real DOCX package contains tailored text and remains parseable with Unicode and XML characters (0.2355ms)
+Γ£û uploaded resume parsing keeps raw facts without guessing employer, location, dates or eligibility (0.2776ms)
+Γ£û fingerprint preserves arbitrary job counts and invalidates changed JD, candidate, company and URL (1.1906ms)
+Γ£û negative skill mentions never become candidate skills or supported requirements (0.2146ms)
+Γ£û mixed JD clauses retain unknown qualifications and ATS evidence comes from the actual output (0.1921ms)
+Γ£û explicit unfamiliar skills and labeled JSON-import names remain grounded in their source (0.2198ms)
+Γ£û unstructured work history before the first recognized section is never dropped (0.3009ms)
+node:internal/fs/promises:697
+  return new FileHandle(await PromisePrototypeThen(
+                        ^
+
+Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+    at async open (node:internal/fs/promises:697:25)
+    at async readFile (node:internal/fs/promises:1348:14)
+    at async file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-resume-history.test.mjs:6:18 {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+}
+
+Node.js v24.19.0
+Γ£û tests\extension-resume-history.test.mjs (78.9053ms)
+Γ£û structured JSON includes skills, nested employment, and education (257.046ms)
+Γ£û text and Markdown retain candidate details (85.6061ms)
+Γ£û compressed PDF content is extracted through a real PDF parser (123.8164ms)
+Γ£û PDF extraction loads its local worker across the page origin boundary (127.738ms)
+Γ£û DOCX central directory handles data descriptors and XML paragraphs/entities (112.6968ms)
+Γ£û unreadable and scanned PDFs request pasted text instead of guessing binary (102.2679ms)
+Γ£û rejects oversized, unsupported, malformed JSON and empty text files (102.6112ms)
+node:internal/modules/cjs/loader:1517
+  const err = new Error(message);
+              ^
+
+Error: Cannot find module '../browser-extension/resume-engine.js'
+Require stack:
+- C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\extension-resume-points.test.mjs
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1517:15)
+    at wrapResolveFilename (node:internal/modules/cjs/loader:1071:27)
+    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1095:10)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1122:12)
+    at Module._load (node:internal/modules/cjs/loader:1294:5)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.require (node:internal/modules/cjs/loader:1617:12)
+    at require (node:internal/modules/helpers:153:16)
+    at file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-resume-points.test.mjs:5:53
+    at ModuleJob.run (node:internal/modules/esm/module_job:439:25) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\tests\\extension-resume-points.test.mjs'
+  ]
+}
+
+Node.js v24.19.0
+Γ£û tests\extension-resume-points.test.mjs (426.3064ms)
+Γ£û pending screening reviews cannot insert an old company answer after an SPA job change (294.7857ms)
+Γ£û screening radio undo restores the complete prior group state and respects later manual edits (106.2552ms)
+Γ£û late screening responses cannot become reviewable answers for a new job (107.3784ms)
+Γ£û repeated fill operations preserve the original undo value within the same session (105.8966ms)
+Γ£û manual corrections made while drafting are never overwritten by acceptance (108.5473ms)
+Γ£û a reused control with changed question wording invalidates the pending answer (106.2251ms)
+Γ£û screening acceptance does not record writes rejected by controlled inputs (110.1868ms)
+Γ£ö screening rejects unauthorized role without queueing/provider access (459.3295ms)
+Γ£ö screening rejects inactive account without queueing/provider access (144.0417ms)
+Γ£ö screening rejects another client without queueing/provider access (122.6499ms)
+Γ£ö screening rejects unassigned recruiter without queueing/provider access (96.2325ms)
+Γ£ö screening rejects unreviewed candidate without queueing/provider access (104.2702ms)
+Γ£ö explicit consent and complete job context required (95.5869ms)
+Γ£ö assigned recruiter creates durable work; shared AI boundary is lease checked (91.3532ms)
+Γ£ö task results stay actor scoped and reassignment revokes reads and processing (96.3046ms)
+node:internal/test_runner/harness:124
+      throw err;
+      ^
+
+Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\content.js'
+    at async open (node:internal/fs/promises:697:25)
+    at async readFile (node:internal/fs/promises:1348:14)
+    at async file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-screening-options.test.mjs:22:17 {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\content.js'
+}
+
+Node.js v24.19.0
+Γ£û tests\extension-screening-options.test.mjs (509.4649ms)
+Γ£û shared extension source required by portal imports remains present (2.3457ms)
+Γ£û linked native submission captures final answers before the form disappears and promotes on confirmation (310.3981ms)
+Γ£û linked button-only submission captures final answers before the form disappears and promotes on confirmation (123.5624ms)
+Γ£û a failed submit remains a draft and manual Log Applied retains actually observed answers (120.9533ms)
+Γ£û standalone confirmation preserves final answers after the application form is removed (119.9643ms)
+Γ£û linked success archives the exact final selected resume, not an earlier file or cover letter (128.3367ms)
+Γ£û standalone success archives the exact final selected resume, not an earlier file or cover letter (124.99ms)
+Γ£û manual Log Applied includes the observed file and an explicit removal clears it (138.0412ms)
+[AUTO-SUBMIT INNER ERROR] CaptureError: Several applications match this page. Open the correct draft from the portal and retry.
+    at eval (eval at load (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/helpers/load-ts-module.mjs:27:5), <anonymous>:132:27)
+    at async extensionRoute (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-submission-link.test.mjs:17:129)
+    at async POST (eval at load (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/helpers/load-ts-module.mjs:27:5), <anonymous>:46:16)
+    at async setup (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-submission-link.test.mjs:22:17)
+    at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-submission-link.test.mjs:32:31)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+  status: 409
+}
+Γ£ö a reopened exact application promotes the existing draft and stores answers on the same submission (342.5594ms)
+Γ£ö ambiguous application links stay for review without changing drafts (54.6451ms)
+Γ£ö an unlinked new application retains normal insertion and captures observed answers during manual logging (49.641ms)
+Γ£ö connected tailoring blocks unauthorized roles and inaccessible or unconfirmed candidates (692.1022ms)
+Γ£ö connected tailoring requires the actual title, company and JD (100.344ms)
+Γ£ö connected tailoring saves and reuses exact job snapshots without a ten job limit (203.738ms)
+Γ£ö connected tailoring reports persistence failure instead of fake success (84.97ms)
+Γ£ö history is actor and candidate scoped, paginated, and inaccessible candidates cannot download (186.3111ms)
+Γ£ö candidate changes create a new version and revoke old access without fallback (111.7959ms)
+Γ£ö recruiters can generate only assigned candidate application resumes (160.0475ms)
+Γ£ö history omits other actors and candidates and validates page boundaries (81.344ms)
+Γ£ö connected route uses real evidence engine and exports matching DOCX for each application (157.3564ms)
+Γ£ö AI errors and absent consent never produce a saved fallback; stale facts are rechecked after AI (199.0621ms)
+Γ£ö queued AI work is actor scoped, never executed by status GET and waits for configured worker (70.198ms)
+Γ£ö uploaded source uses authenticated AI without creating a candidate record or storing original file bytes (101.0455ms)
+Γ£ö web provider timeout defers to longer worker processing and resuming cannot reclaim it on the web (74.2024ms)
+node:internal/modules/cjs/loader:1517
+  const err = new Error(message);
+              ^
+
+Error: Cannot find module '../browser-extension/resume-engine.js'
+Require stack:
+- C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\extension-tailoring-browser.test.mjs
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1517:15)
+    at wrapResolveFilename (node:internal/modules/cjs/loader:1071:27)
+    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1095:10)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1122:12)
+    at Module._load (node:internal/modules/cjs/loader:1294:5)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.require (node:internal/modules/cjs/loader:1617:12)
+    at require (node:internal/modules/helpers:153:16)
+    at file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-tailoring-browser.test.mjs:6:54
+    at ModuleJob.run (node:internal/modules/esm/module_job:439:25) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\tests\\extension-tailoring-browser.test.mjs'
+  ]
+}
+
+Node.js v24.19.0
+Γ£û tests\extension-tailoring-browser.test.mjs (495.1479ms)
+node:internal/test_runner/harness:124
+      throw err;
+      ^
+
+Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\candidate-context.js'
+    at async open (node:internal/fs/promises:697:25)
+    at async readFile (node:internal/fs/promises:1348:14)
+    at async file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-undo-review.test.mjs:22:30 {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\candidate-context.js'
+}
+
+Node.js v24.19.0
+Γ£û tests\extension-undo-review.test.mjs (516.9671ms)
+Γ£ö application evidence separates success observation from confirmation and exposes source history (2616.4737ms)
+Γ£ö billing does not invent a subscription or payment action when no billing contract exists (1212.1795ms)
+Γ£ö receipt API failure does not disable configured Gmail or hide administrator setup (3496.5053ms)
+Γ£ö failed Gmail status request is unknown rather than proof of missing credentials (473.3712ms)
+Gmail OAuth callback error: Error: Callback host mismatch.
+    at Object.GET (eval at load (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/helpers/load-ts-module.mjs:27:5), <anonymous>:34:19)
+    at TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/gmail-production.test.mjs:45:107)
+    at Test.runInAsyncScope (node:async_hooks:227:14)
+    at Test.run (node:internal/test_runner/test:1382:25)
+    at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+    at Test.postRun (node:internal/test_runner/test:1522:19)
+    at Test.run (node:internal/test_runner/test:1447:12)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+Γ£ö invalid Gmail setup reports only variable names and safe reasons (94.8414ms)
+Γ£ö only administrators receive Gmail setup diagnostics (65.8036ms)
+Γ£ö Gmail connect moves alias visitors to canonical host before writing OAuth cookies (37.5385ms)
+Γ£ö canonical Gmail connect uses a secure host-only cookie and matching callback (22.7759ms)
+Γ£ö Gmail callback rejects a different host before touching the consent cookie (43.7128ms)
+Γ£ö Gmail deployment URL fallback is normalized without exposing credentials (6.7468ms)
+Γ£ö production Gmail rejects a local callback origin even when every credential exists (9.5814ms)
+Γ£ö candidate can start own Gmail consent without administrator diagnostics (18.8221ms)
+Γ£ö hosted email worker accepts environment-only startup without requiring a local env file (75.0077ms)
+Γ£ö hosted email worker never replaces host variables with local defaults (69.1134ms)
+Γ£ö AI key alone uses the supported defaults and agrees with configuration status (74.1305ms)
+Γ£ö production rejects a localhost AI gateway and exposes safe actionable diagnostics (14.0546ms)
+Γ£ö Gmail configuration diagnostics name missing variables without exposing credentials (12.7055ms)
+Γ£ö Gmail canonical production origin and callback URI are consistent (10.4743ms)
+Γ£ö JD uploads are admin-only, duplicate-safe and require versioned review (3654.6055ms)
+Γ£ö tailored generation checks ownership, deduplicates requests and binds source versions (25.7466ms)
+Γ£ö tailored saves need a current lease, review preserves history and stale edits are rejected (34.8499ms)
+Γ£ö direct authenticated SQL cannot read confidential briefs or generated resumes (6.1933ms)
+Γ£ö candidate ownership does not grant review access to an administrator private JD resume (16.1085ms)
+Γ£ö live job content changes advance versions while duplicate refreshes preserve them (8.7943ms)
+Γ£ö duplicate generation requests return bound tasks without rewriting worker-owned records (11.4011ms)
+Γ£ö tailoring handler leases one AI request, sends reviewed professional facts and saves factual content (418.89ms)
+Γ£ö stale and cached resume tasks never consume another AI call; invented IDs cannot be saved (298.554ms)
+Γ£ö JD handler extracts once, rejects unquoted AI criteria and saves for administrator review (15.8004ms)
+Γ£ö portal tailoring persists JD coverage evidence and a content hash for stale-report detection (91.4765ms)
+Γ£ö portal ATS cannot claim Kubernetes evidence omitted from the generated resume (102.2388ms)
+Γ£ö JD criteria need source evidence and distinguish supported requirements from unknowns (269.0591ms)
+Γ£ö admin JD matching scans all active reviewed candidates, including beyond first database batch (111.7712ms)
+Γ£ö tailored download requires authorized reviewed current content and returns DOCX bytes (43.0057ms)
+(node:4976) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/jobs/normalize.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö job dates persist through lease checked snapshots, update versions, and leave historical dates unknown (3059.9769ms)
+Γ£ö saved defaults to recent actual posting dates, newest first, before counts and pagination (227.737ms)
+Γ£ö saved allows explicit older and unknown dates without pretending they were posted recently (48.8231ms)
+Γ£ö saved resume matching retains freshness ordering (36.6961ms)
+Γ£ö saved rejects unsupported posting age filters (41.7617ms)
+Γ£ö live defaults to recent actual posting dates, newest first, before counts and pagination (109.6179ms)
+Γ£ö live allows explicit older and unknown dates without pretending they were posted recently (41.3885ms)
+Γ£ö live resume matching retains freshness ordering (38.8077ms)
+Γ£ö live rejects unsupported posting age filters (47.7982ms)
+(node:1432) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/jobs/normalize.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö provider metadata wins and permanent W2 is not contract (3.4732ms)
+Γ£ö all listed Ashby jobs have stable URL identities; missing facts remain null (8.3501ms)
+Γ£ö invalid listed records and missing Greenhouse totals prevent closure (0.254ms)
+Γ£ö negated arrangements are not advertised as supported (0.2482ms)
+Γ£ö provider publication dates survive normalization without using provider update or closure timestamps (1.4788ms)
+Γ£ö missing or malformed provider dates remain unknown and do not borrow sync or updated dates (0.5232ms)
+Γ£ö publication changes are part of the versioned job content hash (0.3911ms)
+(node:12712) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/ai/requirements-validation.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö requirements retain exact job evidence and reject unsupported claims (3.6862ms)
+Γ£ö SQL substring is not a NoSQL requirement (0.3337ms)
+(node:6316) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/ai/match-validation.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö SQL is not proved by NoSQL or by explicitly negated experience (5.5482ms)
+Γ£ö Python is not supported by ambiguous or negated text (0.5015ms)
+Γ£ö CI/CD is not supported by ambiguous or negated text (0.4135ms)
+Γ£ö Python and CI/CD is not supported by ambiguous or negated text (0.5416ms)
+Γ£ö Python or CI/CD is not supported by ambiguous or negated text (0.578ms)
+Γ£ö Go is not supported by ambiguous or negated text (0.5682ms)
+Γ£ö literal Go and the complete CI/CD compound remain supported (0.5149ms)
+Γ£ö the comparison evaluates canonical job criteria against reviewed facts without a second AI guess (322.6273ms)
+Γ£ö cached evidence is reevaluated only for the current reviewed versions (stale=false) (307.5632ms)
+Γ£ö cached evidence is reevaluated only for the current reviewed versions (stale=true) (36.7557ms)
+Γ£ö the selected job comparison is found beyond one hundred unrelated results without expanding candidate access (29.7081ms)
+Γ£ö changing the selected candidate hides previous resume history while the new list loads (746.0343ms)
+Γ£ö tailored resume requires AI consent, factual review and saved edits before DOCX download (873.6032ms)
+Γ£ö admin uploads a JD, reviews priorities and matches saved candidates before shortlisting (640.9763ms)
+Γ£ö a genuinely new Google account becomes pending technical staff and cannot access staff data (3150.9974ms)
+Γ£ö an existing candidate cannot convert their profile with a fresh OAuth intent (2.5556ms)
+Γ£ö signed registration intents cannot activate staff or create administrators (4.2622ms)
+Γ£ö expired OAuth registration cannot change a profile (1.025ms)
+Γ£ö a consumed registration intent cannot register a second Google account (3.5958ms)
+Γ£ö administrator corrects a previously affected candidate to pending staff with separate approval (17.5323ms)
+Γ£ö dashboard queue totals and approval preview remain correct beyond bounded preview lists (268.9579ms)
+Γ£ö incremental platform update applies to the existing operations schema (3117.1008ms)
+Γ£ö portal reports ATS outdated after manual content edits and current for assessed content (212.3033ms)
+Γ£ö staff can review official source links and import selected vendors with visible counts (1120.3482ms)
+Γ£ö public catalogs contain primary source evidence and no invented commercial or personal data (65.8967ms)
+Γ£ö vendor import is idempotent and preserves edited and manually entered records (2760.2789ms)
+Γ£ö live persistence creates catalog source IDs and surfaces database failures (43.3352ms)
+Γ£ö public vendor API permits only authorized staff and curated company IDs (175.414ms)
+(node:12624) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/jobs/sync-policy.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö public job repair claims only due queued source tasks with remaining attempts (0.9807ms)
+Γ£ö unlinked resumes are private to the uploading staff member (191.0282ms)
+Γ£ö suspension takes effect on the next request even with the same authenticated cookie (17.9559ms)
+Γ£ö concurrent requests with the same cookie share a single in-flight auth query (12.9681ms)
+Γ£ö invalid captured answers cannot mutate application success status (52.6785ms)
+(node:5500) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/auth/profile-access.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö a confirmed candidate is saved durably with unknown facts and server ownership (3050.3988ms)
+Γ£ö candidate owners cannot reassign identity or grant provenance through direct writes (5.6526ms)
+Γ£ö database profile permissions fail closed instead of trusting metadata (58.4403ms)
+(node:13456) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/jobs/normalize.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö complete snapshots persist idempotently; partial feeds retain jobs and failed feeds become stale (2877.0906ms)
+Γ£ö resume registration queues and links atomically, stale older documents cannot overwrite a profile (26.7826ms)
+Γ£ö browser capture deduplicates retries, never downgrades success and email confirms the same application (27.2967ms)
+Γ£ö staff review of an unlinked client resume retains candidate ownership (7.1688ms)
+Γ£ö job requirement claims share one versioned cache and packets persist one Draft (24.4162ms)
+Γ£ö candidate reviews a recruiter-uploaded linked resume and saves edited history (8.2881ms)
+Γ£ö one-time pairing expires and suspended candidates cannot read private records (10.8917ms)
+Γ£ö staff can see their own salary period with the inclusive end date and payment history (3048.1492ms)
+Γ£ö admin reviews a partial salary, records external payment and refreshes dashboard data (2414.5602ms)
+Γ£ö collections opens without waiting for unrelated placement or payroll APIs (1384.4252ms)
+(node:5380) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/payroll/periods.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö salary anniversaries keep the original joining day through short and leap months (3102.5835ms)
+Γ£ö pending technical staff are denied and assignments retain their history on removal (24.8428ms)
+Γ£ö manual final salary adjustment survives refresh, partial payments and corrections are auditable (52.2091ms)
+Γ£ö salary snapshots cannot be backdated or rewritten by later terms (14.6456ms)
+Γ£ö placement months retain reviewed partial amounts and joining commissions require approval (26.2073ms)
+Γ£ö submission retries reuse the application and answer revisions remain assignment-scoped (24.1244ms)
+Γ£ö dashboard financial totals keep currencies and corrections separate (5.9013ms)
+Γ£ö candidate reassignment revokes task results and task retry permission (12.5632ms)
+Γ£ö ending an active placement preserves its earned commission for later approval (8.5918ms)
+Γ£ö unchanged period refresh does not rewrite rows or fire update triggers (14.315ms)
+Γ£ö batch period maintenance preserves financial data and is service-only (15.0764ms)
+Γ£ö durable tasks deduplicate, lease once and recover expired attempts (2621.585ms)
+Γ£ö atomic AI allowances include failed/unknown outcomes (7.1033ms)
+Γ£ö worker failure is visible and stops after the retry limit (8.9426ms)
+Γ£ö the deployable operations bundle applies after the existing schema and includes both new guards (3726.5325ms)
+Γ£ö candidate roster searches loaded profiles and filters availability without inventing facts (4604.5583ms)
+Γ£ö candidate roster and profile fit a mobile viewport and expose empty search recovery (803.6082ms)
+Γ£ö applied resume preview never invents an ATS score or changes the recorded file type (1799.9002ms)
+Γ£ö missing applied snapshot stays unknown instead of fetching a candidate-wide reconstructed resume (1309.4508ms)
+Γ£ö reviewed candidate exports are real DOCX and PDF documents (1464.8206ms)
+Γ£ö another candidate cannot read a resume or its extracted private details (3196.9978ms)
+Γ£ö confirmation links a reviewed document to an owned persistent profile (15.6304ms)
+node:internal/test_runner/harness:124
+      throw err;
+      ^
+
+Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\content.js'
+    at async open (node:internal/fs/promises:697:25)
+    at async readFile (node:internal/fs/promises:1348:14)
+    at async file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/resume-autofill.test.mjs:12:17 {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\content.js'
+}
+
+Node.js v24.19.0
+Γ£û tests\resume-autofill.test.mjs (577.6117ms)
+Γ£ö candidate job discovery ranks the whole feed before pagination (445.3611ms)
+Γ£ö candidates cannot use another candidate profile for job recommendations (74.1683ms)
+Γ£ö candidates without reviewed profiles see an upload prompt rather than unrelated jobs (58.203ms)
+Γ£ö staff can browse all jobs or filter them for a selected reviewed candidate (72.6829ms)
+Γ£ö candidate extension tokens receive only their own reviewed profile (50.0707ms)
+Γ£ö revoked extension credentials cannot retrieve profiles (42.0111ms)
+Γ£ö a linked recruiter can retrieve the exact reviewed candidate beyond the first list page (37.5868ms)
+Γ£ö recruiters cannot select an unassigned profile for recommendations (57.5201ms)
+Γ£ö candidate autofill credentials do not gain access to staff submission actions (30.8906ms)
+Γ£ö saved discovery excludes explicit expired deadlines before pagination and retains unknown dates (47.3052ms)
+Γ£ö candidate live discovery never falls back to unrelated software roles (254.5958ms)
+(node:16820) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/jobs/relevance.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö recommendations use reviewed facts rather than stale editable profile columns (55.0916ms)
+Γ£ö resume recommendations exclude unrelated and closed jobs and explain the ranked results (0.7245ms)
+Γ£ö recommendations do not use unreviewed or missing profile facts (0.3541ms)
+Γ£ö skill matching respects Java, C++, C#, .NET and short-word boundaries (2.6195ms)
+Γ£ö role-only profiles still find relevant titles without matching generic engineer words (0.465ms)
+Γ£ö expired explicit application deadlines are excluded without requiring an observed closed state (15.9677ms)
+Γ£ö saved Lever feed includes software jobs from every saved Lever company (208.421ms)
+Γ£ö provider-wide live feed merges catalog and saved boards, deduplicates and respects disabled boards (60.6712ms)
+Γ£ö saved public jobs filter portal, company and location before pagination (50.437ms)
+Γ£ö live board results honor company and location filters too (57.4177ms)
+Γ£ö saved candidate feed filters using reviewed resume facts (206.4531ms)
+Γ£ö live candidate feed filters using reviewed resume facts (54.1214ms)
+Γ£û live jobs can be verified and saved before opening the tailored resume workspace (30247.2293ms)
+Γ£û Public Jobs sends portal, company and location filters together with candidate context (30244.1144ms)
+Γ£û public jobs defaults to latest postings and applies date changes in saved and live views (30233.436ms)
+Γ£û choosing an ATS provider searches all companies and clears the previous company board (30202.4617ms)
+Γ£û public board selection fetches exact provider and staff can persist it (30276.3198ms)
+Γ£û candidate job list shows resume-related match reasons and prompts unfinished profiles (30392.3944ms)
+Γ£û technical recruiters can select an assigned candidate for resume-related jobs (30278.5948ms)
+Γ£û recruiter selector includes reviewed candidates from later pages and carries selection into job details (30240.0758ms)
+Γ£û saved job cards distinguish source dates from unknown closing dates (30299.9398ms)
+Γ£û recruiter can move a successful job to one candidate's Applied list while another can still apply (30662.8013ms)
+Γ£û technical_recruiter can move a successful job to one candidate's Applied list while another can still apply (30200.3731ms)
+Γ£û super_admin can move a successful job to one candidate's Applied list while another can still apply (30186.9002ms)
+Γ£û candidate sees their own Applied list without selecting another candidate (30185.5152ms)
+Γ£û returning from a successful live application removes it without refetching every company board (30187.4092ms)
+Γ£û Applied jobs remains usable on desktop and mobile with the project styles (32952.8662ms)
+Γ£ö candidate can read a recruiter-uploaded resume linked to their profile, but deleted resumes remain private (7791.5907ms)
+Γ£ö PDF worker cleanup failures do not discard readable resume text (1586.161ms)
+Γ£ö PDF worker cleanup failures do not hide password errors (38.6956ms)
+Γ£ö resume task preserves safe parser validation errors before making an AI request (2601.0794ms)
+(node:13304) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/resumes/validation.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö valid PDF text is extracted and PDF page/size limits are enforced (3106.6614ms)
+Γ£ö DOCX signature and actual document content are validated (47.5833ms)
+Γ£ö AI extraction keeps missing facts unknown and rejects unsupported evidence (942.8109ms)
+(node:13208) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/html-sanitizer.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö VULN-03: sanitizeJobHtml strips malicious script, event handlers, and iframes from job descriptions (10.6811ms)
+Γ£ö VULN-03: sanitizeJobHtml handles null, undefined, and non-string inputs safely (0.615ms)
+Γ£ö VULN-05: next package is upgraded to >=16.4.5 to mitigate GHSA-2464-fhr4-w9xw & GHSA-673q-mjm6-r5xr (18.8158ms)
+Γ£ö VULN-01: extensionProfile rejects missing or invalid authorization header with 401 (698.8892ms)
+Γ£ö VULN-04: generate-answer route does not leak hardcoded OpenAI API key fallback (6.5649ms)
+Γ£û VULN-06: Next.js 16 proxy.ts and middleware.ts are configured with matching pattern (8.3919ms)
+Γ£ö VULN-07: extension agent-submission-sync validates ev.origin and ev.source (2.9069ms)
+Γ£ö VULN-08 & VULN-09: RTR [id] endpoint enforces identifier validation and calls candidateAccess (5.9844ms)
+Γ£ö VULN-10: migration 20261105000100_candidate_shares_rls enables RLS on candidate_shares (3.8153ms)
+(node:21136) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/rate-limit.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö VULN-11: cors helper rejects malicious or invalid chrome-extension IDs (802.5073ms)
+Γ£ö VULN-14: extension manifests do not contain unauthorized typosquat domain nexckinhr.com (3.2825ms)
+Γ£ö VULN-15: Gmail callback validates destination origin and prevents open redirect (2.7452ms)
+Γ£ö VULN-16: rate limiter throttles requests after reaching threshold (0.7793ms)
+(node:19104) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/auth/profile-access.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö service collection write routes reject candidate, recruiter and suspended admin before database work (673.1287ms)
+Γ£ö candidate collection API scopes billing reads to authenticated owner candidate ids (52.5516ms)
+Γ£ö admin records incoming service receipt and correction without recruiter payout fields (13458.784ms)
+Γ£ö service collections preserve anniversary bills, partial receipts, corrections and access boundaries (6297.3676ms)
+node:internal/test_runner/harness:124
+      throw err;
+      ^
+
+Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+    at async open (node:internal/fs/promises:697:25)
+    at async readFile (node:internal/fs/promises:1348:14)
+    at async file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/standalone-resume-mode.test.mjs:12:20 {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+}
+
+Node.js v24.19.0
+Γ£û tests\standalone-resume-mode.test.mjs (1194.1986ms)
+node:fs:484
+    return binding.readFileUtf8(path, stringToFlags(options.flag));
+                   ^
+
+Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\embedded-support.js'
+    at readFileSync (node:fs:484:20)
+    at load (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/helpers/load-ts-module.mjs:16:39)
+    at file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/helpers/load-ts-module.mjs:30:22
+    at file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/stripe-embedded-boundaries.test.mjs:4:29
+    at ModuleJob.run (node:internal/modules/esm/module_job:439:25)
+    at async node:internal/modules/esm/loader:643:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\embedded-support.js'
+}
+
+Node.js v24.19.0
+Γ£û tests\stripe-embedded-boundaries.test.mjs (755.0517ms)
+Γ£û installed extension fills Stripe Greenhouse iframe, detects linked JD, preserves edits and undoes (33178.2629ms)
+Γ£ö manual submissions record the authenticated staff actor instead of supplied credit (3324.4166ms)
+Γ£ö staff edits retain original actor and candidate while allowing ordinary status changes (22.3463ms)
+Γ£ö application dates use inclusive calendar boundaries, independent of updated time (87.1661ms)
+Γ£ö date shortcuts cover seven calendar days and current month without UTC shifting (1.0096ms)
+Γ£û returning to submissions refreshes the existing draft row to Applied without resetting filters (30781.9639ms)
+Γ£û submission dates filter rows, daily counts, status and exported report together (30204.0149ms)
+Γ£ö super_admin sidebar has one Public Jobs link and no separate portal entries (498.7723ms)
+Γ£ö recruiter sidebar has one Public Jobs link and no separate portal entries (315.1179ms)
+Γ£ö technical_recruiter sidebar has one Public Jobs link and no separate portal entries (277.989ms)
+Γ£ö client sidebar has one Public Jobs link and no separate portal entries (246.3388ms)
+(node:2120) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/submission-store.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö submission history loads beyond database row caps without dropping daily totals (94.8747ms)
+Γ£ö an empty database returns no invented submissions (3.6091ms)
+Γ£ö failed database writes return errors rather than successful demo records (7037.3707ms)
+Γ£ö failed database reads surface an error (7024.7405ms)
+Γ£ö editing a loaded submission sends editable fields without joins or attribution (1.9178ms)
+Γ£ö tailoring uses only reviewed facts, preserves history and never accepts invented fact IDs (476.2576ms)
+Γ£ö download is a real DOCX, round-trips text and handles XML characters and Unicode (63.7052ms)
+Γ£ö candidate cannot list private JDs or generate another candidate resume (991.805ms)
+Γ£ö tailoring requires explicit AI consent and accepts only the owned reviewed candidate (64.6801ms)
+Γ£ö technical recruiters cannot generate tailored resumes through the API (66.0145ms)
+Γ£ö private JD resumes cannot be listed or opened by the candidate owner (50.8607ms)
+Γ£ö protected binary downloads retain bytes and response headers (20.5914ms)
+Γ£ö live job import verifies a public source and selected posting before returning its stored ID (16.977ms)
+Γ£ö targeted claim cannot reclaim an active lease even with the same token (4594.7174ms)
+Γ£ö targeted claim recovers expired leases but respects actor status, availability and attempt limit (23.3175ms)
+Γ£ö targeted claim is executable only by the service role (3.6379ms)
+Γ£ö resume status GET only reads stored state without claiming or executing a task (216.5889ms)
+Γ£ö resume upload stores and registers the document without running AI in the HTTP request (410.5283ms)
+Γ£ö retry endpoint leaves an active worker lease untouched (10.05ms)
+Γ£ö retry endpoint queues failed tasks through authorized retry RPC only (7.6488ms)
+Γ£ö webhook rejects missing authorization before database access (23.1045ms)
+Γ£ö webhook requires deployed shared-secret configuration (20.031ms)
+Γ£ö repeated target webhook never falls back to an unrelated queued task (16.3367ms)
+Γ£ö webhook rejects invalid target identifiers without database access (19.0696ms)
+Γ£ö webhook sanitizes handler errors and checks failure finalization (14.2934ms)
+Γ£ö webhook preserves controlled parser errors for resume review and retry (14.4909ms)
+Γ£ö webhook with unavailable AI configuration leaves queued work for the separate worker (15.1677ms)
+Γ£ö authenticated webhook finalizes only its claimed target under its lease (13.2324ms)
+Γ£ö authorized candidate can process exactly their queued AI task (300.6332ms)
+Γ£ö another candidate cannot claim a task (17.7162ms)
+Γ£ö unconfigured web app defers to worker without consuming a lease or attempt (13.8144ms)
+Γ£ö active worker lease cannot be stolen by browser processing (14.8342ms)
+Γ£ö processing errors are finalized without leaking provider responses (12.5482ms)
+Γ£ö Iframe Manifest Configuration: all_frames is enabled for universal autofill (7.3188ms)
+Γ£ö Iframe Form Discovery: walks accessible iframe contentDocuments (1.6731ms)
+Γ£ö Embedded Support: validates ATS frames universally without Stripe restriction (2.225ms)
+Γ£ö Outside Job Engine: cross-frame broadcast and multi-frame control collection (4.0159ms)
+Γ£ö Background Worker: handles NEXTKIN_BROADCAST_AUTOFILL to dispatch across tab frames (4.782ms)
+Γ£ö Toast Removal: in-page bottom toast overlays are disabled in jobright_extension (6.2412ms)
+Γ£û Domain Gating: non-job websites like gitingest.com are explicitly blocked (2.2932ms)
+Γ£ö Career Classification Logic: evaluates hosts correctly (3.4737ms)
+Γ£ö Outside Job Pipeline: save-external-job stores outside job posting into database (341.1608ms)
+Γ£ö Outside Job Pipeline: auto-submit stores outside application into public.job_submissions as Applied (75.6122ms)
+(node:18784) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/src/lib/cache.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to \\?\C:\Users\bharg\OneDrive\Desktop\marketing portal\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Γ£ö System Design: MemoryCache stores and retrieves values in O(1) time (1.1205ms)
+Γ£ö System Design: MemoryCache evicts expired keys (27.4214ms)
+Γ£ö System Design: MemoryCache SWR returns stale value immediately and updates in background (127.103ms)
+Γä╣ tests 542
+Γä╣ suites 0
+Γä╣ pass 435
+Γä╣ fail 107
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 925218.5813
+
+Γ£û failing tests:
+
+test at tests\admin-dashboard-layout.test.mjs:17:1
+Γ£û admin layout remains readable at mobile, tablet, desktop and dark mode with one main scroll region (18816.771ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  0 !== 1
+  
+      at TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/admin-dashboard-layout.test.mjs:23:27)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\application-answer-capture.test.mjs:8:1
+Γ£û capture uses accessible question names and excludes sensitive fieldset answers (299.4632ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\content.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/application-answer-capture.test.mjs:20:35)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\content.js'
+  }
+
+test at tests\application-answer-capture.test.mjs:29:2
+Γ£û linked capture displays actionable delivery feedback: {"queued":true} (95.3939ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\content.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/application-answer-capture.test.mjs:35:36)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\content.js'
+  }
+
+test at tests\application-answer-capture.test.mjs:29:2
+Γ£û linked capture displays actionable delivery feedback: {"error":"Capture queue is full. Use the portal review action."} (99.8259ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\content.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/application-answer-capture.test.mjs:35:36)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\content.js'
+  }
+
+test at tests\application-answer-capture.test.mjs:29:2
+Γ£û linked capture displays actionable delivery feedback: {"error":"Application needs manual review.","manualReview":true} (117.8025ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\content.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/application-answer-capture.test.mjs:35:36)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\content.js'
+  }
+
+test at tests\application-answer-capture.test.mjs:41:1
+Γ£û final captured answers retain earlier steps and applicant edits after the form disappears (139.9449ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\content.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/application-answer-capture.test.mjs:55:35)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\content.js'
+  }
+
+test at tests\application-answer-capture.test.mjs:67:1
+Γ£û confirmation reload retains the submission key, final answers and original role (106.3789ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\content.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/application-answer-capture.test.mjs:79:15)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\content.js'
+  }
+
+test at tests\application-answer-capture.test.mjs:90:1
+Γ£û linked confirmation waits for saved multi-step answers before reporting success (222.3524ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\content.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/application-answer-capture.test.mjs:101:35)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\content.js'
+  }
+
+test at tests\application-answer-capture.test.mjs:106:1
+Γ£û the manual action on a linked application uses its intent instead of creating an unlinked submission (167.0821ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\content.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/application-answer-capture.test.mjs:116:35)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\content.js'
+  }
+
+test at tests\autofill-submit-validation.test.mjs:7:1
+Γ£û autofilled fields update framework state and submit without required field errors (854.9968ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\content.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/autofill-submit-validation.test.mjs:145:21)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\content.js'
+  }
+
+test at tests\browser-capture.test.mjs:1:1
+Γ£û tests\browser-capture.test.mjs (218.161ms)
+  'test failed'
+
+test at tests\browser-extension-runtime.test.mjs:8:2
+Γ£û linked capture preserves evidence and reports HTTP 408 delivery failures (12.8181ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\background.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/browser-extension-runtime.test.mjs:14:19)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\background.js'
+  }
+
+test at tests\browser-extension-runtime.test.mjs:8:2
+Γ£û linked capture preserves evidence and reports HTTP 401 delivery failures (4.7609ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\background.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/browser-extension-runtime.test.mjs:14:19)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\background.js'
+  }
+
+test at tests\browser-extension-runtime.test.mjs:8:2
+Γ£û linked capture preserves evidence and reports HTTP 403 delivery failures (2.6481ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\background.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/browser-extension-runtime.test.mjs:14:19)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\background.js'
+  }
+
+test at tests\browser-extension-runtime.test.mjs:8:2
+Γ£û linked capture preserves evidence and reports HTTP 422 delivery failures (3.0496ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\background.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/browser-extension-runtime.test.mjs:14:19)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\background.js'
+  }
+
+test at tests\browser-extension-runtime.test.mjs:8:2
+Γ£û linked capture preserves evidence and reports HTTP 400 delivery failures (2.8598ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\background.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/browser-extension-runtime.test.mjs:14:19)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\background.js'
+  }
+
+test at tests\browser-extension-runtime.test.mjs:27:1
+Γ£û extension keeps candidate intents separate per tab and retries offline events with the same key (3.6227ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\background.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/browser-extension-runtime.test.mjs:35:19)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\background.js'
+  }
+
+test at tests\browser-extension-runtime.test.mjs:52:1
+Γ£û unlinked answer submissions retry offline with their original submission key (3.2545ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\background.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/browser-extension-runtime.test.mjs:59:18)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\background.js'
+  }
+
+test at tests\browser-extension-runtime.test.mjs:67:1
+Γ£û answer drafts retain application identity through confirmation navigation and stay job-scoped (3.0283ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\background.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/browser-extension-runtime.test.mjs:71:21)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\background.js'
+  }
+
+test at tests\browser-extension-runtime.test.mjs:81:1
+Γ£û explicit manual review recovers a paused automatic submission without losing evidence or identity (3.7274ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\background.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/browser-extension-runtime.test.mjs:88:18)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\background.js'
+  }
+
+test at tests\browser-extension-runtime.test.mjs:109:1
+Γ£û linked manual recovery queues an attestation for the same intent and retains rejected automatic evidence (2.8778ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\background.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/browser-extension-runtime.test.mjs:118:21)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\background.js'
+  }
+
+test at tests\extension-ai-workflow.test.mjs:1:1
+Γ£û tests\extension-ai-workflow.test.mjs (95.0556ms)
+  'test failed'
+
+test at tests\extension-ashby-commit.test.mjs:29:1
+Γ£û installed extension commits React email, phone and a real Ashby location option before a local test submission (32007.7413ms)
+  browserContext.waitForEvent: Timeout 30000ms exceeded while waiting for event "serviceworker"
+      at TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\extension-ashby-commit.test.mjs:34:73) {
+    name: 'TimeoutError',
+    log: []
+  }
+
+test at tests\extension-ashby-commit.test.mjs:63:37
+Γ£û Ashby absent location options never become a fake selected location (1283.7821ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\adapters\generic.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async Object.readFile (node:internal/fs/promises:1348:14)
+      at async _Frame.addScriptTag (C:\Users\bharg\OneDrive\Desktop\marketing portal\node_modules\playwright-core\lib\coreBundle.js:61996:27)
+      at async _Page.addScriptTag (C:\Users\bharg\OneDrive\Desktop\marketing portal\node_modules\playwright-core\lib\coreBundle.js:63072:16)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-ashby-commit.test.mjs:67:121)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\adapters\\generic.js'
+  }
+
+test at tests\extension-ashby-commit.test.mjs:63:37
+Γ£û Ashby ambiguous location options never become a fake selected location (484.985ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\adapters\generic.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async Object.readFile (node:internal/fs/promises:1348:14)
+      at async _Frame.addScriptTag (C:\Users\bharg\OneDrive\Desktop\marketing portal\node_modules\playwright-core\lib\coreBundle.js:61996:27)
+      at async _Page.addScriptTag (C:\Users\bharg\OneDrive\Desktop\marketing portal\node_modules\playwright-core\lib\coreBundle.js:63072:16)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-ashby-commit.test.mjs:67:121)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\adapters\\generic.js'
+  }
+
+test at tests\extension-ashby-commit.test.mjs:77:1
+Γ£û field writer leaves portal validation messages for the portal to clear (423.5003ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\field-writer.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async Object.readFile (node:internal/fs/promises:1348:14)
+      at async _Frame.addScriptTag (C:\Users\bharg\OneDrive\Desktop\marketing portal\node_modules\playwright-core\lib\coreBundle.js:61996:27)
+      at async _Page.addScriptTag (C:\Users\bharg\OneDrive\Desktop\marketing portal\node_modules\playwright-core\lib\coreBundle.js:63072:16)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-ashby-commit.test.mjs:80:2)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\field-writer.js'
+  }
+
+test at tests\extension-candidate-isolation.test.mjs:68:1
+Γ£û Wrong-candidate fallback bug: candidate A receiving 403 must NEVER return candidate B uploaded facts (5.8349ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\background.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async setupBackground (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-candidate-isolation.test.mjs:8:18)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-candidate-isolation.test.mjs:77:27)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\background.js'
+  }
+
+test at tests\extension-candidate-isolation.test.mjs:100:1
+Γ£û Sponsorship vs Work-Authorization: sponsorship question must NOT use work-authorization value (2.3481ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\background.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async setupBackground (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-candidate-isolation.test.mjs:8:18)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-candidate-isolation.test.mjs:110:27)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\background.js'
+  }
+
+test at tests\extension-candidate-isolation.test.mjs:129:1
+Γ£û Unknown authorization or sponsorship must NOT default to No in offline fallback (1.4486ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\background.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async setupBackground (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-candidate-isolation.test.mjs:8:18)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-candidate-isolation.test.mjs:138:27)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\background.js'
+  }
+
+test at tests\extension-candidate-isolation.test.mjs:157:1
+Γ£û connected screening polls read-only results and reuses the same request identity (2.503ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\background.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async setupBackground (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-candidate-isolation.test.mjs:8:18)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-candidate-isolation.test.mjs:159:22)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\background.js'
+  }
+
+test at tests\extension-candidate-isolation.test.mjs:168:1
+Γ£û no consent prevents any provider-service request (1.3954ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\background.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async setupBackground (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-candidate-isolation.test.mjs:8:18)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-candidate-isolation.test.mjs:169:34)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\background.js'
+  }
+
+test at tests\extension-contextual-ai.test.mjs:23:1
+Γ£û tailoring preserves every original source section including professional experience and licenses (0.616ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at readFileSync (node:fs:484:20)
+      at load (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/helpers/load-ts-module.mjs:16:39)
+      at file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/helpers/load-ts-module.mjs:30:22
+      at TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-contextual-ai.test.mjs:24:42)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-contextual-ai.test.mjs:33:1
+Γ£û twenty-five jobs create distinct resume scopes and genuine DOCX documents without a fixed cap (81.5796ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at readFileSync (node:fs:484:20)
+      at load (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/helpers/load-ts-module.mjs:16:39)
+      at file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/helpers/load-ts-module.mjs:30:22
+      at TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-contextual-ai.test.mjs:34:60)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-domain-exclusions.test.mjs:1:1
+Γ£û tests\extension-domain-exclusions.test.mjs (806.5589ms)
+  'test failed'
+
+test at tests\extension-fill-session.test.mjs:34:1
+Γ£û FillSession reports not ready when candidate or JD is missing (5.4039ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async loadContext (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-fill-session.test.mjs:8:18)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-fill-session.test.mjs:35:15)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-fill-session.test.mjs:48:1
+Γ£û FillSession reports not ready when candidate facts are unconfirmed (2.669ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async loadContext (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-fill-session.test.mjs:8:18)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-fill-session.test.mjs:49:15)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-fill-session.test.mjs:59:1
+Γ£û FillSession reports ready when reviewed candidate and complete JD exist (1.7207ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async loadContext (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-fill-session.test.mjs:8:18)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-fill-session.test.mjs:60:15)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-fill-session.test.mjs:71:1
+Γ£û FillSession tracks written receipts and enables safe undo only when value matches writtenValue (1.822ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async loadContext (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-fill-session.test.mjs:8:18)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-fill-session.test.mjs:72:15)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-fill-session.test.mjs:84:1
+Γ£û Two distinct job postings with the same title produce distinct job keys and session IDs (1.5665ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async loadContext (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-fill-session.test.mjs:8:18)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-fill-session.test.mjs:85:15)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-form-adapters.test.mjs:7:1
+Γ£û adapter contracts discover scoped fields, preserve existing values and verify undo (811.9858ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\adapters\generic.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async Object.readFile (node:internal/fs/promises:1348:14)
+      at async _Frame.addScriptTag (C:\Users\bharg\OneDrive\Desktop\marketing portal\node_modules\playwright-core\lib\coreBundle.js:61996:27)
+      at async _Page.addScriptTag (C:\Users\bharg\OneDrive\Desktop\marketing portal\node_modules\playwright-core\lib\coreBundle.js:63072:16)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-form-adapters.test.mjs:11:28)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\adapters\\generic.js'
+  }
+
+test at tests\extension-form-adapters.test.mjs:23:1
+Γ£û controlled fields, delayed combobox options, duplicates and stale sessions fail safely (298.0647ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\adapters\generic.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async Object.readFile (node:internal/fs/promises:1348:14)
+      at async _Frame.addScriptTag (C:\Users\bharg\OneDrive\Desktop\marketing portal\node_modules\playwright-core\lib\coreBundle.js:61996:27)
+      at async _Page.addScriptTag (C:\Users\bharg\OneDrive\Desktop\marketing portal\node_modules\playwright-core\lib\coreBundle.js:63072:16)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-form-adapters.test.mjs:25:28)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\adapters\\generic.js'
+  }
+
+test at tests\extension-form-adapters.test.mjs:36:1
+Γ£û reference, emergency and consent fields are excluded even under generic labels (362.9455ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\adapters\generic.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async Object.readFile (node:internal/fs/promises:1348:14)
+      at async _Frame.addScriptTag (C:\Users\bharg\OneDrive\Desktop\marketing portal\node_modules\playwright-core\lib\coreBundle.js:61996:27)
+      at async _Page.addScriptTag (C:\Users\bharg\OneDrive\Desktop\marketing portal\node_modules\playwright-core\lib\coreBundle.js:63072:16)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-form-adapters.test.mjs:37:385)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\adapters\\generic.js'
+  }
+
+test at tests\extension-form-adapters.test.mjs:42:1
+Γ£û platform contract fixtures work at desktop, tablet and mobile widths (366.7425ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\adapters\generic.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async Object.readFile (node:internal/fs/promises:1348:14)
+      at async _Frame.addScriptTag (C:\Users\bharg\OneDrive\Desktop\marketing portal\node_modules\playwright-core\lib\coreBundle.js:61996:27)
+      at async _Page.addScriptTag (C:\Users\bharg\OneDrive\Desktop\marketing portal\node_modules\playwright-core\lib\coreBundle.js:63072:16)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-form-adapters.test.mjs:48:30)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\adapters\\generic.js'
+  }
+
+test at tests\extension-form-adapters.test.mjs:55:1
+Γ£û custom combobox undo restores the prior state; disabled resets prevent a write (367.0217ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\adapters\generic.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async Object.readFile (node:internal/fs/promises:1348:14)
+      at async _Frame.addScriptTag (C:\Users\bharg\OneDrive\Desktop\marketing portal\node_modules\playwright-core\lib\coreBundle.js:61996:27)
+      at async _Page.addScriptTag (C:\Users\bharg\OneDrive\Desktop\marketing portal\node_modules\playwright-core\lib\coreBundle.js:63072:16)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-form-adapters.test.mjs:56:376)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\adapters\\generic.js'
+  }
+
+test at tests\extension-form-adapters.test.mjs:66:1
+Γ£û installed adapter path waits for recruiter action before filling a selected profile (421.9425ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async Object.readFile (node:internal/fs/promises:1348:14)
+      at async _Frame.addScriptTag (C:\Users\bharg\OneDrive\Desktop\marketing portal\node_modules\playwright-core\lib\coreBundle.js:61996:27)
+      at async _Page.addScriptTag (C:\Users\bharg\OneDrive\Desktop\marketing portal\node_modules\playwright-core\lib\coreBundle.js:63072:16)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-form-adapters.test.mjs:69:123)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-installed-smoke.test.mjs:7:1
+Γ£û installed Manifest V3 extension imports PDF, generates a genuine per-job DOCX and lists history (30938.0543ms)
+  browserContext.waitForEvent: Timeout 30000ms exceeded while waiting for event "serviceworker"
+      at TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\extension-installed-smoke.test.mjs:11:73) {
+    name: 'TimeoutError',
+    log: []
+  }
+
+test at tests\extension-popup-resumes.test.mjs:8:1
+Γ£û popup saves pasted candidate details and downloads the selected per-job version safely (244.3969ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\popup.html'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-popup-resumes.test.mjs:10:13)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\popup.html'
+  }
+
+test at tests\extension-resume-engine.test.mjs:14:1
+Γ£û generation refuses missing candidate or JD instead of inventing defaults (2.0937ms)
+  AssertionError [ERR_ASSERTION]: resume engine must exist
+  + actual - expected
+  
+  + 'undefined'
+  - 'function'
+  
+      at TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-resume-engine.test.mjs:15:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'undefined',
+    expected: 'function',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\extension-resume-engine.test.mjs:22:1
+Γ£û tailoring preserves supplied claims and never turns target requirements into candidate facts (0.3326ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'undefined'
+  - 'function'
+  
+      at TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-resume-engine.test.mjs:23:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'undefined',
+    expected: 'function',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\extension-resume-engine.test.mjs:33:1
+Γ£û coverage uses word boundaries, supports nonengineering jobs and unknown requirements (0.2627ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'undefined'
+  - 'function'
+  
+      at TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-resume-engine.test.mjs:34:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'undefined',
+    expected: 'function',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\extension-resume-engine.test.mjs:44:1
+Γ£û real DOCX package contains tailored text and remains parseable with Unicode and XML characters (0.2355ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'undefined'
+  - 'function'
+  
+      at TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-resume-engine.test.mjs:45:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'undefined',
+    expected: 'function',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\extension-resume-engine.test.mjs:53:1
+Γ£û uploaded resume parsing keeps raw facts without guessing employer, location, dates or eligibility (0.2776ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'undefined'
+  - 'function'
+  
+      at TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-resume-engine.test.mjs:54:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'undefined',
+    expected: 'function',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\extension-resume-engine.test.mjs:64:1
+Γ£û fingerprint preserves arbitrary job counts and invalidates changed JD, candidate, company and URL (1.1906ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'undefined'
+  - 'function'
+  
+      at TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-resume-engine.test.mjs:65:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'undefined',
+    expected: 'function',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\extension-resume-engine.test.mjs:79:1
+Γ£û negative skill mentions never become candidate skills or supported requirements (0.2146ms)
+  TypeError: engine.candidateFromText is not a function
+      at TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-resume-engine.test.mjs:80:23)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\extension-resume-engine.test.mjs:87:1
+Γ£û mixed JD clauses retain unknown qualifications and ATS evidence comes from the actual output (0.1921ms)
+  TypeError: engine.analyze is not a function
+      at TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-resume-engine.test.mjs:88:21)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\extension-resume-engine.test.mjs:96:1
+Γ£û explicit unfamiliar skills and labeled JSON-import names remain grounded in their source (0.2198ms)
+  TypeError: engine.candidateFromText is not a function
+      at TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-resume-engine.test.mjs:97:23)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\extension-resume-engine.test.mjs:103:1
+Γ£û unstructured work history before the first recognized section is never dropped (0.3009ms)
+  TypeError: engine.candidateFromText is not a function
+      at TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-resume-engine.test.mjs:104:23)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\extension-resume-history.test.mjs:1:1
+Γ£û tests\extension-resume-history.test.mjs (78.9053ms)
+  'test failed'
+
+test at tests\extension-resume-import.test.mjs:28:1
+Γ£û structured JSON includes skills, nested employment, and education (257.046ms)
+  page.addScriptTag: Provide an object with a `url`, `path` or `content` property
+      at extract (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\extension-resume-import.test.mjs:20:13)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\extension-resume-import.test.mjs:29:15) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests\extension-resume-import.test.mjs:32:1
+Γ£û text and Markdown retain candidate details (85.6061ms)
+  page.addScriptTag: Provide an object with a `url`, `path` or `content` property
+      at extract (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\extension-resume-import.test.mjs:20:13)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\extension-resume-import.test.mjs:33:61) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests\extension-resume-import.test.mjs:35:1
+Γ£û compressed PDF content is extracted through a real PDF parser (123.8164ms)
+  page.addScriptTag: Provide an object with a `url`, `path` or `content` property
+      at extract (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\extension-resume-import.test.mjs:20:13)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\extension-resume-import.test.mjs:37:15) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests\extension-resume-import.test.mjs:39:1
+Γ£û PDF extraction loads its local worker across the page origin boundary (127.738ms)
+  page.addScriptTag: Provide an object with a `url`, `path` or `content` property
+      at extract (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\extension-resume-import.test.mjs:20:13)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\extension-resume-import.test.mjs:41:15) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests\extension-resume-import.test.mjs:52:1
+Γ£û DOCX central directory handles data descriptors and XML paragraphs/entities (112.6968ms)
+  page.addScriptTag: Provide an object with a `url`, `path` or `content` property
+      at extract (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\extension-resume-import.test.mjs:20:13)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\extension-resume-import.test.mjs:53:15) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests\extension-resume-import.test.mjs:56:1
+Γ£û unreadable and scanned PDFs request pasted text instead of guessing binary (102.2679ms)
+  page.addScriptTag: Provide an object with a `url`, `path` or `content` property
+      at extract (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\extension-resume-import.test.mjs:20:13)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\extension-resume-import.test.mjs:59:16) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests\extension-resume-import.test.mjs:62:1
+Γ£û rejects oversized, unsupported, malformed JSON and empty text files (102.6112ms)
+  page.addScriptTag: Provide an object with a `url`, `path` or `content` property
+      at extract (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\extension-resume-import.test.mjs:20:13)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\extension-resume-import.test.mjs:63:180) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests\extension-resume-points.test.mjs:1:1
+Γ£û tests\extension-resume-points.test.mjs (426.3064ms)
+  'test failed'
+
+test at tests\extension-review-regressions.test.mjs:15:1
+Γ£û pending screening reviews cannot insert an old company answer after an SPA job change (294.7857ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async setup (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-review-regressions.test.mjs:11:142)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-review-regressions.test.mjs:16:13)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-review-regressions.test.mjs:19:1
+Γ£û screening radio undo restores the complete prior group state and respects later manual edits (106.2552ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async setup (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-review-regressions.test.mjs:11:142)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-review-regressions.test.mjs:20:13)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-review-regressions.test.mjs:23:1
+Γ£û late screening responses cannot become reviewable answers for a new job (107.3784ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async setup (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-review-regressions.test.mjs:11:142)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-review-regressions.test.mjs:24:13)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-review-regressions.test.mjs:27:1
+Γ£û repeated fill operations preserve the original undo value within the same session (105.8966ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async setup (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-review-regressions.test.mjs:11:142)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-review-regressions.test.mjs:28:13)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-review-regressions.test.mjs:30:1
+Γ£û manual corrections made while drafting are never overwritten by acceptance (108.5473ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async setup (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-review-regressions.test.mjs:11:142)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-review-regressions.test.mjs:31:13)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-review-regressions.test.mjs:33:1
+Γ£û a reused control with changed question wording invalidates the pending answer (106.2251ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async setup (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-review-regressions.test.mjs:11:142)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-review-regressions.test.mjs:34:13)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-review-regressions.test.mjs:36:1
+Γ£û screening acceptance does not record writes rejected by controlled inputs (110.1868ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async setup (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-review-regressions.test.mjs:11:142)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-review-regressions.test.mjs:37:13)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-screening-options.test.mjs:1:1
+Γ£û tests\extension-screening-options.test.mjs (509.4649ms)
+  'test failed'
+
+test at tests\extension-source-integrity.test.mjs:5:1
+Γ£û shared extension source required by portal imports remains present (2.3457ms)
+  AssertionError [ERR_ASSERTION]: Missing required source: resume-engine.js
+      at TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-source-integrity.test.mjs:6:117)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\extension-submission-capture.test.mjs:37:38
+Γ£û linked native submission captures final answers before the form disappears and promotes on confirmation (310.3981ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async setup (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-submission-capture.test.mjs:32:142)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-submission-capture.test.mjs:38:22)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-submission-capture.test.mjs:37:38
+Γ£û linked button-only submission captures final answers before the form disappears and promotes on confirmation (123.5624ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async setup (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-submission-capture.test.mjs:32:142)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-submission-capture.test.mjs:38:22)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-submission-capture.test.mjs:50:1
+Γ£û a failed submit remains a draft and manual Log Applied retains actually observed answers (120.9533ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async setup (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-submission-capture.test.mjs:32:142)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-submission-capture.test.mjs:51:15)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-submission-capture.test.mjs:61:1
+Γ£û standalone confirmation preserves final answers after the application form is removed (119.9643ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async setup (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-submission-capture.test.mjs:32:142)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-submission-capture.test.mjs:62:22)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-submission-capture.test.mjs:72:34
+Γ£û linked success archives the exact final selected resume, not an earlier file or cover letter (128.3367ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async setup (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-submission-capture.test.mjs:32:142)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-submission-capture.test.mjs:73:22)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-submission-capture.test.mjs:72:34
+Γ£û standalone success archives the exact final selected resume, not an earlier file or cover letter (124.99ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async setup (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-submission-capture.test.mjs:32:142)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-submission-capture.test.mjs:73:22)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-submission-capture.test.mjs:85:1
+Γ£û manual Log Applied includes the observed file and an explicit removal clears it (138.0412ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\bharg\OneDrive\Desktop\marketing portal\browser-extension\resume-engine.js'
+      at async open (node:internal/fs/promises:697:25)
+      at async readFile (node:internal/fs/promises:1348:14)
+      at async setup (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-submission-capture.test.mjs:32:142)
+      at async TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/extension-submission-capture.test.mjs:86:15)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\bharg\\OneDrive\\Desktop\\marketing portal\\browser-extension\\resume-engine.js'
+  }
+
+test at tests\extension-tailoring-browser.test.mjs:1:1
+Γ£û tests\extension-tailoring-browser.test.mjs (495.1479ms)
+  'test failed'
+
+test at tests\extension-undo-review.test.mjs:1:1
+Γ£û tests\extension-undo-review.test.mjs (516.9671ms)
+  'test failed'
+
+test at tests\resume-autofill.test.mjs:1:1
+Γ£û tests\resume-autofill.test.mjs (577.6117ms)
+  'test failed'
+
+test at tests\resume-jobs-ui.test.mjs:70:1
+Γ£û live jobs can be verified and saved before opening the tailored resume workspace (30247.2293ms)
+  locator.click: Timeout 30000ms exceeded.
+  Call log:
+  [2m  - waiting for getByText('Company boards & source discovery', { exact: true })[22m
+  
+      at jobsPage (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:66:74)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:71:26) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByText('Company boards & source discovery', { exact: true })" ]
+  }
+
+test at tests\resume-jobs-ui.test.mjs:78:1
+Γ£û Public Jobs sends portal, company and location filters together with candidate context (30244.1144ms)
+  locator.click: Timeout 30000ms exceeded.
+  Call log:
+  [2m  - waiting for getByText('Company boards & source discovery', { exact: true })[22m
+  
+      at jobsPage (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:66:74)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:79:27) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByText('Company boards & source discovery', { exact: true })" ]
+  }
+
+test at tests\resume-jobs-ui.test.mjs:92:1
+Γ£û public jobs defaults to latest postings and applies date changes in saved and live views (30233.436ms)
+  locator.click: Timeout 30000ms exceeded.
+  Call log:
+  [2m  - waiting for getByText('Company boards & source discovery', { exact: true })[22m
+  
+      at jobsPage (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:66:74)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:93:26) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByText('Company boards & source discovery', { exact: true })" ]
+  }
+
+test at tests\resume-jobs-ui.test.mjs:102:1
+Γ£û choosing an ATS provider searches all companies and clears the previous company board (30202.4617ms)
+  locator.click: Timeout 30000ms exceeded.
+  Call log:
+  [2m  - waiting for getByText('Company boards & source discovery', { exact: true })[22m
+  
+      at jobsPage (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:66:74)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:103:28) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByText('Company boards & source discovery', { exact: true })" ]
+  }
+
+test at tests\resume-jobs-ui.test.mjs:114:1
+Γ£û public board selection fetches exact provider and staff can persist it (30276.3198ms)
+  locator.click: Timeout 30000ms exceeded.
+  Call log:
+  [2m  - waiting for getByText('Company boards & source discovery', { exact: true })[22m
+  
+      at jobsPage (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:66:74)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:115:46) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByText('Company boards & source discovery', { exact: true })" ]
+  }
+
+test at tests\resume-jobs-ui.test.mjs:127:1
+Γ£û candidate job list shows resume-related match reasons and prompts unfinished profiles (30392.3944ms)
+  locator.click: Timeout 30000ms exceeded.
+  Call log:
+  [2m  - waiting for getByText('Company boards & source discovery', { exact: true })[22m
+  
+      at jobsPage (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:66:74)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:128:20) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByText('Company boards & source discovery', { exact: true })" ]
+  }
+
+test at tests\resume-jobs-ui.test.mjs:137:1
+Γ£û technical recruiters can select an assigned candidate for resume-related jobs (30278.5948ms)
+  locator.click: Timeout 30000ms exceeded.
+  Call log:
+  [2m  - waiting for getByText('Company boards & source discovery', { exact: true })[22m
+  
+      at jobsPage (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:66:74)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:138:15) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByText('Company boards & source discovery', { exact: true })" ]
+  }
+
+test at tests\resume-jobs-ui.test.mjs:147:1
+Γ£û recruiter selector includes reviewed candidates from later pages and carries selection into job details (30240.0758ms)
+  locator.click: Timeout 30000ms exceeded.
+  Call log:
+  [2m  - waiting for getByText('Company boards & source discovery', { exact: true })[22m
+  
+      at jobsPage (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:66:74)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:148:30) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByText('Company boards & source discovery', { exact: true })" ]
+  }
+
+test at tests\resume-jobs-ui.test.mjs:158:1
+Γ£û saved job cards distinguish source dates from unknown closing dates (30299.9398ms)
+  locator.click: Timeout 30000ms exceeded.
+  Call log:
+  [2m  - waiting for getByText('Company boards & source discovery', { exact: true })[22m
+  
+      at jobsPage (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:66:74)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:159:15) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByText('Company boards & source discovery', { exact: true })" ]
+  }
+
+test at tests\resume-jobs-ui.test.mjs:165:69
+Γ£û recruiter can move a successful job to one candidate's Applied list while another can still apply (30662.8013ms)
+  locator.click: Timeout 30000ms exceeded.
+  Call log:
+  [2m  - waiting for getByText('Company boards & source discovery', { exact: true })[22m
+  
+      at jobsPage (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:66:74)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:166:36) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByText('Company boards & source discovery', { exact: true })" ]
+  }
+
+test at tests\resume-jobs-ui.test.mjs:165:69
+Γ£û technical_recruiter can move a successful job to one candidate's Applied list while another can still apply (30200.3731ms)
+  locator.click: Timeout 30000ms exceeded.
+  Call log:
+  [2m  - waiting for getByText('Company boards & source discovery', { exact: true })[22m
+  
+      at jobsPage (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:66:74)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:166:36) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByText('Company boards & source discovery', { exact: true })" ]
+  }
+
+test at tests\resume-jobs-ui.test.mjs:165:69
+Γ£û super_admin can move a successful job to one candidate's Applied list while another can still apply (30186.9002ms)
+  locator.click: Timeout 30000ms exceeded.
+  Call log:
+  [2m  - waiting for getByText('Company boards & source discovery', { exact: true })[22m
+  
+      at jobsPage (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:66:74)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:166:36) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByText('Company boards & source discovery', { exact: true })" ]
+  }
+
+test at tests\resume-jobs-ui.test.mjs:180:1
+Γ£û candidate sees their own Applied list without selecting another candidate (30185.5152ms)
+  locator.click: Timeout 30000ms exceeded.
+  Call log:
+  [2m  - waiting for getByText('Company boards & source discovery', { exact: true })[22m
+  
+      at jobsPage (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:66:74)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:181:27) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByText('Company boards & source discovery', { exact: true })" ]
+  }
+
+test at tests\resume-jobs-ui.test.mjs:188:1
+Γ£û returning from a successful live application removes it without refetching every company board (30187.4092ms)
+  locator.click: Timeout 30000ms exceeded.
+  Call log:
+  [2m  - waiting for getByText('Company boards & source discovery', { exact: true })[22m
+  
+      at jobsPage (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:66:74)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:189:40) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByText('Company boards & source discovery', { exact: true })" ]
+  }
+
+test at tests\resume-jobs-ui.test.mjs:195:1
+Γ£û Applied jobs remains usable on desktop and mobile with the project styles (32952.8662ms)
+  locator.click: Timeout 30000ms exceeded.
+  Call log:
+  [2m  - waiting for getByText('Company boards & source discovery', { exact: true })[22m
+  
+      at jobsPage (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:66:74)
+      at async TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\resume-jobs-ui.test.mjs:198:27) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByText('Company boards & source discovery', { exact: true })" ]
+  }
+
+test at tests\security-phase2-high.test.mjs:5:1
+Γ£û VULN-06: Next.js 16 proxy.ts and middleware.ts are configured with matching pattern (8.3919ms)
+  AssertionError [ERR_ASSERTION]: src/middleware.ts must exist for backwards compatibility
+      at TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/security-phase2-high.test.mjs:7:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\standalone-resume-mode.test.mjs:1:1
+Γ£û tests\standalone-resume-mode.test.mjs (1194.1986ms)
+  'test failed'
+
+test at tests\stripe-embedded-boundaries.test.mjs:1:1
+Γ£û tests\stripe-embedded-boundaries.test.mjs (755.0517ms)
+  'test failed'
+
+test at tests\stripe-embedded-extension.test.mjs:5:1
+Γ£û installed extension fills Stripe Greenhouse iframe, detects linked JD, preserves edits and undoes (33178.2629ms)
+  browserContext.waitForEvent: Timeout 30000ms exceeded while waiting for event "serviceworker"
+      at TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\stripe-embedded-extension.test.mjs:6:305) {
+    name: 'TimeoutError',
+    log: []
+  }
+
+test at tests\submission-filters-ui.test.mjs:32:1
+Γ£û returning to submissions refreshes the existing draft row to Applied without resetting filters (30781.9639ms)
+  locator.waitFor: Timeout 30000ms exceeded.
+  Call log:
+  [2m  - waiting for getByRole('row').filter({ hasText: 'Focus Fixture' }).getByText('Draft', { exact: true }) to be visible[22m
+  
+      at TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\submission-filters-ui.test.mjs:37:96) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByRole('row').filter({ hasText: 'Focus Fixture' }).getByText('Draft', { exact: true }) to be visible" ]
+  }
+
+test at tests\submission-filters-ui.test.mjs:44:1
+Γ£û submission dates filter rows, daily counts, status and exported report together (30204.0149ms)
+  locator.waitFor: Timeout 30000ms exceeded.
+  Call log:
+  [2m  - waiting for getByRole('region', { name: 'Application date filters' }).getByRole('status').getByText('4', { exact: true }) to be visible[22m
+  
+      at TestContext.<anonymous> (C:\Users\bharg\OneDrive\Desktop\marketing portal\tests\submission-filters-ui.test.mjs:54:62) {
+    name: 'TimeoutError',
+    log: [ "  - waiting for getByRole('region', { name: 'Application date filters' }).getByRole('status').getByText('4', { exact: true }) to be visible" ]
+  }
+
+test at tests\test-non-job-exclusion-and-toast-removal.test.mjs:23:1
+Γ£û Domain Gating: non-job websites like gitingest.com are explicitly blocked (2.2932ms)
+  AssertionError [ERR_ASSERTION]: performPageScan must abort immediately if not isJobOrCareerPage
+      at TestContext.<anonymous> (file:///C:/Users/bharg/OneDrive/Desktop/marketing%20portal/tests/test-non-job-exclusion-and-toast-removal.test.mjs:43:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

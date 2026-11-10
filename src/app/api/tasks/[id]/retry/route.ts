@@ -1,0 +1,2 @@
+import {protectedRoute} from '@/lib/http/protected-route';import {database,checkDb} from '@/lib/db/admin';import {z} from 'zod';
+export async function POST(request:Request,context:{params:Promise<{id:string}>}){return protectedRoute(request,'candidate_or_staff',async p=>{const {id}=await context.params;z.uuid().parse(id);const {data,error}=await database().rpc('retry_task',{p_actor:p.id,p_task:id});checkDb(error);return {taskId:data};});}
