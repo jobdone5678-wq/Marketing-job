@@ -4,7 +4,7 @@ import { candidateAccess } from '@/lib/resumes/repository';
 import { z } from 'zod';
 
 export async function GET(request: Request, context: { params: Promise<{id:string}> }) {
-  return protectedRoute(request, 'candidate_or_staff', async profile => {
+  return protectedRoute(request,async profile => {
     const id = z.uuid().parse((await context.params).id);
     const { data: submission, error } = await database().from('job_submissions').select('id,candidate_id').eq('id', id).maybeSingle();
     checkDb(error);

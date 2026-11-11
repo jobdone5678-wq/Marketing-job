@@ -3,7 +3,7 @@ import { database, checkDb, CaptureError } from '@/lib/db/admin';
 import { candidateProfileCache, outsideJobsCache } from '@/lib/cache';
 
 export async function GET(request: Request) {
-  return protectedRoute(request, 'candidate_or_staff', async (profile) => {
+  return protectedRoute(request,async (profile) => {
     const { searchParams } = new URL(request.url);
     const rawSearch = searchParams.get('q')?.trim() || '';
     const safeSearch = rawSearch.replace(/[%_,()'"\\:]/g, ' ').trim();
@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     let candidateId: string | null = null;
 
     // Enforce data isolation: candidates can only view their own outside job applications
-    if (profile.role === 'client') {
+    {
       // System Design: L1 In-Memory Cache with SWR for candidate ID resolution
       const cand = await candidateProfileCache.fetchWithSWR(
         `candidate:user:${profile.id}`,

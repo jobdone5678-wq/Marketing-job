@@ -3,7 +3,7 @@ import {database,checkDb,CaptureError} from '@/lib/db/admin';
 import {ownDocument} from '@/lib/resumes/repository';
 import {candidateInput} from '@/lib/candidate-input';
 import {z} from 'zod';
-export async function POST(request:Request,context:{params:Promise<{id:string}>}) {return protectedRoute(request,'candidate_or_staff',async profile=>{
+export async function POST(request:Request,context:{params:Promise<{id:string}>}) {return protectedRoute(request,async profile=>{
   const {id}=await context.params;await ownDocument(profile,id);
   const body=z.object({version:z.number().int().positive().nullable(),fields:candidateInput}).parse(await request.json());
   if(!body.fields.full_name?.trim())throw new CaptureError('Full name is required.');

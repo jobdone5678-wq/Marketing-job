@@ -16,7 +16,7 @@ function setup({role='client', candidate={}, saveError=false, useRealEngine=fals
  return {route,upload,tables,payload,flush,writes:()=>writes,post:async body=>flush(await route.POST(new Request('https://portal.test/api/extension/tailor-resume',{method:'POST',body:JSON.stringify(body??payload)})))};
 }
 test('connected tailoring blocks unauthorized roles and inaccessible or unconfirmed candidates',async()=>{
- for(const options of [{role:'technical_recruiter'},{candidate:{user_id:'other'}},{candidate:{provenance_status:'legacy_unconfirmed'}}]){
+ for(const options of [{role: 'client'},{candidate:{user_id:'other'}},{candidate:{provenance_status:'legacy_unconfirmed'}}]){
   const app=setup(options);const response=await app.post();assert.ok([403,404,409].includes(response.status));assert.equal(app.writes(),0);
  }
 });
@@ -46,8 +46,8 @@ test('candidate changes create a new version and revoke old access without fallb
  app.tables.candidates[0].user_id='other';assert.equal((await app.post()).status,404);assert.equal(app.writes(),2);
 });
 test('recruiters can generate only assigned candidate application resumes',async()=>{
- assert.equal((await setup({role:'recruiter'}).post()).status,404);
- assert.equal((await setup({role:'recruiter',candidate:{assigned_recruiter_id:'actor'}}).post()).status,200);
+ assert.equal((await setup({role: 'client'}).post()).status,404);
+ assert.equal((await setup({role: 'client',candidate:{}}).post()).status,200);
 });
 test('history omits other actors and candidates and validates page boundaries',async()=>{
  const app=setup();await app.post();const own=app.tables.application_resume_versions[0];

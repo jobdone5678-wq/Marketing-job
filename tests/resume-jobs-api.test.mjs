@@ -8,7 +8,7 @@ test('saved Lever feed includes software jobs from every saved Lever company',as
   {id:'two',title:'Developer',company:'Two',location:'Remote',source_id:'b',state:'active'},
   {id:'other',title:'Software Engineer',company:'Other',location:'Remote',source_id:'c',state:'active'},
  ]});
- const load=moduleLoader({'@/lib/http/protected-route':{protectedRoute:(_r,_a,work)=>work({id:'actor',role:'recruiter'})},'@/lib/db/admin':{database:()=>db,checkDb:e=>{if(e)throw e;},CaptureError:Error},'@/lib/jobs/recommendations':{recommendationContext:async()=>({candidate:null,recommendation:{}})}});
+ const load=moduleLoader({'@/lib/http/protected-route':{protectedRoute:(_r,_a,work)=>work({id:'actor',role: 'client'})},'@/lib/db/admin':{database:()=>db,checkDb:e=>{if(e)throw e;},CaptureError:Error},'@/lib/jobs/recommendations':{recommendationContext:async()=>({candidate:null,recommendation:{}})}});
  const result=await load('src/app/api/jobs/route.ts').GET(new Request('https://portal.test/api/jobs?postedWithin=all&provider=lever'));
  assert.deepEqual(result.jobs.map(j=>j.id).sort(),['one','two']);assert.equal(result.total,2);
 });
@@ -17,7 +17,7 @@ test('provider-wide live feed merges catalog and saved boards, deduplicates and 
  const catalog=[{provider:'lever',board_slug:'one',company:'One'},{provider:'lever',board_slug:'two',company:'Two'},{provider:'lever',board_slug:'disabled',company:'Disabled'},{provider:'ashby',board_slug:'other',company:'Other'}];
  const db=fixtureDatabase({job_sources:[{id:'one',...catalog[0],enabled:true},{id:'disabled',...catalog[2],enabled:false},{id:'custom',provider:'lever',board_slug:'custom',company:'Custom',enabled:true}]});
  const fetched=[];
- const load=moduleLoader({'@/lib/http/protected-route':{protectedRoute:(_r,_a,work)=>work({id:'actor',role:'recruiter'})},'@/lib/db/admin':{database:()=>db,checkDb:e=>{if(e)throw e;},CaptureError:Error},'@/lib/jobs/recommendations':{recommendationContext:async()=>({candidate:null,recommendation:{}})},'@/lib/public-directory':{PUBLIC_JOB_BOARDS:catalog},'@/lib/jobs/adapters/native':{fetchSnapshot:async source=>{fetched.push(source.board_slug);return {jobs:[{title:'Software Engineer',company:source.company},{title:'Accountant',company:source.company}]};},validateBoard(){}},'@/lib/jobs/normalize':{isSoftwareJob:job=>job.title==='Software Engineer'}});
+ const load=moduleLoader({'@/lib/http/protected-route':{protectedRoute:(_r,_a,work)=>work({id:'actor',role: 'client'})},'@/lib/db/admin':{database:()=>db,checkDb:e=>{if(e)throw e;},CaptureError:Error},'@/lib/jobs/recommendations':{recommendationContext:async()=>({candidate:null,recommendation:{}})},'@/lib/public-directory':{PUBLIC_JOB_BOARDS:catalog},'@/lib/jobs/adapters/native':{fetchSnapshot:async source=>{fetched.push(source.board_slug);return {jobs:[{title:'Software Engineer',company:source.company},{title:'Accountant',company:source.company}]};},validateBoard(){}},'@/lib/jobs/normalize':{isSoftwareJob:job=>job.title==='Software Engineer'}});
  const result=await load('src/app/api/jobs/live/route.ts').GET(new Request('https://portal.test/api/jobs/live?postedWithin=all&provider=lever'));
  assert.deepEqual(fetched.sort(),['custom','one','two']);assert.equal(result.jobs.length,3);assert.equal(result.sources.length,3);
 });
@@ -29,7 +29,7 @@ test('saved public jobs filter portal, company and location before pagination',a
   {id:'other-company',title:'Engineer',company:'Other',location:'Austin, Texas',source_id:'gh',state:'active'},
   {id:'other-city',title:'Engineer',company:'Example',location:'Boston, Massachusetts',source_id:'gh',state:'active'},
  ]});
- const load=moduleLoader({'@/lib/http/protected-route':{protectedRoute:async(r,a,work)=>Response.json(await work({id:'actor',role:'recruiter'}))},'@/lib/db/admin':{database:()=>db,checkDb:e=>{if(e)throw e;},CaptureError:Error},'@/lib/jobs/recommendations':{recommendationContext:async()=>({candidate:null,recommendation:{}})}});
+ const load=moduleLoader({'@/lib/http/protected-route':{protectedRoute:async(r,a,work)=>Response.json(await work({id:'actor',role: 'client'}))},'@/lib/db/admin':{database:()=>db,checkDb:e=>{if(e)throw e;},CaptureError:Error},'@/lib/jobs/recommendations':{recommendationContext:async()=>({candidate:null,recommendation:{}})}});
  const result=await (await load('src/app/api/jobs/route.ts').GET(new Request('https://portal.test/api/jobs?postedWithin=all&provider=greenhouse&company=Example&location=Austin'))).json();
  assert.deepEqual(result.jobs.map(j=>j.id),['wanted']);assert.equal(result.total,1);
 });
@@ -39,7 +39,7 @@ test('live board results honor company and location filters too',async()=>{
   {id:'other-city',title:'Engineer',company:'Example',location:'Boston, Massachusetts',employment_type:'permanent'},
   {id:'other-company',title:'Engineer',company:'Other',location:'Austin, Texas',employment_type:'permanent'}];
  const db=fixtureDatabase({job_sources:[]});
- const load=moduleLoader({'@/lib/http/protected-route':{protectedRoute:async(r,a,work)=>Response.json(await work({id:'actor',role:'recruiter'}))},'@/lib/db/admin':{database:()=>db,checkDb:e=>{if(e)throw e;},CaptureError:Error},'@/lib/jobs/recommendations':{recommendationContext:async()=>({candidate:null,recommendation:{}})},'@/lib/jobs/adapters/native':{fetchSnapshot:async()=>({jobs}),validateBoard(){}},'@/lib/jobs/normalize':{isSoftwareJob:()=>true}});
+ const load=moduleLoader({'@/lib/http/protected-route':{protectedRoute:async(r,a,work)=>Response.json(await work({id:'actor',role: 'client'}))},'@/lib/db/admin':{database:()=>db,checkDb:e=>{if(e)throw e;},CaptureError:Error},'@/lib/jobs/recommendations':{recommendationContext:async()=>({candidate:null,recommendation:{}})},'@/lib/jobs/adapters/native':{fetchSnapshot:async()=>({jobs}),validateBoard(){}},'@/lib/jobs/normalize':{isSoftwareJob:()=>true}});
  const result=await (await load('src/app/api/jobs/live/route.ts').GET(new Request('https://portal.test/api/jobs/live?postedWithin=all&provider=greenhouse&board=example&company=EXAMPLE&location=austin'))).json();
  assert.deepEqual(result.jobs.map(job=>job.id),['wanted']);
 });

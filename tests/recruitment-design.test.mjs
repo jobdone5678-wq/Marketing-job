@@ -18,7 +18,7 @@ async function mount(t,width=1440){
  const page=await browser.newPage({viewport:{width,height:950}});t.after(()=>page.close());
  await page.route('https://portal.test/**',route=>{
   const path=new URL(route.request().url()).pathname;
-  if(path==='/api/candidates')return route.fulfill({json:{candidates,total:2,hasMore:false,role:'recruiter'}});
+  if(path==='/api/candidates')return route.fulfill({json:{candidates,total:2,hasMore:false,role: 'client'}});
   if(path.endsWith('/documents'))return route.fulfill({json:{documents:[]}});
   return route.fulfill({contentType:'text/html',body:'<html><body><div id="root"></div></body></html>'});
  });

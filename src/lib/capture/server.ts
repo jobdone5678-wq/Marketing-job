@@ -1,7 +1,7 @@
 import {appliedResumeSchema,saveAppliedResume} from './applied-resume';
 import 'server-only';import {createHash} from 'node:crypto';import {database,checkDb,CaptureError,errorResponse} from '@/lib/db/admin';import {allowedCaptureUrl,validateObservation} from './validation';import {validateApplicationAnswers} from './snapshot';import {z} from 'zod';
 export const tokenHash=(value:string)=>createHash('sha256').update(value).digest('hex');
-export type ExtensionProfile = { id: string; status: string; role: 'client' | 'recruiter' | 'technical_recruiter' | 'super_admin' | 'job_seeker' };
+export type ExtensionProfile = { id: string; status: string; role: 'client' };
 export async function extensionProfile(request: Request): Promise<ExtensionProfile> {
   const header = request.headers.get('authorization') || '';
   if (!/^Bearer [A-Za-z0-9_-]{20,128}$/.test(header)) {
@@ -20,14 +20,13 @@ export async function extensionProfile(request: Request): Promise<ExtensionProfi
   if (!profile || profile.status !== 'active') {
     throw new CaptureError('Active user profile required to use the extension.', 403);
   }
-  if (!['client', 'job_seeker', 'recruiter', 'technical_recruiter', 'super_admin'].includes(profile.role)) {
+  if (profile.role !== 'client' && profile.role !== 'candidate') {
     throw new CaptureError('Unauthorized role for extension access.', 403);
   }
   return profile;
 }
 export async function extensionActor(request: Request) {
   const profile = await extensionProfile(request);
-  if(profile.role==='client'||profile.role==='job_seeker')throw new CaptureError('Active recruiting staff required for linked application actions.',403);
   return profile.id;
 }
 export async function recordObservation(actor:string,body:unknown,manual=false){const input=z.object({intentId:z.uuid(),eventKey:z.uuid(),status:z.enum(['in_progress','submit_attempted','submitted','failed']),attempt:z.number().int().min(1).max(1000),evidence:z.string().min(1).max(1000),url:z.string().url().max(2000),observedAt:z.string().datetime(),answers:z.unknown().optional(),appliedResume:appliedResumeSchema}).parse(body);const parsedUrl=new URL(input.url);parsedUrl.search='';parsedUrl.hash='';const safeUrl=parsedUrl.toString();const {data:intent,error}=await database().from('application_intents').select('*,job:jobs(application_url),candidate:candidates(version)').eq('id',input.intentId).eq('owner_id',actor).single();checkDb(error);if(!intent)throw new CaptureError('Intent not found.',404);if(!manual&&(!allowedCaptureUrl(safeUrl,intent.job.application_url)||!validateObservation(input.status,input.evidence)))throw new CaptureError('Unsupported site or insufficient application evidence. Review manually.',422);

@@ -87,7 +87,7 @@ export async function POST(request: Request) {
         candidateVersion = cand.version ?? null;
       } else {
         const { data: fallbackCand } = await database().from('candidates').select('id,version')
-          .or(`user_id.eq.${actor.id},assigned_recruiter_id.eq.${actor.id},assigned_technical_recruiter_id.eq.${actor.id}`)
+          .eq('user_id', actor.id)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
       }
     } else {
       const { data: fallbackCand } = await database().from('candidates').select('id,version')
-        .or(`user_id.eq.${actor.id},assigned_recruiter_id.eq.${actor.id},assigned_technical_recruiter_id.eq.${actor.id}`)
+        .eq('user_id', actor.id)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -208,8 +208,6 @@ export async function POST(request: Request) {
           // Direct insert fallback without owner_id or applied_resume
           const { data: newSub, error: subErr } = await database().from('job_submissions').insert({
             candidate_id: candidateId,
-            recruiter_id: actor.role === 'recruiter' ? actor.id : null,
-            technical_recruiter_id: actor.role === 'technical_recruiter' ? actor.id : null,
             submission_date: new Date().toISOString().split('T')[0],
             company_name: body.companyName,
             job_title: body.jobTitle,

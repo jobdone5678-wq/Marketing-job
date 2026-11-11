@@ -10,7 +10,7 @@ before(async()=>{
  db=await recruitingDatabase(files);
  await db.exec(await readFile(new URL('../supabase/migrations/20261016000100_jd_tailored_resumes.sql',import.meta.url),'utf8'));
  await db.query(`INSERT INTO auth.users VALUES($1,'admin@example.test','{}'),($2,'owner@example.test','{}'),($3,'other@example.test','{}')`,[admin,owner,other]);
- await db.query(`UPDATE profiles SET role='super_admin',status='active' WHERE id=$1`,[admin]);
+ await db.query(`UPDATE profiles SET role='client',status='active' WHERE id=$1`,[admin]);
  candidate=(await db.query(`SELECT save_candidate_profile($1,NULL,NULL,'{"full_name":"Reviewed Candidate","primary_skills":"Python, SQL"}') id`,[owner])).rows[0].id;
  const source=(await db.query(`INSERT INTO job_sources(provider,board_slug,company,created_by) VALUES('greenhouse','fixture','Fixture',$1) RETURNING id`,[admin])).rows[0].id;
  job=(await db.query(`INSERT INTO jobs(source_id,external_id,title,company,source_url,application_url,description,content_hash,employment_type) VALUES($1,'fixture','Python Developer','Fixture','https://jobs.lever.co/fixture/1','https://jobs.lever.co/fixture/1','Python and SQL required','hash','unknown') RETURNING id`,[source])).rows[0].id;

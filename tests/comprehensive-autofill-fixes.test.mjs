@@ -108,9 +108,9 @@ test('comprehensive verification: checkboxes, dropdowns, and AI-only bio/screeni
             I am legally authorized to work in the United States
           </label>
 
-          <!-- 4. Custom ARIA Checkbox -->
-          <div role="checkbox" id="aria-consent" aria-checked="false" tabindex="0" class="custom-chk">
-            I certify and acknowledge all information is true and accurate
+          <!-- 4. Custom ARIA Checkbox backed by a profile fact -->
+          <div role="checkbox" id="aria-work-auth" aria-checked="false" tabindex="0" class="custom-chk">
+            I am legally authorized to work in the United States
           </div>
 
           <!-- 5. Custom Combobox Dropdown -->
@@ -185,15 +185,15 @@ test('comprehensive verification: checkboxes, dropdowns, and AI-only bio/screeni
   const stateVal = await page.inputValue('#state');
   assert.equal(stateVal, 'TX', 'State dropdown selected TX option for Texas');
 
-  // Verification 3: Checkboxes - Terms & Legal Authorization
+  // Verification 3: Checkboxes - a legal acknowledgement stays with the candidate
   const termsChecked = await page.isChecked('#terms-agree');
-  assert.equal(termsChecked, true, 'Terms and privacy consent checkbox checked');
+  assert.equal(termsChecked, false, 'Terms and privacy consent are never ticked for the candidate');
 
   const authChecked = await page.isChecked('#work-auth');
   assert.equal(authChecked, true, 'Work authorization checkbox checked');
 
   // Verification 4: Custom ARIA Checkbox
-  const ariaChecked = await page.getAttribute('#aria-consent', 'aria-checked');
+  const ariaChecked = await page.getAttribute('#aria-work-auth', 'aria-checked');
   assert.equal(ariaChecked, 'true', 'Custom ARIA checkbox checked');
 
   // Verification 5: Combobox Dropdown

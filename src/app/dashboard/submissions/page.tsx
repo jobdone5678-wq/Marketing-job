@@ -61,8 +61,8 @@ import {
 } from "lucide-react";
 
 export default function SubmissionsPage() {
-  const { isRecruiter, isTechnicalRecruiter, isClient } = useUserProfile();
-  const canPushProfile = isRecruiter || isTechnicalRecruiter;
+  const { isCandidate } = useUserProfile();
+  const canPushProfile = false;
   const [submissions, setSubmissions] = React.useState<JobSubmission[]>([]);
   const [candidates, setCandidates] = React.useState<Candidate[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -463,7 +463,7 @@ export default function SubmissionsPage() {
           <div>
             <div className="flex items-center gap-2.5">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                {isClient ? "My Applications" : "Job submissions"}
+                {isCandidate ? "My Applications" : "Job submissions"}
               </h1>
               <Badge
                 variant="outline"
@@ -474,7 +474,7 @@ export default function SubmissionsPage() {
               </Badge>
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              {isClient
+              {isCandidate
                 ? "Track all your submitted applications, interview stages, and statuses."
                 : "Every application, its recorded resume, and the next step — in one place."}
             </p>
@@ -489,7 +489,7 @@ export default function SubmissionsPage() {
             >
               <MailIcon className="size-3.5" /> Email confirmations
             </Button>
-            {!isClient && (
+            {false && (
               <Button
                 variant="outline"
                 size="sm"
@@ -528,7 +528,7 @@ export default function SubmissionsPage() {
               Refresh
             </Button>
 
-            {!isClient && (
+            {false && (
               <Link href="/dashboard/submissions/new">
                 <Button
                   size="sm"
@@ -666,7 +666,7 @@ export default function SubmissionsPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            {!isClient && (
+            {false && (
               <CandidateCombobox candidates={candidates} value={selectedCandidateFilter} onChange={setSelectedCandidateFilter}/>
             )}
 
@@ -843,7 +843,7 @@ export default function SubmissionsPage() {
           <Table className={`submissions-table min-w-[1250px] ${showDetails ? "show-details" : ""}`}>
             <TableHeader className="bg-muted/40 border-b border-border/60">
               <TableRow>
-                {!isClient && (
+                {false && (
                   <TableHead data-col="candidate" className="w-[180px] whitespace-normal leading-tight text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Candidate</TableHead>
                 )}
                 <TableHead data-col="client" className="w-[200px] whitespace-normal leading-tight text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">End Client &amp; Role</TableHead>
@@ -861,7 +861,7 @@ export default function SubmissionsPage() {
               {loading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={isClient ? 9 : 10}
+                    colSpan={9}
                     className="h-32 text-center text-muted-foreground"
                   >
                     <WorkspaceSkeleton rows={4}/>
@@ -870,7 +870,7 @@ export default function SubmissionsPage() {
               ) : filteredSubmissions.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={isClient ? 9 : 10}
+                    colSpan={9}
                     className="h-32 text-center text-muted-foreground text-xs"
                   >
                     <div className="flex flex-col items-center justify-center gap-2">
@@ -901,7 +901,7 @@ export default function SubmissionsPage() {
                   return (
                     <TableRow key={sub.id} className="hover:bg-muted/30 transition-colors">
                       {/* Candidate Column */}
-                      {!isClient && (
+                      {false && (
                         <TableCell data-col="candidate" className="align-top py-3.5">
                           <div className="flex items-start gap-2.5">
                             <div className="size-8 rounded-lg bg-gradient-to-br from-primary/15 via-primary/5 to-transparent text-primary font-bold text-xs flex items-center justify-center border border-primary/20 shadow-2xs shrink-0 mt-0.5">

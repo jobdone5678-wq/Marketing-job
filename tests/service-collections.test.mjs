@@ -8,7 +8,7 @@ test('service collections preserve anniversary bills, partial receipts, correcti
  try {
  const admin='20000000-0000-0000-0000-000000000001',owner='20000000-0000-0000-0000-000000000002',other='20000000-0000-0000-0000-000000000003';
  await db.query(`INSERT INTO auth.users VALUES($1,'collections-admin@test','{}'),($2,'collections-owner@test','{}'),($3,'collections-other@test','{}');`,[admin,owner,other]);
- await db.query(`UPDATE profiles SET role='super_admin',status='active' WHERE id=$1`,[admin]);
+ await db.query(`UPDATE profiles SET role='client',status='active' WHERE id=$1`,[admin]);
  const candidate=(await db.query(`SELECT save_candidate_profile($1,NULL,NULL,'{"full_name":"Service candidate"}') id`,[owner])).rows[0].id;
  await assert.rejects(db.query(`SELECT create_service_enrollment($1,$2,'2024-01-31','2024-03-10',100,'USD')`,[owner,candidate]),/administrator/i);
  const enrollment=(await db.query(`SELECT create_service_enrollment($1,$2,'2024-01-31','2024-03-10',100,'USD') result`,[admin,candidate])).rows[0].result;

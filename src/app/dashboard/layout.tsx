@@ -2,7 +2,6 @@ import * as React from "react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
-import { RoleNotificationHandler } from "@/components/role-notification-handler"
 
 export default function DashboardLayout({
   children,
@@ -22,7 +21,6 @@ export default function DashboardLayout({
       <AppSidebar variant="sidebar" />
       <SidebarInset className="h-svh min-h-0 min-w-0 overflow-hidden flex flex-col">
         <SiteHeader />
-        <RoleNotificationHandler />
         <div id="workspace-content" tabIndex={-1} className="portal-workspace min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/20">
           {children}
         </div>

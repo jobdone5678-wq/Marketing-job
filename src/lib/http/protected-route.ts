@@ -1,11 +1,10 @@
 import 'server-only';
 import {withDatabaseTiming,databaseTiming} from '@/lib/db/timing';
 import {requireProfile} from '@/lib/auth/require-profile';
-import type {ProfileAccess} from '@/lib/auth/profile-access';
 import {requireSameOrigin,errorResponse} from '@/lib/db/admin';
 import type {UserProfile} from '@/types/database';
 import {ZodError} from 'zod';
-export async function protectedRoute(request:Request,access:ProfileAccess,work:(profile:UserProfile)=>Promise<unknown>) {
+export async function protectedRoute(request:Request,work:(profile:UserProfile)=>Promise<unknown>) {
   return withDatabaseTiming(async()=>{
   const started=performance.now();let authenticated=started;
   const timed=(response:Response)=>{
@@ -16,7 +15,7 @@ export async function protectedRoute(request:Request,access:ProfileAccess,work:(
   };
   try {
     if(!['GET','HEAD'].includes(request.method))requireSameOrigin(request);
-    const profile=await requireProfile(access);
+    const profile=await requireProfile();
     authenticated=performance.now();
     const result=await work(profile);
     return timed(result instanceof Response?result:Response.json(result));

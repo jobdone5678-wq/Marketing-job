@@ -8,14 +8,14 @@ test('candidate and recruiter mailbox receipts link one owned application withou
  const owner='10000000-0000-4000-8000-000000000001',other='10000000-0000-4000-8000-000000000002',staff='10000000-0000-4000-8000-000000000003';
  try{
  for(const [id,email] of [[owner,'owner@example.test'],[other,'other@example.test'],[staff,'staff@example.test']])await db.query('INSERT INTO auth.users(id,email,raw_user_meta_data) VALUES($1,$2,$3)',[id,email,{}]);
- await db.query("UPDATE profiles SET role='recruiter',status='active' WHERE id=$1",[staff]);
+ await db.query("UPDATE profiles SET role='client',status='active' WHERE id=$1",[staff]);
  const own=(await db.query("INSERT INTO candidates(full_name,user_id,assigned_recruiter_id) VALUES('Own',$1,$2) RETURNING id",[owner,staff])).rows[0].id;
  const foreign=(await db.query("INSERT INTO candidates(full_name,user_id) VALUES('Other',$1) RETURNING id",[other])).rows[0].id;
  async function receipt(actor,key){return (await db.query("INSERT INTO email_receipts(owner_id,message_key,source,sender,subject,received_at,body_text,review_reason) VALUES($1,$2,'manual_import','careers@example.test','Receipt',now(),'Receipt','Review') RETURNING id",[actor,key])).rows[0].id;}
  const first=await receipt(owner,'first');
  await assert.rejects(db.query("SELECT confirm_email_receipt($1,$2,$3,'Acme','Engineer',NULL,true)",[owner,first,foreign]),/Candidate access denied/);
  const app=(await db.query("SELECT confirm_email_receipt($1,$2,$3,'Acme','Engineer',NULL,true) id",[owner,first,own])).rows[0].id;
- const submission=(await db.query('SELECT * FROM job_submissions WHERE id=$1',[app])).rows[0];assert.equal(submission.recruiter_id,null);assert.equal(submission.technical_recruiter_id,null);assert.equal(submission.capture_status,'confirmed');
+ const submission=(await db.query('SELECT * FROM job_submissions WHERE id=$1',[app])).rows[0];assert.equal(submission.recruiter_id,null);assert.equal(submission.client_id,null);assert.equal(submission.capture_status,'confirmed');
  const second=await receipt(staff,'staff');
  assert.equal((await db.query("SELECT confirm_email_receipt($1,$2,$3,'Acme','Engineer',NULL,true) id",[staff,second,own])).rows[0].id,app);
  assert.equal((await db.query('SELECT count(*)::int n FROM job_submissions')).rows[0].n,1);

@@ -11,7 +11,7 @@ test('linked extension manual recovery attests the existing application without 
  const snapshot={id:'snapshot',answers:[{key:'email',label:'Email',value:'final@example.test'}]};
  const db=fixtureDatabase({
   extension_credentials:[{token_hash:createHash('sha256').update(token).digest('hex'),owner_id:actor,expires_at:'2099-01-01T00:00:00Z',revoked_at:null}],
-  profiles:[{id:actor,role:'technical_recruiter',status:'active'}],
+  profiles:[{id:actor,role: 'client',status:'active'}],
   application_intents:[{id:intent,owner_id:actor,submission_id:submission,candidate_id:'candidate',job:{application_url:'https://jobs.ashbyhq.com/fixture/application'},candidate:{version:1}}],
   application_answer_snapshots:[snapshot],
  });

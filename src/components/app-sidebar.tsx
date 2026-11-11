@@ -35,127 +35,6 @@ import {
 import { createClient } from "@/lib/client"
 import Link from "next/link"
 
-// Recruiter & Super Admin Navigation Items with Premium Icons
-const recruiterNavItems: NavItem[] = [
-  {
-    id: "email-confirmations",
-    title: "Email Confirmations",
-    url: "/dashboard/email-confirmations",
-    icon: <InboxIcon className="size-4 stroke-[1.8]" />,
-  },
-  {
-    id: "dashboard",
-    title: "Dashboard",
-    url: "/dashboard",
-    icon: <LayoutDashboardIcon className="size-4 stroke-[1.8]" />,
-  },
-  {
-    id: "candidates",
-    title: "Bench Candidates",
-    url: "/dashboard/candidates",
-    icon: <UsersIcon className="size-4 stroke-[1.8]" />,
-  },
-  {
-    id: "submissions",
-    title: "Job Submissions",
-    url: "/dashboard/submissions",
-    icon: <SendHorizontalIcon className="size-4 stroke-[1.8]" />,
-  },
-  {
-    id: "rtr",
-    title: "Right to Represent (RTR)",
-    url: "/dashboard/rtr",
-    icon: <FileSignatureIcon className="size-4 stroke-[1.8]" />,
-  },
-  {
-    id: "placements",
-    title: "Placements & Compensation",
-    url: "/dashboard/placements",
-    icon: <CircleDollarSignIcon className="size-4 stroke-[1.8]" />,
-  },
-  {
-    id: "vendors",
-    title: "Prime Vendors",
-    url: "/dashboard/vendors",
-    icon: <Building2Icon className="size-4 stroke-[1.8]" />,
-  },
-  {
-    id: "public-jobs",
-    title: "Public Jobs",
-    url: "/dashboard/jobs",
-    icon: <CompassIcon className="size-4 stroke-[1.8]" />,
-  },
-  {
-    id: "outside-jobs",
-    title: "Outside Jobs",
-    url: "/dashboard/outside-jobs",
-    icon: <GlobeIcon className="size-4 stroke-[1.8]" />,
-  },
-]
-
-const technicalRecruiterNavItems: NavItem[] = [
-  {
-    id: "dashboard",
-    title: "Dashboard",
-    url: "/dashboard",
-    icon: <LayoutDashboardIcon className="size-4 stroke-[1.8]" />,
-  },
-  {
-    id: "candidates",
-    title: "Assigned Candidates",
-    url: "/dashboard/candidates",
-    icon: <UsersIcon className="size-4 stroke-[1.8]" />,
-  },
-  {
-    id: "submissions",
-    title: "Job Submissions",
-    url: "/dashboard/submissions",
-    icon: <SendHorizontalIcon className="size-4 stroke-[1.8]" />,
-  },
-  {
-    id: "rtr",
-    title: "Right to Represent (RTR)",
-    url: "/dashboard/rtr",
-    icon: <FileSignatureIcon className="size-4 stroke-[1.8]" />,
-  },
-  {
-    id: "placements",
-    title: "Placements & Compensation",
-    url: "/dashboard/placements",
-    icon: <CircleDollarSignIcon className="size-4 stroke-[1.8]" />,
-  },
-  {
-    id: "public-jobs",
-    title: "Public Jobs",
-    url: "/dashboard/jobs",
-    icon: <CompassIcon className="size-4 stroke-[1.8]" />,
-  },
-  {
-    id: "outside-jobs",
-    title: "Outside Jobs",
-    url: "/dashboard/outside-jobs",
-    icon: <GlobeIcon className="size-4 stroke-[1.8]" />,
-  },
-]
-
-const adminNavItems: NavItem[] = [
-  ...recruiterNavItems.map((item) =>
-    item.id === "placements" ? { ...item, title: "Collections & Payroll" } : item
-  ),
-  {
-    id: "team",
-    title: "Team & Assignments",
-    url: "/dashboard/team",
-    icon: <ShieldCheckIcon className="size-4 stroke-[1.8]" />,
-  },
-  {
-    id: "job-matching",
-    title: "JD Candidate Matching",
-    url: "/dashboard/job-matching",
-    icon: <SparklesIcon className="size-4 stroke-[1.8]" />,
-  },
-]
-
 // Candidate Navigation Items
 const candidateNavItems: NavItem[] = [
   {
@@ -286,16 +165,8 @@ export function AppSidebar({
     }
   }, [])
 
-  const mainItems =
-    currentUser.role === "super_admin"
-      ? adminNavItems
-      : currentUser.role === "recruiter"
-      ? recruiterNavItems
-      : currentUser.role === "technical_recruiter"
-      ? technicalRecruiterNavItems
-      : currentUser.role === "client"
-      ? candidateNavItems
-      : []
+  const isAllowedRole = currentUser.role === "client" || currentUser.role === "candidate"
+  const mainItems = isAllowedRole ? candidateNavItems : []
 
   const navigationItems = currentUser.role
     ? [
@@ -306,16 +177,6 @@ export function AppSidebar({
           url: "/dashboard/integrations",
           icon: <PlugZapIcon className="size-4 stroke-[1.8]" />,
         },
-        ...(currentUser.role === "super_admin"
-          ? [
-              {
-                id: "billing",
-                title: "SaaS Billing",
-                url: "/dashboard/billing",
-                icon: <CreditCardIcon className="size-4 stroke-[1.8]" />,
-              },
-            ]
-          : []),
       ]
     : []
 
@@ -345,15 +206,7 @@ export function AppSidebar({
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                   <span className="text-[10.5px] text-muted-foreground truncate capitalize font-medium">
-                    {currentUser.role === "client"
-                      ? "Candidate Workspace"
-                      : currentUser.role === "super_admin"
-                      ? "Super Admin Workspace"
-                      : currentUser.role === "technical_recruiter"
-                      ? "Tech Recruiter Workspace"
-                      : currentUser.role === "recruiter"
-                      ? "Recruiter Workspace"
-                      : "Portal Workspace"}
+                    {currentUser.role === "candidate" ? "Candidate Workspace" : currentUser.role === "client" ? "Client Workspace" : "Portal Workspace"}
                   </span>
                 </div>
               </div>

@@ -383,6 +383,13 @@ function escapeHtml(value) {
   return String(value || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+
+// Load saved resumes history
+const btnLoadHistory = document.getElementById('btn-load-history');
+const historyCandidateSelect = document.getElementById('history-candidate');
+const savedResumesList = document.getElementById('saved-resumes-list');
+const savedResumesStatus = document.getElementById('saved-resumes-status');
+
 // Initial render
 void renderState();
 void populateCandidateDropdown();
@@ -445,11 +452,6 @@ document.getElementById('btn-download-active-resume')?.addEventListener('click',
   }
 });
 
-// Load saved resumes history
-const btnLoadHistory = document.getElementById('btn-load-history');
-const historyCandidateSelect = document.getElementById('history-candidate');
-const savedResumesList = document.getElementById('saved-resumes-list');
-const savedResumesStatus = document.getElementById('saved-resumes-status');
 
 async function populateCandidateDropdown() {
   if (!historyCandidateSelect) return;

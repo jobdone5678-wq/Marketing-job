@@ -5,7 +5,7 @@ import type { AppliedResumeSnapshot } from '@/types/database';
 import { z } from 'zod';
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
-  return protectedRoute(request, 'candidate_or_staff', async profile => {
+  return protectedRoute(request,async profile => {
     const id = z.uuid().parse((await context.params).id);
     const db = database();
     const { data: submission, error } = await db

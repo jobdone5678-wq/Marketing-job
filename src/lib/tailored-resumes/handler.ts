@@ -3,7 +3,7 @@ import {createHash} from 'node:crypto';
 import {analyze} from '@/lib/resume-analysis';
 import {database,checkDb,CaptureError} from '@/lib/db/admin';
 import {getTailoredResume} from './repository';
-import {getJobBrief,checkWorkflowDb} from '@/lib/job-briefs/repository';
+import {checkWorkflowDb} from '@/lib/tailored-resumes/workflow-db';
 import {resumeFactCatalog,tailorSelectionSchema,buildTailoredContent} from './content';
 import {structuredAI,getAIModel} from '@/lib/ai/client';
 import {taskLease} from '@/lib/tasks/repository';
@@ -17,8 +17,7 @@ export async function generateTailoredResume(task:BackgroundTask){
  if(resume.stale)throw new CaptureError('Candidate or job changed. Generate a new resume.',409);
  if(resume.status!=='queued')return {resumeId:resume.id,cached:true};
  let source:{title:string;company:string;description:string};
- if(resume.brief_id){if(actor.role!=='super_admin')throw new CaptureError('Private JD access denied.',403);source=await getJobBrief(resume.brief_id);}
- else{const result=await database().from('jobs').select('title,company,description').eq('id',resume.job_id).single();checkDb(result.error);if(!result.data)throw new CaptureError('Job unavailable.',404);source=result.data;}
+ const result=await database().from('jobs').select('title,company,description').eq('id',resume.job_id).single();checkDb(result.error);if(!result.data)throw new CaptureError('Job unavailable.' ,404);source=result.data;
  await taskLease(task.id,task.lease_token);
  const catalog=resumeFactCatalog(candidate);
  if(!catalog.length)throw new CaptureError('Add and review professional skills or experience before tailoring.',409);

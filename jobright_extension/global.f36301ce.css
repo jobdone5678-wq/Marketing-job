@@ -36,3 +36,6 @@
 }
 
 @keyframes nextkinLinear{0%{left:-30%;width:30%}50%{left:30%;width:50%}100%{left:100%;width:30%}}
+plasmo-csui#jobright-helper-plugin { pointer-events: none !important; }
+plasmo-csui#jobright-helper-plugin > * { pointer-events: auto !important; }
+

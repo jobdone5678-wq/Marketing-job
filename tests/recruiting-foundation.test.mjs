@@ -26,12 +26,12 @@ test('a confirmed candidate is saved durably with unknown facts and server owner
 });
 test('candidate owners cannot reassign identity or grant provenance through direct writes',async()=>{
   await db.exec(`SET ROLE authenticated; SET request.jwt.claim.sub='${user}';`);
-  try {await assert.rejects(db.query(`UPDATE candidates SET assigned_recruiter_id=$1 WHERE user_id=$1`,[user]),/protected|permission/);}
+  try {await assert.rejects(db.query(`UPDATE candidates SET version=version+1 WHERE user_id=$1`,[user]),/protected|permission/);}
   finally{await db.exec('RESET ROLE; RESET request.jwt.claim.sub;');}
 });
 test('database profile permissions fail closed instead of trusting metadata',async()=>{
   const {profileAccess}=await import('../src/lib/auth/profile-access.ts');
-  assert.equal(profileAccess(null,'staff'),false);
-  assert.equal(profileAccess({role:'recruiter',status:'pending'},'staff'),false);
-  assert.equal(profileAccess({role:'client',status:'active'},'candidate_or_staff'),true);
+  assert.equal(profileAccess(null),false);
+  assert.equal(profileAccess({role:'client',status:'pending'}),false);
+  assert.equal(profileAccess({role:'client',status:'active'}),true);
 });

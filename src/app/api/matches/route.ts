@@ -1,8 +1,8 @@
 import {protectedRoute} from '@/lib/http/protected-route';import {requestAnalysis} from '@/lib/ai/request';import {candidateAccess} from '@/lib/resumes/repository';import {database,checkDb} from '@/lib/db/admin';import {z} from 'zod';
 import {refreshStoredMatch} from '@/lib/ai/match-validation';
-export async function POST(request:Request){return protectedRoute(request,'candidate_or_staff',p=>requestAnalysis(request,p));}
+export async function POST(request:Request){return protectedRoute(request,p=>requestAnalysis(request,p));}
 export async function GET(request:Request){
- return protectedRoute(request,'candidate_or_staff',async p=>{
+ return protectedRoute(request,async p=>{
   const params=new URL(request.url).searchParams;
   const id=params.get('candidateId')||'';
   const candidate=await candidateAccess(p,id);

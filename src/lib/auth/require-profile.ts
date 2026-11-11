@@ -3,7 +3,7 @@ import {cookies} from 'next/headers';
 import {createClient} from '@/lib/server';
 import {database} from '@/lib/db/admin';
 import {CaptureError} from '@/lib/email-confirmations/server';
-import {profileAccess,type ProfileAccess} from './profile-access';
+import {profileAccess} from './profile-access';
 import type {UserProfile} from '@/types/database';
 
 const inflightAuth = new Map<string, Promise<UserProfile>>();
@@ -19,7 +19,7 @@ async function fetchProfile(): Promise<UserProfile> {
   return profile as UserProfile;
 }
 
-export async function requireProfile(access:ProfileAccess='candidate_or_staff'):Promise<UserProfile> {
+export async function requireProfile():Promise<UserProfile> {
   let sessionKey = '';
   try {
     const store = await cookies();
@@ -36,7 +36,7 @@ export async function requireProfile(access:ProfileAccess='candidate_or_staff'):
   if (isLive && sessionKey) {
     const cached = profileCache.get(sessionKey);
     if (cached && cached.expiresAt > now) {
-      if(!profileAccess(cached.profile, access)) throw new CaptureError('An approved active account is required.',403);
+      if(!profileAccess(cached.profile)) throw new CaptureError('An approved active account is required.',403);
       return cached.profile;
     }
   }
@@ -62,7 +62,7 @@ export async function requireProfile(access:ProfileAccess='candidate_or_staff'):
   }
 
   const profile = await profilePromise;
-  if(!profileAccess(profile, access)) throw new CaptureError('An approved active account is required.',403);
+  if(!profileAccess(profile)) throw new CaptureError('An approved active account is required.',403);
   return profile;
 }
 

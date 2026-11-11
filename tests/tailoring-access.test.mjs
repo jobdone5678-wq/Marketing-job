@@ -23,7 +23,7 @@ test('tailoring requires explicit AI consent and accepts only the owned reviewed
  assert.equal((await run(true)).status,200);assert.equal(calls[0].args.p_candidate,own);
 });
 test('technical recruiters cannot generate tailored resumes through the API',async()=>{
- const {load,calls}=setup('technical_recruiter');
+ const {load,calls}=setup('client');
  const response=await load('src/app/api/tailored-resumes/route.ts').POST(new Request('https://portal.test/api/tailored-resumes',{method:'POST',body:JSON.stringify({candidateId:own,jobId:job,consent:true})}));
  assert.equal(response.status,403);assert.equal(calls.length,0);
 });

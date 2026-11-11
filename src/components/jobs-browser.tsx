@@ -45,9 +45,8 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   const router=useRouter();
   const [importingJob,setImportingJob]=useState('');
   const [applyingJobHash, setApplyingJobHash] = useState('');
-  const { isRecruiter,isTechnicalRecruiter,isSuperAdmin, isClient, loading: profileLoading } = useUserProfile();
-  const isRecruitingStaff=isRecruiter||isTechnicalRecruiter;
-  const canSelectCandidate=isRecruitingStaff||isSuperAdmin;
+  const { isCandidate, loading: profileLoading } = useUserProfile();
+  const canSelectCandidate = false;
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [candidateId, setCandidateId] = useState('');
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
@@ -68,7 +67,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   const [liveBoard, setLiveBoard] = useState('');
   const [liveProvider, setLiveProvider] = useState<string>(provider || 'all');
   const [liveLoading, setLiveLoading] = useState(false);
-  const [saveToDbOnFetch, setSaveToDbOnFetch] = useState(isRecruitingStaff);
+  const [saveToDbOnFetch, setSaveToDbOnFetch] = useState(false);
   const [syncingSoftwareJobs, setSyncingSoftwareJobs] = useState(false);
   const [lastFetchedTime, setLastFetchedTime] = useState<string | null>(null);
   const [liveSources, setLiveSources] = useState<{company:string;count:number;error?:string}[]>([]);
@@ -300,17 +299,12 @@ export function JobsBrowser({ provider }: { provider?: string }) {
     return()=>{active=false;window.removeEventListener('focus',refresh);document.removeEventListener('visibilitychange',refresh);};
   },[mode,applicationView,candidateParam]);
 
-  // Load configured sources for recruiter
+  // Load the candidate's own confirmed profile.
   useEffect(() => {
     if (canSelectCandidate) {
       void getCandidates().then(items => setCandidates(items.filter(c => c.provenance_status === 'confirmed'))).catch(e => setError(e.message));
     }
-    if (isRecruitingStaff) {
-      void api<{ sources: Source[] }>('/api/job-sources')
-        .then((r) => setDbSources(r.sources || []))
-        .catch((e) => setError(e.message));
-    }
-  }, [isRecruitingStaff,canSelectCandidate]);
+  }, [canSelectCandidate]);
 
   return (
     <main className="p-6 max-w-[1440px] mx-auto space-y-6">
@@ -326,7 +320,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
               Software & Tech Roles Only
             </span>
             <Badge variant="outline" className="text-xs px-2.5 py-0.5 rounded-full border-border/70 capitalize font-medium">
-              {isClient ? 'Candidate view' : isRecruitingStaff ? 'Recruiter view · all roles' : 'All roles'}
+              {isCandidate ? 'Candidate view' : 'All roles'}
             </Badge>
           </div>
           <p className="text-muted-foreground text-sm">
@@ -372,7 +366,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           <div className="mt-4 pt-3 border-t border-border/60">
             <PublicJobCatalog
               provider={mode === 'live' && liveProvider !== 'all' ? liveProvider : provider || portalFilter || undefined}
-              canSave={isRecruiter}
+              canSave={false}
               onSelect={board => {
                 setLiveBoard(board.board_slug);
                 setLiveProvider(board.provider);
@@ -429,7 +423,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 Review your resume
               </Link>
             </p>
-          ) : (isClient || candidateId) && (
+          ) : (isCandidate || candidateId) && (
             <p className="text-xs text-muted-foreground leading-relaxed">
               Roles related to <span className="font-semibold text-foreground">{recommendation?.candidateName || 'your saved resume'}</span>, ranked by skills and job titles. Matching helps discovery; review each job’s requirements before applying.
             </p>
@@ -836,7 +830,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                         >
                           {importingJob === job.content_hash
                             ? 'Saving job…'
-                            : isTechnicalRecruiter
+                            : isCandidate
                             ? 'Review job'
                             : 'Review job'}
                         </Button>
@@ -958,7 +952,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
       )}
 
       {/* Recruiter Section: Public Job Sources */}
-      {isRecruiter && applicationView === 'available' && (
+      {false && applicationView === 'available' && (
         <details className="group rounded-2xl border border-border/70 bg-card p-5 transition-all shadow-xs">
           <summary className="flex cursor-pointer items-center justify-between text-xs font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground">
             <span>Manage saved job sources ({dbSources.length})</span>

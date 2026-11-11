@@ -3,7 +3,7 @@ import {CaptureError} from '@/lib/db/admin';
 import {getTailoredResume} from '@/lib/tailored-resumes/repository';
 import {resumeDocx} from '@/lib/tailored-resumes/docx';
 export const runtime='nodejs';
-export async function GET(request:Request,context:{params:Promise<{id:string}>}){return protectedRoute(request,'candidate_or_staff',async profile=>{
+export async function GET(request:Request,context:{params:Promise<{id:string}>}){return protectedRoute(request,async profile=>{
  const {resume,candidate}=await getTailoredResume(profile,(await context.params).id);
  if(resume.stale)throw new CaptureError('Candidate or source changed. Generate and review a new resume.',409);
  if(resume.status!=='ready'||resume.reviewed_revision!==resume.revision)throw new CaptureError('Review and confirm resume accuracy before downloading.',409);

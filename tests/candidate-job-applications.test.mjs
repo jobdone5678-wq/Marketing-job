@@ -6,12 +6,12 @@ import {applicationUrlKey,withoutAppliedJobs} from '../src/lib/jobs/application-
 const recruiter='10000000-0000-4000-8000-000000000801',technical='10000000-0000-4000-8000-000000000802',admin='10000000-0000-4000-8000-000000000803',ownerA='10000000-0000-4000-8000-000000000804',ownerB='10000000-0000-4000-8000-000000000805';
 const a='10000000-0000-4000-8000-000000000811',b='10000000-0000-4000-8000-000000000812',other='10000000-0000-4000-8000-000000000813';
 class CaptureError extends Error{constructor(message,status=400){super(message);this.status=status;}}
-function setup(role='recruiter',actor=recruiter){
- const candidate=(id,user_id,name)=>({id,user_id,full_name:name,provenance_status:'confirmed',primary_skills:'Python',target_job_titles:'Software Engineer',assigned_recruiter_id:recruiter,assigned_technical_recruiter_id:technical});
+function setup(role='client',actor=recruiter){
+ const candidate=(id,user_id,name)=>({id,user_id,full_name:name,provenance_status:'confirmed',primary_skills:'Python',target_job_titles:'Software Engineer',assigned_recruiter_id:recruiter,assigned_client_id:technical});
  const job=(id,provider='ashby',state='active')=>({id,external_id:'same-external-id',source_id:provider,title:'Python Software Engineer',company:'Example',location:'Remote',description:'Python software development',employment_type:'permanent',state,posted_at:'2026-10-29T00:00:00Z',closes_at:null,application_url:`https://${provider==='ashby'?'jobs.ashbyhq.com':'boards.greenhouse.io'}/example/${id}/application`,source_url:`https://${provider==='ashby'?'jobs.ashbyhq.com':'boards.greenhouse.io'}/example/${id}`,source:{provider},updated_at:'2026-10-29T00:00:00Z'});
  const jobs=[job('applied'),job('draft','greenhouse'),job('closed','ashby','closed')];
  const record=(id,job,candidate_id,status='Applied')=>({id,candidate_id,job_id:job.id,job_url:job.application_url,company_name:job.company,job_title:job.title,portal_source:job.source.provider,submission_date:'2026-10-29',created_at:id,status,capture_status:status==='Draft'?'submit_attempted':'submitted',job});
- const tables={candidates:[candidate(a,ownerA,'Candidate A'),candidate(b,ownerB,'Candidate B'),{...candidate(other,'other-owner','Private candidate'),assigned_recruiter_id:'other-recruiter',assigned_technical_recruiter_id:'other-tech'}],jobs,job_sources:[{id:'ashby',provider:'ashby',board_slug:'example',company:'Example',enabled:true},{id:'greenhouse',provider:'greenhouse',board_slug:'example',company:'Example',enabled:true}],job_submissions:[record('success',jobs[0],a),record('draft',jobs[1],a,'Draft'),record('closed-success',jobs[2],a),record('private-success',jobs[1],other)]};
+ const tables={candidates:[candidate(a,ownerA,'Candidate A'),candidate(b,ownerB,'Candidate B'),{...candidate(other,'other-owner','Private candidate'),assigned_client_id:'other-tech'}],jobs,job_sources:[{id:'ashby',provider:'ashby',board_slug:'example',company:'Example',enabled:true},{id:'greenhouse',provider:'greenhouse',board_slug:'example',company:'Example',enabled:true}],job_submissions:[record('success',jobs[0],a),record('draft',jobs[1],a,'Draft'),record('closed-success',jobs[2],a),record('private-success',jobs[1],other)]};
  const db=fixtureDatabase(tables);
  const load=moduleLoader({
   '@/lib/http/protected-route':{protectedRoute:async(_req,_access,work)=>{try{return Response.json(await work({id:actor,role,status:'active'}));}catch(error){return Response.json({error:error.message},{status:error.status||500});}}},
@@ -31,7 +31,7 @@ for(const live of [false,true])test(`${live?'live':'saved'} jobs move only for t
  assert.deepEqual((await get(path)).jobs.map(job=>job.id).sort(),['applied','draft']);
 });
 
-for(const [role,actor] of [['recruiter',recruiter],['technical_recruiter',technical],['super_admin',admin],['client',ownerA]])test(`${role} sees the same candidate-specific applied history, including closed jobs`,async()=>{
+for(const [role,actor] of [['client',recruiter],['client',technical],['client',admin],['client',ownerA]])test(`${role} sees the same candidate-specific applied history, including closed jobs`,async()=>{
  const {get}=setup(role,actor),query=role==='client'?'':`candidateId=${a}`;
  const history=await get('applications/',query);
  assert.equal(history.status,200);assert.equal(history.candidateId,a);assert.equal(history.total,2);
@@ -42,14 +42,14 @@ for(const [role,actor] of [['recruiter',recruiter],['technical_recruiter',techni
 });
 
 test('clients and staff cannot read applications for another inaccessible candidate',async()=>{
- for(const [role,actor,candidate] of [['client',ownerB,a],['recruiter',recruiter,other],['technical_recruiter',technical,other]]){
+ for(const [role,actor,candidate] of [['client',ownerB,a],['client',recruiter,other],['client',technical,other]]){
   const {get}=setup(role,actor);
   for(const path of ['','live/','applications/'])assert.equal((await get(path,`candidateId=${candidate}`)).status,404);
  }
 });
 
 test('super admin can inspect a candidate outside recruiter assignments',async()=>{
- const {get}=setup('super_admin',admin),result=await get('applications/',`candidateId=${other}`);
+ const {get}=setup('client',admin),result=await get('applications/',`candidateId=${other}`);
  assert.equal(result.status,200);assert.equal(result.total,1);assert.equal(result.applications[0].id,'private-success');
 });
 

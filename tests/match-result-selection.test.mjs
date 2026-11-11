@@ -8,7 +8,7 @@ for(const stale of [false,true])test(`cached evidence is reevaluated only for th
  const phrase='Strong background in TypeScript/JavaScript or Python';
  const target={id:'target',candidate_id:candidateId,job_id:jobId,created_at:'2026-01-01',candidate_version:stale?1:2,job_version:1,job:{version:1,state:'active',description:phrase},data:{coverage:0,requirements:[{requirement:phrase,jobEvidence:phrase,status:'unknown',candidateField:'primary_skills',candidateEvidence:null}],constraints:[]}};
  const load=moduleLoader({
-  '@/lib/http/protected-route':{protectedRoute:async(request,access,work)=>Response.json(await work({id:'staff',role:'recruiter'}))},
+  '@/lib/http/protected-route':{protectedRoute:async(request,access,work)=>Response.json(await work({id:'staff',role: 'client'}))},
   '@/lib/resumes/repository':{candidateAccess:async()=>({version:2,confirmed_facts:{primary_skills:'Python'}})},
   '@/lib/db/admin':{database:()=>fixtureDatabase({candidate_matches:[target]}),checkDb:error=>{if(error)throw error;}},
  });
@@ -22,7 +22,7 @@ test('the selected job comparison is found beyond one hundred unrelated results 
  const unrelated=Array.from({length:110},(_,index)=>({...target,id:'unrelated-'+index,job_id:'other-job',created_at:'2026-01-01'}));
  const allowed=[];
  const load=moduleLoader({
-  '@/lib/http/protected-route':{protectedRoute:async(request,access,work)=>{assert.equal(access,'candidate_or_staff');return Response.json(await work({id:'staff',role:'technical_recruiter'}));}},
+  '@/lib/http/protected-route':{protectedRoute:async(request,access,work)=>{assert.equal(access,'candidate_or_staff');return Response.json(await work({id:'staff',role: 'client'}));}},
   '@/lib/resumes/repository':{candidateAccess:async(actor,id)=>{assert.equal(actor.id,'staff');allowed.push(id);assert.equal(id,candidateId);return {version:1};}},
   '@/lib/db/admin':{database:()=>fixtureDatabase({candidate_matches:[...unrelated,target]}),checkDb:error=>{if(error)throw error;}},
  });

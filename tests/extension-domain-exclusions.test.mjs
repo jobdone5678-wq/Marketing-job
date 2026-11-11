@@ -47,7 +47,7 @@ test('extension never injects or autofills on chatgpt.com or other excluded AI s
       runtime: {
         sendMessage: async message => {
           if (message.type === 'get_candidates') {
-            return { candidates: [candidate], role: 'recruiter', ownCandidateId: candidate.id };
+            return { candidates: [candidate], role: 'client', ownCandidateId: candidate.id };
           }
           return { linked: false };
         }
@@ -99,7 +99,7 @@ test('extension never injects or touches inputs on the recruiter portal itself (
       runtime: {
         sendMessage: async message => {
           if (message.type === 'get_candidates') {
-            return { candidates: [candidate], role: 'recruiter', ownCandidateId: candidate.id };
+            return { candidates: [candidate], role: 'client', ownCandidateId: candidate.id };
           }
           return { linked: false };
         }

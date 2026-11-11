@@ -30,7 +30,7 @@ export async function generateScreening(task:BackgroundTask){
  const input=task.payload.screening as AnswerInput;
  if(!input||input.version!=='screening-v1')throw new CaptureError('Unsupported screening task. Generate again.',409);
  const {data:actor,error}=await database().from('profiles').select('*').eq('id',task.actor_id).single();checkDb(error);
- if(!actor||actor.status!=='active'||!['client','recruiter','super_admin'].includes(actor.role))throw new CaptureError('Active screening access required.',403);
+ if(!actor||actor.status!=='active'||!['client','client'].includes(actor.role))throw new CaptureError('Active screening access required.',403);
  const candidate=await currentExtensionCandidate(actor,input),facts=extensionFactCatalog(candidate);
  await taskLease(task.id,task.lease_token);
  const selected=await structuredAI(task,screeningSelectionSchema,'application_screening',

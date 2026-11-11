@@ -22,7 +22,7 @@ test('installed Manifest V3 extension imports PDF, generates a genuine per-job D
  await worker.evaluate(async()=>{
   await chrome.storage.local.set({origin:'https://portal.example.test',token:'synthetic-ai-credential'});
   globalThis.fetch=async(url,options={})=>{
-   if(String(url).includes('/api/extension/candidates'))return Response.json({candidates:[],role:'recruiter'});
+   if(String(url).includes('/api/extension/candidates'))return Response.json({candidates:[],role: 'client'});
    if(!String(url).endsWith('/api/extension/tailor-upload'))return Response.json({error:'Unexpected fixture request'},{status:404});
    const body=JSON.parse(options.body),candidate=(await chrome.storage.local.get('uploadedCandidate')).uploadedCandidate;
    const output=globalThis.NextkinResume.buildResume(candidate,body),scopeKey=await globalThis.NextkinResume.fingerprint(output.scopeKey);

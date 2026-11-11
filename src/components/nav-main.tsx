@@ -34,19 +34,11 @@ export function NavMain({
 }) {
   const pathname = usePathname()
 
-  const sections =
-    role === "client"
-      ? [
-          ["My Workspace", ["dashboard", "candidates", "resumes", "submissions", "rtr", "placements"]],
-          ["Opportunities", ["public-jobs"]],
-          ["Connections", ["email-confirmations", "integrations"]],
-        ]
-      : [
-          ["Workspace", ["dashboard", "candidates", "public-jobs", "job-matching", "resumes", "submissions", "rtr"]],
-          ["Communications", ["email-confirmations", "integrations"]],
-          ["Operations", ["vendors", "placements"]],
-          ["Administration", ["team", "billing"]],
-        ]
+  const sections = [
+    ["My Workspace", ["dashboard", "candidates", "submissions", "rtr", "placements"]],
+    ["Opportunities", ["public-jobs", "outside-jobs"]],
+    ["Connections", ["email-confirmations", "integrations"]],
+  ];
 
   return (
     <div className="flex flex-col gap-1 py-1">

@@ -106,7 +106,7 @@ test('the RTR section is reachable from the navigation for every role', async t 
     { id: 'email-confirmations', title: 'Email Confirmations', url: '/dashboard/email-confirmations' },
     { id: 'integrations', title: 'Integrations', url: '/dashboard/integrations' },
   ];
-  for (const role of ['client', 'recruiter', 'technical_recruiter', 'super_admin']) {
+  for (const role of ['client', 'client', 'client', 'client']) {
     const tab = await browser.newPage();
     t.after(() => tab.close());
     await tab.route('https://portal.test/**', route => route.fulfill({ contentType: 'text/html', body: '<div id="root"></div>' }));
@@ -172,7 +172,7 @@ sources['@/components/applied-resume-badge'] = 'exports.AppliedResumeBadge=()=>n
 sources['@/components/rtr-badge'] = 'exports.RTRBadge=()=>null;';
 sources['@/components/rtr-submission-dialog'] = 'exports.RTRSubmissionDialog=()=>null;';
 sources['@/components/candidate-combobox'] = 'exports.CandidateCombobox=()=>null;';
-sources['@/hooks/use-user-profile'] = 'exports.useUserProfile=()=>({profile:{role:window.fixtureRole||"recruiter",status:"active"},isRecruiter:true,isClient:window.fixtureRole==="client"});';
+sources['@/hooks/use-user-profile'] = 'exports.useUserProfile=()=>({profile:{role:window.fixtureRole||"client",status:"active"},isCandidate: true,isCandidate:window.fixtureRole==="client"});';
 sources['@/components/workspace-ui'] = 'exports.WorkspaceError=({children})=>require("react").createElement("div",null,children);exports.WorkspaceSkeleton=()=>null;';
 sources['@/components/ui/sidebar'] = "const tag=({children,...props})=>require('react').createElement('div',props,children);exports.Sidebar=tag;exports.SidebarContent=tag;exports.SidebarFooter=tag;exports.SidebarHeader=tag;exports.SidebarGroup=tag;exports.SidebarGroupContent=tag;exports.SidebarGroupLabel=tag;exports.SidebarMenu=({children})=>require('react').createElement('ul',null,children);exports.SidebarMenuItem=({children})=>require('react').createElement('li',null,children);";
 for (const [module, components] of Object.entries({
@@ -208,7 +208,7 @@ test('a candidate sees the RTR column and every header is labelled by name', asy
 });
 
 test('staff see the candidate column ahead of the client column', async t => {
-  const tab = await renderPage('recruiter');
+  const tab = await renderPage('client');
   t.after(() => tab.close());
   await tab.evaluate(() => {
     window.fixtureRows = [{ id: 'a', submission_date: '2026-11-09', company_name: 'Globex', job_title: 'Engineer', status: 'Applied' }];

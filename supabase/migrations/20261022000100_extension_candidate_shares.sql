@@ -63,10 +63,10 @@ RETURNS public.candidate_shares LANGUAGE plpgsql SECURITY DEFINER SET search_pat
 DECLARE existing public.candidate_shares;
 BEGIN
   IF NOT public.candidate_actor_can_share(p_actor, p_candidate) THEN
-    RAISE EXCEPTION 'Candidate not found or not assigned to this account.' USING ERRORESTATE = '404';
+    RAISE EXCEPTION 'Candidate not found or not assigned to this account.';
   END IF;
   IF NOT public.candidate_recipient_is_client(p_recipient, p_candidate) THEN
-    RAISE EXCEPTION 'Recipient account is not a valid client for this candidate.' USING ERRORESTATE = '400';
+    RAISE EXCEPTION 'Recipient account is not a valid client for this candidate.';
   END IF;
   SELECT * INTO existing FROM public.candidate_shares
     WHERE candidate_id = p_candidate AND recipient_id = p_recipient;

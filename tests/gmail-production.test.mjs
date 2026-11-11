@@ -8,7 +8,7 @@ function setup(t, extra={}) {
  Object.assign(process.env,values);
  t.after(()=>{for(const key of Object.keys(values)){if(before[key]===undefined)delete process.env[key];else process.env[key]=before[key];}});
 }
-function loader(role='super_admin',cookieWrites=[]) {
+function loader(role='client',cookieWrites=[]) {
  const server={CaptureError,requireSameOrigin(){},requireCaptureStaff:async()=>({profile:{id:'staff',role},client:fixtureDatabase({email_connections:[]})}),checkDb(){},captureErrorResponse:error=>Response.json({error:error.message},{status:error.status||500})};
  return moduleLoader({'./server':server,'@/lib/email-confirmations/server':server,'next/headers':{cookies:async()=>({set:(...args)=>cookieWrites.push(args)})},'next/server':{NextResponse:{redirect:url=>Response.redirect(url)}}});
 }
@@ -23,26 +23,26 @@ test('only administrators receive Gmail setup diagnostics',async t=>{
  setup(t,{GOOGLE_MAIL_CLIENT_SECRET:''});
  const admin=await (await loader()('src/app/api/email-connections/route.ts').GET()).json();
  assert.ok(admin.gmailSetup.missing.includes('GOOGLE_MAIL_CLIENT_SECRET'));
- const recruiter=await (await loader('recruiter')('src/app/api/email-connections/route.ts').GET()).json();
+ const recruiter=await (await loader('client')('src/app/api/email-connections/route.ts').GET()).json();
  assert.equal(recruiter.gmailConfigured,false);assert.equal(recruiter.gmailSetup,undefined);
  assert.ok(!JSON.stringify(admin).includes('private-service'));
 });
 test('Gmail connect moves alias visitors to canonical host before writing OAuth cookies',async t=>{
  setup(t);const writes=[];
- const response=await loader('recruiter',writes)('src/app/api/email-connections/gmail/connect/route.ts').POST(new Request('https://www.nextkinhr.com/api/email-connections/gmail/connect',{method:'POST'}));
+ const response=await loader('client',writes)('src/app/api/email-connections/gmail/connect/route.ts').POST(new Request('https://www.nextkinhr.com/api/email-connections/gmail/connect',{method:'POST'}));
  assert.equal(response.status,200);assert.equal((await response.json()).url,'https://nextkinhr.com/dashboard/email-confirmations?mail=reconnect');
  assert.equal(writes.length,0);
 });
 test('canonical Gmail connect uses a secure host-only cookie and matching callback',async t=>{
  setup(t);const writes=[];
- const response=await loader('recruiter',writes)('src/app/api/email-connections/gmail/connect/route.ts').POST(new Request('https://nextkinhr.com/api/email-connections/gmail/connect',{method:'POST'}));
+ const response=await loader('client',writes)('src/app/api/email-connections/gmail/connect/route.ts').POST(new Request('https://nextkinhr.com/api/email-connections/gmail/connect',{method:'POST'}));
  const authUrl=new URL((await response.json()).url);
  assert.equal(authUrl.searchParams.get('redirect_uri'),'https://nextkinhr.com/api/email-connections/gmail/callback');
  assert.equal(writes.length,1);assert.equal(writes[0][2].secure,true);assert.equal(writes[0][2].domain,undefined);
 });
 test('Gmail callback rejects a different host before touching the consent cookie',async t=>{
  setup(t);const writes=[];
- const response=await loader('recruiter',writes)('src/app/api/email-connections/gmail/callback/route.ts').GET(new Request('https://www.nextkinhr.com/api/email-connections/gmail/callback?code=private-code'));
+ const response=await loader('client',writes)('src/app/api/email-connections/gmail/callback/route.ts').GET(new Request('https://www.nextkinhr.com/api/email-connections/gmail/callback?code=private-code'));
  assert.equal(response.headers.get('location'),'https://nextkinhr.com/dashboard/email-confirmations?mail=connection_failed');
  assert.equal(writes.length,0);
 });

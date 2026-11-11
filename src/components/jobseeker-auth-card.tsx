@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, Loader2, RotateCcw, ShieldCheck, ArrowRight } from "lucide-react";
-import { ensureSessionProfile, registrationRole } from "@/lib/auth/session-profile";
+import { ensureSessionProfile } from "@/lib/auth/session-profile";
 
 export function JobseekerAuthCard() {
   const router = useRouter();
@@ -58,7 +58,7 @@ export function JobseekerAuthCard() {
     try {
       const redirectUrl =
         typeof window !== "undefined"
-          ? `${window.location.origin}/auth/callback?next=/auth/jobseeker/connected&role=job_seeker`
+          ? `${window.location.origin}/auth/callback?next=/auth/jobseeker/connected`
           : "";
 
       const { error } = await supabase.auth.signInWithOtp({
@@ -66,7 +66,6 @@ export function JobseekerAuthCard() {
         options: {
           shouldCreateUser: true,
           data: {
-            role: "job_seeker",
             full_name: cleanEmail.split("@")[0] || "Candidate",
           },
           emailRedirectTo: redirectUrl,
@@ -150,14 +149,9 @@ export function JobseekerAuthCard() {
       if (error) {
         setErrorMsg(error.message || "Invalid or expired code. Please request a new code.");
       } else if (data.user) {
-        await ensureSessionProfile(
-          supabase,
-          data.user,
-          registrationRole("job_seeker"),
-          {
-            fullName: data.user.email?.split("@")[0] || "Candidate",
-          }
-        );
+        await ensureSessionProfile(supabase, data.user, {
+          fullName: data.user.email?.split("@")[0] || "Candidate",
+        });
 
         router.push("/auth/jobseeker/connected");
       }
@@ -178,16 +172,13 @@ export function JobseekerAuthCard() {
     try {
       const redirectUrl =
         typeof window !== "undefined"
-          ? `${window.location.origin}/auth/callback?next=/auth/jobseeker/connected&role=job_seeker`
+          ? `${window.location.origin}/auth/callback?next=/auth/jobseeker/connected`
           : "";
 
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim().toLowerCase(),
         options: {
           shouldCreateUser: true,
-          data: {
-            role: "job_seeker",
-          },
           emailRedirectTo: redirectUrl,
         },
       });
@@ -210,7 +201,7 @@ export function JobseekerAuthCard() {
     try {
       setGoogleLoading(true);
       setErrorMsg(null);
-      const redirectTo = `${window.location.origin}/auth/callback?next=/auth/jobseeker/connected&role=job_seeker`;
+      const redirectTo = `${window.location.origin}/auth/callback?next=/auth/jobseeker/connected`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {

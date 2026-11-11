@@ -36,7 +36,7 @@ async function mount(t, { profile = null, readError = null, signedIn = false, en
   await page.route('https://portal.test/**', route => route.fulfill({ contentType: 'text/html', body: '<div id="root"></div>' }));
   await page.goto('https://portal.test/' + query);
   await page.evaluate(({ profile, readError, signedIn }) => {
-    const user = { id: 'actor', email: 'staff@example.test', user_metadata: { role: 'technical_recruiter', full_name: 'Test Staff' } };
+    const user = { id: 'actor', email: 'staff@example.test', user_metadata: { role: 'client', full_name: 'Test Staff' } };
     window.writes = []; window.navigations = []; window.notices = [];window.authListeners=[];
     window.searchParams = new URLSearchParams(location.search);
     window.router = { push: url => window.navigations.push(url), replace: url => window.navigations.push(url) };
@@ -67,7 +67,7 @@ async function mount(t, { profile = null, readError = null, signedIn = false, en
 }
 
 test('the root page preserves an authoritative-role notice instead of sending an existing candidate into dashboard',async t=>{
- const page=await mount(t,{entry:'page',signedIn:true,profile:{id:'actor',role:'client',status:'active',full_name:'Test Staff'},query:'?role_notice=existing_role&current_role=client&attempted_role=technical_recruiter'});
+ const page=await mount(t,{entry:'page',signedIn:true,profile:{id:'actor',role:'client',status:'active',full_name:'Test Staff'},query:'?role_notice=existing_role&current_role=client&attempted_role=client'});
  await page.getByText(/This email is registered as Candidate/i).waitFor({timeout:3000});
  assert.equal(new URL(page.url()).pathname,'/');assert.deepEqual(await page.evaluate(()=>window.navigations),[]);
 });
@@ -102,7 +102,7 @@ test('profile load errors in current session disable dashboard access and show r
 });
 
 test('technical recruiter mismatch notification uses the actual role name', async t => {
-  const page = await mount(t, { entry: 'notification', query: '?role_notice=existing_role&current_role=technical_recruiter&attempted_role=client' });
+  const page = await mount(t, { entry: 'notification', query: '?role_notice=existing_role&current_role=client&attempted_role=client' });
   await page.waitForFunction(() => window.notices.length === 1);
   const [notice] = await page.evaluate(() => window.notices);
   assert.equal(notice.title, 'Signed in as Technical Recruiter');

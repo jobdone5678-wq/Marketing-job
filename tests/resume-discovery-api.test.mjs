@@ -12,7 +12,7 @@ function setup({ role = 'client', candidates, jobs = [], revoked = false, liveJo
   const profile = { id: owner, role, status: 'active' };
   const tables = {
     candidates: candidates || [
-      { id: ownId, user_id: owner, assigned_recruiter_id:role==='recruiter'?owner:null, full_name: 'Own profile', provenance_status: 'confirmed', primary_skills: 'Python, SQL' },
+      { id: ownId, user_id: owner, assigned_recruiter_id:role==='client'?owner:null, full_name: 'Own profile', provenance_status: 'confirmed', primary_skills: 'Python, SQL' },
       { id: otherId, user_id: 'another-owner', full_name: 'Other profile', provenance_status: 'confirmed', primary_skills: 'Java' },
     ],
     jobs,
@@ -57,7 +57,7 @@ test('candidates without reviewed profiles see an upload prompt rather than unre
 });
 
 test('staff can browse all jobs or filter them for a selected reviewed candidate', async () => {
-  const { load } = setup({ role: 'recruiter', jobs: [{ id: 'java', title: 'Java Developer', description: 'Java', location: 'Remote', state: 'active' }, { id: 'python', title: 'Python Developer', description: 'Python', location: 'Remote', state: 'active' }] });
+  const { load } = setup({ role: 'client', jobs: [{ id: 'java', title: 'Java Developer', description: 'Java', location: 'Remote', state: 'active' }, { id: 'python', title: 'Python Developer', description: 'Python', location: 'Remote', state: 'active' }] });
   const { GET } = load('src/app/api/jobs/route.ts');
   const all = await (await GET(new Request('https://portal.test/api/jobs?postedWithin=all'))).json();
   const selected = await (await GET(new Request('https://portal.test/api/jobs?postedWithin=all&candidateId=' + ownId))).json();
@@ -83,7 +83,7 @@ test('revoked extension credentials cannot retrieve profiles', async () => {
 });
 
 test('a linked recruiter can retrieve the exact reviewed candidate beyond the first list page', async () => {
-  const { load } = setup({ role: 'recruiter', candidates: [
+  const { load } = setup({ role: 'client', candidates: [
     ...Array.from({ length: 110 }, (_, i) => ({ id: 'earlier-' + i, full_name: 'Earlier', provenance_status: 'confirmed' })),
     { id: ownId, assigned_recruiter_id:owner, full_name: 'Linked candidate', provenance_status: 'confirmed' },
   ] });
@@ -93,7 +93,7 @@ test('a linked recruiter can retrieve the exact reviewed candidate beyond the fi
 });
 
 test('recruiters cannot select an unassigned profile for recommendations',async()=>{
- const {load}=setup({role:'recruiter'});
+ const {load}=setup({role: 'client'});
  const response=await load('src/app/api/jobs/route.ts').GET(new Request('https://portal.test/api/jobs?postedWithin=all&candidateId='+otherId));
  assert.equal(response.status,404);
 });

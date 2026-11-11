@@ -112,13 +112,13 @@ for (const host of ['job-boards.greenhouse.io', 'jobs.ashbyhq.com']) {
 }
 
 test('recruiter tabs use the application-linked candidate instead of the first candidate', async t => {
-  const page = await portal(t, { role: 'recruiter', candidates: [{ ...candidate, id: 'other', email: 'wrong@example.test' }, candidate], intentCandidateId: candidate.id });
+  const page = await portal(t, { role: 'client', candidates: [{ ...candidate, id: 'other', email: 'wrong@example.test' }, candidate], intentCandidateId: candidate.id });
   await page.waitForFunction(() => document.querySelector('#email').value === 'alex@example.test', null, { timeout: 2500 });
   assert.equal(await page.inputValue('#mp-candidate-select'), 'own');
 });
 
 test('unlinked recruiter tabs wait for candidate selection and unknown booleans stay blank', async t => {
-  const page = await portal(t, { role: 'recruiter', candidates: [{ ...candidate, authorized_in_usa: null, need_sponsorship_now: null }, { ...candidate, id: 'other' }] });
+  const page = await portal(t, { role: 'client', candidates: [{ ...candidate, authorized_in_usa: null, need_sponsorship_now: null }, { ...candidate, id: 'other' }] });
   await page.waitForTimeout(400);
   assert.equal(await page.inputValue('#email'), '');
   await page.locator('#mp-copilot-pill').click();
@@ -129,7 +129,7 @@ test('unlinked recruiter tabs wait for candidate selection and unknown booleans 
 });
 
 test('an application locks its selected profile so different candidates cannot mix answers', async t => {
-  const page = await portal(t, { role: 'recruiter', candidates: [candidate, { ...candidate, id: 'other', email: 'other@example.test', authorized_in_usa: true }] });
+  const page = await portal(t, { role: 'client', candidates: [candidate, { ...candidate, id: 'other', email: 'other@example.test', authorized_in_usa: true }] });
   await page.locator('#mp-copilot-pill').click();
   await page.selectOption('#mp-candidate-select', 'own');
   await page.waitForFunction(() => document.querySelector('#email').value === 'alex@example.test', null, { timeout: 2500 });
@@ -141,7 +141,7 @@ test('an application locks its selected profile so different candidates cannot m
 });
 
 test('recruiter application retains its linked candidate after navigation removes the URL hash', async t => {
-  const page = await portal(t, { role: 'recruiter', persistedCandidateId: candidate.id });
+  const page = await portal(t, { role: 'client', persistedCandidateId: candidate.id });
   await page.waitForFunction(() => document.querySelector('#email').value === 'alex@example.test', null, { timeout: 2500 });
   assert.equal(await page.isDisabled('#mp-candidate-select'), true);
 });
@@ -214,7 +214,7 @@ test('Ashby container-based Name* and Location* questions without label-for attr
 
 test('URL hash supports #marketing_intent= with underscore', async t => {
   const page = await portal(t, {
-    role: 'recruiter',
+    role: 'client',
     candidates: [{ ...candidate, id: 'other', email: 'other@example.test' }, candidate],
     intentCandidateId: candidate.id,
     hash: '#marketing_intent=fixture-intent'

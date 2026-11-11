@@ -2,7 +2,6 @@ import { protectedRoute } from "@/lib/http/protected-route";
 import { database, CaptureError } from "@/lib/db/admin";
 import { candidateAccess } from "@/lib/resumes/repository";
 import { ownedCandidates, ensureOwnedCandidate } from "@/lib/auth/candidate-ownership";
-import { recruitingRoles } from "@/lib/auth/profile-access";
 import { buildRtrMetadataTag, parseRtrMetadata, stripRtrMetadata } from "@/lib/rtr-metadata";
 import { toIsoDate, todayIsoDate } from "@/lib/rtr-dates";
 import { z } from "zod";
@@ -12,7 +11,7 @@ export const maxDuration = 60;
 
 // The agreement file travels as multipart form data, so the request body stays the size of the
 // original document instead of a base64 blob that is a third larger.
-export const MAX_RTR_DOCUMENT_BYTES = 4 * 1024 * 1024;
+const MAX_RTR_DOCUMENT_BYTES = 4 * 1024 * 1024;
 
 // Database codes that mean "this table or column does not exist yet". They are recoverable by
 // falling back to the notes column, so they must not fail the whole request.
@@ -124,24 +123,18 @@ async function readRtrRequest(
 }
 
 export async function GET(request: Request) {
-  return protectedRoute(request, "candidate_or_staff", async (profile) => {
+  return protectedRoute(request, async (profile) => {
     const url = new URL(request.url);
     const candidateId = url.searchParams.get("candidateId");
     const status = url.searchParams.get("status");
     const search = (url.searchParams.get("search") || "").replace(/[%_,()'"\\:]/g, " ").trim().toLowerCase();
 
     const db = database();
-    const isStaff = recruitingRoles.includes(profile.role);
 
+    // A candidate only ever sees the agreements filed against their own record.
     let candidateFilter = candidateId;
-    let ownedIds: string[] = [];
-    if (!isStaff) {
-      // A candidate only ever sees the agreements filed against their own record.
-      ownedIds = (await ownedCandidates(profile)).map((row) => row.id);
-      if (ownedIds.length === 0) return { documents: [], total: 0 };
-    } else if (candidateFilter && profile.role !== "super_admin") {
-      await candidateAccess(profile, candidateFilter);
-    }
+    const ownedIds = (await ownedCandidates(profile)).map((row) => row.id);
+    if (ownedIds.length === 0) return { documents: [], total: 0 };
 
     const items: Array<Record<string, unknown>> = [];
     const submissionsById = new Map<string, Record<string, unknown>>();
@@ -156,11 +149,8 @@ export async function GET(request: Request) {
         )
         .order("submission_date", { ascending: false });
 
-      if (isStaff) {
-        if (candidateFilter) subQuery = subQuery.eq("candidate_id", candidateFilter);
-      } else {
-        subQuery = subQuery.in("candidate_id", ownedIds);
-      }
+      if (candidateFilter) subQuery = subQuery.eq("candidate_id", candidateFilter);
+      else subQuery = subQuery.in("candidate_id", ownedIds);
 
       const { data: subs } = await subQuery;
       if (Array.isArray(subs)) {
@@ -181,11 +171,8 @@ export async function GET(request: Request) {
         )
         .order("rtr_date", { ascending: false });
 
-      if (isStaff) {
-        if (candidateFilter) query = query.eq("candidate_id", candidateFilter);
-      } else {
-        query = query.in("candidate_id", ownedIds);
-      }
+      if (candidateFilter) query = query.eq("candidate_id", candidateFilter);
+      else query = query.in("candidate_id", ownedIds);
       if (status && status !== "all") {
         query = query.eq("rtr_status", status);
       }
@@ -282,7 +269,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  return protectedRoute(request, "candidate_or_staff", async (profile) => {
+  return protectedRoute(request, async (profile) => {
     const { meta, document } = await readRtrRequest(request);
     const parsed = createRtrSchema.safeParse(meta);
     if (!parsed.success) {
@@ -290,7 +277,7 @@ export async function POST(request: Request) {
     }
     const body: RtrPayload = parsed.data;
     const db = database();
-    const isCandidateUploader = profile.role === "client" || profile.role === "job_seeker";
+    const isCandidateUploader = true;
 
     // The uploaded file always wins over the form fields for the document identity.
     // The document is always attached to the request, so the agreement file is stored even when
@@ -528,7 +515,6 @@ export async function POST(request: Request) {
         submission_date: agreementDate,
         notes: finalNotes,
         rtr_document: rtrRef,
-        recruiter_id: profile.role === "client" ? null : profile.id,
       };
 
       let insert = await db.from("job_submissions").insert(row).select("id").single();

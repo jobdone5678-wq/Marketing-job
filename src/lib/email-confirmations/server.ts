@@ -38,8 +38,8 @@ export async function requireCaptureStaff() {
   }
 
   const { data: profile, error: profileError } = await client.from('profiles').select('*').eq('id', user.id).single();
-  if (profileError || !profile || profile.status !== 'active' || !['client', 'recruiter', 'technical_recruiter', 'super_admin'].includes(profile.role)) {
-    throw new CaptureError('An active candidate, recruiter or administrator account is required.', 403);
+  if (profileError || !profile || profile.status !== 'active' || (profile.role !== 'client' && profile.role !== 'candidate')) {
+    throw new CaptureError('An active candidate or client account is required.', 403);
   }
 
   if (isLive) {

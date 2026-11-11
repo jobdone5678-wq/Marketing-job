@@ -123,47 +123,6 @@
     },
     {
       "matches": [
-        "<all_urls>"
-      ],
-      "js": [
-        "applied-success-popup.beee901a.js"
-      ],
-      "all_frames": true,
-      "run_at": "document_start",
-      "css": [],
-      "exclude_matches": [
-        "*://*.chatgpt.com/*",
-        "*://chatgpt.com/*",
-        "*://*.openai.com/*",
-        "*://*.claude.ai/*",
-        "*://*.anthropic.com/*",
-        "*://*.gitreverse.com/*",
-        "*://gitreverse.com/*",
-        "*://*.gitingest.com/*",
-        "*://gitingest.com/*",
-        "*://*.github.com/*",
-        "*://github.com/*",
-        "*://*.gitlab.com/*",
-        "*://*.google.com/*",
-        "*://google.com/*",
-        "*://*.google.co.in/*",
-        "*://*.bing.com/*",
-        "*://*.youtube.com/*",
-        "*://*.whatsapp.com/*",
-        "*://*.telegram.org/*",
-        "*://*.discord.com/*",
-        "*://*.twitter.com/*",
-        "*://*.x.com/*",
-        "*://*.reddit.com/*",
-        "*://*.cloudflare.com/*",
-        "*://*.notion.so/*",
-        "*://*.figma.com/*",
-        "*://*.linear.app/*",
-        "*://*.slack.com/*"
-      ]
-    },
-    {
-      "matches": [
         "https://*/*"
       ],
       "js": [
@@ -235,55 +194,6 @@
         "*://*.reddit.com/*",
         "*://*.cloudflare.com/*"
       ]
-    },
-    {
-      "matches": [
-        "<all_urls>"
-      ],
-      "js": [
-        "contents.d42e7fcf.js"
-      ],
-      "all_frames": true,
-      "exclude_matches": [
-        "*://*.cloudflare.com/*",
-        "https://li.protechts.net/*",
-        "https://cs.ns1p.net/*",
-        "https://merchantpool1.linkedin.com/*",
-        "https://www.googletagmanager.com/*",
-        "https://*.fls.doubleclick.net/activityi*",
-        "https://lnkd.demdex.net/*",
-        "https://www.google.com/recaptcha/enterprise/*",
-        "https://crcldu.com/*",
-        "*://*.chatgpt.com/*",
-        "*://chatgpt.com/*",
-        "*://*.openai.com/*",
-        "*://*.claude.ai/*",
-        "*://*.anthropic.com/*",
-        "*://*.gitreverse.com/*",
-        "*://gitreverse.com/*",
-        "*://*.gitingest.com/*",
-        "*://gitingest.com/*",
-        "*://*.github.com/*",
-        "*://github.com/*",
-        "*://*.gitlab.com/*",
-        "*://*.google.com/*",
-        "*://google.com/*",
-        "*://*.google.co.in/*",
-        "*://*.bing.com/*",
-        "*://*.youtube.com/*",
-        "*://*.whatsapp.com/*",
-        "*://*.telegram.org/*",
-        "*://*.discord.com/*",
-        "*://*.twitter.com/*",
-        "*://*.x.com/*",
-        "*://*.reddit.com/*",
-        "*://*.notion.so/*",
-        "*://*.figma.com/*",
-        "*://*.linear.app/*",
-        "*://*.slack.com/*"
-      ],
-      "run_at": "document_start",
-      "css": []
     },
     {
       "matches": [

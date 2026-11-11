@@ -18,7 +18,7 @@ test('database migration adds applied_resume column and record_extension_submiss
     const eventKey = '20000000-0000-4000-8000-000000000003';
 
     await db.query("INSERT INTO auth.users VALUES($1,'recruiter@example.test','{}')", [actor]);
-    await db.query("UPDATE profiles SET role='recruiter',status='active' WHERE id=$1", [actor]);
+    await db.query("UPDATE profiles SET role='client',status='active' WHERE id=$1", [actor]);
     await db.query("INSERT INTO candidates(id,user_id,assigned_recruiter_id,full_name,provenance_status) VALUES($1,$2,$2,'Arjun Mehta','confirmed')", [candidate, actor]);
 
     const appliedResumeData = {
@@ -157,7 +157,7 @@ test('GET /api/submissions/[id]/applied-resume returns JSON snapshot and support
     },
     '@/lib/http/protected-route': {
       protectedRoute: async (_req, _role, handler) => {
-        const result = await handler({ id: 'actor-1', role: 'recruiter', status: 'active' });
+        const result = await handler({ id: 'actor-1', role: 'client', status: 'active' });
         if (result instanceof Response) return result;
         return Response.json(result);
       },

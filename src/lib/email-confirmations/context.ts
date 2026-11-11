@@ -4,12 +4,9 @@ import {readAllRows} from './pagination';
 import type {CandidateIdentity,ApplicationIdentity} from './types';
 export async function receiptContext(owner:string){
  const db=adminClient();const {data:actor,error}=await db.from('profiles').select('id,role,status').eq('id',owner).single();checkDb(error);
- if(!actor||actor.status!=='active'||!['client','recruiter','technical_recruiter','super_admin'].includes(actor.role))throw new CaptureError('Active account required.',403);
+ if(!actor||actor.status!=='active'||actor.role!=='client')throw new CaptureError('Active account required.',403);
  const candidates=await readAllRows<CandidateIdentity>(async(from,to)=>{
-  let q=db.from('candidates').select('id,full_name,email').order('id').range(from,to);
-  if(actor.role==='client')q=q.eq('user_id',owner);
-  if(actor.role==='recruiter')q=q.eq('assigned_recruiter_id',owner);
-  if(actor.role==='technical_recruiter')q=q.eq('assigned_technical_recruiter_id',owner);
+  const q=db.from('candidates').select('id,full_name,email').eq('user_id',owner).order('id').range(from,to);
   const {data,error}=await q;checkDb(error);return data||[];
  });
  const applications:ApplicationIdentity[]=[];

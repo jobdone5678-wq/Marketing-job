@@ -8,24 +8,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import type { User } from "@supabase/supabase-js";
-import type { AppRole, UserProfile } from "@/types/database";
-import { ensureSessionProfile, readSessionProfile, registrationRole, roleLabel, roleMismatchMessage } from "@/lib/auth/session-profile";
+import type { UserProfile } from "@/types/database";
+import { ensureSessionProfile, readSessionProfile } from "@/lib/auth/session-profile";
 import {
-  BriefcaseIcon,
-  UserCheckIcon,
-  ShieldCheckIcon,
   ArrowRightIcon,
   PhoneIcon,
   MailIcon,
   KeyRoundIcon,
   RotateCcwIcon,
   ArrowLeftIcon,
+  ShieldCheckIcon,
 } from "lucide-react";
 
 export function SignupForm() {
   const router = useRouter();
 
-  const [selectedRole, setSelectedRole] = useState<AppRole>("recruiter");
   const [email, setEmail] = useState("");
 
   // OTP Verification state
@@ -40,7 +37,6 @@ export function SignupForm() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
-  const [roleNotice, setRoleNotice] = useState<string | null>(null);
   const profileRequest = useRef(0);
 
   const supabase = useMemo(() => createClient(), []);
@@ -100,11 +96,6 @@ export function SignupForm() {
       const params = new URLSearchParams(window.location.search);
       const urlErrorDesc = params.get("error_description");
       const urlError = params.get("error");
-      const registeredRole = params.get("current_role");
-      const attemptedRole = registrationRole(params.get("attempted_role"));
-      if (params.get("role_notice") === "existing_role" && attemptedRole && registeredRole) {
-        setRoleNotice(roleMismatchMessage(registeredRole as AppRole, attemptedRole));
-      }
 
       if (urlErrorDesc) {
         setErrorMsg(urlErrorDesc);
@@ -140,7 +131,7 @@ export function SignupForm() {
     try {
       const redirectUrl =
         typeof window !== "undefined"
-          ? `${window.location.origin}/auth/callback?next=/dashboard&role=${selectedRole}`
+          ? `${window.location.origin}/auth/callback?next=/dashboard`
           : "";
 
       const { error } = await supabase.auth.signInWithOtp({
@@ -149,7 +140,6 @@ export function SignupForm() {
           shouldCreateUser: true,
           data: {
             full_name: derivedName,
-            role: selectedRole,
           },
           emailRedirectTo: redirectUrl,
         },
@@ -230,7 +220,7 @@ export function SignupForm() {
         setErrorMsg(error.message || "Invalid or expired verification code. Please check the code or request a new one.");
       } else if (data.user) {
         const derivedName = data.user.email?.split("@")[0] || "User";
-        const prof = await ensureSessionProfile(supabase, data.user, registrationRole(selectedRole), {
+        const prof = await ensureSessionProfile(supabase, data.user, {
           fullName: derivedName,
           phone: null,
         });
@@ -239,13 +229,9 @@ export function SignupForm() {
         setCurrentProfile(prof);
         setProfileLoading(false);
 
-        if (prof.role !== selectedRole) {
-          setRoleNotice(roleMismatchMessage(prof.role, selectedRole));
-        } else if (prof.status === "active") {
+        if (prof.status === "active") {
           setSuccessMsg("Verification successful! Opening dashboard...");
           router.push("/dashboard");
-        } else if (prof.status === "pending") {
-          setSuccessMsg("Verification successful! Your staff account is pending administrator approval before workspace access.");
         } else {
           setErrorMsg(`Your account is ${prof.status}. Please contact an administrator before accessing the portal.`);
         }
@@ -269,16 +255,13 @@ export function SignupForm() {
     try {
       const redirectUrl =
         typeof window !== "undefined"
-          ? `${window.location.origin}/auth/callback?next=/dashboard&role=${selectedRole}`
+          ? `${window.location.origin}/auth/callback?next=/dashboard`
           : "";
 
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
           shouldCreateUser: true,
-          data: {
-            role: selectedRole,
-          },
           emailRedirectTo: redirectUrl,
         },
       });
@@ -304,10 +287,9 @@ export function SignupForm() {
 
     setGoogleLoading(true);
     try {
-      const params = new URLSearchParams({ role: selectedRole });
       // OAuth needs a full browser navigation so the server can set PKCE and
       // registration cookies before redirecting to Google.
-      window.location.assign(new URL(`/auth/google?${params}`, window.location.origin).href);
+      window.location.assign(new URL(`/auth/google?next=${encodeURIComponent("/dashboard")}`, window.location.origin).href);
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Failed to initiate Google login.";
@@ -321,7 +303,6 @@ export function SignupForm() {
     await supabase.auth.signOut();
     setCurrentUser(null);
     setCurrentProfile(null);
-    setRoleNotice(null);
     setErrorMsg(null);
     setOtpStep(false);
     setOtpCode("");
@@ -331,21 +312,14 @@ export function SignupForm() {
 
   // Authenticated State View
   if (currentUser) {
-    const currentRoleLabel = profileLoading ? "Loading account role…" : roleLabel(currentProfile?.role);
-
-    const badgeColor =
-      currentProfile?.role === "super_admin"
-        ? "bg-foreground/10 text-foreground border-foreground/20"
-        : currentProfile?.role === "recruiter"
-        ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30"
-        : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30";
+    const badgeColor = "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30";
 
     return (
       <div className="flex flex-col gap-4 p-5 sm:p-6 border rounded-2xl border-border/70 bg-card/90 backdrop-blur-xs shadow-xs">
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">Current Session</span>
           <Badge variant="outline" className={badgeColor}>
-            {currentRoleLabel}
+            Candidate
           </Badge>
         </div>
 
@@ -363,19 +337,7 @@ export function SignupForm() {
         </div>
 
         {errorMsg && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">{errorMsg}</p>}
-        {roleNotice && <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs">{roleNotice}</p>}
         {currentProfile && ["rejected", "suspended"].includes(currentProfile.status) && <p role="alert" className="text-xs text-destructive">Your account is {currentProfile.status}. Contact an administrator to review access.</p>}
-        {currentProfile?.status === "pending" && (
-          <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200 text-xs space-y-1">
-            <div className="font-semibold flex items-center gap-1.5">
-              <ShieldCheckIcon className="size-3.5 text-amber-600 dark:text-amber-400" />
-              Account Pending Approval
-            </div>
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Your {currentRoleLabel.toLowerCase()} account is currently pending administrative approval. An administrator must approve your account before you can access the recruiting workspace.
-            </p>
-          </div>
-        )}
 
         <div className="flex flex-col gap-2 pt-2">
           <Button
@@ -383,8 +345,8 @@ export function SignupForm() {
             onClick={() => router.push("/dashboard")}
             className="w-full bg-primary text-primary-foreground font-medium flex items-center justify-center gap-1.5 cursor-pointer h-9 text-xs disabled:opacity-50"
           >
-            {currentProfile?.status === "pending" ? "Pending Administrator Approval" : "Enter Portal Dashboard"}
-            {currentProfile?.status !== "pending" && <ArrowRightIcon className="size-3.5" />}
+            Enter Portal Dashboard
+            <ArrowRightIcon className="size-3.5" />
           </Button>
           {!currentProfile && !profileLoading && <Button variant="outline" onClick={() => loadProfile(currentUser)} className="w-full h-9 text-xs">Retry Account Profile</Button>}
           <Button
@@ -515,7 +477,7 @@ export function SignupForm() {
           Portal Access
         </h1>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Select your account role and verify your email. Both recruiter roles require administrator approval. Existing accounts keep their registered role.
+          Verify your email to create your candidate account. Existing accounts keep their saved profile.
         </p>
       </div>
 
@@ -532,73 +494,6 @@ export function SignupForm() {
       )}
 
       <form onSubmit={handleSendOtp} className="flex flex-col gap-3.5">
-        {/* Role Selection Tabs */}
-        <div className="space-y-1.5">
-          <Label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-            Select Your Account Role
-          </Label>
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              {
-                id: "recruiter",
-                title: "Recruiter",
-                subtitle: "Bench Sales & Submissions",
-                icon: BriefcaseIcon,
-              },
-              {
-                id: "technical_recruiter",
-                title: "Technical Recruiter",
-                subtitle: "Candidate referrals",
-                icon: ShieldCheckIcon,
-              },
-              {
-                id: "client",
-                title: "Candidate",
-                subtitle: "USA Job Seeker / Bench",
-                icon: UserCheckIcon,
-              },
-            ].map((role) => {
-              const isSelected = selectedRole === role.id;
-              const Icon = role.icon;
-              return (
-                <button
-                  key={role.id}
-                  type="button"
-                  onClick={() => setSelectedRole(role.id as AppRole)}
-                  className={`group relative flex flex-col justify-between p-2.5 rounded-xl border text-left transition-all duration-200 cursor-pointer select-none ${
-                    isSelected
-                      ? "border-primary bg-primary/[0.08] shadow-xs ring-1 ring-primary/40 text-foreground"
-                      : "border-border/70 bg-card/60 hover:bg-muted/40 hover:border-border"
-                  }`}
-                >
-                  <div className="flex items-center justify-between w-full mb-1.5">
-                    <div
-                      className={`size-6 rounded-md flex items-center justify-center transition-colors ${
-                        isSelected
-                          ? "bg-primary text-primary-foreground shadow-2xs"
-                          : "bg-muted text-muted-foreground group-hover:text-foreground"
-                      }`}
-                    >
-                      <Icon className="size-3.5" />
-                    </div>
-                    {isSelected && (
-                      <span className="size-1.5 rounded-full bg-primary" />
-                    )}
-                  </div>
-                  <div>
-                    <span className="block text-xs font-semibold leading-tight text-foreground">
-                      {role.title}
-                    </span>
-                    <span className="block text-[10px] text-muted-foreground line-clamp-2 leading-tight mt-0.5">
-                      {role.subtitle}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         {/* Email Address */}
         <div className="space-y-1">
           <Label htmlFor="email" className="text-xs font-medium text-foreground">

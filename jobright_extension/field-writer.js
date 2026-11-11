@@ -92,7 +92,8 @@
   // React Fiber & Native Setter Bypass with event cascade
   function writeNative(el, property, next) {
     if (!el || !el.isConnected) return false;
-    if (typeof el.setCustomValidity === 'function') {
+    const hasPortalValidation = Boolean(el.validationMessage);
+    if (typeof el.setCustomValidity === 'function' && !hasPortalValidation) {
       try { el.setCustomValidity(''); } catch { }
     }
 
@@ -198,7 +199,7 @@
       try { el.dispatchEvent(new FocusEvent('blur', { bubbles: true, composed: true })); } catch { }
     });
 
-    if (el.getAttribute?.('aria-invalid') === 'true') {
+    if (!hasPortalValidation && el.getAttribute?.('aria-invalid') === 'true') {
       try { el.removeAttribute('aria-invalid'); } catch { }
     }
 
@@ -293,7 +294,10 @@
 
   // True when the value the plan asked for is actually present in the page.
   function writeLanded(field, expected, optionEl) {
-    if (field.kind === 'checkbox') return Boolean(field.element.checked) === Boolean(expected);
+    if (field.kind === 'checkbox') {
+      const cur = field.element.checked !== undefined ? field.element.checked : (field.element.getAttribute('aria-checked') === 'true');
+      return Boolean(cur) === Boolean(expected);
+    }
     if (field.kind === 'radio') {
       const target = Array.isArray(expected) ? expected.indexOf(true) : -1;
       return field.elements.some((el, i) => el.checked && (target < 0 || i === target));
@@ -333,6 +337,16 @@
       let pickedOption = null;
 
       if (Array.isArray(previousValue) ? previousValue.some(Boolean) : (previousValue && String(previousValue).trim().length > 0)) {
+        if (sameish(previousValue, plan.value) || String(previousValue).trim() === String(plan.value).trim()) {
+          field.commitStatus = 'filled';
+          receipts.push({
+            field,
+            previousValue,
+            writtenValue: previousValue,
+            sessionId: session.sessionId,
+            writtenAt: new Date().toISOString()
+          });
+        }
         continue;
       }
 
@@ -346,8 +360,25 @@
         let option = null;
         for (let attempt = 0; attempt < 20 && session.isCurrent(); attempt++) {
           const options = comboboxOptions(el, plan.value);
-          if (options.length >= 1) {
+          if (options.length === 1) {
             option = options[0];
+            break;
+          }
+          if (options.length > 1) {
+            if (plan.state || plan.location) {
+              const stateNorm = String(plan.state || '').toLowerCase().trim();
+              const stateCode = STATE_MAP[stateNorm] || null;
+              const locNorm = String(plan.location || '').toLowerCase().trim();
+              const filtered = options.filter(opt => {
+                const txt = opt.textContent.toLowerCase();
+                return (stateNorm && txt.includes(stateNorm)) || (stateCode && txt.includes(stateCode.toLowerCase())) || (locNorm && txt.includes(locNorm));
+              });
+              if (filtered.length >= 1) {
+                option = filtered[0];
+                break;
+              }
+            }
+            option = null;
             break;
           }
           await new Promise(r => setTimeout(r, 80));
@@ -356,6 +387,7 @@
         if (!option) {
           // No suggestion matched: the typed value is ours, so the control goes back to how it was.
           if (el.tagName === 'INPUT') writeNative(el, 'value', previousValue || '');
+          field.commitStatus = 'needs_review';
           continue;
         }
         singleClick(option);
@@ -387,7 +419,14 @@
       } else if (field.kind === 'checkbox') {
         const boolVal = typeof plan.value === 'boolean' ? plan.value : (plan.value === 'true' || plan.value === 'Yes' || plan.value === '1');
         expected = boolVal;
-        writeNative(el, 'checked', boolVal);
+        if (el.tagName === 'INPUT') {
+          writeNative(el, 'checked', boolVal);
+        } else {
+          el.setAttribute('aria-checked', String(boolVal));
+          try { el.dispatchEvent(new Event('input', { bubbles: true, composed: true })); } catch {}
+          try { el.dispatchEvent(new Event('change', { bubbles: true, composed: true })); } catch {}
+          try { el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); } catch {}
+        }
       } else if (field.kind === 'choice') {
         const valLower = String(plan.value).toLowerCase().trim();
         const opt = (field.options || []).find(o => o.label.toLowerCase().trim() === valLower || o.value.toLowerCase().trim() === valLower)
@@ -409,6 +448,7 @@
       }
       if (!session.isCurrent()) continue;
 
+      field.commitStatus = 'filled';
       receipts.push({
         fieldKey: field.key,
         field,
@@ -462,9 +502,11 @@
     undo,
     writeNative,
     pointerClick,
+    singleClick,
     dispatching,
     isFilling,
     verifyField,
+    comboboxOptions,
     parseDateSegments,
     isForbiddenClick
   };

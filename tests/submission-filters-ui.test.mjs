@@ -23,7 +23,7 @@ sources['@/components/rtr-badge']='exports.RTRBadge=()=>null;';
 sources['@/components/rtr-submission-dialog']='exports.RTRSubmissionDialog=()=>null;';
 sources['@/components/candidate-combobox']='exports.CandidateCombobox=()=>null;';
 sources['@/components/send-to-extension-button']='exports.SendToExtensionButton=()=>null;';
-sources['@/hooks/use-user-profile']='exports.useUserProfile=()=>({profile:{role:window.fixtureRole||"recruiter",status:"active"},isRecruiter:true});';
+sources['@/hooks/use-user-profile']='exports.useUserProfile=()=>({profile:{role:window.fixtureRole||"client",status:"active"},isCandidate: true});';
 sources['@/components/workspace-ui']='exports.WorkspaceError=({children})=>require("react").createElement("div",null,children);exports.WorkspaceSkeleton=()=>null;';
 for(const [module,components] of Object.entries({button:{Button:'button'},input:{Input:'input'},badge:{Badge:'span'},card:{Card:'div',CardAction:'div',CardDescription:'p',CardFooter:'div',CardHeader:'div',CardTitle:'h3'},table:{Table:'table',TableBody:'tbody',TableCell:'td',TableHead:'th',TableHeader:'thead',TableRow:'tr'},select:{Select:'div',SelectContent:'div',SelectItem:'span',SelectTrigger:'button',SelectValue:'span'},sidebar:{Sidebar:'aside',SidebarContent:'div',SidebarFooter:'footer',SidebarHeader:'header',SidebarMenu:'div',SidebarMenuItem:'div'}}))sources['@/components/ui/'+module]=Object.entries(components).map(([name,tag])=>`exports.${name}=({children,variant,size,render,onValueChange,collapsible,...props})=>require('react').createElement('${tag}',props,children);`).join('');
 sources['@/lib/client']='exports.createClient=()=>({auth:{getUser:async()=>({data:{user:{id:"actor",email:"fixture@example.test"}}}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})},channel:()=>({on:()=>({subscribe:()=>({})})}),removeChannel:()=>{},from:()=>({select:()=>({eq:()=>({single:async()=>({data:{role:window.fixtureRole,status:"active"}})})})})});';
@@ -73,7 +73,7 @@ test('submission dates filter rows, daily counts, status and exported report tog
  assert.equal(await page.getByLabel('To application date').inputValue(),'2026-10-14');
 });
 
-for(const role of ['super_admin','recruiter','technical_recruiter','client'])test(`${role} sidebar has one Public Jobs link and no separate portal entries`,async t=>{
+for(const role of ['client','client','client','client'])test(`${role} sidebar has one Public Jobs link and no separate portal entries`,async t=>{
  const page=await browser.newPage();t.after(()=>page.close());
  await page.route('https://portal.test/**',route=>route.fulfill({contentType:'text/html',body:'<div id="root"></div>'}));await page.goto('https://portal.test/');
  await page.evaluate(role=>{window.fixtureRole=role;},role);

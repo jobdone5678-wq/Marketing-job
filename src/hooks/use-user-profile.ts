@@ -62,10 +62,7 @@ export function useUserProfile() {
   }, [supabase, fetchProfile]);
 
   const role: AppRole | null = profile?.role || null;
-  const isSuperAdmin = profile?.status === "active" && role === "super_admin";
-  const isRecruiter = profile?.status === "active" && (role === "recruiter" || isSuperAdmin);
-  const isTechnicalRecruiter=profile?.status==='active'&&role==='technical_recruiter';
-  const isClient = profile?.status === "active" && role === "client";
+  const isCandidate = profile?.status === "active" && (role === "client" || role === "candidate");
 
   return {
     user,
@@ -74,10 +71,7 @@ export function useUserProfile() {
     status: profile?.status || "pending",
     loading,
     profileError,
-    isSuperAdmin,
-    isRecruiter,
-    isTechnicalRecruiter,
-    isClient,
+    isCandidate,
     refreshProfile: () => fetchProfile(user),
   };
 }

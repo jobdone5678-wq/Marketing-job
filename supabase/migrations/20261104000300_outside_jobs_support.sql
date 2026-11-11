@@ -12,6 +12,41 @@ ALTER TABLE public.jobs ADD COLUMN IF NOT EXISTS is_external boolean NOT NULL DE
 ALTER TABLE public.jobs ADD COLUMN IF NOT EXISTS portal_source text DEFAULT NULL;
 ALTER TABLE public.jobs ADD COLUMN IF NOT EXISTS extracted_skills text[] DEFAULT NULL;
 
+-- 2b. The outside job feed stores jobs a candidate discovered on an external career
+--     site. The extension writes here and the candidate's Outside Jobs page reads it.
+CREATE TABLE IF NOT EXISTS public.outside_jobs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  candidate_id uuid REFERENCES public.candidates(id) ON DELETE SET NULL,
+  submission_id uuid REFERENCES public.job_submissions(id) ON DELETE SET NULL,
+  title text NOT NULL,
+  company text NOT NULL,
+  job_url text NOT NULL DEFAULT '',
+  portal_source text,
+  location text,
+  department text,
+  employment_type text,
+  description text,
+  description_html text,
+  match_score numeric,
+  matched_skills text[] DEFAULT '{}',
+  missing_skills text[] DEFAULT '{}',
+  extracted_skills text[] DEFAULT '{}',
+  ats_analysis jsonb,
+  answers jsonb,
+  applied_resume jsonb,
+  status text NOT NULL DEFAULT 'Discovered',
+  applied_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.outside_jobs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS candidate_outside_jobs ON public.outside_jobs;
+CREATE POLICY candidate_outside_jobs ON public.outside_jobs FOR SELECT TO authenticated
+  USING(public.candidate_actor_can_access(auth.uid(), candidate_id));
+REVOKE ALL ON public.outside_jobs FROM anon,authenticated;
+GRANT ALL ON public.outside_jobs TO service_role;
+CREATE INDEX IF NOT EXISTS outside_jobs_candidate ON public.outside_jobs(candidate_id,created_at DESC);
+
 -- 3. Expand job_sources provider check to allow 'external' and 'manual'
 ALTER TABLE public.job_sources DROP CONSTRAINT IF EXISTS job_sources_provider_check;
 ALTER TABLE public.job_sources ADD CONSTRAINT job_sources_provider_check 
@@ -22,29 +57,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS jobs_external_url_idx
   ON public.jobs(lower(trim(application_url))) 
   WHERE is_external = true;
 
--- 5. Update candidate_actor_can_access to support candidates with role 'client' and 'job_seeker'
+-- 5. Update candidate_actor_can_access to support candidates with role 'client'
 CREATE OR REPLACE FUNCTION public.candidate_actor_can_access(p_actor uuid, p_candidate uuid)
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
   SELECT EXISTS(
-    SELECT 1 FROM public.profiles actor 
+    SELECT 1 FROM public.profiles actor
     JOIN public.candidates candidate ON candidate.id = p_candidate
     WHERE actor.id = p_actor AND actor.status = 'active' AND (
-      actor.role = 'super_admin'
-      OR (actor.role IN ('client', 'job_seeker') AND (
-        candidate.user_id = actor.id 
+      (actor.role = 'client' AND (
+        candidate.user_id = actor.id
         OR lower(trim(COALESCE(candidate.email, ''))) = lower(trim(COALESCE(actor.email, '')))
         OR EXISTS (SELECT 1 FROM public.candidate_shares cs WHERE cs.candidate_id = p_candidate AND cs.recipient_id = p_actor AND cs.revoked_at IS NULL)
       ))
-      OR (actor.role = 'recruiter' AND (candidate.assigned_recruiter_id = actor.id OR candidate.assigned_recruiter_id IS NULL))
-      OR (actor.role = 'technical_recruiter' AND (candidate.assigned_technical_recruiter_id = actor.id OR candidate.assigned_technical_recruiter_id IS NULL))
     )
   )
 $$;
 
--- 6. Ensure job_reads allows client and job_seeker roles
+-- 6. Ensure job_reads allows the client role
 DROP POLICY IF EXISTS job_reads ON public.jobs;
 CREATE POLICY job_reads ON public.jobs FOR SELECT TO authenticated
-  USING(public.get_current_role() IN ('client', 'recruiter', 'technical_recruiter', 'super_admin', 'job_seeker'));
+  USING(public.get_current_role() IN ('client'));
 
 -- 7. Update record_extension_submission to upsert outside jobs into public.jobs with full details
 CREATE OR REPLACE FUNCTION public.record_extension_submission(

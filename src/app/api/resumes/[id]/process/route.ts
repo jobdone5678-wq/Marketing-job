@@ -4,7 +4,7 @@ import { database, checkDb, CaptureError } from '@/lib/db/admin';
 
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  return protectedRoute(request, 'candidate_or_staff', async p => {
+  return protectedRoute(request,async p => {
     const { id } = await context.params;
     const document = await ownDocument(p, id);
     if (!document.task_id) throw new CaptureError('Upload registration was incomplete. Upload again.', 409);

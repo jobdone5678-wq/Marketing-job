@@ -1,11 +1,11 @@
 import {protectedRoute} from '@/lib/http/protected-route';
 import {database,CaptureError} from '@/lib/db/admin';
 import {getTailoredResume} from '@/lib/tailored-resumes/repository';
-import {checkWorkflowDb} from '@/lib/job-briefs/repository';
+import {checkWorkflowDb} from '@/lib/tailored-resumes/workflow-db';
 import {z} from 'zod';
 type Context={params:Promise<{id:string}>};
-export async function GET(request:Request,context:Context){return protectedRoute(request,'candidate_or_staff',async profile=>({resume:(await getTailoredResume(profile,(await context.params).id)).resume}));}
-export async function PATCH(request:Request,context:Context){return protectedRoute(request,'candidate_or_staff',async profile=>{
+export async function GET(request:Request,context:Context){return protectedRoute(request,async profile=>({resume:(await getTailoredResume(profile,(await context.params).id)).resume}));}
+export async function PATCH(request:Request,context:Context){return protectedRoute(request,async profile=>{
  const id=(await context.params).id;const {resume}=await getTailoredResume(profile,id);
  const body=z.object({revision:z.number().int().min(1),content:z.string().trim().min(1).max(100000),confirmFacts:z.literal(true)}).parse(await request.json());
  if(resume.stale)throw new CaptureError('Candidate or source changed. Generate a new resume.',409);

@@ -10,7 +10,7 @@ function setup(live,candidate=null){
  {id:'unknown',title:'Python Developer',posted_at:null,state:'active'},
  {id:'future',title:'Python Developer',posted_at:recent(-10),state:'active'}].map(job=>({...job,location:'Remote'}));
  const db=fixtureDatabase({jobs});
- const load=moduleLoader({'@/lib/http/protected-route':{protectedRoute:(_r,_a,work)=>work({id:'actor',role:'recruiter'})},'@/lib/db/admin':{database:()=>db,checkDb:e=>{if(e)throw e;},CaptureError:Error},'@/lib/jobs/recommendations':{recommendationContext:async()=>({candidate,recommendation:{}})},'@/lib/jobs/adapters/native':{fetchSnapshot:async()=>({jobs}),validateBoard(){}},'@/lib/jobs/normalize':{isSoftwareJob:()=>true}});
+ const load=moduleLoader({'@/lib/http/protected-route':{protectedRoute:(_r,_a,work)=>work({id:'actor',role: 'client'})},'@/lib/db/admin':{database:()=>db,checkDb:e=>{if(e)throw e;},CaptureError:Error},'@/lib/jobs/recommendations':{recommendationContext:async()=>({candidate,recommendation:{}})},'@/lib/jobs/adapters/native':{fetchSnapshot:async()=>({jobs}),validateBoard(){}},'@/lib/jobs/normalize':{isSoftwareJob:()=>true}});
  const GET=load(`src/app/api/jobs/${live?'live/':''}route.ts`).GET;
  return value=>GET(new Request(`https://portal.test/api/jobs${live?'/live?provider=lever&board=fixture':'?'}${value?`${live?'&':''}postedWithin=${value}`:''}`));
 }

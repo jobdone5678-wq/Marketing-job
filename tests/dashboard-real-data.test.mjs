@@ -7,7 +7,7 @@ before(async()=>{browser=await chromium.launch({headless:true});script=await bro
 after(async()=>{await browser?.close();});
 const metrics={candidates:2,submissions:17,confirmed:6,contractJobs:98765,vendors:null,activity:[]};
 async function mount(t,role,response){const page=await browser.newPage();t.after(()=>page.close());await page.route('https://portal.test/**',route=>new URL(route.request().url()).pathname==='/api/dashboard'?response(route):route.fulfill({contentType:'text/html',body:'<div id="root"></div>'}));await page.goto('https://portal.test/');await page.evaluate(role=>{window.testRole=role;},role);await page.addScriptTag({content:script});return page;}
-for(const [role,title] of [['client','Candidate workspace'],['recruiter','Recruiter workspace'],['technical_recruiter','Technical recruiter workspace']])test(`${role} dashboard displays saved counts with accurate role and no global job count`,async t=>{
+for(const [role,title] of [['client','Candidate workspace'],['client','Recruiter workspace'],['client','Technical recruiter workspace']])test(`${role} dashboard displays saved counts with accurate role and no global job count`,async t=>{
  const page=await mount(t,role,route=>route.fulfill({json:{role,metrics}}));
  await page.getByRole('heading',{name:title,exact:true}).waitFor({timeout:4000});
  await page.getByRole('link',{name:/Submission records|My application records/}).getByText('17',{exact:true}).waitFor();
@@ -17,7 +17,7 @@ for(const [role,title] of [['client','Candidate workspace'],['recruiter','Recrui
 });
 test('dashboard refresh reads changed saved counts without inventing a value on failure',async t=>{
  let count=17,fail=false;
- const page=await mount(t,'recruiter',route=>fail?route.fulfill({status:503,json:{error:'Database temporarily unavailable'}}):route.fulfill({json:{role:'recruiter',metrics:{...metrics,submissions:count}}}));
+ const page=await mount(t,'client',route=>fail?route.fulfill({status:503,json:{error:'Database temporarily unavailable'}}):route.fulfill({json:{role: 'client',metrics:{...metrics,submissions:count}}}));
  await page.getByText('17',{exact:true}).waitFor();count=23;
  await page.getByRole('button',{name:'Refresh',exact:true}).click();await page.getByText('23',{exact:true}).waitFor();
  fail=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();

@@ -7,7 +7,7 @@ function session(profile){return moduleLoader({
 })('src/lib/middleware.ts').updateSession;}
 function request(path){return {nextUrl:Object.assign(new URL('https://portal.test'+path),{clone:()=>new URL('https://portal.test'+path)}),cookies:{getAll:()=>[],set(){}}};}
 test('pending staff cannot open dashboard pages and the public page does not redirect them back',async()=>{
- const update=session({role:'technical_recruiter',status:'pending'});
+ const update=session({role: 'client',status:'pending'});
  assert.equal((await update(request('/dashboard/payroll'))).status,307);
  assert.equal((await update(request('/'))).status,200);
 });

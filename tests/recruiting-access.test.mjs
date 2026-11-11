@@ -3,36 +3,36 @@ import assert from 'node:assert/strict';
 import {moduleLoader} from './helpers/load-ts-module.mjs';
 class CaptureError extends Error {constructor(message,status=400){super(message);this.status=status;}}
 
-test('unlinked resumes are private to the uploading staff member',async()=>{
- const load=moduleLoader({'@/lib/db/admin':{CaptureError,checkDb:error=>{if(error)throw error;},database:()=>({from:()=>({select(){return this;},eq(){return this;},maybeSingle:async()=>({data:{id:'10000000-0000-4000-8000-000000000201',owner_id:'other',candidate_id:null,status:'extracted'},error:null})})})}});
- const {ownDocument}=load('src/lib/resumes/repository.ts');
- await assert.rejects(ownDocument({id:'staff',role:'technical_recruiter'},'10000000-0000-4000-8000-000000000201'),error=>error.status===404);
+test('unlinked resumes are private to their owner',async()=>{
+  const load=moduleLoader({'@/lib/db/admin':{CaptureError,checkDb:error=>{if(error)throw error;},database:()=>({from:()=>({select(){return this;},eq(){return this;},maybeSingle:async()=>({data:{id:'10000000-0000-4000-8000-000000000201',owner_id:'other',candidate_id:null,status:'extracted'},error:null})})})}});
+  const {ownDocument}=load('src/lib/resumes/repository.ts');
+  await assert.rejects(ownDocument({id:'candidate',role:'client'},'10000000-0000-4000-8000-000000000201'),error=>error.status===404);
 });
 
 test('suspension takes effect on the next request even with the same authenticated cookie',async()=>{
   let status='active';
   const load=moduleLoader({
     'next/headers':{cookies:async()=>({getAll:()=>[{name:'sb-fixture-auth-token',value:'session'}]})},
-    '@/lib/server':{createClient:async()=>({auth:{getUser:async()=>({data:{user:{id:'staff'}},error:null})}})},
-    '@/lib/db/admin':{database:()=>({from:()=>({select(){return this;},eq(){return this;},single:async()=>({data:{id:'staff',role:'technical_recruiter',status},error:null})})})},
+    '@/lib/server':{createClient:async()=>({auth:{getUser:async()=>({data:{user:{id:'candidate'}},error:null})}})},
+    '@/lib/db/admin':{database:()=>({from:()=>({select(){return this;},eq(){return this;},single:async()=>({data:{id:'candidate',role:'client',status},error:null})})})},
     '@/lib/email-confirmations/server':{CaptureError},
   });
   const {requireProfile}=load('src/lib/auth/require-profile.ts');
-  assert.equal((await requireProfile('recruiting_staff')).id,'staff');
+  assert.equal((await requireProfile()).id,'candidate');
   status='suspended';
-  await assert.rejects(requireProfile('recruiting_staff'),error=>error.status===403);
+  await assert.rejects(requireProfile(),error=>error.status===403);
 });
 
 test('concurrent requests with the same cookie share a single in-flight auth query',async()=>{
   let queryCount=0;
   const load=moduleLoader({
     'next/headers':{cookies:async()=>({getAll:()=>[{name:'sb-fixture-auth-token',value:'session'}]})},
-    '@/lib/server':{createClient:async()=>({auth:{getUser:async()=>{queryCount++;return {data:{user:{id:'staff'}},error:null};}}})},
-    '@/lib/db/admin':{database:()=>({from:()=>({select(){return this;},eq(){return this;},single:async()=>({data:{id:'staff',role:'technical_recruiter',status:'active'},error:null})})})},
+    '@/lib/server':{createClient:async()=>({auth:{getUser:async()=>{queryCount++;return {data:{user:{id:'candidate'}},error:null};}}})},
+    '@/lib/db/admin':{database:()=>({from:()=>({select(){return this;},eq(){return this;},single:async()=>({data:{id:'candidate',role:'client',status:'active'},error:null})})})},
     '@/lib/email-confirmations/server':{CaptureError},
   });
   const {requireProfile}=load('src/lib/auth/require-profile.ts');
-  const results=await Promise.all([requireProfile('recruiting_staff'),requireProfile('recruiting_staff'),requireProfile('recruiting_staff')]);
+  const results=await Promise.all([requireProfile(),requireProfile(),requireProfile()]);
   assert.equal(results.length,3);
   assert.equal(queryCount,1);
 });

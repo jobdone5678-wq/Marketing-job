@@ -71,14 +71,9 @@ export async function updateSession(request: NextRequest) {
       const url=request.nextUrl.clone();url.pathname='/';url.search='';
       return NextResponse.redirect(url);
     }
-    const adminPage=['/dashboard/team','/dashboard/job-matching'].some(page=>pathname===page||pathname.startsWith(page+'/'));
-    const staffPage=['/dashboard/payroll','/dashboard/commissions'].some(page=>pathname.startsWith(page));
-    if(pathname.startsWith('/dashboard')&&((adminPage&&profile?.role!=='super_admin')||(staffPage&&profile?.role==='client'))){
-      const url=request.nextUrl.clone();url.pathname='/dashboard';url.search='';return NextResponse.redirect(url);
-    }
   }
-  // Pending/suspended users stay on the sign-in/status page rather than redirecting in a loop.
-  if (user && pathname === '/' && profile?.status==='active' && !request.nextUrl.searchParams.has('role_notice') && !request.nextUrl.searchParams.has('error')) {
+  // Signed-in candidates stay on the sign-in/status page rather than redirecting in a loop.
+  if (user && pathname === '/' && profile?.status==='active' && !request.nextUrl.searchParams.has('error')) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)

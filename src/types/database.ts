@@ -1,6 +1,6 @@
-export type AppRole = 'super_admin' | 'recruiter' | 'technical_recruiter' | 'client' | 'job_seeker';
+// Workspace roles: candidate and client only. All staff roles have been retired.
+export type AppRole = 'candidate' | 'client';
 export type AccountStatus = 'active' | 'pending' | 'rejected' | 'suspended';
-
 export type SubmissionStatus =
   | 'Draft'
   | 'Applied'
@@ -28,8 +28,6 @@ export interface UserProfile {
 export interface Candidate {
   id: string;
   user_id?: string | null;
-  assigned_recruiter_id?: string | null;
-  assigned_technical_recruiter_id?: string | null;
 
   // Personal Information
   full_name: string;
@@ -94,8 +92,6 @@ export interface JobSubmission {
   id: string;
   job_id?: string | null;
   candidate_id: string;
-  recruiter_id?: string | null;
-  technical_recruiter_id?: string | null;
   submission_date: string;
 
   // Company & Role Details
@@ -135,7 +131,6 @@ export interface JobSubmission {
 
   // Joined fields for display
   candidate?: Candidate;
-  recruiter?: UserProfile;
 }
 
 export interface AppliedResumeSnapshot {
@@ -149,36 +144,13 @@ export interface AppliedResumeSnapshot {
   resumeId?: string | null;
 }
 
-export interface CandidateStaffAssignment {
-  id: string;
-  candidate_id: string;
-  profile_id: string;
-  assignment_role: 'recruiter' | 'technical_recruiter';
-  assigned_by: string | null;
-  started_at: string;
-  ended_at: string | null;
-}
-
-export interface StaffEmployment {
-  id:string;profile_id:string;hire_date:string;end_date:string|null;partial_period_rule:'manual'|'fixed_monthly';created_by:string;created_at:string;updated_at:string;
-}
-export interface StaffSalaryPeriod {
-  id:string;employment_id:string;period_index:number;start_date:string;end_date_exclusive:string;due_date:string;amount:string;currency:string;status:'awaiting_adjustment'|'accruing'|'due'|'partially_paid'|'paid'|'overdue'|'cancelled';
-  compensation_term_id:string|null;monthly_amount:string|null;adjusted_at:string|null;adjusted_by:string|null;
-}
 export interface Placement {
   id:string;candidate_id:string;submission_id:string|null;company:string;role_title:string;status:'offer_accepted'|'joining_scheduled'|'active'|'completed'|'ended_early'|'cancelled';
-  recruiter_id:string|null;technical_recruiter_id:string|null;planned_start_date:string|null;actual_join_date:string|null;expected_end_date:string|null;actual_end_date:string|null;
-  candidate_monthly_amount:string|null;candidate_currency:string|null;candidate_compensation_visible:boolean;commission_amount:string|null;commission_currency:string|null;commission_milestone:'candidate_joining'|'placement_active';commission_due_days:number;
+  planned_start_date:string|null;actual_join_date:string|null;expected_end_date:string|null;actual_end_date:string|null;
+  candidate_monthly_amount:string|null;candidate_currency:string|null;candidate_compensation_visible:boolean;
 }
 export interface PlacementMonth {
   id:string;placement_id:string;month_start:string;covered_start:string;covered_end:string;agreed_amount:string|null;currency:string|null;status:'scheduled'|'active'|'completed'|'cancelled';
-}
-export interface TechnicalRecruiterCommission {
-  id:string;placement_id:string;technical_recruiter_id:string;milestone:'candidate_joining'|'placement_active';amount:string;currency:string;due_date:string|null;status:'awaiting_eligibility'|'awaiting_approval'|'approved'|'rejected'|'partially_paid'|'paid';eligible_at:string|null;approved_by:string|null;approved_at:string|null;
-}
-export interface ExternalPayment {
-  id:string;payee_profile_id:string;salary_period_id:string|null;commission_id:string|null;amount:string;currency:string;paid_on:string;method:string;external_reference:string|null;notes:string|null;recorded_by:string;created_at:string;correction_of:string|null;
 }
 
 export type CandidateFormData = Omit<Candidate, 'id' | 'created_at' | 'updated_at'>;
@@ -230,4 +202,4 @@ export interface RTRDocumentReference {
   created_at: string;
 }
 
-export type JobSubmissionFormData = Omit<JobSubmission, 'id' | 'created_at' | 'updated_at' | 'candidate' | 'recruiter'>;
+export type JobSubmissionFormData = Omit<JobSubmission, 'id' | 'created_at' | 'updated_at' | 'candidate'>;

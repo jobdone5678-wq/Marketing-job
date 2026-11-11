@@ -158,7 +158,7 @@ function regexExtractFallback(text: string, filename: string): ExtractedRtrData 
 }
 
 export async function POST(request: Request) {
-  return protectedRoute(request, "candidate_or_staff", async () => {
+  return protectedRoute(request, async () => {
     const formData = await request.formData();
     const file = formData.get("file");
 

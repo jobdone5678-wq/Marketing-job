@@ -21,17 +21,17 @@ function setup({role='client',status='active',candidate={},configured=false}={})
  return {actor,tables,payload,service,calls:()=>calls,leases:()=>leases,scheduled,post:async(body=payload)=>route.POST(new Request('https://portal.test/api/extension/answer-drafts',{method:'POST',body:JSON.stringify(body)}))};
 }
 for(const [name,options,status] of [
- ['unauthorized role',{role:'technical_recruiter'},403],['inactive account',{status:'suspended'},403],['another client',{candidate:{user_id:randomUUID()}},404],['unassigned recruiter',{role:'recruiter',candidate:{user_id:randomUUID(),assigned_recruiter_id:randomUUID()}},404],['unreviewed candidate',{candidate:{provenance_status:'unconfirmed'}},409],
+ ['unauthorized role',{role: 'client'},403],['inactive account',{status:'suspended'},403],['another client',{candidate:{user_id:randomUUID()}},404],['unassigned recruiter',{role: 'client',candidate:{user_id:randomUUID(),assigned_recruiter_id:randomUUID()}},404],['unreviewed candidate',{candidate:{provenance_status:'unconfirmed'}},409],
 ])test(`screening rejects ${name} without queueing/provider access`,async()=>{const app=setup(options),res=await app.post();assert.equal(res.status,status);assert.equal(app.tables.background_tasks.length,0);assert.equal(app.calls(),0);});
 test('explicit consent and complete job context required',async()=>{const app=setup();assert.equal((await app.post({...app.payload,consent:false})).status,400);assert.equal((await app.post({...app.payload,jobDescription:''})).status,400);assert.equal(app.tables.background_tasks.length,0);});
 test('assigned recruiter creates durable work; shared AI boundary is lease checked',async()=>{
- const app=setup({role:'recruiter',candidate:{user_id:randomUUID(),assigned_recruiter_id:actorId}}),res=await app.post();assert.equal(res.status,200);
+ const app=setup({role: 'client',candidate:{user_id:randomUUID(),assigned_recruiter_id:actorId}}),res=await app.post();assert.equal(res.status,200);
  const data=await res.json();assert.equal(data.status,'queued');assert.equal(app.calls(),0);assert.equal(app.scheduled.length,0);
  const task=app.tables.background_tasks[0];assert.equal(task.kind,'application_answers');
  const output=await app.service.generateScreening({...task,lease_token:randomUUID()});assert.deepEqual(output.answers,{q:'Python'});assert.equal(app.calls(),1);assert.equal(app.leases(),2);
 });
 test('task results stay actor scoped and reassignment revokes reads and processing',async()=>{
- const app=setup({role:'recruiter',candidate:{user_id:randomUUID(),assigned_recruiter_id:actorId}});const response=await app.post(),{taskId}=await response.json();
+ const app=setup({role: 'client',candidate:{user_id:randomUUID(),assigned_recruiter_id:actorId}});const response=await app.post(),{taskId}=await response.json();
  await assert.rejects(app.service.answerTaskStatus({...app.actor,id:randomUUID()},taskId),e=>e.status===404);
  app.tables.candidates[0].assigned_recruiter_id=randomUUID();
  await assert.rejects(app.service.answerTaskStatus(app.actor,taskId),e=>e.status===404);

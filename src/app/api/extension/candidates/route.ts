@@ -54,12 +54,10 @@ export async function GET(request: Request) {
         certifications
       `)
       .eq('provenance_status', 'confirmed')
+      .eq('user_id', profile.id)
       .order('updated_at', { ascending: false })
       .order('id')
-      .limit(profile.role === 'client' ? 1 : 100);
-    if (profile.role === 'client') query = query.eq('user_id', profile.id);
-    if (profile.role === 'recruiter') query = query.eq('assigned_recruiter_id', profile.id);
-    if (profile.role === 'technical_recruiter') query = query.eq('assigned_technical_recruiter_id', profile.id);
+      .limit(1);
     if (requested) query = query.eq('id', requested);
     const { data, error } = await query;
 
@@ -71,7 +69,7 @@ export async function GET(request: Request) {
       candidates: candidates || [],
       actorId: profile.id,
       role: profile.role,
-      ownCandidateId: profile.role === 'client' ? candidates?.[0]?.id || null : null,
+      ownCandidateId: candidates?.[0]?.id || null,
     };
   });
 }

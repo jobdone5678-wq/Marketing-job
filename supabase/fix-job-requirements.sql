@@ -21,7 +21,7 @@ ALTER TABLE public.job_requirements ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS requirement_reads ON public.job_requirements;
 CREATE POLICY requirement_reads ON public.job_requirements FOR SELECT TO authenticated
-  USING (get_current_role()::text IN ('client', 'recruiter', 'technical_recruiter', 'super_admin') AND data IS NOT NULL);
+  USING (get_current_role()::text = 'client' AND data IS NOT NULL);
 
 GRANT SELECT ON public.job_requirements TO authenticated;
 GRANT ALL ON public.job_requirements TO service_role;

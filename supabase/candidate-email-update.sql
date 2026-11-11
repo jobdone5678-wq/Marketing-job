@@ -1,30 +1,29 @@
 BEGIN;
 ALTER TABLE public.email_confirmation_events DROP CONSTRAINT IF EXISTS email_confirmation_events_evidence_source_check;
-ALTER TABLE public.email_confirmation_events ADD CONSTRAINT email_confirmation_events_evidence_source_check CHECK(evidence_source IN ('mailbox_receipt','recruiter_review','candidate_review'));
--- Requires the existing recruiting roles/assignments and email schema.
+ALTER TABLE public.email_confirmation_events ADD CONSTRAINT email_confirmation_events_evidence_source_check CHECK(evidence_source IN ('mailbox_receipt','candidate_review'));
+-- Candidate-only email capture. Every account is a candidate, so a candidate
+-- reaches only the records filed against their own profile.
 CREATE OR REPLACE FUNCTION public.email_candidate_access(p_owner uuid,p_candidate uuid)
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
  SELECT EXISTS(SELECT 1 FROM public.profiles p JOIN public.candidates c ON c.id=p_candidate
- WHERE p.id=p_owner AND p.status='active' AND (p.role='super_admin'
- OR (p.role='client' AND c.user_id=p.id) OR (p.role='recruiter' AND c.assigned_recruiter_id=p.id)
- OR (p.role='technical_recruiter' AND c.assigned_technical_recruiter_id=p.id)));
+ WHERE p.id=p_owner AND p.status='active' AND p.role='client' AND c.user_id=p.id);
 $$;
 REVOKE ALL ON FUNCTION public.email_candidate_access(uuid,uuid) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.email_candidate_access(uuid,uuid) TO service_role;
 DROP POLICY IF EXISTS own_email_connections ON public.email_connections;
-CREATE POLICY own_email_connections ON public.email_connections FOR SELECT TO authenticated USING(owner_id=auth.uid() AND EXISTS(SELECT 1 FROM public.profiles WHERE id=auth.uid() AND status='active' AND role IN ('client','recruiter','technical_recruiter','super_admin')));
+CREATE POLICY own_email_connections ON public.email_connections FOR SELECT TO authenticated USING(owner_id=auth.uid() AND EXISTS(SELECT 1 FROM public.profiles WHERE id=auth.uid() AND status='active' AND role='client'));
 DROP POLICY IF EXISTS own_email_receipts ON public.email_receipts;
-CREATE POLICY own_email_receipts ON public.email_receipts FOR SELECT TO authenticated USING(owner_id=auth.uid() AND EXISTS(SELECT 1 FROM public.profiles WHERE id=auth.uid() AND status='active' AND role IN ('client','recruiter','technical_recruiter','super_admin')));
+CREATE POLICY own_email_receipts ON public.email_receipts FOR SELECT TO authenticated USING(owner_id=auth.uid() AND EXISTS(SELECT 1 FROM public.profiles WHERE id=auth.uid() AND status='active' AND role='client'));
 DROP POLICY IF EXISTS own_confirmation_events ON public.email_confirmation_events;
-CREATE POLICY own_confirmation_events ON public.email_confirmation_events FOR SELECT TO authenticated USING(actor_id=auth.uid() AND EXISTS(SELECT 1 FROM public.profiles WHERE id=auth.uid() AND status='active' AND role IN ('client','recruiter','technical_recruiter','super_admin')));
+CREATE POLICY own_confirmation_events ON public.email_confirmation_events FOR SELECT TO authenticated USING(actor_id=auth.uid() AND EXISTS(SELECT 1 FROM public.profiles WHERE id=auth.uid() AND status='active' AND role='client'));
 
 CREATE OR REPLACE FUNCTION public.confirm_email_receipt(
   p_owner uuid, p_receipt uuid, p_candidate uuid, p_company text, p_title text,
   p_submission uuid DEFAULT NULL, p_manual boolean DEFAULT true
-) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=public, pg_temp AS $$
 DECLARE r public.email_receipts; target uuid; existing_count integer;
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = p_owner AND status = 'active' AND role IN ('client','recruiter','technical_recruiter','super_admin')) THEN
+  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = p_owner AND status = 'active' AND role = 'client') THEN
     RAISE EXCEPTION 'Active mailbox account required';
   END IF;
   SELECT * INTO r FROM public.email_receipts WHERE id = p_receipt AND owner_id = p_owner FOR UPDATE;
@@ -48,16 +47,16 @@ BEGIN
     IF existing_count > 1 THEN RAISE EXCEPTION 'Multiple applications match; select one for review'; END IF;
   END IF;
   IF target IS NULL THEN
-    INSERT INTO public.job_submissions(candidate_id,recruiter_id,technical_recruiter_id,company_name,job_title,submission_date,portal_source,status,job_location)
-      VALUES(p_candidate,CASE WHEN (SELECT role FROM profiles WHERE id=p_owner) IN ('recruiter','super_admin') THEN p_owner ELSE NULL END,CASE WHEN (SELECT role FROM profiles WHERE id=p_owner)='technical_recruiter' THEN p_owner ELSE NULL END,trim(p_company),trim(p_title),(r.received_at AT TIME ZONE 'UTC')::date,'Email confirmation','Applied',NULL)
+    INSERT INTO public.job_submissions(candidate_id,company_name,job_title,submission_date,portal_source,status,job_location)
+      VALUES(p_candidate,trim(p_company),trim(p_title),(r.received_at AT TIME ZONE 'UTC')::date,'Email confirmation','Applied',NULL)
       RETURNING id INTO target;
   END IF;
-  -- Preserve the recruiting pipeline status (interviews, offers, rejection, etc.).
+  -- Preserve the application pipeline status (interviews, offers, rejection, etc.).
   UPDATE public.job_submissions SET capture_status='confirmed', email_confirmed_at=COALESCE(email_confirmed_at,r.received_at) WHERE id=target;
   UPDATE public.email_receipts SET disposition='confirmed', candidate_id=p_candidate, submission_id=target,
     extracted_company=trim(p_company),extracted_job_title=trim(p_title),reviewed_at=now() WHERE id=r.id;
   INSERT INTO public.email_confirmation_events(receipt_id,submission_id,actor_id,evidence_source,observed_at)
-    VALUES(r.id,target,p_owner,CASE WHEN p_manual AND (SELECT role FROM profiles WHERE id=p_owner)='client' THEN 'candidate_review' WHEN p_manual THEN 'recruiter_review' ELSE 'mailbox_receipt' END,r.received_at);
+    VALUES(r.id,target,p_owner,CASE WHEN p_manual THEN 'candidate_review' ELSE 'mailbox_receipt' END,r.received_at);
   RETURN target;
 END; $$;
 REVOKE ALL ON FUNCTION public.confirm_email_receipt(uuid,uuid,uuid,text,text,uuid,boolean) FROM PUBLIC, anon, authenticated;
@@ -72,7 +71,7 @@ DECLARE r public.email_receipts; saved_id uuid; prior public.email_receipts;
 BEGIN
   PERFORM 1 FROM public.email_connections WHERE email_connections.id=p_connection AND owner_id=p_owner
     AND status='connected' AND sync_lease_token=p_lease AND sync_lease_until>now() FOR UPDATE;
-  IF NOT FOUND OR NOT EXISTS(SELECT 1 FROM public.profiles WHERE profiles.id=p_owner AND status='active' AND role IN ('client','recruiter','technical_recruiter','super_admin')) THEN
+  IF NOT FOUND OR NOT EXISTS(SELECT 1 FROM public.profiles WHERE profiles.id=p_owner AND status='active' AND role='client') THEN
     RAISE EXCEPTION 'An active mailbox lease is required';
   END IF;
   SELECT * INTO prior FROM public.email_receipts WHERE owner_id=p_owner AND message_key=p_key;
@@ -102,11 +101,11 @@ REVOKE ALL ON FUNCTION public.ingest_mailbox_receipt(uuid,uuid,uuid,text,jsonb,b
 GRANT EXECUTE ON FUNCTION public.ingest_mailbox_receipt(uuid,uuid,uuid,text,jsonb,boolean) TO service_role;
 
 CREATE OR REPLACE FUNCTION public.claim_email_sync(p_connection uuid,p_owner uuid,p_lease uuid)
-RETURNS SETOF public.email_connections LANGUAGE sql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+RETURNS SETOF public.email_connections LANGUAGE sql SECURITY DEFINER SET search_path=public, pg_temp AS $$
   UPDATE public.email_connections SET sync_lease_until=now()+interval '5 minutes',sync_lease_token=p_lease,last_attempted_at=now()
     WHERE id=p_connection AND owner_id=p_owner AND status='connected'
     AND (sync_lease_until IS NULL OR sync_lease_until < now())
-    AND EXISTS(SELECT 1 FROM public.profiles WHERE id=p_owner AND role IN ('client','recruiter','technical_recruiter','super_admin') AND status='active')
+    AND EXISTS(SELECT 1 FROM public.profiles WHERE id=p_owner AND role='client' AND status='active')
     RETURNING *;
 $$;
 REVOKE ALL ON FUNCTION public.claim_email_sync(uuid,uuid,uuid) FROM PUBLIC,anon,authenticated;
@@ -115,7 +114,7 @@ GRANT EXECUTE ON FUNCTION public.claim_email_sync(uuid,uuid,uuid) TO service_rol
 CREATE OR REPLACE FUNCTION public.eligible_email_connections()
 RETURNS TABLE(id uuid,owner_id uuid) LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
   SELECT connection.id,connection.owner_id FROM public.email_connections connection JOIN public.profiles profile ON profile.id=connection.owner_id
-    WHERE connection.status='connected' AND profile.status='active' AND profile.role IN ('client','recruiter','technical_recruiter','super_admin')
+    WHERE connection.status='connected' AND profile.status='active' AND profile.role='client'
       AND (connection.sync_lease_until IS NULL OR connection.sync_lease_until<now())
     ORDER BY connection.last_attempted_at ASC NULLS FIRST,connection.id LIMIT 3;
 $$;

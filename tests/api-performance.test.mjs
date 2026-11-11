@@ -13,10 +13,10 @@ test('salary refresh batches and deduplicates IDs instead of one HTTP request pe
 });
 test('staff finances start before placement maintenance and candidates cannot see private compensation',async()=>{
  const events=[];
- const tables={placements:[{id:'placement',candidate_id:'candidate',candidate_compensation_visible:false,candidate_monthly_amount:5000,candidate_currency:'USD'}],placement_months:[{id:'month',placement_id:'placement',agreed_amount:5000,currency:'USD'}],candidates:[{id:'candidate',user_id:'actor',assigned_recruiter_id:'actor'}]};
+ const tables={placements:[{id:'placement',candidate_id:'candidate',candidate_compensation_visible:false,candidate_monthly_amount:5000,candidate_currency:'USD'}],placement_months:[{id:'month',placement_id:'placement',agreed_amount:5000,currency:'USD'}],candidates:[{id:'candidate',user_id:'actor'}]};
  const fixture=fixtureDatabase(tables);
  const db={from(table){events.push(table);return fixture.from(table);}};
- let role='recruiter';
+ let role='client';
  const {GET}=moduleLoader({'@/lib/http/protected-route':{protectedRoute:(_r,_a,work)=>work({id:'actor',role})},'@/lib/db/admin':{database:()=>db,checkDb:error=>{if(error)throw error;}},'@/lib/payroll/repository':{ensureSalaryPeriods:async()=>{},earningSummary:()=>({})},'@/lib/placements/repository':{syncPlacementMonths:async()=>{},syncPlacementMonthsBatch:async()=>{events.push('refresh');}}})('src/app/api/placements/route.ts');
  await GET(new Request('https://test/api/placements'));
  assert.ok(events.indexOf('staff_employments')<events.indexOf('placement_months'),events.join(','));
@@ -49,8 +49,8 @@ test('protected routes expose authentication and handler durations on successful
 
 
 test('super admin dashboard skips unused general metrics while other roles keep their metrics',async()=>{
- let role='super_admin';const calls=[];
+ let role='client';const calls=[];
  const {GET}=moduleLoader({'@/lib/http/protected-route':{protectedRoute:(_r,_a,work)=>work({id:'actor',role})},'@/lib/db/admin':{database:()=>({rpc:async(name)=>{calls.push(name);return {data:{candidates:3},error:null};}}),checkDb:error=>{if(error)throw error;}}})('src/app/api/dashboard/route.ts');
- const admin=await GET(new Request('https://test/api/dashboard'));assert.equal(admin.role,'super_admin');assert.equal(admin.metrics,null);assert.deepEqual(calls,[]);
- role='recruiter';const staff=await GET(new Request('https://test/api/dashboard'));assert.equal(staff.metrics.candidates,3);assert.deepEqual(calls,['workspace_metrics']);
+ const admin=await GET(new Request('https://test/api/dashboard'));assert.equal(admin.role,'client');assert.equal(admin.metrics,null);assert.deepEqual(calls,[]);
+ role='client';const staff=await GET(new Request('https://test/api/dashboard'));assert.equal(staff.metrics.candidates,3);assert.deepEqual(calls,['workspace_metrics']);
 });

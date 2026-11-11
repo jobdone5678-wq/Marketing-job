@@ -4,7 +4,7 @@ import {recommendationContext} from '@/lib/jobs/recommendations';
 import {candidateJobApplications} from '@/lib/jobs/applications';
 
 export async function GET(request:Request){
- return protectedRoute(request,'candidate_or_staff',async profile=>{
+ return protectedRoute(request,async profile=>{
   const params=new URL(request.url).searchParams;
   const {recommendation}=await recommendationContext(profile,params);
   const page=Number(params.get('page')||0);

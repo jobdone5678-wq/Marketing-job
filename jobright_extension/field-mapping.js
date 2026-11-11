@@ -143,7 +143,18 @@
 
   function buildValues(candidate) {
     const facts = candidate.provenance_status === 'confirmed' ? (candidate.confirmed_facts || {}) : candidate;
-    const names = String(facts.full_name || candidate.full_name || '').trim().split(/\s+/);
+    let fullName = String(facts.full_name || candidate.full_name || '').trim();
+    if (/\.(docx?|pdf)$/i.test(fullName) || (fullName.includes('_') && !fullName.includes(' '))) {
+      if (candidate.first_name && candidate.last_name) {
+        fullName = `${candidate.first_name} ${candidate.last_name}`;
+      } else {
+        const parts = fullName.replace(/\.[^.]+$/, '').split(/[_\s]+/).filter(Boolean);
+        if (parts.length >= 2) {
+          fullName = parts.slice(0, 2).map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ');
+        }
+      }
+    }
+    const names = fullName.split(/\s+/);
 
     // An explicit null means "not known"; an absent value keeps the portal default.
     const rawAuth = facts.authorized_in_usa !== undefined ? facts.authorized_in_usa : candidate.authorized_in_usa;
@@ -160,14 +171,17 @@
 
     const city = facts.current_city || candidate.current_city || candidate.city || '';
     const state = facts.current_state || candidate.current_state || candidate.state || '';
+    const rawPhone = String(facts.phone || candidate.phone || '').trim();
+    const phoneDigits = rawPhone.replace(/\D/g, '');
+    const phone = phoneDigits.length >= 10 ? phoneDigits.slice(-10) : rawPhone;
 
     return {
       ...facts,
       first_name: names[0] || candidate.first_name || '',
       last_name: names.slice(1).join(' ') || candidate.last_name || names[0] || '',
-      full_name: facts.full_name || candidate.full_name || '',
+      full_name: fullName,
       email: facts.email || candidate.email || '',
-      phone: facts.phone || candidate.phone || '',
+      phone: phone,
       current_city: city,
       current_state: state,
       current_location: [city, state].filter(Boolean).join(', '),
@@ -299,7 +313,18 @@
       }
       if (field.kind === 'combobox') {
         // Autocomplete options only exist after typing, so the fact itself is the target.
-        return { field, factKey, value: String(val), status: 'supported', exactMatch: resolved.exact, matchLength: resolved.length, reason: 'Exact profile field mapping.' };
+        return {
+          field,
+          factKey,
+          value: String(val),
+          status: 'supported',
+          exactMatch: resolved.exact,
+          matchLength: resolved.length,
+          state: values.current_state,
+          location: values.current_location,
+          country: values.country,
+          reason: 'Exact profile field mapping.'
+        };
       }
       if (isChoiceKind(field.kind)) {
         const opt = pickOption(field, val);

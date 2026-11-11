@@ -20,9 +20,9 @@ const starterBoards = [
 async function main() {
   const db = database();
   if (process.argv.includes('--starter')) {
-    const { data: staff, error } = await db.from('profiles').select('id').eq('status', 'active').in('role', ['super_admin', 'recruiter']).order('role', { ascending: false }).order('created_at').limit(1).maybeSingle();
+    const { data: owner, error } = await db.from('profiles').select('id').eq('status', 'active').eq('role', 'client').order('created_at').limit(1).maybeSingle();
     checkDb(error);
-    if (!staff) throw new Error('An active approved recruiter or administrator must own public job sources.');
+    if (!owner) throw new Error('An active candidate account must own public job sources.');
     for (const [board_slug, company] of starterBoards) {
       const { data: existing, error: lookup } = await db.from('job_sources').select('id').eq('provider', 'ashby').eq('board_slug', board_slug).maybeSingle();
       checkDb(lookup);
@@ -32,7 +32,7 @@ async function main() {
         console.log(`${company}: no complete contract listings available; source not added.`);
         continue;
       }
-      const { error: insert } = await db.from('job_sources').upsert({ provider: 'ashby', board_slug, company, created_by: staff.id }, { onConflict: 'provider,board_slug', ignoreDuplicates: true });
+      const { error: insert } = await db.from('job_sources').upsert({ provider: 'ashby', board_slug, company, created_by: owner.id }, { onConflict: 'provider,board_slug', ignoreDuplicates: true });
       checkDb(insert);
       console.log(`${company}: verified public source connected.`);
     }

@@ -12,7 +12,7 @@ test('capture uses accessible question names and excludes sensitive fieldset ans
  await page.setContent('<h1>Engineer</h1><form><span id="question">Relevant project experience</span><textarea name="q1" aria-labelledby="question">Pipeline work</textarea><fieldset><legend>Availability to start</legend><label>Yes<input name="q2" type="radio" value="Yes" checked></label></fieldset><fieldset><legend>Disability information</legend><label>Experience<input name="q3" value="private answer"></label></fieldset><span id="secret">Social security number</span><input name="email_alias" aria-labelledby="secret" value="private number"></form>');
  await page.exposeFunction('extensionMessage',async message=>{
   if(message.type==='get_context')return {linked:true,candidateId:'candidate'};
-  if(message.type==='get_candidates')return {role:'recruiter',candidates:[{id:'candidate',full_name:'Candidate'}]};
+  if(message.type==='get_candidates')return {role: 'client',candidates:[{id:'candidate',full_name:'Candidate'}]};
   if(message.status==='submit_attempted')captured.push(message.answers);
   return {};
  });
@@ -30,7 +30,7 @@ for(const response of [{queued:true},{error:'Capture queue is full. Use the port
   const page=await browser.newPage();t.after(()=>page.close());
   await page.route('https://jobs.ashbyhq.com/**',route=>route.fulfill({contentType:'text/html',body:'<h1>Your application has been submitted</h1>'}));
   await page.goto('https://jobs.ashbyhq.com/fixture/application');
-  await page.exposeFunction('extensionMessage',async message=>message.type==='get_context'?{linked:true,candidateId:'candidate'}:message.type==='get_candidates'?{role:'recruiter',candidates:[{id:'candidate',full_name:'Candidate'}]}:message.status?response:{});
+  await page.exposeFunction('extensionMessage',async message=>message.type==='get_context'?{linked:true,candidateId:'candidate'}:message.type==='get_candidates'?{role: 'client',candidates:[{id:'candidate',full_name:'Candidate'}]}:message.status?response:{});
   await page.evaluate(()=>{window.chrome={runtime:{sendMessage:message=>window.extensionMessage(message)}};});
   await page.addScriptTag({content:await readFile(new URL('../jobright_extension/content.js',import.meta.url),'utf8')});await page.locator('#mp-copilot-root').waitFor();
   await page.waitForTimeout(150);
@@ -92,7 +92,7 @@ test('linked confirmation waits for saved multi-step answers before reporting su
  await page.route('https://jobs.ashbyhq.com/**',route=>route.fulfill({contentType:'text/html',body:'<h1>Your application has been submitted</h1>'}));
  await page.exposeFunction('extensionMessage',async message=>{
   if(message.type==='get_context')return {linked:true,candidateId:'candidate'};
-  if(message.type==='get_candidates')return {role:'recruiter',candidates:[{id:'candidate',full_name:'Candidate'}]};
+  if(message.type==='get_candidates')return {role: 'client',candidates:[{id:'candidate',full_name:'Candidate'}]};
   if(message.type==='get_answer_draft')return {candidateId:'candidate',answers:[{key:'email',label:'Email',value:'saved@example.test'}]};
   messages.push(message);return {};
  });
@@ -108,7 +108,7 @@ test('the manual action on a linked application uses its intent instead of creat
  await page.route('https://jobs.ashbyhq.com/**',route=>route.fulfill({contentType:'text/html',body:'<h1>Engineer</h1><form><label>Email<input name="email" value="final@example.test"></label></form>'}));
  await page.exposeFunction('extensionMessage',async message=>{
   if(message.type==='get_context')return {linked:true,candidateId:'candidate'};
-  if(message.type==='get_candidates')return {role:'recruiter',candidates:[{id:'candidate',full_name:'Candidate'}]};
+  if(message.type==='get_candidates')return {role: 'client',candidates:[{id:'candidate',full_name:'Candidate'}]};
   messages.push(message);return {success:true};
  });
  await page.goto('https://jobs.ashbyhq.com/fixture/role/application');

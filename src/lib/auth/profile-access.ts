@@ -1,11 +1,6 @@
-export type ProfileAccess = 'candidate_or_staff' | 'recruiting_staff' | 'staff' | 'admin';
-
-export const recruitingRoles = ['recruiter', 'technical_recruiter', 'super_admin'];
-
-export function profileAccess(profile: {role:string;status:string}|null, access:ProfileAccess):boolean {
-  if(!profile || profile.status!=='active') return false;
-  if(access==='admin') return profile.role==='super_admin';
-  if(access==='staff') return ['recruiter','super_admin'].includes(profile.role);
-  if(access==='recruiting_staff') return recruitingRoles.includes(profile.role);
-  return ['client', ...recruitingRoles].includes(profile.role);
+// Candidate and client are the only valid account roles.
+// Every authenticated request must resolve to an active candidate or client profile.
+export function profileAccess(profile: { role: string; status: string } | null): boolean {
+  if (!profile || profile.status !== 'active') return false;
+  return profile.role === 'client' || profile.role === 'candidate';
 }

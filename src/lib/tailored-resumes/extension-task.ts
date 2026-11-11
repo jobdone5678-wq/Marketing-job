@@ -20,7 +20,7 @@ export async function generateExtensionResume(task:BackgroundTask){
  const input=task.payload.extensionTailoring as ExtensionResumeInput;
  if(!input||input.version!==EXTENSION_AI_VERSION)throw new CaptureError('This AI resume task uses an unsupported version. Generate a new draft.',409);
  const db=database(),{data:actor,error}=await db.from('profiles').select('*').eq('id',task.actor_id).single();checkDb(error);
- if(!actor||actor.status!=='active'||!['client','recruiter','super_admin'].includes(actor.role))throw new CaptureError('Active resume-generation access required.',403);
+ if(!actor||actor.status!=='active'||!['client','client'].includes(actor.role))throw new CaptureError('Active resume-generation access required.',403);
  const candidate=await currentExtensionCandidate(actor as UserProfile,input);
  const facts=extensionFactCatalog(candidate);
  if(!facts.length)throw new CaptureError('Candidate professional facts are missing. Review the source resume first.',409);

@@ -16,7 +16,7 @@ function setupOutsideJobsTest() {
   
   const tables = {
     profiles: [
-      { id: actorId, role: 'job_seeker', email: 'bhargavreddy.m@gmail.com', status: 'active' }
+      { id: actorId, role: 'client', email: 'bhargavreddy.m@gmail.com', status: 'active' }
     ],
     candidates: [
       {
@@ -137,7 +137,7 @@ function setupOutsideJobsTest() {
       checkDb: e => { if (e) throw new CaptureError(e.message, 500); }
     },
     '@/lib/capture/server': {
-      extensionProfile: async () => ({ id: actorId, role: 'job_seeker', email: 'bhargavreddy.m@gmail.com', status: 'active' }),
+      extensionProfile: async () => ({ id: actorId, role: 'client', email: 'bhargavreddy.m@gmail.com', status: 'active' }),
       cors: (_r, res) => res,
       extensionRoute: async (_r, work) => {
         try {

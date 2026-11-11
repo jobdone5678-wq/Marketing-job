@@ -5,7 +5,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {hasPdfHeader} from '@/lib/resumes/validation';
 export const runtime='nodejs';
 export const maxDuration=60;
-export async function POST(request:Request) {return protectedRoute(request,'candidate_or_staff',async profile=>{
+export async function POST(request:Request) {return protectedRoute(request,async profile=>{
   if(Number(request.headers.get('content-length')||0)>11*1024*1024)throw new CaptureError('Resume must be at most 10 MiB.',413);
   const form=await request.formData();const file=form.get('resume');
   if(!(file instanceof File)||file.size>10*1024*1024||!file.size)throw new CaptureError('Upload a PDF or DOCX of at most 10 MiB.');

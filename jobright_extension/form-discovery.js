@@ -74,6 +74,10 @@
       else if (/urls\[([^\]]+)\]/i.test(el.name)) found = RegExp.$1;
     }
 
+    if (!found && (el.getAttribute('role') === 'checkbox' || el.tagName !== 'INPUT') && el.textContent && el.textContent.trim().length < 200) {
+      found = clean(el.textContent);
+    }
+
     return found || clean(el.getAttribute('placeholder')) || '';
   }
 

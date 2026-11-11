@@ -10,7 +10,7 @@ import {withoutAppliedJobs} from '@/lib/jobs/application-state';
 export interface PublicJob {id:string;title:string;company:string;companySlug:string;portal:'Greenhouse'|'Ashby';location:string;department:string;type:string;url:string;updatedAt:string}
 
 export async function GET(request: Request) {
-  return protectedRoute(request, 'candidate_or_staff', async profile => {
+  return protectedRoute(request,async profile => {
     const params = new URL(request.url).searchParams;
     const postedWithin=params.get('postedWithin');
     if(postedWithin&&!['7','30','90','all'].includes(postedWithin))throw new CaptureError('Invalid posting date filter.');
@@ -20,7 +20,6 @@ export async function GET(request: Request) {
     const type = params.get('type') || 'all';
     if (!['all','contract','permanent','temporary','part_time','internship','unknown'].includes(type)) throw new CaptureError('Invalid job filter.');
     const { candidate, recommendation } = await recommendationContext(profile, params);
-    const isSuperAdmin = profile.role === 'super_admin';
     const provider = params.get('provider');
     if (provider && !['greenhouse','ashby','lever','smartrecruiters','breezy','remoteok'].includes(provider)) throw new CaptureError('Invalid portal filter.');
     let sourceIds: string[] | null = null;
@@ -68,7 +67,7 @@ export async function GET(request: Request) {
       }
     }
     const available=withoutAppliedJobs(jobs,appliedKeys);
-    const ranked = (candidate&&!isSuperAdmin?rankResumeJobs(available, candidate):available).sort(newestPostedFirst);
+    const ranked = (candidate?rankResumeJobs(available, candidate):available).sort(newestPostedFirst);
     return { jobs: ranked.slice(page * 50, page * 50 + 50), total: ranked.length, hasMore: (page + 1) * 50 < ranked.length, recommendation };
   });
 }

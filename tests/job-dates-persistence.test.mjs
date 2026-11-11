@@ -5,7 +5,7 @@ import {normalizeSnapshot} from '../src/lib/jobs/normalize.ts';
 test('job dates persist through lease checked snapshots, update versions, and leave historical dates unknown',async t=>{
  const db=await recruitingDatabase(['20261009000200_crm.sql','20261009000300_tasks.sql','20261009000500_jobs.sql','202610120003_job_dates.sql']);t.after(()=>db.close());
  const actor='10000000-0000-0000-0000-000000000081',lease='90000000-0000-0000-0000-000000000081';
- await db.query(`INSERT INTO auth.users VALUES($1,'dates@example.test','{"role":"recruiter"}')`,[actor]);await db.query("UPDATE profiles SET status='active' WHERE id=$1",[actor]);
+ await db.query(`INSERT INTO auth.users VALUES($1,'dates@example.test','{"role":"client"}')`,[actor]);await db.query("UPDATE profiles SET status='active' WHERE id=$1",[actor]);
  const source=(await db.query("INSERT INTO job_sources(provider,board_slug,company,created_by) VALUES('ashby','dates','Fixture',$1) RETURNING id",[actor])).rows[0].id;
  const job=normalizeSnapshot({provider:'ashby',company:'Fixture'},{jobs:[{title:'Python Engineer',jobUrl:'https://jobs.ashbyhq.com/dates/job',publishedAt:'2026-10-01T12:00:00Z'}]}).jobs[0];
  async function save(value,complete=true){const task=(await db.query('SELECT enqueue_source_sync($1,$2) id',[actor,source])).rows[0].id;await db.query('SELECT * FROM claim_task($1)',[lease]);await db.query('SELECT save_job_snapshot($1,$2,$3,$4::jsonb,$5)',[task,lease,source,JSON.stringify(value),complete]);await db.query("SELECT finish_task($1,$2,'{}',NULL,false)",[task,lease]);}

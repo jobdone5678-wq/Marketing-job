@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { moduleLoader } from './helpers/load-ts-module.mjs';
 
 const CANDIDATE_ID = '550e8400-e29b-41d4-a716-446655440000';
-const PROFILE = { id: '550e8400-e29b-41d4-a716-446655440001', role: 'recruiter', status: 'active', email: 'staff@example.test', full_name: 'Staff' };
+const PROFILE = { id: '550e8400-e29b-41d4-a716-446655440001', role: 'client', status: 'active', email: 'staff@example.test', full_name: 'Staff' };
 
 class CaptureError extends Error {
   constructor(message, status = 400) {

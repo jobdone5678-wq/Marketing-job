@@ -35,7 +35,7 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
-  return protectedRoute(request, "candidate_or_staff", async (profile) => {
+  return protectedRoute(request, async (profile) => {
     const rawId = (await context.params).id;
     const id = sanitizeRtrId(rawId);
     const db = database();
@@ -115,7 +115,7 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
-  return protectedRoute(request, "recruiting_staff", async (profile) => {
+  return protectedRoute(request, async (profile) => {
     const rawId = (await context.params).id;
     const id = sanitizeRtrId(rawId);
     const body = updateRtrSchema.parse(await request.json());
@@ -212,7 +212,7 @@ export async function DELETE(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
-  return protectedRoute(request, "recruiting_staff", async (profile) => {
+  return protectedRoute(request, async (profile) => {
     const rawId = (await context.params).id;
     const id = sanitizeRtrId(rawId);
     const db = database();

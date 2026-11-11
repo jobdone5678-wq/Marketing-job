@@ -19,7 +19,7 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
-  return protectedRoute(request, "candidate_or_staff", async (profile) => {
+  return protectedRoute(request, async (profile) => {
     const id = sanitizeRtrId((await context.params).id);
     const db = database();
 

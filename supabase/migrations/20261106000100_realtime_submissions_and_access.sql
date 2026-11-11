@@ -11,22 +11,27 @@ ALTER TABLE public.outside_jobs REPLICA IDENTITY FULL;
 -- 2. Add tables to supabase_realtime publication
 DO $$
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    -- Supabase hosts this publication; a plain Postgres instance does not have it.
+    RETURN;
+  END IF;
+
   IF NOT EXISTS (
-    SELECT 1 FROM pg_publication_tables 
+    SELECT 1 FROM pg_publication_tables
     WHERE pubname = 'supabase_realtime' AND tablename = 'job_submissions'
   ) THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.job_submissions;
   END IF;
 
   IF NOT EXISTS (
-    SELECT 1 FROM pg_publication_tables 
+    SELECT 1 FROM pg_publication_tables
     WHERE pubname = 'supabase_realtime' AND tablename = 'outside_jobs'
   ) THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.outside_jobs;
   END IF;
 END $$;
 
--- 3. Staff and Candidate Access Functions
+-- 3. Candidate Access Functions
 CREATE OR REPLACE FUNCTION public.candidate_staff_can_access(p_candidate uuid)
 RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
@@ -34,16 +39,11 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
     SELECT 1
     FROM public.profiles actor
     WHERE actor.id = auth.uid() AND actor.status = 'active'
-      AND (
-        actor.role IN ('super_admin', 'recruiter', 'technical_recruiter')
-        OR (
-          actor.role = 'client' 
-          AND p_candidate IS NOT NULL 
-          AND EXISTS (
-            SELECT 1 FROM public.candidates candidate 
-            WHERE candidate.id = p_candidate AND candidate.user_id = actor.id
-          )
-        )
+      AND actor.role = 'client'
+      AND p_candidate IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM public.candidates candidate
+        WHERE candidate.id = p_candidate AND candidate.user_id = actor.id
       )
   );
 $$;
@@ -55,21 +55,16 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
     SELECT 1
     FROM public.profiles actor
     WHERE actor.id = p_actor AND actor.status = 'active'
-      AND (
-        actor.role IN ('super_admin', 'recruiter', 'technical_recruiter')
-        OR (
-          actor.role = 'client' 
-          AND p_candidate IS NOT NULL 
-          AND EXISTS (
-            SELECT 1 FROM public.candidates candidate 
-            WHERE candidate.id = p_candidate AND candidate.user_id = actor.id
-          )
-        )
+      AND actor.role = 'client'
+      AND p_candidate IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM public.candidates candidate
+        WHERE candidate.id = p_candidate AND candidate.user_id = actor.id
       )
   );
 $$;
 
--- 4. Application Intent creation supporting candidate or staff actors
+-- 4. Application Intent creation supporting candidate actors
 CREATE OR REPLACE FUNCTION public.create_application_intent(p_actor uuid,p_candidate uuid,p_job uuid,p_submission uuid DEFAULT NULL) RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
 DECLARE job public.jobs; target uuid; submission uuid; matches integer; actor public.profiles; candidate public.candidates;
@@ -78,7 +73,7 @@ BEGIN
   SELECT * INTO candidate FROM public.candidates WHERE id=p_candidate;
   IF actor.id IS NULL THEN RAISE EXCEPTION 'Active profile required'; END IF;
   IF candidate.id IS NULL THEN RAISE EXCEPTION 'Candidate not found'; END IF;
-  IF actor.role = 'client' AND candidate.user_id IS DISTINCT FROM p_actor THEN
+  IF actor.role <> 'client' OR candidate.user_id IS DISTINCT FROM p_actor THEN
     RAISE EXCEPTION 'Candidate access denied';
   END IF;
   SELECT * INTO job FROM public.jobs WHERE id=p_job AND state<>'closed';
@@ -96,8 +91,8 @@ BEGIN
     IF matches>1 THEN RAISE EXCEPTION 'Several submissions match; select the correct submission'; END IF;
   END IF;
   IF submission IS NULL THEN
-    INSERT INTO public.job_submissions(candidate_id,recruiter_id,company_name,job_title,job_url,job_id,status,capture_status)
-      VALUES(p_candidate,CASE WHEN actor.role IN ('recruiter','technical_recruiter','super_admin') THEN p_actor ELSE candidate.assigned_recruiter_id END,job.company,job.title,job.application_url,p_job,'Draft','started') RETURNING id INTO submission;
+    INSERT INTO public.job_submissions(candidate_id,company_name,job_title,job_url,job_id,status,capture_status)
+      VALUES(p_candidate,job.company,job.title,job.application_url,p_job,'Draft','started') RETURNING id INTO submission;
   ELSE UPDATE public.job_submissions SET capture_status=COALESCE(capture_status,'started'),job_id=COALESCE(job_id,p_job) WHERE id=submission;
   END IF;
   INSERT INTO public.application_intents(owner_id,candidate_id,job_id,submission_id) VALUES(p_actor,p_candidate,p_job,submission) RETURNING id INTO target;

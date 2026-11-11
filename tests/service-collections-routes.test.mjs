@@ -10,7 +10,7 @@ test('service collection write routes reject candidate, recruiter and suspended 
   '@/lib/db/admin':{CaptureError,checkDb:()=>{},database:()=>{calls++;throw new Error('Unexpected database call');},requireSameOrigin:()=>{},errorResponse:error=>Response.json({error:error.message},{status:error.status||500})},
  });
  const enrollment=load('src/app/api/admin/service-collections/route.ts'),receipt=load('src/app/api/admin/service-receipts/route.ts');
- for(actor of [{id:'client',role:'client',status:'active'},{id:'recruiter',role:'recruiter',status:'active'},{id:'admin',role:'super_admin',status:'suspended'}]){
+ for(actor of [{id:'client',role:'client',status:'active'},{id:'client',role: 'client',status:'active'},{id:'admin',role: 'client',status:'suspended'}]){
   for(const [handler,method] of [[enrollment.GET,'GET'],[enrollment.POST,'POST'],[enrollment.PATCH,'PATCH'],[receipt.POST,'POST']]){
    const response=await handler(new Request('https://portal.test/api/admin/service-collections',{method,...(method==='GET'?{}:{body:'{}'})}));assert.equal(response.status,403);
   }

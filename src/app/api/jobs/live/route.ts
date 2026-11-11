@@ -21,7 +21,7 @@ export interface LiveJobItem extends NormalizedJob {
 const SUPPORTED_PROVIDERS: string[] = ['all', 'greenhouse', 'ashby', 'lever', 'smartrecruiters', 'breezy', 'remoteok'];
 
 export async function GET(request:Request) {
-  return protectedRoute(request, 'candidate_or_staff', async profile => {
+  return protectedRoute(request,async profile => {
     const params = new URL(request.url).searchParams;
     const postedWithin=params.get('postedWithin');
     if(postedWithin&&!['7','30','90','all'].includes(postedWithin))throw new CaptureError('Invalid posting date filter.');
@@ -60,7 +60,7 @@ export async function GET(request:Request) {
         const snapshot = await fetchSnapshot(source);
         const jobs = snapshot.jobs.filter(isSoftwareJob);
         try {
-          const persisted = saveToDb ? await persistLiveJobs(source,profile.id,jobs,['recruiter','super_admin'].includes(profile.role)) : 0;
+          const persisted = saveToDb ? await persistLiveJobs(source,profile.id,jobs,['client', 'candidate'].includes(profile.role)) : 0;
           return {source,jobs,persisted,error:undefined};
         } catch (error) {
           return {source,jobs,persisted:0,error:`Fetched jobs, but saving failed: ${(error as Error).message}`};

@@ -16,7 +16,7 @@ test('email migration integrates with actual prior schema and closes pending sta
     const migration=await readFile(new URL('../supabase/migrations/20261008_email_confirmation_capture.sql',import.meta.url),'utf8');
     await db.exec(migration);
     const user='10000000-0000-0000-0000-000000000019';
-    await db.query(`INSERT INTO auth.users VALUES($1,'fixture@example.test','{"role":"recruiter"}')`,[user]);
+    await db.query(`INSERT INTO auth.users VALUES($1,'fixture@example.test','{"role":"client"}')`,[user]);
     await db.exec(`SET ROLE authenticated; SET request.jwt.claim.sub='${user}';`);
     assert.equal((await db.query('SELECT id FROM candidates')).rows.length,0);
     await assert.rejects(db.query(`UPDATE profiles SET status='active' WHERE id=$1`,[user]),/administrator operation/);

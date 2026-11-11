@@ -6,7 +6,7 @@ const actor='10000000-0000-0000-0000-000000000211';
 const lease='90000000-0000-0000-0000-000000000211';
 before(async()=>{
  db=await recruitingDatabase(['20261009000200_crm.sql','20261009000300_tasks.sql','20261009000400_resumes.sql','20261009000500_jobs.sql','20261009000600_matches.sql','20261009000700_intake_tasks.sql','20261009001100_webhook_and_task_priority.sql','202610120005_safe_task_claims.sql']);
- await db.query(`INSERT INTO auth.users VALUES($1,'claims@example.test','{"role":"recruiter"}')`,[actor]);
+ await db.query(`INSERT INTO auth.users VALUES($1,'claims@example.test','{"role":"client"}')`,[actor]);
  await db.query(`UPDATE profiles SET status='active' WHERE id=$1`,[actor]);
 });
 after(async()=>{await db?.close();});

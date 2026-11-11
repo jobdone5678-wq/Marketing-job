@@ -206,8 +206,8 @@ export default function JobDetail({
 }) {
   const { id } = use(params);
   const requestedCandidate = use(searchParams).candidateId || '';
-  const { isRecruiter, isTechnicalRecruiter, isClient } = useUserProfile();
-  const canRecruit = isRecruiter || isTechnicalRecruiter;
+  const { isCandidate } = useUserProfile();
+  const canRecruit = false;
 
   const [job, setJob] = useState<StoredJob | null>(null);
   const [error, setError] = useState('');

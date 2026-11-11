@@ -61,7 +61,7 @@ async function jobsPage(t, { role = 'client', requiresProfile = false, liveJob=f
     return route.fulfill({ contentType: 'text/html', body: '<div id="root"></div>' });
   });
   await page.goto('https://portal.test/');
-  await page.evaluate(role => { window.fixtureProfile = { isRecruiter: role === 'recruiter', isTechnicalRecruiter:role==='technical_recruiter', isSuperAdmin:role==='super_admin', isClient: role === 'client', loading: false }; }, role);
+  await page.evaluate(role => { window.fixtureProfile = { isCandidate: role === 'client', isCandidate:role==='client', isCandidate:role==='client', isCandidate: role === 'client', loading: false }; }, role);
   await page.addScriptTag({ content: browserModuleScript(sources, "require('react-dom/client').createRoot(document.getElementById('root')).render(require('react').createElement(require('jobs-browser').JobsBrowser));") });
   await page.getByText('Company boards & source discovery',{exact:true}).click();
   return { page, requests, sourceWrites, liveRequests, jobFilters,jobImports,secondId,markApplied:()=>{applied=true;} };
@@ -112,7 +112,7 @@ test('choosing an ATS provider searches all companies and clears the previous co
 });
 
 test('public board selection fetches exact provider and staff can persist it', async t => {
-  const {page, sourceWrites, liveRequests} = await jobsPage(t,{role:'recruiter'});
+  const {page, sourceWrites, liveRequests} = await jobsPage(t,{role: 'client'});
   await page.getByLabel('Public company board').selectOption('ashby/notion');
   await page.getByRole('button',{name:'Save source to directory'}).click();
   await page.getByText('Source saved.',{exact:false}).waitFor();
@@ -135,7 +135,7 @@ test('candidate job list shows resume-related match reasons and prompts unfinish
 });
 
 test('technical recruiters can select an assigned candidate for resume-related jobs',async t=>{
- const {page}=await jobsPage(t,{role:'technical_recruiter'});
+ const {page}=await jobsPage(t,{role: 'client'});
  const selector=page.getByLabel('Match jobs to candidate');
  await selector.waitFor({timeout:3000});
  await page.waitForFunction(id=>document.querySelector('select[aria-label="Match jobs to candidate"] option[value="'+id+'"]'),ownId);
@@ -145,7 +145,7 @@ test('technical recruiters can select an assigned candidate for resume-related j
 });
 
 test('recruiter selector includes reviewed candidates from later pages and carries selection into job details', async t => {
-  const { page, requests } = await jobsPage(t, { role: 'recruiter' });
+  const { page, requests } = await jobsPage(t, { role: 'client' });
   const selector = page.getByLabel('Match jobs to candidate');
   await page.waitForFunction(id => document.querySelector(`select[aria-label="Match jobs to candidate"] option[value="${id}"]`), ownId);
   assert.equal(await selector.locator('option').count(), 2);
@@ -162,7 +162,7 @@ test('saved job cards distinguish source dates from unknown closing dates',async
  assert.ok((await page.textContent('main')).includes('Closing date: Not provided by source'));
 });
 
-for(const role of ['recruiter','technical_recruiter','super_admin'])test(`${role} can move a successful job to one candidate's Applied list while another can still apply`,async t=>{
+for(const role of ['client','client','client'])test(`${role} can move a successful job to one candidate's Applied list while another can still apply`,async t=>{
  const {page,secondId,markApplied}=await jobsPage(t,{role,applicationTracking:true});
  const selector=page.getByLabel('Match jobs to candidate');await page.waitForFunction(id=>Array.from(document.querySelectorAll('select option')).some(option=>option.value===id),secondId);
  await selector.selectOption(ownId);await page.getByRole('link',{name:'Review and apply'}).waitFor();

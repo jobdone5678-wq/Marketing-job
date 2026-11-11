@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {recruitingDatabase} from './helpers/recruiting-db.mjs';
 let db;const actor='10000000-0000-0000-0000-000000000061';const lease='90000000-0000-0000-0000-000000000061';
 before(async()=>{db=await recruitingDatabase(['20261009000200_crm.sql','20261009000300_tasks.sql']);
-  await db.query(`INSERT INTO auth.users VALUES($1,'staff@example.test','{"role":"recruiter"}')`,[actor]);await db.query(`UPDATE profiles SET status='active' WHERE id=$1`,[actor]);});
+  await db.query(`INSERT INTO auth.users VALUES($1,'staff@example.test','{"role":"client"}')`,[actor]);await db.query(`UPDATE profiles SET status='active' WHERE id=$1`,[actor]);});
 after(async()=>{await db?.close();});
 test('durable tasks deduplicate, lease once and recover expired attempts',async()=>{
   const args=[actor,'resume_extract','{}','synthetic-document:v1'];

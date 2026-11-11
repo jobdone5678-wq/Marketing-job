@@ -250,7 +250,7 @@
       const v = el.getAttribute(attr);
       if (v) parts.push(v);
     });
-    return parts.join(' ').toLowerCase().trim();
+    return parts.join(' ').replace(/[_\-.]+/g, ' ').toLowerCase().trim();
   }
 
   function findPhoneInputElement() {

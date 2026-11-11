@@ -3,6 +3,7 @@ import { database, checkDb, CaptureError } from '@/lib/db/admin';
 import { applicationUrlKey } from '@/lib/jobs/application-state';
 import { outsideJobsCache } from '@/lib/cache';
 import { z } from 'zod';
+import { createHash } from 'node:crypto';
 
 export async function OPTIONS(request: Request) {
   return cors(request, new Response(null, { status: 204 }));
@@ -12,6 +13,7 @@ const saveExternalJobSchema = z.object({
   title: z.string().trim().min(1).max(200),
   company: z.string().trim().min(1).max(200),
   jobUrl: z.string().url().max(2000),
+  applicationUrl: z.string().url().max(2000).optional(),
   location: z.string().max(200).optional().nullable(),
   department: z.string().max(100).optional().nullable(),
   description: z.string().min(10),
@@ -34,7 +36,10 @@ export async function POST(request: Request) {
     const body = saveExternalJobSchema.parse(await request.json());
 
     const safeJobUrl = applicationUrlKey(body.jobUrl) || body.jobUrl;
+    const safeApplicationUrl = applicationUrlKey(body.applicationUrl || body.jobUrl) || body.applicationUrl || body.jobUrl;
     const portalSource = body.portalSource || (safeJobUrl ? new URL(safeJobUrl).hostname : 'Outside Job');
+    const employmentType = ['contract', 'permanent', 'temporary', 'part_time', 'internship', 'unknown'].includes(body.employmentType || '') ? body.employmentType! : 'unknown';
+    const contentHash = createHash('sha256').update(body.description).digest('hex');
 
     // 1. Check if outside job already exists by URL in outside_jobs table
     const { data: existingByUrl, error: urlError } = await database()
@@ -63,6 +68,8 @@ export async function POST(request: Request) {
       };
 
       await database().from('outside_jobs').update(updatePayload).eq('id', existingByUrl.id);
+      const { error: jobUpdateError } = await database().from('jobs').update({ application_url: safeApplicationUrl, updated_at: new Date().toISOString() }).eq('id', existingByUrl.id);
+      checkDb(jobUpdateError);
       return { success: true, jobId: existingByUrl.id, updated: true, table: 'outside_jobs' };
     }
 
@@ -91,6 +98,9 @@ export async function POST(request: Request) {
         ats_analysis: body.atsAnalysis || undefined,
         updated_at: new Date().toISOString(),
       }).eq('id', existingByName.id);
+
+      const { error: jobUpdateError } = await database().from('jobs').update({ source_url: safeJobUrl, application_url: safeApplicationUrl, updated_at: new Date().toISOString() }).eq('id', existingByName.id);
+      checkDb(jobUpdateError);
 
       return { success: true, jobId: existingByName.id, updated: true, table: 'outside_jobs' };
     }
@@ -126,24 +136,27 @@ export async function POST(request: Request) {
     if (!newOutsideJob) throw new CaptureError('Failed to save outside job.', 500);
 
     // Mirror to public.jobs for unified portal visibility
-    try {
-      await database().from('jobs').insert({
+    const { error: mirrorError } = await database().from('jobs').insert({
         id: newOutsideJob.id,
+        source_id: null,
+        external_id: body.externalId || `ext_${createHash('sha256').update(safeJobUrl).digest('hex').slice(0, 40)}`,
         title: body.title,
         company: body.company,
+        source_url: safeJobUrl,
+        application_url: safeApplicationUrl,
         description: body.description,
         description_html: body.descriptionHtml || null,
         location: body.location || null,
         department: body.department || null,
-        employment_type: body.employmentType || 'Full-time',
-        status: 'published',
+        employment_type: employmentType,
+        content_hash: contentHash,
         is_external: true,
-        source_url: safeJobUrl,
         portal_source: portalSource,
+        state: 'active',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
-    } catch {}
+    checkDb(mirrorError);
 
     // Invalidate outside jobs cache to ensure fresh state
     outsideJobsCache.clear();
