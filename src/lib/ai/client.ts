@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { database, checkDb, CaptureError } from '@/lib/db/admin';
 import type { BackgroundTask } from '@/lib/tasks/types';
 import {requireAIConfiguration,getAIResponseFormat} from './config';
-export {aiConfiguration,getAIModel,getAIProvider,type AIProvider} from './config';
+export {getAIModel} from './config';
 
 import { emptyCandidateFields } from './schemas';
 
