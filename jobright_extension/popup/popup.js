@@ -379,10 +379,6 @@ async function loadSharedProfiles() {
   } catch (err) { sharedProfilesStatus.textContent = 'Error: ' + err.message; }
 }
 
-function escapeHtml(value) {
-  return String(value || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-
 
 // Load saved resumes history
 const btnLoadHistory = document.getElementById('btn-load-history');

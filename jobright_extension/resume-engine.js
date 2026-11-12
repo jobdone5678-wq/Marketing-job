@@ -343,7 +343,7 @@ function buildResume(candidate, job, rewrittenBullets) {
     if (raw.length < 30 || /(?:^%PDF|\/FontDescriptor|endstream|\x00)/.test(raw)) throw new Error('Could not read this resume reliably. Upload a text-based PDF, DOCX or TXT, or paste the resume text.');
     const lines = raw.split('\n').map(text).filter(Boolean);
     const nameLines = lines.slice(0,5).map(line => line.replace(/^(?:full[_ ]?name|candidate[_ ]?name|name)\s*:\s*/i,''));
-    const name = nameLines.find(line => /^[\p{L}][\p{L} .'-]{2,70}$/u.test(line) && line.split(/\s+/).length >= 2 && line.split(/\s+/).length <= 5 && !/resume|summary|experience|curriculum|engineer|developer|skills|education|accountant/i.test(line)) || '';
+    const name = nameLines.find(line => /^[\p{L}][\p{L} .'-]{2,70}$/u.test(line) && line.split(/\s+/).length >= 2 && line.split(/\s+/).length <= 5 && !/^(?:resume|summary|experience|curriculum|engineer|developer|skills|education|accountant)$/i.test(line)) || '';
     if (!name) throw new Error('Candidate name could not be identified. Paste the resume with the candidate name on its own first line.');
     const email = raw.match(/[\w.%+-]+@[\w.-]+\.[a-z]{2,}/i)?.[0] || '';
     const phone = raw.match(/(?:\+\d{1,3}[ -]?)?(?:\(\d{3}\)|\d{3})[ .-]\d{3}[ .-]\d{4}\b/)?.[0] || '';
