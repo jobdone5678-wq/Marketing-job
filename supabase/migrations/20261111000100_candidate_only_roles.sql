@@ -537,11 +537,11 @@ BEGIN
   INSERT INTO public.job_submissions(
     candidate_id, company_name, job_title, job_url, portal_source,
     job_location, job_id, status, capture_status, duplicate_flag,
-    submission_date, notes, applied_resume
+    submission_date, notes, applied_resume, source_type
   ) VALUES (
     p_candidate, company, title, safe_job_url, v_portal_source,
     NULLIF(left(p_fields->>'jobLocation', 200), ''), v_job_id, 'Applied', 'submitted', duplicate,
-    today, NULLIF(left(COALESCE(p_fields->>'notes', p_fields->>'evidence', 'Application captured by NextKin browser extension'), 1000), ''), applied_res
+    today, NULLIF(left(COALESCE(p_fields->>'notes', p_fields->>'evidence', 'Application captured by NextKin browser extension'), 1000), ''), applied_res, 'extension'
   ) RETURNING * INTO submission;
 
   INSERT INTO public.extension_submission_events(event_key, actor_id, candidate_id, submission_id, attempt)

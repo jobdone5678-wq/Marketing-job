@@ -205,10 +205,11 @@ export async function POST(request: Request) {
       const finalNotes = [atsNote, userNotes].filter(Boolean).join(' • ');
 
       if (existingSubmission) {
-        const updatePayload: any = { 
-          status: 'Applied', 
-          capture_status: 'submitted', 
-          notes: finalNotes || existingSubmission.notes
+        const updatePayload: any = {
+          status: 'Applied',
+          capture_status: 'submitted',
+          notes: finalNotes || existingSubmission.notes,
+          source_type: 'extension'
         };
         if (resolvedJobId && !existingSubmission.job_id) {
           updatePayload.job_id = resolvedJobId;
@@ -219,20 +220,21 @@ export async function POST(request: Request) {
         checkDb(updateError);
         existingSubmission.status = 'Applied';
         existingSubmission.capture_status = 'submitted';
+        existingSubmission.source_type = 'extension';
         if (resolvedJobId) existingSubmission.job_id = resolvedJobId;
         result = { submission: existingSubmission, duplicate: false, replayed: true };
       } else {
         try {
           const { data, error } = await database().rpc('record_extension_submission', {
-            p_actor: actor.id, 
-            p_candidate: candidateId, 
-            p_event_key: eventKey, 
+            p_actor: actor.id,
+            p_candidate: candidateId,
+            p_event_key: eventKey,
             p_attempt: attempt,
-            p_fields: { 
-              companyName: body.companyName, 
-              jobTitle: body.jobTitle, 
+            p_fields: {
+              companyName: body.companyName,
+              jobTitle: body.jobTitle,
               jobUrl: safeJobUrl,
-              portalSource: body.portalSource || 'Outside Job', 
+              portalSource: body.portalSource || 'Outside Job',
               jobLocation: body.jobLocation || null,
               jobDescription: body.jobDescription || null,
               jobDescriptionHtml: body.jobDescriptionHtml || null,
@@ -247,8 +249,9 @@ export async function POST(request: Request) {
           if (error) throw error;
           result = data as typeof result;
           if (resolvedJobId && result?.submission?.id) {
-            await database().from('job_submissions').update({ job_id: resolvedJobId }).eq('id', result.submission.id);
+            await database().from('job_submissions').update({ job_id: resolvedJobId, source_type: 'extension' }).eq('id', result.submission.id);
             result.submission.job_id = resolvedJobId;
+            result.submission.source_type = 'extension';
           }
         } catch (rpcErr: any) {
           // Direct insert fallback without owner_id or applied_resume
@@ -263,7 +266,8 @@ export async function POST(request: Request) {
             job_location: body.jobLocation || null,
             status: 'Applied',
             capture_status: 'submitted',
-            notes: finalNotes
+            notes: finalNotes,
+            source_type: 'extension'
           }).select('*').single();
           checkDb(subErr);
           result = { submission: newSub, duplicate: false };

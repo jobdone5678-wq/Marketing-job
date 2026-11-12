@@ -13,6 +13,11 @@ const manualSection = document.getElementById('manual-section');
 const toggleConnectPanel = document.getElementById('toggle-connect-panel');
 const connectPanel = document.getElementById('connect-panel');
 
+// Landing Page Elements
+const landingPage = document.getElementById('landing-page');
+const mainApp = document.getElementById('main-app');
+const btnGetStarted = document.getElementById('btn-get-started');
+
 // Resume Upload Elements
 const resumeDropzone = document.getElementById('resume-dropzone');
 const resumeFileInput = document.getElementById('resume-file-input');
@@ -390,10 +395,46 @@ const historyCandidateSelect = document.getElementById('history-candidate');
 const savedResumesList = document.getElementById('saved-resumes-list');
 const savedResumesStatus = document.getElementById('saved-resumes-status');
 
+// Check if user has completed onboarding (has uploaded a resume or connected to portal)
+async function checkOnboardingStatus() {
+  const data = await chrome.storage.local.get(['uploadedCandidate', 'token', 'user', 'onboardingComplete']);
+  // If onboarding is already complete, or user has uploaded a resume, or is connected to portal
+  return data.onboardingComplete === true || data.uploadedCandidate || (data.token && data.user);
+}
+
+// Show landing page or main app based on onboarding status
+async function initializeApp() {
+  const isOnboarded = await checkOnboardingStatus();
+
+  if (isOnboarded) {
+    landingPage.style.display = 'none';
+    mainApp.style.display = 'block';
+  } else {
+    landingPage.style.display = 'block';
+    mainApp.style.display = 'none';
+  }
+
+  // Initial render of the main app state
+  await renderState();
+  void populateCandidateDropdown();
+  void loadSharedProfiles();
+}
+
+// Get Started button click handler
+btnGetStarted.addEventListener('click', async () => {
+  // Mark onboarding as complete
+  await chrome.storage.local.set({ onboardingComplete: true });
+
+  // Hide landing page, show main app
+  landingPage.style.display = 'none';
+  mainApp.style.display = 'block';
+
+  // Re-render state now that we're in the main app
+  await renderState();
+});
+
 // Initial render
-void renderState();
-void populateCandidateDropdown();
-void loadSharedProfiles();
+initializeApp();
 
 // Download active candidate resume. Prefer the most recent AI-tailored version
 // for this candidate (generated from a real JD); fall back to a general DOCX.

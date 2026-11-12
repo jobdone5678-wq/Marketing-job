@@ -296,138 +296,166 @@
     </div>
   </div>
 
-  <!-- Active Candidate Resume Section (Standalone / Local Upload) -->
-  <div class="card" id="resume-section">
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-      <strong style="font-size: 12px; color: #f1f5f9; display: flex; align-items: center; gap: 5px;">
-        <span>📄</span> Candidate Resume (Autofill & ATS)
-      </strong>
-      <span id="resume-mode-pill" style="font-size: 10px; font-weight: 600; color: #38bdf8; background: rgba(56, 189, 248, 0.12); padding: 1px 6px; border-radius: 4px;">
-        Standalone Mode
-      </span>
+  <!-- Landing Page (Initial State - Shown First) -->
+  <div id="landing-page" class="card" style="text-align: center; padding: 24px 16px;">
+    <div style="font-size: 48px; margin-bottom: 12px;">🚀</div>
+    <h2 style="font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 8px;">
+      Nextkinlife Recruiting Copilot
+    </h2>
+    <p style="font-size: 13px; color: var(--muted); line-height: 1.5; margin-bottom: 20px;">
+      Universal AI autofill, live ATS capture & real-time match scoring — works on every career site.
+    </p>
+    <ul class="feature-list" style="text-align: left; max-width: 280px; margin: 0 auto 20px;">
+      <li><span>✓</span> <strong>1-Click Autofill</strong> on LinkedIn, Indeed, Greenhouse, Lever, Workday & more</li>
+      <li><span>✓</span> <strong>Real-Time ATS Match Scoring</strong> against active job openings</li>
+      <li><span>✓</span> <strong>AI Screening Answers</strong> generated from your candidate profile</li>
+      <li><span>✓</span> <strong>Resume Attachment</strong> via DataTransfer — no manual upload needed</li>
+    </ul>
+    <button id="btn-get-started" class="btn btn-primary" style="font-size: 14px; padding: 12px 24px;">
+      Get Started →
+    </button>
+    <p style="font-size: 10px; color: var(--muted); margin-top: 12px;">
+      No login required to start — upload a resume and go.
+    </p>
+  </div>
+
+  <!-- Main App (Hidden initially, shown after Get Started) -->
+  <div id="main-app" style="display: none;">
+
+    <!-- Active Candidate Resume Section (Standalone / Local Upload) -->
+    <div class="card" id="resume-section">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+        <strong style="font-size: 12px; color: #f1f5f9; display: flex; align-items: center; gap: 5px;">
+          <span>📄</span> Candidate Resume (Autofill & ATS)
+        </strong>
+        <span id="resume-mode-pill" style="font-size: 10px; font-weight: 600; color: #38bdf8; background: rgba(56, 189, 248, 0.12); padding: 1px 6px; border-radius: 4px;">
+          Standalone Mode
+        </span>
+      </div>
+
+      <!-- State A: Candidate Uploaded & Active -->
+      <div id="candidate-active-card" style="display: none;">
+        <div class="candidate-preview">
+          <div class="candidate-name-row">
+            <span class="candidate-name" id="cv-name">Arjun Mehta</span>
+            <span style="font-size: 10px; color: #34d399; font-weight: 600;">✓ Active</span>
+          </div>
+          <div class="candidate-title" id="cv-title">Senior Full Stack Engineer</div>
+          <div class="candidate-details">
+            <div id="cv-contact">arjun.mehta@example.com · (512) 555-0199</div>
+            <div id="cv-location" style="color: #cbd5e1;">Austin, TX</div>
+            <div id="cv-file" style="margin-top: 4px; font-size: 10px; color: #38bdf8;">📄 Resume.pdf (Ready to attach)</div>
+          </div>
+          <div class="candidate-skills-wrap" id="cv-skills"></div>
+        </div>
+        <div style="display: flex; gap: 6px; margin-top: 8px;">
+          <button id="btn-change-resume" class="btn btn-outline" style="flex: 1; margin-top: 0; font-size: 11px;">
+            🔄 Replace Resume
+          </button>
+          <button id="btn-remove-resume" class="btn btn-danger" style="flex: 0 0 75px; margin-top: 0; font-size: 11px;">
+            🗑 Remove
+          </button>
+        </div>
+        <button id="btn-download-active-resume" class="btn btn-emerald" style="margin-top: 6px; font-size: 11px; width: 100%;">
+          ⬇️ Download Resume (.docx)
+        </button>
+      </div>
+
+      <!-- State B: No Resume Uploaded Yet -->
+      <div id="resume-dropzone-wrap">
+        <div class="dropzone" id="resume-dropzone">
+          <div class="dropzone-icon">📁</div>
+          <div class="dropzone-title">Upload Candidate Resume</div>
+          <div class="dropzone-desc">PDF, DOCX, TXT or JSON (Click or Drag & Drop)</div>
+        </div>
+        <p style="font-size: 10.5px; color: var(--muted); margin-top: 6px; line-height: 1.35;">
+          <strong>No NextKinHR login needed:</strong> Upload a resume once to enable 1-click autofill, real-time ATS match scoring, and resume attachment on any career site.
+        </p>
+      </div>
+      <input type="file" id="resume-file-input" accept=".pdf,.docx,.txt,.json,.md" style="display: none;">
     </div>
 
-    <!-- State A: Candidate Uploaded & Active -->
-    <div id="candidate-active-card" style="display: none;">
-      <div class="candidate-preview">
-        <div class="candidate-name-row">
-          <span class="candidate-name" id="cv-name">Arjun Mehta</span>
-          <span style="font-size: 10px; color: #34d399; font-weight: 600;">✓ Active</span>
-        </div>
-        <div class="candidate-title" id="cv-title">Senior Full Stack Engineer</div>
-        <div class="candidate-details">
-          <div id="cv-contact">arjun.mehta@example.com · (512) 555-0199</div>
-          <div id="cv-location" style="color: #cbd5e1;">Austin, TX</div>
-          <div id="cv-file" style="margin-top: 4px; font-size: 10px; color: #38bdf8;">📄 Resume.pdf (Ready to attach)</div>
-        </div>
-        <div class="candidate-skills-wrap" id="cv-skills"></div>
+    <details class="card" id="source-resume-panel">
+      <summary style="cursor:pointer;font-weight:600;font-size:12px;">Paste or review candidate details</summary>
+      <p style="font-size:11px;color:var(--muted);margin:8px 0;">Put the candidate's name on the first line, then contact details, skills, work history and education. Include only accurate information.</p>
+      <label for="source-resume-text" style="font-size:11px;">Source resume text</label>
+      <textarea id="source-resume-text" rows="8" style="box-sizing:border-box;width:100%;margin-top:5px;padding:8px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:5px;font:12px/1.5 inherit;" placeholder="Candidate name&#10;Email and phone&#10;Skills&#10;Experience and education"></textarea>
+      <button id="btn-save-source" class="btn btn-primary" type="button">Use these candidate details</button>
+    </details>
+
+    <details class="card" id="saved-resumes-panel">
+      <summary style="cursor:pointer;font-weight:600;font-size:12px;">Saved resumes by job</summary>
+      <p style="font-size:11px;color:var(--muted);margin:8px 0;">Candidate resumes and ATS score history across reviewed job postings.</p>
+      <label for="history-candidate" style="font-size:11px;">Candidate</label>
+      <select id="history-candidate" style="box-sizing:border-box;width:100%;padding:8px;margin-top:5px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:5px;"></select>
+      <button id="btn-load-history" class="btn btn-outline" type="button">Load saved versions</button>
+      <div id="saved-resumes-list" style="font-size:12px;line-height:1.5;"></div>
+      <p id="saved-resumes-status" role="status" style="font-size:11px;color:var(--muted);margin-top:8px;"></p>
+    </details>
+
+    <!-- Connected NextKinHR Portal Card -->
+    <div id="connected-card" class="card" style="display: none;">
+      <div class="status-badge status-connected">
+        <div class="dot"></div> Connected · NextKinHR Portal
       </div>
-      <div style="display: flex; gap: 6px; margin-top: 8px;">
-        <button id="btn-change-resume" class="btn btn-outline" style="flex: 1; margin-top: 0; font-size: 11px;">
-          🔄 Replace Resume
-        </button>
-        <button id="btn-remove-resume" class="btn btn-danger" style="flex: 0 0 75px; margin-top: 0; font-size: 11px;">
-          🗑 Remove
-        </button>
+      <div class="user-info">
+        <div>Recruiter: <strong id="user-name">Loading...</strong></div>
+        <div>Email: <span id="user-email">...</span></div>
+        <div>Portal: <span id="portal-url">...</span></div>
       </div>
-      <button id="btn-download-active-resume" class="btn btn-emerald" style="margin-top: 6px; font-size: 11px; width: 100%;">
-        ⬇️ Download Resume (.docx)
+      <div class="stats-row">
+        <span>Reviewed profiles: <strong id="candidate-count">0</strong></span>
+        <span>Autofill: <strong>Universal</strong></span>
+      </div>
+      <p id="sync-status" role="status" style="font-size: 11px; color: var(--muted); margin-top: 6px;"></p>
+      <button id="btn-sync-candidates" class="btn btn-outline" style="margin-top: 8px;">
+        🔄 Refresh NextKinHR Profiles
+      </button>
+      <button id="btn-open-portal" class="btn btn-outline">
+        ↗ Open Portal Submissions
+      </button>
+      <button id="btn-disconnect" class="btn btn-danger">
+        Disconnect NextKinHR
       </button>
     </div>
 
-    <!-- State B: No Resume Uploaded Yet -->
-    <div id="resume-dropzone-wrap">
-      <div class="dropzone" id="resume-dropzone">
-        <div class="dropzone-icon">📁</div>
-        <div class="dropzone-title">Upload Candidate Resume</div>
-        <div class="dropzone-desc">PDF, DOCX, TXT or JSON (Click or Drag & Drop)</div>
-      </div>
-      <p style="font-size: 10.5px; color: var(--muted); margin-top: 6px; line-height: 1.35;">
-        <strong>No NextKinHR login needed:</strong> Upload a resume once to enable 1-click autofill, real-time ATS match scoring, and resume attachment on any career site.
-      </p>
-    </div>
-    <input type="file" id="resume-file-input" accept=".pdf,.docx,.txt,.json,.md" style="display: none;">
-  </div>
-
-  <details class="card" id="source-resume-panel">
-    <summary style="cursor:pointer;font-weight:600;font-size:12px;">Paste or review candidate details</summary>
-    <p style="font-size:11px;color:var(--muted);margin:8px 0;">Put the candidate’s name on the first line, then contact details, skills, work history and education. Include only accurate information.</p>
-    <label for="source-resume-text" style="font-size:11px;">Source resume text</label>
-    <textarea id="source-resume-text" rows="8" style="box-sizing:border-box;width:100%;margin-top:5px;padding:8px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:5px;font:12px/1.5 inherit;" placeholder="Candidate name&#10;Email and phone&#10;Skills&#10;Experience and education"></textarea>
-    <button id="btn-save-source" class="btn btn-primary" type="button">Use these candidate details</button>
-  </details>
-
-  <details class="card" id="saved-resumes-panel">
-    <summary style="cursor:pointer;font-weight:600;font-size:12px;">Saved resumes by job</summary>
-    <p style="font-size:11px;color:var(--muted);margin:8px 0;">Candidate resumes and ATS score history across reviewed job postings.</p>
-    <label for="history-candidate" style="font-size:11px;">Candidate</label>
-    <select id="history-candidate" style="box-sizing:border-box;width:100%;padding:8px;margin-top:5px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:5px;"></select>
-    <button id="btn-load-history" class="btn btn-outline" type="button">Load saved versions</button>
-    <div id="saved-resumes-list" style="font-size:12px;line-height:1.5;"></div>
-    <p id="saved-resumes-status" role="status" style="font-size:11px;color:var(--muted);margin-top:8px;"></p>
-  </details>
-
-  <!-- Connected NextKinHR Portal Card -->
-  <div id="connected-card" class="card" style="display: none;">
-    <div class="status-badge status-connected">
-      <div class="dot"></div> Connected · NextKinHR Portal
-    </div>
-    <div class="user-info">
-      <div>Recruiter: <strong id="user-name">Loading...</strong></div>
-      <div>Email: <span id="user-email">...</span></div>
-      <div>Portal: <span id="portal-url">...</span></div>
-    </div>
-    <div class="stats-row">
-      <span>Reviewed profiles: <strong id="candidate-count">0</strong></span>
-      <span>Autofill: <strong>Universal</strong></span>
-    </div>
-    <p id="sync-status" role="status" style="font-size: 11px; color: var(--muted); margin-top: 6px;"></p>
-    <button id="btn-sync-candidates" class="btn btn-outline" style="margin-top: 8px;">
-      🔄 Refresh NextKinHR Profiles
-    </button>
-    <button id="btn-open-portal" class="btn btn-outline">
-      ↗ Open Portal Submissions
-    </button>
-    <button id="btn-disconnect" class="btn btn-danger">
-      Disconnect NextKinHR
-    </button>
-  </div>
-
-  <!-- Disconnected NextKinHR Portal Card (Optional Connect) -->
-  <div id="disconnected-card" class="card">
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-      <span class="status-badge status-standalone" id="connection-mode-badge" style="margin-bottom: 0;">
-        <div class="dot"></div> NextKinHR Portal: Unlinked
-      </span>
-      <span class="details-toggle" id="toggle-connect-panel" style="margin-top: 0;">Connect Portal</span>
-    </div>
-
-    <div id="connect-panel" style="display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);">
-      <p style="font-size: 11px; color: var(--muted); margin-bottom: 8px;">
-        Connect to NextKinHR to sync candidate bench profiles across your team.
-      </p>
-
-      <div class="field">
-        <label for="origin-input">NextKinHR Origin URL</label>
-        <input id="origin-input" value="http://localhost:3000" placeholder="http://localhost:3000">
+    <!-- Disconnected NextKinHR Portal Card (Optional Connect) -->
+    <div id="disconnected-card" class="card">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+        <span class="status-badge status-standalone" id="connection-mode-badge" style="margin-bottom: 0;">
+          <div class="dot"></div> NextKinHR Portal: Unlinked
+        </span>
+        <span class="details-toggle" id="toggle-connect-panel" style="margin-top: 0;">Connect Portal</span>
       </div>
 
-      <button id="btn-auto-connect" class="btn btn-primary">
-        ⚡ 1-Click Auto-Connect
-      </button>
+      <div id="connect-panel" style="display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);">
+        <p style="font-size: 11px; color: var(--muted); margin-bottom: 8px;">
+          Connect to NextKinHR to sync candidate bench profiles across your team.
+        </p>
 
-      <p class="details-toggle" id="toggle-manual" style="margin-top: 6px;">Or enter 5-minute pairing code</p>
-
-      <div id="manual-section" style="display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);">
         <div class="field">
-          <label for="code-input">5-Minute Pairing Code</label>
-          <input id="code-input" placeholder="Paste code from Application Capture">
+          <label for="origin-input">NextKinHR Origin URL</label>
+          <input id="origin-input" value="http://localhost:3000" placeholder="http://localhost:3000">
         </div>
-        <button id="btn-manual-pair" class="btn btn-outline">
-          Pair with Code
+
+        <button id="btn-auto-connect" class="btn btn-primary">
+          ⚡ 1-Click Auto-Connect
         </button>
+
+        <p class="details-toggle" id="toggle-manual" style="margin-top: 6px;">Or enter 5-minute pairing code</p>
+
+        <div id="manual-section" style="display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);">
+          <div class="field">
+            <label for="code-input">5-Minute Pairing Code</label>
+            <input id="code-input" placeholder="Paste code from Application Capture">
+          </div>
+          <button id="btn-manual-pair" class="btn btn-outline">
+            Pair with Code
+          </button>
+        </div>
       </div>
     </div>
+
   </div>
 
   <!-- Universal Capabilities -->

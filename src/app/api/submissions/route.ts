@@ -99,7 +99,8 @@ export async function GET(request: Request) {
       if (!row.rtr_document) {
         row.rtr_document = parseRtrMetadata(row.notes);
       }
-      row.source_type = 'portal';
+      // Keep the source_type from database (could be 'portal' or 'extension')
+      // Don't overwrite with hardcoded 'portal'
       return row;
     });
 

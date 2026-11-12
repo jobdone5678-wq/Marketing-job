@@ -3,7 +3,7 @@ import {database,checkDb} from '@/lib/db/admin';
 import {applicationUrlKey,normalizeCompanyTitleKey,type AppliedJobKeys,type CandidateJobApplication} from './application-state';
 
 type LinkedJob={id:string;application_url:string;source_url:string;location:string|null;employment_type:string;state:string;source:{provider:string}|{provider:string}[]|null};
-type Record={id:string;candidate_id:string;job_id:string|null;job_url:string|null;company_name:string;job_title:string;job_location:string|null;portal_source:string|null;status:string;capture_status:string|null;submission_date:string;job:LinkedJob|LinkedJob[]|null};
+type Record={id:string;candidate_id:string;job_id:string|null;job_url:string|null;company_name:string;job_title:string;job_location:string|null;portal_source:string|null;status:string;capture_status:string|null;submission_date:string;source_type:string|null;job:LinkedJob|LinkedJob[]|null};
 const appliedStages=new Set(['Applied','Vendor_Screening','Submitted_to_Client','Interview_Scheduled','Round_1','Round_2','Offer_Received','Rejected','No_Response']);
 
 // The caller must resolve candidate access through recommendationContext first.
@@ -13,7 +13,7 @@ export async function candidateJobApplications(candidateId:string|null|undefined
   // Fetch from job_submissions (portal/inside jobs)
   for(let offset=0;;offset+=500){
    const {data,error}=await database().from('job_submissions')
-    .select('id,candidate_id,job_id,job_url,company_name,job_title,job_location,portal_source,status,capture_status,submission_date,job:jobs(id,application_url,source_url,location,employment_type,state,source:job_sources(provider))')
+    .select('id,candidate_id,job_id,job_url,company_name,job_title,job_location,portal_source,status,capture_status,submission_date,source_type,job:jobs(id,application_url,source_url,location,employment_type,state,source:job_sources(provider))')
     .eq('candidate_id',candidateId).order('submission_date',{ascending:false}).order('created_at',{ascending:false}).order('id').range(offset,offset+499);
    checkDb(error);records.push(...(data||[]) as unknown as Record[]);if(!data||data.length<500)break;
   }
@@ -36,6 +36,7 @@ export async function candidateJobApplications(candidateId:string|null|undefined
      status:'Applied',
      capture_status:'submitted',
      submission_date:oj.applied_at?oj.applied_at.split('T')[0]:new Date().toISOString().split('T')[0],
+     source_type: 'extension',
      job:null
     } as Record);
    }
