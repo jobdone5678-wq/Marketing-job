@@ -939,7 +939,7 @@
       shadowRoot.getElementById('mp-resume-review').hidden = false;
       shadowRoot.getElementById('mp-review-accuracy').checked = false;
       shadowRoot.getElementById('mp-attach-tailored-btn').disabled = true;
-      workflowStatus('Saved this job’s AI-tailored resume. Review the source-backed draft and contextual evidence before attaching.');
+      workflowStatus("Saved this job's AI-tailored resume. Review the source-backed draft and contextual evidence before attaching.");
       const reviewSection = shadowRoot?.getElementById('mp-resume-review');
       if (reviewSection) {
         reviewSection.hidden = false;
@@ -3117,21 +3117,21 @@
     });
 
     // Fill Job Form button
-    card.querySelector(‘#mp-autofill-btn’).addEventListener(‘click’, async () => {
+    card.querySelector('#mp-autofill-btn').addEventListener('click', async () => {
       if (isAuthOrLoginPage()) {
-        showInPageToast(‘ Autofill is paused on login/auth pages to protect credentials. Please sign in and open a job opening.’, true);
+        showInPageToast(' Autofill is paused on login/auth pages to protect credentials. Please sign in and open a job opening.', true);
         return;
       }
       const candidate = candidates.find(c => c.id === selectedCandidateId);
       if (!candidate) {
-        showInPageToast(‘Please select a candidate first.’, true);
+        showInPageToast('Please select a candidate first.', true);
         return;
       }
 
-      const btn = card.querySelector(‘#mp-autofill-btn’);
+      const btn = card.querySelector('#mp-autofill-btn');
       const originalText = btn.textContent;
       btn.disabled = true;
-      btn.textContent = ‘⟳ Filling fields...’;
+      btn.textContent = '⟳ Filling fields...';
 
       try {
         recruiterStartedFill = true;
@@ -3140,11 +3140,11 @@
         const hasSupportedFrame = supportedEmbeddedForm();
         if (hasSupportedFrame) {
           const session = ensureFillSession(candidate), context = screeningContext(candidate);
-          const result = await chrome.runtime.sendMessage({type:’embedded_form_action’,op:’fill’,candidateId:candidate.id,jobUrl:location.href,sessionId:session.sessionId});
+          const result = await chrome.runtime.sendMessage({type:'embedded_form_action',op:'fill',candidateId:candidate.id,jobUrl:location.href,sessionId:session.sessionId});
           if (context !== screeningContext(candidates.find(c=>c.id===selectedCandidateId))) return;
           if (result?.error) { workflowStatus(result.error, true); return; }
           embeddedCount = result?.count || 0;
-          if (embeddedCount) { embeddedReceipt = {candidateId:candidate.id}; session.recordWrite(‘embedded-form’, null, session.sessionId); updateUndoButtonUI(); }
+          if (embeddedCount) { embeddedReceipt = {candidateId:candidate.id}; session.recordWrite('embedded-form', null, session.sessionId); updateUndoButtonUI(); }
         }
 
         // Use async autofill with progress callback
@@ -3159,11 +3159,11 @@
           workflowStatus(`Filled ${filledCount} supported fields in the embedded application. Review remaining questions and attach the reviewed resume inside the form. Submission tracking for this embedded form requires manual review.`);
           return;
         }
-        workflowStatus(attached ? `Filled ${filledCount} known fields and attached the candidate resume. Review before submitting.` : `Filled ${filledCount} known fields. Generate and review this job’s tailored DOCX before attaching it.`);
-        showInPageToast(`✅ Filled ${result.filled} of ${result.total} fields${result.skipped ? ` (${result.skipped} skipped)` : ‘’}!`);
+        workflowStatus(attached ? `Filled ${filledCount} known fields and attached the candidate resume. Review before submitting.` : `Filled ${filledCount} known fields. Generate and review this job's tailored DOCX before attaching it.`);
+        showInPageToast(`✅ Filled ${result.filled} of ${result.total} fields${result.skipped ? ` (${result.skipped} skipped)` : ''}!`);
       } catch (err) {
-        console.error(‘Autofill error:’, err);
-        showInPageToast(‘Autofill failed: ‘ + err.message, true);
+        console.error('Autofill error:', err);
+        showInPageToast('Autofill failed: ' + err.message, true);
       } finally {
         btn.disabled = false;
         btn.textContent = originalText;
