@@ -109,9 +109,16 @@ async function renderState() {
     const skills = uploaded.all_skills || (uploaded.primary_skills ? uploaded.primary_skills.split(/[,;]/).map(s => s.trim()) : []);
     cvSkillsEl.replaceChildren();
     for (const skill of skills.slice(0,7)) {const chip = document.createElement('span');chip.className = 'skill-chip';chip.textContent = skill;cvSkillsEl.appendChild(chip);}
+
+    // Show field stats panel and fetch stats from content script
+    const fieldStatsPanel = document.getElementById('field-stats-panel');
+    if (fieldStatsPanel) fieldStatsPanel.style.display = 'block';
+    await fetchFieldStats();
   } else {
     candidateActiveCard.style.display = 'none';
     resumeDropzoneWrap.style.display = 'block';
+    const fieldStatsPanel = document.getElementById('field-stats-panel');
+    if (fieldStatsPanel) fieldStatsPanel.style.display = 'none';
   }
 
   // 2. NextKinHR Portal Connection State
@@ -157,6 +164,28 @@ async function renderState() {
         }
       } catch {}
     }
+  }
+}
+
+// Fetch field stats from content script
+async function fetchFieldStats() {
+  try {
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!activeTab?.id) return;
+
+    const response = await chrome.tabs.sendMessage(activeTab.id, { type: 'get_field_stats' });
+    if (response) {
+      const capturedEl = document.getElementById('captured-count');
+      const lastFillEl = document.getElementById('last-fill-count');
+      if (capturedEl) capturedEl.textContent = response.captured || 0;
+      if (lastFillEl) lastFillEl.textContent = response.lastFilled || 0;
+    }
+  } catch (e) {
+    // Content script not loaded or not on a job page - that's fine
+    const capturedEl = document.getElementById('captured-count');
+    const lastFillEl = document.getElementById('last-fill-count');
+    if (capturedEl) capturedEl.textContent = 'N/A';
+    if (lastFillEl) lastFillEl.textContent = 'N/A';
   }
 }
 

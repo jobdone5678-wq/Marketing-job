@@ -19,7 +19,8 @@
     'first_name', 'last_name', 'full_name', 'email', 'phone', 'current_city', 'current_state',
     'current_location', 'zip_code', 'country', 'full_address', 'linkedin_url', 'github_url', 'website',
     'current_employer', 'current_title', 'total_experience_years', 'primary_skills',
-    'authorized_in_usa', 'needs_sponsorship', 'open_to_relocation'
+    'authorized_in_usa', 'needs_sponsorship', 'open_to_relocation',
+    'end_client', 'point_of_contact', 'pay_rate', 'vendor_email', 'personal_email', 'contract_type'
   ]);
 
   // Adapters spell a fact as "current_state" or "current state"; normalise before lookup.
@@ -88,6 +89,12 @@
       'need sponsorship future'
     ],
     open_to_relocation: ['willing to relocate', 'are you willing to relocate', 'open to relocation', 'willing to move', 'are you open to relocation', 'open to moving'],
+    end_client: ['end client', 'client', 'client company', 'client name', 'customer', 'customer company', 'end client company', 'client organization'],
+    point_of_contact: ['point of contact', 'poc', 'contact person', 'client contact', 'hiring manager', 'recruiter contact', 'vendor contact'],
+    pay_rate: ['pay rate', 'rate', 'hourly rate', 'salary', 'compensation', 'wage', 'hourly', 'bill rate', 'pay'],
+    vendor_email: ['vendor email', 'vendor contact email', 'recruiter email', 'staffing email', 'vendor contact', 'vendor e-mail'],
+    personal_email: ['personal email', 'personal email address', 'personal e-mail', 'personal email id'],
+    contract_type: ['contract type', 'employment type', 'w2', 'c2c', '1099', 'contractor', 'independent contractor', 'w-2', 'c2c contractor', 'type of employment', 'type of contract'],
     consent: [
       'agree to terms',
       'agree to the terms',
@@ -200,6 +207,12 @@
       authorized_in_usa: authKnown,
       needs_sponsorship: sponsorKnown,
       open_to_relocation: typeof (facts.open_to_relocation ?? candidate.open_to_relocation) === 'boolean' ? (facts.open_to_relocation ?? candidate.open_to_relocation) : '',
+      end_client: facts.end_client || candidate.end_client || '',
+      point_of_contact: facts.point_of_contact || candidate.point_of_contact || '',
+      pay_rate: facts.pay_rate || candidate.pay_rate || '',
+      vendor_email: facts.vendor_email || candidate.vendor_email || '',
+      personal_email: facts.personal_email || candidate.personal_email || '',
+      contract_type: facts.contract_type || candidate.contract_type || '',
       consent: true,
       known_authorization: rawAuth !== undefined,
       known_sponsorship: sponsorPrimary !== undefined || sponsorFuture !== undefined

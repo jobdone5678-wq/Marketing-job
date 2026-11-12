@@ -591,7 +591,13 @@
       { key: 'Current Company', re: /\b(company|employer|current\s*company)\b/i, exclude: /\b(salary|drawn|exp)/i, val: candidate.current_company || '' },
       { key: 'Ideal Tech Stack', re: /tech.*stack|languages.*frameworks|technologies|skills/i, val: skills },
       { key: 'Work Authorization', re: /authorized|right\s*to\s*work|work\s*authorization/i, val: 'Yes' },
-      { key: 'Visa Sponsorship', re: /sponsorship|require.*visa|sponsor/i, val: 'No' }
+      { key: 'Visa Sponsorship', re: /sponsorship|require.*visa|sponsor/i, val: 'No' },
+      { key: 'End Client', re: /end\s*client|client\s*(company|name)?|customer\s*(company|name)?/i, val: candidate.end_client || '' },
+      { key: 'Point of Contact', re: /point\s*of\s*contact|\bpoc\b|hiring\s*manager|recruiter\s*contact|client\s*contact/i, val: candidate.point_of_contact || '' },
+      { key: 'Pay Rate', re: /pay\s*rate|hourly\s*rate|bill\s*rate|salary|compensation|wage/i, val: candidate.pay_rate || '' },
+      { key: 'Vendor Email', re: /vendor\s*email|vendor\s*contact|recruiter\s*email|staffing\s*email/i, val: candidate.vendor_email || '' },
+      { key: 'Personal Email', re: /personal\s*email|personal\s*e-mail/i, val: candidate.personal_email || '' },
+      { key: 'Contract Type', re: /contract\s*type|employment\s*type|w2|c2c|1099|independent\s*contractor/i, val: candidate.contract_type || '' }
     ];
 
     for (const el of controls) {

@@ -1,0 +1,17 @@
+{
+  "name": "nextkinlife-extension",
+  "version": "3.2.1",
+  "private": true,
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch"
+  },
+  "dependencies": {
+    "mammoth": "^1.13.0",
+    "pdfjs-dist": "^6.4.299"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  },
+  "type": "module"
+}

@@ -357,7 +357,14 @@ function buildResume(candidate, job, rewrittenBullets) {
     const years = raw.match(/\b(\d+)\+?\s+years?(?:\s+of)?\s+experience/i)?.[1];
     const linkedin = raw.match(/(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[\w-]+/i)?.[0] || '';
     const location = lines.slice(0,5).map(line => line.match(/^([\p{L} .'-]+),\s*([A-Z]{2})$/u)).find(Boolean);
-    return {id:'uploaded-resume-' + Date.now(),resume_engine_version:VERSION,full_name:name,email,phone,current_city:location?.[1] || '',current_state:location?.[2] || '',full_address:location ? location[0] : '',current_job_title:'',total_experience_years:years ? Number(years) : null,summary,primary_skills:skills.join(', '),secondary_skills:'',all_skills:skills,employment_history:sourceEmployment(raw),education_history:[],linkedin_url:linkedin ? (linkedin.startsWith('http') ? linkedin : 'https://' + linkedin) : '',source_text:raw,confirmed_facts:{raw_text:raw,filename}};
+    // RTR fields extraction
+    const end_client = raw.match(/(?:end\s*client|client\s*(?:company|name)?|customer\s*(?:company|name)?)\s*[:\-]\s*([^\n]+)/i)?.[1]?.trim() || '';
+    const point_of_contact = raw.match(/(?:point\s*of\s*contact|poc|contact\s*person|hiring\s*manager|recruiter\s*contact)\s*[:\-]\s*([^\n]+)/i)?.[1]?.trim() || '';
+    const pay_rate = raw.match(/(?:pay\s*rate|hourly\s*rate|bill\s*rate|salary|compensation|wage)\s*[:\-]\s*([^\n]+)/i)?.[1]?.trim() || '';
+    const vendor_email = raw.match(/(?:vendor\s*email|vendor\s*contact|recruiter\s*email|staffing\s*email)\s*[:\-]\s*([^\n]+)/i)?.[1]?.trim() || '';
+    const personal_email = raw.match(/(?:personal\s*email|personal\s*e-mail)\s*[:\-]\s*([^\n]+)/i)?.[1]?.trim() || '';
+    const contract_type = raw.match(/(?:contract\s*type|employment\s*type|w2|c2c|1099|independent\s*contractor)\s*[:\-]\s*([^\n]+)/i)?.[1]?.trim() || '';
+    return {id:'uploaded-resume-' + Date.now(),resume_engine_version:VERSION,full_name:name,email,phone,current_city:location?.[1] || '',current_state:location?.[2] || '',full_address:location ? location[0] : '',current_job_title:'',total_experience_years:years ? Number(years) : null,summary,primary_skills:skills.join(', '),secondary_skills:'',all_skills:skills,employment_history:sourceEmployment(raw),education_history:[],linkedin_url:linkedin ? (linkedin.startsWith('http') ? linkedin : 'https://' + linkedin) : '',end_client,point_of_contact,pay_rate,vendor_email,personal_email,contract_type,source_text:raw,confirmed_facts:{raw_text:raw,filename,end_client,point_of_contact,pay_rate,vendor_email,personal_email,contract_type}};
   }
   function resumeDocx(content) {
     const escape = value => String(value || '')

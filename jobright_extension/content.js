@@ -146,6 +146,53 @@
     } catch {}
   }
 
+  // Animated highlight for active filling - blue pulse to show "currently filling this field"
+  function highlightFieldAnimated(el) {
+    try {
+      const originalOutline = el.style.outline;
+      const originalBoxShadow = el.style.boxShadow;
+      const originalBackground = el.style.backgroundColor;
+      const originalTransition = el.style.transition;
+      // Strong blue "filling" indicator that overrides any prior highlight
+      el.style.transition = 'box-shadow 0.12s ease-out, outline 0.12s ease-out, background-color 0.12s ease-out';
+      el.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.8), 0 0 14px rgba(59, 130, 246, 0.5)';
+      el.style.outline = '2px solid #3b82f6';
+      el.style.outlineOffset = '2px';
+      el.style.backgroundColor = 'rgba(59, 130, 246, 0.08)';
+      // Fade out after 900ms - longer than nativeSet's green highlight so it's visible
+      setTimeout(() => {
+        try {
+          el.style.boxShadow = originalBoxShadow || '';
+          el.style.outline = originalOutline || '';
+          el.style.outlineOffset = '';
+          el.style.backgroundColor = originalBackground || '';
+          el.style.transition = originalTransition || '';
+        } catch {}
+      }, 900);
+    } catch {}
+  }
+
+  // Show progress UI in the floating widget
+  function showFillProgress(filled, total, currentLabel) {
+    if (!shadowRoot) return;
+    const progressEl = shadowRoot.getElementById('mp-field-progress');
+    const fillEl = shadowRoot.getElementById('mp-progress-fill');
+    const countEl = shadowRoot.getElementById('mp-progress-count');
+    const labelEl = shadowRoot.getElementById('mp-progress-label');
+    if (progressEl) {
+      progressEl.style.display = 'block';
+      if (fillEl) fillEl.style.width = total > 0 ? `${Math.round((filled / total) * 100)}%` : '0%';
+      if (countEl) countEl.textContent = `${filled} / ${total}`;
+      if (labelEl && currentLabel) labelEl.textContent = `Filling: ${currentLabel.slice(0, 40)}${currentLabel.length > 40 ? '…' : ''}`;
+    }
+  }
+
+  function hideFillProgress() {
+    if (!shadowRoot) return;
+    const progressEl = shadowRoot.getElementById('mp-field-progress');
+    if (progressEl) progressEl.style.display = 'none';
+  }
+
   function captureApplicationAnswers() {
     const answers = new Map();
     const relevant = /name|email|phone|mobile|address|city|state|zip|postal|country|location|linkedin|portfolio|website|github|skill|experience|employ|education|school|university|degree|qualif|company|title|role|position|salary|compensation|rate|availab|notice|start|relocat|sponsor|authori|work.?permit|cover.?letter|message|hear|referr|interest|project|summary/i;
@@ -1036,14 +1083,20 @@
     selectedCandidateId = candidates.some(c => c.id === id) ? id : null;
     const candidate = candidates.find(c => c.id === selectedCandidateId);
     if (candidate) {
-      const count = autofillCandidate(candidate, true);
-      if (count > 0) {
-        showInPageToast(` Filled ${count} application fields for ${candidate.full_name}!`);
-      } else if(supportedEmbeddedForm()){
-        workflowStatus('Embedded application detected. Click Fill Job Form to fill its supported fields.');
-      } else {
-        showInPageToast(`No form fields matched resume data for ${candidate.full_name}. Review fields manually or click Autofill.`, true);
-      }
+      // Use async autofill with progress
+      autofillCandidate(candidate, true, (filled, total, label) => {
+        showInPageToast(`⟳ Filling ${filled}/${total}... ${label}`);
+      }).then(result => {
+        if (result.filled > 0) {
+          showInPageToast(`✅ Filled ${result.filled} of ${result.total} fields for ${candidate.full_name}!`);
+        } else if(supportedEmbeddedForm()){
+          workflowStatus('Embedded application detected. Click Fill Job Form to fill its supported fields.');
+        } else {
+          showInPageToast(`No form fields matched resume data for ${candidate.full_name}. Review fields manually or click Autofill.`, true);
+        }
+      }).catch(err => {
+        showInPageToast('Autofill failed: ' + err.message, true);
+      });
     }
     scheduleAutofill();
   }
@@ -1617,25 +1670,47 @@
   }
 
   // Fill known profile facts into application fields. Never submit.
-  function autofillCandidate(candidate, force = false) {
-    if (!candidate||supportedEmbeddedForm()) return 0;
-    // Paired adapter runtime starts on profile selection, Fill Job Form, or a portal Apply launch.
-    if(globalThis.NextkinForms&&!force&&!recruiterStartedFill&&!linkedCandidateId)return 0;
-    if (isPortalPage() || isExcludedDomain() || (!force && !isJobOrApplicationPage())) return 0;
+  // Returns: { filled: number, total: number, skipped: number }
+  // Accepts optional onProgress callback: (filled, total, currentLabel) => void
+  async function autofillCandidate(candidate, force = false, onProgress) {
+    if (!candidate || supportedEmbeddedForm()) return { filled: 0, total: 0, skipped: 0 };
+    if (globalThis.NextkinForms && !force && !recruiterStartedFill && !linkedCandidateId && !String(candidate.id || '').startsWith('uploaded')) {
+      return { filled: 0, total: 0, skipped: 0 };
+    }
+    if (isPortalPage() || isExcludedDomain() || (!force && !isJobOrApplicationPage())) return { filled: 0, total: 0, skipped: 0 };
     if (isAuthOrLoginPage()) {
       if (force) {
         showInPageToast('Autofill is paused on login/auth pages to protect your credentials.', true);
       }
-      return 0;
+      return { filled: 0, total: 0, skipped: 0 };
     }
-    let count = 0;
+
     ensureFillSession(candidate);
     const names = (candidate.full_name || '').trim().split(/\s+/);
     const norm = value => String(value || '').toLowerCase().replace(/[\*:]/g, ' ').replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
-    const discovered=globalThis.NextkinForms?.discoverFields(document);
-    const adapterPlans=discovered?globalThis.NextkinFieldMapping?.planFill(discovered,candidate):[];
-    const blocked=new Set((adapterPlans||[]).filter(p=>p.field.excluded||p.field.scope&&/work|employ|experience|education|school|university/i.test(p.field.scope)||p.status==='needs_review'&&p.factKey||p.field.kind==='combobox'&&p.factKey).map(p=>p.field.element));
-    const controls = discovered?discovered.filter(f=>f.kind!=='inaccessible').flatMap(f=>f.elements||[f.element]):document.querySelectorAll('input, textarea, select, button[role="combobox"]');
+    const discovered = globalThis.NextkinForms?.discoverFields(document);
+    const adapterPlans = discovered ? globalThis.NextkinFieldMapping?.planFill(discovered, candidate) : [];
+    const blocked = new Set((adapterPlans || []).filter(p => p.field.excluded || p.field.scope && /work|employ|experience|education|school|university/i.test(p.field.scope) || p.status === 'needs_review' && p.factKey || p.field.kind === 'combobox' && p.factKey).map(p => p.field.element));
+    const controls = discovered ? discovered.filter(f => f.kind !== 'inaccessible').flatMap(f => f.elements || [f.element]) : document.querySelectorAll('input, textarea, select, button[role="combobox"]');
+
+    // Filter to only fillable controls first (for accurate total count)
+    const fillableControls = [];
+    for (const el of controls) {
+      if (blocked.has(el)) continue;
+      const dropdown = el.tagName !== 'SELECT' && (el.getAttribute('role') === 'combobox' || el.getAttribute('aria-autocomplete') === 'list' || el.getAttribute('aria-haspopup') === 'listbox');
+      if (el.closest('#mp-copilot-root') || el.disabled || (el.readOnly && !dropdown) || (!force && editedFields.has(el)) || !el.getClientRects().length) continue;
+      if (['hidden', 'submit', 'file', 'password', 'reset'].includes(el.type) || (['button', 'search'].includes(el.type) && !dropdown)) continue;
+      if (el.id === 'prompt-textarea' || el.matches?.('[data-id="root"], [contenteditable="true"], .ProseMirror, input[type="search"], input[name="q" i], input[name="query" i], input[role="searchbox" i]')) continue;
+      if (el.closest?.('form[role="search"], [role="search"], [id*="search" i], [class*="search-bar" i], [id*="chat" i], [class*="chat-window" i]')) continue;
+      fillableControls.push(el);
+    }
+
+    const total = fillableControls.length;
+    let filled = 0;
+    let skipped = 0;
+
+    // Show progress UI
+    showFillProgress(0, total, 'Starting...');
 
     // Automatically trigger resume file upload in parallel (once per form unless forced)
     if (!resumeAttachedToForm && !isResumeUploading) {
@@ -1647,173 +1722,205 @@
       }
     }
 
-    for (const el of controls) {
-      if(blocked.has(el))continue;
-      const dropdown = el.tagName !== 'SELECT' && (el.getAttribute('role') === 'combobox' || el.getAttribute('aria-autocomplete') === 'list' || el.getAttribute('aria-haspopup') === 'listbox');
-      if (el.closest('#mp-copilot-root') || el.disabled || (el.readOnly && !dropdown) || (!force && editedFields.has(el)) || !el.getClientRects().length) continue;
-      if (['hidden', 'submit', 'file', 'password', 'reset'].includes(el.type) || (['button', 'search'].includes(el.type) && !dropdown)) continue;
+    // Process in batches to yield to main thread and show progress
+    const BATCH_SIZE = 3;
+    for (let i = 0; i < fillableControls.length; i += BATCH_SIZE) {
+      const batch = fillableControls.slice(i, i + BATCH_SIZE);
 
-      // Never touch prompt/chat inputs (e.g. ChatGPT, Claude, AI textareas) or search inputs
-      if (el.id === 'prompt-textarea' || el.matches?.('[data-id="root"], [contenteditable="true"], .ProseMirror, input[type="search"], input[name="q" i], input[name="query" i], input[role="searchbox" i]')) continue;
-      if (el.closest?.('form[role="search"], [role="search"], [id*="search" i], [class*="search-bar" i], [id*="chat" i], [class*="chat-window" i]')) continue;
+      for (const el of batch) {
+        const rawContext = getElementContext(el);
+        const key = norm(rawContext);
+        if (!key) { skipped++; continue; }
 
-      const rawContext = getElementContext(el);
-      const key = norm(rawContext);
-      if (!key) continue;
+        const directParts = [];
+        if (el.name) directParts.push(el.name);
+        if (el.id) directParts.push(el.id);
+        if (el.placeholder) directParts.push(el.placeholder);
+        const ariaLabel = el.getAttribute('aria-label');
+        if (ariaLabel) directParts.push(ariaLabel);
+        if (el.autocomplete) directParts.push(el.autocomplete);
+        if (el.labels && el.labels.length) {
+          for (const l of el.labels) if (l.textContent) directParts.push(l.textContent);
+        }
+        if (el.getAttribute('data-automation-id')) directParts.push(el.getAttribute('data-automation-id'));
+        if (el.getAttribute('data-testid')) directParts.push(el.getAttribute('data-testid'));
+        if (el.getAttribute('data-qa')) directParts.push(el.getAttribute('data-qa'));
+        const parentLabel = el.closest('label');
+        if (parentLabel?.textContent) directParts.push(parentLabel.textContent);
+        const legend = el.closest('fieldset')?.querySelector('legend')?.textContent;
+        if (legend) directParts.push(legend);
+        const directKey = norm(directParts.join(' '));
 
-      const directParts = [];
-      if (el.name) directParts.push(el.name);
-      if (el.id) directParts.push(el.id);
-      if (el.placeholder) directParts.push(el.placeholder);
-      const ariaLabel = el.getAttribute('aria-label');
-      if (ariaLabel) directParts.push(ariaLabel);
-      if (el.autocomplete) directParts.push(el.autocomplete);
-      if (el.labels && el.labels.length) {
-        for (const l of el.labels) if (l.textContent) directParts.push(l.textContent);
-      }
-      if (el.getAttribute('data-automation-id')) directParts.push(el.getAttribute('data-automation-id'));
-      if (el.getAttribute('data-testid')) directParts.push(el.getAttribute('data-testid'));
-      if (el.getAttribute('data-qa')) directParts.push(el.getAttribute('data-qa'));
-      const parentLabel = el.closest('label');
-      if (parentLabel?.textContent) directParts.push(parentLabel.textContent);
-      const legend = el.closest('fieldset')?.querySelector('legend')?.textContent;
-      if (legend) directParts.push(legend);
-      const directKey = norm(directParts.join(' '));
+        if (EXCLUSIONARY_FIELD.test(directKey)) { skipped++; continue; }
 
-      if (EXCLUSIONARY_FIELD.test(directKey)) continue;
+        let value = null;
+        const dropdown = el.tagName !== 'SELECT' && (el.getAttribute('role') === 'combobox' || el.getAttribute('aria-autocomplete') === 'list' || el.getAttribute('aria-haspopup') === 'listbox');
 
-      let value = null;
-      if (/sponsor/.test(key)) {
-        if(/\bnot\b|without|no sponsorship/.test(key))continue;
-        const now=candidate.need_sponsorship_now,future=candidate.need_sponsorship_future;
-        value=/future/.test(key)&&!/now|current/.test(key)?future:/now|current/.test(key)&&!/future/.test(key)?now:now===true||future===true?true:now===false&&future===false?false:null;
-      } else if (/authoriz|eligible|legally.*work/.test(key)) {
-        if (!/\b(?:usa|united states|u\.s\.?|us)\b/.test(key) || /\bnot\b|unrestricted|permanent/.test(key)) continue;
-        value = candidate.authorized_in_usa;
-      } else if (/relocat/.test(key)) {
-        value = candidate.open_to_relocation;
-      } else if (/\b(?:first\s*name|given\s*name|forename|\bfname\b)\b/.test(key) && !/\b(?:last|family|sur)\b/.test(key)) {
-        value = names[0];
-      } else if (/\b(?:last\s*name|family\s*name|surname|\blname\b)\b/.test(key) && !/\b(?:first|given)\b/.test(key)) {
-        value = names.slice(1).join(' ') || names[0];
-      } else if (/\b(?:middle\s*name|\bmname\b)\b/.test(key)) {
-        value = names.length > 2 ? names.slice(1, -1).join(' ') : '';
-      } else if (/e ?mail/.test(key) || el.type === 'email') {
-        value = candidate.email;
-      } else if (/phone|mobile|telephone/.test(key) || el.type === 'tel') {
-        value = candidate.phone;
-      } else if (/linkedin/.test(key)) {
-        value = candidate.linkedin_url;
-      } else if (/\bgithub\b/.test(key)) {
-        value = candidate.confirmed_facts?.github_url || candidate.github_url;
-      } else if (/\b(?:portfolio|personal\s*website|website|personal\s*site|url)\b/.test(key) && !/\b(?:linkedin|github|company)\b/.test(key)) {
-        value = candidate.confirmed_facts?.portfolio_url || candidate.portfolio_url;
-      } else if (/\b(?:candidate\s*location|your\s*location|current\s*location|\blocation\b|where\s*are\s*you\s*(?:located|based)|city\s*(?:and|,|\/)\s*state)\b/.test(key) && !/\b(?:relocat|work\s*location|office\s*location|job\s*location|desired\s*location|preferred\s*location)\b/.test(key)) {
-        value = [candidate.current_city, candidate.current_state].filter(Boolean).join(', ') || candidate.current_city || candidate.full_address;
-      } else if (/\b(?:city|town|address\s*level2)\b/.test(key)) {
-        value = candidate.current_city;
-      } else if (/\b(?:state|province|region|address\s*level1)\b/.test(key)) {
-        value = candidate.current_state;
-      } else if (/\b(?:country)\b/.test(key) && !/code|phone|prefix/.test(key)) {
-        value = candidate.confirmed_facts?.country || candidate.country;
-      } else if (/\b(?:full\s*address|street\s*address|address\s*line\s*1|\baddress\b)\b/.test(key) && !/\b(?:email|ip|web|url|level1|level2)\b/.test(key)) {
-        value = candidate.full_address || candidate.current_city;
-      } else if (/\b(?:zip|postal|postcode|post\s*code|pincode)\b/.test(key)) {
-        value = candidate.full_address?.match(/\b\d{5}(?:-\d{4})?\b/)?.[0] || '';
-      } else if (/university|institution|school|alma\s*mater/.test(key) && !/high\s*school/.test(key)) {
-        value = candidate.university_name || candidate.education_history?.[0]?.school;
-      } else if (/degree|highest\s*qualification|qualification|education\s*level/.test(key)) {
-        value = candidate.highest_qualification || candidate.education_history?.[0]?.degree;
-      } else if (/major|field\s*of\s*study|discipline|area\s*of\s*study/.test(key)) {
-        value = candidate.education_history?.[0]?.field_of_study || candidate.education_history?.[0]?.major || candidate.confirmed_facts?.major;
-      } else if (/graduation|grad\s*year/.test(key)) {
-        value = candidate.graduation_year || candidate.education_history?.[0]?.end;
-      } else if (/gpa|grade\s*point/.test(key)) {
-        value = candidate.education_history?.[0]?.gpa || candidate.confirmed_facts?.gpa;
-      } else if (/current.*company|current.*employer|most\s*recent\s*company|most\s*recent\s*employer|present\s*employer/.test(key) && !/sponsor|authoriz|past|previous/.test(key)) {
-        value = candidate.current_employer || candidate.employment_history?.[0]?.employer;
-      } else if (/current.*title|job.*title|current\s*role|present\s*title|headline/.test(key)) {
-        value = candidate.current_job_title || candidate.employment_history?.[0]?.title;
-      } else if (/previous.*company|past.*company|former.*employer/.test(key)) {
-        value = candidate.employment_history?.[1]?.employer;
-      } else if (/previous.*title|past.*title/.test(key)) {
-        value = candidate.employment_history?.[1]?.title;
-      } else if (/years.*experience|experience.*years|total\s*experience/.test(key)) {
-        const wording=norm([...(el.labels||[])].map(label=>label.textContent).join(' ')||ariaLabel||el.placeholder||el.name).replace(/[^a-z ]/g,' ');
-        const unexplained=wording.replace(/\b(how|many|years?|of|experience|do|you|have|total|professional|work|overall|your|in)\b/g,'').trim();
-        if(unexplained)continue;
-        value = candidate.total_experience_years;
-      } else if (/primary.*skills|technical.*skills|core\s*skills|key\s*skills/.test(key)) {
-        value = candidate.primary_skills;
-      } else if (/notice\s*period|available\s*to\s*start|start\s*date|how\s*soon\s*can\s*you\s*start|availability/.test(key)) {
-        value = candidate.notice_period || candidate.available_to_join;
-      } else if (/expected\s*salary|desired\s*salary|compensation\s*expectation|salary\s*expectation|desired\s*pay|target\s*salary/.test(key)) {
-        value = candidate.expected_salary;
-      } else if (/gender|sex\b/.test(key)) {
-        value = candidate.confirmed_facts?.gender;
-      } else if (/veteran|military\s*status/.test(key)) {
-        value = candidate.confirmed_facts?.veteran_status;
-      } else if (/disability|handicap/.test(key)) {
-        value = candidate.confirmed_facts?.disability_status;
-      } else if (/ethnicity|race\b/.test(key)) {
-        value = candidate.confirmed_facts?.race || candidate.confirmed_facts?.ethnicity;
-      } else if (/\b(?:full\s*name|legal\s*name|candidate\s*name|applicant\s*name|your\s*name|\bname\b)\b/.test(key) || norm(el.name) === 'name' || norm(el.name) === 'systemfield name' || norm(el.name) === 'fullname' || norm(el.autocomplete) === 'name') {
-        if (!/\b(?:company|employer|school|university|organization|college|user\s*name|username|file|referral|emergency|preferred)\b/.test(key) && !/\b(?:first|given|last|family|surname)\b/.test(key)) {
-          value = candidate.full_name;
+        if (/sponsor/.test(key)) {
+          if (/\bnot\b|without|no sponsorship/.test(key)) { skipped++; continue; }
+          const now = candidate.need_sponsorship_now, future = candidate.need_sponsorship_future;
+          value = /future/.test(key) && !/now|current/.test(key) ? future : /now|current/.test(key) && !/future/.test(key) ? now : now === true || future === true ? true : now === false && future === false ? false : null;
+        } else if (/authoriz|eligible|legally.*work/.test(key)) {
+          if (!/\b(?:usa|united states|u\.s\.?|us)\b/.test(key) || /\bnot\b|unrestricted|permanent/.test(key)) { skipped++; continue; }
+          value = candidate.authorized_in_usa;
+        } else if (/relocat/.test(key)) {
+          value = candidate.open_to_relocation;
+        } else if (/\b(?:first\s*name|given\s*name|forename|\bfname\b)\b/.test(key) && !/\b(?:last|family|sur)\b/.test(key)) {
+          value = names[0];
+        } else if (/\b(?:last\s*name|family\s*name|surname|\blname\b)\b/.test(key) && !/\b(?:first|given)\b/.test(key)) {
+          value = names.slice(1).join(' ') || names[0];
+        } else if (/\b(?:middle\s*name|\bmname\b)\b/.test(key)) {
+          value = names.length > 2 ? names.slice(1, -1).join(' ') : '';
+        } else if (/e ?mail/.test(key) || el.type === 'email') {
+          value = candidate.email;
+        } else if (/phone|mobile|telephone/.test(key) || el.type === 'tel') {
+          value = candidate.phone;
+        } else if (/linkedin/.test(key)) {
+          value = candidate.linkedin_url;
+        } else if (/\bgithub\b/.test(key)) {
+          value = candidate.confirmed_facts?.github_url || candidate.github_url;
+        } else if (/\b(?:portfolio|personal\s*website|website|personal\s*site|url)\b/.test(key) && !/\b(?:linkedin|github|company)\b/.test(key)) {
+          value = candidate.confirmed_facts?.portfolio_url || candidate.portfolio_url;
+        } else if (/\b(?:candidate\s*location|your\s*location|current\s*location|\blocation\b|where\s*are\s*you\s*(?:located|based)|city\s*(?:and|,|\/)\s*state)\b/.test(key) && !/\b(?:relocat|work\s*location|office\s*location|job\s*location|desired\s*location|preferred\s*location)\b/.test(key)) {
+          value = [candidate.current_city, candidate.current_state].filter(Boolean).join(', ') || candidate.current_city || candidate.full_address;
+        } else if (/\b(?:city|town|address\s*level2)\b/.test(key)) {
+          value = candidate.current_city;
+        } else if (/\b(?:state|province|region|address\s*level1)\b/.test(key)) {
+          value = candidate.current_state;
+        } else if (/\b(?:country)\b/.test(key) && !/code|phone|prefix/.test(key)) {
+          value = candidate.confirmed_facts?.country || candidate.country;
+        } else if (/\b(?:full\s*address|street\s*address|address\s*line\s*1|\baddress\b)\b/.test(key) && !/\b(?:email|ip|web|url|level1|level2)\b/.test(key)) {
+          value = candidate.full_address || candidate.current_city;
+        } else if (/\b(?:zip|postal|postcode|post\s*code|pincode)\b/.test(key)) {
+          value = candidate.full_address?.match(/\b\d{5}(?:-\d{4})?\b/)?.[0] || '';
+        } else if (/university|institution|school|alma\s*mater/.test(key) && !/high\s*school/.test(key)) {
+          value = candidate.university_name || candidate.education_history?.[0]?.school;
+        } else if (/degree|highest\s*qualification|qualification|education\s*level/.test(key)) {
+          value = candidate.highest_qualification || candidate.education_history?.[0]?.degree;
+        } else if (/major|field\s*of\s*study|discipline|area\s*of\s*study/.test(key)) {
+          value = candidate.education_history?.[0]?.field_of_study || candidate.education_history?.[0]?.major || candidate.confirmed_facts?.major;
+        } else if (/graduation|grad\s*year/.test(key)) {
+          value = candidate.graduation_year || candidate.education_history?.[0]?.end;
+        } else if (/gpa|grade\s*point/.test(key)) {
+          value = candidate.education_history?.[0]?.gpa || candidate.confirmed_facts?.gpa;
+        } else if (/current.*company|current.*employer|most\s*recent\s*company|most\s*recent\s*employer|present\s*employer/.test(key) && !/sponsor|authoriz|past|previous/.test(key)) {
+          value = candidate.current_employer || candidate.employment_history?.[0]?.employer;
+        } else if (/current.*title|job.*title|current\s*role|present\s*title|headline/.test(key)) {
+          value = candidate.current_job_title || candidate.employment_history?.[0]?.title;
+        } else if (/previous.*company|past.*company|former.*employer/.test(key)) {
+          value = candidate.employment_history?.[1]?.employer;
+        } else if (/previous.*title|past.*title/.test(key)) {
+          value = candidate.employment_history?.[1]?.title;
+        } else if (/years.*experience|experience.*years|total\s*experience/.test(key)) {
+          const wording = norm([...(el.labels || [])].map(label => label.textContent).join(' ') || ariaLabel || el.placeholder || el.name).replace(/[^a-z ]/g, ' ');
+          const unexplained = wording.replace(/\b(how|many|years?|of|experience|do|you|have|total|professional|work|overall|your|in)\b/g, '').trim();
+          if (unexplained) { skipped++; continue; }
+          value = candidate.total_experience_years;
+        } else if (/primary.*skills|technical.*skills|core\s*skills|key\s*skills/.test(key)) {
+          value = candidate.primary_skills;
+        } else if (/notice\s*period|available\s*to\s*start|start\s*date|how\s*soon\s*can\s*you\s*start|availability/.test(key)) {
+          value = candidate.notice_period || candidate.available_to_join;
+        } else if (/expected\s*salary|desired\s*salary|compensation\s*expectation|salary\s*expectation|desired\s*pay|target\s*salary/.test(key)) {
+          value = candidate.expected_salary;
+        } else if (/gender|sex\b/.test(key)) {
+          value = candidate.confirmed_facts?.gender;
+        } else if (/veteran|military\s*status/.test(key)) {
+          value = candidate.confirmed_facts?.veteran_status;
+        } else if (/disability|handicap/.test(key)) {
+          value = candidate.confirmed_facts?.disability_status;
+        } else if (/ethnicity|race\b/.test(key)) {
+          value = candidate.confirmed_facts?.race || candidate.confirmed_facts?.ethnicity;
+        } else if (/\b(?:full\s*name|legal\s*name|candidate\s*name|applicant\s*name|your\s*name|\bname\b)\b/.test(key) || norm(el.name) === 'name' || norm(el.name) === 'systemfield name' || norm(el.name) === 'fullname' || norm(el.autocomplete) === 'name') {
+          if (!/\b(?:company|employer|school|university|organization|college|user\s*name|username|file|referral|emergency|preferred)\b/.test(key) && !/\b(?:first|given|last|family|surname)\b/.test(key)) {
+            value = candidate.full_name;
+          }
+        } else if (/\bend\s*client\b|\bclient\b|\bcustomer\b/i.test(key)) {
+          value = candidate.end_client || '';
+        } else if (/\bpoint\s*of\s*contact\b|\bpoc\b|hiring\s*manager|recruiter\s*contact|client\s*contact/i.test(key)) {
+          value = candidate.point_of_contact || '';
+        } else if (/\bpay\s*rate\b|\bhourly\s*rate\b|\bbill\s*rate\b|\bsalary\b|\bcompensation\b|\bwage\b/i.test(key)) {
+          value = candidate.pay_rate || '';
+        } else if (/\bvendor\s*email\b|\bvendor\s*contact\b|\brecruiter\s*email\b|\bstaffing\s*email\b/i.test(key)) {
+          value = candidate.vendor_email || '';
+        } else if (/\bpersonal\s*email\b|\bpersonal\s*e-mail\b/i.test(key)) {
+          value = candidate.personal_email || '';
+        } else if (/\bcontract\s*type\b|\bemployment\s*type\b|\bw2\b|\bc2c\b|\b1099\b|\bindependent\s*contractor\b/i.test(key)) {
+          value = candidate.contract_type || '';
+        }
+
+        if (value === null || value === undefined || value === '') { skipped++; continue; }
+
+        // Update progress
+        const currentLabel = (el.labels?.[0]?.textContent || el.getAttribute('aria-label') || el.placeholder || el.name || el.id || 'Field').slice(0, 50);
+        showFillProgress(filled + 1, total, currentLabel);
+        if (onProgress) onProgress(filled + 1, total, currentLabel);
+
+        const prevVal = el.type === 'checkbox' || el.type === 'radio' ? el.checked : el.value;
+        const fieldKey = el.id || el.name || norm(rawContext);
+        const boolean = typeof value === 'boolean';
+
+        try {
+          if (dropdown) {
+            selectDropdownOption(el, boolean ? (value ? 'Yes' : 'No') : value);
+            if (activeFillSession) activeFillSession.recordWrite(fieldKey, prevVal, boolean ? (value ? 'Yes' : 'No') : value);
+          } else if (['radio', 'checkbox'].includes(el.type)) {
+            if (!boolean) {
+              const group = el.name ? Array.from(document.getElementsByName(el.name)).filter(input => input.form === el.form) : [el];
+              if (group.some(input => input.checked)) { skipped++; continue; }
+              const answer = norm(el.value);
+              const labelsText = norm(Array.from(el.labels || []).map(l => l.textContent).join(' '));
+              const valNorm = norm(value);
+              const matchesOption = answer === valNorm || labelsText === valNorm || labelsText.includes(valNorm) || (valNorm.includes('decline') && (answer.includes('decline') || labelsText.includes('decline') || labelsText.includes('wish not')));
+              if (!matchesOption) { skipped++; continue; }
+              nativeSet(el, 'checked', true);
+              if (activeFillSession) activeFillSession.recordWrite(fieldKey, prevVal, true);
+            } else {
+              const group = el.name ? Array.from(document.getElementsByName(el.name)).filter(input => input.form === el.form) : [el];
+              if (group.some(input => input.checked)) { skipped++; continue; }
+              const answer = norm(el.value);
+              const labelsText = norm(Array.from(el.labels || []).map(l => l.textContent).join(' '));
+              const yes = /^(yes|true|1)$/.test(answer) || /^(yes|yes[,. ].*)$/.test(labelsText);
+              const no = /^(no|false|0)$/.test(answer) || /^(no|no[,. ].*)$/.test(labelsText);
+              if (!(value ? yes : no)) { skipped++; continue; }
+              nativeSet(el, 'checked', true);
+              if (activeFillSession) activeFillSession.recordWrite(fieldKey, prevVal, true);
+            }
+          } else if (el.tagName === 'SELECT') {
+            const selected = el.selectedOptions[0];
+            if (el.value && !/^(select|choose|please select|--)/i.test(selected?.textContent?.trim() || '')) { skipped++; continue; }
+            const answer = boolean ? (value ? 'yes' : 'no') : norm(value);
+            const stateAbbr = typeof value === 'string' ? US_STATES[norm(value)] : null;
+            const option = Array.from(el.options).find(option => !option.disabled && option.value !== '' &&
+              (norm(option.textContent) === answer || norm(option.value) === answer || (boolean && norm(option.value) === String(value)) || (stateAbbr && (norm(option.textContent) === stateAbbr || norm(option.value) === stateAbbr)) || (typeof value === 'string' && value.toLowerCase().includes('decline') && norm(option.textContent).includes('decline'))));
+            if (!option) { skipped++; continue; }
+            nativeSet(el, 'value', option.value);
+            if (activeFillSession) activeFillSession.recordWrite(fieldKey, prevVal, option.value);
+          } else {
+            if (el.value.trim()) { skipped++; continue; }
+            const answer = boolean ? (value ? 'Yes' : 'No') : String(value);
+            nativeSet(el, 'value', answer);
+            if (activeFillSession) activeFillSession.recordWrite(fieldKey, prevVal, answer);
+          }
+          filled++;
+
+          // AFTER fill: apply blue "just filled" animation (overrides nativeSet's green)
+          highlightFieldAnimated(el);
+        } catch (e) {
+          console.warn('Failed to fill field:', e);
+          skipped++;
         }
       }
 
-      if (value === null || value === undefined || value === '') continue;
-      const prevVal = el.type === 'checkbox' || el.type === 'radio' ? el.checked : el.value;
-      const fieldKey = el.id || el.name || norm(rawContext);
-      const boolean = typeof value === 'boolean';
-      if (dropdown) {
-        selectDropdownOption(el, boolean ? (value ? 'Yes' : 'No') : value);
-        if (activeFillSession) activeFillSession.recordWrite(fieldKey, prevVal, boolean ? (value ? 'Yes' : 'No') : value);
-        continue;
+      // Yield to main thread between batches for smooth UI
+      if (i + BATCH_SIZE < fillableControls.length) {
+        await new Promise(r => requestAnimationFrame(r));
+        await new Promise(r => setTimeout(r, 16)); // ~1 frame
       }
-      if (['radio', 'checkbox'].includes(el.type)) {
-        if (!boolean) {
-          const group = el.name ? Array.from(document.getElementsByName(el.name)).filter(input => input.form === el.form) : [el];
-          if (group.some(input => input.checked)) continue;
-          const answer = norm(el.value);
-          const labelsText = norm(Array.from(el.labels || []).map(l => l.textContent).join(' '));
-          const valNorm = norm(value);
-          const matchesOption = answer === valNorm || labelsText === valNorm || labelsText.includes(valNorm) || (valNorm.includes('decline') && (answer.includes('decline') || labelsText.includes('decline') || labelsText.includes('wish not')));
-          if (!matchesOption) continue;
-          nativeSet(el, 'checked', true);
-          if (activeFillSession) activeFillSession.recordWrite(fieldKey, prevVal, true);
-        } else {
-          const group = el.name ? Array.from(document.getElementsByName(el.name)).filter(input => input.form === el.form) : [el];
-          if (group.some(input => input.checked)) continue;
-          const answer = norm(el.value);
-          const labelsText = norm(Array.from(el.labels || []).map(l => l.textContent).join(' '));
-          const yes = /^(yes|true|1)$/.test(answer) || /^(yes|yes[,. ].*)$/.test(labelsText);
-          const no = /^(no|false|0)$/.test(answer) || /^(no|no[,. ].*)$/.test(labelsText);
-          if (!(value ? yes : no)) continue;
-          nativeSet(el, 'checked', true);
-          if (activeFillSession) activeFillSession.recordWrite(fieldKey, prevVal, true);
-        }
-      } else if (el.tagName === 'SELECT') {
-        const selected = el.selectedOptions[0];
-        if (el.value && !/^(select|choose|please select|--)/i.test(selected?.textContent?.trim() || '')) continue;
-        const answer = boolean ? (value ? 'yes' : 'no') : norm(value);
-        const stateAbbr = typeof value === 'string' ? US_STATES[norm(value)] : null;
-        const option = Array.from(el.options).find(option => !option.disabled && option.value !== '' &&
-          (norm(option.textContent) === answer || norm(option.value) === answer || (boolean && norm(option.value) === String(value)) || (stateAbbr && (norm(option.textContent) === stateAbbr || norm(option.value) === stateAbbr)) || (typeof value === 'string' && value.toLowerCase().includes('decline') && norm(option.textContent).includes('decline'))));
-        if (!option) continue;
-        nativeSet(el, 'value', option.value);
-        if (activeFillSession) activeFillSession.recordWrite(fieldKey, prevVal, option.value);
-      } else {
-        if (el.value.trim()) continue;
-        const answer = boolean ? (value ? 'Yes' : 'No') : String(value);
-        nativeSet(el, 'value', answer);
-        if (activeFillSession) activeFillSession.recordWrite(fieldKey, prevVal, answer);
-      }
-      count++;
     }
+
+    hideFillProgress();
     updateUndoButtonUI();
-    return count;
+    return { filled, total, skipped };
   }
 
   function scheduleAutofill() {
@@ -1822,7 +1929,7 @@
     autofillTimer = setTimeout(() => {
       if (isPortalPage() || isExcludedDomain() || !isJobOrApplicationPage() || isAuthOrLoginPage() || filling) return;
       const candidate = candidates.find(c => c.id === selectedCandidateId);
-      if (candidate) autofillCandidate(candidate);
+      if (candidate) autofillCandidate(candidate).catch(err => console.warn('Scheduled autofill failed:', err));
     }, 280);
   }
 
@@ -2696,6 +2803,38 @@
         border-radius: 6px;
         margin-top: 4px;
       }
+      /* Progress bar for autofill */
+      #mp-field-progress {
+        display: none;
+        margin-top: 8px;
+        padding: 8px;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        border-radius: 8px;
+      }
+      .mp-progress-bar {
+        height: 4px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      .mp-progress-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+        transition: width 0.3s ease;
+        border-radius: 2px;
+      }
+      #mp-progress-label {
+        font-size: 10px;
+        color: #94a3b8;
+        font-weight: 500;
+      }
+      #mp-progress-count {
+        font-size: 10px;
+        color: #38bdf8;
+        font-weight: 600;
+      }
     `;
 
 
@@ -2834,6 +2973,14 @@
       <div id="mp-match-container"></div>
       <details class="mp-workflow-section"><summary>ATS evidence and checks</summary><div id="mp-ats-details"></div></details>
       <p id="mp-workflow-status" role="status" aria-live="polite"></p>
+      <!-- Autofill progress bar -->
+      <div id="mp-field-progress" role="status" aria-live="polite" aria-label="Autofill progress">
+        <div class="mp-progress-bar"><div class="mp-progress-fill"></div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px;">
+          <span id="mp-progress-label" style="font-size:10px;color:#94a3b8;font-weight:500;">Filling fields...</span>
+          <span id="mp-progress-count" style="font-size:10px;color:#38bdf8;font-weight:600;">0 / 0</span>
+        </div>
+      </div>
       <label class="mp-review-label"><input type="checkbox" id="mp-ai-consent"> Use these candidate facts and this JD with the configured AI service. Processing snapshots are stored by NextKinHR. Requires connected AI access; uploads do not create a portal candidate record.</label>
       <div class="mp-btn-row">
         <button id="mp-autofill-btn" class="mp-btn mp-btn-primary" title="Autofill candidate fields and upload resume">
@@ -2970,32 +3117,57 @@
     });
 
     // Fill Job Form button
-    card.querySelector('#mp-autofill-btn').addEventListener('click', async () => {
+    card.querySelector(‘#mp-autofill-btn’).addEventListener(‘click’, async () => {
       if (isAuthOrLoginPage()) {
-        showInPageToast(' Autofill is paused on login/auth pages to protect credentials. Please sign in and open a job opening.', true);
+        showInPageToast(‘ Autofill is paused on login/auth pages to protect credentials. Please sign in and open a job opening.’, true);
         return;
       }
       const candidate = candidates.find(c => c.id === selectedCandidateId);
       if (!candidate) {
-        showInPageToast('Please select a candidate first.', true);
+        showInPageToast(‘Please select a candidate first.’, true);
         return;
       }
-      recruiterStartedFill=true;
-      const adapterCount=await fillAdapterFields(candidate);
-      let embeddedCount=0;
-      const hasSupportedFrame=supportedEmbeddedForm();
-      if(hasSupportedFrame){
-        const session=ensureFillSession(candidate),context=screeningContext(candidate);
-        const result=await chrome.runtime.sendMessage({type:'embedded_form_action',op:'fill',candidateId:candidate.id,jobUrl:location.href,sessionId:session.sessionId});
-        if(context!==screeningContext(candidates.find(c=>c.id===selectedCandidateId)))return;
-        if(result?.error){workflowStatus(result.error,true);return;}
-        embeddedCount=result?.count||0;
-        if(embeddedCount){embeddedReceipt={candidateId:candidate.id};session.recordWrite('embedded-form',null,session.sessionId);updateUndoButtonUI();}
+
+      const btn = card.querySelector(‘#mp-autofill-btn’);
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = ‘⟳ Filling fields...’;
+
+      try {
+        recruiterStartedFill = true;
+        const adapterCount = await fillAdapterFields(candidate);
+        let embeddedCount = 0;
+        const hasSupportedFrame = supportedEmbeddedForm();
+        if (hasSupportedFrame) {
+          const session = ensureFillSession(candidate), context = screeningContext(candidate);
+          const result = await chrome.runtime.sendMessage({type:’embedded_form_action’,op:’fill’,candidateId:candidate.id,jobUrl:location.href,sessionId:session.sessionId});
+          if (context !== screeningContext(candidates.find(c=>c.id===selectedCandidateId))) return;
+          if (result?.error) { workflowStatus(result.error, true); return; }
+          embeddedCount = result?.count || 0;
+          if (embeddedCount) { embeddedReceipt = {candidateId:candidate.id}; session.recordWrite(‘embedded-form’, null, session.sessionId); updateUndoButtonUI(); }
+        }
+
+        // Use async autofill with progress callback
+        const result = await autofillCandidate(candidate, true, (filled, total, label) => {
+          btn.textContent = `⟳ Filling ${filled}/${total}...`;
+        });
+
+        const filledCount = adapterCount + embeddedCount + result.filled;
+        const attached = await uploadResumeFile(candidate);
+
+        if (hasSupportedFrame) {
+          workflowStatus(`Filled ${filledCount} supported fields in the embedded application. Review remaining questions and attach the reviewed resume inside the form. Submission tracking for this embedded form requires manual review.`);
+          return;
+        }
+        workflowStatus(attached ? `Filled ${filledCount} known fields and attached the candidate resume. Review before submitting.` : `Filled ${filledCount} known fields. Generate and review this job’s tailored DOCX before attaching it.`);
+        showInPageToast(`✅ Filled ${result.filled} of ${result.total} fields${result.skipped ? ` (${result.skipped} skipped)` : ‘’}!`);
+      } catch (err) {
+        console.error(‘Autofill error:’, err);
+        showInPageToast(‘Autofill failed: ‘ + err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
       }
-      const filledCount = adapterCount+embeddedCount+autofillCandidate(candidate, true);
-      const attached = await uploadResumeFile(candidate);
-      if(hasSupportedFrame){workflowStatus(`Filled ${filledCount} supported fields in the embedded application. Review remaining questions and attach the reviewed resume inside the form. Submission tracking for this embedded form requires manual review.`);return;}
-      workflowStatus(attached ? `Filled ${filledCount} known fields and attached the candidate resume. Review before submitting.` : `Filled ${filledCount} known fields. Generate and review this job’s tailored DOCX before attaching it.`);
     });
 
     card.querySelector('#mp-tailor-btn').addEventListener('click',async () => {
@@ -3222,6 +3394,16 @@
       }
     }, true);
   }
+
+  // Message listener for popup to get field stats
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg.type === 'get_field_stats') {
+      const discovered = globalThis.NextkinForms?.discoverFields(document) || [];
+      const filled = activeFillSession ? activeFillSession.getReceipts().length : 0;
+      sendResponse({ captured: discovered.length, lastFilled: filled });
+      return true;
+    }
+  });
 
   let initialized = false;
   // Initialize Copilot on DOM ready - inject widget only on job/application pages
