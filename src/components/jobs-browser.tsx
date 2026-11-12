@@ -310,6 +310,23 @@ export function JobsBrowser({ provider }: { provider?: string }) {
     };
   }, [mode, employmentType, search, dbPage, savedFilterParam, candidateParam, profileLoading, reload, applicationView]);
 
+  // Live mode: fetch applied keys and filter live jobs on initial load and reload
+  useEffect(() => {
+    if (mode !== 'live' || applicationView !== 'available') return;
+    let active = true;
+    const loadAndFilter = async () => {
+      try {
+        const data = await api<AppliedJobsResponse>(`/api/jobs/applications?page=0${candidateParam}`);
+        if (active) {
+          setLiveJobs(jobs => withoutAppliedJobs(jobs, data.appliedKeys));
+        }
+      } catch (error) {
+        if (active) setError((error as Error).message);
+      }
+    };
+    loadAndFilter();
+  }, [mode, applicationView, candidateParam, reload]);
+
   useEffect(() => {
     if (profileLoading || applicationView !== 'applied') return;
     let active = true;
