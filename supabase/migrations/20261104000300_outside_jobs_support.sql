@@ -57,26 +57,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS jobs_external_url_idx
   ON public.jobs(lower(trim(application_url))) 
   WHERE is_external = true;
 
--- 5. Update candidate_actor_can_access to support candidates with role 'client'
+-- 5. candidate_actor_can_access for candidate-only role
 CREATE OR REPLACE FUNCTION public.candidate_actor_can_access(p_actor uuid, p_candidate uuid)
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
   SELECT EXISTS(
     SELECT 1 FROM public.profiles actor
     JOIN public.candidates candidate ON candidate.id = p_candidate
-    WHERE actor.id = p_actor AND actor.status = 'active' AND (
-      (actor.role = 'client' AND (
-        candidate.user_id = actor.id
-        OR lower(trim(COALESCE(candidate.email, ''))) = lower(trim(COALESCE(actor.email, '')))
-        OR EXISTS (SELECT 1 FROM public.candidate_shares cs WHERE cs.candidate_id = p_candidate AND cs.recipient_id = p_actor AND cs.revoked_at IS NULL)
-      ))
+    WHERE actor.id = p_actor AND actor.status = 'active' AND actor.role = 'candidate' AND (
+      candidate.user_id = actor.id
+      OR lower(trim(COALESCE(candidate.email, ''))) = lower(trim(COALESCE(actor.email, '')))
+      OR EXISTS (SELECT 1 FROM public.candidate_shares cs WHERE cs.candidate_id = p_candidate AND cs.recipient_id = p_actor AND cs.revoked_at IS NULL)
     )
   )
 $$;
 
--- 6. Ensure job_reads allows the client role
+-- 6. Ensure job_reads allows any active authenticated user
 DROP POLICY IF EXISTS job_reads ON public.jobs;
 CREATE POLICY job_reads ON public.jobs FOR SELECT TO authenticated
-  USING(public.get_current_role() IN ('client'));
+  USING(true);
 
 -- 7. Update record_extension_submission to upsert outside jobs into public.jobs with full details
 CREATE OR REPLACE FUNCTION public.record_extension_submission(
@@ -87,17 +85,17 @@ CREATE OR REPLACE FUNCTION public.record_extension_submission(
   p_fields jsonb
 )
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
-DECLARE 
-  actor public.profiles; 
-  candidate public.candidates; 
-  existing public.extension_submission_events; 
-  submission public.job_submissions; 
+DECLARE
+  actor public.profiles;
+  candidate public.candidates;
+  existing public.extension_submission_events;
+  submission public.job_submissions;
   v_job public.jobs;
   v_job_id uuid;
-  company text; 
-  title text; 
-  today date; 
-  duplicate boolean; 
+  company text;
+  title text;
+  today date;
+  duplicate boolean;
   applied_res jsonb;
   raw_job_url text;
   safe_job_url text;
@@ -110,17 +108,17 @@ DECLARE
 BEGIN
   SELECT * INTO actor FROM public.profiles WHERE id = p_actor AND status = 'active';
   SELECT * INTO candidate FROM public.candidates WHERE id = p_candidate;
-  IF actor.id IS NULL OR candidate.id IS NULL OR p_attempt < 1 THEN 
-    RAISE EXCEPTION 'Active account and candidate required'; 
+  IF actor.id IS NULL OR candidate.id IS NULL OR p_attempt < 1 THEN
+    RAISE EXCEPTION 'Active account and candidate required';
   END IF;
-  IF NOT public.candidate_actor_can_access(p_actor, p_candidate) THEN 
-    RAISE EXCEPTION 'Candidate access denied'; 
+  IF NOT public.candidate_actor_can_access(p_actor, p_candidate) THEN
+    RAISE EXCEPTION 'Candidate access denied';
   END IF;
 
-  company := left(trim(COALESCE(p_fields->>'companyName', '')), 200); 
+  company := left(trim(COALESCE(p_fields->>'companyName', '')), 200);
   title := left(trim(COALESCE(p_fields->>'jobTitle', '')), 200);
-  IF company = '' OR title = '' THEN 
-    RAISE EXCEPTION 'Company and job title are required'; 
+  IF company = '' OR title = '' THEN
+    RAISE EXCEPTION 'Company and job title are required';
   END IF;
 
   raw_job_url := left(COALESCE(p_fields->>'jobUrl', ''), 2000);
@@ -131,8 +129,8 @@ BEGIN
   PERFORM pg_advisory_xact_lock(hashtextextended(p_event_key::text, 0));
   SELECT * INTO existing FROM public.extension_submission_events WHERE event_key = p_event_key;
   IF FOUND THEN
-    IF existing.actor_id <> p_actor OR existing.candidate_id <> p_candidate THEN 
-      RAISE EXCEPTION 'Submission event key conflict'; 
+    IF existing.actor_id <> p_actor OR existing.candidate_id <> p_candidate THEN
+      RAISE EXCEPTION 'Submission event key conflict';
     END IF;
     SELECT * INTO submission FROM public.job_submissions WHERE id = existing.submission_id;
     applied_res := COALESCE(p_fields->'appliedResume', p_fields->'applied_resume');
@@ -160,13 +158,13 @@ BEGIN
   END IF;
 
   IF v_job.id IS NULL THEN
-    SELECT * INTO v_job FROM public.jobs WHERE lower(trim(company)) = lower(company) AND lower(trim(jobs.title)) = lower(title) LIMIT 1;
+    SELECT * INTO v_job FROM public.jobs WHERE lower(trim(public.jobs.company)) = lower(trim(company)) AND lower(trim(public.jobs.title)) = lower(trim(title)) LIMIT 1;
   END IF;
 
   IF v_job.id IS NOT NULL THEN
     v_job_id := v_job.id;
     -- Update description or location if missing
-    UPDATE public.jobs SET 
+    UPDATE public.jobs SET
       description = CASE WHEN length(public.jobs.description) < 50 AND length(v_description) >= 50 THEN v_description ELSE public.jobs.description END,
       description_html = CASE WHEN public.jobs.description_html = '' AND v_description_html <> '' THEN v_description_html ELSE public.jobs.description_html END,
       location = COALESCE(public.jobs.location, NULLIF(left(p_fields->>'jobLocation', 200), '')),
@@ -218,19 +216,18 @@ BEGIN
   -- -------------------------------------------------------------
   today := current_date;
   SELECT EXISTS(
-    SELECT 1 FROM public.job_submissions 
-    WHERE candidate_id = p_candidate 
-      AND lower(trim(company_name)) = lower(company) 
+    SELECT 1 FROM public.job_submissions
+    WHERE candidate_id = p_candidate
+      AND lower(trim(company_name)) = lower(company)
       AND submission_date >= today - 30
   ) INTO duplicate;
 
   applied_res := COALESCE(p_fields->'appliedResume', p_fields->'applied_resume');
 
   -- Insert the submission linked with job_id and outside job fields
+  -- Note: recruiter_id and technical_recruiter_id columns are dropped in candidate-only migration
   INSERT INTO public.job_submissions(
     candidate_id,
-    recruiter_id,
-    technical_recruiter_id,
     company_name,
     job_title,
     job_url,
@@ -245,8 +242,6 @@ BEGIN
     applied_resume
   ) VALUES (
     p_candidate,
-    CASE WHEN actor.role IN ('recruiter', 'super_admin') THEN p_actor ELSE candidate.assigned_recruiter_id END,
-    CASE WHEN actor.role = 'technical_recruiter' THEN p_actor ELSE candidate.assigned_technical_recruiter_id END,
     company,
     title,
     safe_job_url,
@@ -261,16 +256,16 @@ BEGIN
     applied_res
   ) RETURNING * INTO submission;
 
-  INSERT INTO public.extension_submission_events(event_key, actor_id, candidate_id, submission_id, attempt) 
+  INSERT INTO public.extension_submission_events(event_key, actor_id, candidate_id, submission_id, attempt)
   VALUES(p_event_key, p_actor, p_candidate, submission.id, p_attempt);
 
   RETURN jsonb_build_object(
-    'submission', to_jsonb(submission), 
-    'duplicate', duplicate, 
+    'submission', to_jsonb(submission),
+    'duplicate', duplicate,
     'replayed', false,
     'job_id', v_job_id
   );
-END; 
+END;
 $$;
 
 REVOKE ALL ON FUNCTION public.record_extension_submission(uuid,uuid,uuid,integer,jsonb) FROM PUBLIC,anon,authenticated;

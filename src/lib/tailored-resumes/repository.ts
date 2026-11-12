@@ -5,7 +5,7 @@ import {checkWorkflowDb} from '@/lib/tailored-resumes/workflow-db';
 import {candidateAccess} from '@/lib/resumes/repository';
 import type {UserProfile} from '@/types/database';
 import {z} from 'zod';
-export function tailoringRole(profile:UserProfile){if(!['client', 'candidate'].includes(profile.role))throw new CaptureError('Resume tailoring is available to candidates and clients.',403);}
+export function tailoringRole(profile:UserProfile){if(profile.role !== 'candidate')throw new CaptureError('Resume tailoring is available to candidates.',403);}
 export async function getTailoredResume(profile:UserProfile,id:string){
   tailoringRole(profile);if(!z.uuid().safeParse(id).success)throw new CaptureError('Invalid resume identifier.');
   const {data,error}=await database().from('tailored_resumes').select('*').eq('id',id).maybeSingle();checkWorkflowDb(error);

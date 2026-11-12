@@ -1,5 +1,5 @@
-// Workspace roles: candidate and client only. All staff roles have been retired.
-export type AppRole = 'candidate' | 'client';
+// Workspace roles: candidate only (job seekers). Single role for all users.
+export type AppRole = 'candidate';
 export type AccountStatus = 'active' | 'pending' | 'rejected' | 'suspended';
 export type SubmissionStatus =
   | 'Draft'

@@ -62,7 +62,7 @@ export function useUserProfile() {
   }, [supabase, fetchProfile]);
 
   const role: AppRole | null = profile?.role || null;
-  const isCandidate = profile?.status === "active" && (role === "client" || role === "candidate");
+  const isCandidate = profile?.status === "active" && role === "candidate";
 
   return {
     user,

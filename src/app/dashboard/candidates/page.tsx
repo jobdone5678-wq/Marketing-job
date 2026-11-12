@@ -95,10 +95,10 @@ export default function CandidatesPage() {
       {/* Workspace Header */}
       <WorkspaceHeading
         eyebrow="Talent workspace"
-        title={role === "client" ? "My profile & resume" : "Bench candidates"}
+        title={role === "candidate" ? "My profile & resume" : "Bench candidates"}
         description="Reviewed talent, ready for the right opportunity. Keep candidate facts and documents together."
         actions={
-          (role !== "client" || !total) && (
+          (role !== "candidate" || !total) && (
             <Button
               render={<Link href="/dashboard/candidates/new" />}
               className="h-9 px-3.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs hover:shadow active:scale-[0.99] transition-all flex items-center gap-1.5 cursor-pointer text-xs"

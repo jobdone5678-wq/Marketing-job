@@ -12,16 +12,15 @@ BEGIN;
 --    it. Each of these is recreated candidate-only further down.
 DROP POLICY IF EXISTS admin_audit ON public.audit_events;
 DROP POLICY IF EXISTS private_documents ON public.candidate_documents;
-DROP POLICY IF EXISTS candidate_staff_assignment_reads ON public.candidate_staff_assignments;
 DROP POLICY IF EXISTS candidate_owner_insert ON public.candidates;
 DROP POLICY IF EXISTS candidate_owner_update ON public.candidates;
+DROP POLICY IF EXISTS candidate_owner_reads ON public.candidates;
 DROP POLICY IF EXISTS "Clients can only view their own candidate profile" ON public.candidates;
 DROP POLICY IF EXISTS candidate_assignment_reads ON public.candidates;
 DROP POLICY IF EXISTS own_confirmation_events ON public.email_confirmation_events;
 DROP POLICY IF EXISTS own_email_connections ON public.email_connections;
 DROP POLICY IF EXISTS own_email_receipts ON public.email_receipts;
 DROP POLICY IF EXISTS credential_reads ON public.extension_credentials;
-DROP POLICY IF EXISTS external_payment_reads ON public.external_payments;
 DROP POLICY IF EXISTS requirement_reads ON public.job_requirements;
 DROP POLICY IF EXISTS source_reads ON public.job_sources;
 DROP POLICY IF EXISTS assigned_staff_submission_access ON public.job_submissions;
@@ -35,13 +34,6 @@ DROP POLICY IF EXISTS admin_usage ON public.provider_usage;
 DROP POLICY IF EXISTS private_extractions ON public.resume_extractions;
 DROP POLICY IF EXISTS service_enrollment_view ON public.service_enrollments;
 DROP POLICY IF EXISTS sync_reads ON public.source_sync_runs;
-DROP POLICY IF EXISTS staff_terms_reads ON public.staff_compensation_terms;
-DROP POLICY IF EXISTS staff_employment_reads ON public.staff_employments;
-DROP POLICY IF EXISTS staff_salary_period_reads ON public.staff_salary_periods;
-DROP POLICY IF EXISTS commission_reads ON public.technical_recruiter_commissions;
-DROP POLICY IF EXISTS staff_contacts ON public.vendor_contacts;
-DROP POLICY IF EXISTS staff_vendors ON public.vendors;
-DROP POLICY IF EXISTS staff_settings ON public.workspace_settings;
 DROP POLICY IF EXISTS match_reads ON public.candidate_matches;
 DROP POLICY IF EXISTS packet_reads ON public.submission_packets;
 DROP POLICY IF EXISTS intent_reads ON public.application_intents;
@@ -74,41 +66,23 @@ END $$;
 --    trigger functions, so they go before the enum is replaced.
 DROP TRIGGER IF EXISTS maintain_placement_commission ON public.placements;
 DROP TRIGGER IF EXISTS sync_placement_commission ON public.placements;
-DROP TRIGGER IF EXISTS enforce_salary_payment ON public.external_payments;
 DROP TRIGGER IF EXISTS enforce_submission_attribution ON public.job_submissions;
 DROP TRIGGER IF EXISTS enforce_placement_lifecycle ON public.placements;
 
 -- Staff-only functions. Each is either dropped outright or replaced with a
 -- candidate-only equivalent further down.
-DROP FUNCTION IF EXISTS public.sync_staff_salary_periods(uuid,date);
 DROP FUNCTION IF EXISTS public.sync_placement_commission();
 DROP FUNCTION IF EXISTS public.adjust_placement_month(uuid,uuid,uuid,numeric,text,text,text);
 DROP FUNCTION IF EXISTS public.decide_placement_commission(uuid,uuid,text,text);
 DROP FUNCTION IF EXISTS public.recruiting_operations_totals(uuid);
 DROP FUNCTION IF EXISTS public.create_service_enrollment(uuid,uuid,date,date,numeric,text);
 DROP FUNCTION IF EXISTS public.record_service_receipt(uuid,uuid,numeric,text,date,text,text,uuid,text);
-DROP FUNCTION IF EXISTS public.set_candidate_staff_assignment(uuid,uuid,uuid,text,boolean);
-DROP FUNCTION IF EXISTS public.save_staff_employment(uuid,uuid,date,date,text,numeric,text,date);
-DROP FUNCTION IF EXISTS public.adjust_staff_salary_period(uuid,uuid,numeric,text);
-DROP FUNCTION IF EXISTS public.set_staff_account_status(uuid,uuid,account_status);
-DROP FUNCTION IF EXISTS public.record_external_payment(uuid,uuid,uuid,numeric,text,date,text,text,text,uuid,text);
-DROP FUNCTION IF EXISTS public.save_rtr_document_extended(uuid,uuid,uuid,text,text,text,uuid,text,text,text,text,text,text,date,date,text,numeric,numeric,numeric,numeric,numeric,char);
 DROP FUNCTION IF EXISTS public.end_service_enrollment(uuid,uuid,date,text);
-DROP FUNCTION IF EXISTS public.guard_salary_payment();
 DROP FUNCTION IF EXISTS public.guard_submission_attribution();
 DROP FUNCTION IF EXISTS public.validate_placement_lifecycle();
 DROP FUNCTION IF EXISTS public.service_collection_totals(uuid);
 
 DROP TABLE IF EXISTS public.candidate_staff_assignments;
--- Child objects first: the earning_payment_balances view reads external_payments,
--- external_payments references staff_salary_periods, and staff_salary_periods
--- references staff_employments and staff_compensation_terms.
-DROP VIEW IF EXISTS public.earning_payment_balances;
-DROP TABLE IF EXISTS public.external_payments;
-DROP TABLE IF EXISTS public.technical_recruiter_commissions;
-DROP TABLE IF EXISTS public.staff_salary_periods;
-DROP TABLE IF EXISTS public.staff_compensation_terms;
-DROP TABLE IF EXISTS public.staff_employments;
 DROP TABLE IF EXISTS public.oauth_registration_intents;
 
 -- 3. Retire the staff roles from the enum. The enum keeps its name so the
@@ -119,17 +93,17 @@ DROP FUNCTION IF EXISTS public.set_candidate_staff_assignment(uuid,uuid,text,boo
 DROP FUNCTION IF EXISTS public.get_current_role();
 
 ALTER TYPE public.app_role RENAME TO app_role_legacy;
-CREATE TYPE public.app_role AS ENUM ('candidate', 'client');
+CREATE TYPE public.app_role AS ENUM ('candidate');
 
--- 4. Every existing account becomes a candidate or client. No row may keep a staff role.
-UPDATE public.profiles SET role = 'client'::public.app_role_legacy WHERE role <> 'client'::public.app_role_legacy;
+-- 4. Every existing account becomes a candidate. No row may keep a staff role.
+UPDATE public.profiles SET role = 'candidate'::public.app_role_legacy WHERE role <> 'candidate'::public.app_role_legacy;
 
 -- 5. Point the role column at the new enum.
 ALTER TABLE public.profiles
   ALTER COLUMN role DROP DEFAULT;
 ALTER TABLE public.profiles
   ALTER COLUMN role TYPE public.app_role USING role::text::public.app_role;
-ALTER TABLE public.profiles ALTER COLUMN role SET DEFAULT 'client';
+ALTER TABLE public.profiles ALTER COLUMN role SET DEFAULT 'candidate';
 ALTER TABLE public.profiles ALTER COLUMN role SET NOT NULL;
 
 DROP TYPE public.app_role_legacy;
@@ -169,9 +143,9 @@ BEGIN
   IF requested_role = 'candidate' THEN
     assigned_role := 'candidate'::public.app_role;
   ELSE
-    assigned_role := 'client'::public.app_role;
+    assigned_role := 'candidate'::public.app_role;
   END IF;
-  -- Every signup creates an active candidate or client profile.
+  -- Every signup creates an active candidate profile.
   INSERT INTO public.profiles (id,email,full_name,phone,role,status)
   VALUES(NEW.id,COALESCE(NEW.email,''),user_full_name,user_phone,assigned_role,'active'::public.account_status)
   ON CONFLICT(id) DO UPDATE SET
@@ -193,7 +167,7 @@ BEGIN
   IF TG_OP='UPDATE' AND (NEW.role IS DISTINCT FROM OLD.role OR NEW.status IS DISTINCT FROM OLD.status) THEN
     RAISE EXCEPTION 'Role and account status changes require an administrator operation';
   END IF;
-  IF TG_OP='INSERT' AND NOT (NEW.role IN ('client', 'candidate') AND NEW.status='active') THEN
+  IF TG_OP='INSERT' AND NOT (NEW.role IN ('candidate') AND NEW.status='active') THEN
     RAISE EXCEPTION 'Staff privileges cannot be granted by profile insertion'; END IF;
   RETURN NEW;
 END; $$;
@@ -218,7 +192,7 @@ BEGIN
   RETURN EXISTS(
     SELECT 1 FROM public.profiles actor
     JOIN public.candidates candidate ON candidate.id = p_candidate
-    WHERE actor.id = p_actor AND actor.status = 'active' AND actor.role IN ('client', 'candidate')
+    WHERE actor.id = p_actor AND actor.status = 'active' AND actor.role IN ('candidate')
       AND (
         candidate.user_id = actor.id
         OR lower(trim(COALESCE(candidate.email, ''))) = lower(trim(COALESCE(actor.email, '')))
@@ -237,7 +211,7 @@ CREATE OR REPLACE FUNCTION public.candidate_resume_object_can_access(p_object_pa
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.candidate_documents document
-    JOIN public.profiles actor ON actor.id = auth.uid() AND actor.status = 'active' AND actor.role IN ('client', 'candidate')
+    JOIN public.profiles actor ON actor.id = auth.uid() AND actor.status = 'active' AND actor.role IN ('candidate')
     WHERE document.object_path = p_object_path AND document.status <> 'deleted'
       AND (
         document.owner_id = actor.id AND document.candidate_id IS NULL
@@ -251,7 +225,7 @@ CREATE OR REPLACE FUNCTION public.save_candidate_profile(p_actor uuid,p_id uuid,
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
 DECLARE actor public.profiles; prior public.candidates; incoming public.candidates; result uuid;
 BEGIN
-  SELECT * INTO actor FROM public.profiles WHERE id=p_actor AND status='active' AND role IN ('client', 'candidate');
+  SELECT * INTO actor FROM public.profiles WHERE id=p_actor AND status='active' AND role IN ('candidate');
   IF NOT FOUND THEN RAISE EXCEPTION 'Active account required'; END IF;
   SELECT * INTO incoming FROM jsonb_populate_record(NULL::public.candidates,p_fields);
   IF incoming.full_name IS NULL OR length(trim(incoming.full_name)) NOT BETWEEN 1 AND 160 THEN RAISE EXCEPTION 'Full name is required'; END IF;
@@ -310,7 +284,7 @@ DECLARE job public.jobs; target uuid; submission uuid; matches integer; actor pu
 BEGIN
   SELECT * INTO actor FROM public.profiles WHERE id=p_actor AND status='active';
   SELECT * INTO candidate FROM public.candidates WHERE id=p_candidate;
-  IF actor.id IS NULL OR actor.role NOT IN ('client', 'candidate') THEN RAISE EXCEPTION 'Active account required'; END IF;
+  IF actor.id IS NULL OR actor.role NOT IN ('candidate') THEN RAISE EXCEPTION 'Active account required'; END IF;
   IF candidate.id IS NULL OR NOT public.candidate_actor_can_access(p_actor,p_candidate) THEN RAISE EXCEPTION 'Candidate access denied'; END IF;
   SELECT * INTO job FROM public.jobs WHERE id=p_job AND state<>'closed';
   IF NOT FOUND THEN RAISE EXCEPTION 'Candidate or job unavailable'; END IF;
@@ -339,7 +313,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
 DECLARE intent public.application_intents; current_status text; next_status text; current_rank integer; observed_rank integer; actor public.profiles;
 BEGIN
   SELECT * INTO actor FROM public.profiles WHERE id=p_actor AND status='active';
-  IF actor.id IS NULL OR actor.role NOT IN ('client', 'candidate') THEN RAISE EXCEPTION 'Active account required'; END IF;
+  IF actor.id IS NULL OR actor.role NOT IN ('candidate') THEN RAISE EXCEPTION 'Active account required'; END IF;
   SELECT * INTO intent FROM public.application_intents WHERE id=p_intent AND owner_id=p_actor FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Intent access denied'; END IF;
   SELECT capture_status INTO current_status FROM public.job_submissions WHERE id=intent.submission_id FOR UPDATE;
@@ -366,7 +340,7 @@ DECLARE code public.extension_pair_codes; target uuid;
 BEGIN
   SELECT * INTO code FROM public.extension_pair_codes
     WHERE code_hash=encode(digest(p_code,'sha256'),'hex') AND used_at IS NULL AND expires_at>now() FOR UPDATE;
-  IF NOT FOUND OR NOT EXISTS(SELECT 1 FROM public.profiles WHERE id=code.owner_id AND status='active' AND role IN ('client', 'candidate')) THEN RAISE EXCEPTION 'Pairing code expired or invalid'; END IF;
+  IF NOT FOUND OR NOT EXISTS(SELECT 1 FROM public.profiles WHERE id=code.owner_id AND status='active' AND role IN ('candidate')) THEN RAISE EXCEPTION 'Pairing code expired or invalid'; END IF;
   UPDATE public.extension_pair_codes SET used_at=now() WHERE id=code.id;
   INSERT INTO public.extension_credentials(owner_id,token_hash) VALUES(code.owner_id,p_token) RETURNING id INTO target;
   RETURN target;
@@ -524,14 +498,14 @@ BEGIN
   END IF;
 
   IF v_job_id IS NULL THEN
-    SELECT id INTO v_job_id FROM public.jobs WHERE lower(trim(company)) = lower(trim(company)) AND lower(trim(jobs.title)) = lower(trim(title)) LIMIT 1;
+    SELECT id INTO v_job_id FROM public.jobs WHERE lower(trim(public.jobs.company)) = lower(trim(company)) AND lower(trim(public.jobs.title)) = lower(trim(title)) LIMIT 1;
   END IF;
 
   IF v_job_id IS NOT NULL THEN
     UPDATE public.jobs SET
       description = CASE WHEN length(public.jobs.description) < 50 AND length(v_description) >= 50 THEN v_description ELSE public.jobs.description END,
       description_html = CASE WHEN public.jobs.description_html = '' AND v_description_html <> '' THEN v_description_html ELSE public.jobs.description_html END,
-      location = COALESCE(public.jobs.location, NULLIF(left(trim(v_job_location), 200), '')),
+      location = COALESCE(public.jobs.location, NULLIF(left(trim(p_fields->>'jobLocation'), 200), '')),
       last_seen_at = now()
     WHERE id = v_job_id;
   ELSE
@@ -540,8 +514,12 @@ BEGIN
       location, department, description, description_html, employment_type,
       content_hash, is_external, portal_source, state
     ) VALUES (
-      NULL, v_ext_id, title, company, source_url, safe_job_url,
-      location, department, v_description, v_description_html, v_emp_type,
+      NULL, v_ext_id, title, company,
+      COALESCE(safe_job_url, 'https://careers.external.invalid'),
+      COALESCE(safe_job_url, 'https://careers.external.invalid'),
+      NULLIF(left(p_fields->>'jobLocation', 200), ''),
+      NULLIF(left(p_fields->>'department', 100), ''),
+      v_description, v_description_html, v_emp_type,
       v_content_hash, true, v_portal_source, 'active'
     ) RETURNING id INTO v_job_id;
   END IF;
@@ -562,7 +540,7 @@ BEGIN
     submission_date, notes, applied_resume
   ) VALUES (
     p_candidate, company, title, safe_job_url, v_portal_source,
-    location, v_job_id, 'Applied', 'submitted', duplicate,
+    NULLIF(left(p_fields->>'jobLocation', 200), ''), v_job_id, 'Applied', 'submitted', duplicate,
     today, NULLIF(left(COALESCE(p_fields->>'notes', p_fields->>'evidence', 'Application captured by NextKin browser extension'), 1000), ''), applied_res
   ) RETURNING * INTO submission;
 
@@ -597,6 +575,7 @@ DROP POLICY IF EXISTS "Admins and Recruiters have full candidate access" ON publ
 DROP POLICY IF EXISTS "Admins and Recruiters have full submission access" ON public.job_submissions;
 DROP POLICY IF EXISTS assigned_staff_submission_access ON public.job_submissions;
 DROP POLICY IF EXISTS "Clients can view their own submissions" ON public.job_submissions;
+DROP POLICY IF EXISTS candidate_submission_reads ON public.job_submissions;
 CREATE POLICY candidate_submission_reads ON public.job_submissions FOR SELECT TO authenticated
   USING(public.candidate_actor_can_access(auth.uid(), candidate_id));
 
@@ -639,7 +618,7 @@ CREATE POLICY credential_reads ON public.extension_credentials FOR SELECT TO aut
 
 DROP POLICY IF EXISTS requirement_reads ON public.job_requirements;
 CREATE POLICY requirement_reads ON public.job_requirements FOR SELECT TO authenticated
-  USING(public.get_current_role() IN ('client', 'candidate') AND data IS NOT NULL);
+  USING(public.get_current_role() IN ('candidate') AND data IS NOT NULL);
 
 DROP POLICY IF EXISTS source_reads ON public.job_sources;
 CREATE POLICY source_reads ON public.job_sources FOR SELECT TO authenticated USING(true);
@@ -661,20 +640,15 @@ CREATE POLICY job_reads ON public.jobs FOR SELECT TO authenticated USING(true);
 
 DROP POLICY IF EXISTS own_email_connections ON public.email_connections;
 CREATE POLICY own_email_connections ON public.email_connections FOR SELECT TO authenticated
-  USING(owner_id=auth.uid() AND EXISTS(SELECT 1 FROM public.profiles WHERE id=auth.uid() AND status='active' AND role IN ('client', 'candidate')));
+  USING(owner_id=auth.uid() AND EXISTS(SELECT 1 FROM public.profiles WHERE id=auth.uid() AND status='active' AND role IN ('candidate')));
 
 DROP POLICY IF EXISTS own_email_receipts ON public.email_receipts;
 CREATE POLICY own_email_receipts ON public.email_receipts FOR SELECT TO authenticated
-  USING(owner_id=auth.uid() AND EXISTS(SELECT 1 FROM public.profiles WHERE id=auth.uid() AND status='active' AND role IN ('client', 'candidate')));
+  USING(owner_id=auth.uid() AND EXISTS(SELECT 1 FROM public.profiles WHERE id=auth.uid() AND status='active' AND role IN ('candidate')));
 
 DROP POLICY IF EXISTS own_confirmation_events ON public.email_confirmation_events;
 CREATE POLICY own_confirmation_events ON public.email_confirmation_events FOR SELECT TO authenticated
-  USING(actor_id=auth.uid() AND EXISTS(SELECT 1 FROM public.profiles WHERE id=auth.uid() AND status='active' AND role IN ('client', 'candidate')));
-
--- 15b. The remaining policies dropped for the role retyped are recreated candidate-only.
-CREATE POLICY service_enrollment_view ON public.service_enrollments FOR SELECT TO authenticated
-  USING(EXISTS(SELECT 1 FROM public.candidates c WHERE c.id=candidate_id
-    AND public.candidate_actor_can_access(auth.uid(), c.id)));
+  USING(actor_id=auth.uid() AND EXISTS(SELECT 1 FROM public.profiles WHERE id=auth.uid() AND status='active' AND role IN ('candidate')));
 
 -- The candidate-share and RTR policies are recreated only when those tables exist.
 DO $$
@@ -765,7 +739,7 @@ DROP FUNCTION IF EXISTS public.placement_profile_can_read(uuid,uuid,uuid,boolean
 CREATE OR REPLACE FUNCTION public.email_candidate_access(p_owner uuid,p_candidate uuid)
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
  SELECT EXISTS(SELECT 1 FROM public.profiles p JOIN public.candidates c ON c.id=p_candidate
- WHERE p.id=p_owner AND p.status='active' AND p.role IN ('client', 'candidate') AND c.user_id=p.id);
+ WHERE p.id=p_owner AND p.status='active' AND p.role IN ('candidate') AND c.user_id=p.id);
 $$;
 
 CREATE OR REPLACE FUNCTION public.confirm_email_receipt(
@@ -774,7 +748,7 @@ CREATE OR REPLACE FUNCTION public.confirm_email_receipt(
 ) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE r public.email_receipts; target uuid; existing_count integer;
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = p_owner AND status = 'active' AND role IN ('client', 'candidate')) THEN
+  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = p_owner AND status = 'active' AND role IN ('candidate')) THEN
     RAISE EXCEPTION 'Active mailbox account required';
   END IF;
   SELECT * INTO r FROM public.email_receipts WHERE id = p_receipt AND owner_id = p_owner FOR UPDATE;
@@ -819,7 +793,7 @@ DECLARE r public.email_receipts; saved_id uuid; prior public.email_receipts;
 BEGIN
   PERFORM 1 FROM public.email_connections WHERE email_connections.id=p_connection AND owner_id=p_owner
     AND status='connected' AND sync_lease_token=p_lease AND sync_lease_until>now() FOR UPDATE;
-  IF NOT FOUND OR NOT EXISTS(SELECT 1 FROM public.profiles WHERE profiles.id=p_owner AND status='active' AND role IN ('client', 'candidate')) THEN
+  IF NOT FOUND OR NOT EXISTS(SELECT 1 FROM public.profiles WHERE profiles.id=p_owner AND status='active' AND role IN ('candidate')) THEN
     RAISE EXCEPTION 'An active mailbox lease is required';
   END IF;
   SELECT * INTO prior FROM public.email_receipts WHERE owner_id=p_owner AND message_key=p_key;
@@ -851,14 +825,14 @@ RETURNS SETOF public.email_connections LANGUAGE sql SECURITY DEFINER SET search_
   UPDATE public.email_connections SET sync_lease_until=now()+interval '5 minutes',sync_lease_token=p_lease,last_attempted_at=now()
     WHERE id=p_connection AND owner_id=p_owner AND status='connected'
     AND (sync_lease_until IS NULL OR sync_lease_until < now())
-    AND EXISTS(SELECT 1 FROM public.profiles WHERE id=p_owner AND role IN ('client', 'candidate') AND status='active')
+    AND EXISTS(SELECT 1 FROM public.profiles WHERE id=p_owner AND role IN ('candidate') AND status='active')
     RETURNING *;
 $$;
 
 CREATE OR REPLACE FUNCTION public.eligible_email_connections()
 RETURNS TABLE(id uuid,owner_id uuid) LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
   SELECT connection.id,connection.owner_id FROM public.email_connections connection JOIN public.profiles profile ON profile.id=connection.owner_id
-    WHERE connection.status='connected' AND profile.status='active' AND profile.role IN ('client', 'candidate')
+    WHERE connection.status='connected' AND profile.status='active' AND profile.role IN ('candidate')
       AND (connection.sync_lease_until IS NULL OR connection.sync_lease_until<now())
     ORDER BY connection.last_attempted_at ASC NULLS FIRST,connection.id LIMIT 3;
 $$;
@@ -887,7 +861,7 @@ CREATE OR REPLACE FUNCTION public.candidate_actor_can_share(
 RETURNS boolean LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
 DECLARE actor public.profiles; candidate public.candidates;
 BEGIN
-  SELECT * INTO actor FROM public.profiles WHERE id=p_actor AND status='active' AND role IN ('client', 'candidate');
+  SELECT * INTO actor FROM public.profiles WHERE id=p_actor AND status='active' AND role IN ('candidate');
   IF NOT FOUND THEN RETURN false; END IF;
   SELECT * INTO candidate FROM public.candidates WHERE id=p_candidate;
   IF NOT FOUND OR candidate.provenance_status <> 'confirmed' THEN RETURN false; END IF;
@@ -916,7 +890,7 @@ $do$;
 CREATE OR REPLACE FUNCTION public.enqueue_source_sync(p_actor uuid,p_source uuid) RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
 DECLARE target uuid;BEGIN
-  IF NOT EXISTS(SELECT 1 FROM profiles WHERE id=p_actor AND status='active' AND role IN ('client', 'candidate')) THEN RAISE EXCEPTION 'Source access denied';END IF;
+  IF NOT EXISTS(SELECT 1 FROM profiles WHERE id=p_actor AND status='active' AND role IN ('candidate')) THEN RAISE EXCEPTION 'Source access denied';END IF;
   PERFORM 1 FROM job_sources WHERE id=p_source AND enabled FOR UPDATE;IF NOT FOUND THEN RAISE EXCEPTION 'Source is disabled or missing';END IF;
   SELECT id INTO target FROM background_tasks WHERE kind='source_sync' AND payload->>'sourceId'=p_source::text AND status IN('queued','running') LIMIT 1;
   IF target IS NULL THEN target:=enqueue_task(p_actor,'source_sync',jsonb_build_object('sourceId',p_source),'source:'||p_source||':'||gen_random_uuid());END IF;
@@ -954,7 +928,7 @@ DECLARE
     candidate public.candidates;
     rtr public.rtr_documents;
 BEGIN
-    SELECT * INTO actor FROM public.profiles WHERE id = p_actor AND status = 'active' AND role IN ('client', 'candidate');
+    SELECT * INTO actor FROM public.profiles WHERE id = p_actor AND status = 'active' AND role IN ('candidate');
     IF actor.id IS NULL THEN
         RAISE EXCEPTION 'Active candidate account required';
     END IF;
@@ -1038,7 +1012,7 @@ DECLARE
     actor public.profiles;
     rtr public.rtr_documents;
 BEGIN
-    SELECT * INTO actor FROM public.profiles WHERE id = p_actor AND status = 'active' AND role IN ('client', 'candidate');
+    SELECT * INTO actor FROM public.profiles WHERE id = p_actor AND status = 'active' AND role IN ('candidate');
     IF actor.id IS NULL THEN
         RAISE EXCEPTION 'Active candidate account required';
     END IF;
@@ -1094,7 +1068,7 @@ CREATE OR REPLACE FUNCTION public.request_tailored_resume(p_actor uuid,p_candida
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
 DECLARE candidate public.candidates; v_source_version integer; v_source_key text; target uuid; task uuid;
 BEGIN
-  IF NOT EXISTS(SELECT 1 FROM public.profiles WHERE id=p_actor AND status='active' AND role IN ('client', 'candidate')) OR NOT public.candidate_actor_can_access(p_actor,p_candidate) THEN RAISE EXCEPTION 'Candidate access denied'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM public.profiles WHERE id=p_actor AND status='active' AND role IN ('candidate')) OR NOT public.candidate_actor_can_access(p_actor,p_candidate) THEN RAISE EXCEPTION 'Candidate access denied'; END IF;
   SELECT * INTO candidate FROM public.candidates WHERE id=p_candidate FOR SHARE;
   IF candidate.provenance_status<>'confirmed' THEN RAISE EXCEPTION 'Review the candidate resume first'; END IF;
   IF p_job IS NULL THEN RAISE EXCEPTION 'Select a job'; END IF;
@@ -1134,7 +1108,7 @@ BEGIN
   PERFORM 1 FROM public.candidates WHERE id=target.candidate_id FOR SHARE;
   PERFORM 1 FROM public.jobs WHERE id=target.job_id FOR SHARE;
   IF target.id IS NULL OR task.kind<>'resume_tailor' OR task.payload->>'resumeId' IS DISTINCT FROM p_resume::text OR target.task_id IS DISTINCT FROM p_task OR target.actor_id IS DISTINCT FROM task.actor_id OR NOT public.candidate_actor_can_access(task.actor_id,target.candidate_id)
-   OR NOT EXISTS(SELECT 1 FROM public.profiles WHERE id=task.actor_id AND status='active' AND role IN ('client', 'candidate')) THEN RAISE EXCEPTION 'Resume task access denied'; END IF;
+   OR NOT EXISTS(SELECT 1 FROM public.profiles WHERE id=task.actor_id AND status='active' AND role IN ('candidate')) THEN RAISE EXCEPTION 'Resume task access denied'; END IF;
   IF NOT public.tailored_resume_is_current(p_resume) THEN RAISE EXCEPTION 'Candidate or job changed; generate a fresh resume'; END IF;
   IF length(trim(p_content)) NOT BETWEEN 1 AND 100000 THEN RAISE EXCEPTION 'Invalid generated resume'; END IF;
   IF target.status<>'queued' THEN RETURN; END IF;
@@ -1147,7 +1121,7 @@ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS
 DECLARE target public.tailored_resumes;
 BEGIN
   SELECT * INTO target FROM public.tailored_resumes WHERE id=p_resume FOR UPDATE;
-  IF target.id IS NULL OR NOT EXISTS(SELECT 1 FROM public.profiles WHERE id=p_actor AND status='active' AND role IN ('client', 'candidate')) OR NOT public.candidate_actor_can_access(p_actor,target.candidate_id) THEN RAISE EXCEPTION 'Candidate access denied'; END IF;
+  IF target.id IS NULL OR NOT EXISTS(SELECT 1 FROM public.profiles WHERE id=p_actor AND status='active' AND role IN ('candidate')) OR NOT public.candidate_actor_can_access(p_actor,target.candidate_id) THEN RAISE EXCEPTION 'Candidate access denied'; END IF;
   PERFORM 1 FROM public.candidates WHERE id=target.candidate_id FOR SHARE;
   PERFORM 1 FROM public.jobs WHERE id=target.job_id FOR SHARE;
   IF target.revision<>p_expected OR target.status NOT IN('review','ready') OR NOT public.tailored_resume_is_current(p_resume) THEN RAISE EXCEPTION 'Resume or source changed; reload or regenerate'; END IF;

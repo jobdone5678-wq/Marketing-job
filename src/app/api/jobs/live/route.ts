@@ -60,7 +60,7 @@ export async function GET(request:Request) {
         const snapshot = await fetchSnapshot(source);
         const jobs = snapshot.jobs.filter(isSoftwareJob);
         try {
-          const persisted = saveToDb ? await persistLiveJobs(source,profile.id,jobs,['client', 'candidate'].includes(profile.role)) : 0;
+          const persisted = saveToDb ? await persistLiveJobs(source,profile.id,jobs,['candidate'].includes(profile.role)) : 0;
           return {source,jobs,persisted,error:undefined};
         } catch (error) {
           return {source,jobs,persisted:0,error:`Fetched jobs, but saving failed: ${(error as Error).message}`};

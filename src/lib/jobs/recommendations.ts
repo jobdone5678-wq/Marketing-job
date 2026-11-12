@@ -14,7 +14,7 @@ export async function recommendationContext(profile: UserProfile, params: URLSea
     }
   }
 
-  if (!candidate && ['client', 'candidate', 'admin', 'staff'].includes(profile.role)) {
+  if (!candidate && profile.role === 'candidate') {
     // 1. Try finding candidate linked by user_id
     const { data: byUser, error: errUser } = await database().from('candidates').select('*').eq('user_id', profile.id)
       .eq('provenance_status', 'confirmed').order('updated_at', { ascending: false }).order('id').limit(1).maybeSingle();

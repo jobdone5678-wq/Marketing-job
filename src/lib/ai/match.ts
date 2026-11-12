@@ -1,7 +1,7 @@
 import {jobRequirements} from './requirements';
 import 'server-only';import {database,checkDb,CaptureError} from '@/lib/db/admin';import {getAIModel} from './client';import {validateMatch} from './match-validation';import type {BackgroundTask} from '@/lib/tasks/types';
 export async function recruitingInputs(task:BackgroundTask){const db=database();const {data:candidate,error:c}=await db.from('candidates').select('*').eq('id',task.payload.candidateId).single();checkDb(c);const {data:job,error:j}=await db.from('jobs').select('*').eq('id',task.payload.jobId).single();checkDb(j);const {data:actor,error:a}=await db.from('profiles').select('role,status').eq('id',task.actor_id).single();checkDb(a);
- if(!actor||actor.status!=='active'||actor.role==='client'&&candidate.user_id!==task.actor_id)throw new CaptureError('Candidate access denied.',403);
+ if(!actor||actor.status!=='active'||actor.role!=='candidate'||candidate.user_id!==task.actor_id)throw new CaptureError('Candidate access denied.',403);
  if(candidate.provenance_status!=='confirmed')throw new CaptureError('Review and confirm the candidate profile first.',409);
  if(candidate.version!==task.payload.candidateVersion||job.version!==task.payload.jobVersion||job.state==='closed')throw new CaptureError('Candidate or job changed. Start a new comparison.',409);
  return {candidate,job};}

@@ -14,7 +14,7 @@ export async function POST(request:Request){return protectedRoute(request,async 
  if(!source||saved?.enabled===false)throw new CaptureError('This public source is unavailable. Ask a recruiter to add or enable it.',404);
  const snapshot=await fetchSnapshot(source);const job=snapshot.jobs.find(row=>row.external_id===body.externalId);
  if(!job||!isSoftwareJob(job)||job.closes_at&&Date.parse(job.closes_at)<=Date.now())throw new CaptureError('The selected posting is unavailable. Refresh the public board.',404);
- await persistLiveJobs(source,profile.id,[job],['client', 'candidate'].includes(profile.role));
+ await persistLiveJobs(source,profile.id,[job],['candidate'].includes(profile.role));
  const sourceResult=await db.from('job_sources').select('id').eq('provider',body.provider).eq('board_slug',body.board).single();checkDb(sourceResult.error);
  if(!sourceResult.data)throw new CaptureError('Public source could not be saved.',503);
  const result=await db.from('jobs').select('id').eq('source_id',sourceResult.data.id).eq('external_id',body.externalId).neq('state','closed').single();checkDb(result.error);

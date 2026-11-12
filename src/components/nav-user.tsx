@@ -34,7 +34,7 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
-  const roleDisplay = user.role === "candidate" ? "Candidate" : user.role === "client" ? "Client" : undefined
+  const roleDisplay = user.role === "candidate" ? "Candidate" : undefined
 
   const initials = (() => {
     if (!user.name || user.name === "Loading account" || user.name === "Account") {

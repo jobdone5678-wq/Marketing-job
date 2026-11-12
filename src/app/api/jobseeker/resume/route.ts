@@ -41,7 +41,7 @@ async function getAuthenticatedUserId(request: Request): Promise<{ id: string; r
 
     return {
       id: user.id,
-      role: profile?.role || "client",
+      role: profile?.role || "candidate",
     };
   }
 

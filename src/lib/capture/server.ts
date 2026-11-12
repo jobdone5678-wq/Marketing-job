@@ -1,7 +1,7 @@
 import {appliedResumeSchema,saveAppliedResume} from './applied-resume';
 import 'server-only';import {createHash} from 'node:crypto';import {database,checkDb,CaptureError,errorResponse} from '@/lib/db/admin';import {allowedCaptureUrl,validateObservation} from './validation';import {validateApplicationAnswers} from './snapshot';import {z} from 'zod';
 export const tokenHash=(value:string)=>createHash('sha256').update(value).digest('hex');
-export type ExtensionProfile = { id: string; status: string; role: 'client' };
+export type ExtensionProfile = { id: string; status: string; role: 'candidate' };
 export async function extensionProfile(request: Request): Promise<ExtensionProfile> {
   const header = request.headers.get('authorization') || '';
   if (!/^Bearer [A-Za-z0-9_-]{20,128}$/.test(header)) {
@@ -20,7 +20,7 @@ export async function extensionProfile(request: Request): Promise<ExtensionProfi
   if (!profile || profile.status !== 'active') {
     throw new CaptureError('Active user profile required to use the extension.', 403);
   }
-  if (!['client', 'candidate', 'admin', 'staff', 'superadmin'].includes(profile.role)) {
+  if (profile.role !== 'candidate') {
     throw new CaptureError('Unauthorized role for extension access.', 403);
   }
   return profile;

@@ -79,11 +79,11 @@ export async function POST(request: Request) {
       );
     }
 
-    if (profile.status !== 'active' || (profile.role !== 'client' && profile.role !== 'candidate')) {
+    if (profile.status !== 'active' || profile.role !== 'candidate') {
       return cors(
         request,
         Response.json(
-          { error: 'An active candidate or client account is required to use the extension.' },
+          { error: 'An active candidate account is required to use the extension.' },
           { status: 403 }
         )
       );

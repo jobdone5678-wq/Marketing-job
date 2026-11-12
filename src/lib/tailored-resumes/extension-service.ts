@@ -17,7 +17,7 @@ import type {BackgroundTask} from '@/lib/tasks/types';
 export const extensionJobSchema=z.object({jobTitle:z.string().trim().min(1).max(500),companyName:z.string().trim().min(1).max(500),jobDescription:z.string().trim().min(40).max(100000),jobUrl:z.string().url().max(4000),consent:z.literal(true),requestId:z.uuid()});
 export async function extensionResumeActor(request:Request){
  const actor=await extensionProfile(request);
- if(actor.status!=='active'||!['client','client'].includes(actor.role))throw new CaptureError('Your role cannot generate or access application resumes.',403);
+ if(actor.status!=='active'||actor.role!=='candidate')throw new CaptureError('Your role cannot generate or access application resumes.',403);
  return actor as UserProfile;
 }
 export async function resumeRequestBody(request:Request){

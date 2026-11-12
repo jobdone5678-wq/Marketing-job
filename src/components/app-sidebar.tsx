@@ -147,7 +147,7 @@ export function AppSidebar({
     }
   }, [])
 
-  const isAllowedRole = currentUser.role === "client" || currentUser.role === "candidate"
+  const isAllowedRole = currentUser.role === "candidate"
   const mainItems = isAllowedRole ? candidateNavItems : []
 
   const navigationItems = currentUser.role
@@ -188,7 +188,7 @@ export function AppSidebar({
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                   <span className="text-[10.5px] text-muted-foreground truncate capitalize font-medium">
-                    {currentUser.role === "candidate" ? "Candidate Workspace" : currentUser.role === "client" ? "Client Workspace" : "Portal Workspace"}
+                    {currentUser.role === "candidate" ? "Candidate Workspace" : "Portal Workspace"}
                   </span>
                 </div>
               </div>

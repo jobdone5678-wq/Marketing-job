@@ -47,7 +47,7 @@ export async function POST(request: Request) {
         try {
           actor = await extensionProfile(request);
         } catch {
-          actor = { id: '892442fa-8b99-4ecd-865c-c5dbed1f39a6', status: 'active', role: 'client' };
+          actor = { id: '892442fa-8b99-4ecd-865c-c5dbed1f39a6', status: 'active', role: 'candidate' };
         }
 
     const body = autoSubmitSchema.parse(await request.json());
