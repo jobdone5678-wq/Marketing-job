@@ -38,10 +38,10 @@ import Link from "next/link"
 // Candidate Navigation Items
 const candidateNavItems: NavItem[] = [
   {
-    id: "dashboard",
-    title: "Dashboard",
-    url: "/dashboard",
-    icon: <LayoutDashboardIcon className="size-4 stroke-[1.8]" />,
+    id: "public-jobs",
+    title: "Public Jobs",
+    url: "/dashboard/jobs",
+    icon: <CompassIcon className="size-4 stroke-[1.8]" />,
   },
   {
     id: "candidates",
@@ -66,18 +66,6 @@ const candidateNavItems: NavItem[] = [
     title: "Email Confirmations",
     url: "/dashboard/email-confirmations",
     icon: <InboxIcon className="size-4 stroke-[1.8]" />,
-  },
-  {
-    id: "placements",
-    title: "My Service Fees & Placement",
-    url: "/dashboard/placements",
-    icon: <CircleDollarSignIcon className="size-4 stroke-[1.8]" />,
-  },
-  {
-    id: "public-jobs",
-    title: "Public Jobs",
-    url: "/dashboard/jobs",
-    icon: <CompassIcon className="size-4 stroke-[1.8]" />,
   },
   {
     id: "outside-jobs",
@@ -187,8 +175,8 @@ export function AppSidebar({
         <SidebarMenu>
           <SidebarMenuItem>
             <Link
-              href="/dashboard"
-              onClick={() => onSelectSection?.("dashboard")}
+              href="/dashboard/jobs"
+              onClick={() => onSelectSection?.("public-jobs")}
               className="group flex items-center gap-3 p-1.5 rounded-lg hover:bg-sidebar-accent/70 transition-all duration-150 cursor-pointer text-foreground select-none"
             >
               <div className="flex size-8.5 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary/20 via-primary/10 to-transparent text-primary border border-primary/25 shadow-2xs group-hover:scale-105 group-hover:border-primary/40 transition-transform duration-150">

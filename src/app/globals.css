@@ -8,9 +8,10 @@
 .resume-consent-row {position:relative;display:flex;align-items:flex-start;gap:.75rem;min-height:3rem;padding:.625rem 0;cursor:pointer;font-size:.875rem;line-height:1.5;}
 .resume-consent-checkbox {appearance:auto;flex:none;width:1.25rem;height:1.25rem;margin:.0625rem 0 0;accent-color:hsl(var(--primary));cursor:pointer;}
 .resume-consent-checkbox:focus-visible {outline:2px solid hsl(var(--ring));outline-offset:3px;}
-.resume-file-input {display:block;width:100%;min-width:0;min-height:3rem;padding:.375rem;border:1px solid hsl(var(--border));border-radius:.5rem;background:hsl(var(--background));color:hsl(var(--foreground));font-size:.875rem;line-height:1.5;cursor:pointer;}
-.resume-file-input::file-selector-button {margin-right:.875rem;border:1px solid hsl(var(--primary));border-radius:.375rem;padding:.5rem .875rem;background:hsl(var(--primary));color:hsl(var(--primary-foreground));font:inherit;font-weight:600;cursor:pointer;}
-.resume-file-input:not(:disabled):hover::file-selector-button {filter:brightness(.95);}
+.resume-file-input {display:block;width:100%;min-width:0;min-height:3rem;padding:.375rem;border:1px solid hsl(var(--border));border-radius:.625rem;background:hsl(var(--background));color:hsl(var(--foreground));font-size:.875rem;line-height:1.5;cursor:pointer;transition:border-color 0.15s ease, box-shadow 0.15s ease;}
+.resume-file-input:focus {border-color:hsl(var(--ring));box-shadow:0 0 0 3px hsl(var(--ring)/0.15);}
+.resume-file-input::file-selector-button {margin-right:.875rem;border:1px solid hsl(var(--primary));border-radius:.375rem;padding:.5rem .875rem;background:hsl(var(--primary));color:hsl(var(--primary-foreground));font:inherit;font-weight:600;cursor:pointer;transition:all 0.15s ease;}
+.resume-file-input:not(:disabled):hover::file-selector-button {filter:brightness(.95);transform:translateY(-0.5px);}
 .resume-file-input:focus-visible {outline:2px solid hsl(var(--ring));outline-offset:3px;}
 .resume-file-input:disabled {cursor:not-allowed;background:hsl(var(--muted)/.4);color:hsl(var(--muted-foreground));}
 .resume-file-input:disabled::file-selector-button {cursor:not-allowed;border-color:hsl(var(--border));background:hsl(var(--muted));color:hsl(var(--muted-foreground));}
@@ -26,27 +27,27 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Official shadcn default light theme colors */
+  /* Linear / Stripe inspired ultra-refined palette */
   --background: 220 20% 98%;
   --foreground: 222 24% 13%;
   --card: 0 0% 100%;
-  --card-foreground: 240 10% 3.9%;
+  --card-foreground: 222 24% 13%;
   --popover: 0 0% 100%;
-  --popover-foreground: 240 10% 3.9%;
-  --primary: 221 70% 45%;
-  --primary-foreground: 0 0% 98%;
-  --secondary: 240 4.8% 95.9%;
-  --secondary-foreground: 240 5.9% 10%;
-  --muted: 240 4.8% 95.9%;
-  --muted-foreground: 220 10% 38%;
-  --accent: 240 4.8% 95.9%;
-  --accent-foreground: 240 5.9% 10%;
-  --destructive: 0 84.2% 60.2%;
+  --popover-foreground: 222 24% 13%;
+  --primary: 221 83% 53%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 14% 96%;
+  --secondary-foreground: 222 24% 18%;
+  --muted: 220 14% 95%;
+  --muted-foreground: 220 10% 46%;
+  --accent: 220 14% 94%;
+  --accent-foreground: 222 24% 13%;
+  --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 98%;
-  --border: 220 16% 87%;
-  --input: 240 5.9% 90%;
+  --border: 220 13% 90%;
+  --input: 220 13% 88%;
   --ring: 221 83% 53%;
-  --radius: 0.5rem;
+  --radius: 0.625rem;
 
   /* Taste-skill high-trust status tokens (WCAG AA 4.5:1+ contrast) */
   --status-started-bg: 220 14% 96%;
@@ -73,30 +74,31 @@
   --status-failed-fg: 0 74% 35%;
   --status-failed-border: 0 91% 83%;
 
-  --font-display: 'Geist', 'Segoe UI', sans-serif;
-  --font-body: 'Geist', 'Segoe UI', sans-serif;
+  --font-display: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-body: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .dark {
-  --background: 222 19% 8%;
-  --foreground: 0 0% 98%;
-  --card: 222 17% 11%;
-  --card-foreground: 0 0% 98%;
-  --popover: 222 17% 12%;
-  --popover-foreground: 0 0% 98%;
-  --primary: 217 91% 65%;
-  --primary-foreground: 222 47% 11%;
-  --secondary: 240 3.7% 15.9%;
-  --secondary-foreground: 0 0% 98%;
-  --muted: 240 3.7% 15.9%;
-  --muted-foreground: 220 10% 68%;
-  --accent: 240 3.7% 15.9%;
-  --accent-foreground: 0 0% 98%;
-  --destructive: 0 62.8% 45%;
+  --background: 224 25% 6%;
+  --foreground: 210 20% 98%;
+  --card: 224 20% 9%;
+  --card-foreground: 210 20% 98%;
+  --popover: 224 20% 10%;
+  --popover-foreground: 210 20% 98%;
+  --primary: 217 91% 60%;
+  --primary-foreground: 224 25% 6%;
+  --secondary: 224 16% 14%;
+  --secondary-foreground: 210 20% 95%;
+  --muted: 224 16% 14%;
+  --muted-foreground: 220 10% 65%;
+  --accent: 224 16% 16%;
+  --accent-foreground: 210 20% 98%;
+  --destructive: 0 70% 50%;
   --destructive-foreground: 0 0% 98%;
-  --border: 220 13% 23%;
-  --input: 240 3.7% 15.9%;
-  --ring: 240 4.9% 83.9%;
+  --border: 224 14% 18%;
+  --input: 224 14% 20%;
+  --ring: 217 91% 60%;
 
   --status-started-bg: 222 14% 15%;
   --status-started-fg: 220 10% 70%;
@@ -151,6 +153,7 @@
   --color-sidebar-ring: hsl(var(--ring));
   --font-display: var(--font-display);
   --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
 }
 
 html, body {
@@ -171,17 +174,17 @@ body {
   * { border-color: hsl(var(--border)); }
   button, a, input, select, summary { touch-action: manipulation; }
   button:not(:disabled), summary { cursor: pointer; }
-  .num { font-variant-numeric: tabular-nums; font-family: 'Geist Mono', ui-monospace, monospace; }
+  .num { font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
   td.num, th.num { text-align: right; }
 }
 
 @layer components {
   .portal-page { @apply mx-auto w-full max-w-[1440px] p-4 sm:p-6 lg:p-7; }
-  .section-label { @apply text-xs font-semibold tracking-wide text-foreground; }
-  .status-chip { @apply inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-medium leading-none; }
-  .status-positive { @apply border-emerald-600/20 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300; }
-  .status-warning { @apply border-amber-600/20 bg-amber-500/5 text-amber-800 dark:text-amber-300; }
-  .status-neutral { @apply border-border/60 bg-muted/40 text-muted-foreground; }
+  .section-label { @apply text-xs font-semibold tracking-wide text-foreground uppercase tracking-wider text-muted-foreground/90; }
+  .status-chip { @apply inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium leading-none transition-colors; }
+  .status-positive { @apply border-emerald-600/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300; }
+  .status-warning { @apply border-amber-600/25 bg-amber-500/10 text-amber-800 dark:text-amber-300; }
+  .status-neutral { @apply border-border/70 bg-muted/50 text-muted-foreground; }
   
   /* Semantic application tracker statuses */
   .status-started { background-color: hsl(var(--status-started-bg)); color: hsl(var(--status-started-fg)); border-color: hsl(var(--status-started-border)); }
@@ -191,14 +194,109 @@ body {
   .status-confirmed { background-color: hsl(var(--status-confirmed-bg)); color: hsl(var(--status-confirmed-fg)); border-color: hsl(var(--status-confirmed-border)); }
   .status-failed { background-color: hsl(var(--status-failed-bg)); color: hsl(var(--status-failed-fg)); border-color: hsl(var(--status-failed-border)); }
 
-  .skeleton { @apply bg-muted motion-safe:animate-pulse; }
-  .skip-link { @apply fixed top-2 left-3 z-[60] -translate-y-20 rounded-md bg-foreground px-4 py-2 text-sm text-background focus:translate-y-0; }
-  .ops-input { @apply w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20; }
+  /* Premium Linear/Stripe component utilities */
+  .card-premium {
+    @apply rounded-xl border border-border/70 bg-card text-card-foreground shadow-[0_1px_3px_rgba(0,0,0,0.02),0_1px_2px_rgba(0,0,0,0.01)] transition-all duration-200;
+  }
+  .card-premium-hover {
+    @apply hover:border-border hover:shadow-[0_4px_16px_rgba(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 active:translate-y-0;
+  }
+  .badge-dot {
+    @apply size-1.5 rounded-full shrink-0;
+  }
+
+  .skeleton {
+    background: linear-gradient(90deg, hsl(var(--muted)/0.8) 0%, hsl(var(--muted)/0.4) 50%, hsl(var(--muted)/0.8) 100%);
+    background-size: 200% 100%;
+    animation: shimmer-wave 1.6s ease-in-out infinite;
+  }
+  .skip-link { @apply fixed top-2 left-3 z-[60] -translate-y-20 rounded-md bg-foreground px-4 py-2 text-sm text-background focus:translate-y-0 transition-transform; }
+  .ops-input { @apply w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none transition-all focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20; }
   .ops-table { @apply w-full text-left text-sm; }
-  .ops-table th { @apply whitespace-nowrap border-b border-border bg-muted/30 px-3 py-2.5 text-xs font-medium text-muted-foreground; }
-  .ops-table td { @apply border-b border-border px-3 py-3 align-middle; }
+  .ops-table th { @apply whitespace-nowrap border-b border-border bg-muted/40 px-3.5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider; }
+  .ops-table td { @apply border-b border-border/70 px-3.5 py-3 align-middle; }
   .ops-table tr:last-child td { @apply border-b-0; }
-  .ops-table tbody tr { @apply hover:bg-muted/20; }
+  .ops-table tbody tr { @apply hover:bg-muted/30 transition-colors; }
+
+  /* Premium Job Portal Components & Interactions */
+  .job-card-interactive {
+    @apply transition-all duration-200 ease-out border border-border/80 bg-card hover:border-primary/50 hover:shadow-[0_4px_20px_-2px_rgba(0,0,0,0.06),0_2px_6px_-1px_rgba(0,0,0,0.04)] hover:-translate-y-0.5 active:translate-y-0 cursor-pointer;
+  }
+  .job-card-glow {
+    position: relative;
+    overflow: hidden;
+  }
+  .job-card-glow::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    background: radial-gradient(circle at top left, hsl(var(--primary) / 0.1), transparent 65%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+    border-radius: inherit;
+  }
+  .job-card-glow:hover::before {
+    opacity: 1;
+  }
+
+  /* Editorial Job Description (JD) Typography */
+  .jd-prose {
+    font-size: 0.9375rem;
+    line-height: 1.75;
+    color: hsl(var(--foreground) / 0.9);
+  }
+  .jd-prose p {
+    margin-bottom: 1.25rem;
+  }
+  .jd-prose h2, .jd-prose h3 {
+    font-size: 1.125rem;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    color: hsl(var(--foreground));
+    margin-top: 1.75rem;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .jd-prose h2::before, .jd-prose h3::before {
+    content: '';
+    display: inline-block;
+    width: 0.25rem;
+    height: 1rem;
+    border-radius: 9999px;
+    background-color: hsl(var(--primary));
+  }
+  .jd-prose ul {
+    margin-top: 0.5rem;
+    margin-bottom: 1.25rem;
+    padding-left: 0.25rem;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .jd-prose ul li {
+    position: relative;
+    padding-left: 1.5rem;
+    line-height: 1.6;
+  }
+  .jd-prose ul li::before {
+    content: '';
+    position: absolute;
+    left: 0.25rem;
+    top: 0.55rem;
+    width: 0.375rem;
+    height: 0.375rem;
+    border-radius: 9999px;
+    background-color: hsl(var(--primary));
+    opacity: 0.8;
+  }
+  .jd-prose strong {
+    font-weight: 700;
+    color: hsl(var(--foreground));
+  }
 }
 
 /* One workspace rhythm across every existing route, including form and detail pages. */
@@ -208,7 +306,7 @@ body {
   margin-inline: auto;
   padding: clamp(1rem, 2.2vw, 1.75rem);
 }
-.portal-workspace h1 { font-family: var(--font-body); font-size: clamp(1.35rem, 2vw, 1.65rem); font-weight: 600; letter-spacing: -.035em; line-height: 1.25; }
+.portal-workspace h1 { font-family: var(--font-body); font-size: clamp(1.35rem, 2vw, 1.65rem); font-weight: 600; letter-spacing: -.03em; line-height: 1.25; }
 .portal-workspace :is(input, textarea, select) { color-scheme: light; }
 .dark .portal-workspace :is(input, textarea, select) { color-scheme: dark; }
 .portal-workspace label { font-size: .8125rem; font-weight: 500; line-height: 1.6; }
@@ -216,24 +314,101 @@ body {
 .portal-workspace :is(select, textarea):not([data-slot]) { max-width: 100%; border-color: hsl(var(--border)); background-color: hsl(var(--card)); color: hsl(var(--foreground)); border-radius: .5rem; }
 .portal-workspace th { font-size: .75rem; font-weight: 600; letter-spacing: .025em; color: hsl(var(--muted-foreground)); }
 .portal-workspace td { font-size: .8125rem; }
-.portal-workspace [data-slot="card"] { border-color: hsl(var(--border) / .65); box-shadow: 0 1px 2px hsl(var(--foreground) / .025); }
+.portal-workspace [data-slot="card"] { border-color: hsl(var(--border) / .75); box-shadow: 0 1px 3px hsl(var(--foreground) / .02); }
 .portal-workspace [data-slot="sidebar-inset"] { min-width: 0; }
 :where(a, button, summary, select, textarea, input):focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
 ::selection { background: hsl(var(--primary) / .18); }
+
+/* Keyframes and hardware-accelerated animation classes */
+@keyframes fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slide-in-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer-wave {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-fade-rise {
+  animation: fade-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-fade-rise-delay {
+  animation: fade-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out both;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-slide-up {
+  animation: slide-in-bottom 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Stagger entrance delays */
+.delay-1 { animation-delay: 50ms; }
+.delay-2 { animation-delay: 100ms; }
+.delay-3 { animation-delay: 150ms; }
+.delay-4 { animation-delay: 200ms; }
+.delay-5 { animation-delay: 250ms; }
+
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ─── Resume Preview ─── */
 .resume-preview {
-  background: hsl(var(--background));
+  background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
-  border-radius: 0.75rem;
+  border-radius: 0.875rem;
   padding: 2rem 2.25rem;
   font-family: var(--font-body);
   color: hsl(var(--foreground));
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
-  max-height: 36rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03), 0 4px 14px rgba(0,0,0,0.03);
+  max-height: 40rem;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--border)) transparent;
@@ -245,7 +420,7 @@ body {
   justify-content: center;
   min-height: 12rem;
   border: 2px dashed hsl(var(--border));
-  border-radius: 0.75rem;
+  border-radius: 0.875rem;
   color: hsl(var(--muted-foreground));
   font-size: 0.875rem;
 }
@@ -344,18 +519,18 @@ body {
 .resume-skill-badge {
   display: inline-flex;
   align-items: center;
-  padding: 0.2rem 0.625rem;
+  padding: 0.25rem 0.625rem;
   background: hsl(var(--secondary));
   color: hsl(var(--secondary-foreground));
   border-radius: 9999px;
   font-size: 0.75rem;
   font-weight: 500;
   border: 1px solid hsl(var(--border));
-  transition: background 0.15s, border-color 0.15s;
+  transition: all 0.15s ease;
 }
 .resume-skill-badge:hover {
   background: hsl(var(--accent));
-  border-color: hsl(var(--primary) / 0.3);
+  border-color: hsl(var(--primary) / 0.4);
 }
 
 .resume-exp-entry {
@@ -446,38 +621,18 @@ body {
   color: hsl(var(--foreground));
 }
 
-/* Keyframes and animation classes */
-@keyframes fade-rise {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-rise {
-  animation: fade-rise 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.animate-fade-rise-delay {
-  animation: fade-rise 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
-}
-
 /* Shared operational sections and readable numeric comparisons. */
-.portal-workspace :is(.tabular-nums,.num) {font-family:'Geist Mono',ui-monospace,monospace;}
-.portal-workspace > :is(main,div) > section.border, .portal-workspace > :is(main,div) > form {border-color:hsl(var(--border)/.65);}
-.workspace-form {border:1px solid hsl(var(--border)/.65);border-radius:.5rem;background:hsl(var(--card));padding:1.25rem;}
+.portal-workspace :is(.tabular-nums,.num) {font-family:var(--font-mono);}
+.portal-workspace > :is(main,div) > section.border, .portal-workspace > :is(main,div) > form {border-color:hsl(var(--border)/.75);}
+.workspace-form {border:1px solid hsl(var(--border)/.75);border-radius:.75rem;background:hsl(var(--card));padding:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,0.02);}
 .workspace-form legend {font-size:.8125rem;font-weight:600;padding-inline:.25rem;}
 .evidence-table {width:100%;border-collapse:collapse;text-align:left;font-size:.875rem;}
-.evidence-table th {padding:.75rem;background:hsl(var(--muted)/.3);font-size:.75rem;font-weight:500;}
-.evidence-table td {padding:.875rem .75rem;border-top:1px solid hsl(var(--border)/.6);vertical-align:top;}
-@media(max-width:639px){.evidence-table thead{display:none;}.evidence-table,.evidence-table tbody{display:block;}.evidence-table tr{display:grid;grid-template-columns:1fr;gap:.75rem;padding:1rem;border-bottom:1px solid hsl(var(--border)/.6);}.evidence-table td{display:block;padding:0;border:0;font-size:.875rem;}.evidence-table td::before{content:attr(data-label);display:block;margin-bottom:.25rem;font-size:.75rem;font-weight:500;color:hsl(var(--muted-foreground));}}
+.evidence-table th {padding:.875rem 1rem;background:hsl(var(--muted)/.4);font-size:.75rem;font-weight:600;letter-spacing:0.04em;}
+.evidence-table td {padding:.875rem 1rem;border-top:1px solid hsl(var(--border)/.65);vertical-align:middle;}
+@media(max-width:639px){.evidence-table thead{display:none;}.evidence-table,.evidence-table tbody{display:block;}.evidence-table tr{display:grid;grid-template-columns:1fr;gap:.75rem;padding:1rem;border-bottom:1px solid hsl(var(--border)/.65);}.evidence-table td{display:block;padding:0;border:0;font-size:.875rem;}.evidence-table td::before{content:attr(data-label);display:block;margin-bottom:.25rem;font-size:.75rem;font-weight:600;color:hsl(var(--muted-foreground));}}
 
 @media(max-width:767px){
- .submissions-table{display:block;min-width:0!important;}.submissions-table thead{display:none;}.submissions-table tbody{display:block;}.submissions-table tbody>tr{display:grid;grid-template-columns:minmax(0,1fr);gap:.75rem;padding:1rem;border-bottom:1px solid hsl(var(--border));}.submissions-table td{display:block;padding:0;white-space:normal;min-width:0;}.submissions-table td::before{display:block;font-size:.75rem;font-weight:500;color:hsl(var(--muted-foreground));margin-bottom:.35rem;}.submissions-table td[data-col="candidate"]::before{content:'Candidate';}.submissions-table td[data-col="client"]::before{content:'End client & role';}.submissions-table td[data-col="resume"]::before{content:'Applied resume & answers';}.submissions-table td[data-col="rtr"]::before{content:'RTR document';}.submissions-table td[data-col="vendor"]::before{content:'Vendor & recruiter';}.submissions-table td[data-col="rate"]::before{content:'Rate';}.submissions-table td[data-col="date"]::before{content:'Application date';}.submissions-table td[data-col="stage"]::before{content:'Recruiting stage & capture';}.submissions-table td[data-col="interview"]::before{content:'Interview & notes';}.submissions-table td:last-child>div{justify-content:flex-start;}
+ .submissions-table{display:block;min-width:0!important;}.submissions-table thead{display:none;}.submissions-table tbody{display:block;}.submissions-table tbody>tr{display:grid;grid-template-columns:minmax(0,1fr);gap:.75rem;padding:1rem;border-bottom:1px solid hsl(var(--border));}.submissions-table td{display:block;padding:0;white-space:normal;min-width:0;}.submissions-table td::before{display:block;font-size:.75rem;font-weight:600;color:hsl(var(--muted-foreground));margin-bottom:.35rem;}.submissions-table td[data-col="candidate"]::before{content:'Candidate';}.submissions-table td[data-col="client"]::before{content:'End client & role';}.submissions-table td[data-col="resume"]::before{content:'Applied resume & answers';}.submissions-table td[data-col="rtr"]::before{content:'RTR document';}.submissions-table td[data-col="vendor"]::before{content:'Vendor & recruiter';}.submissions-table td[data-col="rate"]::before{content:'Rate';}.submissions-table td[data-col="date"]::before{content:'Application date';}.submissions-table td[data-col="stage"]::before{content:'Recruiting stage & capture';}.submissions-table td[data-col="interview"]::before{content:'Interview & notes';}.submissions-table td:last-child>div{justify-content:flex-start;}
 }
 
 @media(min-width:768px){.submissions-table:not(.show-details){min-width:980px;}.submissions-table:not(.show-details) :is(th,td):is([data-col="vendor"],[data-col="rate"],[data-col="interview"]){display:none;}}

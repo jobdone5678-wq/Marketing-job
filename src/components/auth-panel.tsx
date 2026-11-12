@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Sparkles, ShieldCheck } from "lucide-react";
 import { SignupForm } from "@/components/signup-form";
 
@@ -8,7 +9,7 @@ export function AuthPanel() {
     <div className="relative h-full overflow-y-auto p-6 md:p-8 lg:p-12 bg-gradient-to-b from-background via-background/98 to-muted/20 flex flex-col justify-between border-r border-border/40 select-none">
       {/* Brand Header */}
       <div className="flex items-center justify-between w-full mb-6">
-        <a
+        <Link
           href="/"
           className="group flex items-center gap-2.5 font-medium text-foreground transition-transform duration-200"
         >
@@ -23,7 +24,7 @@ export function AuthPanel() {
               Recruit
             </span>
           </div>
-        </a>
+        </Link>
 
         <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium text-muted-foreground bg-muted/40 border border-border/50">
           <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />

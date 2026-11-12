@@ -10,7 +10,6 @@ import {
   Users,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import type { Candidate } from "@/types/database";

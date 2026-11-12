@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/client";
-import { CheckCircle2, Sparkles, ArrowRight, LayoutDashboard } from "lucide-react";
+import { CheckCircle2, Sparkles, ArrowRight, LayoutDashboard, ExternalLink, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function JobseekerConnectedPage() {
@@ -73,7 +73,6 @@ export default function JobseekerConnectedPage() {
     initPairing();
 
     return () => {
-      
       active = false;
     };
   }, [supabase]);
@@ -107,8 +106,8 @@ export default function JobseekerConnectedPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-background via-muted/10 to-muted/30 flex items-center justify-center p-4">
-      <div className="w-full max-w-lg bg-card rounded-2xl border border-border/60 shadow-2xl p-6 sm:p-8 text-center space-y-6">
+    <div className="min-h-screen w-full bg-background flex items-center justify-center p-4 antialiased">
+      <div className="w-full max-w-lg bg-card rounded-2xl border border-border/80 shadow-md p-6 sm:p-8 text-center space-y-6 animate-fade-rise">
         <div className="inline-flex size-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shadow-xs">
           <CheckCircle2 className="size-7" />
         </div>
@@ -122,12 +121,13 @@ export default function JobseekerConnectedPage() {
               : "Account Authenticated!"}
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
-            Your NextKin applicant account is active. Your extension is now linked and ready to autofill job applications.
+            Your candidate account is linked and ready. The NextKin extension is paired to assist your application autofill.
           </p>
           {paired && (
-            <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-              Redirecting to candidate dashboard in {countdown}s...
-            </p>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 text-xs font-semibold">
+              <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Redirecting to candidate dashboard in {countdown}s...</span>
+            </div>
           )}
         </div>
 
@@ -137,22 +137,22 @@ export default function JobseekerConnectedPage() {
           </div>
         )}
 
-        <div className="p-4 rounded-xl bg-muted/40 border border-border/50 text-left space-y-2.5">
+        <div className="p-4 rounded-xl bg-muted/40 border border-border/60 text-left space-y-2.5">
           <div className="flex items-center gap-2 text-xs font-bold text-foreground">
-            <Sparkles className="size-4 text-emerald-500 shrink-0" />
-            <span>Next Steps on Your Job Application</span>
+            <Sparkles className="size-4 text-primary shrink-0" />
+            <span>Next Steps on Your Career Journey</span>
           </div>
           <ul className="text-xs text-muted-foreground space-y-1.5 pl-6 list-disc">
-            <li>Return to your job application tab (Greenhouse, Ashby, Keka, etc.).</li>
-            <li>Click <strong>Autofill</strong> on the extension to apply with one click.</li>
-            <li>Upload or update your resume anytime via the extension panel.</li>
+            <li>Open any job listing on Greenhouse, Ashby, Lever, or Workday.</li>
+            <li>Click <strong>Autofill Application</strong> in the floating extension panel.</li>
+            <li>Manage your tailored resumes and track applications in NextKin.</li>
           </ul>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 pt-2">
           <Button
             onClick={handleGoToDashboard}
-            className="flex-1 h-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs sm:text-sm shadow-md"
+            className="flex-1 h-10 rounded-xl font-semibold text-xs sm:text-sm shadow-xs cursor-pointer"
           >
             <LayoutDashboard className="size-4 mr-1.5" />
             <span>Go to Candidate Dashboard</span>
@@ -161,7 +161,7 @@ export default function JobseekerConnectedPage() {
           <Button
             onClick={handleCloseTab}
             variant="outline"
-            className="h-11 rounded-xl font-semibold text-xs sm:text-sm"
+            className="h-10 rounded-xl font-semibold text-xs sm:text-sm cursor-pointer"
           >
             <span>Return to Job Application</span>
           </Button>

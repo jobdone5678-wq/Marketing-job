@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import {useRouter} from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,16 +11,39 @@ import { useUserProfile } from '@/hooks/use-user-profile';
 import type { Candidate } from '@/types/database';
 import { getCandidates } from '@/lib/candidates';
 import type { StoredJob, NormalizedJob } from '@/lib/jobs/types';
-import {JobRoster} from '@/components/job-roster';
-import {WorkspaceSkeleton} from '@/components/workspace-ui';
+import { JobRoster } from '@/components/job-roster';
+import { WorkspaceSkeleton } from '@/components/workspace-ui';
 import { JobDates } from '@/components/job-dates';
 import { PublicJobCatalog } from '@/components/public-job-catalog';
-import {AppliedJobsList} from '@/components/applied-jobs-list';
-import {withoutAppliedJobs,type AppliedJobsResponse} from '@/lib/jobs/application-state';
-import { extractJobSkills } from '@/lib/jobs/skills-extractor';
+import { AppliedJobsList } from '@/components/applied-jobs-list';
+import { withoutAppliedJobs, type AppliedJobsResponse } from '@/lib/jobs/application-state';
+import { extractCompleteJobDetails, extractJobSkills } from '@/lib/jobs/skills-extractor';
 import { sanitizeJobHtml } from '@/lib/html-sanitizer';
-
+import { CompanyLogo } from '@/components/company-logo';
+import { SkillBadge } from '@/components/skill-badge';
+import { SkillMatcherDialog } from '@/components/skill-matcher-dialog';
 import type { SupportedJobProvider } from '@/lib/public-directory';
+import {
+  Search,
+  MapPin,
+  Building2,
+  ExternalLink,
+  Sparkles,
+  Layers,
+  Filter,
+  CheckCircle2,
+  AlertCircle,
+  Briefcase,
+  Globe,
+  Clock,
+  ArrowUpRight,
+  Send,
+  FileCheck,
+  ChevronRight,
+  X,
+  RefreshCw,
+  Download,
+} from 'lucide-react';
 
 interface LiveJob extends NormalizedJob {
   provider: SupportedJobProvider;
@@ -42,8 +65,8 @@ type Source = {
 };
 
 export function JobsBrowser({ provider }: { provider?: string }) {
-  const router=useRouter();
-  const [importingJob,setImportingJob]=useState('');
+  const router = useRouter();
+  const [importingJob, setImportingJob] = useState('');
   const [applyingJobHash, setApplyingJobHash] = useState('');
   const { isCandidate, loading: profileLoading } = useUserProfile();
   const canSelectCandidate = false;
@@ -55,12 +78,11 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   const liveRequest = useRef(0);
   const candidateParam = candidateId ? '&candidateId=' + encodeURIComponent(candidateId) : '';
 
-
   // Mode: 'db' (fast, cached in database) vs 'live' (direct fetch from ATS)
   const [mode, setMode] = useState<'live' | 'db'>('db');
-  const [applicationView,setApplicationView]=useState<'available'|'applied'>('available');
-  const [appliedData,setAppliedData]=useState<AppliedJobsResponse|null>(null);
-  const [appliedLoading,setAppliedLoading]=useState(false);
+  const [applicationView, setApplicationView] = useState<'available' | 'applied'>('available');
+  const [appliedData, setAppliedData] = useState<AppliedJobsResponse | null>(null);
+  const [appliedLoading, setAppliedLoading] = useState(false);
 
   // Live Mode states
   const [liveJobs, setLiveJobs] = useState<LiveJob[]>([]);
@@ -70,8 +92,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   const [saveToDbOnFetch, setSaveToDbOnFetch] = useState(false);
   const [syncingSoftwareJobs, setSyncingSoftwareJobs] = useState(false);
   const [lastFetchedTime, setLastFetchedTime] = useState<string | null>(null);
-  const [liveSources, setLiveSources] = useState<{company:string;count:number;error?:string}[]>([]);
-  const [expandedJobHash, setExpandedJobHash] = useState<string | null>(null);
+  const [liveSources, setLiveSources] = useState<{ company: string; count: number; error?: string }[]>([]);
 
   // Database Mode states
   const [dbJobs, setDbJobs] = useState<StoredJob[]>([]);
@@ -79,6 +100,11 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   const [dbTotal, setDbTotal] = useState(0);
   const [dbPage, setDbPage] = useState(0);
   const [dbMore, setDbMore] = useState(false);
+
+  // Master-Detail Selected Job State (Jobright style)
+  const [selectedDbJob, setSelectedDbJob] = useState<StoredJob | null>(null);
+  const [selectedLiveJob, setSelectedLiveJob] = useState<LiveJob | null>(null);
+  const [matcherOpen, setMatcherOpen] = useState(false);
 
   // Shared filters
   const [search, setSearch] = useState('');
@@ -93,15 +119,10 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  // Source management form
-  const [newCompany, setNewCompany] = useState('');
-  const [newBoard, setNewBoard] = useState('');
-  const [newSourceProvider, setNewSourceProvider] = useState(provider || 'greenhouse');
-
-  useEffect(()=>{
-    const selected=new URLSearchParams(window.location.search).get('candidateId');
-    if(selected)queueMicrotask(()=>setCandidateId(selected));
-  },[]);
+  useEffect(() => {
+    const selected = new URLSearchParams(window.location.search).get('candidateId');
+    if (selected) queueMicrotask(() => setCandidateId(selected));
+  }, []);
 
   // Sync all configured software jobs to database
   const handleSyncSoftwareJobs = async () => {
@@ -115,7 +136,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         fetchedAt: string;
         persistedInDb: boolean;
         recommendation: Recommendation;
-        sources?: {error?:string}[];
+        sources?: { error?: string }[];
       }>(`/api/jobs/live?saveToDb=true&postedWithin=${postedWithin}${provider || portalFilter ? '&provider=' + encodeURIComponent(provider || portalFilter) : ''}`);
       setNotice(res.persistedInDb ? 'Public jobs refreshed and saved. Updating your related roles...' : res.recommendation.requiresProfile ? 'Review and save your resume profile before finding related roles.' : 'No complete refresh was saved. Review source errors or try another public board.');
       const failures = res.sources?.flatMap(source => source.error ? [source.error] : []);
@@ -130,23 +151,30 @@ export function JobsBrowser({ provider }: { provider?: string }) {
     }
   };
 
-  const handleApplyDirectly = async (job: LiveJob) => {
+  const handleApplyDirectly = async (job: LiveJob | StoredJob) => {
     const tab = window.open('about:blank', '_blank');
     if (tab) tab.opener = null;
-    setApplyingJobHash(job.content_hash);
+    const isStored = 'id' in job;
+    const contentHash = isStored ? (job as StoredJob).id : (job as LiveJob).content_hash;
+    setApplyingJobHash(contentHash);
     try {
       let targetJobId = '';
-      try {
-        const result = await api<{ jobId: string }>('/api/jobs/import', {
-          method: 'POST',
-          body: JSON.stringify({
-            provider: job.provider,
-            board: job.board_slug,
-            externalId: job.external_id,
-          }),
-        });
-        targetJobId = result.jobId;
-      } catch {}
+      if (!isStored) {
+        const live = job as LiveJob;
+        try {
+          const result = await api<{ jobId: string }>('/api/jobs/import', {
+            method: 'POST',
+            body: JSON.stringify({
+              provider: live.provider,
+              board: live.board_slug,
+              externalId: live.external_id,
+            }),
+          });
+          targetJobId = result.jobId;
+        } catch {}
+      } else {
+        targetJobId = (job as StoredJob).id;
+      }
 
       const activeCandId = candidateId || recommendation?.candidateId || candidates[0]?.id;
       let appUrl = job.application_url;
@@ -188,7 +216,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         if (provToUse) query.set('provider', provToUse);
         if (boardToUse.trim()) query.set('board', boardToUse.trim());
         if (employmentType) query.set('type', employmentType);
-        query.set('postedWithin',postedWithin);
+        query.set('postedWithin', postedWithin);
         if (search.trim()) query.set('search', search.trim());
         if (companyFilter.trim()) query.set('company', companyFilter.trim());
         if (locationFilter.trim()) query.set('location', locationFilter.trim());
@@ -199,13 +227,18 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           total: number;
           fetchedAt: string;
           persistedInDb: boolean;
-        recommendation: Recommendation;
-        sources?: {company:string;count:number;error?:string}[];
+          recommendation: Recommendation;
+          sources?: { company: string; count: number; error?: string }[];
         }>(`/api/jobs/live?${query.toString()}`);
 
         if (requestId !== liveRequest.current) return;
         setRecommendation(res.recommendation);
         setLiveJobs(res.jobs || []);
+        if (res.jobs?.length > 0) {
+          setSelectedLiveJob(res.jobs[0]);
+        } else {
+          setSelectedLiveJob(null);
+        }
         setLiveSources(res.sources || []);
         setLastFetchedTime(new Date(res.fetchedAt).toLocaleTimeString());
         const failures = res.sources?.flatMap(source => source.error ? [source.error] : []);
@@ -222,6 +255,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
               setDbJobs(dbRes.jobs);
               setDbTotal(dbRes.total);
               setDbMore(dbRes.hasMore);
+              if (dbRes.jobs.length > 0) setSelectedDbJob(dbRes.jobs[0]);
             })
             .catch(() => {});
         }
@@ -242,7 +276,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
       if (!profileLoading && mode === 'live' && applicationView === 'available') void fetchLiveJobs();
     }, 0);
     return () => { clearTimeout(timer); request.current++; };
-  }, [mode, fetchLiveJobs, profileLoading,applicationView]);
+  }, [mode, fetchLiveJobs, profileLoading, applicationView]);
 
   // Load database jobs if in DB mode
   useEffect(() => {
@@ -260,6 +294,11 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           setDbJobs(r.jobs);
           setDbTotal(r.total);
           setDbMore(r.hasMore);
+          if (r.jobs.length > 0) {
+            setSelectedDbJob(prev => prev && r.jobs.some(j => j.id === prev.id) ? prev : r.jobs[0]);
+          } else {
+            setSelectedDbJob(null);
+          }
           setError('');
         }
       })
@@ -269,35 +308,35 @@ export function JobsBrowser({ provider }: { provider?: string }) {
     return () => {
       active = false;
     };
-  }, [mode, employmentType, search, dbPage, savedFilterParam, candidateParam, profileLoading, reload,applicationView]);
+  }, [mode, employmentType, search, dbPage, savedFilterParam, candidateParam, profileLoading, reload, applicationView]);
 
-  useEffect(()=>{
-    if(profileLoading||applicationView!=='applied')return;
-    let active=true;
-    queueMicrotask(()=>{if(active){setAppliedLoading(true);setAppliedData(null);}});
-    void api<AppliedJobsResponse>(`/api/jobs/applications?type=${employmentType}&search=${encodeURIComponent(search)}&page=${dbPage}${savedFilterParam+candidateParam}`)
-      .then(data=>{if(active){setAppliedData(data);setError('');}})
-      .catch(error=>{if(active)setError(error.message);})
-      .finally(()=>{if(active)setAppliedLoading(false);});
-    return()=>{active=false;};
-  },[profileLoading,applicationView,employmentType,search,dbPage,savedFilterParam,candidateParam,reload]);
+  useEffect(() => {
+    if (profileLoading || applicationView !== 'applied') return;
+    let active = true;
+    queueMicrotask(() => { if (active) { setAppliedLoading(true); setAppliedData(null); } });
+    void api<AppliedJobsResponse>(`/api/jobs/applications?type=${employmentType}&search=${encodeURIComponent(search)}&page=${dbPage}${savedFilterParam + candidateParam}`)
+      .then(data => { if (active) { setAppliedData(data); setError(''); } })
+      .catch(error => { if (active) setError(error.message); })
+      .finally(() => { if (active) setAppliedLoading(false); });
+    return () => { active = false; };
+  }, [profileLoading, applicationView, employmentType, search, dbPage, savedFilterParam, candidateParam, reload]);
 
-  useEffect(()=>{
-    let active=true,refreshing=false;
-    const refresh=async()=>{
-      if(document.visibilityState!=='visible'||refreshing)return;
-      refreshing=true;setReload(value=>value+1);
-      try{
-        if(mode==='live'&&applicationView==='available'){
-          const data=await api<AppliedJobsResponse>(`/api/jobs/applications?page=0${candidateParam}`);
-          if(active)setLiveJobs(jobs=>withoutAppliedJobs(jobs,data.appliedKeys));
+  useEffect(() => {
+    let active = true, refreshing = false;
+    const refresh = async () => {
+      if (document.visibilityState !== 'visible' || refreshing) return;
+      refreshing = true; setReload(value => value + 1);
+      try {
+        if (mode === 'live' && applicationView === 'available') {
+          const data = await api<AppliedJobsResponse>(`/api/jobs/applications?page=0${candidateParam}`);
+          if (active) setLiveJobs(jobs => withoutAppliedJobs(jobs, data.appliedKeys));
         }
-      }catch(error){if(active)setError((error as Error).message);}
-      finally{refreshing=false;}
+      } catch (error) { if (active) setError((error as Error).message); }
+      finally { refreshing = false; }
     };
-    window.addEventListener('focus',refresh);document.addEventListener('visibilitychange',refresh);
-    return()=>{active=false;window.removeEventListener('focus',refresh);document.removeEventListener('visibilitychange',refresh);};
-  },[mode,applicationView,candidateParam]);
+    window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', refresh);
+    return () => { active = false; window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
+  }, [mode, applicationView, candidateParam]);
 
   // Load the candidate's own confirmed profile.
   useEffect(() => {
@@ -306,25 +345,29 @@ export function JobsBrowser({ provider }: { provider?: string }) {
     }
   }, [canSelectCandidate]);
 
+  // Active selected detail data
+  const activeJob = mode === 'db' ? selectedDbJob : selectedLiveJob;
+  const activeExtracted = activeJob?.description ? extractCompleteJobDetails(activeJob.description, activeJob.title) : null;
+
   return (
-    <main className="p-6 max-w-[1440px] mx-auto space-y-6">
+    <main className="p-4 sm:p-6 max-w-[1600px] mx-auto space-y-4">
       {/* Top Header & Mode Toggle */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border/70 pb-5">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border/70 pb-4">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              {provider ? provider.toUpperCase() + ' Jobs' : 'Public Jobs'}
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+              {provider ? provider.toUpperCase() + ' Roles' : 'Discover Opportunities'}
             </h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
               <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Software & Tech Roles Only
+              Verified Tech Roles
             </span>
-            <Badge variant="outline" className="text-xs px-2.5 py-0.5 rounded-full border-border/70 capitalize font-medium">
-              {isCandidate ? 'Candidate view' : 'All roles'}
+            <Badge variant="outline" className="text-xs px-2 py-0.5 rounded-full border-border/70 capitalize font-medium">
+              {isCandidate ? 'Candidate Mode' : 'All Openings'}
             </Badge>
           </div>
-          <p className="text-muted-foreground text-sm">
-            Find jobs across public portals and companies. Filter by portal, company, location and employment type.
+          <p className="text-muted-foreground text-xs sm:text-sm">
+            Curated software & tech roles directly from verified company ATS boards.
           </p>
         </div>
 
@@ -333,19 +376,19 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           <Button
             size="sm"
             variant={mode === 'db' ? 'default' : 'ghost'}
-            onClick={() => {setMode('db');setApplicationView('available');setDbPage(0);}}
+            onClick={() => { setMode('db'); setApplicationView('available'); setDbPage(0); }}
             className={`text-xs h-8 px-3.5 rounded-lg font-medium transition-all ${
               mode === 'db'
                 ? 'bg-background text-foreground shadow-xs font-semibold'
                 : 'text-muted-foreground hover:text-foreground hover:bg-background/40'
             }`}
           >
-            Saved jobs <span className="ml-1.5 font-mono text-[11px] tabular-nums opacity-80">({dbTotal})</span>
+            Saved Catalog <span className="ml-1.5 font-mono text-[11px] tabular-nums opacity-80">({dbTotal})</span>
           </Button>
           <Button
             size="sm"
             variant={mode === 'live' ? 'default' : 'ghost'}
-            onClick={() => {setLiveProvider(provider || portalFilter || 'all');setLiveBoard('');setMode('live');setApplicationView('available');setDbPage(0);}}
+            onClick={() => { setLiveProvider(provider || portalFilter || 'all'); setLiveBoard(''); setMode('live'); setApplicationView('available'); setDbPage(0); }}
             className={`text-xs h-8 px-3.5 rounded-lg font-medium transition-all ${
               mode === 'live'
                 ? 'bg-background text-foreground shadow-xs font-semibold'
@@ -357,704 +400,542 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         </div>
       </div>
 
-      {applicationView==='available'&& (
-        <details className="group rounded-2xl border border-border/70 bg-card p-4 transition-all shadow-2xs">
-          <summary className="flex cursor-pointer items-center justify-between text-xs font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground">
-            <span>Company boards & source discovery</span>
-            <span className="text-[10px] lowercase font-normal text-muted-foreground/80">click to expand</span>
-          </summary>
-          <div className="mt-4 pt-3 border-t border-border/60">
-            <PublicJobCatalog
-              provider={mode === 'live' && liveProvider !== 'all' ? liveProvider : provider || portalFilter || undefined}
-              canSave={false}
-              onSelect={board => {
-                setLiveBoard(board.board_slug);
-                setLiveProvider(board.provider);
-                setPortalFilter(board.provider);
-                setDbPage(0);
-                setCompanyFilter('');
-                setMode('live');
-              }}
-              onSaved={async () => {
-                const result = await api<{sources:Source[]}>('/api/job-sources');
-                setDbSources(result.sources || []);
-              }}
+      {/* Available / Applied Filter Tabs */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex items-center p-1 rounded-xl bg-card border border-border/70 shadow-2xs">
+          <button
+            type="button"
+            onClick={() => { setApplicationView('available'); setDbPage(0); setAppliedData(null); }}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              applicationView === 'available'
+                ? 'bg-primary text-primary-foreground shadow-2xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Briefcase className="size-3.5" />
+            <span>Available Roles</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => { setApplicationView('applied'); setDbPage(0); }}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              applicationView === 'applied'
+                ? 'bg-primary text-primary-foreground shadow-2xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <CheckCircle2 className="size-3.5" />
+            <span>Applied Jobs</span>
+          </button>
+        </div>
+
+        {/* Sync Software Jobs / Refresh Button */}
+        {(mode === 'db' || applicationView === 'applied') && applicationView === 'available' && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setDbPage(0); setReload(v => v + 1); }}
+              className="h-8 text-xs font-medium rounded-lg border-border/80 shadow-2xs gap-1.5"
+            >
+              <RefreshCw className="size-3" />
+              <span>Refresh</span>
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSyncSoftwareJobs}
+              disabled={syncingSoftwareJobs}
+              className="h-8 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs gap-1.5"
+            >
+              <Download className="size-3" />
+              <span>{syncingSoftwareJobs ? 'Pulling...' : 'Sync Software Jobs'}</span>
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* SEARCH & FILTERS BAR (Jobright Style Clean Filter Strip) */}
+      <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-xs space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+          {/* Main Keyword Search */}
+          <div className="sm:col-span-4 relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              aria-label="Search jobs"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setDbPage(0); }}
+              placeholder="Search by job title, role or keywords..."
+              className="h-10 pl-10 rounded-xl bg-background border-border/80 text-xs sm:text-sm font-medium"
             />
           </div>
-        </details>
-      )}
 
-      {/* Candidate Selection & Application Status View */}
-      <section className="rounded-2xl border border-border/70 bg-card p-5 space-y-4 shadow-xs">
-        {canSelectCandidate && (
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Find roles for a candidate
-              <select
-                aria-label="Match jobs to candidate"
-                className="mt-2 block w-full h-10 rounded-xl border border-border/80 bg-background px-3.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors cursor-pointer"
-                value={candidateId}
-                onChange={e => {
-                  const id = e.target.value;
-                  setCandidateId(id);
-                  const url = new URL(window.location.href);
-                  if (id) url.searchParams.set('candidateId', id);
-                  else url.searchParams.delete('candidateId');
-                  window.history.replaceState(null, '', url);
-                  setDbPage(0);
-                  setDbJobs([]);
-                  setLiveJobs([]);
-                  setAppliedData(null);
-                  setRecommendation(null);
-                }}
-              >
-                <option value="">All saved roles</option>
-                {candidates.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
-              </select>
-            </label>
+          {/* Location Filter */}
+          <div className="sm:col-span-3 relative">
+            <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              aria-label="Filter by location"
+              value={locationFilter}
+              onChange={(e) => { setLocationFilter(e.target.value); setDbPage(0); }}
+              placeholder="City, state or remote..."
+              className="h-10 pl-10 rounded-xl bg-background border-border/80 text-xs sm:text-sm font-medium"
+            />
           </div>
-        )}
 
-        {applicationView === 'available' && (
-          recommendation?.requiresProfile ? (
-            <p className="text-sm text-foreground/90 bg-muted/30 p-3 rounded-xl border border-border/60">
-              Upload, review and save your resume details to see related roles.{' '}
-              <Link className="underline font-semibold text-primary hover:text-primary/80 transition-colors" href="/dashboard/candidates/new">
-                Review your resume
-              </Link>
-            </p>
-          ) : (isCandidate || candidateId) && (
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Roles related to <span className="font-semibold text-foreground">{recommendation?.candidateName || 'your saved resume'}</span>, ranked by skills and job titles. Matching helps discovery; review each job’s requirements before applying.
-            </p>
-          )
-        )}
-
-        <fieldset className="flex flex-wrap items-center gap-2 pt-1 text-sm">
-          <legend className="sr-only">Job list</legend>
-          {(['available', 'applied'] as const).map(view => {
-            const isActive = applicationView === view;
-            return (
-              <label
-                key={view}
-                className={`flex min-h-9 cursor-pointer items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-medium transition-all ${
-                  isActive
-                    ? 'border-primary/40 bg-primary/10 text-primary shadow-2xs font-semibold'
-                    : 'border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:text-foreground'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="job-list"
-                  value={view}
-                  checked={isActive}
-                  onChange={() => {
-                    setApplicationView(view);
-                    setDbPage(0);
-                    setAppliedData(null);
-                    setError('');
-                  }}
-                  className="size-3.5 accent-primary"
-                />
-                <span>{view === 'available' ? 'Available to apply' : 'Applied jobs'}</span>
-              </label>
-            );
-          })}
-        </fieldset>
-
-        <p className="text-[11px] text-muted-foreground">
-          Application status belongs to the selected candidate. A job applied for one candidate stays available for other candidates.
-        </p>
-      </section>
-
-      {/* Mode Status Banner */}
-      {applicationView === 'available' && (
-        mode === 'live' ? (
-          <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-foreground p-3.5 text-xs flex flex-wrap items-center justify-between gap-2 shadow-2xs">
-            <div className="flex items-center gap-2 font-medium">
-              <span className="size-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>Live job search — Strictly filtered for software & tech roles. Save fetched jobs: <strong>{saveToDbOnFetch ? 'Enabled' : 'Disabled'}</strong>.</span>
-            </div>
-            {lastFetchedTime && (
-              <span className="text-xs text-muted-foreground font-mono">
-                Last updated: {lastFetchedTime}
-              </span>
-            )}
+          {/* Company Filter */}
+          <div className="sm:col-span-2 relative">
+            <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              aria-label="Filter by company"
+              value={companyFilter}
+              onChange={(e) => { setCompanyFilter(e.target.value); setDbPage(0); }}
+              placeholder="Company name..."
+              className="h-10 pl-10 rounded-xl bg-background border-border/80 text-xs sm:text-sm font-medium"
+            />
           </div>
-        ) : (
-          <p className="text-xs text-muted-foreground px-1">
-            <span className="font-semibold text-foreground">{dbTotal}</span> saved job records. Review source dates and requirements before applying.
-          </p>
-        )
-      )}
 
-      {/* Controls & Search Toolbar */}
-      <section className="rounded-2xl border border-border/70 bg-card p-5 space-y-4 shadow-xs">
-        {mode === 'live' && applicationView === 'available' && (
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5 pb-4 border-b border-border/70">
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground block mb-1.5">
-                Company Board Slug (optional)
-              </label>
-              <Input
-                aria-label="Board slug"
-                value={liveBoard}
-                onChange={(e) => setLiveBoard(e.target.value)}
-                placeholder="Leave empty for all companies"
-                className="h-10 rounded-xl"
-              />
-              <p className="mt-1 text-[11px] text-muted-foreground">Empty searches every catalog and enabled saved board for this provider.</p>
-            </div>
+          {/* Employment Type Dropdown */}
+          <div className="sm:col-span-3 flex items-center gap-2">
+            <select
+              aria-label="Employment type"
+              className="h-10 w-full rounded-xl border border-border/80 bg-background px-3 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              value={employmentType}
+              onChange={(e) => { setEmploymentType(e.target.value); setDbPage(0); }}
+            >
+              <option value="all">All Employment Types</option>
+              <option value="contract">Contract (C2C/W2)</option>
+              <option value="permanent">Permanent / Full-time</option>
+              <option value="temporary">Temporary</option>
+              <option value="part_time">Part-time</option>
+              <option value="internship">Internship</option>
+            </select>
+          </div>
+        </div>
 
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground block mb-1.5">
-                ATS Provider
-              </label>
-              <select
-                aria-label="Provider"
-                className="w-full h-10 border border-border/80 rounded-xl px-3 bg-background text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                value={liveProvider}
-                onChange={(e) => {
-                  const newProv = e.target.value;
-                  setLiveProvider(newProv);
-                  setPortalFilter(newProv === 'all' ? '' : newProv);
-                  setDbPage(0);
-                  setLiveBoard('');
-                  setCompanyFilter('');
-                  setLiveJobs([]);
-                  setLiveSources([]);
-                }}
-                disabled={Boolean(provider)}
-              >
-                <option value="all">All ATS providers</option>
-                <option value="greenhouse">Greenhouse (e.g. figma, stripe)</option>
-                <option value="ashby">Ashby (e.g. ramp, openai)</option>
-                <option value="lever">Lever (all available company boards)</option>
-                <option value="smartrecruiters">SmartRecruiters (e.g. BoschGroup)</option>
-                <option value="breezy">Breezy HR (e.g. breezy)</option>
-                <option value="remoteok">RemoteOK (Global tech)</option>
-              </select>
-              <Button size="sm" variant="ghost" className="mt-1 h-7 text-xs px-2 text-muted-foreground" onClick={()=>{setLiveBoard('');setCompanyFilter('');}}>All companies</Button>
-            </div>
+        {/* Secondary Filter Pills */}
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50 text-xs">
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Filters:</span>
 
-            <div className="sm:col-span-2 flex flex-wrap items-end gap-2.5">
-              <Button
-                onClick={() => void fetchLiveJobs()}
-                disabled={liveLoading}
-                className="w-full sm:w-auto h-10 px-4 rounded-xl font-semibold shadow-xs"
-              >
-                {liveLoading ? 'Fetching Jobs...' : ' Fetch & Save Jobs'}
-              </Button>
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none py-2 px-1">
+          {/* Date Posted Filter */}
+          <select
+            aria-label="Posted within"
+            disabled={applicationView === 'applied'}
+            className="h-8 rounded-lg border border-border/80 bg-background px-2.5 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary"
+            value={postedWithin}
+            onChange={(e) => { setPostedWithin(e.target.value); setDbPage(0); }}
+          >
+            <option value="7">Posted: Last 7 days</option>
+            <option value="30">Posted: Last 30 days</option>
+            <option value="90">Posted: Last 90 days</option>
+            <option value="all">Posted: Any time</option>
+          </select>
+
+          {/* Portal Filter */}
+          <select
+            aria-label="Filter by portal"
+            className="h-8 rounded-lg border border-border/80 bg-background px-2.5 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary"
+            value={provider || portalFilter}
+            disabled={Boolean(provider)}
+            onChange={(e) => { setPortalFilter(e.target.value); setCompanyFilter(''); setDbPage(0); }}
+          >
+            <option value="">Portal: All ATS</option>
+            <option value="greenhouse">Greenhouse</option>
+            <option value="ashby">Ashby</option>
+            <option value="lever">Lever</option>
+            <option value="smartrecruiters">SmartRecruiters</option>
+            <option value="breezy">Breezy HR</option>
+            <option value="remoteok">RemoteOK</option>
+          </select>
+
+          {mode === 'live' && applicationView === 'available' && (
+            <div className="flex items-center gap-2 ml-auto">
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={saveToDbOnFetch}
                   onChange={(e) => setSaveToDbOnFetch(e.target.checked)}
                   className="rounded border-border accent-primary"
                 />
-                <span>Save to Database</span>
+                <span>Auto-save to database</span>
               </label>
-              {dbSources.length > 0 && (
-                <select
-                  aria-label="Select configured source"
-                  className="h-10 border border-border/80 rounded-xl px-3 bg-background text-xs truncate max-w-[200px]"
-                  onChange={(e) => {
-                    const found = dbSources.find((s) => s.id === e.target.value);
-                    if (found) {
-                      setLiveBoard(found.board_slug);
-                      setLiveProvider(found.provider);
-                      setCompanyFilter('');
-                    }
-                  }}
-                  defaultValue=""
-                >
-                  <option value="" disabled>
-                    Saved Companies...
-                  </option>
-                  {dbSources.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.company} ({s.provider})
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Search & Filter Bar */}
-        <div className="flex flex-col sm:flex-row gap-3 items-end">
-          <label className="text-xs font-semibold text-muted-foreground flex flex-col gap-1.5 w-full sm:w-auto">
-            <span>Posting date</span>
-            <select
-              aria-label="Posted within"
-              disabled={applicationView === 'applied'}
-              className="h-10 rounded-xl border border-border/80 bg-background px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
-              value={postedWithin}
-              onChange={e => { setPostedWithin(e.target.value); setDbPage(0); }}
-            >
-              <option value="7">Last 7 days</option>
-              <option value="30">Last 30 days</option>
-              <option value="90">Last 90 days</option>
-              <option value="all">All dates (including unknown)</option>
-            </select>
-          </label>
-
-          <div className="w-full flex-1">
-            <label className="text-xs font-semibold text-muted-foreground block mb-1.5">Search jobs</label>
-            <Input
-              aria-label="Search jobs"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setDbPage(0); }}
-              placeholder="Search job titles..."
-              className="h-10 rounded-xl"
-            />
-          </div>
-
-          <div className="w-full sm:w-auto">
-            <label className="text-xs font-semibold text-muted-foreground block mb-1.5">Employment type</label>
-            <select
-              aria-label="Employment type"
-              className="h-10 w-full sm:w-auto rounded-xl border border-border/80 bg-background px-3 text-sm font-medium min-w-[150px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              value={employmentType}
-              onChange={(e) => { setEmploymentType(e.target.value); setDbPage(0); }}
-            >
-              <option value="all">All Types</option>
-              <option value="contract">Contract (C2C/W2)</option>
-              <option value="permanent">Permanent / Full-time</option>
-              <option value="temporary">Temporary</option>
-              <option value="part_time">Part-time</option>
-              <option value="internship">Internship</option>
-              <option value="unknown">Unknown</option>
-            </select>
-          </div>
-
-          {(mode === 'db' || applicationView === 'applied') && (
-            <div className="flex gap-2 w-full sm:w-auto pt-1 sm:pt-0">
               <Button
-                variant="outline"
-                className="h-10 rounded-xl px-3.5 text-xs font-semibold border-border/80 shadow-2xs hover:bg-muted"
-                onClick={() => { setDbPage(0); setReload(v => v + 1); }}
+                size="sm"
+                onClick={() => void fetchLiveJobs()}
+                disabled={liveLoading}
+                className="h-8 px-3 rounded-lg text-xs font-semibold shadow-2xs"
               >
-                Refresh jobs
-              </Button>
-              <Button
-                variant="default"
-                className="h-10 rounded-xl px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs hover:shadow transition-all"
-                onClick={handleSyncSoftwareJobs}
-                hidden={applicationView === 'applied'}
-                disabled={syncingSoftwareJobs}
-              >
-                {syncingSoftwareJobs ? 'Syncing...' : ' Pull & Save'}
+                {liveLoading ? 'Fetching...' : 'Fetch Live'}
               </Button>
             </div>
           )}
         </div>
-
-        <div className="grid gap-3 sm:grid-cols-3 pt-1 border-t border-border/50">
-          {(mode === 'db' || applicationView === 'applied') && (
-            <label className="text-xs font-semibold text-muted-foreground flex flex-col gap-1.5">
-              <span>Portal</span>
-              <select
-                aria-label="Filter by portal"
-                className="h-10 w-full rounded-xl border border-border/80 bg-background px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                value={provider || portalFilter}
-                disabled={Boolean(provider)}
-                onChange={e => { setPortalFilter(e.target.value); setCompanyFilter(''); setDbPage(0); }}
-              >
-                <option value="">All portals</option>
-                <option value="greenhouse">Greenhouse</option>
-                <option value="ashby">Ashby</option>
-                <option value="lever">Lever</option>
-                <option value="smartrecruiters">SmartRecruiters</option>
-                <option value="breezy">Breezy HR</option>
-                <option value="remoteok">RemoteOK</option>
-              </select>
-            </label>
-          )}
-          <label className="text-xs font-semibold text-muted-foreground flex flex-col gap-1.5">
-            <span>Company (optional)</span>
-            <Input
-              aria-label="Filter by company"
-              className="h-10 rounded-xl"
-              placeholder="All companies"
-              value={companyFilter}
-              onChange={e => { setCompanyFilter(e.target.value); setDbPage(0); }}
-            />
-          </label>
-          <label className="text-xs font-semibold text-muted-foreground flex flex-col gap-1.5">
-            <span>Location</span>
-            <Input
-              aria-label="Filter by location"
-              className="h-10 rounded-xl"
-              placeholder="City, state or remote"
-              value={locationFilter}
-              onChange={e => { setLocationFilter(e.target.value); setDbPage(0); }}
-            />
-          </label>
-        </div>
-
-        <p className="text-[11px] text-muted-foreground">
-          {applicationView === 'applied' ? (
-            'Applied jobs are ordered by application date. Closed and older postings remain in application history.'
-          ) : (
-            <>
-              Newest source posting dates first. {postedWithin === 'all' ? 'Older postings and unknown dates are included; unknown dates appear last.' : 'Older postings and jobs without a source posting date are hidden. Fetching a job today does not make its posting date recent.'}
-            </>
-          )}
-        </p>
       </section>
 
       {/* Messages */}
       {error && (
-        <div role="alert" className="p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-lg text-sm">
-          {error}
+        <div role="alert" className="p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-xl text-xs flex items-center gap-2">
+          <AlertCircle className="size-4 shrink-0" />
+          <span>{error}</span>
         </div>
       )}
       {notice && (
-        <div role="status" className="p-3 bg-primary/10 border border-primary/20 text-primary rounded-lg text-sm">
-          {notice}
+        <div role="status" className="p-3 bg-primary/10 border border-primary/20 text-primary rounded-xl text-xs flex items-center gap-2">
+          <Sparkles className="size-4 shrink-0" />
+          <span>{notice}</span>
         </div>
       )}
 
-      {/* ======================= LIVE JOBS LIST ======================= */}
-      {mode === 'live' && applicationView==='available' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center text-sm text-muted-foreground px-1">
-            <span>
-              Found <strong>{liveJobs.length}</strong> live jobs on {liveBoard || 'all available company boards'}.
-            </span>
-            <span className="text-xs">Click a job to view details or apply directly</span>
-          </div>
-          {!!liveSources.length && !liveLoading && <details className="rounded-lg border p-3 text-sm"><summary>{liveSources.length} company boards checked · {liveSources.filter(source=>!!source.error).length} with errors</summary><p className="mt-2 text-xs text-muted-foreground">Coverage includes our catalog and enabled saved sources. Resume, location and other filters can reduce the displayed results.</p><ul className="mt-2 space-y-1">{liveSources.map((source,index)=><li key={index}>{source.company}: {source.count} software / tech roles{source.error?` · ${source.error}`:''}</li>)}</ul></details>}
-
-          {liveLoading ? (
-            <div className="p-12 text-center text-muted-foreground border rounded-xl bg-card">
-              <div className="animate-spin inline-block w-6 h-6 border-2 border-current border-t-transparent rounded-full mb-2"></div>
-              <p>Fetching jobs directly from {liveProvider} board...</p>
-            </div>
-          ) : !liveJobs.length ? (
-            <div className="p-10 text-center border rounded-xl bg-card space-y-3">
-              <p className="text-muted-foreground">
-                {liveBoard?<>No live jobs found for board &quot;<strong>{liveBoard}</strong>&quot; with the selected filters.</>:'No live software jobs found across the available company boards with the selected filters.'}
-              </p>
-              <div className="flex justify-center gap-2">
-                <Button size="sm" variant="outline" onClick={() => {setLiveBoard('ramp'); setLiveProvider('ashby'); setCompanyFilter('');}}>
-                  Try Ramp (Ashby)
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => {setLiveBoard('figma');setLiveProvider('greenhouse');setCompanyFilter('');}}>
-                  Try Figma (Greenhouse)
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => {setLiveBoard('openai');setLiveProvider('ashby');setCompanyFilter('');}}>
-                  Try OpenAI (Ashby)
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4">
-              {liveJobs.map((job) => {
-                const isExpanded = expandedJobHash === job.content_hash;
-                const companyInitial = (job.company || 'C').charAt(0).toUpperCase();
-                const liveSkills = extractJobSkills(job.description || '', job.title).slice(0, 5);
-
-                return (
-                  <article
-                    key={job.content_hash}
-                    className="group rounded-2xl border border-border/70 p-5 bg-card hover:border-primary/40 transition-all shadow-xs space-y-4"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                      <div className="flex items-start gap-3">
-                        <div className="size-10 rounded-xl bg-gradient-to-br from-primary/15 via-primary/5 to-transparent text-primary font-bold text-sm flex items-center justify-center border border-primary/20 shadow-2xs shrink-0 mt-0.5 group-hover:scale-105 transition-transform">
-                          {companyInitial}
-                        </div>
-                        <div>
-                          <h2 className="text-base font-bold text-foreground hover:text-primary transition-colors">
-                            {job.title}
-                          </h2>
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-1">
-                            <span className="font-semibold text-foreground">{job.company}</span>
-                            <span>•</span>
-                            <span>{job.location || 'Remote / Unknown'}</span>
-                            {job.department && (
-                              <>
-                                <span>•</span>
-                                <span>{job.department}</span>
-                              </>
-                            )}
-                          </div>
-                          {liveSkills.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {liveSkills.map((s) => (
-                                <span
-                                  key={s.name}
-                                  className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20"
-                                >
-                                  {s.name}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Action buttons */}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={!!importingJob}
-                          onClick={async () => {
-                            setImportingJob(job.content_hash);
-                            setError('');
-                            try {
-                              const result = await api<{ jobId: string }>('/api/jobs/import', {
-                                method: 'POST',
-                                body: JSON.stringify({
-                                  provider: job.provider,
-                                  board: job.board_slug,
-                                  externalId: job.external_id,
-                                }),
-                              });
-                              router.push(
-                                `/dashboard/jobs/${result.jobId}${
-                                  candidateId ? '?candidateId=' + encodeURIComponent(candidateId) : ''
-                                }`
-                              );
-                            } catch (error) {
-                              setError((error as Error).message);
-                            } finally {
-                              setImportingJob('');
-                            }
-                          }}
-                          className="h-8 rounded-lg text-xs font-semibold px-3 border-border/80 shadow-2xs"
-                        >
-                          {importingJob === job.content_hash
-                            ? 'Saving job…'
-                            : isCandidate
-                            ? 'Review job'
-                            : 'Review job'}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setExpandedJobHash(isExpanded ? null : job.content_hash)}
-                          className="h-8 rounded-lg text-xs"
-                        >
-                          {isExpanded ? 'Hide Details' : 'View Details'}
-                        </Button>
-                        <Button
-                          size="sm"
-                          disabled={applyingJobHash === job.content_hash}
-                          onClick={() => void handleApplyDirectly(job)}
-                          className="inline-flex items-center justify-center rounded-lg text-xs font-semibold bg-primary text-primary-foreground h-8 px-3.5 hover:bg-primary/90 shadow-2xs transition-all cursor-pointer"
-                        >
-                          {applyingJobHash === job.content_hash ? 'Starting…' : 'Apply Directly ↗'}
-                        </Button>
-                      </div>
-                    </div>
-
-                    <JobDates posted_at={job.posted_at} closes_at={job.closes_at} provider={job.provider}/>
-                    {job.match_reasons?.map(reason => <p key={reason} className="text-xs text-emerald-700 dark:text-emerald-300">{reason}</p>)}
-                    {/* Metadata tags */}
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      <Badge variant="outline" className="capitalize text-xs">
-                        {job.employment_type.replace('_', ' ')}
-                      </Badge>
-                      {job.arrangements?.map((arr) => (
-                        <Badge key={arr} variant="secondary" className="text-xs">
-                          {arr}
-                        </Badge>
-                      ))}
-                      <Badge variant="outline" className="text-xs text-muted-foreground">
-                        {job.provider}
-                      </Badge>
-                      {job.employment_evidence && (
-                        <span className="text-xs text-muted-foreground italic self-center truncate max-w-md">
-                          &quot;{job.employment_evidence}&quot;
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Expandable Description */}
-                    {isExpanded && (
-                      <div className="mt-4 pt-4 border-t space-y-3 bg-muted/30 p-4 rounded-lg">
-                        <h3 className="font-semibold text-sm">Job Description & Details</h3>
-                        <div
-                          className="prose prose-sm dark:prose-invert max-w-none text-sm text-muted-foreground max-h-96 overflow-y-auto leading-relaxed"
-                          dangerouslySetInnerHTML={{
-                            __html: sanitizeJobHtml(job.description_html || job.description.replace(/\n/g, '<br/>')),
-                          }}
-                        />
-                        <div className="pt-2 flex justify-between items-center text-xs text-muted-foreground border-t">
-                          <span>External ID: {job.external_id}</span>
-                          <a
-                            href={job.source_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline hover:text-foreground"
-                          >
-                            Open original posting ↗
-                          </a>
-                        </div>
-                      </div>
-                    )}
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ======================= DATABASE MODE ======================= */}
-      {applicationView==='applied'&&<section aria-label="Applied jobs" className="space-y-4">
-        <div><h2 className="text-lg font-semibold">Applied jobs{appliedData?.candidateName?` · ${appliedData.candidateName}`:''}</h2>{appliedData&&!appliedLoading&&<p className="mt-1 text-sm text-muted-foreground">{appliedData.total} applied {appliedData.total===1?'job':'jobs'} with these filters.</p>}</div>
-        <AppliedJobsList data={appliedData} loading={appliedLoading}/>
-        {!!appliedData&&!appliedData.requiresCandidate&&<div className="flex gap-2"><Button size="sm" variant="outline" disabled={appliedLoading||!dbPage} onClick={()=>setDbPage(page=>page-1)}>Previous applied jobs</Button><Button size="sm" variant="outline" disabled={appliedLoading||!appliedData.hasMore} onClick={()=>setDbPage(page=>page+1)}>Next applied jobs</Button></div>}
-      </section>}
-      {mode === 'db' && applicationView==='available' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center text-sm text-muted-foreground px-1">
-            <span>
-              Showing {dbJobs.length} of {dbTotal} saved database jobs
-            </span>
-          </div>
-
-          {dbLoading ? <WorkspaceSkeleton rows={6}/> : !dbJobs.length ? (
-            <p className="p-8 text-center border rounded-xl bg-card text-muted-foreground">
-              {recommendation?.enabled ? 'No related roles found with these filters. Check your saved skills and target roles, or try different filters.' : 'No saved jobs found with these filters.'}
-            </p>
-          ) : (
-            <JobRoster jobs={dbJobs} candidateId={candidateId}/>
-          )}
-
-          <div className="flex items-center gap-2 pt-2">
-            <Button
-              disabled={!dbPage}
-              size="sm"
-              variant="outline"
-              onClick={() => setDbPage((p) => p - 1)}
-              className="h-9 rounded-xl px-4 text-xs font-semibold shadow-2xs hover:bg-muted"
-            >
-              Previous
-            </Button>
-            <Button
-              disabled={!dbMore}
-              size="sm"
-              variant="outline"
-              onClick={() => setDbPage((p) => p + 1)}
-              className="h-9 rounded-xl px-4 text-xs font-semibold shadow-2xs hover:bg-muted"
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Recruiter Section: Public Job Sources */}
-      {false && applicationView === 'available' && (
-        <details className="group rounded-2xl border border-border/70 bg-card p-5 transition-all shadow-xs">
-          <summary className="flex cursor-pointer items-center justify-between text-xs font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground">
-            <span>Manage saved job sources ({dbSources.length})</span>
-            <span className="text-[10px] lowercase font-normal text-muted-foreground/80">click to expand</span>
-          </summary>
-          <section className="mt-4 pt-4 border-t border-border/60 space-y-4">
-            <div>
-              <h2 className="font-bold text-base text-foreground">Public Job Sources Directory</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Configure company ATS boards here. You can preview their live jobs anytime using the &quot;Fetch
-                Jobs&quot; button above.
-              </p>
-            </div>
-
-            <form
-              className="flex flex-wrap gap-2.5 items-center"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                setError('');
-                try {
-                  await api('/api/job-sources', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                      provider: newSourceProvider,
-                      company: newCompany,
-                      board_slug: newBoard,
-                    }),
-                  });
-                  setNewCompany('');
-                  setNewBoard('');
-                  const res = await api<{ sources: Source[] }>('/api/job-sources');
-                  setDbSources(res.sources || []);
-                  setNotice('Added new source. You can now fetch its jobs live anytime!');
-                } catch (err) {
-                  setError((err as Error).message);
-                }
-              }}
-            >
-              <Input
-                aria-label="Source company"
-                required
-                value={newCompany}
-                onChange={(e) => setNewCompany(e.target.value)}
-                placeholder="Company Name (e.g. Stripe)"
-                className="h-10 w-48 rounded-xl"
-              />
-              <Input
-                aria-label="Board slug"
-                required
-                value={newBoard}
-                onChange={(e) => setNewBoard(e.target.value)}
-                placeholder="Public board slug (e.g. stripe)"
-                className="h-10 w-48 rounded-xl"
-              />
-              <select
-                value={newSourceProvider}
-                onChange={(e) => setNewSourceProvider(e.target.value)}
-                className="h-10 border border-border/80 rounded-xl px-3 bg-background text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              >
-                <option value="greenhouse">Greenhouse</option>
-                <option value="ashby">Ashby</option>
-                <option value="lever">Lever</option>
-                <option value="smartrecruiters">SmartRecruiters</option>
-                <option value="breezy">Breezy HR</option>
-                <option value="remoteok">RemoteOK</option>
-              </select>
-              <Button type="submit" size="sm" className="h-10 rounded-xl px-4 font-semibold shadow-xs">
-                Add source
+      {/* ======================= APPLIED JOBS VIEW ======================= */}
+      {applicationView === 'applied' && (
+        <section aria-label="Applied jobs" className="space-y-4">
+          <AppliedJobsList data={appliedData} loading={appliedLoading} />
+          {!!appliedData && !appliedData.requiresCandidate && (
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" disabled={appliedLoading || !dbPage} onClick={() => setDbPage(page => page - 1)}>
+                Previous
               </Button>
-            </form>
+              <Button size="sm" variant="outline" disabled={appliedLoading || !appliedData.hasMore} onClick={() => setDbPage(page => page + 1)}>
+                Next
+              </Button>
+            </div>
+          )}
+        </section>
+      )}
 
-            {dbSources.length > 0 && (
-              <div className="divide-y divide-border/60 border border-border/70 rounded-xl overflow-hidden bg-background">
-                {dbSources.map((s) => (
-                  <div key={s.id} className="p-3.5 flex justify-between items-center text-sm hover:bg-muted/20 transition-colors">
-                    <div>
-                      <span className="font-semibold text-foreground">{s.company}</span>{' '}
-                      <span className="text-muted-foreground text-xs font-mono">
-                        ({s.provider}/{s.board_slug})
-                      </span>
-                    </div>
-                    <div className="flex gap-2">
+      {/* ======================= JOBRIGHT MASTER-DETAIL SPLIT SCREEN ======================= */}
+      {applicationView === 'available' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          {/* LEFT COLUMN: SCROLLABLE FEED OF COMPACT CARDS (5 Cols on Large) */}
+          <div className="lg:col-span-5 space-y-4">
+            {mode === 'db' ? (
+              dbLoading ? (
+                <WorkspaceSkeleton rows={6} />
+              ) : !dbJobs.length ? (
+                <div className="rounded-2xl border border-dashed border-border/80 bg-card p-10 text-center space-y-2">
+                  <Briefcase className="size-8 text-muted-foreground/60 mx-auto" />
+                  <p className="text-sm font-semibold text-foreground">No saved jobs found</p>
+                  <p className="text-xs text-muted-foreground">Try clearing filters or click &quot;Sync Software Jobs&quot; to fetch new roles.</p>
+                </div>
+              ) : (
+                <>
+                  <JobRoster
+                    jobs={dbJobs}
+                    candidateId={candidateId}
+                    selectedJobId={selectedDbJob?.id}
+                    onSelectJob={(job) => setSelectedDbJob(job)}
+                  />
+
+                  {/* Pagination */}
+                  <div className="flex items-center justify-between pt-2 px-1">
+                    <span className="text-xs text-muted-foreground">
+                      Page {dbPage + 1}
+                    </span>
+                    <div className="flex items-center gap-2">
                       <Button
+                        disabled={!dbPage}
                         size="sm"
                         variant="outline"
-                        onClick={() => {
-                          setMode('live');
-                          setLiveBoard(s.board_slug);
-                          setLiveProvider(s.provider);
-                          setCompanyFilter('');
-                        }}
-                        className="h-8 rounded-lg text-xs font-medium"
+                        onClick={() => setDbPage((p) => p - 1)}
+                        className="h-8 rounded-lg px-3 text-xs font-semibold shadow-2xs hover:bg-muted"
                       >
-                        Fetch Live
+                        Previous
+                      </Button>
+                      <Button
+                        disabled={!dbMore}
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setDbPage((p) => p + 1)}
+                        className="h-8 rounded-lg px-3 text-xs font-semibold shadow-2xs hover:bg-muted"
+                      >
+                        Next
                       </Button>
                     </div>
                   </div>
-                ))}
+                </>
+              )
+            ) : (
+              /* LIVE JOBS LIST */
+              liveLoading ? (
+                <div className="p-12 text-center text-muted-foreground border rounded-2xl bg-card">
+                  <div className="animate-spin inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full mb-2"></div>
+                  <p className="text-xs">Fetching live postings directly from ATS...</p>
+                </div>
+              ) : !liveJobs.length ? (
+                <div className="p-10 text-center border rounded-2xl bg-card space-y-3">
+                  <p className="text-xs text-muted-foreground">
+                    {liveBoard ? <>No live jobs found for board &quot;<strong>{liveBoard}</strong>&quot;.</> : 'No live software jobs found across the available company boards.'}
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setLiveBoard('ramp'); setLiveProvider('ashby'); setCompanyFilter(''); }}>
+                      Ramp (Ashby)
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setLiveBoard('figma'); setLiveProvider('greenhouse'); setCompanyFilter(''); }}>
+                      Figma (Greenhouse)
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setLiveBoard('openai'); setLiveProvider('ashby'); setCompanyFilter(''); }}>
+                      OpenAI (Ashby)
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {liveJobs.map((job) => {
+                    const isSelected = selectedLiveJob?.content_hash === job.content_hash;
+                    const liveSkills = extractJobSkills(job.description || '', job.title).slice(0, 4);
+
+                    return (
+                      <article
+                        key={job.content_hash}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedLiveJob(job)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setSelectedLiveJob(job);
+                          }
+                        }}
+                        className={`group relative text-left w-full rounded-2xl p-4 transition-all duration-200 cursor-pointer ${
+                          isSelected
+                            ? 'bg-card border-2 border-primary shadow-sm ring-1 ring-primary/20'
+                            : 'bg-card border border-border/70 hover:border-border hover:shadow-xs'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3.5">
+                          <CompanyLogo company={job.company} size="md" className="shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <h3 className="text-sm font-bold text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                                  {job.title}
+                                </h3>
+                                <p className="text-xs font-semibold text-muted-foreground mt-0.5">
+                                  {job.company}
+                                </p>
+                              </div>
+                              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80 px-2 py-0.5 rounded bg-muted/60 border border-border/50 shrink-0">
+                                {job.provider}
+                              </span>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-1.5 mt-2 text-xs text-muted-foreground">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-foreground/85">
+                                <MapPin className="size-3 text-muted-foreground shrink-0" />
+                                <span className="truncate max-w-[170px]">{job.location || 'Remote / Unknown'}</span>
+                              </span>
+                              <span>·</span>
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize border-border/60">
+                                {job.employment_type.replace('_', ' ')}
+                              </Badge>
+                            </div>
+
+                            {liveSkills.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mt-2.5">
+                                {liveSkills.map((s) => (
+                                  <SkillBadge key={s.name} name={s.name} category={s.category} size="xs" />
+                                ))}
+                              </div>
+                            )}
+
+                            <div className="mt-3 pt-2 border-t border-border/40 flex items-center justify-between text-[11px] text-muted-foreground">
+                              <JobDates posted_at={job.posted_at} closes_at={job.closes_at} provider={job.provider} />
+                              <span className="text-primary font-semibold text-xs inline-flex items-center gap-0.5">
+                                View details <ChevronRight className="size-3" />
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )
+            )}
+          </div>
+
+          {/* RIGHT COLUMN: DETAIL PREVIEW PANEL (7 Cols on Large, Sticky) */}
+          <div className="lg:col-span-7 lg:sticky lg:top-4">
+            {activeJob ? (
+              <div className="rounded-3xl border border-border/80 bg-card p-6 shadow-sm space-y-6 max-h-[calc(100vh-6rem)] overflow-y-auto scrollbar-thin">
+                {/* Header: Company, Title, Actions */}
+                <div className="space-y-4 pb-5 border-b border-border/70">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-4">
+                      <CompanyLogo company={activeJob.company} size="lg" className="shadow-xs shrink-0" />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
+                            {activeJob.company}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {activeJob.location || 'Remote'}
+                          </span>
+                        </div>
+                        <h2 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight mt-1">
+                          {activeJob.title}
+                        </h2>
+                      </div>
+                    </div>
+
+                    {/* AI Match Trigger Button */}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setMatcherOpen(true)}
+                      className="shrink-0 h-9 rounded-xl border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-semibold text-xs gap-1.5 shadow-2xs hover:bg-emerald-500/20"
+                    >
+                      <Sparkles className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span>Match Fit</span>
+                    </Button>
+                  </div>
+
+                  {/* Metadata Chips */}
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <Badge variant="outline" className="capitalize text-xs font-medium border-border/70 bg-muted/20">
+                      {activeJob.employment_type.replace('_', ' ')}
+                    </Badge>
+                    {'arrangements' in activeJob && activeJob.arrangements?.[0] && (
+                      <Badge variant="secondary" className="text-xs font-medium">
+                        {activeJob.arrangements[0]}
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="text-xs font-mono text-muted-foreground uppercase">
+                      {'source' in activeJob && activeJob.source?.provider ? activeJob.source.provider : ('provider' in activeJob ? (activeJob as LiveJob).provider : 'ATS')}
+                    </Badge>
+                    <div className="text-xs text-muted-foreground ml-auto">
+                      <JobDates
+                        posted_at={activeJob.posted_at}
+                        closes_at={activeJob.closes_at}
+                        provider={'source' in activeJob ? activeJob.source?.provider : ('provider' in activeJob ? (activeJob as LiveJob).provider : undefined)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Primary Action Buttons */}
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                    <Button
+                      size="default"
+                      disabled={applyingJobHash === ('id' in activeJob ? (activeJob as StoredJob).id : (activeJob as LiveJob).content_hash)}
+                      onClick={() => void handleApplyDirectly(activeJob)}
+                      className="flex-1 h-10 rounded-xl bg-primary text-primary-foreground font-bold text-xs sm:text-sm shadow-xs hover:bg-primary/90 transition-all gap-1.5"
+                    >
+                      <span>Apply Directly on Official Portal</span>
+                      <ExternalLink className="size-3.5" />
+                    </Button>
+
+                    {'id' in activeJob && (
+                      <Link
+                        href={`/dashboard/jobs/${activeJob.id}${candidateId ? '?candidateId=' + encodeURIComponent(candidateId) : ''}`}
+                        className="inline-flex items-center justify-center h-10 px-4 rounded-xl border border-border/80 bg-background text-foreground text-xs font-semibold shadow-2xs hover:bg-muted transition-colors gap-1.5"
+                      >
+                        <span>Full Page View</span>
+                        <ArrowUpRight className="size-3.5" />
+                      </Link>
+                    )}
+                  </div>
+                </div>
+
+                {/* Key Skills Ribbon */}
+                {activeExtracted && activeExtracted.topTechStack.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <Layers className="size-3.5 text-primary" />
+                      <span>Required Tech Stack</span>
+                    </h3>
+                    <div className="flex flex-wrap gap-1.5">
+                      {activeExtracted.topTechStack.map((tech) => (
+                        <SkillBadge key={tech} name={tech} size="xs" />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Core Responsibilities */}
+                {activeExtracted && activeExtracted.responsibilities.length > 0 && (
+                  <div className="space-y-2.5">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <CheckCircle2 className="size-3.5 text-emerald-600" />
+                      <span>Key Responsibilities</span>
+                    </h3>
+                    <ul className="space-y-2">
+                      {activeExtracted.responsibilities.slice(0, 5).map((resp, i) => (
+                        <li key={i} className="flex items-start gap-2.5 text-xs text-foreground/90 leading-relaxed">
+                          <span className="size-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                          <span>{resp}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Qualifications & Must-Haves */}
+                {activeExtracted && activeExtracted.mustHaves.length > 0 && (
+                  <div className="space-y-2.5">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <Sparkles className="size-3.5 text-primary" />
+                      <span>Essential Qualifications</span>
+                    </h3>
+                    <div className="space-y-2">
+                      {activeExtracted.mustHaves.slice(0, 4).map((req, i) => (
+                        <div key={i} className="rounded-xl border border-border/60 bg-muted/15 p-3 text-xs flex items-start gap-2.5">
+                          <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                          <span className="font-medium text-foreground leading-snug">{req}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Full Description Section */}
+                <div className="space-y-3 pt-4 border-t border-border/60">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                    <span>Complete Description</span>
+                    <a
+                      href={activeJob.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline lowercase font-normal inline-flex items-center gap-1"
+                    >
+                      <span>open original</span>
+                      <ExternalLink className="size-3" />
+                    </a>
+                  </h3>
+                  <div
+                    className="jd-prose max-w-none text-xs text-foreground/80 leading-relaxed max-h-96 overflow-y-auto pr-2 scrollbar-thin"
+                    dangerouslySetInnerHTML={{
+                      __html: sanitizeJobHtml(
+                        ('description_html' in activeJob && activeJob.description_html)
+                          ? activeJob.description_html
+                          : (activeJob.description || '').replace(/\n/g, '<br/>')
+                      ),
+                    }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-3xl border border-dashed border-border/80 bg-card p-12 text-center space-y-2">
+                <Briefcase className="size-8 text-muted-foreground/60 mx-auto" />
+                <p className="text-sm font-semibold text-foreground">Select a job to view details</p>
+                <p className="text-xs text-muted-foreground">Click any card from the list to preview responsibilities, requirements, and apply directly.</p>
               </div>
             )}
-          </section>
-        </details>
+          </div>
+        </div>
+      )}
+
+      {/* AI Skill Matcher Dialog for Preview Panel */}
+      {activeJob && (
+        <SkillMatcherDialog
+          open={matcherOpen}
+          onOpenChange={setMatcherOpen}
+          job={{
+            id: 'id' in activeJob ? activeJob.id : activeJob.external_id,
+            title: activeJob.title,
+            company: activeJob.company,
+            description: activeJob.description,
+            location: activeJob.location || undefined,
+            url: activeJob.application_url,
+          }}
+        />
       )}
     </main>
   );

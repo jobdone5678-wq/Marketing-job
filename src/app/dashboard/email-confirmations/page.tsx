@@ -15,7 +15,6 @@ import {
   Settings2Icon,
   ChevronDownIcon,
   ShieldCheckIcon,
-  CheckIcon,
   XIcon,
 } from 'lucide-react';
 import { WorkspaceSkeleton } from '@/components/workspace-ui';

@@ -14,14 +14,10 @@ import type {
 } from "@/types/database";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
-  FileSignature,
-  UploadCloud,
   Sparkles,
   CheckCircle2,
   Loader2,
-  FileText,
   Building2,
 } from "lucide-react";
 import { toast } from "sonner";
