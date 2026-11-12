@@ -37,6 +37,7 @@ export function CandidateForm({
   const [fields, setFields] = useState<Record<string, unknown>>({
     ...emptyCandidateFields(),
     ...initialCandidate,
+    is_active_bench: true,
   });
   const [id, setId] = useState(initialCandidate?.id || candidateId || "");
   const [version, setVersion] = useState<number | null>(
