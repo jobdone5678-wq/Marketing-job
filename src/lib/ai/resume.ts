@@ -28,7 +28,7 @@ export async function extractResume(task:BackgroundTask) {
     throw error;
   }
 
-  // PRIMARY PATH: Local deterministic extraction (NO AI, NO NETWORK)
+  // LOCAL EXTRACTION: No AI required
   const extracted = extractResumeLocal(parsed.text, document.filename);
 
   // Validate and save

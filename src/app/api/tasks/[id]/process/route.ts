@@ -16,7 +16,8 @@ export async function POST(request:Request,context:{params:Promise<{id:string}>}
   const {data:target,error}=await db.from('background_tasks').select('id,actor_id,kind,status').eq('id',id).maybeSingle();checkDb(error);
   if(!target||target.actor_id!==actor.id)throw new CaptureError('Task not found.',404);
   if(!['resume_extract','candidate_match','packet_generate','resume_tailor','application_answers'].includes(target.kind))throw new CaptureError('This task requires the background worker.',409);
-  if(!aiConfiguration().configured)return {taskId:id,status:'waiting_for_worker',message:'AI is waiting for a configured processing worker. Ask your administrator to check the AI endpoint, model and worker settings.'};
+  // resume_extract uses local deterministic parsing - no AI required
+  if(!aiConfiguration().configured && target.kind !== 'resume_extract')return {taskId:id,status:'waiting_for_worker',message:'AI is waiting for a configured processing worker. Ask your administrator to check the AI endpoint, model and worker settings.'};
   const {data:claimed,error:claimError}=await db.rpc('claim_specific_task',{p_task:id,p_lease:randomUUID()});checkDb(claimError);
   const task=claimed?.[0] as BackgroundTask|undefined;
   if(!task)return {taskId:id,status:'not_claimed'};

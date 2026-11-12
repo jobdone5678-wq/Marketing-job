@@ -335,20 +335,7 @@ export function CandidateForm({
               />
             </div>
 
-            <div className="sm:col-span-2 pt-1">
-              <label className="flex items-center gap-2.5 text-xs font-medium text-foreground cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={fields.is_active_bench === true}
-                  onChange={(e) =>
-                    setFields({ ...fields, is_active_bench: e.target.checked })
-                  }
-                  className="size-4 rounded accent-primary cursor-pointer"
-                />
-                <span>Active on recruitment bench (ready for active matching)</span>
-              </label>
-            </div>
-          </div>
+                      </div>
         </div>
 
         {/* Work & Education History Cards */}
