@@ -14,7 +14,7 @@ export async function GET(request:Request){
   const {applications,appliedKeys}=await candidateJobApplications(recommendation.candidateId);
   const search=params.get('search')?.trim().toLowerCase(),company=params.get('company')?.trim().toLowerCase(),location=params.get('location')?.trim().toLowerCase(),type=params.get('type')||'all';
   if(!['all','contract','permanent','temporary','part_time','internship','unknown'].includes(type))throw new CaptureError('Invalid job filter.');
-  const filtered=applications.filter(row=>(!provider||row.provider===provider)&&(!company||row.company.toLowerCase().includes(company))&&(!location||row.location?.toLowerCase().includes(location))&&(!search||[row.title,row.company].some(value=>value.toLowerCase().includes(search)))&&(type==='all'||row.employmentType===type));
+  const filtered=applications.filter(row=>(!provider||provider==='all'||row.provider?.toLowerCase()===provider.toLowerCase())&&(!company||row.company.toLowerCase().includes(company))&&(!location||row.location?.toLowerCase().includes(location))&&(!search||[row.title,row.company].some(value=>value.toLowerCase().includes(search)))&&(type==='all'||row.employmentType===type));
   return {candidateId:recommendation.candidateId,candidateName:recommendation.candidateName,requiresCandidate:!recommendation.candidateId,applications:filtered.slice(page*50,page*50+50),total:filtered.length,hasMore:(page+1)*50<filtered.length,appliedKeys};
  });
 }

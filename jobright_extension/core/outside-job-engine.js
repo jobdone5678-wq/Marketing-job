@@ -661,15 +661,78 @@
     }, true);
   }
 
+  const submissionDispatchedKeys = new Set();
+
+  async function triggerSubmissionCapture(evidenceText) {
+    const rawUrl = window.location.href.split('#')[0];
+    const job = scrapeJobFromDOM(), candidate = await loadActiveCandidate();
+    const targetTitle = job?.title || currentExtractedJob?.title || document.title || 'Software Engineer';
+    const targetCompany = job?.company || currentExtractedJob?.company || 'Company';
+    const dedupeKey = rawUrl + '::' + targetCompany + '::' + targetTitle;
+
+    if (submissionDispatchedKeys.has(dedupeKey)) return;
+    submissionDispatchedKeys.add(dedupeKey);
+
+    const ats = computeATSAnalysis(job, candidate);
+    const evidence = evidenceText || 'Application submission confirmed via page state / confirmation message.';
+
+    chrome.runtime.sendMessage({
+      type: 'auto_submit',
+      payload: {
+        matchScore: ats?.score || 85,
+        matchedSkills: ats?.matched || [],
+        missingSkills: ats?.missing || [],
+        atsAnalysis: ats,
+        candidateId: candidate?.id || 'cand-active',
+        eventKey: 'sub_' + Date.now(),
+        jobUrl: rawUrl,
+        applicationUrl: rawUrl,
+        jobTitle: targetTitle,
+        companyName: targetCompany,
+        status: 'Applied',
+        evidence: evidence,
+        manualAttestation: false
+      }
+    });
+  }
+
   function bindSubmissionListeners() {
+    // 1. Native form submit event
     document.addEventListener('submit', async () => {
-      const job = scrapeJobFromDOM(), candidate = await loadActiveCandidate();
-      const ats = computeATSAnalysis(job, candidate);
-      chrome.runtime.sendMessage({
-        type: 'auto_submit',
-        payload: { matchScore: ats?.score || 85, matchedSkills: ats?.matched || [], missingSkills: ats?.missing || [], atsAnalysis: ats, candidateId: candidate?.id || 'cand-active', eventKey: 'sub_' + Date.now(), applicationUrl: window.location.href, jobTitle: job.title, companyName: job.company }
-      });
+      triggerSubmissionCapture('Detected native form submit event');
     }, true);
+
+    // 2. Submit / Apply button click detector (covers SPA ATS forms)
+    document.addEventListener('click', async (e) => {
+      const btn = e.target?.closest?.('button, input[type="submit"], input[type="button"], [role="button"], a');
+      if (!btn) return;
+      const text = (btn.textContent || btn.innerText || btn.value || btn.getAttribute('aria-label') || '').trim().toLowerCase();
+      const testId = (btn.getAttribute('data-testid') || btn.getAttribute('data-automation-id') || btn.getAttribute('data-qa') || btn.id || '').toLowerCase();
+      
+      const isSubmitBtn = /^(?:submit(?:\s+application)?|apply(?:\s+now)?|send\s+application|complete\s+application|finish\s+application)$/i.test(text)
+        || /(?:submit|apply)-?(?:button|btn|action)/i.test(testId)
+        || (btn.type === 'submit' && !/search|filter|cancel|back/i.test(text));
+
+      if (isSubmitBtn) {
+        setTimeout(() => {
+          const mode = detectPageMode();
+          if (mode === 'submitted') {
+            triggerSubmissionCapture('Application submitted via button click and confirmation detected');
+          }
+        }, 1500);
+      }
+    }, true);
+
+    // 3. MutationObserver to capture post-submission confirmation states dynamically
+    try {
+      const observer = new MutationObserver(() => {
+        const mode = detectPageMode();
+        if (mode === 'submitted') {
+          triggerSubmissionCapture('Application success confirmation text detected in DOM');
+        }
+      });
+      observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
+    } catch {}
   }
 
   // 9. Main Scanning & Step Watcher
@@ -679,6 +742,9 @@
     const job = scrapeJobFromDOM(), candidate = await loadActiveCandidate();
     const ats = computeATSAnalysis(job, candidate);
     currentExtractedJob = job;
+    if (mode === 'submitted') {
+      triggerSubmissionCapture('Application confirmation state detected during page scan');
+    }
     window.postMessage({ type: 'NEXTKIN_JOB_PAGE_DETECTED', job, mode, atsMatch: ats, candidate }, '*');
   }
 

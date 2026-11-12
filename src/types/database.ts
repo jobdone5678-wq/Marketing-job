@@ -126,6 +126,9 @@ export interface JobSubmission {
   // RTR Document Reference
   rtr_document?: RTRDocumentReference | null;
 
+  // Source type: 'portal' for inside/portal applications, 'extension' for extension-captured outside jobs
+  source_type?: 'portal' | 'extension';
+
   created_at: string;
   updated_at: string;
 

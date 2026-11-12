@@ -80,28 +80,45 @@ export async function POST(request: Request) {
     // Resolve Candidate (handles UUID or candidate slug/actor candidate)
     let candidateId = body.candidateId;
     let candidateVersion: number | null = null;
+    const findFallbackCandidate = async () => {
+      if (actor.id) {
+        const { data: byUser } = await database().from('candidates').select('id,version')
+          .eq('user_id', actor.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (byUser) return byUser;
+      }
+      if (actor.email) {
+        const { data: byEmail } = await database().from('candidates').select('id,version')
+          .ilike('email', actor.email)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (byEmail) return byEmail;
+      }
+      const { data: latestConfirmed } = await database().from('candidates').select('id,version')
+        .eq('provenance_status', 'confirmed')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return latestConfirmed;
+    };
+
     if (isUuid(candidateId)) {
       const { data: cand } = await database().from('candidates').select('id,version').eq('id', candidateId).maybeSingle();
       if (cand) {
         candidateId = cand.id;
         candidateVersion = cand.version ?? null;
       } else {
-        const { data: fallbackCand } = await database().from('candidates').select('id,version')
-          .eq('user_id', actor.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (fallbackCand) { candidateId = fallbackCand.id; } else { throw new CaptureError('Candidate not found. Please upload or select a valid candidate.', 404); }
-        candidateVersion = fallbackCand ? fallbackCand.version ?? null : null;
+        const fallbackCand = await findFallbackCandidate();
+        if (fallbackCand) { candidateId = fallbackCand.id; candidateVersion = fallbackCand.version ?? null; }
+        else { throw new CaptureError('Candidate not found. Please upload or select a valid candidate.', 404); }
       }
     } else {
-      const { data: fallbackCand } = await database().from('candidates').select('id,version')
-        .eq('user_id', actor.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (fallbackCand) { candidateId = fallbackCand.id; } else { throw new CaptureError('Candidate not found. Please upload or select a valid candidate.', 404); }
-      candidateVersion = fallbackCand ? fallbackCand.version ?? null : null;
+      const fallbackCand = await findFallbackCandidate();
+      if (fallbackCand) { candidateId = fallbackCand.id; candidateVersion = fallbackCand.version ?? null; }
+      else { throw new CaptureError('Candidate not found. Please upload or select a valid candidate.', 404); }
     }
 
     const eventKey = isUuid(body.eventKey) ? body.eventKey : crypto.randomUUID();
@@ -148,6 +165,26 @@ export async function POST(request: Request) {
 
       result = { submission: existing, duplicate: existing.duplicate_flag };
     } else {
+      // Resolve linked job from jobs table if possible
+      let resolvedJobId: string | null = null;
+      if (safeJobUrl) {
+        const { data: jobByUrl } = await database().from('jobs').select('id,application_url,source_url').limit(150);
+        const matched = (jobByUrl || []).find(j => {
+          const k1 = applicationUrlKey(j.application_url);
+          const k2 = applicationUrlKey(j.source_url);
+          return (k1 && k1 === safeJobUrl) || (k2 && k2 === safeJobUrl);
+        });
+        if (matched) resolvedJobId = matched.id;
+      }
+      if (!resolvedJobId && body.companyName && body.jobTitle) {
+        const { data: jobByTitle } = await database().from('jobs').select('id,company,title')
+          .ilike('company', body.companyName.trim())
+          .ilike('title', body.jobTitle.trim())
+          .limit(1)
+          .maybeSingle();
+        if (jobByTitle) resolvedJobId = jobByTitle.id;
+      }
+
       // Look for an existing submission with the same candidate and matching job_url
       let existingSubmission: any = null;
       if (safeJobUrl) {
@@ -168,16 +205,21 @@ export async function POST(request: Request) {
       const finalNotes = [atsNote, userNotes].filter(Boolean).join(' • ');
 
       if (existingSubmission) {
+        const updatePayload: any = { 
+          status: 'Applied', 
+          capture_status: 'submitted', 
+          notes: finalNotes || existingSubmission.notes
+        };
+        if (resolvedJobId && !existingSubmission.job_id) {
+          updatePayload.job_id = resolvedJobId;
+        }
         const { error: updateError } = await database().from('job_submissions')
-          .update({ 
-            status: 'Applied', 
-            capture_status: 'submitted', 
-            notes: finalNotes || existingSubmission.notes
-          })
+          .update(updatePayload)
           .eq('id', existingSubmission.id);
         checkDb(updateError);
         existingSubmission.status = 'Applied';
         existingSubmission.capture_status = 'submitted';
+        if (resolvedJobId) existingSubmission.job_id = resolvedJobId;
         result = { submission: existingSubmission, duplicate: false, replayed: true };
       } else {
         try {
@@ -204,10 +246,15 @@ export async function POST(request: Request) {
           });
           if (error) throw error;
           result = data as typeof result;
+          if (resolvedJobId && result?.submission?.id) {
+            await database().from('job_submissions').update({ job_id: resolvedJobId }).eq('id', result.submission.id);
+            result.submission.job_id = resolvedJobId;
+          }
         } catch (rpcErr: any) {
           // Direct insert fallback without owner_id or applied_resume
           const { data: newSub, error: subErr } = await database().from('job_submissions').insert({
             candidate_id: candidateId,
+            job_id: resolvedJobId,
             submission_date: new Date().toISOString().split('T')[0],
             company_name: body.companyName,
             job_title: body.jobTitle,

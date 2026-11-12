@@ -67,12 +67,6 @@ const candidateNavItems: NavItem[] = [
     url: "/dashboard/email-confirmations",
     icon: <InboxIcon className="size-4 stroke-[1.8]" />,
   },
-  {
-    id: "outside-jobs",
-    title: "Outside Jobs",
-    url: "/dashboard/outside-jobs",
-    icon: <GlobeIcon className="size-4 stroke-[1.8]" />,
-  },
 ]
 
 const navSecondaryItems: SecondaryNavItem[] = [

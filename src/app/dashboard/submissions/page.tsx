@@ -58,6 +58,7 @@ import {
   PhoneIcon,
   MailIcon,
   FilterIcon,
+  GlobeIcon,
 } from "lucide-react";
 
 export default function SubmissionsPage() {
@@ -74,6 +75,7 @@ export default function SubmissionsPage() {
   const [selectedStatusTab, setSelectedStatusTab] = React.useState("all");
   const [selectedCandidateFilter, setSelectedCandidateFilter] = React.useState("all");
   const [selectedPortalFilter, setSelectedPortalFilter] = React.useState("all");
+  const [selectedSourceFilter, setSelectedSourceFilter] = React.useState("all");
   const [dateFrom, setDateFrom] = React.useState("");
   const [dateTo, setDateTo] = React.useState("");
 
@@ -111,7 +113,9 @@ export default function SubmissionsPage() {
   // Real-time updates via WebSockets (Supabase Realtime)
   React.useEffect(() => {
     const supabase = createClient();
-    const channel = supabase
+
+    // Channel for job_submissions (portal/inside applications)
+    const portalChannel = supabase
       .channel("job_submissions_realtime_feed")
       .on(
         "postgres_changes",
@@ -142,8 +146,41 @@ export default function SubmissionsPage() {
       )
       .subscribe();
 
+    // Channel for outside_jobs (extension-captured outside applications)
+    const outsideChannel = supabase
+      .channel("outside_jobs_realtime_feed")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "outside_jobs",
+        },
+        async (payload) => {
+          try {
+            const latest = await getSubmissions();
+            setSubmissions(latest);
+            if (payload.eventType === "INSERT") {
+              const row = payload.new as Record<string, unknown>;
+              const comp = (row?.company as string) || "Application";
+              const title = (row?.title as string) || "Role";
+              toast.success(`🌐 New extension application: ${comp} (${title})`);
+            } else if (payload.eventType === "UPDATE") {
+              const row = payload.new as Record<string, unknown>;
+              if (row?.status === "Applied") {
+                toast.success(`⚡ Extension application updated: ${(row?.company as string) || "Job"}`);
+              }
+            }
+          } catch (e) {
+            console.error("[Realtime Outside Jobs Error]", e);
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(portalChannel);
+      supabase.removeChannel(outsideChannel);
     };
   }, []);
 
@@ -246,6 +283,14 @@ export default function SubmissionsPage() {
         return false;
       }
 
+      // Source Type filter
+      if (
+        selectedSourceFilter !== "all" &&
+        sub.source_type !== selectedSourceFilter
+      ) {
+        return false;
+      }
+
       // Status Tab filter
       if (selectedStatusTab === "interviews") {
         if (
@@ -291,6 +336,7 @@ export default function SubmissionsPage() {
     submissions,
     selectedCandidateFilter,
     selectedPortalFilter,
+    selectedSourceFilter,
     selectedStatusTab,
     searchQuery,
     dateFrom,
@@ -689,6 +735,31 @@ export default function SubmissionsPage() {
                 ))}
               </SelectContent>
             </Select>
+
+            {/* Source Type Filter */}
+            <Select
+              value={selectedSourceFilter}
+              onValueChange={(val) => setSelectedSourceFilter(val ?? "all")}
+            >
+              <SelectTrigger aria-label="Filter by source type" className="h-9.5 text-xs w-[150px] bg-background rounded-xl border-border/70 shadow-2xs">
+                <SelectValue>
+                  {selectedSourceFilter === 'all' ? 'All Sources' : selectedSourceFilter === 'portal' ? '🏢 Portal' : '🌐 Extension'}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-xs">
+                  All Sources
+                </SelectItem>
+                <SelectItem value="portal" className="text-xs flex items-center gap-2">
+                  <Building2Icon className="size-3.5 text-primary" />
+                  Portal (Inside Jobs)
+                </SelectItem>
+                <SelectItem value="extension" className="text-xs flex items-center gap-2">
+                  <GlobeIcon className="size-3.5 text-blue-600" />
+                  Extension (Outside Jobs)
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>
@@ -754,6 +825,7 @@ export default function SubmissionsPage() {
                 setSearchQuery("");
                 setSelectedCandidateFilter("all");
                 setSelectedPortalFilter("all");
+                setSelectedSourceFilter("all");
                 setSelectedStatusTab("all");
               }}
             >
@@ -959,6 +1031,29 @@ export default function SubmissionsPage() {
                           >
                             {sub.portal_source || "Not recorded"}
                           </Badge>
+                          {sub.source_type && (
+                            <Badge
+                              variant="outline"
+                              className="text-[9px] px-1.5 py-0 h-4 font-semibold gap-1 flex items-center"
+                              style={
+                                sub.source_type === 'extension'
+                                  ? { backgroundColor: 'rgba(59, 130, 246, 0.1)', borderColor: 'rgba(59, 130, 246, 0.3)', color: '#3b82f6' }
+                                  : { backgroundColor: 'rgba(139, 92, 246, 0.1)', borderColor: 'rgba(139, 92, 246, 0.3)', color: '#8b5cf6' }
+                              }
+                            >
+                              {sub.source_type === 'extension' ? (
+                                <>
+                                  <GlobeIcon className="size-3" />
+                                  Extension
+                                </>
+                              ) : (
+                                <>
+                                  <Building2Icon className="size-3" />
+                                  Portal
+                                </>
+                              )}
+                            </Badge>
+                          )}
                           {Boolean(sub.portal_source?.toLowerCase().includes("outside")) && (
                             <Badge
                               variant="outline"

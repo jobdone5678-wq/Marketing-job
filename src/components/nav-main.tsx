@@ -36,7 +36,7 @@ export function NavMain({
 
   const sections = [
     ["My Workspace", ["dashboard", "candidates", "submissions", "rtr", "placements"]],
-    ["Opportunities", ["public-jobs", "outside-jobs"]],
+    ["Opportunities", ["public-jobs"]],
     ["Connections", ["email-confirmations", "integrations"]],
   ];
 

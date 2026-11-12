@@ -962,6 +962,25 @@
       const draft=await chrome.runtime.sendMessage({type:'get_answer_draft'}).catch(()=>null);
       const id = linkedCandidateId || (candidateRole === 'client' ? res.ownCandidateId : ((candidateRole === 'standalone' && candidates.length === 1) ? candidates[0].id : draft?.candidateId));
       selectedCandidateId = candidates.some(c => c.id === id) ? id : null;
+
+      // Fallback: if no candidate resolved, try chrome.storage.local for uploaded/active candidate
+      if (!selectedCandidateId && candidates.length === 0) {
+        try {
+          const storage = await chrome.storage.local.get(['nextkin_active_candidate', 'uploadedCandidate', 'uploaded_resume', 'nextkin_uploaded_resume']);
+          const upl = storage.uploaded_resume || storage.nextkin_uploaded_resume;
+          const fallbackCand = upl?.parsed_candidate || upl?.candidate || storage.uploadedCandidate || storage.nextkin_active_candidate || (upl && (upl.full_name || upl.id) ? upl : null);
+          if (fallbackCand && (fallbackCand.id || fallbackCand.full_name)) {
+            if (!fallbackCand.id) fallbackCand.id = 'cand-local';
+            candidates = [fallbackCand];
+            selectedCandidateId = fallbackCand.id;
+          }
+        } catch {}
+      }
+      // If candidates exist but none selected, default to first
+      if (!selectedCandidateId && candidates.length > 0) {
+        selectedCandidateId = candidates[0].id;
+      }
+
       if(draft?.candidateId===selectedCandidateId&&Array.isArray(draft.answers)){
         for(const answer of draft.answers.slice(0,100))applicationAnswers.set(answer.key.toLowerCase(),answer);
         if(draft.eventKey)submissionEventKey=draft.eventKey;
