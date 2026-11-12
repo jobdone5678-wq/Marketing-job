@@ -27,7 +27,7 @@ function extractCandidateFromText(source: string, filename = ''): LocalCandidate
 
   const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
   const nameLines = lines.slice(0, 5).map(line => line.replace(/^(?:full[_ ]?name|candidate[_ ]?name|name)\s*:\s*/i, ''));
-  const name = nameLines.find(line => /^[\p{L}][\p{L} .\'-]{2,70}$/u.test(line) && line.split(/\s+/).length >= 2 && line.split(/\s+/).length <= 5 && !/resume|summary|experience|curriculum|engineer|developer|skills|education|accountant/i.test(line.replace(/\s+/g, ''))) || '';
+  const name = nameLines.find(line => /^[A-Za-z][A-Za-z .\'-]{2,70}$/i.test(line) && line.split(/\s+/).length >= 2 && line.split(/\s+/).length <= 5 && !/resume|summary|experience|curriculum|engineer|developer|skills|education|accountant/i.test(line.replace(/\s+/g, ''))) || '';
   if (!name) throw new Error('Candidate name could not be identified. Put the candidate name on its own line at the top of the resume.');
 
   const email = raw.match(/[\w.%+-]+@[\w.-]+\.[a-z]{2,}/i)?.[0] || null;
