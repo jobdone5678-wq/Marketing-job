@@ -43,6 +43,18 @@ export function DashboardOverview() {
       setMetrics(response.metrics);
       setUpdated(new Date());
       setError('');
+      // Sync candidate profile with extension
+      try {
+        const resumeRes = await api<{ candidate?: Record<string, unknown> | null }>('/api/jobseeker/resume');
+        if (resumeRes?.candidate) {
+          window.postMessage({
+            type: 'NEXTKIN_CANDIDATE_CHANGED',
+            candidate: resumeRes.candidate,
+          }, '*');
+          document.documentElement.setAttribute('data-nextkin-paired', 'true');
+          document.documentElement.setAttribute('data-nextkin-candidate', JSON.stringify(resumeRes.candidate));
+        }
+      } catch {}
     } catch (e) {
       if (current === generation.current) setError((e as Error).message);
     } finally {

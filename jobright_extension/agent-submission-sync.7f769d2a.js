@@ -57,7 +57,7 @@ var e,t;"function"==typeof(e=globalThis.define)&&(t=e,e=null),function(t,r,o,n,i
       if (!effectiveTok) {
         chrome.storage.local.get(['token', 'nextkin_auth_token'], function(st){
           var t = st && (st.token || st.nextkin_auth_token);
-          if (t) syncCandidateFromPortal(win.location.origin || 'https://nextkinhr.com', t);
+          syncCandidateFromPortal(win.location.origin || 'https://nextkinhr.com', t);
         });
       } else {
         syncCandidateFromPortal(win.location.origin || 'https://nextkinhr.com', effectiveTok);
@@ -66,9 +66,11 @@ var e,t;"function"==typeof(e=globalThis.define)&&(t=e,e=null),function(t,r,o,n,i
   } catch(err) {}
 
   function syncCandidateFromPortal(origin, token) {
-    if (!token) return;
+    var headers = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = "Bearer " + token;
     fetch(origin + "/api/jobseeker/resume", {
-      headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }
+      headers: headers,
+      credentials: "include"
     }).then(function(r){ return r.json(); }).then(function(res){
       var cand = res && res.candidate;
       if (cand && cand.full_name) {
@@ -87,19 +89,12 @@ var e,t;"function"==typeof(e=globalThis.define)&&(t=e,e=null),function(t,r,o,n,i
           skills: cand.primary_skills ? cand.primary_skills.split(/[,;]+/).map(function(s){return s.trim();}) : [],
           uploadedAt: Date.now()
         };
-        chrome.storage.local.get(["uploaded_resume", "nextkin_uploaded_resume"], function(chk) {
-          var upl = chk && (chk.uploaded_resume || chk.nextkin_uploaded_resume);
-          if (upl && upl.full_name && upl.uploadedAt && (Date.now() - upl.uploadedAt < 2592000000)) {
-            console.log("[NextKin] Retaining active uploaded candidate resume:", upl.full_name);
-            return;
-          }
-          chrome.storage.local.set({
-            nextkin_active_candidate: cand,
-            uploadedCandidate: cand,
-            nextkin_candidate_data: cand,
-            uploaded_resume: resumeObj,
-            nextkin_uploaded_resume: resumeObj
-          });
+        chrome.storage.local.set({
+          nextkin_active_candidate: cand,
+          uploadedCandidate: cand,
+          nextkin_candidate_data: cand,
+          uploaded_resume: resumeObj,
+          nextkin_uploaded_resume: resumeObj
         });
       }
     }).catch(function(){});

@@ -279,8 +279,12 @@
       const resolved = resolveFact(field.label, field.hint);
       if (!resolved) {
         if (isChoiceKind(field.kind)) return aiPlan(field, 'Select the best answer from the options using the resume.');
-        const isQuestion = field.element?.tagName === 'TEXTAREA' || /\?/.test(field.label || '') || (field.label || '').trim().length > 40;
-        if (field.kind === 'text' && isQuestion) return aiPlan(field, 'Write a concise first-person answer grounded in the resume.');
+        const isBioOrScreening = field.element?.tagName === 'TEXTAREA' ||
+          /\?/.test(field.label || '') ||
+          (field.label || '').trim().length > 25 ||
+          /\b(bio|biography|summary|about\s*(you|yourself)?|cover\s*letter|tell\s*us|interest(ed)?\s*in|why|experience\s*with|describe|explain|qualification|overview|motivation|background|statement)\b/i.test(field.label || '') ||
+          /\b(bio|summary|cover\s*letter|describe|explain)\b/i.test(field.hint || '');
+        if (field.kind === 'text' && isBioOrScreening) return aiPlan(field, 'Write a concise first-person answer grounded in the resume.');
         return { field, status: 'needs_review', reason: 'No unambiguous profile fact.' };
       }
 

@@ -194,26 +194,8 @@
         return r;
       }).catch(() => null);
 
-  // Safety domain detection: Never autofill or inject on the NextKin recruiting portal itself
+  // Safety domain detection: Portal page check
   function isPortalPage() {
-    try {
-      const host = (window.location.hostname || '').toLowerCase();
-      // Test environments running ATS fixtures on localhost or example.test are allowed
-      if (window.location.pathname.includes('/fixture/job') || window.location.pathname.includes('/fixture/role')) {
-        return false;
-      }
-      if (host.includes('localhost') || host === '127.0.0.1' || host === '0.0.0.0' || host === 'portal.test') {
-        return true;
-      }
-      if (host.includes('nextkin') || host.includes('nextkinhr') || host.includes('nextkinlife')) {
-        return true;
-      }
-      if (document.getElementById('workspace-content') ||
-          document.querySelector('.portal-page, .portal-workspace, [data-slot="sidebar-inset"], [data-nextkin-portal]') ||
-          document.querySelector('meta[name="application-name"][content*="NextKin" i]')) {
-        return true;
-      }
-    } catch {}
     return false;
   }
 
@@ -260,14 +242,19 @@
     const host = (window.location.hostname || '').toLowerCase();
     const path = (window.location.pathname || '').toLowerCase();
 
-    // Known ATS and Job Boards
+    if (host.includes('nextkin') || host.includes('nextkinhr') || host.includes('nextkinlife')) {
+      return true;
+    }
+
+    // Known ATS and Job Portals
     const KNOWN_ATS = [
       'greenhouse.io', 'gh.io', 'ashbyhq.com', 'lever.co', 'myworkdayjobs.com', 'workday.com',
       'smartrecruiters.com', 'jobvite.com', 'taleo.net', 'bamboohr.com', 'rippling.com',
       'workable.com', 'recruitee.com', 'ziprecruiter.com', 'joinhandshake.com', 'wellfound.com',
       'angel.co', 'monster.com', 'careerbuilder.com', 'glassdoor.com', 'icims.com',
       'breezy.hr', 'jazzhr.com', 'applytojob.com', 'pinpointhq.com', 'teamtailor.com',
-      'dice.com', 'indeed.com', 'keka.com'
+      'dice.com', 'indeed.com', 'keka.com', 'successfactors.com', 'sapsf.com', 'oraclecloud.com',
+      'brassring.com', 'clearcompany.com', 'icims.com'
     ];
     if (KNOWN_ATS.some(ats => host.includes(ats))) {
       return true;
@@ -282,32 +269,22 @@
       return true;
     }
 
-    // Subdomains dedicated to hiring
+    // Career subdomains (e.g. careers.company.com, jobs.company.com)
     if (/^(careers?|jobs?|recruiting|talent)\./i.test(host)) {
       return true;
     }
 
-    // Career paths
+    // Career paths (e.g. company.com/careers, company.com/jobs/123, company.com/apply)
     if (/\/(careers?|jobs?|apply|application|openings|posting|requisition|job-board)(\/|$)/i.test(path)) {
       return true;
     }
 
-    // Concrete application DOM markers on any corporate page
-    if (document.querySelector('form[data-testid*="application" i], form[id*="application" i], form[class*="application" i], form[action*="apply" i]')) {
-      return true;
-    }
-    if (document.querySelector('input[type="file"][accept*="pdf" i], input[type="file"][name*="resume" i], input[type="file"][id*="resume" i]')) {
-      return true;
-    }
+    // Concrete job application DOM markers on career pages
+    const hasApplicationForm = document.querySelector('form[data-testid*="application" i], form[id*="application" i], form[class*="application" i], form[action*="apply" i]');
+    const hasResumeUpload = document.querySelector('input[type="file"][accept*="pdf" i], input[type="file"][name*="resume" i], input[type="file"][id*="resume" i]');
 
-    // Generic job application forms with 3 or more form inputs
-    const formInputs = document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="search"]), select, textarea');
-    let visibleCount = 0;
-    for (const el of formInputs) {
-      if (el.offsetParent !== null && !el.closest('#mp-copilot-root')) {
-        visibleCount++;
-        if (visibleCount >= 3) return true;
-      }
+    if (hasApplicationForm || hasResumeUpload) {
+      return true;
     }
 
     return false;
@@ -2212,6 +2189,10 @@
 
   // Build and Inject Floating Copilot Widget using Isolated Shadow DOM
   function injectFloatingWidget() {
+    // Suppressed: helper-app provides the main Recruiting Copilot sidebar and floating launcher
+    const existing = document.getElementById('mp-copilot-root');
+    if (existing) existing.remove();
+    return;
     if (isPortalPage() || isExcludedDomain() || !isJobOrApplicationPage()) return;
     if (document.getElementById('mp-copilot-root')) return;
 
@@ -2901,7 +2882,7 @@
 
     shadowRoot.appendChild(pill);
     shadowRoot.appendChild(card);
-    document.body.appendChild(root);
+    (document.body || document.documentElement).appendChild(root);
 
     // Setup Draggable
     const draggable = setupDraggable(root, pill, card.querySelector('#mp-card-header'));

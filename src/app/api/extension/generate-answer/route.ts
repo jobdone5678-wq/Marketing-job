@@ -1,12 +1,63 @@
 import { NextResponse } from 'next/server';
 import { extensionProfile, cors } from '@/lib/capture/server';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { database } from '@/lib/db/admin';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 export async function OPTIONS(request: Request) {
   return cors(request, new Response(null, { status: 204 }));
+}
+
+function normalizeQuestionKey(text: string): string {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json();
+    const { question, key, answer, candidateId } = body;
+    const normKey = (key || normalizeQuestionKey(question));
+    if (!normKey || !answer) {
+      return cors(request, NextResponse.json({ ok: false, error: 'Question key and answer required' }, { status: 400 }));
+    }
+
+    if (candidateId && typeof candidateId === 'string' && candidateId.length === 36) {
+      try {
+        const { data: candRow } = await database()
+          .from('candidates')
+          .select('id, confirmed_facts')
+          .eq('id', candidateId)
+          .maybeSingle();
+        if (candRow) {
+          const currentFacts = (candRow.confirmed_facts as Record<string, unknown>) || {};
+          const currentSaved = (currentFacts.saved_answers as Record<string, unknown>) || {};
+          currentSaved[normKey] = {
+            answer: String(answer).trim(),
+            question: question || normKey,
+            updatedAt: new Date().toISOString()
+          };
+          await database()
+            .from('candidates')
+            .update({ confirmed_facts: { ...currentFacts, saved_answers: currentSaved } })
+            .eq('id', candidateId);
+        }
+      } catch (err) {
+        console.warn('Could not save candidate answer to db:', err);
+      }
+    }
+
+    return cors(request, NextResponse.json({ ok: true, saved: true, key: normKey }));
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Error saving answer';
+    return cors(request, NextResponse.json({ ok: false, error: msg }, { status: 500 }));
+  }
 }
 
 export async function POST(request: Request) {
@@ -32,6 +83,41 @@ export async function POST(request: Request) {
       );
     }
 
+    const body = await request.json();
+    const { prompt, fieldLabel, candidate, jobTitle, companyName, options } = body;
+    const choiceMode = Array.isArray(options) && options.length > 0;
+    const normKey = normalizeQuestionKey(fieldLabel || prompt || '');
+
+    // 1. Check if this repeated question already has a stored answer in candidate profile
+    const candidateSaved = candidate?.confirmed_facts?.saved_answers || candidate?.saved_answers;
+    if (candidateSaved && candidateSaved[normKey]) {
+      const saved = candidateSaved[normKey];
+      const answerVal = typeof saved === 'object' && saved?.answer ? saved.answer : String(saved);
+      if (answerVal) {
+        if (!choiceMode) {
+          return cors(request, NextResponse.json({ ok: true, answer: answerVal, stored: true }));
+        }
+        const match = (options as string[]).find(o => String(o).toLowerCase().trim() === answerVal.toLowerCase().trim())
+          || (options as string[]).find(o => answerVal.toLowerCase().includes(String(o).toLowerCase().trim()));
+        if (match) {
+          return cors(request, NextResponse.json({ ok: true, answer: String(match), stored: true }));
+        }
+      }
+    }
+
+    const candName = candidate?.full_name || candidate?.name || [candidate?.first_name, candidate?.last_name].filter(Boolean).join(' ') || 'Applicant';
+    const skillsStr = Array.isArray(candidate?.skills) && candidate.skills.length > 0
+      ? candidate.skills.join(', ')
+      : (candidate?.primary_skills || '');
+    const candTitle = candidate?.current_job_title || candidate?.target_job_titles || jobTitle || '';
+    const candSummary = candidate?.summary || candidate?.bio || candidate?.confirmed_facts?.summary || '';
+
+    // 2. Check if this is a bio/summary question and candidate already has a confirmed summary/bio
+    const isBioQuestion = /\b(bio|biography|summary|about\s*(you|yourself)?|professional\s*summary|overview)\b/i.test(normKey);
+    if (isBioQuestion && candSummary && String(candSummary).trim().length > 20 && !choiceMode) {
+      return cors(request, NextResponse.json({ ok: true, answer: String(candSummary).trim(), stored: true }));
+    }
+
     const apiKey = process.env.OPENAI_API_KEY?.trim();
     if (!apiKey) {
       return cors(
@@ -40,19 +126,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = await request.json();
-    const { prompt, fieldLabel, candidate, jobTitle, companyName, options } = body;
-    const choiceMode = Array.isArray(options) && options.length > 0;
-
     const baseUrl = process.env.OPENAI_BASE_URL || 'https://api.xkiro.com/v1/';
     const model = process.env.OPENAI_MODEL || 'mistralai/mistral-large-2512';
-
-    const candName = candidate?.full_name || candidate?.name || [candidate?.first_name, candidate?.last_name].filter(Boolean).join(' ') || 'Applicant';
-    const skillsStr = Array.isArray(candidate?.skills) && candidate.skills.length > 0
-      ? candidate.skills.join(', ')
-      : (candidate?.primary_skills || '');
-    const candTitle = candidate?.current_job_title || candidate?.target_job_titles || jobTitle || '';
-    const candSummary = candidate?.summary || candidate?.bio || candidate?.confirmed_facts?.summary || '';
     const rawSnippet = candidate?.source_text || candidate?.confirmed_facts?.raw_text || '';
     const resumeContext = rawSnippet ? `Resume Highlights: ${rawSnippet.slice(0, 800)}` : '';
 
@@ -111,9 +186,31 @@ Strict Rules:
     let answer = rawAnswer.replace(/^["']|["']$/g, '').trim();
     if (choiceMode) {
       const lower = answer.toLowerCase();
-      const match = options.find(o => String(o).toLowerCase().trim() === lower)
-        || options.find(o => lower.includes(String(o).toLowerCase().trim()));
+      const match = (options as string[]).find(o => String(o).toLowerCase().trim() === lower)
+        || (options as string[]).find(o => lower.includes(String(o).toLowerCase().trim()));
       if (match) answer = String(match);
+    }
+
+    // Persist newly generated answer to candidate record in DB if candidate exists
+    if (candidate?.id && typeof candidate.id === 'string' && candidate.id.length === 36) {
+      try {
+        const { data: candRow } = await database()
+          .from('candidates')
+          .select('id, confirmed_facts')
+          .eq('id', candidate.id)
+          .maybeSingle();
+        if (candRow) {
+          const currentFacts = (candRow.confirmed_facts as Record<string, unknown>) || {};
+          const currentSaved = (currentFacts.saved_answers as Record<string, unknown>) || {};
+          currentSaved[normKey] = { answer, question: fieldLabel || prompt, updatedAt: new Date().toISOString() };
+          await database()
+            .from('candidates')
+            .update({ confirmed_facts: { ...currentFacts, saved_answers: currentSaved } })
+            .eq('id', candidate.id);
+        }
+      } catch (saveErr) {
+        console.warn('Failed to persist saved answer:', saveErr);
+      }
     }
 
     return cors(
@@ -121,6 +218,7 @@ Strict Rules:
       NextResponse.json({
         ok: true,
         answer,
+        stored: false
       })
     );
   } catch (err: unknown) {

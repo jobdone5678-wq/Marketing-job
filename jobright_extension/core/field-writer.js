@@ -457,7 +457,8 @@
         writtenValue,
         sessionId: session.sessionId,
         undoChoice,
-        ai: !!plan.ai
+        ai: !!plan.ai,
+        learned: !!plan.learned
       });
     }
     return receipts;

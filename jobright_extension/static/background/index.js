@@ -172,6 +172,38 @@ async function handleV3Message(msg, sender, reply) {
       return true;
     }
 
+    if (type === 'save_learned_answer') {
+      (async () => {
+        try {
+          const { question, key, answer, candidateId } = msg;
+          if (!key || !answer) { reply({ ok: false }); return; }
+          const storage = await chrome.storage.local.get(['nextkin_learned_answers', 'origin', 'token', 'nextkin_auth_token']);
+          const learned = storage.nextkin_learned_answers || {};
+          learned[key] = {
+            question: question || key,
+            answer: String(answer).trim(),
+            candidateId: candidateId || null,
+            updatedAt: Date.now()
+          };
+          await chrome.storage.local.set({ nextkin_learned_answers: learned });
+
+          const origin = storage.origin || 'http://localhost:3000';
+          const tok = storage.token || storage.nextkin_auth_token;
+          if (tok) {
+            fetch(origin + '/api/extension/generate-answer', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+              body: JSON.stringify({ question, key, answer, candidateId })
+            }).catch(() => {});
+          }
+          reply({ ok: true, saved: true });
+        } catch (e) {
+          reply({ ok: false, error: e.message });
+        }
+      })();
+      return true;
+    }
+
     if (type === 'get_ai_answers') {
       (async () => {
         try {

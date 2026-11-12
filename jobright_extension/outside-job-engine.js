@@ -362,16 +362,103 @@
     try { return await _executeOutsideAutofillInner(candidate); } finally { isAutofilling = false; }
   }
 
+  function normalizeQuestionKey(text) {
+    return String(text || '')
+      .toLowerCase()
+      .replace(/&/g, ' and ')
+      .replace(/[^\w\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   async function resolveAiPlans(plans, candidate) {
     const aiPlans = plans.filter(p => p.status === 'ai');
     if (!aiPlans.length) return;
+
     let enabled = true;
-    try { const s = await chrome.storage.local.get(['nextkin_ai_answers']); enabled = s.nextkin_ai_answers !== false; } catch {}
-    if (!enabled) { aiPlans.forEach(p => { p.status = 'needs_review'; p.reason = 'AI answers are turned off.'; }); return; }
+    let storedAnswers = {};
+    try {
+      const s = await chrome.storage.local.get(['nextkin_ai_answers', 'nextkin_learned_answers']);
+      enabled = s.nextkin_ai_answers !== false;
+      storedAnswers = s.nextkin_learned_answers || {};
+    } catch {}
+
+    const candidateSaved = (candidate && candidate.confirmed_facts && candidate.confirmed_facts.saved_answers) || (candidate && candidate.saved_answers) || {};
+    const combinedStored = Object.assign({}, candidateSaved, storedAnswers);
+
+    if (!enabled) {
+      aiPlans.forEach(p => {
+        const qKey = normalizeQuestionKey(p.field?.label || p.aiPrompt);
+        const saved = combinedStored[qKey];
+        const savedAns = typeof saved === 'object' && saved?.answer ? saved.answer : saved;
+        if (savedAns && String(savedAns).trim()) {
+          p.value = String(savedAns).trim();
+          p.status = 'supported';
+          p.ai = false;
+          p.learned = true;
+        } else {
+          p.status = 'needs_review';
+          p.reason = 'AI answers are turned off.';
+        }
+      });
+      return;
+    }
+
     const job = currentExtractedJob || scrapeJobFromDOM();
+    let hasNewLearned = false;
+
     await Promise.all(aiPlans.map(async p => {
       try {
-        const res = await chrome.runtime.sendMessage({ type: 'generate_ai_field_answer', fieldLabel: p.field.label, prompt: p.aiPrompt || p.field.label, options: p.options || [], candidate, jobTitle: job?.title, companyName: job?.company });
+        const qKey = normalizeQuestionKey(p.field?.label || p.aiPrompt);
+
+        // 1. Check if this repeated question already has a stored answer
+        const saved = combinedStored[qKey];
+        const savedAns = typeof saved === 'object' && saved?.answer ? saved.answer : saved;
+        if (savedAns && String(savedAns).trim()) {
+          let val = String(savedAns).trim();
+          if (p.options && p.options.length) {
+            const match = p.options.find(o => o.toLowerCase().trim() === val.toLowerCase().trim()) ||
+                          p.options.find(o => val.toLowerCase().includes(o.toLowerCase().trim()));
+            if (match) {
+              p.value = match;
+              p.status = 'supported';
+              p.ai = false;
+              p.learned = true;
+              return;
+            }
+          } else {
+            p.value = val;
+            p.status = 'supported';
+            p.ai = false;
+            p.learned = true;
+            return;
+          }
+        }
+
+        // 2. Check if candidate bio/summary already satisfies a bio/summary question
+        const isBioQuestion = /\b(bio|biography|summary|about\s*(you|yourself)?|professional\s*summary|overview)\b/i.test(p.field?.label || p.aiPrompt || '');
+        const candSummary = candidate?.summary || candidate?.bio || (candidate?.confirmed_facts && candidate.confirmed_facts.summary);
+        if (isBioQuestion && candSummary && String(candSummary).trim().length > 20 && (!p.options || !p.options.length)) {
+          const summaryVal = String(candSummary).trim();
+          p.value = summaryVal;
+          p.status = 'supported';
+          p.ai = false;
+          p.learned = true;
+          storedAnswers[qKey] = { answer: summaryVal, question: p.field?.label, updatedAt: Date.now() };
+          hasNewLearned = true;
+          return;
+        }
+
+        // 3. Generate with AI
+        const res = await chrome.runtime.sendMessage({
+          type: 'generate_ai_field_answer',
+          fieldLabel: p.field.label,
+          prompt: p.aiPrompt || p.field.label,
+          options: p.options || [],
+          candidate,
+          jobTitle: job?.title,
+          companyName: job?.company
+        });
         const ans = res?.answer;
         if (ans && String(ans).trim()) {
           let val = String(ans).trim();
@@ -380,10 +467,38 @@
             if (!match) { p.status = 'needs_review'; p.reason = 'AI answer did not match an option.'; return; }
             val = match;
           }
-          p.value = val; p.status = 'supported'; p.ai = true;
-        } else { p.status = 'needs_review'; p.reason = 'No AI answer available.'; }
-      } catch { p.status = 'needs_review'; p.reason = 'AI answer failed.'; }
+          p.value = val;
+          p.status = 'supported';
+          p.ai = true;
+
+          // Store for repeated questions
+          storedAnswers[qKey] = { answer: val, question: p.field?.label, candidateId: candidate?.id, updatedAt: Date.now() };
+          hasNewLearned = true;
+
+          try {
+            chrome.runtime.sendMessage({
+              type: 'save_learned_answer',
+              question: p.field?.label,
+              key: qKey,
+              answer: val,
+              candidateId: candidate?.id
+            }).catch(() => {});
+          } catch (_) {}
+        } else {
+          p.status = 'needs_review';
+          p.reason = 'No AI answer available.';
+        }
+      } catch {
+        p.status = 'needs_review';
+        p.reason = 'AI answer failed.';
+      }
     }));
+
+    if (hasNewLearned) {
+      try {
+        await chrome.storage.local.set({ nextkin_learned_answers: storedAnswers });
+      } catch (_) {}
+    }
   }
 
   async function _executeOutsideAutofillInner(candidate) {
@@ -412,9 +527,13 @@
             const value = receipt.writtenValue;
             const hasValue = Array.isArray(value) ? value.some(Boolean) : String(value ?? '').trim().length > 0;
             if (!hasValue) continue;
-            try { receipt.field?.element?.setAttribute('data-nextkin-filled', 'true'); if (receipt.ai) receipt.field?.element?.setAttribute('data-nextkin-ai', 'true'); } catch {}
+            try {
+              receipt.field?.element?.setAttribute('data-nextkin-filled', 'true');
+              if (receipt.ai) receipt.field?.element?.setAttribute('data-nextkin-ai', 'true');
+              if (receipt.learned) receipt.field?.element?.setAttribute('data-nextkin-learned', 'true');
+            } catch {}
             filledCount++;
-            filledLabelsList.push({ key: receipt.field?.label || 'Field', label: String(receipt.field?.label || 'Field').slice(0, 45), value: Array.isArray(value) ? 'Selected' : String(value), ai: !!receipt.ai });
+            filledLabelsList.push({ key: receipt.field?.label || 'Field', label: String(receipt.field?.label || 'Field').slice(0, 45), value: Array.isArray(value) ? 'Selected' : String(value), ai: !!receipt.ai, learned: !!receipt.learned });
           }
         }
       } catch (err) {
