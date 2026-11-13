@@ -18,7 +18,7 @@ export interface LocalCandidate {
   primary_skills: string;
   secondary_skills: string | null;
   employment_history: Array<{ employer: string | null; title: string | null; start: string | null; end: string | null; bullets: string[] }>;
-  education_history: Array<{ degree: string | null; institution: string | null; field: string | null; dates: string | null; start: string | null; end: string | null }>;
+  education_history: Array<{ degree: string | null; institution: string | null; field: string | null; dates: string | null }>;
   source_text: string;
   all_skills: string[];
 }
@@ -204,57 +204,16 @@ function extractSkills(text: string, skillLines: string[]): string[] {
   return Array.from(matched);
 }
 
-function splitDateRange(value: string): [string | null, string | null] {
-  // Normalise every common range separator to a single delimiter, then split.
-  const normalized = value
-    .replace(/[–—]/g, " - ")  // en/em dash
-    .replace(/\s*-\s*/g, " - ")          // hyphen with optional surrounding space
-    .replace(/\s+to\s+/g, " - ");        // literal "to"
-  const parts = normalized.split(" - ").map((p) => clean(p)).filter(Boolean);
-  if (parts.length >= 2) return [parts[0], parts[parts.length - 1]];
-  // No separator: treat the single value as a start date.
-  return [parts[0] ?? null, null];
-}
-
-function normalizeDateSegment(value: string | null): string | null {
-  if (!value) return null;
-  const v = value.trim();
-  if (!v) return null;
-
-  // Already in YYYY-MM or YYYY-MM-DD form.
-  if (/^\d{4}-\d{2}(-\d{2})?$/.test(v)) return v;
-
-  // "Present" / "Current" endpoint -> map to the current month so dated
-  // ranges that are still open still count toward total experience.
-  if (/present|current|now|today/i.test(v)) {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  }
-
-  const monthMatch = v.match(/(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)/i);
-  const yearMatch = v.match(/\b(19|20)\d{2}\b/);
-  if (yearMatch) {
-    const month = monthMatch ? MONTH_INDEX[monthMatch[0].slice(0, 3).toLowerCase()] ?? 1 : 1;
-    return `${yearMatch[0]}-${String(month).padStart(2, "0")}`;
-  }
-  return null;
-}
-
-const MONTH_INDEX: Record<string, number> = {
-  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
-  jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
-};
-
 function extractDates(value: string): string | null {
   return (
     // Match "Month YYYY - Month YYYY", "YYYY - YYYY", "Month YYYY - present", etc.
-    value.match(/(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+)?\b(?:19|20)\d{2}(?:[-/]\d{2})?\s*(?:-|–|—|to)\s*(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+)?(?:(?:19|20)\d{2}(?:[-/]\d{2})?|present|current)/i)?.[0] ??
+    value.match(/(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+)?\b(?:19|20)\d{2}(?:[-/]\d{2})?\s*(?:-|–|to)\s*(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+)?(?:(?:19|20)\d{2}(?:[-/]\d{2})?|present|current)/i)?.[0] ??
     // Match "MM/YYYY - present" format
-    value.match(/\b\d{1,2}\/\d{4}\s*(?:-|–|—|to)\s*(?:present|current|\d{1,2}\/\d{4})/i)?.[0] ??
+    value.match(/\b\d{1,2}\/\d{4}\s*(?:-|–|to)\s*(?:present|current|\d{1,2}\/\d{4})/i)?.[0] ??
     // Match "Month YYYY - Month YYYY" with optional month on end
-    value.match(/(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}\s*(?:-|–|—|to)\s*(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+)?(?:\d{4}|present|current)/i)?.[0] ??
+    value.match(/(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}\s*(?:-|–|to)\s*(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+)?(?:\d{4}|present|current)/i)?.[0] ??
     // Match "YYYY - YYYY" or "YYYY - present"
-    value.match(/\b(?:19|20)\d{2}\s*[–—-]\s*(?:\b(?:19|20)\d{2}\b|present|current)/i)?.[0] ??
+    value.match(/\b(?:19|20)\d{2}\s*[-–]\s*(?:\b(?:19|20)\d{2}\b|present|current)/i)?.[0] ??
     null
   );
 }
@@ -263,15 +222,12 @@ const DEGREE_REGEX = /\b(?:B\.?Tech|B\.?E\.?|B\.?S\.?|B\.?Sc|B\.?A\.?|B\.?Com|BC
 const INSTITUTION_REGEX = /\b(?:University|College|Institute|School|Academy|Polytechnic|IIT|NIT|BITS|Campus)\b/i;
 
 function extractEducation(lines: string[]): Array<{ degree: string | null; institution: string | null; field: string | null; dates: string | null }> {
-  const items: Array<{ degree: string | null; institution: string | null; field: string | null; dates: string | null; start: string | null; end: string | null }> = [];
+  const items: Array<{ degree: string | null; institution: string | null; field: string | null; dates: string | null }> = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const hasDegree = DEGREE_REGEX.test(line);
     const hasInst = INSTITUTION_REGEX.test(line);
     const dates = extractDates(line) ?? (lines[i + 1] ? extractDates(lines[i + 1]) : null);
-    const [rawStart, rawEnd] = splitDateRange(dates || "");
-    const start = normalizeDateSegment(rawStart);
-    const end = normalizeDateSegment(rawEnd) ?? start;
 
     if (hasDegree || hasInst) {
       let degree: string | null = null;
@@ -319,8 +275,6 @@ function extractEducation(lines: string[]): Array<{ degree: string | null; insti
           institution: institution ? clean(institution.replace(dates || "", "").replace(/^[,\s—–-]+|[,\s—–-]+$/g, "")) : null,
           field: field ? clean(field.replace(dates || "", "")) : null,
           dates,
-          start,
-          end,
         });
       }
     }
@@ -334,7 +288,7 @@ function extractEducation(lines: string[]): Array<{ degree: string | null; insti
         array.findIndex(
           (candidate) =>
             (candidate.institution && candidate.institution === item.institution) ||
-            (candidate.degree && candidate.degree && candidate.dates === item.dates)
+            (candidate.degree && candidate.degree === item.degree && candidate.dates === item.dates)
         )
     )
     .slice(0, 6);
@@ -342,9 +296,9 @@ function extractEducation(lines: string[]): Array<{ degree: string | null; insti
 
 const BULLET_REGEX = /^[\s•▪●*–—•●▪◦⁃-]+\s*/;
 
-function extractExperience(lines: string[]): Array<{ company: string | null; role: string | null; dates: string | null; start: string | null; end: string | null; description: string[] }> {
-  const entries: Array<{ company: string | null; role: string | null; dates: string | null; start: string | null; end: string | null; description: string[] }> = [];
-  let current: { company: string | null; role: string | null; dates: string | null; start: string | null; end: string | null; description: string[] } | null = null;
+function extractExperience(lines: string[]): Array<{ company: string | null; role: string | null; dates: string | null; description: string[] }> {
+  const entries: Array<{ company: string | null; role: string | null; dates: string | null; description: string[] }> = [];
+  let current: { company: string | null; role: string | null; dates: string | null; description: string[] } | null = null;
 
   // Role keywords that indicate an experience heading line
   const ROLE_KEYWORDS = /\b(?:engineer|developer|scientist|manager|analyst|designer|intern|lead|consultant|architect|specialist|officer|assistant|member|contributor|full[-\s]?stack|software)\b/i;
@@ -364,10 +318,6 @@ function extractExperience(lines: string[]): Array<{ company: string | null; rol
     }
 
     const dates = extractDates(line);
-    const [rawStart, rawEnd] = splitDateRange(dates || "");
-    const start = normalizeDateSegment(rawStart);
-    const end = normalizeDateSegment(rawEnd) ?? start;
-
     const hasRoleKeyword = ROLE_KEYWORDS.test(line);
     // Handle "Role, Company Date - Date" format (comma-separated)
     const hasCommaFormat = line.includes(",") && (dates || hasRoleKeyword);
@@ -428,8 +378,6 @@ function extractExperience(lines: string[]): Array<{ company: string | null; rol
           role: cleanRole || null,
           company: cleanCompany || null,
           dates,
-          start,
-          end,
           description: [],
         };
         entries.push(current);
@@ -498,22 +446,21 @@ function extractCandidateFromText(source: string, filename = ''): LocalCandidate
 
   const experienceYears = estimateExperienceYears(parsed.experience);
 
-  // Convert experience bullets to the expected format (now using pre-normalized start/end fields)
+  // Convert experience bullets to the expected format
   const employmentHistory = parsed.experience.map(exp => ({
     employer: exp.company,
     title: exp.role,
-    start: exp.start,
-    end: exp.end,
+    start: exp.dates ? exp.dates.split(' – ')[0] || exp.dates.split(' - ')[0] || null : null,
+    end: exp.dates ? exp.dates.split(' – ')[1] || exp.dates.split(' - ')[1] || null : null,
     bullets: exp.description
   }));
 
-  // Convert education to the expected format (now using pre-normalized start/end fields)
+  // Convert education to the expected format
   const educationHistory = parsed.education.map(edu => ({
     degree: edu.degree,
     institution: edu.institution,
     field: edu.field,
-    start: edu.start,
-    end: edu.end
+    dates: edu.dates
   }));
 
   return {
@@ -651,31 +598,62 @@ export function extractResumeLocal(text: string, filename: string): ResumeExtrac
 
   const allEvidence = [...evidence, ...employmentEvidence, ...educationEvidence, ...skillsEvidence];
 
-  // Helper to compute a short evidence snippet from source text for an entry
-  function makeEvidence(text: string, keywords: (string | null)[]): string {
-    const idx = keywords.map(k => k ? text.toLowerCase().indexOf(k.toLowerCase()) : -1).reduce((a, b) => Math.min(a, b));
-    if (idx >= 0) return text.slice(Math.max(0, idx - 20), Math.min(text.length, idx + 120)).replace(/\n/g, ' ').trim();
-    return keywords.filter(Boolean).join(' at ') || 'experience';
-  }
-
   // Build employment history with proper evidence from source text
-  const employmentHistory = candidate.employment_history.map(e => ({
-    employer: e.employer,
-    title: e.title,
-    start: e.start,
-    end: e.end,
-    location: null,
-    evidence: makeEvidence(text, [e.employer, e.title])
-  }));
+  const employmentHistory = candidate.employment_history.map(e => {
+    // Find actual evidence snippet from source text
+    const employerIdx = e.employer ? text.toLowerCase().indexOf(e.employer.toLowerCase()) : -1;
+    const titleIdx = e.title ? text.toLowerCase().indexOf(e.title.toLowerCase()) : -1;
+    const bulletIdx = e.bullets.length > 0 ? text.toLowerCase().indexOf(e.bullets[0].toLowerCase()) : -1;
+
+    let evidence = '';
+    if (employerIdx >= 0 && titleIdx >= 0) {
+      // Found both - use a snippet from the employment line
+      evidence = text.slice(Math.min(employerIdx, titleIdx), Math.max(employerIdx, titleIdx) + 100).replace(/\n/g, ' ').trim();
+    } else if (employerIdx >= 0) {
+      evidence = text.slice(employerIdx, employerIdx + 150).replace(/\n/g, ' ').trim();
+    } else if (titleIdx >= 0) {
+      evidence = text.slice(titleIdx, titleIdx + 150).replace(/\n/g, ' ').trim();
+    } else if (bulletIdx >= 0) {
+      evidence = e.bullets[0];
+    } else {
+      evidence = `${e.employer || ''} at ${e.title || ''}`.trim() || 'employment';
+    }
+
+    return {
+      employer: e.employer,
+      title: e.title,
+      start: e.start,
+      end: e.end,
+      location: null,
+      evidence
+    };
+  });
 
   // Build education history with proper evidence from source text
-  const educationHistory = candidate.education_history.map(e => ({
-    degree: e.degree,
-    institution: e.institution,
-    start: e.start,
-    end: e.end,
-    evidence: makeEvidence(text, [e.degree, e.institution])
-  }));
+  const educationHistory = candidate.education_history.map(e => {
+    // Find actual evidence snippet from source text
+    const degreeIdx = e.degree ? text.toLowerCase().indexOf(e.degree.toLowerCase()) : -1;
+    const instIdx = e.institution ? text.toLowerCase().indexOf(e.institution.toLowerCase()) : -1;
+
+    let evidence = '';
+    if (degreeIdx >= 0 && instIdx >= 0) {
+      evidence = text.slice(Math.min(degreeIdx, instIdx), Math.max(degreeIdx, instIdx) + 100).replace(/\n/g, ' ').trim();
+    } else if (degreeIdx >= 0) {
+      evidence = text.slice(degreeIdx, degreeIdx + 150).replace(/\n/g, ' ').trim();
+    } else if (instIdx >= 0) {
+      evidence = text.slice(instIdx, instIdx + 150).replace(/\n/g, ' ').trim();
+    } else {
+      evidence = [e.degree, e.institution].filter(Boolean).join(' at ') || 'education';
+    }
+
+    return {
+      degree: e.degree,
+      institution: e.institution,
+      start: e.dates ? e.dates.split(' – ')[0] || e.dates.split(' - ')[0] || null : null,
+      end: e.dates ? e.dates.split(' – ')[1] || e.dates.split(' - ')[1] || null : null,
+      evidence
+    };
+  });
 
   return {
     fields: fields as any,

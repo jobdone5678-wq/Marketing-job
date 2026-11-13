@@ -36,10 +36,10 @@ export function validateResumeExtraction(input:unknown,source:string):ResumeExtr
     }
   }
   parsed.evidence=supported;
-  // Filter employment history: require employer OR title AND evidence; dates are optional
-  parsed.employmentHistory=parsed.employmentHistory.filter(entry=>entry.evidence&&norm(source).includes(norm(entry.evidence))&&entry.employer||entry.title||entry.start||entry.end);
-  // Filter education history: require degree OR institution AND evidence; dates are optional
-  parsed.educationHistory=parsed.educationHistory.filter(entry=>entry.evidence&&norm(source).includes(norm(entry.evidence))&&entry.degree||entry.institution||entry.start||entry.end);
+  // Filter employment history: require evidence with employer OR title OR date
+  parsed.employmentHistory=parsed.employmentHistory.filter(entry=>entry.evidence&&norm(source).includes(norm(entry.evidence))&&(entry.employer||entry.title||entry.start||entry.end));
+  // Filter education history: require evidence with degree OR institution OR date
+  parsed.educationHistory=parsed.educationHistory.filter(entry=>entry.evidence&&norm(source).includes(norm(entry.evidence))&&(entry.degree||entry.institution||entry.start||entry.end));
   // Experience is calculated from complete month dates, never from the model's guessed total.
   fields.total_experience_years=null;
   const experience=estimateExperience(parsed.employmentHistory);
