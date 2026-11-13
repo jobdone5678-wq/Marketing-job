@@ -18,7 +18,9 @@ export async function POST(request:Request) {return protectedRoute(request,async
   const {error:uploadError}=await db.storage.from('candidate-resumes').upload(path,raw,{contentType:pdf?'application/pdf':'application/vnd.openxmlformats-officedocument.wordprocessingml.document',upsert:false});
   if(uploadError)throw new CaptureError('Private resume upload failed. Check storage setup and retry.',503);
   try {
-    const {data:taskId,error}=await db.rpc('register_resume',{p_actor:profile.id,p_document:documentId,p_candidate:candidate?.id||null,p_expected:candidate?.version||null,p_path:path,p_filename:filename,p_hash:createHash('sha256').update(raw).digest('hex')});checkDb(error);
+    const {data:taskId,error}=await db.rpc('register_resume',{p_actor:profile.id,p_document:documentId,p_candidate:null,p_expected:null,p_path:path,p_filename:filename,p_hash:createHash('sha256').update(raw).digest('hex')});checkDb(error);
+    // The document is registered for the uploader and linked to their profile afterwards.
+    if(candidate){const {error:linkError}=await db.from('candidate_documents').update({candidate_id:candidate.id,candidate_version:candidate.version??null}).eq('id',documentId);checkDb(linkError);}
     
     return {documentId,taskId};
   } catch(error) {

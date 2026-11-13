@@ -1,6 +1,6 @@
 import { protectedRoute } from '@/lib/http/protected-route';
 import { database, checkDb, CaptureError } from '@/lib/db/admin';
-import { candidateInput } from '@/lib/candidate-input';
+import { candidateInput, candidatePayload } from '@/lib/candidate-input';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(request: Request) {
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
 }
 export async function POST(request: Request) {
   return protectedRoute(request,async profile => {
-    const fields = candidateInput.parse(await request.json()); if (!fields.full_name?.trim()) throw new CaptureError('Full name is required.');
+    const fields = candidateInput.parse(candidatePayload(await request.json())); if (!fields.full_name?.trim()) throw new CaptureError('Full name is required.');
     const { data: id, error } = await database().rpc('save_candidate_profile', { p_actor: profile.id, p_id: null, p_expected: null, p_fields: fields }); checkDb(error)
     const { data, error: readError } = await database().from('candidates').select('*').eq('id', id).single(); checkDb(readError); return { candidate: data };
   });

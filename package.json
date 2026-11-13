@@ -14,6 +14,7 @@
     "worker": "tsx --conditions=react-server scripts/workers/worker.ts",
     "test:unit": "node --experimental-strip-types --test --test-concurrency=1 tests/*.test.mjs",
     "test:e2e": "node scripts/testing/e2e.mjs",
+    "test:db": "node scripts/testing/verify-candidate-writes.mjs",
     "legacy:report": "tsx --conditions=react-server scripts/tools/legacy-review-report.ts",
     "jobs:sync": "tsx --conditions=react-server scripts/workers/sync-public-jobs.ts"
   },

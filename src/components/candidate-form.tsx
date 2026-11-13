@@ -6,7 +6,8 @@
 	import { CandidateHistoryEditor } from "./candidate-history-editor";
 	import { Button } from "@/components/ui/button";
 	import { Input } from "@/components/ui/input";
-	import { textFields, booleanFields, emptyCandidateFields } from "@/lib/ai/schemas";
+	import { emptyCandidateFields } from "@/lib/ai/schemas";
+	import { candidatePayload } from "@/lib/candidate-input";
 	import { ResumeUploadReview } from "./resume-upload-review";
 	import { api } from "@/lib/api-client";
 	import { getCandidateById, getCandidates } from "@/lib/candidates";
@@ -21,6 +22,39 @@
 	  RotateCcw,
 	  Sparkles,
 	} from "lucide-react";
+
+	// The core facts a recruiter matches on. Every field here is stored on the
+	// candidate record, so the extracted values can be reviewed and corrected.
+	const CORE_FIELDS: { name: string; label: string; type?: string; wide?: boolean }[] = [
+	  { name: "full_name", label: "Full name" },
+	  { name: "email", label: "Email", type: "email" },
+	  { name: "phone", label: "Phone", type: "tel" },
+	  { name: "linkedin_url", label: "LinkedIn", type: "url" },
+	  { name: "current_job_title", label: "Current role" },
+	  { name: "current_employer", label: "Current employer" },
+	  { name: "current_city", label: "City" },
+	  { name: "current_state", label: "State" },
+	  { name: "target_job_titles", label: "Target roles" },
+	  { name: "total_experience_years", label: "Total experience (years)" },
+	  { name: "employment_status", label: "Employment status" },
+	  { name: "primary_skills", label: "Primary skills", wide: true },
+	  { name: "secondary_skills", label: "Secondary skills", wide: true },
+	  { name: "highest_qualification", label: "Highest qualification" },
+	  { name: "university_name", label: "University" },
+	  { name: "graduation_year", label: "Graduation year" },
+	  { name: "certifications", label: "Certifications", wide: true },
+	  { name: "visa_status", label: "Visa status" },
+	  { name: "preferred_locations", label: "Preferred locations" },
+	  { name: "available_to_join", label: "Available to join" },
+	  { name: "expected_salary", label: "Expected salary" },
+	];
+
+	const TOGGLE_FIELDS: { name: string; label: string }[] = [
+	  { name: "authorized_in_usa", label: "Authorized to work in the US" },
+	  { name: "need_sponsorship_now", label: "Needs sponsorship now" },
+	  { name: "need_sponsorship_future", label: "Needs sponsorship later" },
+	  { name: "open_to_relocation", label: "Open to relocation" },
+	];
 
 	export function CandidateForm({
 	  initialCandidate,
@@ -49,6 +83,11 @@
 	  const [changes, setChanges] = useState<string[]>([]);
 	  const [permittedCandidates, setPermittedCandidates] = useState<Candidate[]>([]);
 	  const [contactCheckError, setContactCheckError] = useState("");
+	  const [extracted, setExtracted] = useState<string[]>([]);
+
+	  const setField = useCallback((name: string, value: unknown) => {
+	    setFields((previous) => ({ ...previous, [name]: value }));
+	  }, []);
 
 	  useEffect(() => {
 	    let active = true;
@@ -109,6 +148,15 @@
 	        );
 	        return { ...previous, ...draft };
 	      });
+	      // Remember which core facts the resume filled in, so they can be marked in the form.
+	      setExtracted(
+	        Object.keys(draft).filter((key) => {
+	          const value = draft[key];
+	          if (value === null || value === undefined) return false;
+	          if (Array.isArray(value)) return value.length > 0;
+	          return typeof value === "string" ? value.trim().length > 0 : true;
+	        })
+	      );
 	      setDocumentId(doc);
 	      setVersion(v);
 	    },
@@ -119,13 +167,16 @@
 	    setBusy(true);
 	    setError("");
 	    try {
+	      // Only the fields the database stores are sent, so a saved profile never
+	      // fails validation because of row metadata carried over from the record.
+	      const payload = candidatePayload(fields);
 	      let candidate: Candidate;
 	      if (documentId) {
 	        const r = await api<{ candidateId: string }>(
 	          `/api/resumes/${documentId}/confirm`,
 	          {
 	            method: "POST",
-	            body: JSON.stringify({ version, fields }),
+	            body: JSON.stringify({ version, fields: payload }),
 	          }
 	        );
 	        candidate = await getCandidateById(r.candidateId);
@@ -135,7 +186,7 @@
 	            id ? `/api/candidates/${id}` : "/api/candidates",
 	            {
 	              method: id ? "PATCH" : "POST",
-	              body: JSON.stringify(id ? { version, fields } : fields),
+	              body: JSON.stringify(id ? { version, fields: payload } : payload),
 	            }
 	          )
 	        ).candidate;
@@ -253,6 +304,71 @@
 	        }}
 	        className="space-y-6"
 	      >
+	        {/* Core candidate details */}
+	        <div className="rounded-2xl border border-border/80 bg-card p-5 sm:p-6 shadow-xs space-y-4">
+	          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
+	            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+	              Core Candidate Details
+	            </h2>
+	            {extracted.length > 0 && (
+	              <p className="text-[11px] text-muted-foreground">
+	                Facts marked from resume were extracted from the uploaded document. Edit
+	                anything that is wrong before saving.
+	              </p>
+	            )}
+	          </div>
+	          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+	            {CORE_FIELDS.map((field) => (
+	              <label
+	                key={field.name}
+	                className={`space-y-1 text-xs font-medium text-muted-foreground ${
+	                  field.wide ? "sm:col-span-2 lg:col-span-3" : ""
+	                }`}
+	              >
+	                <span className="flex items-center gap-1.5">
+	                  {field.label}
+	                  {extracted.includes(field.name) && (
+	                    <span className="inline-flex items-center gap-1 rounded-full border border-primary/25 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+	                      <Sparkles className="size-2.5" />
+	                      From resume
+	                    </span>
+	                  )}
+	                </span>
+	                <Input
+	                  aria-label={field.label}
+	                  type={field.type || "text"}
+	                  value={
+	                    typeof fields[field.name] === "string"
+	                      ? (fields[field.name] as string)
+	                      : ""
+	                  }
+	                  onChange={(event) =>
+	                    setField(field.name, event.target.value || null)
+	                  }
+	                  className="h-9 text-xs"
+	                />
+	              </label>
+	            ))}
+	          </div>
+	          <div className="grid gap-2 border-t border-border/60 pt-3 sm:grid-cols-2">
+	            {TOGGLE_FIELDS.map((field) => (
+	              <label
+	                key={field.name}
+	                className="flex items-center gap-2 text-xs font-medium text-foreground"
+	              >
+	                <input
+	                  type="checkbox"
+	                  aria-label={field.label}
+	                  className="size-3.5 accent-primary"
+	                  checked={fields[field.name] === true}
+	                  onChange={(event) => setField(field.name, event.target.checked)}
+	                />
+	                {field.label}
+	              </label>
+	            ))}
+	          </div>
+	        </div>
+
 	        {/* Work History Card */}
 	        <div className="rounded-2xl border border-border/80 bg-card p-5 sm:p-6 shadow-xs space-y-4">
 	          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-border/60 pb-2">
