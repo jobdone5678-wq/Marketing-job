@@ -15,8 +15,31 @@ export const resumeSchema=z.object({fields:candidateFields,employmentHistory:z.a
 export type ResumeExtraction=z.infer<typeof resumeSchema>;
 export const emptyCandidateFields=()=>Object.fromEntries([...textFields,...booleanFields,'employment_types'].map(field=>[field,null]));
 const norm=(value:string)=>value.toLowerCase().replace(/\s+/g,' ').trim();
-const isSupported=(value:unknown,snippet:string)=>typeof value==='string' ? value.split(/[,;\n]/).filter(Boolean).every(part=>norm(snippet).includes(norm(part)))
-  : Array.isArray(value)?value.every(part=>typeof part==='string'&&norm(snippet).includes(norm(part))):false;
+const isSupported=(value:unknown,snippet:string)=>{
+  if(typeof value!=='string'&&!Array.isArray(value))return false;
+  const parts=typeof value==='string'?value.split(/[,;\n]/).filter(Boolean):value.map(String);
+  if(!parts.length)return true; // empty values are fine
+  const n=norm(snippet);
+  for(const part of parts){
+    const p=norm(part);
+    if(!p)continue;
+    // Allow flexible matching: exact, word-boundary, or common aliases
+    if(n.includes(p))continue;
+    // Try word-boundary matching for multi-word terms
+    if(p.split(/\s+/).every(w=>new RegExp('\\b'+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i').test(n)))continue;
+    // Common skill aliases
+    const aliases:Record<string,string[]>={'javascript':['js','ecmascript'],'typescript':['ts'],'node.js':['nodejs','node'],'react.js':['react'],'vue.js':['vue'],'angular.js':['angular'],'c#':['csharp','.net'],'c++':['cpp'],'aws':['amazon web services'],'gcp':['google cloud','google cloud platform'],'kubernetes':['k8s'],'postgres':['postgresql'],'mongodb':['mongo'],'ci/cd':['continuous integration','continuous deployment'],'ml':['machine learning'],'ai':['artificial intelligence'],'qa':['quality assurance']};
+    let matched=false;
+    for(const [key,vals] of Object.entries(aliases)){
+      if(p===key||vals.some(v=>p===v)){
+        if(n.includes(key)||vals.some(v=>n.includes(v))){matched=true;break;}
+      }
+    }
+    if(matched)continue;
+    return false; // this part has no evidence
+  }
+  return true;
+};
 function supportedBoolean(field:string,value:boolean,snippet:string) {
   const negative=/\b(?:not|no|without|do not|does not|don't)\b/i.test(snippet);
   if(field==='open_to_relocation')return /relocat/i.test(snippet)&&/open|willing|not|no/i.test(snippet)&&value!==negative;
@@ -28,10 +51,19 @@ export function validateResumeExtraction(input:unknown,source:string):ResumeExtr
   const parsed=resumeSchema.parse({...object,fields:{...emptyCandidateFields(),...object.fields}});
   const supported=parsed.evidence.filter(evidence=>norm(source).includes(norm(evidence.snippet)));
   const fields=parsed.fields as Record<string,unknown>;
+  // Core facts: name, email, phone, linkedin, location - accept if found anywhere in source
+  const coreFacts=['full_name','email','phone','linkedin_url','current_city','current_state'];
   for(const [field,value] of Object.entries(fields)) {
     if(value===null)continue;
     const proof=supported.filter(evidence=>evidence.field===field);
     if(!proof.some(evidence=>typeof value==='boolean'?supportedBoolean(field,value,evidence.snippet):isSupported(value,evidence.snippet))) {
+      // For core facts, check if the value appears anywhere in the source text
+      if(coreFacts.includes(field)&&typeof value==='string'&&value.trim()){
+        const n=norm(value);
+        if(n&&norm(source).includes(n)){
+          continue; // core fact found in source, keep it
+        }
+      }
       fields[field]=null;parsed.warnings.push(`Review ${field}: extracted value lacked supporting text.`);
     }
   }
