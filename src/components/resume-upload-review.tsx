@@ -31,7 +31,7 @@ export function ResumeUploadReview({
       try {
 
         const r = await api<{
-          document: { status: string; candidate_version: number | null };
+          document: { id: string; status: string; candidate_version: number | null };
           extraction: { data: ResumeExtraction } | null;
           task: { id?:string; status: string; error: string | null } | null;
         }>(`/api/resumes/${documentId}`);
@@ -46,7 +46,7 @@ export function ResumeUploadReview({
               employment_history: r.extraction.data.employmentHistory,
               education_history: r.extraction.data.educationHistory,
             },
-            documentId,
+            r.document.id,
             r.document.candidate_version
           );
           setBusy(false);
@@ -62,7 +62,7 @@ export function ResumeUploadReview({
               const dynamicBio = (title || skillsSummary) ? `${title}${expYears ? ` with ${expYears}` : ''}${skillsSummary ? ` specializing in ${skillsSummary}` : ''}. Proven track record of developing applications and delivering technical results.`.trim() : '';
 
               const candPayload = {
-                id: documentId,
+                id: r.document.id,
                 full_name: fn,
                 first_name: fn.split(/\s+/)[0] || '',
                 last_name: fn.split(/\s+/).slice(1).join(' ') || '',
@@ -85,14 +85,15 @@ export function ResumeUploadReview({
                   current_job_title: title,
                   summary: dynamicBio,
                   bio: dynamicBio,
-                  raw_text: ((r.extraction.data as Record<string, unknown>).rawText as string || "") || ''
+                  raw_text: ((r.extraction.data as Record<string, unknown>).rawText as string || "") || '',
+                  filename: String((r.extraction.data as Record<string, unknown>).filename || `${fn}_Resume.pdf`)
                 }
               };
               window.postMessage({
                 type: 'NEXTKIN_RESUME_UPLOADED',
                 candidate: candPayload,
                 resume: {
-                  filename: fn ? `${fn}_Resume.pdf` : 'Uploaded_Resume.pdf',
+                  filename: String((r.extraction.data as Record<string, unknown>).filename || `${fn}_Resume.pdf`),
                   raw_text: candPayload.source_text,
                   source_text: candPayload.source_text,
                   full_name: fn,
@@ -158,17 +159,17 @@ export function ResumeUploadReview({
       const r = await api<{
         documentId: string;
         status?: string;
-        extraction?: ResumeExtraction;
+        extraction?: { data: ResumeExtraction };
       }>('/api/resumes', { method: 'POST', body: form });
 
       setId(r.documentId);
       if (r.extraction) {
-        setExtraction(r.extraction);
+        setExtraction(r.extraction.data);
         onDraft(
           {
-            ...r.extraction.fields,
-            employment_history: r.extraction.employmentHistory,
-            education_history: r.extraction.educationHistory,
+            ...r.extraction.data.fields,
+            employment_history: r.extraction.data.employmentHistory,
+            education_history: r.extraction.data.educationHistory,
           },
           r.documentId,
           null
@@ -178,7 +179,7 @@ export function ResumeUploadReview({
 
         if (typeof window !== 'undefined') {
           try {
-            const f = r.extraction.fields as Record<string, unknown>;
+            const f = r.extraction.data.fields as Record<string, unknown>;
             const fn = String(f?.full_name || '').trim();
             const skills = Array.isArray(f?.skills) ? f.skills : String(f?.primary_skills || '').split(/[,;]+/).map((s: string) => s.trim()).filter(Boolean);
             const title = String(f?.current_job_title || f?.target_job_titles || '').trim();
@@ -242,6 +243,31 @@ export function ResumeUploadReview({
       setBusy(false);
     }
   }
+
+  // Save to dashboard - calls confirm_resume API
+  const handleSaveResume = async () => {
+    if (!documentId || !extraction) return;
+    setBusy(true);
+    setError('');
+    try {
+      const fields = {
+        ...extraction.fields,
+        employment_history: extraction.employmentHistory,
+        education_history: extraction.educationHistory
+      };
+      await api(`/api/resumes/${documentId}/confirm`, {
+        method: 'POST',
+        body: JSON.stringify({
+          version: null,
+          fields
+        })
+      });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <section
@@ -314,6 +340,8 @@ export function ResumeUploadReview({
           Retry processing
         </Button>
       )}
+
+      {/* AI Extraction View */}
       {extraction && (
         <details className="mt-3 text-xs bg-muted/40 p-3 rounded-lg border">
           <summary className="cursor-pointer font-medium text-foreground">
@@ -330,6 +358,22 @@ export function ResumeUploadReview({
             </p>
           ))}
         </details>
+      )}
+
+      {/* Save Button */}
+      {extraction && (
+        <div className="flex gap-3 pt-4">
+          <Button
+            onClick={handleSaveResume}
+            disabled={busy || !consent}
+            className="flex-1"
+          >
+            {busy && (
+              <span className="animate-spin mr-2">⟳</span>
+            )}
+            Save to Profile
+          </Button>
+        </div>
       )}
     </section>
   );
