@@ -343,7 +343,17 @@ function buildResume(candidate, job, rewrittenBullets) {
     if (raw.length < 30 || /(?:^%PDF|\/FontDescriptor|endstream|\x00)/.test(raw)) throw new Error('Could not read this resume reliably. Upload a text-based PDF, DOCX or TXT, or paste the resume text.');
     const lines = raw.split('\n').map(text).filter(Boolean);
     const nameLines = lines.slice(0,5).map(line => line.replace(/^(?:full[_ ]?name|candidate[_ ]?name|name)\s*:\s*/i,''));
-    const name = nameLines.find(line => /^[\p{L}][\p{L} .'-]{2,70}$/u.test(line) && line.split(/\s+/).length >= 2 && line.split(/\s+/).length <= 5 && !/^(?:resume|summary|experience|curriculum|engineer|developer|skills|education|accountant)$/i.test(line)) || '';
+    // Filter out role keywords that appear as standalone lines (not as part of a name)
+    // Only filter if the entire line matches these keywords exactly (ignoring whitespace)
+    const name = nameLines.find(line => {
+      if (!/^[\p{L}][\p{L} .'-]{2,70}$/u.test(line)) return false;
+      if (line.split(/\s+/).length < 2 || line.split(/\s+/).length > 5) return false;
+      const normalized = line.replace(/\s+/g, '').toLowerCase();
+      if (/^(resume|summary|experience|curriculum|skills|education|accountant)$/.test(normalized)) return false;
+      // Filter lines that are purely role titles (not containing actual name)
+      if (/^(engineer|developer|scientist|manager|intern|full[-]?stack|frontend|backend|analyst|designer|architect|consultant|specialist|officer|assistant|lead)$/i.test(normalized)) return false;
+      return true;
+    }) || '';
     if (!name) throw new Error('Candidate name could not be identified. Paste the resume with the candidate name on its own first line.');
     const email = raw.match(/[\w.%+-]+@[\w.-]+\.[a-z]{2,}/i)?.[0] || '';
     const phone = raw.match(/(?:\+\d{1,3}[ -]?)?(?:\(\d{3}\)|\d{3})[ .-]\d{3}[ .-]\d{4}\b/)?.[0] || '';
