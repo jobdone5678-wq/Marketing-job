@@ -10,7 +10,7 @@ export async function OPTIONS(request: Request) {
 
 export async function GET(request: Request) {
   return extensionRoute(request, async () => {
-    await extensionProfile(request);
+    const profile = await extensionProfile(request);
     const candidateId = new URL(request.url).searchParams.get('candidateId');
     if (!candidateId) throw new CaptureError('candidateId is required', 400);
     z.uuid().parse(candidateId);
@@ -26,19 +26,40 @@ export async function GET(request: Request) {
     if (!candidateData) throw new CaptureError('Candidate not found', 404);
 
     const candidate = candidateData as Candidate;
+    // The extension may only read the resume of the account that owns the profile.
+    if (candidate.user_id !== profile.id) throw new CaptureError('Candidate not found', 404);
     const confirmed = (candidate.confirmed_facts || {}) as Record<string, any>;
 
-    // 2. Fetch latest confirmed document from candidate_documents
-    const { data: docs, error: dErr } = await db
+    // 2. The resume document uploaded in the dashboard. A confirmed document is
+    //    preferred, but a document the candidate uploaded and has not confirmed
+    //    yet is still their resume and must not force a second upload in the
+    //    extension. Documents the account uploaded are included even before they
+    //    are linked to a profile.
+    const { data: linked, error: linkedError } = await db
       .from('candidate_documents')
-      .select('id, filename, object_path, content_hash')
+      .select('id, filename, object_path, content_hash, status, created_at')
       .eq('candidate_id', candidateId)
-      .eq('status', 'confirmed')
+      .in('status', ['confirmed', 'review'])
       .order('created_at', { ascending: false })
-      .limit(1);
-    checkDb(dErr);
+      .limit(5);
+    checkDb(linkedError);
 
-    const doc = docs?.[0];
+    const { data: owned, error: ownedError } = await db
+      .from('candidate_documents')
+      .select('id, filename, object_path, content_hash, status, created_at')
+      .eq('owner_id', profile.id)
+      .is('candidate_id', null)
+      .in('status', ['confirmed', 'review'])
+      .order('created_at', { ascending: false })
+      .limit(5);
+    checkDb(ownedError);
+
+    const documents = [...(linked || []), ...(owned || [])].sort((a, b) => {
+      const rank = (row: { status: string }) => (row.status === 'confirmed' ? 0 : 1);
+      return rank(a) - rank(b) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+
+    const doc = documents[0];
     if (doc?.object_path) {
       const { data: download, error: downloadError } = await db.storage
         .from('candidate-resumes')
