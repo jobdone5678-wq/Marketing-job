@@ -666,46 +666,7 @@ export default function RTRManagementPage() {
           {/* Extracted Fields Form */}
           <form onSubmit={handleSaveRtr} className="space-y-4 pt-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              {/* Candidate Selection & Name */}
-              <div className="space-y-1 sm:col-span-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs font-semibold">Candidate Association</Label>
-                  {extractedData.candidate_name && (
-                    <Badge variant="outline" className="text-[10px] py-0 h-4.5 bg-primary/5 text-primary border-primary/20">
-                      OCR Detected: {extractedData.candidate_name}
-                    </Badge>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <select
-                    value={selectedCandidateId}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setSelectedCandidateId(val);
-                      const found = candidates.find((c) => c.id === val);
-                      if (found) {
-                        setExtractedData({ ...extractedData, candidate_name: found.full_name });
-                      }
-                    }}
-                    className="w-full h-9 rounded-lg border border-border bg-background px-3 text-xs"
-                  >
-                    <option value="">-- Choose Bench Candidate (Optional) --</option>
-                    {candidates.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.full_name} ({c.email || "No email"})
-                      </option>
-                    ))}
-                  </select>
-                  <Input
-                    value={extractedData.candidate_name || ""}
-                    onChange={(e) =>
-                      setExtractedData({ ...extractedData, candidate_name: e.target.value })
-                    }
-                    placeholder="Candidate full name (from OCR or manual)"
-                    className="h-9 text-xs"
-                  />
-                </div>
-              </div>
+            
 
               {/* Company / Client */}
               <div className="space-y-1">
