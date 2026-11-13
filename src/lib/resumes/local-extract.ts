@@ -387,25 +387,13 @@ function extractCandidateFromText(source: string, filename = ''): LocalCandidate
   const experienceYears = estimateExperienceYears(parsed.experience);
 
   // Convert experience bullets to the expected format
-  // Parse dates into start/end format
-  const employmentHistory = parsed.experience.map(exp => {
-    let startDate: string | null = null;
-    let endDate: string | null = null;
-    if (exp.dates) {
-      const parts = exp.dates.split(/\s*[-–]\s*/);
-      if (parts.length >= 2) {
-        startDate = parts[0].trim();
-        endDate = parts[1].trim();
-      }
-    }
-    return {
-      employer: exp.company,
-      title: exp.role,
-      start: startDate,
-      end: endDate,
-      bullets: exp.description
-    };
-  });
+  const employmentHistory = parsed.experience.map(exp => ({
+    employer: exp.company,
+    title: exp.role,
+    start: exp.dates ? exp.dates.split(' – ')[0] || exp.dates.split(' - ')[0] || null : null,
+    end: exp.dates ? exp.dates.split(' – ')[1] || exp.dates.split(' - ')[1] || null : null,
+    bullets: exp.description
+  }));
 
   // Convert education to the expected format
   const educationHistory = parsed.education.map(edu => ({
