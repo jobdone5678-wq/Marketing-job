@@ -387,13 +387,25 @@ function extractCandidateFromText(source: string, filename = ''): LocalCandidate
   const experienceYears = estimateExperienceYears(parsed.experience);
 
   // Convert experience bullets to the expected format
-  const employmentHistory = parsed.experience.map(exp => ({
-    employer: exp.company,
-    title: exp.role,
-    start: exp.dates ? exp.dates.split(' – ')[0] || exp.dates.split(' - ')[0] || null : null,
-    end: exp.dates ? exp.dates.split(' – ')[1] || exp.dates.split(' - ')[1] || null : null,
-    bullets: exp.description
-  }));
+  // Parse dates into start/end format
+  const employmentHistory = parsed.experience.map(exp => {
+    let startDate: string | null = null;
+    let endDate: string | null = null;
+    if (exp.dates) {
+      const parts = exp.dates.split(/\s*[-–]\s*/);
+      if (parts.length >= 2) {
+        startDate = parts[0].trim();
+        endDate = parts[1].trim();
+      }
+    }
+    return {
+      employer: exp.company,
+      title: exp.role,
+      start: startDate,
+      end: endDate,
+      bullets: exp.description
+    };
+  });
 
   // Convert education to the expected format
   const educationHistory = parsed.education.map(edu => ({
@@ -432,7 +444,6 @@ export function extractResumeLocal(text: string, filename: string): ResumeExtrac
     email: candidate.email,
     phone: candidate.phone,
     linkedin_url: candidate.linkedin_url,
-    github_url: candidate.github_url,
     current_city: null,
     current_state: null,
     current_job_title: candidate.current_job_title,
@@ -490,6 +501,55 @@ export function extractResumeLocal(text: string, filename: string): ResumeExtrac
     }
   }
 
+  // Generate evidence from source text for employment history
+  const employmentEvidence: { field: string; snippet: string; page: number | null }[] = [];
+  for (const entry of candidate.employment_history) {
+    const parts = [entry.employer, entry.title].filter(Boolean) as string[];
+    if (parts.length > 0) {
+      const searchStr = parts[0];
+      const idx = text.toLowerCase().indexOf(searchStr.toLowerCase());
+      if (idx >= 0) {
+        employmentEvidence.push({
+          field: 'employment_history',
+          snippet: text.slice(Math.max(0, idx - 20), Math.min(text.length, idx + 120)).replace(/\n/g, ' ').trim(),
+          page: 1
+        });
+      }
+    }
+  }
+
+  // Generate evidence from source text for education history
+  const educationEvidence: { field: string; snippet: string; page: number | null }[] = [];
+  for (const entry of candidate.education_history) {
+    const parts = [entry.degree, entry.institution].filter(Boolean) as string[];
+    if (parts.length > 0) {
+      const searchStr = parts[0];
+      const idx = text.toLowerCase().indexOf(searchStr.toLowerCase());
+      if (idx >= 0) {
+        educationEvidence.push({
+          field: 'education_history',
+          snippet: text.slice(Math.max(0, idx - 20), Math.min(text.length, idx + 120)).replace(/\n/g, ' ').trim(),
+          page: 1
+        });
+      }
+    }
+  }
+
+  // Generate evidence from source text for skills
+  const skillsEvidence: { field: string; snippet: string; page: number | null }[] = [];
+  if (candidate.primary_skills) {
+    const idx = text.toLowerCase().indexOf(candidate.primary_skills.toLowerCase().slice(0, 30));
+    if (idx >= 0) {
+      skillsEvidence.push({
+        field: 'primary_skills',
+        snippet: text.slice(Math.max(0, idx - 20), Math.min(text.length, idx + 100)).replace(/\n/g, ' ').trim(),
+        page: 1
+      });
+    }
+  }
+
+  const allEvidence = [...evidence, ...employmentEvidence, ...educationEvidence, ...skillsEvidence];
+
   return {
     fields: fields as any,
     employmentHistory: candidate.employment_history.map(e => ({
@@ -498,7 +558,9 @@ export function extractResumeLocal(text: string, filename: string): ResumeExtrac
       start: e.start,
       end: e.end,
       location: null,
-      evidence: (e.bullets.length > 0 ? e.bullets[0] : [e.employer, e.title].filter(Boolean).join(' at ') || 'employment') + ' (extracted)'
+      evidence: e.bullets.length > 0
+        ? e.bullets[0]
+        : [e.employer, e.title].filter(Boolean).join(' at ') || 'employment'
     })),
     educationHistory: candidate.education_history.map(e => ({
       degree: e.degree,
@@ -507,7 +569,7 @@ export function extractResumeLocal(text: string, filename: string): ResumeExtrac
       end: e.dates ? e.dates.split(' – ')[1] || e.dates.split(' - ')[1] || null : null,
       evidence: [e.degree, e.institution].filter(Boolean).join(' at ') || 'education'
     })),
-    evidence,
+    evidence: allEvidence,
     warnings: [
       'Extracted using deterministic text parser (no AI). Review all evidence before saving.',
       'This method does not use AI - all extraction is done via regex pattern matching.'
