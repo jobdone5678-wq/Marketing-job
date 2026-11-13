@@ -71,6 +71,36 @@ const SKILL_TAXONOMY: Record<string, string[]> = {
   Jest: ["jest"],
   FastAPI: ["fastapi"],
   Linux: ["linux", "unix"],
+  Django: ["django", "django rest framework", "drf"],
+  Wagtail: ["wagtail", "wagtail cms", "headless wagtail", "wagtail headless"],
+  StreamField: ["streamfield", "stream field"],
+  Snippets: ["snippets", "wagtail snippets"],
+  Redux: ["redux", "redux toolkit", "reduxtoolkit"],
+  MaterialUI: ["material ui", "material-ui", "mui"],
+  Elasticsearch: ["elasticsearch"],
+  PyTest: ["pytest"],
+  Cypress: ["cypress"],
+  Playwright: ["playwright"],
+  Selenium: ["selenium"],
+  Nginx: ["nginx"],
+  CloudFront: ["cloudfront"],
+  EC2: ["ec2"],
+  S3: ["s3"],
+  RDS: ["rds"],
+  Jira: ["jira"],
+  Postman: ["postman"],
+  VSCode: ["visual studio code", "vscode", "vs code"],
+  SEO: ["seo", "search engine optimization"],
+  WCAG: ["wcag", "wcag 2.1", "section 508"],
+  Lighthouse: ["lighthouse"],
+  "Core Web Vitals": ["core web vitals", "core web"],
+  "Google Analytics": ["google analytics", "ga4", "analytics"],
+  Mixpanel: ["mixpanel"],
+  Jenkins: ["jenkins"],
+  GitLab: ["gitlab", "gitlab ci"],
+  "AWS ECS": ["aws ecs", "ecs"],
+  IAM: ["iam"],
+  USWDS: ["uswds", "u.s. web design system", "united states web design system"],
 };
 
 // Section heading patterns from resume-parser
@@ -128,13 +158,14 @@ function extractName(lines: string[], email: string | null): string | null {
   const emailIndex = email ? lines.findIndex((line) => line.toLowerCase().includes(email)) : -1;
   const searchLimit = emailIndex >= 0 ? Math.min(emailIndex + 1, 8) : Math.min(lines.length, 8);
   const candidates = lines.slice(0, searchLimit).filter((line) => {
-    if (line.length < 3 || line.length > 50) return false;
+    if (line.length < 2 || line.length > 50) return false;
     if (/[@:/|•*▪●]|\d{3,}/.test(line)) return false;
     // Only filter out if the entire line matches these keywords exactly (case-insensitive, ignoring whitespace)
     const normalizedLine = line.replace(/\s+/g, '').toLowerCase();
     if (/^(resume|summary|experience|curriculum|skills|education|accountant)$/.test(normalizedLine)) return false;
     // Filter out lines that are purely role titles (not containing actual name)
     if (/^(engineer|developer|scientist|manager|intern|full[-]?stack|frontend|backend|analyst|designer|architect|consultant|specialist|officer|assistant|lead)$/i.test(normalizedLine)) return false;
+    // Allow single-word names (like "VINOD") as well as multi-word names
     return /^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ .\'-]+$/.test(line);
   });
   return candidates.sort((a, b) => b.split(/\s+/).length - a.split(/\s+/).length)[0] ?? (candidates[0] || null);
@@ -175,7 +206,13 @@ function extractSkills(text: string, skillLines: string[]): string[] {
 
 function extractDates(value: string): string | null {
   return (
-    value.match(/(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}|\d{4})\s*(?:-|–|to)\s*(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}|\d{4}|present|current)/i)?.[0] ??
+    // Match "Month YYYY - Month YYYY", "YYYY - YYYY", "Month YYYY - present", etc.
+    value.match(/(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+)?\b(?:19|20)\d{2}(?:[-/]\d{2})?\s*(?:-|–|to)\s*(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+)?(?:(?:19|20)\d{2}(?:[-/]\d{2})?|present|current)/i)?.[0] ??
+    // Match "MM/YYYY - present" format
+    value.match(/\b\d{1,2}\/\d{4}\s*(?:-|–|to)\s*(?:present|current|\d{1,2}\/\d{4})/i)?.[0] ??
+    // Match "Month YYYY - Month YYYY" with optional month on end
+    value.match(/(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}\s*(?:-|–|to)\s*(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+)?(?:\d{4}|present|current)/i)?.[0] ??
+    // Match "YYYY - YYYY" or "YYYY - present"
     value.match(/\b(?:19|20)\d{2}\s*[-–]\s*(?:\b(?:19|20)\d{2}\b|present|current)/i)?.[0] ??
     null
   );
@@ -263,6 +300,9 @@ function extractExperience(lines: string[]): Array<{ company: string | null; rol
   const entries: Array<{ company: string | null; role: string | null; dates: string | null; description: string[] }> = [];
   let current: { company: string | null; role: string | null; dates: string | null; description: string[] } | null = null;
 
+  // Role keywords that indicate an experience heading line
+  const ROLE_KEYWORDS = /\b(?:engineer|developer|scientist|manager|analyst|designer|intern|lead|consultant|architect|specialist|officer|assistant|member|contributor|full[-\s]?stack|software)\b/i;
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const isBullet = BULLET_REGEX.test(line);
@@ -278,36 +318,56 @@ function extractExperience(lines: string[]): Array<{ company: string | null; rol
     }
 
     const dates = extractDates(line);
-    const hasRoleKeyword = /\b(?:engineer|developer|scientist|manager|analyst|designer|intern|lead|consultant|architect|specialist|officer|assistant|member|contributor)\b/i.test(line);
-    const isExplicitHeading = (line.includes("—") || line.includes(" - ") || line.includes(" | ")) && (dates || hasRoleKeyword);
+    const hasRoleKeyword = ROLE_KEYWORDS.test(line);
+    // Handle "Role, Company Date - Date" format (comma-separated)
+    const hasCommaFormat = line.includes(",") && (dates || hasRoleKeyword);
+    const isExplicitHeading = (line.includes("—") || line.includes(" - ") || line.includes(" | ") || hasCommaFormat) && (dates || hasRoleKeyword);
 
     if (isExplicitHeading || (dates && hasRoleKeyword)) {
       const lineWithoutDates = (dates ? line.replace(dates, "") : line).replace(/^[|,\s—–-]+|[|,\s—–-]+$/g, "").trim();
-      const parts = lineWithoutDates.split(/(?:\s+[—–-]\s+|\s*\|\s*)/).filter(Boolean);
 
       let role: string | null = null;
       let company: string | null = null;
 
-      if (parts.length >= 2) {
-        if (hasRoleKeyword && !/\b(?:engineer|developer|scientist|manager|analyst|designer|intern|lead|consultant|architect|specialist|officer|assistant|member|contributor)\b/i.test(parts[0])) {
-          company = parts[0].trim();
-          role = parts.slice(1).join(" — ").trim();
-        } else if (hasRoleKeyword || parts[0].length < parts[1].length) {
-          role = parts[0].trim();
-          company = parts.slice(1).join(" — ").trim();
-        } else {
-          company = parts[0].trim();
-          role = parts.slice(1).join(" — ").trim();
+      // Handle comma-separated format: "Role, Company"
+      if (hasCommaFormat && lineWithoutDates.includes(",")) {
+        const parts = lineWithoutDates.split(/\s*,\s*/);
+        if (parts.length >= 2) {
+          // First part is usually the role, second is the company
+          if (hasRoleKeyword) {
+            role = parts[0].trim();
+            company = parts.slice(1).join(", ").trim();
+          } else {
+            // If first part doesn't have role keyword, it might be "Company, Role"
+            company = parts[0].trim();
+            role = parts.slice(1).join(", ").trim();
+          }
         }
       } else {
-        if (hasRoleKeyword) {
-          role = lineWithoutDates;
-          if (lines[i + 1] && !BULLET_REGEX.test(lines[i + 1]) && !extractDates(lines[i + 1])) {
-            company = lines[i + 1];
-            i++;
+        // Handle dash/pipe-separated format
+        const parts = lineWithoutDates.split(/(?:\s+[—–-]\s+|\s*\|\s*)/).filter(Boolean);
+
+        if (parts.length >= 2) {
+          if (hasRoleKeyword && !ROLE_KEYWORDS.test(parts[0])) {
+            company = parts[0].trim();
+            role = parts.slice(1).join(" — ").trim();
+          } else if (hasRoleKeyword || parts[0].length < parts[1].length) {
+            role = parts[0].trim();
+            company = parts.slice(1).join(" — ").trim();
+          } else {
+            company = parts[0].trim();
+            role = parts.slice(1).join(" — ").trim();
           }
         } else {
-          company = lineWithoutDates;
+          if (hasRoleKeyword) {
+            role = lineWithoutDates;
+            if (lines[i + 1] && !BULLET_REGEX.test(lines[i + 1]) && !extractDates(lines[i + 1])) {
+              company = lines[i + 1];
+              i++;
+            }
+          } else {
+            company = lineWithoutDates;
+          }
         }
       }
 
@@ -538,25 +598,67 @@ export function extractResumeLocal(text: string, filename: string): ResumeExtrac
 
   const allEvidence = [...evidence, ...employmentEvidence, ...educationEvidence, ...skillsEvidence];
 
-  return {
-    fields: fields as any,
-    employmentHistory: candidate.employment_history.map(e => ({
+  // Build employment history with proper evidence from source text
+  const employmentHistory = candidate.employment_history.map(e => {
+    // Find actual evidence snippet from source text
+    const employerIdx = e.employer ? text.toLowerCase().indexOf(e.employer.toLowerCase()) : -1;
+    const titleIdx = e.title ? text.toLowerCase().indexOf(e.title.toLowerCase()) : -1;
+    const bulletIdx = e.bullets.length > 0 ? text.toLowerCase().indexOf(e.bullets[0].toLowerCase()) : -1;
+
+    let evidence = '';
+    if (employerIdx >= 0 && titleIdx >= 0) {
+      // Found both - use a snippet from the employment line
+      evidence = text.slice(Math.min(employerIdx, titleIdx), Math.max(employerIdx, titleIdx) + 100).replace(/\n/g, ' ').trim();
+    } else if (employerIdx >= 0) {
+      evidence = text.slice(employerIdx, employerIdx + 150).replace(/\n/g, ' ').trim();
+    } else if (titleIdx >= 0) {
+      evidence = text.slice(titleIdx, titleIdx + 150).replace(/\n/g, ' ').trim();
+    } else if (bulletIdx >= 0) {
+      evidence = e.bullets[0];
+    } else {
+      evidence = `${e.employer || ''} at ${e.title || ''}`.trim() || 'employment';
+    }
+
+    return {
       employer: e.employer,
       title: e.title,
       start: e.start,
       end: e.end,
       location: null,
-      evidence: e.bullets.length > 0
-        ? e.bullets[0]
-        : [e.employer, e.title].filter(Boolean).join(' at ') || 'employment'
-    })),
-    educationHistory: candidate.education_history.map(e => ({
+      evidence
+    };
+  });
+
+  // Build education history with proper evidence from source text
+  const educationHistory = candidate.education_history.map(e => {
+    // Find actual evidence snippet from source text
+    const degreeIdx = e.degree ? text.toLowerCase().indexOf(e.degree.toLowerCase()) : -1;
+    const instIdx = e.institution ? text.toLowerCase().indexOf(e.institution.toLowerCase()) : -1;
+
+    let evidence = '';
+    if (degreeIdx >= 0 && instIdx >= 0) {
+      evidence = text.slice(Math.min(degreeIdx, instIdx), Math.max(degreeIdx, instIdx) + 100).replace(/\n/g, ' ').trim();
+    } else if (degreeIdx >= 0) {
+      evidence = text.slice(degreeIdx, degreeIdx + 150).replace(/\n/g, ' ').trim();
+    } else if (instIdx >= 0) {
+      evidence = text.slice(instIdx, instIdx + 150).replace(/\n/g, ' ').trim();
+    } else {
+      evidence = [e.degree, e.institution].filter(Boolean).join(' at ') || 'education';
+    }
+
+    return {
       degree: e.degree,
       institution: e.institution,
       start: e.dates ? e.dates.split(' – ')[0] || e.dates.split(' - ')[0] || null : null,
       end: e.dates ? e.dates.split(' – ')[1] || e.dates.split(' - ')[1] || null : null,
-      evidence: [e.degree, e.institution].filter(Boolean).join(' at ') || 'education'
-    })),
+      evidence
+    };
+  });
+
+  return {
+    fields: fields as any,
+    employmentHistory,
+    educationHistory,
     evidence: allEvidence,
     warnings: [
       'Extracted using deterministic text parser (no AI). Review all evidence before saving.',

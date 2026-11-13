@@ -346,8 +346,8 @@ function buildResume(candidate, job, rewrittenBullets) {
     // Filter out role keywords that appear as standalone lines (not as part of a name)
     // Only filter if the entire line matches these keywords exactly (ignoring whitespace)
     const name = nameLines.find(line => {
-      if (!/^[\p{L}][\p{L} .'-]{2,70}$/u.test(line)) return false;
-      if (line.split(/\s+/).length < 2 || line.split(/\s+/).length > 5) return false;
+      if (!/^[\p{L}][\p{L} .'-]{1,70}$/u.test(line)) return false;
+      if (line.split(/\s+/).length < 1 || line.split(/\s+/).length > 5) return false;
       const normalized = line.replace(/\s+/g, '').toLowerCase();
       if (/^(resume|summary|experience|curriculum|skills|education|accountant)$/.test(normalized)) return false;
       // Filter lines that are purely role titles (not containing actual name)
