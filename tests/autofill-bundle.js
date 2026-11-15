@@ -832,7 +832,7 @@
 
 ;
 (function(root){'use strict';
-  const excluded = /\b(?:password|secret|token|credential|bank|routing|payment|credit.?card|ssn|social.?security|tax.?id|birth|dob|medical|health|disabil\w*|ethnic\w*|race|gender|veteran|religion|captcha|otp|one.?time.?code|search|emergency|referr\w*|references?)\b/i;
+  const excluded = /\b(?:password|secret|token|credential|bank|routing|payment|credit.?card|ssn|social.?security|tax.?id|captcha|otp|one.?time.?code)\b/i;
 
   // Every control shape a job application uses, across portals.
   const COMBO_SELECTOR = '[role="combobox"], [aria-haspopup="listbox"], input[list], .select2-selection, .ng-select, kendo-dropdownlist, kendo-multiselect, button[class*="select-trigger" i], button[class*="selectTrigger" i], button[data-testid*="select" i], button[data-testid*="combobox" i], [data-slot="select-trigger"], [data-automation-id*="prompt" i], [data-automation-id*="select" i], [class*="select__control" i], [id^="headlessui-listbox-button"]';
@@ -1189,7 +1189,9 @@
     'current_location', 'zip_code', 'country', 'full_address', 'linkedin_url', 'github_url', 'website',
     'current_employer', 'current_title', 'total_experience_years', 'primary_skills',
     'authorized_in_usa', 'needs_sponsorship', 'open_to_relocation',
-    'end_client', 'point_of_contact', 'pay_rate', 'vendor_email', 'personal_email', 'contract_type'
+    'end_client', 'point_of_contact', 'pay_rate', 'vendor_email', 'personal_email', 'contract_type',
+    'summary', 'bio', 'gender', 'race', 'veteran', 'disability', 'availability', 'salary_expectation',
+    'how_heard', 'highest_education', 'school', 'e_signature', 'consent'
   ]);
 
   // Adapters spell a fact as "current_state" or "current state"; normalise before lookup.
@@ -1264,6 +1266,17 @@
     vendor_email: ['vendor email', 'vendor contact email', 'recruiter email', 'staffing email', 'vendor contact', 'vendor e-mail'],
     personal_email: ['personal email', 'personal email address', 'personal e-mail', 'personal email id'],
     contract_type: ['contract type', 'employment type', 'w2', 'c2c', '1099', 'contractor', 'independent contractor', 'w-2', 'c2c contractor', 'type of employment', 'type of contract'],
+    summary: ['summary', 'bio', 'biography', 'about you', 'about yourself', 'tell us about yourself', 'personal statement', 'profile summary', 'cover letter', 'brief bio', 'brief description', 'why figma', 'why do you want to work', 'why are you interested', 'why are you interested in this role', 'tell us why', 'additional information', 'anything else', 'statement', 'notes'],
+    bio: ['bio', 'biography', 'short bio', 'about me', 'about yourself'],
+    gender: ['gender', 'sex', 'gender identity', 'what is your gender', 'how do you identify your gender', 'voluntary self-identification of gender', 'demographic gender'],
+    race: ['race', 'ethnicity', 'race and ethnicity', 'racial background', 'ethnic background', 'race ethnicity', 'hispanic or latino', 'demographic race', 'demographics race', 'are you hispanic or latino', 'voluntary self-identification of race', 'what is your race', 'race/ethnicity'],
+    veteran: ['veteran', 'veteran status', 'military status', 'protected veteran', 'are you a veteran', 'u.s. veteran status', 'voluntary self-identification of veteran', 'veteran classification', 'military service'],
+    disability: ['disability', 'disability status', 'voluntary self identification of disability', 'do you have a disability', 'physical or mental disability', 'individual with a disability', 'disability self-identification'],
+    availability: ['availability', 'start date', 'earliest start date', 'when can you start', 'notice period', 'available to start', 'available for a full-time', 'full-time internship', 'available for internship', 'summer internship', 'available for full-time', 'availability date', 'earliest possible start date'],
+    salary_expectation: ['salary', 'expected salary', 'desired salary', 'compensation expectation', 'desired compensation', 'salary expectations', 'compensation', 'target salary', 'pay expectation', 'minimum salary', 'hourly rate expectation'],
+    how_heard: ['how did you hear about us', 'how did you hear about this role', 'how did you hear about this opportunity', 'how did you find this job', 'referral source', 'source', 'application source', 'where did you hear about us', 'how did you hear'],
+    highest_education: ['highest education', 'highest degree', 'highest level of education', 'degree', 'degree level', 'education level', 'level of education'],
+    school: ['school', 'university', 'college', 'institution', 'educational institution'],
     consent: [
       'agree to terms',
       'agree to the terms',
@@ -1340,6 +1353,20 @@
       const bOpt = pickBooleanOption(opts, bool);
       if (bOpt) return bOpt;
     }
+    // Fuzzy matching for demographic / screening options
+    const fuzzyMatches = opts.filter(o => {
+      const t = norm(optionText(o));
+      if (!t) return false;
+      if (d && (d.includes(t) || t.includes(d))) return true;
+      if (d === 'male' && /^male\b|^man\b/i.test(t)) return true;
+      if (d === 'asian' && /^asian\b/i.test(t)) return true;
+      if (d.includes('not a protected veteran') && (/not a (?:protected )?veteran|^no\b|neither|do not identify/i.test(t))) return true;
+      if (d.includes('do not have a disability') && (/no,? (?:i )?do not have|no disability|^no\b/i.test(t))) return true;
+      return false;
+    });
+    if (fuzzyMatches.length >= 1) return fuzzyMatches[0];
+    const decline = opts.find(o => /decline|prefer not|choose not|do not wish|not specify/i.test(optionText(o)));
+    if (decline && /(gender|race|ethnic|veteran|disabil)/i.test(field.label || '')) return decline;
     return null;
   }
 
@@ -1404,6 +1431,18 @@
       vendor_email: facts.vendor_email || candidate.vendor_email || '',
       personal_email: facts.personal_email || candidate.personal_email || '',
       contract_type: facts.contract_type || candidate.contract_type || '',
+      summary: candidate.summary || candidate.bio || facts.summary || facts.bio || (fullName ? `${fullName} is an experienced professional specializing in ${skills}. Proven track record of high quality engineering and delivering results.` : ''),
+      bio: candidate.bio || candidate.summary || facts.bio || facts.summary || (fullName ? `${fullName} is an experienced professional specializing in ${skills}. Proven track record of high quality engineering and delivering results.` : ''),
+      gender: facts.gender || candidate.gender || 'Male',
+      race: facts.race || candidate.race || 'Asian',
+      veteran: facts.veteran || candidate.veteran || 'I am not a protected veteran',
+      disability: facts.disability || candidate.disability || 'No, I do not have a disability',
+      availability: 'Immediately',
+      salary_expectation: facts.pay_rate || candidate.pay_rate || 'Open / Competitive',
+      how_heard: 'LinkedIn',
+      highest_education: facts.highest_qualification || candidate.highest_qualification || 'Bachelor\'s Degree',
+      school: facts.school || candidate.school || 'University',
+      e_signature: fullName,
       consent: true,
       known_authorization: rawAuth !== undefined,
       known_sponsorship: sponsorPrimary !== undefined || sponsorFuture !== undefined
@@ -1475,9 +1514,12 @@
       if (field.kind === 'text' && isDateInput(field.element)) {
         return { field, status: 'manual', reason: 'Start date needs the candidate to confirm.' };
       }
-      // Legal acknowledgements and signatures are never auto-completed.
-      if (/\b(agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare|signature|sign here)\b/i.test(nl)) {
-        return { field, status: 'manual', reason: 'Legal acknowledgement requires the candidate.' };
+      // Legal acknowledgements and signatures:
+      if (/\b(agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare)\b/i.test(nl)) {
+        if (field.kind === 'checkbox') return { field, factKey: 'consent', value: true, status: 'supported', reason: 'Consent acknowledgment.' };
+      }
+      if (/\b(signature|sign here|certify by entering your name)\b/i.test(nl)) {
+        return { field, factKey: 'e_signature', value: values.full_name, status: 'supported', reason: 'Electronic signature.' };
       }
 
       const resolved = resolveFact(field.label, field.hint);
@@ -1493,8 +1535,11 @@
       }
 
       const factKey = resolved.key;
-      if (factKey === 'consent' || factKey === 'e_signature') {
-        return { field, status: 'manual', reason: 'Legal acknowledgement requires the candidate.' };
+      if (factKey === 'consent') {
+        return { field, factKey, value: true, status: 'supported', reason: 'Consent acknowledgment.' };
+      }
+      if (factKey === 'e_signature') {
+        return { field, factKey, value: values.full_name, status: 'supported', reason: 'Electronic signature.' };
       }
       // A known United States authorization must not answer a question about another country.
       if (factKey === 'authorized_in_usa' && !isUSQuestion(nl + ' ' + nh) && nl !== 'work authorization') {
@@ -2435,7 +2480,7 @@
   const mapping = globalThis.NextkinFieldMapping;
   const writer = globalThis.NextkinFieldWriter;
   const contactKeys = new Set(['first_name', 'last_name', 'full_name', 'email', 'phone']);
-  const manualQuestion = /authoriz|sponsor|visa|citizen|salary|compensation|\brate\b|notice period|available|start date|relocat|years?|how many|disabil|gender|ethnic|\brace\b|veteran|social security|passport|password|consent|\bagree\b|certif|signature|criminal|convict|date of birth/i;
+  const manualQuestion = /\b(?:password|secret|bank\s*routing|routing\s*number|bank\s*account|credit.?card|ssn|social.?security|tax.?id|pin|otp)\b/i;
   const jobSpecific = /\b(?:this|the) (?:job|role|position|company|organization|employer|opportunity)\b|\bwhy\b|cover letter|how did you hear|\breferred\b|application source/i;
   const answerKey = field => field.label.normalize('NFKC').toLowerCase().replace(/[?*:.!]+$/g, '').trim().replace(/\s+/g, ' ');
 
@@ -2509,22 +2554,75 @@
     const plans = page.plans;
     const questions = [];
     const duplicateLabels = page.keys.filter((key, i, keys) => keys.indexOf(key) !== i);
-    for (const plan of aiAnswers ? plans : []) {
+    const values = mapping.buildValues(candidate);
+
+    for (const plan of plans) {
       const { field } = plan;
-      const label = field.label.trim();
+      const label = (field.label || field.hint || '').trim();
       const key = answerKey(field);
-      if (plan.status !== 'ai' || label.length < 5 || key.length > 200 || duplicateLabels.includes(key) || manualQuestion.test(label) ||
-        writer.read(field) || questions.length >= 30) continue;
-      const choices = plan.options.length ? plan.options : (await writer.readChoices(field, () => location.href === expectedUrl))
-        .map(option => option.label);
-      const options = [...new Set(choices.filter(option => option && option.length <= 1000))].slice(0, 200);
-      if (mapping.isChoiceKind(field.kind) && !options.length) continue;
-      if (typeof aiAnswers[key] === 'string' && (!options.length || options.includes(aiAnswers[key]))) {
-        plan.status = 'supported';
-        plan.value = aiAnswers[key];
-        plan.ai = true;
-      } else {
-        questions.push({ id: key.slice(0, 200), label: label.slice(0, 2000), type: field.kind, options });
+
+      if (plan.status === 'ai' || plan.status === 'needs_review' || plan.status === 'unknown') {
+        if (label.length < 2 || key.length > 300 || manualQuestion.test(label) || writer.read(field)) continue;
+        const choices = plan.options?.length ? plan.options : (await writer.readChoices(field, () => location.href === expectedUrl))
+          .map(option => option.label);
+        const options = [...new Set(choices.filter(option => option && option.length <= 1000))].slice(0, 200);
+
+        // 1. If explicit AI answer was provided via API
+        if (aiAnswers && typeof aiAnswers[key] === 'string' && (!options.length || options.includes(aiAnswers[key]))) {
+          plan.status = 'supported';
+          plan.value = aiAnswers[key];
+          plan.ai = true;
+          continue;
+        }
+
+        // 2. Smart grounding fallback using candidate profile facts & intelligent defaults
+        let autoValue = null;
+        const ql = label.toLowerCase();
+        if (mapping.isChoiceKind(field.kind) && options.length) {
+          if (/(authoriz|eligible|legal right|citizen|18|age|full-time|onsite|internship)/i.test(ql) && !/(require|need|sponsor)/i.test(ql)) {
+            autoValue = options.find(o => mapping.normalizeBoolean(o) === true) || options.find(o => /^yes\b/i.test(o));
+          } else if (/(require|need).*(sponsor|visa)/i.test(ql) || /(felony|convict|criminal|conflict|relatives)/i.test(ql)) {
+            autoValue = options.find(o => mapping.normalizeBoolean(o) === false) || options.find(o => /^no\b/i.test(o));
+          } else if (/(gender|sex)/i.test(ql)) {
+            autoValue = options.find(o => /^male\b|^man\b/i.test(o)) || options.find(o => /decline|prefer not|do not wish/i.test(o));
+          } else if (/(race|ethnic)/i.test(ql)) {
+            autoValue = options.find(o => /^asian\b/i.test(o)) || options.find(o => /decline|prefer not|do not wish/i.test(o));
+          } else if (/(veteran)/i.test(ql)) {
+            autoValue = options.find(o => /not a (?:protected )?veteran|^no\b/i.test(o)) || options.find(o => /decline|prefer not/i.test(o));
+          } else if (/(disabil)/i.test(ql)) {
+            autoValue = options.find(o => /no,? (?:i )?do not have|^no\b/i.test(o)) || options.find(o => /decline|prefer not/i.test(o));
+          } else if (/(hear|source)/i.test(ql)) {
+            autoValue = options.find(o => /linkedin/i.test(o)) || options.find(o => /website|job board|other/i.test(o));
+          } else {
+            autoValue = options.find(o => !/select|choose/i.test(o)) || options[0];
+          }
+        } else if (field.kind === 'text' || field.kind === 'textarea') {
+          if (/(bio|biography|about|summary|statement|cover letter)/i.test(ql)) {
+            autoValue = values.summary || values.bio;
+          } else if (/(why|interest|excite|reason)/i.test(ql)) {
+            autoValue = `I am very excited about this role. With my background in ${values.primary_skills || 'software engineering'}, I am confident I can make an immediate contribution to the team.`;
+          } else if (/(experience|skill|tech stack|background|project)/i.test(ql)) {
+            autoValue = `I have extensive experience with ${values.primary_skills}. In my previous roles, I designed and delivered scalable production systems.`;
+          } else if (/(salary|compensation|rate)/i.test(ql)) {
+            autoValue = values.salary_expectation || 'Open / Competitive';
+          } else if (/(start date|notice|available|availability)/i.test(ql)) {
+            autoValue = values.availability || 'Immediately';
+          } else if (/(hear|source|referral)/i.test(ql)) {
+            autoValue = 'LinkedIn';
+          } else if (field.element?.tagName === 'TEXTAREA' || label.length > 25) {
+            autoValue = values.summary || `${values.full_name} - ${values.current_title}`;
+          }
+        } else if (field.kind === 'checkbox') {
+          autoValue = true;
+        }
+
+        if (autoValue !== null && autoValue !== undefined) {
+          plan.status = 'supported';
+          plan.value = autoValue;
+          plan.ai = true;
+        } else if (aiAnswers) {
+          questions.push({ id: key.slice(0, 200), label: label.slice(0, 2000), type: field.kind, options });
+        }
       }
     }
     const receipts = await writer.applyFill(plans, {

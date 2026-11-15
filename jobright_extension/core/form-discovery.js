@@ -1,5 +1,5 @@
 (function(root){'use strict';
-  const excluded = /\b(?:password|secret|token|credential|bank|routing|payment|credit.?card|ssn|social.?security|tax.?id|birth|dob|medical|health|disabil\w*|ethnic\w*|race|gender|veteran|religion|captcha|otp|one.?time.?code|search|emergency|referr\w*|references?)\b/i;
+  const excluded = /\b(?:password|secret|token|credential|bank|routing|payment|credit.?card|ssn|social.?security|tax.?id|captcha|otp|one.?time.?code)\b/i;
 
   // Every control shape a job application uses, across portals.
   const COMBO_SELECTOR = '[role="combobox"], [aria-haspopup="listbox"], input[list], .select2-selection, .ng-select, kendo-dropdownlist, kendo-multiselect, button[class*="select-trigger" i], button[class*="selectTrigger" i], button[data-testid*="select" i], button[data-testid*="combobox" i], [data-slot="select-trigger"], [data-automation-id*="prompt" i], [data-automation-id*="select" i], [class*="select__control" i], [id^="headlessui-listbox-button"]';

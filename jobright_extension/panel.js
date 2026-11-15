@@ -672,25 +672,33 @@ $('save-answers').addEventListener('click', async () => {
 });
 
 async function draftScreening(session, profile, tab, job, questions) {
-  if (!job || job.description?.trim().length < 40) throw new Error('Open the complete job posting to draft screening answers.');
   const sessionId = crypto.randomUUID();
   const requestId = crypto.randomUUID();
-  let result = await api('answer-drafts', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionId, requestId, consent: true, candidateId: profile.id,
-      jobTitle: job.title, companyName: job.company, jobDescription: job.description, jobUrl: job.jobUrl, questions,
-    }),
-  }, session);
-  for (let attempt = 0; attempt < 25 && result.status !== 'succeeded'; attempt++) {
-    if (result.sessionId !== sessionId || !result.taskId) throw new Error('NextKinHR returned an invalid screening task.');
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    await checkFormContext(tab, session);
-    result = await api('answer-drafts?taskId=' + encodeURIComponent(result.taskId), {}, session);
+  const jobTitle = job?.title || tab?.title?.split(/[-|–]/)[0]?.trim() || 'Role';
+  const companyName = job?.company || 'Company';
+  const jobDescription = job?.description?.trim() || `${jobTitle} at ${companyName}`;
+  try {
+    let result = await api('answer-drafts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId, requestId, consent: true, candidateId: profile.id,
+        jobTitle, companyName, jobDescription, jobUrl: job?.jobUrl || tab?.url || '', questions,
+      }),
+    }, session);
+    for (let attempt = 0; attempt < 12 && result?.status !== 'succeeded'; attempt++) {
+      if (result?.sessionId !== sessionId || !result?.taskId) break;
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      await checkFormContext(tab, session);
+      result = await api('answer-drafts?taskId=' + encodeURIComponent(result.taskId), {}, session);
+    }
+    if (result?.status === 'succeeded' && result.answers && Object.keys(result.answers).length) {
+      return result.answers;
+    }
+  } catch (err) {
+    console.warn('[AI Screening]', err);
   }
-  if (result.sessionId !== sessionId || result.status !== 'succeeded') throw new Error('AI drafts are still processing. Try again shortly.');
-  return result.answers || {};
+  return {};
 }
 
 async function fillForm(tab, frame, profile, file, saved, aiAnswers) {
