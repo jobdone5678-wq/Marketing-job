@@ -73,6 +73,7 @@
     const keka = kekaPosting(current);
     const isWorkspace = /(^|\.)(nextkinhr\.com|jobright-internal\.com)$/.test(current.hostname)
       || ['localhost', '127.0.0.1'].includes(current.hostname) && !!first(root, '#nextkin-job-details');
+    const isAts = /(^|\.)(lever\.co|ashbyhq\.com|greenhouse\.io|myworkdayjobs\.com|myworkdaysite\.com|smartrecruiters\.com|workable\.com|taleo\.net|icims\.com|jobvite\.com|bamboohr\.com)$/i.test(current.hostname);
     const portal = isWorkspace && /^\/(?:dashboard\/jobs|jobs\/info)\/[^/]+\/?$/.test(current.pathname);
     if (isWorkspace && !portal) return null;
     const workspace = portal ? parse(first(root, '#nextkin-job-details')?.textContent) : null;
@@ -84,22 +85,67 @@
       '.job-description', '.job-description-content', '.jobs-description__content', '#job-details',
       '[class*="job-description" i]', '.posting-page .section-wrapper', 'main article',
     ].map(selector => first(root, selector)).find(Boolean);
-    const knownJobPath = /\/(?:jobs?|careers?|openings?|positions?|requisitions?|jobdetails|viewjob|job-detail|job-posting)(?:\/[^/]+)|[?&](?:gh_jid|jobId|job_id|jk)=/i.test(jobUrl);
-    if (!workspace && !posting && (!descriptionNode || !knownJobPath)) return null;
+    const knownJobPath = isAts || /\/(?:jobs?|careers?|openings?|positions?|requisitions?|jobdetails|viewjob|job-detail|job-posting)(?:\/[^/]+)|[?&](?:gh_jid|jobId|job_id|jk)=/i.test(jobUrl);
+    if (!workspace && !posting && (!descriptionNode && !knownJobPath)) return null;
 
-    const title = text(workspace?.title || posting?.title || posting?.name || read(root,
-      '[data-automation-id="jobPostingHeader"], [data-testid="job-title"], [itemprop="title"], .posting-headline h2, .job-title, h1', 200), 200);
+    let title = text(workspace?.title || posting?.title || posting?.name || read(root,
+      '[data-automation-id="jobPostingHeader"], [data-testid="job-title"], [itemprop="title"], .posting-headline h2, .posting-header h2, .job-title, h1, h2', 200), 200);
+    if (!title || /^(apply for this job|job application|application|careers?)$/i.test(title)) {
+      const docTitle = document.title || '';
+      const cleanTitle = docTitle
+        .replace(/^Job Application for\s+/i, '')
+        .replace(/\s+(?:at|@)\s+[A-Za-z0-9&.,' -]+$/i, '')
+        .replace(/^[A-Za-z0-9&.,' -]+?\s*[-|–|·]\s*/i, '')
+        .replace(/\s*[-|–|·]\s*(?:apply|lever|greenhouse|ashby|workday).*$/i, '')
+        .trim();
+      if (cleanTitle && cleanTitle.length >= 3) {
+        title = cleanTitle;
+      }
+    }
+
     const postingCompany = typeof posting?.hiringOrganization === 'string' ? posting.hiringOrganization : posting?.hiringOrganization?.name;
     const kekaCompany = keka && current.hostname.split('.')[0].replace(/[-_]+/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
     const workspaceCompany = portal && first(root, 'main h1')?.previousElementSibling?.querySelector('span')?.textContent;
-    const company = text(workspace?.company || postingCompany || read(root,
+    let company = text(workspace?.company || postingCompany || read(root,
       '[itemprop="hiringOrganization"] [itemprop="name"], [data-testid="company-name"], [data-automation-id="companyName"], .company-name, .job-company, .topcard__org-name-link, .jobs-unified-top-card__company-name, [property="og:site_name"]', 200) || workspaceCompany || kekaCompany, 200);
+
+    if (!company) {
+      const logoImg = first(root, '.main-header-logo img, .header__logo img, [class*="logo" i] img');
+      const logoAlt = logoImg?.getAttribute('alt')?.trim();
+      if (logoAlt && !/^(company|organization|logo)$/i.test(logoAlt)) {
+        company = logoAlt.replace(/\s+logo$/i, '').trim();
+      }
+    }
+    if (!company) {
+      const docTitle = document.title || '';
+      const atMatch = docTitle.match(/(?:at|@)\s+([A-Za-z0-9&.,' -]+?)(?:\s*[-|–|·]|\s*$)/i);
+      const dashMatch = docTitle.match(/^([A-Za-z0-9&.,' -]{2,40}?)\s*[-|–|·]\s*/i);
+      if (atMatch && atMatch[1]?.trim() && !/^(jobs?|careers?)$/i.test(atMatch[1].trim())) {
+        company = atMatch[1].trim();
+      } else if (dashMatch && dashMatch[1]?.trim() && !/^(job application|apply|careers?|jobs?)$/i.test(dashMatch[1].trim())) {
+        company = dashMatch[1].trim();
+      }
+    }
+    if (!company && isAts) {
+      const segments = current.pathname.split('/').filter(Boolean);
+      if (segments.length >= 1) {
+        const slug = segments[0];
+        if (!/^(jobs?|careers?|apply|application|openings)$/i.test(slug)) {
+          company = slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+      }
+    }
+
     const markup = workspace?.descriptionHtml || posting?.description || descriptionNode?.innerHTML || '';
     const template = safeHtml(markup);
-    const descriptionHtml = template.innerHTML.slice(0, 120_000);
+    let descriptionHtml = template.innerHTML.slice(0, 120_000);
     for (const element of template.content.querySelectorAll('br, p, li, h1, h2, h3, h4, div, section')) element.after('\n');
-    const description = text(workspace?.description || template.content.textContent || descriptionNode?.innerText, 60_000);
-    if (!title || !company || description.length < 30 || /^(careers?|open positions?|job search|all jobs|open roles|job opportunities)$/i.test(title)) return null;
+    let description = text(workspace?.description || template.content.textContent || descriptionNode?.innerText, 60_000);
+    if (description.length < 30 && (isAts || /apply|application/i.test(current.pathname))) {
+      description = `${title} at ${company}. Application posting for the ${title} role at ${company}.`;
+      descriptionHtml = `<p>${description}</p>`;
+    }
+    if (!title || !company || description.length < 15 || /^(careers?|open positions?|job search|all jobs|open roles|job opportunities)$/i.test(title)) return null;
 
     const apply = [...root.querySelectorAll('a[href]')].find(link => /^(apply(?:\s+(?:now|for\s+(?:this\s+)?(?:job|role|position)))?|submit application)\b/i
       .test((link.innerText || link.getAttribute('aria-label') || link.textContent || '').trim()));

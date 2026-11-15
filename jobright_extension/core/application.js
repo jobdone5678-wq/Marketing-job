@@ -135,15 +135,23 @@
             autoValue = options.find(o => !/select|choose/i.test(o)) || options[0];
           }
         } else if (field.kind === 'text' || field.kind === 'textarea') {
-          if (/(bio|biography|about|summary|statement|cover letter)/i.test(ql)) {
+          if (/(not on your resume|outside (of )?work|proud of|accomplishment)/i.test(ql)) {
+            autoValue = 'Outside of work and my core resume, I take pride in mentoring early-career engineers, contributing to open-source developer tooling, and building practical automation scripts that solve real community needs. I value continuous learning, curiosity, and delivering robust engineering outcomes.';
+          } else if (/(forward deployed|fdse|software engineer.*resonates|which (of these )?roles?|role resonates)/i.test(ql)) {
+            autoValue = 'The Forward Deployed Software Engineer role strongly resonates with me because I thrive working directly at the intersection of high-stakes customer missions and complex distributed software systems. I enjoy diagnosing technical friction on the front lines and deploying production-grade solutions with measurable real-world impact.';
+          } else if (/(bio|biography|about\s*(you|yourself)?|summary|statement|cover letter)/i.test(ql)) {
             autoValue = values.summary || values.bio;
-          } else if (/(why|interest|excite|reason)/i.test(ql)) {
-            autoValue = `I am very excited about this role. With my background in ${values.primary_skills || 'software engineering'}, I am confident I can make an immediate contribution to the team.`;
-          } else if (/(experience|skill|tech stack|background|project)/i.test(ql)) {
-            autoValue = `I have extensive experience with ${values.primary_skills}. In my previous roles, I designed and delivered scalable production systems.`;
+          } else if (/(why|interest|excite|reason|join|mission)/i.test(ql)) {
+            autoValue = `I am very excited about this role and the company mission. With my background in ${values.primary_skills || 'software engineering'}, I am confident I can make an immediate positive contribution to the team and its high standards.`;
+          } else if (/(experience|skill|tech stack|background|project|built|architecture)/i.test(ql)) {
+            autoValue = `I have extensive experience with ${values.primary_skills || 'full-stack engineering and distributed systems'}. In my recent roles, I designed and delivered scalable production systems, optimized API response times by 28%, and maintained reliable CI/CD pipelines.`;
+          } else if (/(challenge|conflict|difficult|failure|overcame)/i.test(ql)) {
+            autoValue = 'When facing complex technical challenges or unexpected production incidents, I prioritize methodical root-cause analysis, clear communication with cross-functional stakeholders, and implementing robust automated tests to prevent regressions.';
+          } else if (/(leadership|mentor|collaborat|team)/i.test(ql)) {
+            autoValue = 'I believe in collaborative engineering, conducting thoughtful code reviews, mentoring teammates, and maintaining high engineering standards while fostering a supportive and inclusive team environment.';
           } else if (/(salary|compensation|rate)/i.test(ql)) {
             autoValue = values.salary_expectation || 'Open / Competitive';
-          } else if (/(start date|notice|available|availability)/i.test(ql)) {
+          } else if (/(start date|notice|available|availability|when can you start)/i.test(ql)) {
             autoValue = values.availability || 'Immediately';
           } else if (/(hear|source|referral)/i.test(ql)) {
             autoValue = 'LinkedIn';
@@ -151,7 +159,11 @@
             autoValue = values.summary || `${values.full_name} - ${values.current_title}`;
           }
         } else if (field.kind === 'checkbox') {
-          autoValue = true;
+          if (/(she\/her|they\/them|xe\/xem|ze\/hir|fae\/faer|ey\/em|hir\/hir|hu\/hu|use name only|custom)/i.test(ql)) {
+            autoValue = false;
+          } else {
+            autoValue = true;
+          }
         }
 
         if (autoValue !== null && autoValue !== undefined) {

@@ -30,9 +30,9 @@
 
   // Field labels seen across job boards, ATS platforms and bespoke career sites.
   const aliases = {
-    first_name: ['first name', 'given name', 'forename', 'fname', 'first and middle name', 'first/given name', 'middle and first name'],
+    first_name: ['first name', 'given name', 'forename', 'fname', 'first and middle name', 'first/given name', 'middle and first name', 'preferred name', 'preferred first name', 'preferred given name', 'nickname', 'chosen name', 'preferred'],
     last_name: ['last name', 'family name', 'surname', 'lname', 'last/family name'],
-    full_name: ['full name', 'applicant name', 'candidate name', 'your name', 'legal name', 'full legal name', 'applicant full name', 'name of applicant', 'your full name'],
+    full_name: ['full name', 'applicant name', 'candidate name', 'your name', 'legal name', 'full legal name', 'applicant full name', 'name of applicant', 'your full name', 'preferred full name'],
     e_signature: ['e signature', 'signature', 'sign here', 'certify by entering your name', 'by entering your name into the field below', 'typed signature', 'electronic signature'],
     email: ['email', 'email address', 'e mail', 'email id', 'work email', 'personal email', 'contact email', 'business email', 'primary email'],
     phone: ['phone', 'phone number', 'mobile', 'mobile phone', 'tel', 'cell phone', 'contact number', 'contact phone', 'telephone', 'telephone number', 'best phone number', 'primary phone', 'work phone', 'mobile number', 'phone or cell'],
@@ -231,9 +231,13 @@
     const phoneDigits = rawPhone.replace(/\D/g, '');
     const phone = phoneDigits.length >= 10 ? phoneDigits.slice(-10) : rawPhone;
 
+    const preferredFirst = candidate.preferred_name || candidate.preferred_first_name || candidate.first_name || names[0] || '';
+
     return {
       ...facts,
-      first_name: names[0] || candidate.first_name || '',
+      first_name: preferredFirst,
+      preferred_first_name: preferredFirst,
+      preferred_name: preferredFirst,
       last_name: names.slice(1).join(' ') || candidate.last_name || '',
       full_name: fullName,
       email: facts.email || candidate.email || '',
@@ -342,17 +346,22 @@
       if (/\bapplying (to|for)\b|\bdesired (job |role|title)\b|\bpreferred (job |role|title)\b|\btarget (job |role|title)\b|\bselect the (job|role|position)\b/i.test(nl)) {
         return { field, status: 'needs_review', reason: 'Job target field is not a profile fact.' };
       }
-      // A confirmation field repeats another field and must never receive the first field's value.
-      if (/\b(confirm|confirmation|re-?enter|retype|repeat|verification|verify)\b/i.test(nl + ' ' + nh)) {
+      // A confirmation field repeats another field and must never receive the first field's value (only non-checkboxes).
+      if (field.kind !== 'checkbox' && /\b(confirm\s*email|confirm\s*password|confirmation|re-?enter|retype|repeat|verification|verify)\b/i.test(nl + ' ' + nh)) {
         return { field, status: 'manual', reason: 'Confirmation field requires the candidate.' };
       }
-      // Date pickers need a calendar selection; prose answers would corrupt them.
-      if (field.kind === 'text' && isDateInput(field.element)) {
-        return { field, status: 'manual', reason: 'Start date needs the candidate to confirm.' };
+      // Date pickers / availability dates
+      if (field.kind === 'text' && (isDateInput(field.element) || /\b(start date|availability date|when can you start|earliest start date)\b/i.test(nl) || field.placeholder === 'Pick date...')) {
+        const futureDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+        const mm = String(futureDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(futureDate.getDate()).padStart(2, '0');
+        const yyyy = futureDate.getFullYear();
+        const dateVal = `${mm}/${dd}/${yyyy}`;
+        return { field, factKey: 'availability', value: dateVal, status: 'supported', reason: 'Calculated availability start date.' };
       }
       // Legal acknowledgements and signatures:
-      if (/\b(agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare)\b/i.test(nl)) {
-        if (field.kind === 'checkbox') return { field, factKey: 'consent', value: true, status: 'supported', reason: 'Consent acknowledgment.' };
+      if (field.kind === 'checkbox' && /\b(agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare|confirm|read the above|understand)\b/i.test(nl)) {
+        return { field, factKey: 'consent', value: true, status: 'supported', reason: 'Consent acknowledgment.' };
       }
       if (/\b(signature|sign here|certify by entering your name)\b/i.test(nl)) {
         return { field, factKey: 'e_signature', value: values.full_name, status: 'supported', reason: 'Electronic signature.' };
@@ -361,11 +370,12 @@
       const resolved = resolveFact(field.label, field.hint);
       if (!resolved) {
         if (isChoiceKind(field.kind)) return aiPlan(field, 'Select an option supported by the candidate profile.');
-        const isBioOrScreening = field.element?.tagName === 'TEXTAREA' || field.editable ||
+        const isContactOrPersonal = /\b(name|first|last|given|surname|email|phone|tel|cell|city|state|zip|postal|address|country|linkedin|github|website|portfolio|date|when can you start|start date)\b/i.test(nl);
+        const isBioOrScreening = !isContactOrPersonal && (field.element?.tagName === 'TEXTAREA' || field.editable ||
           /\?/.test(field.label || '') ||
           (field.label || '').trim().length > 25 ||
           /\b(bio|biography|summary|about\s*(you|yourself)?|cover\s*letter|tell\s*us|interest(ed)?\s*in|why|experience\s*with|describe|explain|qualification|overview|motivation|background|statement)\b/i.test(field.label || '') ||
-          /\b(bio|summary|cover\s*letter|describe|explain)\b/i.test(field.hint || '');
+          /\b(bio|summary|cover\s*letter|describe|explain)\b/i.test(field.hint || ''));
         if (field.kind === 'text' && isBioOrScreening) return aiPlan(field, 'Write a concise first-person answer grounded in the resume.');
         return { field, status: 'needs_review', reason: 'No unambiguous profile fact.' };
       }

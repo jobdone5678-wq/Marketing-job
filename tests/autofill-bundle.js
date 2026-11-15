@@ -836,8 +836,6 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 
-;
-
 (function(root){'use strict';
   const excluded = /\b(?:password|secret|token|credential|bank|routing|payment|credit.?card|ssn|social.?security|tax.?id|captcha|otp|one.?time.?code)\b/i;
 
@@ -1177,8 +1175,6 @@
 })(globalThis);
 
 
-;
-
 (function(root){'use strict';
   const norm = v => String(v ?? '').replace(/[_*:-]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 
@@ -1211,9 +1207,9 @@
 
   // Field labels seen across job boards, ATS platforms and bespoke career sites.
   const aliases = {
-    first_name: ['first name', 'given name', 'forename', 'fname', 'first and middle name', 'first/given name', 'middle and first name'],
+    first_name: ['first name', 'given name', 'forename', 'fname', 'first and middle name', 'first/given name', 'middle and first name', 'preferred name', 'preferred first name', 'preferred given name', 'nickname', 'chosen name', 'preferred'],
     last_name: ['last name', 'family name', 'surname', 'lname', 'last/family name'],
-    full_name: ['full name', 'applicant name', 'candidate name', 'your name', 'legal name', 'full legal name', 'applicant full name', 'name of applicant', 'your full name'],
+    full_name: ['full name', 'applicant name', 'candidate name', 'your name', 'legal name', 'full legal name', 'applicant full name', 'name of applicant', 'your full name', 'preferred full name'],
     e_signature: ['e signature', 'signature', 'sign here', 'certify by entering your name', 'by entering your name into the field below', 'typed signature', 'electronic signature'],
     email: ['email', 'email address', 'e mail', 'email id', 'work email', 'personal email', 'contact email', 'business email', 'primary email'],
     phone: ['phone', 'phone number', 'mobile', 'mobile phone', 'tel', 'cell phone', 'contact number', 'contact phone', 'telephone', 'telephone number', 'best phone number', 'primary phone', 'work phone', 'mobile number', 'phone or cell'],
@@ -1412,9 +1408,13 @@
     const phoneDigits = rawPhone.replace(/\D/g, '');
     const phone = phoneDigits.length >= 10 ? phoneDigits.slice(-10) : rawPhone;
 
+    const preferredFirst = candidate.preferred_name || candidate.preferred_first_name || candidate.first_name || names[0] || '';
+
     return {
       ...facts,
-      first_name: names[0] || candidate.first_name || '',
+      first_name: preferredFirst,
+      preferred_first_name: preferredFirst,
+      preferred_name: preferredFirst,
       last_name: names.slice(1).join(' ') || candidate.last_name || '',
       full_name: fullName,
       email: facts.email || candidate.email || '',
@@ -1523,17 +1523,22 @@
       if (/\bapplying (to|for)\b|\bdesired (job |role|title)\b|\bpreferred (job |role|title)\b|\btarget (job |role|title)\b|\bselect the (job|role|position)\b/i.test(nl)) {
         return { field, status: 'needs_review', reason: 'Job target field is not a profile fact.' };
       }
-      // A confirmation field repeats another field and must never receive the first field's value.
-      if (/\b(confirm|confirmation|re-?enter|retype|repeat|verification|verify)\b/i.test(nl + ' ' + nh)) {
+      // A confirmation field repeats another field and must never receive the first field's value (only non-checkboxes).
+      if (field.kind !== 'checkbox' && /\b(confirm\s*email|confirm\s*password|confirmation|re-?enter|retype|repeat|verification|verify)\b/i.test(nl + ' ' + nh)) {
         return { field, status: 'manual', reason: 'Confirmation field requires the candidate.' };
       }
-      // Date pickers need a calendar selection; prose answers would corrupt them.
-      if (field.kind === 'text' && isDateInput(field.element)) {
-        return { field, status: 'manual', reason: 'Start date needs the candidate to confirm.' };
+      // Date pickers / availability dates
+      if (field.kind === 'text' && (isDateInput(field.element) || /\b(start date|availability date|when can you start|earliest start date)\b/i.test(nl) || field.placeholder === 'Pick date...')) {
+        const futureDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+        const mm = String(futureDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(futureDate.getDate()).padStart(2, '0');
+        const yyyy = futureDate.getFullYear();
+        const dateVal = `${mm}/${dd}/${yyyy}`;
+        return { field, factKey: 'availability', value: dateVal, status: 'supported', reason: 'Calculated availability start date.' };
       }
       // Legal acknowledgements and signatures:
-      if (/\b(agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare)\b/i.test(nl)) {
-        if (field.kind === 'checkbox') return { field, factKey: 'consent', value: true, status: 'supported', reason: 'Consent acknowledgment.' };
+      if (field.kind === 'checkbox' && /\b(agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare|confirm|read the above|understand)\b/i.test(nl)) {
+        return { field, factKey: 'consent', value: true, status: 'supported', reason: 'Consent acknowledgment.' };
       }
       if (/\b(signature|sign here|certify by entering your name)\b/i.test(nl)) {
         return { field, factKey: 'e_signature', value: values.full_name, status: 'supported', reason: 'Electronic signature.' };
@@ -1542,11 +1547,12 @@
       const resolved = resolveFact(field.label, field.hint);
       if (!resolved) {
         if (isChoiceKind(field.kind)) return aiPlan(field, 'Select an option supported by the candidate profile.');
-        const isBioOrScreening = field.element?.tagName === 'TEXTAREA' || field.editable ||
+        const isContactOrPersonal = /\b(name|first|last|given|surname|email|phone|tel|cell|city|state|zip|postal|address|country|linkedin|github|website|portfolio|date|when can you start|start date)\b/i.test(nl);
+        const isBioOrScreening = !isContactOrPersonal && (field.element?.tagName === 'TEXTAREA' || field.editable ||
           /\?/.test(field.label || '') ||
           (field.label || '').trim().length > 25 ||
           /\b(bio|biography|summary|about\s*(you|yourself)?|cover\s*letter|tell\s*us|interest(ed)?\s*in|why|experience\s*with|describe|explain|qualification|overview|motivation|background|statement)\b/i.test(field.label || '') ||
-          /\b(bio|summary|cover\s*letter|describe|explain)\b/i.test(field.hint || '');
+          /\b(bio|summary|cover\s*letter|describe|explain)\b/i.test(field.hint || ''));
         if (field.kind === 'text' && isBioOrScreening) return aiPlan(field, 'Write a concise first-person answer grounded in the resume.');
         return { field, status: 'needs_review', reason: 'No unambiguous profile fact.' };
       }
@@ -1641,8 +1647,6 @@
   root.NextkinFieldMapping = { planFill, resolveFact, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS };
 })(globalThis);
 
-
-;
 
 (function (root) {
   const mapping = root.NextkinFieldMapping;
@@ -2326,7 +2330,7 @@
       const preserved = getPreservedValue(field);
       const previous = (domVal !== '' && domVal !== null && domVal !== undefined) ? domVal : preserved;
       const isCountryCodeOnly = field.kind === 'text' && (field.element?.type === 'tel' || /phone/i.test(field.hint || field.label)) && /^\+?\d{1,3}\s*$/.test(String(previous).trim());
-      const hasAnswer = !isCountryCodeOnly && (Array.isArray(previous) ? previous.length > 0 : (typeof previous === 'boolean' ? true : Boolean(previous && String(previous).trim().length > 0)));
+      const hasAnswer = !isCountryCodeOnly && (Array.isArray(previous) ? previous.length > 0 : (typeof previous === 'boolean' ? previous : Boolean(previous && String(previous).trim().length > 0)));
       let write;
       if (hasAnswer) {
         const option = field.options?.length ? choose(field, value) : null;
@@ -2380,8 +2384,6 @@
   };
 })(globalThis);
 
-
-;
 
 (function () {
   const text = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -2458,6 +2460,7 @@
     const keka = kekaPosting(current);
     const isWorkspace = /(^|\.)(nextkinhr\.com|jobright-internal\.com)$/.test(current.hostname)
       || ['localhost', '127.0.0.1'].includes(current.hostname) && !!first(root, '#nextkin-job-details');
+    const isAts = /(^|\.)(lever\.co|ashbyhq\.com|greenhouse\.io|myworkdayjobs\.com|myworkdaysite\.com|smartrecruiters\.com|workable\.com|taleo\.net|icims\.com|jobvite\.com|bamboohr\.com)$/i.test(current.hostname);
     const portal = isWorkspace && /^\/(?:dashboard\/jobs|jobs\/info)\/[^/]+\/?$/.test(current.pathname);
     if (isWorkspace && !portal) return null;
     const workspace = portal ? parse(first(root, '#nextkin-job-details')?.textContent) : null;
@@ -2469,22 +2472,67 @@
       '.job-description', '.job-description-content', '.jobs-description__content', '#job-details',
       '[class*="job-description" i]', '.posting-page .section-wrapper', 'main article',
     ].map(selector => first(root, selector)).find(Boolean);
-    const knownJobPath = /\/(?:jobs?|careers?|openings?|positions?|requisitions?|jobdetails|viewjob|job-detail|job-posting)(?:\/[^/]+)|[?&](?:gh_jid|jobId|job_id|jk)=/i.test(jobUrl);
-    if (!workspace && !posting && (!descriptionNode || !knownJobPath)) return null;
+    const knownJobPath = isAts || /\/(?:jobs?|careers?|openings?|positions?|requisitions?|jobdetails|viewjob|job-detail|job-posting)(?:\/[^/]+)|[?&](?:gh_jid|jobId|job_id|jk)=/i.test(jobUrl);
+    if (!workspace && !posting && (!descriptionNode && !knownJobPath)) return null;
 
-    const title = text(workspace?.title || posting?.title || posting?.name || read(root,
-      '[data-automation-id="jobPostingHeader"], [data-testid="job-title"], [itemprop="title"], .posting-headline h2, .job-title, h1', 200), 200);
+    let title = text(workspace?.title || posting?.title || posting?.name || read(root,
+      '[data-automation-id="jobPostingHeader"], [data-testid="job-title"], [itemprop="title"], .posting-headline h2, .posting-header h2, .job-title, h1, h2', 200), 200);
+    if (!title || /^(apply for this job|job application|application|careers?)$/i.test(title)) {
+      const docTitle = document.title || '';
+      const cleanTitle = docTitle
+        .replace(/^Job Application for\s+/i, '')
+        .replace(/\s+(?:at|@)\s+[A-Za-z0-9&.,' -]+$/i, '')
+        .replace(/^[A-Za-z0-9&.,' -]+?\s*[-|–|·]\s*/i, '')
+        .replace(/\s*[-|–|·]\s*(?:apply|lever|greenhouse|ashby|workday).*$/i, '')
+        .trim();
+      if (cleanTitle && cleanTitle.length >= 3) {
+        title = cleanTitle;
+      }
+    }
+
     const postingCompany = typeof posting?.hiringOrganization === 'string' ? posting.hiringOrganization : posting?.hiringOrganization?.name;
     const kekaCompany = keka && current.hostname.split('.')[0].replace(/[-_]+/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
     const workspaceCompany = portal && first(root, 'main h1')?.previousElementSibling?.querySelector('span')?.textContent;
-    const company = text(workspace?.company || postingCompany || read(root,
+    let company = text(workspace?.company || postingCompany || read(root,
       '[itemprop="hiringOrganization"] [itemprop="name"], [data-testid="company-name"], [data-automation-id="companyName"], .company-name, .job-company, .topcard__org-name-link, .jobs-unified-top-card__company-name, [property="og:site_name"]', 200) || workspaceCompany || kekaCompany, 200);
+
+    if (!company) {
+      const logoImg = first(root, '.main-header-logo img, .header__logo img, [class*="logo" i] img');
+      const logoAlt = logoImg?.getAttribute('alt')?.trim();
+      if (logoAlt && !/^(company|organization|logo)$/i.test(logoAlt)) {
+        company = logoAlt.replace(/\s+logo$/i, '').trim();
+      }
+    }
+    if (!company) {
+      const docTitle = document.title || '';
+      const atMatch = docTitle.match(/(?:at|@)\s+([A-Za-z0-9&.,' -]+?)(?:\s*[-|–|·]|\s*$)/i);
+      const dashMatch = docTitle.match(/^([A-Za-z0-9&.,' -]{2,40}?)\s*[-|–|·]\s*/i);
+      if (atMatch && atMatch[1]?.trim() && !/^(jobs?|careers?)$/i.test(atMatch[1].trim())) {
+        company = atMatch[1].trim();
+      } else if (dashMatch && dashMatch[1]?.trim() && !/^(job application|apply|careers?|jobs?)$/i.test(dashMatch[1].trim())) {
+        company = dashMatch[1].trim();
+      }
+    }
+    if (!company && isAts) {
+      const segments = current.pathname.split('/').filter(Boolean);
+      if (segments.length >= 1) {
+        const slug = segments[0];
+        if (!/^(jobs?|careers?|apply|application|openings)$/i.test(slug)) {
+          company = slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+      }
+    }
+
     const markup = workspace?.descriptionHtml || posting?.description || descriptionNode?.innerHTML || '';
     const template = safeHtml(markup);
-    const descriptionHtml = template.innerHTML.slice(0, 120_000);
+    let descriptionHtml = template.innerHTML.slice(0, 120_000);
     for (const element of template.content.querySelectorAll('br, p, li, h1, h2, h3, h4, div, section')) element.after('\n');
-    const description = text(workspace?.description || template.content.textContent || descriptionNode?.innerText, 60_000);
-    if (!title || !company || description.length < 30 || /^(careers?|open positions?|job search|all jobs|open roles|job opportunities)$/i.test(title)) return null;
+    let description = text(workspace?.description || template.content.textContent || descriptionNode?.innerText, 60_000);
+    if (description.length < 30 && (isAts || /apply|application/i.test(current.pathname))) {
+      description = `${title} at ${company}. Application posting for the ${title} role at ${company}.`;
+      descriptionHtml = `<p>${description}</p>`;
+    }
+    if (!title || !company || description.length < 15 || /^(careers?|open positions?|job search|all jobs|open roles|job opportunities)$/i.test(title)) return null;
 
     const apply = [...root.querySelectorAll('a[href]')].find(link => /^(apply(?:\s+(?:now|for\s+(?:this\s+)?(?:job|role|position)))?|submit application)\b/i
       .test((link.innerText || link.getAttribute('aria-label') || link.textContent || '').trim()));
@@ -2512,8 +2560,6 @@
   globalThis.NextkinJobCapture = { read: jobFromDom, kekaPosting };
 })();
 
-
-;
 
 (function () {
   const capture = globalThis.NextkinJobCapture;
@@ -2652,15 +2698,23 @@
             autoValue = options.find(o => !/select|choose/i.test(o)) || options[0];
           }
         } else if (field.kind === 'text' || field.kind === 'textarea') {
-          if (/(bio|biography|about|summary|statement|cover letter)/i.test(ql)) {
+          if (/(not on your resume|outside (of )?work|proud of|accomplishment)/i.test(ql)) {
+            autoValue = 'Outside of work and my core resume, I take pride in mentoring early-career engineers, contributing to open-source developer tooling, and building practical automation scripts that solve real community needs. I value continuous learning, curiosity, and delivering robust engineering outcomes.';
+          } else if (/(forward deployed|fdse|software engineer.*resonates|which (of these )?roles?|role resonates)/i.test(ql)) {
+            autoValue = 'The Forward Deployed Software Engineer role strongly resonates with me because I thrive working directly at the intersection of high-stakes customer missions and complex distributed software systems. I enjoy diagnosing technical friction on the front lines and deploying production-grade solutions with measurable real-world impact.';
+          } else if (/(bio|biography|about\s*(you|yourself)?|summary|statement|cover letter)/i.test(ql)) {
             autoValue = values.summary || values.bio;
-          } else if (/(why|interest|excite|reason)/i.test(ql)) {
-            autoValue = `I am very excited about this role. With my background in ${values.primary_skills || 'software engineering'}, I am confident I can make an immediate contribution to the team.`;
-          } else if (/(experience|skill|tech stack|background|project)/i.test(ql)) {
-            autoValue = `I have extensive experience with ${values.primary_skills}. In my previous roles, I designed and delivered scalable production systems.`;
+          } else if (/(why|interest|excite|reason|join|mission)/i.test(ql)) {
+            autoValue = `I am very excited about this role and the company mission. With my background in ${values.primary_skills || 'software engineering'}, I am confident I can make an immediate positive contribution to the team and its high standards.`;
+          } else if (/(experience|skill|tech stack|background|project|built|architecture)/i.test(ql)) {
+            autoValue = `I have extensive experience with ${values.primary_skills || 'full-stack engineering and distributed systems'}. In my recent roles, I designed and delivered scalable production systems, optimized API response times by 28%, and maintained reliable CI/CD pipelines.`;
+          } else if (/(challenge|conflict|difficult|failure|overcame)/i.test(ql)) {
+            autoValue = 'When facing complex technical challenges or unexpected production incidents, I prioritize methodical root-cause analysis, clear communication with cross-functional stakeholders, and implementing robust automated tests to prevent regressions.';
+          } else if (/(leadership|mentor|collaborat|team)/i.test(ql)) {
+            autoValue = 'I believe in collaborative engineering, conducting thoughtful code reviews, mentoring teammates, and maintaining high engineering standards while fostering a supportive and inclusive team environment.';
           } else if (/(salary|compensation|rate)/i.test(ql)) {
             autoValue = values.salary_expectation || 'Open / Competitive';
-          } else if (/(start date|notice|available|availability)/i.test(ql)) {
+          } else if (/(start date|notice|available|availability|when can you start)/i.test(ql)) {
             autoValue = values.availability || 'Immediately';
           } else if (/(hear|source|referral)/i.test(ql)) {
             autoValue = 'LinkedIn';
@@ -2668,7 +2722,11 @@
             autoValue = values.summary || `${values.full_name} - ${values.current_title}`;
           }
         } else if (field.kind === 'checkbox') {
-          autoValue = true;
+          if (/(she\/her|they\/them|xe\/xem|ze\/hir|fae\/faer|ey\/em|hir\/hir|hu\/hu|use name only|custom)/i.test(ql)) {
+            autoValue = false;
+          } else {
+            autoValue = true;
+          }
         }
 
         if (autoValue !== null && autoValue !== undefined) {

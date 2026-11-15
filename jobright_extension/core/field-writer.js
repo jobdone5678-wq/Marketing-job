@@ -680,7 +680,7 @@
       const preserved = getPreservedValue(field);
       const previous = (domVal !== '' && domVal !== null && domVal !== undefined) ? domVal : preserved;
       const isCountryCodeOnly = field.kind === 'text' && (field.element?.type === 'tel' || /phone/i.test(field.hint || field.label)) && /^\+?\d{1,3}\s*$/.test(String(previous).trim());
-      const hasAnswer = !isCountryCodeOnly && (Array.isArray(previous) ? previous.length > 0 : (typeof previous === 'boolean' ? true : Boolean(previous && String(previous).trim().length > 0)));
+      const hasAnswer = !isCountryCodeOnly && (Array.isArray(previous) ? previous.length > 0 : (typeof previous === 'boolean' ? previous : Boolean(previous && String(previous).trim().length > 0)));
       let write;
       if (hasAnswer) {
         const option = field.options?.length ? choose(field, value) : null;
