@@ -66,7 +66,7 @@
     el.getAttribute('aria-pressed') === 'true' || el.getAttribute('data-selected') === 'true' ||
     el.getAttribute('data-state') === 'checked' || (el.matches && el.matches('.active, .selected, .is-selected'));
 
-  const YES_REGEX = /^(yes|y|true|1|eligible|authorized|absolutely|of course|correct|affirmative)$/i;
+  const YES_REGEX = /^(yes|y|true|1|eligible|authorized|absolutely|of course|correct|affirmative|immediately|available)$/i;
   const NO_REGEX = /^(no|n|false|0|not eligible|not authorized|incorrect|never|negative)$/i;
 
   function normalizeBoolean(value) {
@@ -129,11 +129,13 @@
       const view = el.ownerDocument.defaultView || globalThis;
       const PointerEvt = view.PointerEvent || view.MouseEvent;
       const MouseEvt = view.MouseEvent;
-      el.dispatchEvent(new PointerEvt('pointerdown', { bubbles: true, composed: true, cancelable: true, pointerType: 'mouse', isPrimary: true }));
-      el.dispatchEvent(new MouseEvt('mousedown', { bubbles: true, composed: true, cancelable: true }));
+      const downInit = { bubbles: true, composed: true, cancelable: true, view, button: 0, buttons: 1, detail: 1 };
+      const upInit = { bubbles: true, composed: true, cancelable: true, view, button: 0, buttons: 0, detail: 1 };
+      el.dispatchEvent(new PointerEvt('pointerdown', { ...downInit, pointerType: 'mouse', isPrimary: true }));
+      el.dispatchEvent(new MouseEvt('mousedown', downInit));
       el.focus?.({ preventScroll: true });
-      el.dispatchEvent(new PointerEvt('pointerup', { bubbles: true, composed: true, pointerType: 'mouse', isPrimary: true }));
-      el.dispatchEvent(new MouseEvt('mouseup', { bubbles: true, composed: true }));
+      el.dispatchEvent(new PointerEvt('pointerup', { ...upInit, pointerType: 'mouse', isPrimary: true }));
+      el.dispatchEvent(new MouseEvt('mouseup', upInit));
       el.click();
       return true;
     } finally {
@@ -362,7 +364,9 @@
   }
 
   function comboValue(el) {
-    const display = el.querySelector('[data-placeholder], .select2-selection__rendered, .ng-value-label, .k-input-value-text, [data-slot="select-value"]');
+    const root = el.closest?.('.select, .select__container, .select__control, [class*="select__control" i], [class*="select-container" i], [class*="select-shell" i]') || el.parentElement || el;
+    const display = (el.querySelector ? el.querySelector('[data-placeholder], .select2-selection__rendered, .ng-value-label, .k-input-value-text, [data-slot="select-value"], [class*="singleValue" i], [class*="single-value" i], [class*="select__single-value" i]') : null) ||
+      root.querySelector?.('[data-placeholder], .select2-selection__rendered, .ng-value-label, .k-input-value-text, [data-slot="select-value"], [class*="singleValue" i], [class*="single-value" i], [class*="select__single-value" i]');
     const input = comboInput(el);
     const value = (display?.textContent || input?.value || (input ? '' : el.textContent)).trim();
     return el.hasAttribute('data-placeholder') || display?.hasAttribute('data-placeholder') ||
@@ -396,10 +400,11 @@
     const isVisible = node => !!node.getClientRects().length && doc.defaultView.getComputedStyle(node).visibility !== 'hidden';
     if (!roots.length) {
       const menus = [...new Set([...(el.getRootNode?.()?.querySelectorAll?.(listboxSelector) || []), ...doc.querySelectorAll(listboxSelector)])].filter(isVisible);
-      const nearby = menus.filter(menu => (el.contains?.(menu)) || (el.parentElement?.contains?.(menu)) || (el.closest?.('[class*="field" i], form, fieldset')?.contains?.(menu)));
+      const fieldContainer = el.closest?.('.select, .select__container, .select-shell, [class*="select__container"], [class*="form-group"], [class*="field-container"], [class*="application-question"]');
+      const nearby = menus.filter(menu => (el.contains?.(menu)) || (el.parentElement?.contains?.(menu)) || (fieldContainer?.contains?.(menu)));
       if (nearby.length >= 1) roots.push(...nearby);
       else if (menus.length === 1) roots.push(menus[0]);
-      else if (menus.length > 1) roots.push(...menus);
+      else if (menus.length > 1) roots.push(menus[menus.length - 1]);
     }
     return roots;
   }
@@ -486,9 +491,11 @@
     // If options not open, click trigger to open listbox
     if (!options.length && trigger) {
       click(trigger);
+      const ctrl = el.closest?.('.select__control, [class*="select__control" i]');
+      if (ctrl && ctrl !== trigger) click(ctrl);
       const openStart = Date.now();
-      // await options asynchronously (up to 300ms)
-      while (Date.now() - openStart < 300 && isCurrent()) {
+      // await options asynchronously (up to 400ms)
+      while (Date.now() - openStart < 400 && isCurrent()) {
         await wait(30);
         options = comboOptions(el);
         if (options.length) break;
@@ -499,6 +506,7 @@
     let option = choose({ options }, desired);
     if (option) {
       const ok = click(option.element);
+      closeCombo(el);
       return ok ? { expected: option.label, option: option.element, typed: false } : null;
     }
 
@@ -511,8 +519,8 @@
       writeValue(search, query);
       typed = true;
       const searchStart = Date.now();
-      // await filtered options asynchronously (up to 300ms)
-      while (Date.now() - searchStart < 300 && isCurrent()) {
+      // await filtered options asynchronously (up to 800ms for network search)
+      while (Date.now() - searchStart < 800 && isCurrent()) {
         await wait(30);
         options = comboOptions(el);
         option = choose({ options }, desired);
@@ -522,6 +530,7 @@
 
     if (option) {
       const ok = click(option.element);
+      closeCombo(el);
       return ok ? { expected: option.label, option: option.element, typed } : null;
     }
 
@@ -601,7 +610,12 @@
     const bExpected = normalizeBoolean(expected);
     const bValue = normalizeBoolean(value);
     if (bExpected !== null && bValue !== null) return bExpected === bValue;
-    return typeof expected === 'boolean' ? value === expected : normalize(value) === normalize(expected);
+    if (typeof expected === 'boolean') return value === expected;
+    if (normalize(value) === normalize(expected)) return true;
+    const dVal = String(value || '').replace(/\D/g, '');
+    const dExp = String(expected || '').replace(/\D/g, '');
+    if (dVal.length >= 7 && dExp.length >= 7 && (dVal === dExp || dVal.endsWith(dExp) || dExp.endsWith(dVal))) return true;
+    return false;
   }
 
   // Preserved values store across wizard step transitions
@@ -665,7 +679,8 @@
       const domVal = read(field);
       const preserved = getPreservedValue(field);
       const previous = (domVal !== '' && domVal !== null && domVal !== undefined) ? domVal : preserved;
-      const hasAnswer = Array.isArray(previous) ? previous.length > 0 : (typeof previous === 'boolean' ? true : Boolean(previous));
+      const isCountryCodeOnly = field.kind === 'text' && (field.element?.type === 'tel' || /phone/i.test(field.hint || field.label)) && /^\+?\d{1,3}\s*$/.test(String(previous).trim());
+      const hasAnswer = !isCountryCodeOnly && (Array.isArray(previous) ? previous.length > 0 : (typeof previous === 'boolean' ? true : Boolean(previous && String(previous).trim().length > 0)));
       let write;
       if (hasAnswer) {
         const option = field.options?.length ? choose(field, value) : null;
@@ -692,8 +707,10 @@
       }
       if (!write) continue;
       const verified = () => session.isCurrent() && el.isConnected &&
-        ((equals(read(field), write.expected) && !(write.typed && write.option?.isConnected &&
-          !selected(write.option) && el.getAttribute('aria-expanded') === 'true')) || (write.option?.isConnected && selected(write.option)));
+        (equals(read(field), write.expected) ||
+         (write.expected && String(read(field) || '').toLowerCase().includes(String(write.expected).toLowerCase())) ||
+         (write.option && !write.option.isConnected && write.expected) ||
+         (write.option?.isConnected && selected(write.option)));
       if (!verified()) await wait(120);
       if (!verified()) continue;
       recordPreservedValues([field]);

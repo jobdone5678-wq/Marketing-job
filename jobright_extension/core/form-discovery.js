@@ -2,9 +2,9 @@
   const excluded = /\b(?:password|secret|token|credential|bank|routing|payment|credit.?card|ssn|social.?security|tax.?id|captcha|otp|one.?time.?code)\b/i;
 
   // Every control shape a job application uses, across portals.
-  const COMBO_SELECTOR = '[role="combobox"], [aria-haspopup="listbox"], input[list], .select2-selection, .ng-select, kendo-dropdownlist, kendo-multiselect, button[class*="select-trigger" i], button[class*="selectTrigger" i], button[data-testid*="select" i], button[data-testid*="combobox" i], [data-slot="select-trigger"], [data-automation-id*="prompt" i], [data-automation-id*="select" i], [class*="select__control" i], [id^="headlessui-listbox-button"]';
+  const COMBO_SELECTOR = '[role="combobox"], [aria-haspopup="listbox"], input[list], .select2-selection, .ng-select, kendo-dropdownlist, kendo-multiselect, button[class*="select-trigger" i], button[class*="selectTrigger" i], button[data-testid*="select" i], button[data-testid*="combobox" i], [data-slot="select-trigger"], [data-automation-id*="prompt" i], [data-automation-id*="select" i], [id^="headlessui-listbox-button"]';
   const CONTROL_SELECTOR = 'input, textarea, select, [role="checkbox"], [role="switch"], [data-slot="checkbox"], [data-slot="switch"], [contenteditable=""], [contenteditable="true"], iframe, ' + COMBO_SELECTOR;
-  const available = el => !el.disabled && !el.readOnly && el.getAttribute('aria-disabled') !== 'true';
+  const available = el => !el.disabled && !el.readOnly && el.getAttribute('aria-disabled') !== 'true' && el.getAttribute('aria-hidden') !== 'true';
   const visible = el => available(el) && !!el.getClientRects().length && el.ownerDocument.defaultView.getComputedStyle(el).visibility !== 'hidden';
   const visibleChoice = el => available(el) && (visible(el) || [...(el.labels || [])].some(visible));
   const multiComboSelector = '[aria-multiselectable="true"], [multiple], [data-multiple="true"], .ng-select-multiple, .select2-selection--multiple, kendo-multiselect';
@@ -60,11 +60,11 @@
 
     if (!found) {
       // Modern ATS container search: Ashby, Greenhouse, Lever, Workday, BambooHR
-      const qContainer = el.closest(QUESTION_CONTAINER);
+      const qContainer = el.closest(QUESTION_CONTAINER + ', [class*="select__container"], .select, .phone-input__country');
       if (qContainer) {
         const qLbl = qContainer.querySelector('label[class*="question-title"], [class*="question-title"], .application-label, [class*="application-label"], [class*="labelContainer"], [class*="label"], [class*="title"], [class*="header"], [class*="heading"], h3, h4, h5, strong, b');
         if (qLbl && qLbl.textContent && qLbl.textContent.trim().length < 200) {
-          found = clean(qLbl.textContent);
+          found = clean(labelText(qLbl));
         }
       }
     }
@@ -159,6 +159,8 @@
       for (const el of scope.querySelectorAll(CONTROL_SELECTOR)) {
         if (el.closest('#mp-copilot-root') || !visibleChoice(el)) continue;
         if (seen.has(el)) continue;
+        if (el.tagName === 'INPUT' && el.tabIndex === -1 && !el.id && !el.name && !el.getAttribute('role')) continue;
+        if (el.tagName === 'INPUT' && el.id && el.id.startsWith('iti-') && el.id.endsWith('search-input')) continue;
         if (el.tagName === 'IFRAME') {
           let inner = 0;
           try {
@@ -180,7 +182,8 @@
         const group = el.closest(HISTORY_SELECTOR);
         const groupLabel = group?.querySelector('legend')?.textContent?.trim() || group?.getAttribute('data-automation-id') || '';
         const isCombo = el.tagName !== 'SELECT' && el.matches(COMBO_SELECTOR);
-        if (el.parentElement?.closest(COMBO_SELECTOR) && (isCombo || el.tagName === 'INPUT')) continue;
+        if (el.tagName !== 'INPUT' && el.tagName !== 'SELECT' && el.tagName !== 'TEXTAREA' && el.querySelector('input[role="combobox"], input.select__input, select, textarea')) continue;
+        if (el.parentElement?.closest(COMBO_SELECTOR) && (isCombo || el.tagName === 'INPUT') && !el.matches('[role="combobox"]')) continue;
         const isCheck = el.type === 'checkbox' || role === 'checkbox' || role === 'switch';
         const isEditable = el.getAttribute('contenteditable') === '' || el.getAttribute('contenteditable') === 'true';
         const controlledList = isCombo && el.getRootNode().getElementById?.(el.getAttribute('aria-controls'));

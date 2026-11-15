@@ -129,7 +129,7 @@
 
   // A history section holds many records, so one fact never fills it. The wording has to name a
   // history: "work in the United States" is an authorization question, not a work-history section.
-  const HISTORY_SCOPE = /\b(work|employment|professional|career)\b[\s-]*(experience|history|records?|entries|section)\b|\bexperience\b[\s-]*(history|records?|entries|section)\b|\beducation(al)?\b[\s-]*(history|records?|entries|section|details)?\b|\b(school|university|college)\b[\s-]*(history|education|details)?\b|\bdegree\b/i;
+  const HISTORY_SCOPE = /\b(work|employment|professional|career)\b[\s-]*(experience|history|records?|entries|section)\b|\bexperience\b[\s-]*(history|records?|entries|section)\b|\beducation(al)?\b[\s-]*(history|records?|entries|section|details)\b|\b(school|university|college)\b[\s-]*(history|records?|details)\b|\bdegree\b[\s-]*(history|records?|section)\b/i;
 
   const isDateInput = el => !el || el.tagName !== 'INPUT' ? false : (
     el.type === 'date' || el.type === 'datetime-local' ||
@@ -302,7 +302,12 @@
       for (const a of aliases[key]) {
         const na = norm(a);
         if (nl === na || (nh && nh === na)) matches.push({ key, exact: true, length: na.length });
-        else if (nl.includes(na) || (nh && nh.includes(na))) matches.push({ key, exact: false, length: na.length });
+        else if (na.length <= 4) {
+          const re = new RegExp('\\b' + na.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
+          if (re.test(nl) || (nh && re.test(nh))) matches.push({ key, exact: false, length: na.length });
+        } else if (nl.includes(na) || (nh && nh.includes(na))) {
+          matches.push({ key, exact: false, length: na.length });
+        }
       }
     }
 
@@ -372,8 +377,8 @@
       if (factKey === 'e_signature') {
         return { field, factKey, value: values.full_name, status: 'supported', reason: 'Electronic signature.' };
       }
-      // A known United States authorization must not answer a question about another country.
-      if (factKey === 'authorized_in_usa' && !isUSQuestion(nl + ' ' + nh) && nl !== 'work authorization') {
+      // A known United States authorization must not answer a question about an unrelated foreign country.
+      if (factKey === 'authorized_in_usa' && !isUSQuestion(nl + ' ' + nh) && !/country for which you applied|where the job is located|legally authorized|work authorization/i.test(nl + ' ' + nh)) {
         return { field, factKey, status: 'unknown', reason: 'Question is not about United States work authorization.' };
       }
 
@@ -442,9 +447,10 @@
     }
     for (const group of groups.values()) {
       if (group.length <= 1) continue;
-      for (const plan of group) {
-        plan.status = 'needs_review';
-        plan.reason = 'Duplicate field labels require review.';
+      // Keep the primary field supported; mark subsequent duplicate elements as review
+      for (let i = 1; i < group.length; i++) {
+        group[i].status = 'needs_review';
+        group[i].reason = 'Duplicate field element.';
       }
     }
 

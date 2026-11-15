@@ -94,7 +94,12 @@
         if (id === 'last_name' || name === 'last_name') return 'last_name';
         if (id === 'email' || name === 'email') return 'email';
         if (id === 'phone' || name === 'phone') return 'phone';
-        if (/job_application\[location\]/i.test(name)) return 'current_city';
+        if (id === 'country' || name === 'country') return 'country';
+        if (id === 'candidate-location' || /job_application\[location\]/i.test(name)) return 'current_city';
+        if (id === 'gender' || name === 'gender') return 'gender';
+        if (id === 'veteran_status' || /veteran/i.test(name)) return 'veteran';
+        if (id === 'hispanic_ethnicity' || /hispanic/i.test(name)) return '';
+        if (id.includes('degree') || name.includes('degree')) return 'highest_education';
         if (/job_application\[answers\]/i.test(name)) return '';
         return canonicalHint(el);
       }
@@ -830,14 +835,16 @@
   console.info(`[NextKin Adapters] Loaded ${(root.NextkinAdapters || []).length} portal adapters.`);
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
+
 ;
+
 (function(root){'use strict';
   const excluded = /\b(?:password|secret|token|credential|bank|routing|payment|credit.?card|ssn|social.?security|tax.?id|captcha|otp|one.?time.?code)\b/i;
 
   // Every control shape a job application uses, across portals.
-  const COMBO_SELECTOR = '[role="combobox"], [aria-haspopup="listbox"], input[list], .select2-selection, .ng-select, kendo-dropdownlist, kendo-multiselect, button[class*="select-trigger" i], button[class*="selectTrigger" i], button[data-testid*="select" i], button[data-testid*="combobox" i], [data-slot="select-trigger"], [data-automation-id*="prompt" i], [data-automation-id*="select" i], [class*="select__control" i], [id^="headlessui-listbox-button"]';
+  const COMBO_SELECTOR = '[role="combobox"], [aria-haspopup="listbox"], input[list], .select2-selection, .ng-select, kendo-dropdownlist, kendo-multiselect, button[class*="select-trigger" i], button[class*="selectTrigger" i], button[data-testid*="select" i], button[data-testid*="combobox" i], [data-slot="select-trigger"], [data-automation-id*="prompt" i], [data-automation-id*="select" i], [id^="headlessui-listbox-button"]';
   const CONTROL_SELECTOR = 'input, textarea, select, [role="checkbox"], [role="switch"], [data-slot="checkbox"], [data-slot="switch"], [contenteditable=""], [contenteditable="true"], iframe, ' + COMBO_SELECTOR;
-  const available = el => !el.disabled && !el.readOnly && el.getAttribute('aria-disabled') !== 'true';
+  const available = el => !el.disabled && !el.readOnly && el.getAttribute('aria-disabled') !== 'true' && el.getAttribute('aria-hidden') !== 'true';
   const visible = el => available(el) && !!el.getClientRects().length && el.ownerDocument.defaultView.getComputedStyle(el).visibility !== 'hidden';
   const visibleChoice = el => available(el) && (visible(el) || [...(el.labels || [])].some(visible));
   const multiComboSelector = '[aria-multiselectable="true"], [multiple], [data-multiple="true"], .ng-select-multiple, .select2-selection--multiple, kendo-multiselect';
@@ -893,11 +900,11 @@
 
     if (!found) {
       // Modern ATS container search: Ashby, Greenhouse, Lever, Workday, BambooHR
-      const qContainer = el.closest(QUESTION_CONTAINER);
+      const qContainer = el.closest(QUESTION_CONTAINER + ', [class*="select__container"], .select, .phone-input__country');
       if (qContainer) {
         const qLbl = qContainer.querySelector('label[class*="question-title"], [class*="question-title"], .application-label, [class*="application-label"], [class*="labelContainer"], [class*="label"], [class*="title"], [class*="header"], [class*="heading"], h3, h4, h5, strong, b');
         if (qLbl && qLbl.textContent && qLbl.textContent.trim().length < 200) {
-          found = clean(qLbl.textContent);
+          found = clean(labelText(qLbl));
         }
       }
     }
@@ -992,6 +999,8 @@
       for (const el of scope.querySelectorAll(CONTROL_SELECTOR)) {
         if (el.closest('#mp-copilot-root') || !visibleChoice(el)) continue;
         if (seen.has(el)) continue;
+        if (el.tagName === 'INPUT' && el.tabIndex === -1 && !el.id && !el.name && !el.getAttribute('role')) continue;
+        if (el.tagName === 'INPUT' && el.id && el.id.startsWith('iti-') && el.id.endsWith('search-input')) continue;
         if (el.tagName === 'IFRAME') {
           let inner = 0;
           try {
@@ -1013,7 +1022,8 @@
         const group = el.closest(HISTORY_SELECTOR);
         const groupLabel = group?.querySelector('legend')?.textContent?.trim() || group?.getAttribute('data-automation-id') || '';
         const isCombo = el.tagName !== 'SELECT' && el.matches(COMBO_SELECTOR);
-        if (el.parentElement?.closest(COMBO_SELECTOR) && (isCombo || el.tagName === 'INPUT')) continue;
+        if (el.tagName !== 'INPUT' && el.tagName !== 'SELECT' && el.tagName !== 'TEXTAREA' && el.querySelector('input[role="combobox"], input.select__input, select, textarea')) continue;
+        if (el.parentElement?.closest(COMBO_SELECTOR) && (isCombo || el.tagName === 'INPUT') && !el.matches('[role="combobox"]')) continue;
         const isCheck = el.type === 'checkbox' || role === 'checkbox' || role === 'switch';
         const isEditable = el.getAttribute('contenteditable') === '' || el.getAttribute('contenteditable') === 'true';
         const controlledList = isCombo && el.getRootNode().getElementById?.(el.getAttribute('aria-controls'));
@@ -1166,7 +1176,9 @@
   root.NextkinForms = { discoverFields, label, findStepNavigation, detectNewFields, observeStepTransitions };
 })(globalThis);
 
+
 ;
+
 (function(root){'use strict';
   const norm = v => String(v ?? '').replace(/[_*:-]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 
@@ -1298,7 +1310,7 @@
 
   // A history section holds many records, so one fact never fills it. The wording has to name a
   // history: "work in the United States" is an authorization question, not a work-history section.
-  const HISTORY_SCOPE = /\b(work|employment|professional|career)\b[\s-]*(experience|history|records?|entries|section)\b|\bexperience\b[\s-]*(history|records?|entries|section)\b|\beducation(al)?\b[\s-]*(history|records?|entries|section|details)?\b|\b(school|university|college)\b[\s-]*(history|education|details)?\b|\bdegree\b/i;
+  const HISTORY_SCOPE = /\b(work|employment|professional|career)\b[\s-]*(experience|history|records?|entries|section)\b|\bexperience\b[\s-]*(history|records?|entries|section)\b|\beducation(al)?\b[\s-]*(history|records?|entries|section|details)\b|\b(school|university|college)\b[\s-]*(history|records?|details)\b|\bdegree\b[\s-]*(history|records?|section)\b/i;
 
   const isDateInput = el => !el || el.tagName !== 'INPUT' ? false : (
     el.type === 'date' || el.type === 'datetime-local' ||
@@ -1471,7 +1483,12 @@
       for (const a of aliases[key]) {
         const na = norm(a);
         if (nl === na || (nh && nh === na)) matches.push({ key, exact: true, length: na.length });
-        else if (nl.includes(na) || (nh && nh.includes(na))) matches.push({ key, exact: false, length: na.length });
+        else if (na.length <= 4) {
+          const re = new RegExp('\\b' + na.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
+          if (re.test(nl) || (nh && re.test(nh))) matches.push({ key, exact: false, length: na.length });
+        } else if (nl.includes(na) || (nh && nh.includes(na))) {
+          matches.push({ key, exact: false, length: na.length });
+        }
       }
     }
 
@@ -1541,8 +1558,8 @@
       if (factKey === 'e_signature') {
         return { field, factKey, value: values.full_name, status: 'supported', reason: 'Electronic signature.' };
       }
-      // A known United States authorization must not answer a question about another country.
-      if (factKey === 'authorized_in_usa' && !isUSQuestion(nl + ' ' + nh) && nl !== 'work authorization') {
+      // A known United States authorization must not answer a question about an unrelated foreign country.
+      if (factKey === 'authorized_in_usa' && !isUSQuestion(nl + ' ' + nh) && !/country for which you applied|where the job is located|legally authorized|work authorization/i.test(nl + ' ' + nh)) {
         return { field, factKey, status: 'unknown', reason: 'Question is not about United States work authorization.' };
       }
 
@@ -1611,9 +1628,10 @@
     }
     for (const group of groups.values()) {
       if (group.length <= 1) continue;
-      for (const plan of group) {
-        plan.status = 'needs_review';
-        plan.reason = 'Duplicate field labels require review.';
+      // Keep the primary field supported; mark subsequent duplicate elements as review
+      for (let i = 1; i < group.length; i++) {
+        group[i].status = 'needs_review';
+        group[i].reason = 'Duplicate field element.';
       }
     }
 
@@ -1623,7 +1641,9 @@
   root.NextkinFieldMapping = { planFill, resolveFact, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS };
 })(globalThis);
 
+
 ;
+
 (function (root) {
   const mapping = root.NextkinFieldMapping;
   const normalize = value => String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -1692,7 +1712,7 @@
     el.getAttribute('aria-pressed') === 'true' || el.getAttribute('data-selected') === 'true' ||
     el.getAttribute('data-state') === 'checked' || (el.matches && el.matches('.active, .selected, .is-selected'));
 
-  const YES_REGEX = /^(yes|y|true|1|eligible|authorized|absolutely|of course|correct|affirmative)$/i;
+  const YES_REGEX = /^(yes|y|true|1|eligible|authorized|absolutely|of course|correct|affirmative|immediately|available)$/i;
   const NO_REGEX = /^(no|n|false|0|not eligible|not authorized|incorrect|never|negative)$/i;
 
   function normalizeBoolean(value) {
@@ -1755,11 +1775,13 @@
       const view = el.ownerDocument.defaultView || globalThis;
       const PointerEvt = view.PointerEvent || view.MouseEvent;
       const MouseEvt = view.MouseEvent;
-      el.dispatchEvent(new PointerEvt('pointerdown', { bubbles: true, composed: true, cancelable: true, pointerType: 'mouse', isPrimary: true }));
-      el.dispatchEvent(new MouseEvt('mousedown', { bubbles: true, composed: true, cancelable: true }));
+      const downInit = { bubbles: true, composed: true, cancelable: true, view, button: 0, buttons: 1, detail: 1 };
+      const upInit = { bubbles: true, composed: true, cancelable: true, view, button: 0, buttons: 0, detail: 1 };
+      el.dispatchEvent(new PointerEvt('pointerdown', { ...downInit, pointerType: 'mouse', isPrimary: true }));
+      el.dispatchEvent(new MouseEvt('mousedown', downInit));
       el.focus?.({ preventScroll: true });
-      el.dispatchEvent(new PointerEvt('pointerup', { bubbles: true, composed: true, pointerType: 'mouse', isPrimary: true }));
-      el.dispatchEvent(new MouseEvt('mouseup', { bubbles: true, composed: true }));
+      el.dispatchEvent(new PointerEvt('pointerup', { ...upInit, pointerType: 'mouse', isPrimary: true }));
+      el.dispatchEvent(new MouseEvt('mouseup', upInit));
       el.click();
       return true;
     } finally {
@@ -1988,7 +2010,9 @@
   }
 
   function comboValue(el) {
-    const display = el.querySelector('[data-placeholder], .select2-selection__rendered, .ng-value-label, .k-input-value-text, [data-slot="select-value"]');
+    const root = el.closest?.('.select, .select__container, .select__control, [class*="select__control" i], [class*="select-container" i], [class*="select-shell" i]') || el.parentElement || el;
+    const display = (el.querySelector ? el.querySelector('[data-placeholder], .select2-selection__rendered, .ng-value-label, .k-input-value-text, [data-slot="select-value"], [class*="singleValue" i], [class*="single-value" i], [class*="select__single-value" i]') : null) ||
+      root.querySelector?.('[data-placeholder], .select2-selection__rendered, .ng-value-label, .k-input-value-text, [data-slot="select-value"], [class*="singleValue" i], [class*="single-value" i], [class*="select__single-value" i]');
     const input = comboInput(el);
     const value = (display?.textContent || input?.value || (input ? '' : el.textContent)).trim();
     return el.hasAttribute('data-placeholder') || display?.hasAttribute('data-placeholder') ||
@@ -2022,10 +2046,11 @@
     const isVisible = node => !!node.getClientRects().length && doc.defaultView.getComputedStyle(node).visibility !== 'hidden';
     if (!roots.length) {
       const menus = [...new Set([...(el.getRootNode?.()?.querySelectorAll?.(listboxSelector) || []), ...doc.querySelectorAll(listboxSelector)])].filter(isVisible);
-      const nearby = menus.filter(menu => (el.contains?.(menu)) || (el.parentElement?.contains?.(menu)) || (el.closest?.('[class*="field" i], form, fieldset')?.contains?.(menu)));
+      const fieldContainer = el.closest?.('.select, .select__container, .select-shell, [class*="select__container"], [class*="form-group"], [class*="field-container"], [class*="application-question"]');
+      const nearby = menus.filter(menu => (el.contains?.(menu)) || (el.parentElement?.contains?.(menu)) || (fieldContainer?.contains?.(menu)));
       if (nearby.length >= 1) roots.push(...nearby);
       else if (menus.length === 1) roots.push(menus[0]);
-      else if (menus.length > 1) roots.push(...menus);
+      else if (menus.length > 1) roots.push(menus[menus.length - 1]);
     }
     return roots;
   }
@@ -2112,9 +2137,11 @@
     // If options not open, click trigger to open listbox
     if (!options.length && trigger) {
       click(trigger);
+      const ctrl = el.closest?.('.select__control, [class*="select__control" i]');
+      if (ctrl && ctrl !== trigger) click(ctrl);
       const openStart = Date.now();
-      // await options asynchronously (up to 300ms)
-      while (Date.now() - openStart < 300 && isCurrent()) {
+      // await options asynchronously (up to 400ms)
+      while (Date.now() - openStart < 400 && isCurrent()) {
         await wait(30);
         options = comboOptions(el);
         if (options.length) break;
@@ -2125,6 +2152,7 @@
     let option = choose({ options }, desired);
     if (option) {
       const ok = click(option.element);
+      closeCombo(el);
       return ok ? { expected: option.label, option: option.element, typed: false } : null;
     }
 
@@ -2137,8 +2165,8 @@
       writeValue(search, query);
       typed = true;
       const searchStart = Date.now();
-      // await filtered options asynchronously (up to 300ms)
-      while (Date.now() - searchStart < 300 && isCurrent()) {
+      // await filtered options asynchronously (up to 800ms for network search)
+      while (Date.now() - searchStart < 800 && isCurrent()) {
         await wait(30);
         options = comboOptions(el);
         option = choose({ options }, desired);
@@ -2148,6 +2176,7 @@
 
     if (option) {
       const ok = click(option.element);
+      closeCombo(el);
       return ok ? { expected: option.label, option: option.element, typed } : null;
     }
 
@@ -2227,7 +2256,12 @@
     const bExpected = normalizeBoolean(expected);
     const bValue = normalizeBoolean(value);
     if (bExpected !== null && bValue !== null) return bExpected === bValue;
-    return typeof expected === 'boolean' ? value === expected : normalize(value) === normalize(expected);
+    if (typeof expected === 'boolean') return value === expected;
+    if (normalize(value) === normalize(expected)) return true;
+    const dVal = String(value || '').replace(/\D/g, '');
+    const dExp = String(expected || '').replace(/\D/g, '');
+    if (dVal.length >= 7 && dExp.length >= 7 && (dVal === dExp || dVal.endsWith(dExp) || dExp.endsWith(dVal))) return true;
+    return false;
   }
 
   // Preserved values store across wizard step transitions
@@ -2291,7 +2325,8 @@
       const domVal = read(field);
       const preserved = getPreservedValue(field);
       const previous = (domVal !== '' && domVal !== null && domVal !== undefined) ? domVal : preserved;
-      const hasAnswer = Array.isArray(previous) ? previous.length > 0 : (typeof previous === 'boolean' ? true : Boolean(previous));
+      const isCountryCodeOnly = field.kind === 'text' && (field.element?.type === 'tel' || /phone/i.test(field.hint || field.label)) && /^\+?\d{1,3}\s*$/.test(String(previous).trim());
+      const hasAnswer = !isCountryCodeOnly && (Array.isArray(previous) ? previous.length > 0 : (typeof previous === 'boolean' ? true : Boolean(previous && String(previous).trim().length > 0)));
       let write;
       if (hasAnswer) {
         const option = field.options?.length ? choose(field, value) : null;
@@ -2318,8 +2353,10 @@
       }
       if (!write) continue;
       const verified = () => session.isCurrent() && el.isConnected &&
-        ((equals(read(field), write.expected) && !(write.typed && write.option?.isConnected &&
-          !selected(write.option) && el.getAttribute('aria-expanded') === 'true')) || (write.option?.isConnected && selected(write.option)));
+        (equals(read(field), write.expected) ||
+         (write.expected && String(read(field) || '').toLowerCase().includes(String(write.expected).toLowerCase())) ||
+         (write.option && !write.option.isConnected && write.expected) ||
+         (write.option?.isConnected && selected(write.option)));
       if (!verified()) await wait(120);
       if (!verified()) continue;
       recordPreservedValues([field]);
@@ -2343,7 +2380,9 @@
   };
 })(globalThis);
 
+
 ;
+
 (function () {
   const text = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : '';
   const first = (root, selector) => root.querySelector(selector);
@@ -2473,7 +2512,9 @@
   globalThis.NextkinJobCapture = { read: jobFromDom, kekaPosting };
 })();
 
+
 ;
+
 (function () {
   const capture = globalThis.NextkinJobCapture;
   const discovery = globalThis.NextkinForms;
@@ -2578,22 +2619,36 @@
         // 2. Smart grounding fallback using candidate profile facts & intelligent defaults
         let autoValue = null;
         const ql = label.toLowerCase();
-        if (mapping.isChoiceKind(field.kind) && options.length) {
-          if (/(authoriz|eligible|legal right|citizen|18|age|full-time|onsite|internship)/i.test(ql) && !/(require|need|sponsor)/i.test(ql)) {
-            autoValue = options.find(o => mapping.normalizeBoolean(o) === true) || options.find(o => /^yes\b/i.test(o));
-          } else if (/(require|need).*(sponsor|visa)/i.test(ql) || /(felony|convict|criminal|conflict|relatives)/i.test(ql)) {
-            autoValue = options.find(o => mapping.normalizeBoolean(o) === false) || options.find(o => /^no\b/i.test(o));
+        if (mapping.isChoiceKind(field.kind)) {
+          if (/(authoriz|eligible|legal right|citizen|18|age|full-time|onsite|internship|currently enrolled)/i.test(ql) && !/(require|need|sponsor)/i.test(ql)) {
+            autoValue = options.find(o => mapping.normalizeBoolean(o) === true) || options.find(o => /^yes\b/i.test(o)) || true;
+          } else if (/(require|need).*(sponsor|visa)/i.test(ql) || /(felony|convict|criminal|conflict|relatives|worked for|worked before|employee or a contractor)/i.test(ql)) {
+            autoValue = options.find(o => mapping.normalizeBoolean(o) === false) || options.find(o => /^no\b/i.test(o)) || false;
           } else if (/(gender|sex)/i.test(ql)) {
-            autoValue = options.find(o => /^male\b|^man\b/i.test(o)) || options.find(o => /decline|prefer not|do not wish/i.test(o));
+            autoValue = options.find(o => /^male\b|^man\b/i.test(o)) || options.find(o => /decline|prefer not|do not wish/i.test(o)) || values.gender || 'Male';
+          } else if (/(hispanic|latino)/i.test(ql)) {
+            autoValue = options.find(o => /^(no|decline|prefer not)/i.test(o)) || false;
           } else if (/(race|ethnic)/i.test(ql)) {
-            autoValue = options.find(o => /^asian\b/i.test(o)) || options.find(o => /decline|prefer not|do not wish/i.test(o));
+            autoValue = options.find(o => /^asian\b/i.test(o)) || options.find(o => /decline|prefer not|do not wish/i.test(o)) || values.race || 'Asian';
           } else if (/(veteran)/i.test(ql)) {
-            autoValue = options.find(o => /not a (?:protected )?veteran|^no\b/i.test(o)) || options.find(o => /decline|prefer not/i.test(o));
+            autoValue = options.find(o => /not a (?:protected )?veteran|^no\b/i.test(o)) || options.find(o => /decline|prefer not/i.test(o)) || values.veteran || 'I am not a protected veteran';
           } else if (/(disabil)/i.test(ql)) {
-            autoValue = options.find(o => /no,? (?:i )?do not have|^no\b/i.test(o)) || options.find(o => /decline|prefer not/i.test(o));
+            autoValue = options.find(o => /no,? (?:i )?do not have|^no\b/i.test(o)) || options.find(o => /decline|prefer not/i.test(o)) || values.disability || 'No, I do not have a disability';
+          } else if (/(pronoun)/i.test(ql)) {
+            autoValue = options.find(o => /he\/him/i.test(o)) || options.find(o => /prefer not|decline/i.test(o)) || 'He/Him/His';
+          } else if (/(degree|education)/i.test(ql)) {
+            autoValue = options.find(o => /master|bachelor/i.test(o)) || values.highest_education || 'Master\'s Degree';
+          } else if (/(country)/i.test(ql)) {
+            autoValue = options.find(o => /united states|usa/i.test(o)) || values.country || 'United States';
+          } else if (/(where do you intend to work|intend to work|work location)/i.test(ql)) {
+            autoValue = options.find(o => /open|either|any|both/i.test(o)) || options.find(o => /remote|united states|francisco|new york/i.test(o)) || options[0] || 'Open to Either';
+          } else if (/(location|city)/i.test(ql)) {
+            autoValue = options.find(o => /austin|texas|remote|united states/i.test(o)) || values.current_city || values.current_location || 'Austin';
+          } else if (/(graduate|graduation|year)/i.test(ql)) {
+            autoValue = options.find(o => /2026|2027|2028/i.test(o)) || '2027';
           } else if (/(hear|source)/i.test(ql)) {
-            autoValue = options.find(o => /linkedin/i.test(o)) || options.find(o => /website|job board|other/i.test(o));
-          } else {
+            autoValue = options.find(o => /linkedin/i.test(o)) || options.find(o => /website|job board|other/i.test(o)) || 'LinkedIn';
+          } else if (options.length) {
             autoValue = options.find(o => !/select|choose/i.test(o)) || options[0];
           }
         } else if (field.kind === 'text' || field.kind === 'textarea') {
@@ -2664,5 +2719,3 @@
     savedAnswers,
   };
 })();
-
-;

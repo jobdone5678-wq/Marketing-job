@@ -102,22 +102,36 @@
         // 2. Smart grounding fallback using candidate profile facts & intelligent defaults
         let autoValue = null;
         const ql = label.toLowerCase();
-        if (mapping.isChoiceKind(field.kind) && options.length) {
-          if (/(authoriz|eligible|legal right|citizen|18|age|full-time|onsite|internship)/i.test(ql) && !/(require|need|sponsor)/i.test(ql)) {
-            autoValue = options.find(o => mapping.normalizeBoolean(o) === true) || options.find(o => /^yes\b/i.test(o));
-          } else if (/(require|need).*(sponsor|visa)/i.test(ql) || /(felony|convict|criminal|conflict|relatives)/i.test(ql)) {
-            autoValue = options.find(o => mapping.normalizeBoolean(o) === false) || options.find(o => /^no\b/i.test(o));
+        if (mapping.isChoiceKind(field.kind)) {
+          if (/(authoriz|eligible|legal right|citizen|18|age|full-time|onsite|internship|currently enrolled)/i.test(ql) && !/(require|need|sponsor)/i.test(ql)) {
+            autoValue = options.find(o => mapping.normalizeBoolean(o) === true) || options.find(o => /^yes\b/i.test(o)) || true;
+          } else if (/(require|need).*(sponsor|visa)/i.test(ql) || /(felony|convict|criminal|conflict|relatives|worked for|worked before|employee or a contractor)/i.test(ql)) {
+            autoValue = options.find(o => mapping.normalizeBoolean(o) === false) || options.find(o => /^no\b/i.test(o)) || false;
           } else if (/(gender|sex)/i.test(ql)) {
-            autoValue = options.find(o => /^male\b|^man\b/i.test(o)) || options.find(o => /decline|prefer not|do not wish/i.test(o));
+            autoValue = options.find(o => /^male\b|^man\b/i.test(o)) || options.find(o => /decline|prefer not|do not wish/i.test(o)) || values.gender || 'Male';
+          } else if (/(hispanic|latino)/i.test(ql)) {
+            autoValue = options.find(o => /^(no|decline|prefer not)/i.test(o)) || false;
           } else if (/(race|ethnic)/i.test(ql)) {
-            autoValue = options.find(o => /^asian\b/i.test(o)) || options.find(o => /decline|prefer not|do not wish/i.test(o));
+            autoValue = options.find(o => /^asian\b/i.test(o)) || options.find(o => /decline|prefer not|do not wish/i.test(o)) || values.race || 'Asian';
           } else if (/(veteran)/i.test(ql)) {
-            autoValue = options.find(o => /not a (?:protected )?veteran|^no\b/i.test(o)) || options.find(o => /decline|prefer not/i.test(o));
+            autoValue = options.find(o => /not a (?:protected )?veteran|^no\b/i.test(o)) || options.find(o => /decline|prefer not/i.test(o)) || values.veteran || 'I am not a protected veteran';
           } else if (/(disabil)/i.test(ql)) {
-            autoValue = options.find(o => /no,? (?:i )?do not have|^no\b/i.test(o)) || options.find(o => /decline|prefer not/i.test(o));
+            autoValue = options.find(o => /no,? (?:i )?do not have|^no\b/i.test(o)) || options.find(o => /decline|prefer not/i.test(o)) || values.disability || 'No, I do not have a disability';
+          } else if (/(pronoun)/i.test(ql)) {
+            autoValue = options.find(o => /he\/him/i.test(o)) || options.find(o => /prefer not|decline/i.test(o)) || 'He/Him/His';
+          } else if (/(degree|education)/i.test(ql)) {
+            autoValue = options.find(o => /master|bachelor/i.test(o)) || values.highest_education || 'Master\'s Degree';
+          } else if (/(country)/i.test(ql)) {
+            autoValue = options.find(o => /united states|usa/i.test(o)) || values.country || 'United States';
+          } else if (/(where do you intend to work|intend to work|work location)/i.test(ql)) {
+            autoValue = options.find(o => /open|either|any|both/i.test(o)) || options.find(o => /remote|united states|francisco|new york/i.test(o)) || options[0] || 'Open to Either';
+          } else if (/(location|city)/i.test(ql)) {
+            autoValue = options.find(o => /austin|texas|remote|united states/i.test(o)) || values.current_city || values.current_location || 'Austin';
+          } else if (/(graduate|graduation|year)/i.test(ql)) {
+            autoValue = options.find(o => /2026|2027|2028/i.test(o)) || '2027';
           } else if (/(hear|source)/i.test(ql)) {
-            autoValue = options.find(o => /linkedin/i.test(o)) || options.find(o => /website|job board|other/i.test(o));
-          } else {
+            autoValue = options.find(o => /linkedin/i.test(o)) || options.find(o => /website|job board|other/i.test(o)) || 'LinkedIn';
+          } else if (options.length) {
             autoValue = options.find(o => !/select|choose/i.test(o)) || options[0];
           }
         } else if (field.kind === 'text' || field.kind === 'textarea') {

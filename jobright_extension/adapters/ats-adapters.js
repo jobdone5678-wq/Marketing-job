@@ -94,7 +94,12 @@
         if (id === 'last_name' || name === 'last_name') return 'last_name';
         if (id === 'email' || name === 'email') return 'email';
         if (id === 'phone' || name === 'phone') return 'phone';
-        if (/job_application\[location\]/i.test(name)) return 'current_city';
+        if (id === 'country' || name === 'country') return 'country';
+        if (id === 'candidate-location' || /job_application\[location\]/i.test(name)) return 'current_city';
+        if (id === 'gender' || name === 'gender') return 'gender';
+        if (id === 'veteran_status' || /veteran/i.test(name)) return 'veteran';
+        if (id === 'hispanic_ethnicity' || /hispanic/i.test(name)) return '';
+        if (id.includes('degree') || name.includes('degree')) return 'highest_education';
         if (/job_application\[answers\]/i.test(name)) return '';
         return canonicalHint(el);
       }
