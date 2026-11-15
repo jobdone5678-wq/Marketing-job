@@ -1,8 +1,13 @@
 (function(root){'use strict';
-  const excluded = /password|secret|token|credential|bank|routing|payment|credit.?card|ssn|social.?security|tax.?id|birth|dob|medical|health|disabil|ethnic|race|gender|veteran|religion|captcha|otp|one.?time.?code|search|emergency|referr|referenc/i;
+  const excluded = /\b(?:password|secret|token|credential|bank|routing|payment|credit.?card|ssn|social.?security|tax.?id|birth|dob|medical|health|disabil\w*|ethnic\w*|race|gender|veteran|religion|captcha|otp|one.?time.?code|search|emergency|referr\w*|references?)\b/i;
 
   // Every control shape a job application uses, across portals.
-  const CONTROL_SELECTOR = 'input, textarea, select, [role="combobox"], [role="checkbox"], [aria-haspopup="listbox"], [contenteditable=""], [contenteditable="true"], button[class*="select-trigger" i], button[class*="selectTrigger" i], button[data-testid*="select" i], button[data-testid*="combobox" i], iframe';
+  const COMBO_SELECTOR = '[role="combobox"], [aria-haspopup="listbox"], input[list], .select2-selection, .ng-select, kendo-dropdownlist, kendo-multiselect, button[class*="select-trigger" i], button[class*="selectTrigger" i], button[data-testid*="select" i], button[data-testid*="combobox" i], [data-slot="select-trigger"], [data-automation-id*="prompt" i], [data-automation-id*="select" i], [class*="select__control" i], [id^="headlessui-listbox-button"]';
+  const CONTROL_SELECTOR = 'input, textarea, select, [role="checkbox"], [role="switch"], [data-slot="checkbox"], [data-slot="switch"], [contenteditable=""], [contenteditable="true"], iframe, ' + COMBO_SELECTOR;
+  const available = el => !el.disabled && !el.readOnly && el.getAttribute('aria-disabled') !== 'true';
+  const visible = el => available(el) && !!el.getClientRects().length && el.ownerDocument.defaultView.getComputedStyle(el).visibility !== 'hidden';
+  const visibleChoice = el => available(el) && (visible(el) || [...(el.labels || [])].some(visible));
+  const multiComboSelector = '[aria-multiselectable="true"], [multiple], [data-multiple="true"], .ng-select-multiple, .select2-selection--multiple, kendo-multiselect';
 
   // Containers that hold a repeated history: a single fact never fills those.
   const HISTORY_SELECTOR = 'fieldset, [data-automation-id="workExperience"], [data-automation-id="education"], [data-automation-id*="workexperience" i], [data-automation-id*="education" i], [class*="work-experience" i], [class*="workexperience" i], [class*="employment-history" i], [class*="education-history" i]';
@@ -19,22 +24,29 @@
       .trim();
   }
 
+  function labelText(node) {
+    if (!node?.querySelector('select, textarea, button, [role="listbox"]')) return node?.textContent;
+    const copy = node.cloneNode(true);
+    copy.querySelectorAll('select, textarea, button, [role="listbox"]').forEach(control => control.remove());
+    return copy.textContent;
+  }
+
   function label(el){
     const tree = el.getRootNode();
     const ids = (el.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean);
-    let found = clean(el.getAttribute('aria-label') || ids.map(id => tree.getElementById?.(id)?.textContent).filter(Boolean).join(' ') || Array.from(el.labels || []).map(l => l.textContent).filter(Boolean).join(' '));
+    let found = clean(el.getAttribute('aria-label') || ids.map(id => labelText(tree.getElementById?.(id))).filter(Boolean).join(' ') || Array.from(el.labels || []).map(labelText).filter(Boolean).join(' '));
 
     if (!found && el.id) {
       try {
         const scope = tree.querySelector ? tree : document;
         const explicitLbl = scope.querySelector(`label[for="${CSS.escape(el.id)}"]`);
-        if (explicitLbl && explicitLbl.textContent) found = clean(explicitLbl.textContent);
-      } catch(e) {}
+        if (explicitLbl) found = clean(labelText(explicitLbl));
+      } catch {}
     }
 
     if (!found) {
       const parentLbl = el.closest('label');
-      if (parentLbl && parentLbl.textContent) found = clean(parentLbl.textContent);
+      if (parentLbl) found = clean(labelText(parentLbl));
     }
 
     // Table based layouts (Taleo, PeopleSoft): the row header names the field.
@@ -78,7 +90,7 @@
       found = clean(el.textContent);
     }
 
-    return found || clean(el.getAttribute('placeholder')) || '';
+    return found || clean(el.getAttribute('placeholder')) || clean(el.getAttribute('name')?.replace(/[_-]+/g, ' '));
   }
 
   // Question text for a control group: its own legend/label, else the label of the enclosing question entry.
@@ -91,11 +103,21 @@
 
   // Title of a container that asks one question about several boxes.
   function groupTitle(group){
+    const accessibleName = group.getAttribute('aria-label') || group.getAttribute('aria-labelledby')?.split(/\s+/)
+      .map(id => group.getRootNode().getElementById?.(id)?.textContent).filter(Boolean).join(' ');
+    if (accessibleName) return clean(accessibleName).slice(0, 200);
     const legend = group.querySelector('legend');
     if (legend && legend.textContent && legend.textContent.trim()) return clean(legend.textContent).slice(0, 200);
-    const title = group.querySelector('label[class*="question-title" i], [class*="question-title" i], [class*="application-label" i], [class*="labelContainer" i], label, h3, h4, h5, strong');
+    const title = group.querySelector('[class*="question-title" i], [class*="application-label" i], [class*="labelContainer" i], h3, h4, h5, strong, p') ||
+      [...group.querySelectorAll('label')].find(el => !el.control && !el.querySelector('input, [role="radio"], [role="checkbox"]'));
     if (title && title.textContent && title.textContent.trim().length < 200) return clean(title.textContent).slice(0, 200);
     return '';
+  }
+
+  function choiceQuestion(el) {
+    const group = el.closest('fieldset, [role="radiogroup"], [role="group"], ' + QUESTION_CONTAINER);
+    return group && (group.querySelector('legend') || !group.querySelector('input:not([type=radio]):not([type=checkbox]):not([type=hidden]), select, textarea'))
+      ? groupTitle(group) : '';
   }
 
   // The portal adapter for this page: a specific one always beats the generic fallback.
@@ -105,7 +127,7 @@
     const list = root.NextkinAdapters || [];
     for (const a of list) {
       if (!a || a.id === 'generic' || typeof a.matches !== 'function') continue;
-      try { if (a.matches(host)) return a; } catch(e) {}
+      try { if (a.matches(host)) return a; } catch {}
     }
     return list.find(a => a && a.id === 'generic') || null;
   }
@@ -118,22 +140,24 @@
       for (const group of scope.querySelectorAll('fieldset, [role="group"], [class*="checkbox-group" i], [class*="checkboxGroup" i], [class*="checkbox_group" i], [data-testid*="checkbox" i]')) {
         if (group.closest('#mp-copilot-root') || !group.getClientRects().length) continue;
         if (group.querySelector('button[data-option]')) continue; // yes/no groups are choices
-        const boxes = Array.from(group.querySelectorAll('input[type="checkbox"], [role="checkbox"]')).filter(b => b.getClientRects().length);
-        if (!boxes.length || boxes.some(b => seen.has(b))) continue;
+        const boxes = Array.from(group.querySelectorAll('input[type="checkbox"], [role="checkbox"]')).filter(visibleChoice);
+        if (boxes.length < 2 || boxes.some(b => seen.has(b)) ||
+          group.querySelector('input:not([type=checkbox]):not([type=hidden]), select, textarea, fieldset')) continue;
         const title = groupTitle(group);
         if (!title) continue;
         boxes.forEach(b => seen.add(b));
         const groupHint = adapter?.hint(group) || '';
         fields.push({
           element: group, elements: boxes, key: 'checkbox-group:' + fields.length,
-          label: title, hint: groupHint, kind: 'checkbox', options: [], scope: '',
+          label: title, hint: groupHint, kind: 'checkbox-group',
+          options: boxes.map(box => ({ label: label(box), value: box.value || '', element: box })), scope: '',
           excluded: excluded.test([title, groupHint, group.id || ''].join(' ').replace(/[_-]/g, ' ')),
           adapter: adapter?.id || 'generic'
         });
       }
 
       for (const el of scope.querySelectorAll(CONTROL_SELECTOR)) {
-        if (el.closest('#mp-copilot-root') || el.disabled || el.readOnly || !el.getClientRects().length) continue;
+        if (el.closest('#mp-copilot-root') || !visibleChoice(el)) continue;
         if (seen.has(el)) continue;
         if (el.tagName === 'IFRAME') {
           let inner = 0;
@@ -144,7 +168,7 @@
               inner = fields.length - before;
               if (inner > 0) continue;
             }
-          } catch(e) {}
+          } catch {}
           fields.push({ element: el, key: 'frame:' + fields.length, label: 'Embedded application requires manual review', kind: 'inaccessible', scope: '' });
           continue;
         }
@@ -155,25 +179,35 @@
         const text = label(el), hint = adapter?.hint(el) || '';
         const group = el.closest(HISTORY_SELECTOR);
         const groupLabel = group?.querySelector('legend')?.textContent?.trim() || group?.getAttribute('data-automation-id') || '';
-        const isCombo = role === 'combobox' || el.getAttribute('aria-haspopup') === 'listbox' || (el.tagName === 'BUTTON' && /select|combobox/i.test(el.getAttribute('data-testid') || el.className || ''));
-        const isCheck = el.type === 'checkbox' || role === 'checkbox';
+        const isCombo = el.tagName !== 'SELECT' && el.matches(COMBO_SELECTOR);
+        if (el.parentElement?.closest(COMBO_SELECTOR) && (isCombo || el.tagName === 'INPUT')) continue;
+        const isCheck = el.type === 'checkbox' || role === 'checkbox' || role === 'switch';
         const isEditable = el.getAttribute('contenteditable') === '' || el.getAttribute('contenteditable') === 'true';
-        const kind = isCombo ? 'combobox' : el.tagName === 'SELECT' ? 'select' : el.type === 'radio' ? 'radio' : isCheck ? 'checkbox' : 'text';
+        const controlledList = isCombo && el.getRootNode().getElementById?.(el.getAttribute('aria-controls'));
+        const multiCombo = isCombo && (el.matches(multiComboSelector) || controlledList?.matches(multiComboSelector));
+        const kind = isCombo ? (multiCombo ? 'multi-combobox' : 'combobox')
+          : el.tagName === 'SELECT' ? (el.multiple ? 'multi-select' : 'select') : el.type === 'radio' ? 'radio' : isCheck ? 'checkbox' : 'text';
         let elements = [el];
         if (kind === 'radio') {
-          elements = Array.from(scope.querySelectorAll('input[type="radio"]')).filter(r => r.name === el.name && r.form === el.form);
+          const radioGroup = el.closest('[role="radiogroup"], fieldset, ' + QUESTION_CONTAINER);
+          elements = Array.from((el.name ? scope : radioGroup || scope).querySelectorAll('input[type="radio"]'))
+            .filter(r => visibleChoice(r) && (el.name ? r.name === el.name && r.form === el.form : radioGroup ? !r.name : r === el));
           if (elements.some(r => seen.has(r))) continue; elements.forEach(r => seen.add(r));
         }
-        const options = kind === 'select' ? Array.from(el.options).filter(o => !o.disabled && o.value).map(o => ({ label: o.textContent.trim(), value: o.value, element: o })) : kind === 'radio' ? elements.map(r => ({ label: label(r) || r.value, value: r.value, element: r })) : [];
-        fields.push({ element: el, elements, key: 'field:' + fields.length + ':' + (el.id || el.name || hint), label: kind === 'radio' ? groupLabel || text : text, hint, kind, options, scope: groupLabel, excluded: excluded.test([text, hint, el.id, el.name, groupLabel].join(' ').replace(/[_-]/g, ' ')), adapter: adapter?.id || 'generic', editable: isEditable });
+        const options = ['select', 'multi-select'].includes(kind)
+          ? Array.from(el.options).filter(o => !o.disabled && !o.parentElement.disabled && o.value).map(o => ({ label: o.textContent.trim(), value: o.value, element: o }))
+          : kind === 'radio' ? elements.map(r => ({ label: label(r) || r.value, value: r.value, element: r }))
+          : el.list ? [...el.list.options].filter(available).map(o => ({ label: o.label || o.value, value: o.value, element: o })) : [];
+        const question = kind === 'radio' ? choiceQuestion(el) || groupLabel || text : text;
+        fields.push({ element: el, elements, key: 'field:' + fields.length + ':' + (el.id || el.name || hint), label: question, hint, kind, options, scope: groupLabel, excluded: excluded.test([question, hint, el.id, el.name, groupLabel].join(' ').replace(/[_-]/g, ' ')), adapter: adapter?.id || 'generic', editable: isEditable });
       }
 
       // Button-based choice groups (Ashby/Greenhouse/Lever Yes/No and segmented radio groups)
       for (const group of scope.querySelectorAll('fieldset, [role="group"], [role="radiogroup"], .application-question, [class*="application-question"], [class*="question"], div[data-testid*="question"]')) {
         if (group.closest('#mp-copilot-root') || !group.getClientRects().length) continue;
         const buttons = Array.from(group.querySelectorAll('button, [role="radio"], [role="button"]')).filter(b => {
-          const t = (b.textContent || '').trim();
-          return t && t.length <= 40 && b.getClientRects().length && !/submit|apply|continue|next|back|save|upload|attach|remove|delete|cancel|sign in|log in/i.test(t);
+          const t = label(b);
+          return t && t.length <= 200 && visible(b) && !/^(submit|apply|continue|next|back|save|upload|attach|remove|delete|cancel|sign in|log in)\b/i.test(t);
         });
         const yesNo = buttons.filter(b => /^(yes|no)$/i.test((b.textContent || '').trim()));
         const isChoice = yesNo.length >= 2 || (group.getAttribute('role') === 'radiogroup' && buttons.length >= 2);
@@ -181,8 +215,8 @@
         const opts = yesNo.length >= 2 ? yesNo : buttons;
         if (opts.some(b => seen.has(b))) continue;
         opts.forEach(b => seen.add(b));
-        const qLabel = clean(group.querySelector('legend, label, [class*="label"], [class*="title"], h3, h4, strong, p')?.textContent || questionTitle(group)).slice(0, 200);
-        fields.push({ element: group, elements: opts, key: 'choice:' + fields.length, label: qLabel, hint: adapter?.hint(group) || '', kind: 'choice', options: opts.map(b => ({ label: (b.textContent || '').trim(), value: (b.textContent || '').trim(), element: b })), scope: '', excluded: excluded.test(qLabel.replace(/[_-]/g, ' ')), adapter: adapter?.id || 'generic' });
+        const qLabel = groupTitle(group) || questionTitle(group);
+        fields.push({ element: group, elements: opts, key: 'choice:' + fields.length, label: qLabel, hint: adapter?.hint(group) || '', kind: 'choice', options: opts.map(b => ({ label: label(b), value: b.getAttribute('data-value') || label(b), element: b })), scope: '', excluded: excluded.test(qLabel.replace(/[_-]/g, ' ')), adapter: adapter?.id || 'generic' });
       }
       // Yes/No button groups that carry no question text of their own (Ashby keeps them in a labelled field entry
       // and backs them with a hidden input that is not the visible control).
@@ -203,5 +237,98 @@
     return fields;
   }
 
-  root.NextkinForms = { discoverFields, label };
+  // Wizard / Multi-Step transition support
+  const NEXT_TEXT_REGEX = /^(next|continue|proceed|save and continue|save & continue|next step|review & submit|review|next page|step \d+)\b/i;
+
+  function findStepNavigation(scope = document) {
+    const root = scope?.nodeType === 9 ? scope : (scope?.ownerDocument || document);
+    const container = scope?.nodeType === 9 ? (scope.body || scope) : scope;
+    const buttons = Array.from(container.querySelectorAll('button, input[type=button], input[type=submit], a[role=button], [role="button"]'));
+    const nextButton = buttons.find(b => {
+      if (!visibleChoice(b)) return false;
+      const t = clean(b.textContent || b.value || b.getAttribute('aria-label'));
+      const autoId = b.getAttribute('data-automation-id') || b.getAttribute('data-testid') || '';
+      return NEXT_TEXT_REGEX.test(t) || /(?:^|[_-])(?:next|continue|nextstep)(?:$|[_-])/i.test(autoId);
+    }) || null;
+    return { nextButton };
+  }
+
+  function detectNewFields(previousFields, currentFields) {
+    if (!Array.isArray(previousFields) || !previousFields.length) return currentFields || [];
+    const prevElements = new Set(previousFields.map(f => f.element).filter(Boolean));
+    const prevKeys = new Set(previousFields.map(f => f.key).filter(Boolean));
+    return (currentFields || []).filter(f => !prevElements.has(f.element) && !prevKeys.has(f.key));
+  }
+
+  function observeStepTransitions(scope = document, callback) {
+    let prevFields = discoverFields(scope);
+    let timer = null;
+
+    const check = triggerType => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        try {
+          const currentFields = discoverFields(scope);
+          const newFields = detectNewFields(prevFields, currentFields);
+          if (newFields.length > 0 || currentFields.length !== prevFields.length) {
+            const oldFields = prevFields;
+            prevFields = currentFields;
+            callback?.({ newFields, allFields: currentFields, oldFields, triggerType });
+          }
+        } catch (err) {
+          console.error('[NextkinForms] Step transition error:', err);
+        }
+      }, 150);
+    };
+
+    const clickHandler = event => {
+      const target = event.target?.closest?.('button, input[type=submit], input[type=button], a[role=button], [role="button"]');
+      if (!target) return;
+      const text = clean(target.textContent || target.value || target.getAttribute('aria-label'));
+      const autoId = target.getAttribute('data-automation-id') || target.getAttribute('data-testid') || '';
+      if (NEXT_TEXT_REGEX.test(text) || /(?:^|[_-])(?:next|continue)(?:$|[_-])/i.test(autoId)) {
+        check('next_click');
+      }
+    };
+
+    const doc = scope?.nodeType === 9 ? scope : (scope?.ownerDocument || document);
+    doc.addEventListener('click', clickHandler, true);
+
+    let observer = null;
+    const targetNode = scope.body || (scope.nodeType === 1 ? scope : doc.body);
+    if (targetNode && typeof MutationObserver !== 'undefined') {
+      observer = new MutationObserver(mutations => {
+        let significant = false;
+        for (const m of mutations) {
+          if (m.addedNodes.length > 0) {
+            for (const node of m.addedNodes) {
+              if (node.nodeType === 1 && (node.matches?.('input, select, textarea, [role="combobox"], [role="radiogroup"], fieldset, form') || node.querySelector?.('input, select, textarea, [role="combobox"]'))) {
+                significant = true;
+                break;
+              }
+            }
+          }
+          if (m.type === 'attributes' && ['style', 'class', 'hidden', 'aria-hidden'].includes(m.attributeName)) {
+            significant = true;
+          }
+          if (significant) break;
+        }
+        if (significant) check('mutation');
+      });
+      observer.observe(targetNode, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class', 'hidden', 'aria-hidden'] });
+    }
+
+    return {
+      disconnect() {
+        if (timer) clearTimeout(timer);
+        doc.removeEventListener('click', clickHandler, true);
+        observer?.disconnect();
+      },
+      triggerCheck() {
+        check('manual');
+      }
+    };
+  }
+
+  root.NextkinForms = { discoverFields, label, findStepNavigation, detectNewFields, observeStepTransitions };
 })(globalThis);

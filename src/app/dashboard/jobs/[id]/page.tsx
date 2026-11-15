@@ -117,6 +117,8 @@ export default function JobDetail({
   }
 
   async function apply() {
+    const applicant = candidates.find(candidate => candidate.id === candidateId) ?? candidates[0];
+    if (!job || !applicant) return;
     const tab = window.open('about:blank', '_blank');
     try {
       if (tab) tab.opener = null;
@@ -124,7 +126,7 @@ export default function JobDetail({
         '/api/application-intents',
         {
           method: 'POST',
-          body: JSON.stringify({ candidateId, jobId: id }),
+          body: JSON.stringify({ candidateId: applicant.id, jobId: id }),
         }
       );
       const u = new URL(r.intent.job.application_url);
@@ -192,6 +194,26 @@ export default function JobDetail({
 
   return (
     <main className="portal-page space-y-6 max-w-6xl w-full mx-auto pb-16">
+      <script
+        id="nextkin-job-details"
+        type="application/json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify({
+          title: job.title,
+          company: job.company,
+          applicationUrl: job.application_url,
+          location: job.location,
+          department: job.department,
+          description: job.description,
+          descriptionHtml: job.description_html,
+          employmentType: job.employment_type,
+          compensation: job.compensation,
+          arrangements: job.arrangements,
+          externalId: job.external_id,
+          postedAt: job.posted_at,
+          closesAt: job.closes_at,
+          portalSource: job.source?.provider,
+        }).replace(/</g, '\\u003c') }}
+      />
       {/* Top back navigation & quick tools */}
       <div className="flex items-center justify-between gap-4">
         <Link
@@ -277,6 +299,11 @@ export default function JobDetail({
           <div className="flex flex-col sm:flex-row md:flex-col items-stretch md:items-end gap-2.5 shrink-0">
             <a
               href={job.application_url}
+              onClick={(event) => {
+                if (!candidates.length || job.state === 'closed' || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                event.preventDefault();
+                void apply();
+              }}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center gap-2 h-11 px-6 rounded-xl bg-primary text-primary-foreground font-bold text-sm shadow-sm hover:bg-primary/90 hover:shadow hover:scale-[1.01] active:scale-98 transition-all cursor-pointer"
@@ -767,6 +794,11 @@ export default function JobDetail({
             <a
               className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-xs font-bold text-primary-foreground shadow-xs hover:bg-primary/90 hover:shadow transition-all cursor-pointer"
               href={job.application_url}
+              onClick={(event) => {
+                if (!candidates.length || job.state === 'closed' || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                event.preventDefault();
+                void apply();
+              }}
               target="_blank"
               rel="noopener noreferrer"
             >

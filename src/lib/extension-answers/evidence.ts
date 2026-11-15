@@ -8,7 +8,7 @@ export const manualQuestion=/authoriz|sponsor|visa|citizen|salary|compensation|r
 export function validateScreening(questions:Question[],facts:Fact[],output:unknown){
  const selected=screeningSelectionSchema.parse(output),byId=new Map(facts.map(f=>[f.id,f])),seen=new Set<string>();
  for(const row of selected.decisions){if(seen.has(row.questionId)||!questions.some(q=>q.id===row.questionId))throw Error('Unknown or duplicate screening question.');seen.add(row.questionId);}
- const answers:Record<string,string>={};
+ const answers:Record<string,string>=Object.create(null);
  const decisions=questions.map(question=>{
   const row=selected.decisions.find(r=>r.questionId===question.id);
   if(manualQuestion.test(question.label))return {questionId:question.id,status:'manual',evidence:[]};
@@ -16,9 +16,9 @@ export function validateScreening(questions:Question[],facts:Fact[],output:unkno
   if(!evidence.length)return {questionId:question.id,status:'unknown',evidence:[]};
   let answer=evidence.map(f=>f.context?`${f.context}: ${f.text}`:f.text).join('\n');
   if(question.options?.length){
-   if(!row?.option||!question.options.includes(row.option)||!evidence.some(f=>f.text.trim().toLowerCase()===row.option!.trim().toLowerCase()))throw Error('Screening option lacks exact source evidence.');
+   if(!row?.option||!question.options.includes(row.option)||!evidence.some(f=>f.text.trim().toLowerCase()===row.option!.trim().toLowerCase()))return {questionId:question.id,status:'unknown',evidence:[]};
    answer=row.option;
-  }else if(row?.option!==null)throw Error('Unexpected choice for a text question.');
+  }else if(row?.option!==null)return {questionId:question.id,status:'unknown',evidence:[]};
   answers[question.id]=answer;
   return {questionId:question.id,status:'supported',evidence};
  });

@@ -17,7 +17,7 @@ import { WorkspaceSkeleton } from '@/components/workspace-ui';
 import { JobDates } from '@/components/job-dates';
 import { PublicJobCatalog } from '@/components/public-job-catalog';
 import { AppliedJobsList } from '@/components/applied-jobs-list';
-import { withoutAppliedJobs, type AppliedJobsResponse } from '@/lib/jobs/application-state';
+import { isAppliedApplication, withoutAppliedJobs, type AppliedJobsResponse } from '@/lib/jobs/application-state';
 import { extractCompleteJobDetails, extractJobSkills } from '@/lib/jobs/skills-extractor';
 import { sanitizeJobHtml } from '@/lib/html-sanitizer';
 import { CompanyLogo } from '@/components/company-logo';
@@ -379,6 +379,11 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         },
         async (payload) => {
           if (!active) return;
+          const row = payload.new as { status?: string; capture_status?: string | null; company_name?: string; job_title?: string };
+          const previous = payload.old as { status?: string; capture_status?: string | null };
+          const applied = isAppliedApplication(row.status || '', row.capture_status);
+          const wasApplied = isAppliedApplication(previous.status || '', previous.capture_status);
+          if (!applied && !wasApplied) return;
           try {
             const data = await api<AppliedJobsResponse>(`/api/jobs/applications?page=0&candidateId=${encodeURIComponent(candidateId)}`);
             if (active && (mode === 'db' || mode === 'live')) {
@@ -393,19 +398,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
               void api<AppliedJobsResponse>(`/api/jobs/applications?page=${dbPage}${savedFilterParam + candidateParam}`)
                 .then(data => { if (active) { setAppliedData(data); } });
             }
-            const row = payload.new as Record<string, unknown>;
-            if (payload.eventType === "UPDATE") {
-              const prevRow = (payload as any).old as Record<string, unknown> | null;
-              if (prevRow && prevRow.status !== row.status) {
-                const comp = (row?.company_name as string) || "Application";
-                const title = (row?.job_title as string) || "Role";
-                toast.success(`✅ Application updated: ${comp} — ${title} (${(row?.status as string) || 'Applied'})`);
-              }
-            } else {
-              const comp = (row?.company_name as string) || "Application";
-              const title = (row?.job_title as string) || "Role";
-              toast.success(`🎉 Application submitted: ${comp} — ${title}`);
-            }
+            if (applied && !wasApplied) toast.success(`Application submitted: ${row.company_name || 'Application'} — ${row.job_title || 'Role'}`);
           } catch (e) {
             console.error('[Realtime Job Browser Error]', e);
           }
@@ -426,6 +419,11 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         },
         async (payload) => {
           if (!active) return;
+          const row = payload.new as { status?: string; applied_at?: string; company?: string; title?: string };
+          const previous = payload.old as { status?: string; applied_at?: string };
+          const applied = row.status === 'Applied' && !!row.applied_at;
+          const wasApplied = previous.status === 'Applied' && !!previous.applied_at;
+          if (!applied && !wasApplied) return;
           try {
             const data = await api<AppliedJobsResponse>(`/api/jobs/applications?page=0&candidateId=${encodeURIComponent(candidateId)}`);
             if (active && (mode === 'db' || mode === 'live')) {
@@ -440,19 +438,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
               void api<AppliedJobsResponse>(`/api/jobs/applications?page=${dbPage}${savedFilterParam + candidateParam}`)
                 .then(data => { if (active) { setAppliedData(data); } });
             }
-            const row = payload.new as Record<string, unknown>;
-            if (payload.eventType === "UPDATE") {
-              const prevRow = (payload as any).old as Record<string, unknown> | null;
-              if (prevRow && prevRow.status !== row.status) {
-                const comp = (row?.company as string) || "Application";
-                const title = (row?.title as string) || "Role";
-                toast.success(`✅ Extension application updated: ${comp} — ${title} (${(row?.status as string) || 'Applied'})`);
-              }
-            } else {
-              const comp = (row?.company as string) || "Application";
-              const title = (row?.title as string) || "Role";
-              toast.success(`🌐 Application submitted: ${comp} — ${title}`);
-            }
+            if (applied && !wasApplied) toast.success(`Application submitted: ${row.company || 'Application'} — ${row.title || 'Role'}`);
           } catch (e) {
             console.error('[Realtime Outside Jobs Browser Error]', e);
           }

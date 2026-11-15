@@ -58,9 +58,8 @@ async function ownCandidates(profileId: string, status: 'confirmed' | 'legacy_un
   return (data || []) as Candidate[];
 }
 
-// A resume uploaded in the dashboard is enough to build the profile, so the
-// extension never asks the candidate to upload the same file twice.
-async function profileFromDashboardUpload(profileId: string): Promise<string | null> {
+// Both upload entry points register their source documents in candidate_documents.
+async function profileFromResumeUpload(profileId: string): Promise<string | null> {
   const db = database();
   const { data: documents, error: documentError } = await db
     .from('candidate_documents')
@@ -92,7 +91,7 @@ async function profileFromDashboardUpload(profileId: string): Promise<string | n
   const payload = {
     ...fields,
     is_active_bench: true,
-    notes: 'Profile created from the resume uploaded in the dashboard. Review the extracted facts and edit anything that is wrong.',
+    notes: 'Profile created from an uploaded resume. Review the extracted facts and edit anything that is wrong.',
     employment_history: extracted.employmentHistory || [],
     education_history: extracted.educationHistory || [],
     evidence: extracted.evidence || []
@@ -111,12 +110,17 @@ async function profileFromDashboardUpload(profileId: string): Promise<string | n
     const legacy = existing.length ? [] : await ownCandidates(profileId, 'legacy_unconfirmed');
     const current = existing[0] || legacy[0];
     if (!current) throw new CaptureError('The uploaded resume could not be added to the profile.');
-    await db.from('candidate_documents').update({ candidate_id: current.id, candidate_version: current.version ?? null }).eq('id', document.id);
+    const { error: linkError } = await db.from('candidate_documents')
+      .update({ candidate_id: current.id, candidate_version: current.version ?? null }).eq('id', document.id);
+    checkDb(linkError);
     return current.id;
   }
 
-  const { data: saved } = await db.from('candidates').select('version').eq('id', candidateId).maybeSingle();
-  await db.from('candidate_documents').update({ candidate_id: candidateId, candidate_version: saved?.version ?? null }).eq('id', document.id);
+  const { data: saved, error: versionError } = await db.from('candidates').select('version').eq('id', candidateId).maybeSingle();
+  checkDb(versionError);
+  const { error: linkError } = await db.from('candidate_documents')
+    .update({ candidate_id: candidateId, candidate_version: saved?.version ?? null }).eq('id', document.id);
+  checkDb(linkError);
   return candidateId;
 }
 
@@ -142,9 +146,8 @@ export async function GET(request: Request) {
       candidates = await ownCandidates(profile.id, 'confirmed');
       if (!candidates.length) candidates = await ownCandidates(profile.id, 'legacy_unconfirmed');
 
-      // 2. No profile yet: build it from the resume uploaded in the dashboard.
       if (!candidates.length) {
-        const created = await profileFromDashboardUpload(profile.id);
+        const created = await profileFromResumeUpload(profile.id);
         if (created) candidates = await ownCandidates(profile.id, 'confirmed');
       }
     }

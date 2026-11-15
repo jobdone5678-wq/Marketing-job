@@ -1,7 +1,7 @@
 import { randomBytes, createHash } from 'node:crypto';
 import { createServerClient } from '@supabase/ssr';
 import { cookies as getNextCookies } from 'next/headers';
-import { database, checkDb } from '@/lib/db/admin';
+import { database, checkDb, requireSameOrigin, CaptureError } from '@/lib/db/admin';
 import { cors } from '@/lib/capture/server';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
@@ -13,6 +13,7 @@ export async function OPTIONS(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    requireSameOrigin(request);
     const ip = getClientIp(request);
     const limit = checkRateLimit(`quick-pair:${ip}`, { windowMs: 60000, max: 20 });
     if (!limit.allowed) {
@@ -123,6 +124,6 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Quick pairing failed';
-    return cors(request, Response.json({ error: msg }, { status: 500 }));
+    return cors(request, Response.json({ error: msg }, { status: error instanceof CaptureError ? error.status : 500 }));
   }
 }

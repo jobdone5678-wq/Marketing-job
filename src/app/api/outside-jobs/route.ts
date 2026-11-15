@@ -1,5 +1,5 @@
 import { protectedRoute } from '@/lib/http/protected-route';
-import { database, checkDb, CaptureError } from '@/lib/db/admin';
+import { database, checkDb } from '@/lib/db/admin';
 import { candidateProfileCache, outsideJobsCache } from '@/lib/cache';
 
 export async function GET(request: Request) {
@@ -27,10 +27,7 @@ export async function GET(request: Request) {
         { ttlMs: 30000, staleTtlMs: 120000 }
       );
 
-      if (!cand || !cand.id) {
-        return { success: true, outsideJobs: [] };
-      }
-      candidateId = cand.id;
+      candidateId = cand?.id || null;
     }
 
     // Cache key for query results based on role, candidate, and search parameter
@@ -48,9 +45,9 @@ export async function GET(request: Request) {
           `)
           .order('created_at', { ascending: false });
 
-        if (candidateId) {
-          query = query.eq('candidate_id', candidateId);
-        }
+        query = candidateId
+          ? query.or(`capture_owner_id.eq.${profile.id},and(capture_owner_id.is.null,candidate_id.eq.${candidateId})`)
+          : query.eq('capture_owner_id', profile.id);
 
         if (safeSearch) {
           const term = `%${safeSearch}%`;

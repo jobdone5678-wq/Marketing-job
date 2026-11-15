@@ -29,7 +29,7 @@ export async function readResume(raw:Buffer,filename:string):Promise<{text:strin
         try {
           const page=await document.getPage(number);
           const content=await page.getTextContent();
-          pages.push(content.items.filter(item=>'str' in item).map(item=>'str' in item?item.str:'').join(' '));
+          pages.push(content.items.map(item=>'str' in item?item.str+(item.hasEOL?'\n':' '):'').join(''));
         } catch (pageError) {
           console.warn(`[readResume] Warning extracting page ${number}:`, pageError);
           pages.push('');

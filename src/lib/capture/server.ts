@@ -29,17 +29,56 @@ export async function extensionActor(request: Request) {
   const profile = await extensionProfile(request);
   return profile.id;
 }
-export async function recordObservation(actor:string,body:unknown,manual=false){const input=z.object({intentId:z.uuid(),eventKey:z.uuid(),status:z.enum(['in_progress','submit_attempted','submitted','failed']),attempt:z.number().int().min(1).max(1000),evidence:z.string().min(1).max(1000),url:z.string().url().max(2000),observedAt:z.string().datetime(),answers:z.unknown().optional(),appliedResume:appliedResumeSchema.optional().nullable()}).parse(body);const parsedUrl=new URL(input.url);parsedUrl.search='';parsedUrl.hash='';const safeUrl=parsedUrl.toString();const {data:intent,error}=await database().from('application_intents').select('*,job:jobs(application_url),candidate:candidates(version)').eq('id',input.intentId).eq('owner_id',actor).single();checkDb(error);if(!intent)throw new CaptureError('Intent not found.',404);if(!manual&&(!allowedCaptureUrl(safeUrl,intent.job.application_url)||!validateObservation(input.status,input.evidence)))throw new CaptureError('Unsupported site or insufficient application evidence. Review manually.',422);
- const validatedAnswers=input.answers!==undefined?validateApplicationAnswers(input.answers):undefined;
- const {data,error:save}=await database().rpc('record_browser_event',{p_actor:actor,p_intent:input.intentId,p_key:input.eventKey,p_status:input.status,p_attempt:input.attempt,p_source:manual?'recruiter_attestation':'extension_observation',p_evidence:input.evidence,p_url:safeUrl,p_observed:input.observedAt});checkDb(save);
- if(input.appliedResume&&input.status==='submitted')await saveAppliedResume(intent.submission_id,intent.candidate_id,input.appliedResume);
- let snapshot=null;
- if(input.answers!==undefined&&['submit_attempted','submitted'].includes(input.status)){
-  const answers=validatedAnswers;
-  const {data:stored,error:snapshotError}=await database().rpc('save_application_answer_snapshot',{p_actor:actor,p_intent:input.intentId,p_submission:intent.submission_id,p_candidate:intent.candidate_id,p_attempt:input.attempt,p_event_key:input.eventKey,p_portal:parsedUrl.hostname,p_url:safeUrl,p_profile_version:intent.candidate?.version??null,p_answers:answers,p_observed_at:input.observedAt});checkDb(snapshotError);snapshot=stored;
- }
- return {status:data,snapshot};}
-export async function extensionRoute(request:Request,work:()=>Promise<unknown>){try{return cors(request,Response.json(await work()));}catch(e){if(e instanceof z.ZodError)return cors(request,Response.json({error:'Invalid capture request.'},{status:400}));return cors(request,errorResponse(e));}}
+export async function recordObservation(actor:string,body:unknown,manual=false){
+  const input=z.object({
+    intentId:z.uuid(),
+    eventKey:z.uuid(),
+    status:z.enum(['in_progress','submit_attempted','submitted','confirmed','failed']),
+    attempt:z.number().int().min(1).max(1000),
+    evidence:z.string().min(1).max(1000),
+    url:z.string().url().max(2000),
+    observedAt:z.string().datetime(),
+    answers:z.unknown().optional(),
+    appliedResume:appliedResumeSchema.optional().nullable()
+  }).parse(body);
+  const parsedUrl=new URL(input.url);
+  parsedUrl.search='';
+  parsedUrl.hash='';
+  const safeUrl=parsedUrl.toString();
+  const {data:intent,error}=await database().from('application_intents').select('*,job:jobs(application_url),candidate:candidates(version)').eq('id',input.intentId).eq('owner_id',actor).maybeSingle();
+  checkDb(error);
+  if(!intent)throw new CaptureError('Intent not found.',404);
+  if(!manual&&(!allowedCaptureUrl(input.url,intent.job.application_url)||!validateObservation(input.status,input.evidence)))throw new CaptureError('Unsupported site or insufficient application evidence. Review manually.',422);
+
+  const validatedAnswers=input.answers!==undefined?validateApplicationAnswers(input.answers):undefined;
+  const dbStatus = input.status === 'confirmed' ? 'submitted' : input.status;
+  const {data,error:save}=await database().rpc('record_browser_event',{p_actor:actor,p_intent:input.intentId,p_key:input.eventKey,p_status:dbStatus,p_attempt:input.attempt,p_source:manual?'recruiter_attestation':'extension_observation',p_evidence:input.evidence,p_url:safeUrl,p_observed:input.observedAt});
+  checkDb(save);
+
+  if (input.status === 'confirmed' || input.status === 'submitted') {
+    const { error: updateErr } = await database().from('job_submissions').update({
+      status: 'Applied',
+      capture_status: 'confirmed'
+    }).eq('id', intent.submission_id);
+    checkDb(updateErr);
+
+    await database().from('outside_jobs').update({
+      status: 'Applied',
+      applied_at: input.observedAt
+    }).eq('submission_id', intent.submission_id);
+  }
+
+  if(input.appliedResume&&(input.status==='submitted'||input.status==='confirmed'))await saveAppliedResume(intent.submission_id,intent.candidate_id,input.appliedResume);
+  let snapshot=null;
+  if(input.answers!==undefined&&['submit_attempted','submitted','confirmed'].includes(input.status)){
+   const answers=validatedAnswers;
+   const {data:stored,error:snapshotError}=await database().rpc('save_application_answer_snapshot',{p_actor:actor,p_intent:input.intentId,p_submission:intent.submission_id,p_candidate:intent.candidate_id,p_attempt:input.attempt,p_event_key:input.eventKey,p_portal:parsedUrl.hostname,p_url:safeUrl,p_profile_version:intent.candidate?.version??null,p_answers:answers,p_observed_at:input.observedAt});
+   checkDb(snapshotError);
+   snapshot=stored;
+  }
+  return {status:input.status==='confirmed'?'confirmed':data,snapshot};
+}
+export async function extensionRoute(request:Request,work:()=>Promise<unknown>){try{return cors(request,Response.json(await work()));}catch(e){if(e instanceof z.ZodError||e instanceof SyntaxError)return cors(request,Response.json({error:'Invalid capture request.'},{status:400}));return cors(request,errorResponse(e));}}
 export function cors(request: Request, response: Response) {
   const origin = request.headers.get('origin');
   if (!origin) return response;

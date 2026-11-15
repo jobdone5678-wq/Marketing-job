@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Recruiting Copilot</title>
+  <link rel="stylesheet" href="panel.css">
+  <script src="core/job-capture.js" defer></script>
+  <script src="panel.js" defer></script>
+</head>
+<body>
+  <header class="header">
+    <div class="brand"><span>Nextkinlife LLC</span><h1>Recruiting Copilot</h1></div>
+    <div id="connection" class="status-line"><i></i><span>Checking NextKinHR connection…</span></div>
+  </header>
+  <main>
+    <section class="context">
+      <div class="site">
+        <div class="site-heading"><span id="site-label" class="badge">NextKinHR Workspace</span><span id="active-site">Active Site</span></div>
+        <h2 id="site-title">Recruiter &amp; Candidate Hub</h2>
+        <p id="site-summary">Ready to assist on an outside career portal</p>
+      </div>
+      <div class="checklist">
+        <div class="candidate-line">
+          <div id="candidate" class="status-line"><i></i><span>Candidate profile</span></div>
+          <button id="connect" class="link" type="button">Connect</button>
+        </div>
+        <div id="job-status" class="status-line"><i></i><span>Open a job page to evaluate ATS match</span></div>
+        <div id="form-status" class="status-line"><i></i><span>Open an application form to autofill</span></div>
+      </div>
+      <section class="resume" aria-labelledby="resume-title">
+        <div class="resume-row">
+          <div class="resume-text">
+            <h2 id="resume-title">Resume</h2>
+            <p id="resume-filename">Connect your NextKinHR account to sync your resume.</p>
+            <p id="resume-email" hidden></p>
+          </div>
+          <button id="change-resume" class="small-button" type="button" hidden>Change</button>
+        </div>
+        <div id="resume-options" class="resume-options" hidden>
+          <label id="resume-select-label" for="resume-select">Saved resumes</label>
+          <select id="resume-select"></select>
+          <button id="upload-resume" class="small-button" type="button">Upload resume</button>
+        </div>
+        <button id="first-upload" class="small-button" type="button" hidden>Upload resume</button>
+        <form id="upload-form" hidden>
+          <label for="resume-file">PDF or DOCX up to 10 MiB</label>
+          <input id="resume-file" name="resume" type="file" accept=".pdf,.docx" required>
+          <label class="consent"><input name="consent" type="checkbox" value="true" required> I consent to processing this resume for my candidate profile.</label>
+          <button class="small-button" type="submit">Save resume</button>
+        </form>
+        <p id="upload-status" role="status" hidden></p>
+      </section>
+    </section>
+    <section class="actions">
+      <button id="autofill" class="primary" type="button" disabled><span aria-hidden="true">⚡</span> Autofill Application Now</button>
+      <label id="ai-screening-option" hidden><input type="checkbox" id="ai-screening"> Use NextKinHR AI to draft bio and screening answers from my profile</label>
+      <button id="review-answers" class="small-button" type="button" hidden>Save reusable answers</button>
+      <section id="answer-review" aria-label="Reusable answers" hidden>
+        <p>Select the answers you want to reuse on future applications.</p>
+        <div id="answer-options"></div>
+        <button id="save-answers" class="small-button" type="button">Save selected answers</button>
+      </section>
+      <p id="notice" role="status" hidden></p>
+      <section id="results" class="results" aria-labelledby="results-title" hidden>
+        <div class="results-heading"><h2 id="results-title"></h2><span id="verified" class="badge">Verified</span></div>
+        <p id="results-summary"></p>
+        <ul id="fields-filled"></ul>
+      </section>
+      <details id="match-panel" open hidden>
+        <summary id="match-title">ATS Match</summary>
+        <p id="match-status" role="status"></p>
+        <div id="match-breakdown" hidden>
+          <dl id="match-skills"></dl>
+          <h2>Matched requirements</h2>
+          <ul id="match-points"></ul>
+          <h2>Unmatched requirements</h2>
+          <ul id="unmatched-points"></ul>
+        </div>
+      </details>
+      <details id="profile-panel" hidden>
+        <summary>Your Autofill Information</summary>
+        <dl id="profile-facts"></dl>
+        <button id="open-profile" class="link" type="button">Open My Profile &amp; Resume</button>
+      </details>
+    </section>
+  </main>
+</body>
+</html>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/client";
 import { CheckCircle2, Sparkles, ArrowRight, LayoutDashboard, ExternalLink, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -50,21 +51,14 @@ export default function JobseekerConnectedPage() {
               token: data.token,
               user: data.user || { id: user.id, name, email: user.email },
             },
-            "*"
-          );
-
-          // Set DOM attributes for extension content scripts to read
-          document.documentElement.setAttribute("data-nextkin-paired", "true");
-          document.documentElement.setAttribute("data-nextkin-token", data.token);
-          document.documentElement.setAttribute(
-            "data-nextkin-user",
-            JSON.stringify(data.user || { id: user.id, name, email: user.email })
+            window.location.origin
           );
         } else {
-          console.warn("Quick pair response:", data);
+          if (active) setErrorMsg(data.error || "Could not connect to NextKinHR.");
         }
       } catch (err: unknown) {
         console.warn("Pairing handshake error:", err);
+        if (active) setErrorMsg("Could not connect to NextKinHR. Reload to try again.");
       } finally {
         if (active) setLoading(false);
       }
@@ -118,10 +112,10 @@ export default function JobseekerConnectedPage() {
               ? "Connecting Your Account..."
               : paired
               ? `Welcome, ${userName}!`
-              : "Account Authenticated!"}
+              : "Connect Recruiting Copilot"}
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
-            Your candidate account is linked and ready. The NextKin extension is paired to assist your application autofill.
+            Connect your NextKinHR account to the Recruiting Copilot extension.
           </p>
           {paired && (
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 text-xs font-semibold">
@@ -144,12 +138,13 @@ export default function JobseekerConnectedPage() {
           </div>
           <ul className="text-xs text-muted-foreground space-y-1.5 pl-6 list-disc">
             <li>Open any job listing on Greenhouse, Ashby, Lever, or Workday.</li>
-            <li>Click <strong>Autofill Application</strong> in the floating extension panel.</li>
-            <li>Manage your tailored resumes and track applications in NextKin.</li>
+            <li>Open Recruiting Copilot from the Chrome toolbar.</li>
+            <li>Open an application form and click <strong>Autofill Application Now</strong>.</li>
           </ul>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 pt-2">
+          {errorMsg === "Please sign in first." && <Link href="/auth/jobseeker" className="text-sm font-semibold text-primary">Sign in to NextKinHR</Link>}
           <Button
             onClick={handleGoToDashboard}
             className="flex-1 h-10 rounded-xl font-semibold text-xs sm:text-sm shadow-xs cursor-pointer"

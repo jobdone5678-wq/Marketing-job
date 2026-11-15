@@ -112,6 +112,7 @@
   };
 
   const isChoiceKind = k => k === 'choice' || k === 'radio' || k === 'select' || k === 'combobox';
+  const isMultiKind = k => k === 'checkbox-group' || k === 'multi-select' || k === 'multi-combobox';
 
   // A history section holds many records, so one fact never fills it. The wording has to name a
   // history: "work in the United States" is an authorization question, not a work-history section.
@@ -124,28 +125,53 @@
     Boolean(el.closest('.react-datepicker-wrapper, [class*="datepicker" i], [class*="date-picker" i]'))
   );
 
-  const YES_OPTION = /^(yes|y|true|1|eligible|authorized|absolutely|of course|correct)$/i;
-  const NO_OPTION = /^(no|n|false|0|not eligible|not authorized|incorrect|never)$/i;
+  const YES_OPTION = /^(yes|y|true|1|eligible|authorized|absolutely|of course|correct|affirmative)$/i;
+  const NO_OPTION = /^(no|n|false|0|not eligible|not authorized|incorrect|never|negative)$/i;
   const optionText = o => String(o?.label ?? o?.value ?? '').trim();
+
+  function normalizeBoolean(v) {
+    if (typeof v === 'boolean') return v;
+    const s = String(v ?? '').trim().toLowerCase();
+    if (YES_OPTION.test(s)) return true;
+    if (NO_OPTION.test(s)) return false;
+    return null;
+  }
 
   // Yes/No controls are phrased differently on every portal; match the wording, not the exact label.
   function pickBooleanOption(options, bool) {
     const list = options || [];
-    const want = bool ? 'yes' : 'no';
-    const exact = list.find(o => new RegExp('^' + want + '$', 'i').test(optionText(o)));
-    if (exact) return exact;
-    const word = list.find(o => new RegExp('\\b' + want + '\\b', 'i').test(optionText(o)));
-    if (word) return word;
-    const starts = list.find(o => new RegExp('^' + want + '\\b', 'i').test(optionText(o)));
-    if (starts) return starts;
-    return null;
+    const normalized = normalizeBoolean(bool);
+    const target = normalized !== null ? normalized : Boolean(bool);
+    const match = target ? YES_OPTION : NO_OPTION;
+    const opposite = target ? NO_OPTION : YES_OPTION;
+    const prefix = target ? /^yes\b/i : /^no\b/i;
+    const matches = list.filter(o => {
+      const text = optionText(o);
+      const val = String(o?.value ?? '').trim();
+      const elVal = o?.element?.getAttribute?.('data-value') || o?.element?.getAttribute?.('data-option') || '';
+      return match.test(text) || prefix.test(text) ||
+        (!opposite.test(text) && (match.test(val) || match.test(elVal)));
+    });
+    return matches.length === 1 ? matches[0] : (matches.length > 1 ? matches[0] : null);
   }
 
   function pickOption(field, desired) {
     const d = norm(desired), opts = field.options || [];
-    return opts.find(o => norm(optionText(o)) === d || norm(o.value) === d)
-      || opts.find(o => norm(optionText(o)).includes(d) || (d && d.includes(norm(optionText(o)))))
-      || null;
+    if (!d) return null;
+    const exact = opts.filter(o => norm(optionText(o)) === d);
+    if (exact.length) return exact.length === 1 ? exact[0] : null;
+    const code = Object.hasOwn(US_STATES, d) ? US_STATES[d] : Object.keys(US_STATES).find(state => US_STATES[state] === d);
+    const aliases = { 'united states': ['us', 'usa', 'united states of america'], 'full time': ['permanent', 'fulltime'], 'part time': ['parttime'] };
+    const equivalent = Object.entries(aliases).find(([key, values]) => key === d || values.includes(d));
+    const acceptable = new Set([d, ...(code ? [code] : []), ...(equivalent ? [equivalent[0], ...equivalent[1]] : [])]);
+    const matches = opts.filter(o => acceptable.has(norm(optionText(o))) || acceptable.has(norm(o.value)));
+    if (matches.length === 1) return matches[0];
+    const bool = normalizeBoolean(desired);
+    if (bool !== null) {
+      const bOpt = pickBooleanOption(opts, bool);
+      if (bOpt) return bOpt;
+    }
+    return null;
   }
 
   function buildValues(candidate) {
@@ -165,15 +191,11 @@
 
     // An explicit null means "not known"; an absent value keeps the portal default.
     const rawAuth = facts.authorized_in_usa !== undefined ? facts.authorized_in_usa : candidate.authorized_in_usa;
-    const authKnown = rawAuth === null ? null : (typeof rawAuth === 'boolean' ? rawAuth : true);
+    const authKnown = typeof rawAuth === 'boolean' ? rawAuth : null;
     const sponsorPrimary = facts.need_sponsorship_now !== undefined ? facts.need_sponsorship_now : candidate.need_sponsorship_now;
     const sponsorFuture = facts.need_sponsorship_future !== undefined ? facts.need_sponsorship_future : candidate.need_sponsorship_future;
-    let sponsorKnown;
-    if (sponsorPrimary === null) sponsorKnown = null;
-    else if (typeof sponsorPrimary === 'boolean') sponsorKnown = sponsorPrimary || sponsorFuture === true;
-    else if (sponsorFuture === null) sponsorKnown = null;
-    else if (typeof sponsorFuture === 'boolean') sponsorKnown = sponsorFuture;
-    else sponsorKnown = false;
+    const sponsorKnown = sponsorPrimary === true || sponsorFuture === true ? true
+      : sponsorPrimary === false && sponsorFuture === false ? false : null;
     const skills = facts.primary_skills || candidate.primary_skills || (Array.isArray(candidate.skills) ? candidate.skills.join(', ') : candidate.skills || '');
 
     const city = facts.current_city || candidate.current_city || candidate.city || '';
@@ -185,7 +207,7 @@
     return {
       ...facts,
       first_name: names[0] || candidate.first_name || '',
-      last_name: names.slice(1).join(' ') || candidate.last_name || names[0] || '',
+      last_name: names.slice(1).join(' ') || candidate.last_name || '',
       full_name: fullName,
       email: facts.email || candidate.email || '',
       phone: phone,
@@ -195,7 +217,7 @@
       zip_code: facts.zip_code || candidate.zip_code || candidate.zip || candidate.postal_code || '',
       country: facts.country ?? candidate.country ?? '',
       full_address: facts.full_address || candidate.full_address || candidate.address || candidate.street_address || '',
-      current_employer: facts.current_company || candidate.current_company || candidate.company || '',
+      current_employer: facts.current_employer || candidate.current_employer || facts.current_company || candidate.current_company || candidate.company || '',
       current_title: facts.current_job_title || candidate.current_job_title || candidate.headline || '',
       linkedin_url: facts.linkedin_url || candidate.linkedin_url || '',
       github_url: facts.github_url || candidate.github_url || '',
@@ -269,7 +291,7 @@
 
       const nl = norm(field.label);
       const nh = norm(field.hint);
-      if (/\b(referr|referred|referral|who\s*referred|employee\s*who|relation\s*to)\b/i.test(nl + ' ' + nh)) {
+      if (/\b(referrer|referred|referral|who\s*referred|employee\s*who|relation\s*to)\b/i.test(nl + ' ' + nh)) {
         return { field, status: 'manual', reason: 'Employee referral question.' };
       }
       // A job target or second-choice field is not a profile fact.
@@ -285,14 +307,14 @@
         return { field, status: 'manual', reason: 'Start date needs the candidate to confirm.' };
       }
       // Legal acknowledgements and signatures are never auto-completed.
-      if (field.kind === 'checkbox' && /\b(agree|consent|terms|privacy|arbitration|acknowledg|certify|declare|signature|sign here)\b/i.test(nl)) {
+      if (/\b(agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare|signature|sign here)\b/i.test(nl)) {
         return { field, status: 'manual', reason: 'Legal acknowledgement requires the candidate.' };
       }
 
       const resolved = resolveFact(field.label, field.hint);
       if (!resolved) {
-        if (isChoiceKind(field.kind)) return aiPlan(field, 'Select the best answer from the options using the resume.');
-        const isBioOrScreening = field.element?.tagName === 'TEXTAREA' ||
+        if (isChoiceKind(field.kind)) return aiPlan(field, 'Select an option supported by the candidate profile.');
+        const isBioOrScreening = field.element?.tagName === 'TEXTAREA' || field.editable ||
           /\?/.test(field.label || '') ||
           (field.label || '').trim().length > 25 ||
           /\b(bio|biography|summary|about\s*(you|yourself)?|cover\s*letter|tell\s*us|interest(ed)?\s*in|why|experience\s*with|describe|explain|qualification|overview|motivation|background|statement)\b/i.test(field.label || '') ||
@@ -306,11 +328,16 @@
         return { field, status: 'manual', reason: 'Legal acknowledgement requires the candidate.' };
       }
       // A known United States authorization must not answer a question about another country.
-      if (factKey === 'authorized_in_usa' && values.known_authorization && !isUSQuestion(nl + ' ' + nh)) {
+      if (factKey === 'authorized_in_usa' && !isUSQuestion(nl + ' ' + nh) && nl !== 'work authorization') {
         return { field, factKey, status: 'unknown', reason: 'Question is not about United States work authorization.' };
       }
 
       let val = values[factKey];
+      if (factKey === 'needs_sponsorship') {
+        const question = nl + ' ' + nh;
+        if (/\bnow\b/.test(question) && !/\bfuture\b/.test(question)) val = candidate.confirmed_facts?.need_sponsorship_now ?? candidate.need_sponsorship_now;
+        if (/\bfuture\b/.test(question) && !/\bnow\b/.test(question)) val = candidate.confirmed_facts?.need_sponsorship_future ?? candidate.need_sponsorship_future;
+      }
       if (val === null || val === undefined || val === '') {
         return { field, status: 'unknown', factKey, reason: 'Candidate fact is missing.' };
       }
@@ -324,10 +351,17 @@
         if (field.kind === 'checkbox') return { field, factKey, value: val, status: 'supported', exactMatch: resolved.exact, matchLength: resolved.length, reason: 'Boolean profile mapping.' };
         if (isChoiceKind(field.kind)) {
           const opt = pickBooleanOption(field.options, val);
-          if (opt) return { field, factKey, value: optionText(opt), status: 'supported', exactMatch: resolved.exact, matchLength: resolved.length, reason: 'Boolean profile mapping.' };
-          return aiPlan(field, 'Choose the best option for this profile fact.');
+          if (opt || field.kind === 'combobox') return { field, factKey, value: opt ? optionText(opt) : val, status: 'supported', exactMatch: resolved.exact, matchLength: resolved.length, reason: 'Boolean profile mapping.' };
+          return { field, factKey, status: 'needs_review' };
         }
       }
+      if (isMultiKind(field.kind)) {
+        const entries = Array.isArray(val) ? val : String(val).split(/[,;|\n]+/);
+        if (field.kind === 'multi-combobox') return { field, factKey, value: entries.map(String).map(value => value.trim()).filter(Boolean).slice(0, 20), status: 'supported' };
+        const choices = entries.map(entry => pickOption(field, entry)).filter(Boolean).map(optionText);
+        return { field, factKey, value: choices, status: choices.length ? 'supported' : 'needs_review' };
+      }
+      if (field.kind === 'checkbox') return { field, factKey, status: 'needs_review' };
       if (field.kind === 'combobox') {
         // Autocomplete options only exist after typing, so the fact itself is the target.
         return {
@@ -372,5 +406,5 @@
     return plans;
   }
 
-  root.NextkinFieldMapping = { planFill, resolveFact, buildValues, pickOption, pickBooleanOption, isChoiceKind, CANONICAL_FACTS };
+  root.NextkinFieldMapping = { planFill, resolveFact, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS };
 })(globalThis);

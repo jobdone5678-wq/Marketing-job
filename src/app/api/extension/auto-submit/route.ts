@@ -43,19 +43,11 @@ export async function POST(request: Request) {
   try {
     return await extensionRoute(request, async () => {
       try {
-        let actor: any;
-        try {
-          actor = await extensionProfile(request);
-        } catch {
-          actor = { id: '892442fa-8b99-4ecd-865c-c5dbed1f39a6', status: 'active', role: 'candidate' };
-        }
+    const actor = await extensionProfile(request);
 
     const body = autoSubmitSchema.parse(await request.json());
     
-    // Resilient validation: allow manual attestation, valid observation, or any submission evidence
-    const isExtension = request.headers.get('origin')?.startsWith('chrome-extension://') || Boolean(request.headers.get('x-extension-id'));
-    const isSuccessEvidence = Boolean(body.evidence && /(?:thank\s*you|application|success|received|submitted|applied|contact\s*you)/i.test(body.evidence));
-    if (!body.manualAttestation && !isSuccessEvidence && !isExtension && !validateObservation('submitted', body.evidence || '')) {
+    if (!validateObservation('submitted', body.evidence || '')) {
       throw new CaptureError('Application success was not observed. Review this application manually.', 422);
     }
 
@@ -81,40 +73,20 @@ export async function POST(request: Request) {
     let candidateId = body.candidateId;
     let candidateVersion: number | null = null;
     const findFallbackCandidate = async () => {
-      if (actor.id) {
-        const { data: byUser } = await database().from('candidates').select('id,version')
-          .eq('user_id', actor.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (byUser) return byUser;
-      }
-      if (actor.email) {
-        const { data: byEmail } = await database().from('candidates').select('id,version')
-          .ilike('email', actor.email)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (byEmail) return byEmail;
-      }
-      const { data: latestConfirmed } = await database().from('candidates').select('id,version')
-        .eq('provenance_status', 'confirmed')
+      const { data, error } = await database().from('candidates').select('id,version')
+        .eq('user_id', actor.id)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      return latestConfirmed;
+      checkDb(error);
+      return data;
     };
 
     if (isUuid(candidateId)) {
-      const { data: cand } = await database().from('candidates').select('id,version').eq('id', candidateId).maybeSingle();
-      if (cand) {
-        candidateId = cand.id;
-        candidateVersion = cand.version ?? null;
-      } else {
-        const fallbackCand = await findFallbackCandidate();
-        if (fallbackCand) { candidateId = fallbackCand.id; candidateVersion = fallbackCand.version ?? null; }
-        else { throw new CaptureError('Candidate not found. Please upload or select a valid candidate.', 404); }
-      }
+      const { data: cand, error } = await database().from('candidates').select('id,version').eq('id', candidateId).eq('user_id', actor.id).maybeSingle();
+      checkDb(error);
+      if (!cand) throw new CaptureError('Candidate not found. Please upload or select a valid candidate.', 404);
+      candidateVersion = cand.version ?? null;
     } else {
       const fallbackCand = await findFallbackCandidate();
       if (fallbackCand) { candidateId = fallbackCand.id; candidateVersion = fallbackCand.version ?? null; }
@@ -134,12 +106,12 @@ export async function POST(request: Request) {
     checkDb(intentError);
     const matches = (intents || []).filter(intent => {
       const job = Array.isArray(intent.job) ? intent.job[0] : intent.job;
-      return safeJobUrl && job?.application_url && allowedCaptureUrl(safeJobUrl, job.application_url);
+      return body.jobUrl && job?.application_url && allowedCaptureUrl(body.jobUrl, job.application_url);
     });
     if (matches.length > 1) throw new CaptureError('Several applications match this page. Open the correct draft from the portal and retry.', 409);
     const matchingIntent = matches[0];
     const attempt = Math.max(body.attempt, matchingIntent?.attempt || 1);
-    let result: { submission: { id: string; candidate_id: string; duplicate_flag: boolean; applied_resume?: any; job_id?: string | null }; duplicate: boolean; replayed?: boolean };
+    let result: { submission: { id: string; candidate_id: string; duplicate_flag: boolean; applied_resume?: any; job_id?: string | null; source_type?: string }; duplicate: boolean; replayed?: boolean };
     
     if (matchingIntent) {
       const { error: observationError } = await database().rpc('record_browser_event', {
@@ -175,14 +147,6 @@ export async function POST(request: Request) {
           return (k1 && k1 === safeJobUrl) || (k2 && k2 === safeJobUrl);
         });
         if (matched) resolvedJobId = matched.id;
-      }
-      if (!resolvedJobId && body.companyName && body.jobTitle) {
-        const { data: jobByTitle } = await database().from('jobs').select('id,company,title')
-          .ilike('company', body.companyName.trim())
-          .ilike('title', body.jobTitle.trim())
-          .limit(1)
-          .maybeSingle();
-        if (jobByTitle) resolvedJobId = jobByTitle.id;
       }
 
       // Look for an existing submission with the same candidate and matching job_url
@@ -296,8 +260,9 @@ export async function POST(request: Request) {
       }
     }
 
-    // Save to dedicated public.outside_jobs table for clear separation
-    try {
+    const sourceHost = safeJobUrl ? new URL(safeJobUrl).hostname : '';
+    const isPortal = /(^|\.)(nextkinhr\.com|jobright-internal\.com)$/.test(sourceHost);
+    if (!matchingIntent && !isPortal && safeJobUrl) try {
       const portalSource = body.portalSource || (safeJobUrl ? new URL(safeJobUrl).hostname : 'Outside Job');
       const outsideJobPayload = {
         candidate_id: candidateId,
@@ -326,7 +291,9 @@ export async function POST(request: Request) {
       const table = database().from('outside_jobs');
       if (typeof table?.select === 'function' && typeof table?.insert === 'function') {
         const { data: existingOutside } = await table
-          .select('id').ilike('job_url', safeJobUrl || '').maybeSingle();
+          .select('id').eq('candidate_id', candidateId).eq('job_url', safeJobUrl)
+          .order('capture_owner_id', { ascending: false, nullsFirst: false })
+          .limit(1).maybeSingle();
 
         if (existingOutside) {
           await table.update(outsideJobPayload).eq('id', existingOutside.id);

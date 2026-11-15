@@ -9,9 +9,10 @@ export async function OPTIONS(request: Request) {
 }
 
 export async function GET(request: Request) {
-  return extensionRoute(request, async () => {
+  const response = await extensionRoute(request, async () => {
     const profile = await extensionProfile(request);
-    const candidateId = new URL(request.url).searchParams.get('candidateId');
+    const params = new URL(request.url).searchParams;
+    const candidateId = params.get('candidateId');
     if (!candidateId) throw new CaptureError('candidateId is required', 400);
     z.uuid().parse(candidateId);
 
@@ -21,13 +22,12 @@ export async function GET(request: Request) {
       .from('candidates')
       .select('*')
       .eq('id', candidateId)
-      .single();
+      .eq('user_id', profile.id)
+      .maybeSingle();
     checkDb(cErr);
     if (!candidateData) throw new CaptureError('Candidate not found', 404);
 
     const candidate = candidateData as Candidate;
-    // The extension may only read the resume of the account that owns the profile.
-    if (candidate.user_id !== profile.id) throw new CaptureError('Candidate not found', 404);
     const confirmed = (candidate.confirmed_facts || {}) as Record<string, any>;
 
     // 2. The resume document uploaded in the dashboard. A confirmed document is
@@ -68,14 +68,15 @@ export async function GET(request: Request) {
       if (!downloadError && download) {
         const buffer = Buffer.from(await download.arrayBuffer());
         const base64 = buffer.toString('base64');
-        const mimeType = doc.filename.endsWith('.docx')
+        const mimeType = /\.docx$/i.test(doc.filename)
           ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
           : 'application/pdf';
         return {
           filename: doc.filename,
           mimeType,
           base64,
-          candidateName: candidate.full_name
+          candidateName: candidate.full_name,
+          source: 'upload'
         };
       }
     }
@@ -85,14 +86,21 @@ export async function GET(request: Request) {
       if (candidate.resume_url.startsWith('data:')) {
         const matches = candidate.resume_url.match(/^data:([^;]+);base64,(.+)$/);
         if (matches) {
+          const extension = matches[1].toLowerCase() === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ? 'docx' : 'pdf';
           return {
-            filename: `${(candidate.full_name || 'Candidate').replace(/[^a-zA-Z0-9]/g, '_')}_Resume.pdf`,
+            filename: `${(candidate.full_name || 'Candidate').replace(/[^a-zA-Z0-9]/g, '_')}_Resume.${extension}`,
             mimeType: matches[1] || 'application/pdf',
             base64: matches[2],
-            candidateName: candidate.full_name
+            candidateName: candidate.full_name,
+            source: 'upload'
           };
         }
       }
+    }
+
+    if (params.get('originalOnly') === 'true') {
+      if (doc?.object_path) throw new CaptureError('The uploaded resume could not be downloaded.', 502);
+      throw new CaptureError('No uploaded resume found.', 404);
     }
 
     // 4. Dynamic ATS-Compliant Resume Generation from verified profile facts
@@ -169,7 +177,10 @@ export async function GET(request: Request) {
       filename: safeFilename,
       mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       base64: docxBase64,
-      candidateName: name
+      candidateName: name,
+      source: 'generated'
     };
   });
+  response.headers.set('Cache-Control', 'private, no-store');
+  return response;
 }
