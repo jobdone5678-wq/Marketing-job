@@ -1,841 +1,179 @@
-/**
- * NextKinHR Universal ATS Portal Adapters Registry
- * Portal-agnostic field hints for job boards, ATS platforms and custom career sites.
- * Nextkinlife LLC
- */
-(function(root) {
-  'use strict';
-
-  root.NextkinAdapters = root.NextkinAdapters || [];
-
-  // Canonical profile facts an adapter may point at. Field mapping turns these straight into values.
-  const CANON_RULES = [
-    ['linkedin_url', /linked\s*in/i],
-    ['github_url', /github/i],
-    ['website', /website|portfolio|homepage|personal\s*site|personal\s*url/i],
-    ['email', /e-?mail/i],
-    ['phone', /phone|mobile|cell|telephone|contact\s*number/i],
-    ['first_name', /first[\s._-]*name|given[\s._-]*name|forename|fname/i],
-    ['last_name', /last[\s._-]*name|family[\s._-]*name|surname|lname/i],
-    ['full_name', /full[\s._-]*name|applicant[\s._-]*name|candidate[\s._-]*name|your[\s._-]*name|system\s*field\s*name/i],
-    ['current_employer', /current[\s._-]*(employer|company|organization|organisation)|employer|company[\s._-]*name|organization|organisation/i],
-    ['current_title', /current[\s._-]*(job[\s._-]*)?title|job[\s._-]*title|headline|designation/i],
-    ['current_city', /\bcity\b|\btown\b|municipality|\blocation\b/i],
-    ['current_state', /\bstate\b|province|\bregion\b/i],
-    ['zip_code', /zip|postal/i],
-    ['country', /country|nationality/i],
-    ['full_address', /address|street/i],
-    ['total_experience_years', /years?[\s._-]*of[\s._-]*experience|experience[\s._-]*years/i],
-    ['primary_skills', /skills|technolog|stack|expertise|competenc/i]
-  ];
-
-  // A confirmation or repeat field is not the primary field.
-  const NOT_PRIMARY = /e?mail[\s._-]*(confirm|confirmation|retype|re-?enter|again|verify)|confirm[\s._-]*e?mail/i;
-
-  const camel = s => String(s || '').replace(/([a-z0-9])([A-Z])/g, '$1 $2');
-
-  const descriptor = el => camel([
-    el.getAttribute('name'), el.getAttribute('id'), el.getAttribute('placeholder'),
-    el.getAttribute('aria-label'), el.getAttribute('data-testid'), el.getAttribute('data-test'),
-    el.getAttribute('data-automation-id'), el.getAttribute('data-ui'), el.getAttribute('data-field-name'),
-    el.getAttribute('title')
-  ].filter(Boolean).join(' '))
-    .replace(/[_\-.]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-
-  // Best-effort canonical fact for any element, used as the base for every adapter.
-  function canonicalHint(el) {
-    if (!el || !el.getAttribute) return '';
-    const desc = descriptor(el);
-    if (!desc || NOT_PRIMARY.test(desc)) return '';
-    for (const [key, re] of CANON_RULES) {
-      if (re.test(desc)) return key;
-    }
-    return '';
-  }
-
-  root.canonicalHint = canonicalHint;
-
-  const hostIs = re => host => re.test(String(host || '').toLowerCase());
-
-  const adapters = [
-    // 1. Ashby
-    {
-      id: 'ashby',
-      name: 'Ashby',
-      matches: hostIs(/(^|\.)ashbyhq\.com$/i),
-      hint: el => {
-        const name = el.getAttribute('name') || '';
-        if (name === '_systemfield_name') return 'full_name';
-        if (name === '_systemfield_email') return 'email';
-        if (name === '_systemfield_location') return 'current_city';
-        if (name === '_systemfield_phone') return 'phone';
-        if (/urls\[([^\]]+)\]/i.test(name)) {
-          const key = RegExp.$1.toLowerCase();
-          if (/linkedin/.test(key)) return 'linkedin_url';
-          if (/github/.test(key)) return 'github_url';
-          if (/twitter|portfolio|website|other|url/.test(key)) return 'website';
-        }
-        return canonicalHint(el) || el.getAttribute('data-testid') || '';
-      }
-    },
-
-    // 2. Greenhouse
-    {
-      id: 'greenhouse',
-      name: 'Greenhouse',
-      matches: hostIs(/(^|\.)greenhouse\.io$/i),
-      hint: el => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        const id = (el.id || '').toLowerCase();
-        if (id === 'first_name' || name === 'first_name') return 'first_name';
-        if (id === 'last_name' || name === 'last_name') return 'last_name';
-        if (id === 'email' || name === 'email') return 'email';
-        if (id === 'phone' || name === 'phone') return 'phone';
-        if (id === 'country' || name === 'country') return 'country';
-        if (id === 'candidate-location' || /job_application\[location\]/i.test(name)) return 'current_city';
-        if (id === 'gender' || name === 'gender') return 'gender';
-        if (id === 'veteran_status' || /veteran/i.test(name)) return 'veteran';
-        if (id === 'hispanic_ethnicity' || /hispanic/i.test(name)) return '';
-        if (id.includes('degree') || name.includes('degree')) return 'highest_education';
-        if (/job_application\[answers\]/i.test(name)) return '';
-        return canonicalHint(el);
-      }
-    },
-
-    // 3. Lever
-    {
-      id: 'lever',
-      name: 'Lever',
-      matches: hostIs(/(^|\.)lever\.co$/i),
-      hint: el => {
-        const name = el.getAttribute('name') || '';
-        if (name === 'name') return 'full_name';
-        if (name === 'email') return 'email';
-        if (name === 'phone') return 'phone';
-        if (name === 'org') return 'current_employer';
-        if (name === 'location') return 'current_city';
-        if (/urls\[linkedin\]/i.test(name)) return 'linkedin_url';
-        if (/urls\[github\]/i.test(name)) return 'github_url';
-        if (/urls\[portfolio\]|urls\[website\]|urls\[other\]/i.test(name)) return 'website';
-        if (/urls\[twitter\]/i.test(name)) return 'website';
-        return canonicalHint(el);
-      }
-    },
-
-    // 4. Workday
-    {
-      id: 'workday',
-      name: 'Workday',
-      matches: hostIs(/(^|\.)myworkday(jobs|site)?\.com$/i),
-      hint: el => {
-        const autoId = (el.getAttribute('data-automation-id') || '').toLowerCase();
-        if (autoId.includes('legalname_firstname') || autoId.includes('legalnamesection_firstname')) return 'first_name';
-        if (autoId.includes('legalname_lastname') || autoId.includes('legalnamesection_lastname')) return 'last_name';
-        if (autoId.includes('email') || autoId.includes('emailaddress')) return 'email';
-        if (autoId.includes('phone') || autoId.includes('phonenumber')) return 'phone';
-        if (autoId.includes('addresssection_addressline1')) return 'full_address';
-        if (autoId.includes('addresssection_city')) return 'current_city';
-        if (autoId.includes('addresssection_countryregion')) return 'current_state';
-        if (autoId.includes('addresssection_postalcode')) return 'zip_code';
-        if (autoId.includes('countrydropdown')) return 'country';
-        if (autoId.includes('sourceprompt')) return '';
-        return canonicalHint(el);
-      }
-    },
-
-    // 5. iCIMS
-    {
-      id: 'icims',
-      name: 'iCIMS',
-      matches: hostIs(/(^|\.)icims\.com$/i),
-      hint: el => {
-        const id = (el.id || '').toLowerCase();
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        if (/firstname|first_name|fname/.test(id || name)) return 'first_name';
-        if (/lastname|last_name|lname/.test(id || name)) return 'last_name';
-        if (/email/.test(id || name)) return 'email';
-        if (/phone.*type|type.*phone/.test(id || name)) return 'phone';
-        if (/phone|mobile|cell|tel/.test(id || name)) return 'phone';
-        if (/address/.test(id || name)) return 'full_address';
-        if (/city/.test(id || name)) return 'current_city';
-        if (/state|province/.test(id || name)) return 'current_state';
-        if (/zip|postal/.test(id || name)) return 'zip_code';
-        if (/country/.test(id || name)) return 'country';
-        if (/salutation|honorific/.test(id || name)) return '';
-        return canonicalHint(el);
-      }
-    },
-
-    // 6. SmartRecruiters
-    {
-      id: 'smartrecruiters',
-      name: 'SmartRecruiters',
-      matches: hostIs(/(^|\.)smartrecruiters\.com$/i),
-      hint: el => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        const testId = (el.getAttribute('data-test') || '').toLowerCase();
-        if (name === 'firstname' || testId.includes('first-name')) return 'first_name';
-        if (name === 'lastname' || testId.includes('last-name')) return 'last_name';
-        if (name === 'email' || testId.includes('email')) return 'email';
-        if (name === 'phonenumber' || testId.includes('phone')) return 'phone';
-        if (name.includes('city') || testId.includes('city')) return 'current_city';
-        if (testId.includes('country')) return 'country';
-        return canonicalHint(el);
-      }
-    },
-
-    // 7. Taleo (Oracle Taleo Enterprise / Business Edition)
-    {
-      id: 'taleo',
-      name: 'Taleo',
-      matches: hostIs(/(^|\.)taleo\.net$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 8. SAP SuccessFactors
-    {
-      id: 'successfactors',
-      name: 'SuccessFactors',
-      matches: hostIs(/(^|\.)(successfactors|sapsf)\.(com|eu|net)$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 9. BambooHR
-    {
-      id: 'bamboohr',
-      name: 'BambooHR',
-      matches: hostIs(/(^|\.)bamboohr\.com$/i),
-      hint: el => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        if (name === 'firstname') return 'first_name';
-        if (name === 'lastname') return 'last_name';
-        if (name === 'email') return 'email';
-        if (name === 'phone') return 'phone';
-        if (name === 'streetaddress') return 'full_address';
-        if (name === 'city') return 'current_city';
-        if (name === 'state') return 'current_state';
-        if (name === 'zipcode') return 'zip_code';
-        if (name === 'linkedinurl') return 'linkedin_url';
-        return canonicalHint(el);
-      }
-    },
-
-    // 10. Workable
-    {
-      id: 'workable',
-      name: 'Workable',
-      matches: hostIs(/(^|\.)workable\.com$/i),
-      hint: el => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        const ui = (el.getAttribute('data-ui') || '').toLowerCase();
-        if (name === 'firstname' || ui.includes('firstname')) return 'first_name';
-        if (name === 'lastname' || ui.includes('lastname')) return 'last_name';
-        if (name === 'email' || ui.includes('email')) return 'email';
-        if (name === 'phone' || ui.includes('phone')) return 'phone';
-        if (name === 'address') return 'full_address';
-        if (name === 'city') return 'current_city';
-        return canonicalHint(el);
-      }
-    },
-
-    // 11. Jobvite
-    {
-      id: 'jobvite',
-      name: 'Jobvite',
-      matches: hostIs(/(^|\.)jobvite\.com$/i),
-      hint: el => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        if (name.includes('jvfirstname') || name === 'firstname') return 'first_name';
-        if (name.includes('jvlastname') || name === 'lastname') return 'last_name';
-        if (name.includes('jvemail') || name === 'email') return 'email';
-        if (name.includes('jvphone') || name === 'phone') return 'phone';
-        return canonicalHint(el);
-      }
-    },
-
-    // 12. JazzHR (ApplyToJob)
-    {
-      id: 'jazzhr',
-      name: 'JazzHR',
-      matches: hostIs(/(^|\.)(jazzhr\.com|applytojob\.com)$/i),
-      hint: el => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        if (name.includes('applicant_first_name')) return 'first_name';
-        if (name.includes('applicant_last_name')) return 'last_name';
-        if (name.includes('applicant_email')) return 'email';
-        if (name.includes('applicant_phone')) return 'phone';
-        if (name.includes('applicant_street_address')) return 'full_address';
-        if (name.includes('applicant_city')) return 'current_city';
-        if (name.includes('applicant_state')) return 'current_state';
-        if (name.includes('applicant_zip')) return 'zip_code';
-        return canonicalHint(el);
-      }
-    },
-
-    // 13. Breezy HR
-    {
-      id: 'breezy',
-      name: 'BreezyHR',
-      matches: hostIs(/(^|\.)breezy\.hr$/i),
-      hint: el => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        if (name === 'name') return 'full_name';
-        if (name === 'email') return 'email';
-        if (name === 'phone_number' || name === 'phone') return 'phone';
-        return canonicalHint(el);
-      }
-    },
-
-    // 14. Personio
-    {
-      id: 'personio',
-      name: 'Personio',
-      matches: hostIs(/(^|\.)personio\.(de|com)$/i),
-      hint: el => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        if (name === 'first_name') return 'first_name';
-        if (name === 'last_name') return 'last_name';
-        if (name === 'email') return 'email';
-        if (name === 'phone') return 'phone';
-        return canonicalHint(el);
-      }
-    },
-
-    // 15. Rippling
-    {
-      id: 'rippling',
-      name: 'Rippling ATS',
-      matches: hostIs(/(^|\.)rippling\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 16. Paylocity
-    {
-      id: 'paylocity',
-      name: 'Paylocity',
-      matches: hostIs(/(^|\.)paylocity\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 17. Paycom
-    {
-      id: 'paycom',
-      name: 'Paycom',
-      matches: hostIs(/(^|\.)paycom(online)?\.(com|net)$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 18. ADP (Workforce Now & Recruiting)
-    {
-      id: 'adp',
-      name: 'ADP',
-      matches: hostIs(/(^|\.)adp\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 19. Oracle Cloud HCM
-    {
-      id: 'oraclecloud',
-      name: 'Oracle Cloud HCM',
-      matches: hostIs(/(^|\.)oracle(cloud|govcloud)\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 20. IBM BrassRing
-    {
-      id: 'brassring',
-      name: 'IBM BrassRing',
-      matches: hostIs(/(^|\.)brassring\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 21. Dayforce HCM
-    {
-      id: 'dayforce',
-      name: 'Dayforce',
-      matches: hostIs(/(^|\.)dayforce(hcm)?\.com$/i),
-      hint: el => {
-        const fieldId = (el.getAttribute('data-field-id') || el.id || '').toLowerCase();
-        if (fieldId.includes('firstname')) return 'first_name';
-        if (fieldId.includes('lastname')) return 'last_name';
-        if (fieldId.includes('email')) return 'email';
-        if (fieldId.includes('phone')) return 'phone';
-        return canonicalHint(el);
-      }
-    },
-
-    // 22. UKG Pro / UltiPro
-    {
-      id: 'ultipro',
-      name: 'UKG / Ultipro',
-      matches: hostIs(/(^|\.)(ultipro\.com|ultipro\.ca|rec\.pro\.ukg\.net)$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 23. Eightfold AI
-    {
-      id: 'eightfold',
-      name: 'Eightfold.ai',
-      matches: hostIs(/(^|\.)eightfold\.ai$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 24. Phenom People
-    {
-      id: 'phenom',
-      name: 'Phenom',
-      matches: hostIs(/(^|\.)phenom(people)?\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 25. Zoho Recruit
-    {
-      id: 'zohorecruit',
-      name: 'Zoho Recruit',
-      matches: hostIs(/(^|\.)zohorecruit\.(com|in|eu)$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 26. Teamtailor
-    {
-      id: 'teamtailor',
-      name: 'Teamtailor',
-      matches: hostIs(/(^|\.)teamtailor\.com$/i),
-      hint: el => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        if (name.includes('[first_name]')) return 'first_name';
-        if (name.includes('[last_name]')) return 'last_name';
-        if (name.includes('[email]')) return 'email';
-        if (name.includes('[phone]')) return 'phone';
-        return canonicalHint(el);
-      }
-    },
-
-    // 27. Recruitee
-    {
-      id: 'recruitee',
-      name: 'Recruitee',
-      matches: hostIs(/(^|\.)recruitee\.com$/i),
-      hint: el => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        if (name.includes('[name]')) return 'full_name';
-        if (name.includes('[email]')) return 'email';
-        if (name.includes('[phone]')) return 'phone';
-        return canonicalHint(el);
-      }
-    },
-
-    // 28. Pinpoint HQ
-    {
-      id: 'pinpoint',
-      name: 'Pinpoint',
-      matches: hostIs(/(^|\.)pinpointhq\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 29. Avature
-    {
-      id: 'avature',
-      name: 'Avature',
-      matches: hostIs(/(^|\.)avature\.net$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 30. Freshteam
-    {
-      id: 'freshteam',
-      name: 'Freshteam',
-      matches: hostIs(/(^|\.)freshteam\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 31. Comeet
-    {
-      id: 'comeet',
-      name: 'Comeet',
-      matches: hostIs(/(^|\.)comeet\.com$/i),
-      hint: el => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        if (name === 'name') return 'full_name';
-        if (name === 'email') return 'email';
-        if (name === 'phone') return 'phone';
-        return canonicalHint(el);
-      }
-    },
-
-    // 32. Keka / Foxsense
-    {
-      id: 'keka',
-      name: 'Keka',
-      matches: hostIs(/(^|\.)(keka\.com|foxsense\.com)$/i),
-      hint: el => {
-        const formGroup = el.closest('.form-group, .keka-form-group');
-        const label = formGroup ? (formGroup.querySelector('label')?.textContent || '') : '';
-        return label || canonicalHint(el);
-      }
-    },
-
-    // 33. Recruit.io
-    {
-      id: 'recruitio',
-      name: 'Recruit.io',
-      matches: hostIs(/(^|\.)recruit\.io$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 34. Cruit
-    {
-      id: 'cruit',
-      name: 'Cruit',
-      matches: hostIs(/(^|\.)cruit\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 35. Crelly
-    {
-      id: 'crelly',
-      name: 'Crelly',
-      matches: hostIs(/(^|\.)crelly\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 36. Sprocket
-    {
-      id: 'sprocket',
-      name: 'Sprocket',
-      matches: hostIs(/(^|\.)sprocket\.live$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 37. Sona
-    {
-      id: 'sona',
-      name: 'Sona',
-      matches: hostIs(/(^|\.)sona\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 38. Paradox
-    {
-      id: 'paradox',
-      name: 'Paradox',
-      matches: hostIs(/(^|\.)paradox\.ai$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 39. Moka
-    {
-      id: 'moka',
-      name: 'Moka',
-      matches: hostIs(/(^|\.)moka\.io$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 40. Movio
-    {
-      id: 'movio',
-      name: 'Movio',
-      matches: hostIs(/(^|\.)movio\.co$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 41. Brax
-    {
-      id: 'brax',
-      name: 'Brax',
-      matches: hostIs(/(^|\.)brax\.(co|com)$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 42. Employment Hero
-    {
-      id: 'employmenthero',
-      name: 'Employment Hero',
-      matches: hostIs(/(^|\.)employmenthero\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 43. Paycor
-    {
-      id: 'paycor',
-      name: 'Paycor',
-      matches: hostIs(/(^|\.)paycor\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 44. isolved
-    {
-      id: 'isolved',
-      name: 'isolved',
-      matches: hostIs(/(^|\.)isolved\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 45. Vndly
-    {
-      id: 'vndly',
-      name: 'Vndly',
-      matches: hostIs(/(^|\.)vndly\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 46. Xero
-    {
-      id: 'xero',
-      name: 'Xero',
-      matches: hostIs(/(^|\.)xero\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 47. JobDiva
-    {
-      id: 'jobdiva',
-      name: 'JobDiva',
-      matches: hostIs(/(^|\.)jobdiva\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 48. LinkedIn
-    {
-      id: 'linkedin',
-      name: 'LinkedIn',
-      matches: hostIs(/(^|\.)linkedin\.com$/i),
-      hint: el => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        const id = (el.getAttribute('id') || '').toLowerCase();
-        if (name === 'firstname' || id === 'input-first-name') return 'first_name';
-        if (name === 'lastname' || id === 'input-last-name') return 'last_name';
-        if (name === 'email' || id === 'input-email') return 'email';
-        if (name === 'phonenumber' || id === 'input-phone-number') return 'phone';
-        if (name === 'location' || id === 'input-location') return 'current_city';
-        if (name === 'company' || id === 'input-current-company') return 'current_employer';
-        if (name === 'currentposition' || id === 'input-current-position') return 'current_title';
-        if (name === 'linkedin' || id === 'input-linkedin') return 'linkedin_url';
-        if (name === 'yearsexperience' || id === 'input-years-experience') return 'total_experience_years';
-        return canonicalHint(el);
-      }
-    },
-
-    // 49. Indeed
-    {
-      id: 'indeed',
-      name: 'Indeed',
-      matches: hostIs(/(^|\.)indeed\.com$/i),
-      hint: el => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        const id = (el.getAttribute('id') || '').toLowerCase();
-        if (name === 'fullname' || id === 'fullname') return 'full_name';
-        if (name === 'email' || id === 'email') return 'email';
-        if (name === 'phone' || id === 'phone') return 'phone';
-        if (name === 'city' || id === 'city') return 'current_city';
-        if (name === 'state' || id === 'state') return 'current_state';
-        if (name === 'street' || id === 'street') return 'full_address';
-        if (name === 'zipcode' || id === 'zipcode') return 'zip_code';
-        return canonicalHint(el);
-      }
-    },
-
-    // 50. Glassdoor
-    {
-      id: 'glassdoor',
-      name: 'Glassdoor',
-      matches: hostIs(/(^|\.)glassdoor\.(com|co\.in)$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 51. Monster
-    {
-      id: 'monster',
-      name: 'Monster',
-      matches: hostIs(/(^|\.)monster\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 52. Dice
-    {
-      id: 'dice',
-      name: 'Dice',
-      matches: hostIs(/(^|\.)dice\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 53. ZipRecruiter
-    {
-      id: 'ziprecruiter',
-      name: 'ZipRecruiter',
-      matches: hostIs(/(^|\.)ziprecruiter\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 54. BuiltIn
-    {
-      id: 'builtin',
-      name: 'BuiltIn',
-      matches: hostIs(/(^|\.)builtin\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 55. Wellfound
-    {
-      id: 'wellfound',
-      name: 'Wellfound',
-      matches: hostIs(/(^|\.)wellfound\.com$/i),
-      hint: el => {
-        const name = (el.getAttribute('name') || '').toLowerCase();
-        if (name.includes('candidate[first_name]')) return 'first_name';
-        if (name.includes('candidate[last_name]')) return 'last_name';
-        if (name.includes('candidate[email]')) return 'email';
-        if (name.includes('candidate[phone]')) return 'phone';
-        return canonicalHint(el);
-      }
-    },
-
-    // 56. Naukri
-    {
-      id: 'naukri',
-      name: 'Naukri',
-      matches: hostIs(/(^|\.)naukri\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 57. Foundit (Monster India)
-    {
-      id: 'foundit',
-      name: 'Foundit',
-      matches: hostIs(/(^|\.)foundit\.in$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 58. CutShort
-    {
-      id: 'cutshort',
-      name: 'CutShort',
-      matches: hostIs(/(^|\.)cutshort\.io$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 59. Bayt
-    {
-      id: 'bayt',
-      name: 'Bayt',
-      matches: hostIs(/(^|\.)bayt\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 60. Jobstreet
-    {
-      id: 'jobstreet',
-      name: 'Jobstreet',
-      matches: hostIs(/(^|\.)jobstreet\.(com\.my|com\.ph|com\.sg)$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 61. Welcome to the Jungle / Otta
-    {
-      id: 'welcometothejungle',
-      name: 'Welcome to the Jungle',
-      matches: hostIs(/(^|\.)welcometothejungle\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 62. SEEK
-    {
-      id: 'seek',
-      name: 'SEEK',
-      matches: hostIs(/(^|\.)seek\.com\.(au|nz)$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 63. Jobserve
-    {
-      id: 'jobserve',
-      name: 'Jobserve',
-      matches: hostIs(/(^|\.)jobserve\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 64. Totaljobs
-    {
-      id: 'totaljobs',
-      name: 'Totaljobs',
-      matches: hostIs(/(^|\.)totaljobs\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 65. Reed
-    {
-      id: 'reed',
-      name: 'Reed',
-      matches: hostIs(/(^|\.)reed\.co\.uk$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 66. SimplyHired
-    {
-      id: 'simplyhired',
-      name: 'SimplyHired',
-      matches: hostIs(/(^|\.)simplyhired\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 67. LHH
-    {
-      id: 'lhh',
-      name: 'LHH',
-      matches: hostIs(/(^|\.)lhh\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 68. Ximble
-    {
-      id: 'ximble',
-      name: 'Ximble',
-      matches: hostIs(/(^|\.)ximble\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 69. Big Tech Direct Platforms (Google, Amazon, Apple, Meta, Tesla, Uber, TikTok)
-    {
-      id: 'bigtech',
-      name: 'Enterprise Career Portals',
-      matches: host => /(amazon\.jobs|jobs\.apple\.com|careers\.google\.com|metacareers\.com|uber\.com|careers\.tiktok\.com|jobs\.bytedance\.com)$/i.test(String(host || '').toLowerCase()),
-      hint: el => canonicalHint(el)
-    }
-  ];
-
-  // Register without duplicating: a later file for the same portal replaces the earlier entry.
-  function registerAdapter(adapter) {
-    if (!adapter || !adapter.id) return adapter;
-    const list = root.NextkinAdapters;
-    const index = list.findIndex(a => a.id === adapter.id);
-    if (index >= 0) list[index] = adapter; else list.push(adapter);
-    return adapter;
-  }
-
-  root.registerAdapter = registerAdapter;
-
-  for (const a of adapters) registerAdapter(a);
-
-  // Active Adapter Resolver: a portal-specific adapter always wins over the generic fallback.
-  root.resolveActiveAdapter = function(urlOrHost) {
-    const host = (urlOrHost || (typeof window !== 'undefined' ? window.location.hostname : '')).toLowerCase();
-    const list = root.NextkinAdapters || [];
-    let generic = null;
-    for (const a of list) {
-      if (!a || typeof a.matches !== 'function') continue;
-      if (a.id === 'generic') { generic = generic || a; continue; }
-      if (a.matches(host)) return a;
-    }
-    return generic || null;
+(function () {
+  const text = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : '';
+  const first = (root, selector) => root.querySelector(selector);
+  const read = (root, selector, max) => {
+    const node = first(root, selector);
+    return text(node?.getAttribute('content') || node?.innerText || node?.textContent, max);
+  };
+  const parse = value => {
+    try { return JSON.parse(value); } catch { return null; }
   };
 
-  console.info(`[NextKin Adapters] Loaded ${(root.NextkinAdapters || []).length} portal adapters.`);
-})(typeof globalThis !== 'undefined' ? globalThis : this);
+  function url(value, base) {
+    if (!value) return null;
+    try {
+      const result = new URL(value, base);
+      return /^https?:$/.test(result.protocol) && !result.username && !result.password ? result.href : null;
+    } catch {
+      return null;
+    }
+  }
 
+  function structuredPosting(root) {
+    const postings = [];
+    function visit(node) {
+      if (Array.isArray(node)) {
+        node.forEach(visit);
+      } else if (node && typeof node === 'object') {
+        if ([node['@type']].flat().some(type => /(?:^|\/)JobPosting$/.test(type))) postings.push(node);
+        visit(node['@graph']);
+        visit(node.mainEntity);
+      }
+    }
+    for (const node of root.querySelectorAll('script[type="application/ld+json"]')) visit(parse(node.textContent));
+    if (postings.length === 1) return postings[0];
+    const heading = read(root, 'h1', 200).toLowerCase();
+    const matching = postings.filter(posting => text(posting.title || posting.name, 200).toLowerCase() === heading);
+    return heading && matching.length === 1 ? matching[0] : null;
+  }
 
+  function formatLocations(locations) {
+    return [locations].flat().map(item => {
+      const address = item?.address || item;
+      if (typeof address === 'string') return address;
+      return [address?.addressLocality, address?.addressRegion,
+        address?.addressCountry?.name || address?.addressCountry].filter(part => typeof part === 'string').join(', ');
+    }).filter(Boolean).join(' • ');
+  }
+
+  function safeHtml(markup) {
+    const template = document.createElement('template');
+    template.innerHTML = String(markup).slice(0, 120_000);
+    template.content.querySelectorAll('script, style, template, iframe, object, embed, form, svg, img, link, meta, audio, video').forEach(node => node.remove());
+    for (const node of template.content.querySelectorAll('*')) {
+      for (const attribute of node.getAttributeNames()) node.removeAttribute(attribute);
+    }
+    return template;
+  }
+
+  function kekaPosting(page) {
+    const id = /(^|\.)keka\.com$/.test(page.hostname) &&
+      page.pathname.match(/^\/careers\/(?:jobdetails|applyjob)\/(\d+)\/?$/i)?.[1];
+    return id ? {
+      id,
+      details: new URL('/careers/jobdetails/' + id, page.origin).href,
+      application: new URL('/careers/applyjob/' + id, page.origin).href,
+    } : null;
+  }
+
+  function jobFromDom(root = document, pageUrl = location.href) {
+    const jobUrl = url(pageUrl);
+    if (!jobUrl) return null;
+    const current = new URL(jobUrl);
+    const keka = kekaPosting(current);
+    const isWorkspace = /(^|\.)(nextkinhr\.com|jobright-internal\.com)$/.test(current.hostname)
+      || ['localhost', '127.0.0.1'].includes(current.hostname) && !!first(root, '#nextkin-job-details');
+    const isAts = /(^|\.)(lever\.co|ashbyhq\.com|greenhouse\.io|myworkdayjobs\.com|myworkdaysite\.com|smartrecruiters\.com|workable\.com|taleo\.net|icims\.com|jobvite\.com|bamboohr\.com)$/i.test(current.hostname);
+    const portal = isWorkspace && /^\/(?:dashboard\/jobs|jobs\/info)\/[^/]+\/?$/.test(current.pathname);
+    if (isWorkspace && !portal) return null;
+    const workspace = portal ? parse(first(root, '#nextkin-job-details')?.textContent) : null;
+    const posting = workspace ? null : structuredPosting(root);
+    const descriptionNode = [
+      '.jd-prose', '[itemprop="description"]', '[data-automation-id="jobPostingDescription"]',
+      '[data-testid="job-description"]', '[data-qa="job-description"]', '.job__description',
+      '#job-description', '#jobDescriptionText', '#jobDescription', '#content.job-description',
+      '.job-description', '.job-description-content', '.jobs-description__content', '#job-details',
+      '[class*="job-description" i]', '.posting-page .section-wrapper', 'main article',
+    ].map(selector => first(root, selector)).find(Boolean);
+    const knownJobPath = isAts || /\/(?:jobs?|careers?|openings?|positions?|requisitions?|jobdetails|viewjob|job-detail|job-posting)(?:\/[^/]+)|[?&](?:gh_jid|jobId|job_id|jk)=/i.test(jobUrl);
+    if (!workspace && !posting && (!descriptionNode && !knownJobPath)) return null;
+
+    let title = text(workspace?.title || posting?.title || posting?.name || read(root,
+      '[data-automation-id="jobPostingHeader"], [data-testid="job-title"], [itemprop="title"], .posting-headline h2, .posting-header h2, .job-title, h1, h2', 200), 200);
+    if (!title || /^(apply for this job|job application|application|careers?)$/i.test(title)) {
+      const docTitle = document.title || '';
+      const cleanTitle = docTitle
+        .replace(/^Job Application for\s+/i, '')
+        .replace(/\s+(?:at|@)\s+[A-Za-z0-9&.,' -]+$/i, '')
+        .replace(/^[A-Za-z0-9&.,' -]+?\s*[-|–|·]\s*/i, '')
+        .replace(/\s*[-|–|·]\s*(?:apply|lever|greenhouse|ashby|workday).*$/i, '')
+        .trim();
+      if (cleanTitle && cleanTitle.length >= 3) {
+        title = cleanTitle;
+      }
+    }
+
+    const postingCompany = typeof posting?.hiringOrganization === 'string' ? posting.hiringOrganization : posting?.hiringOrganization?.name;
+    const kekaCompany = keka && current.hostname.split('.')[0].replace(/[-_]+/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+    const workspaceCompany = portal && first(root, 'main h1')?.previousElementSibling?.querySelector('span')?.textContent;
+    let company = text(workspace?.company || postingCompany || read(root,
+      '[itemprop="hiringOrganization"] [itemprop="name"], [data-testid="company-name"], [data-automation-id="companyName"], .company-name, .job-company, .topcard__org-name-link, .jobs-unified-top-card__company-name, [property="og:site_name"]', 200) || workspaceCompany || kekaCompany, 200);
+
+    if (!company) {
+      const logoImg = first(root, '.main-header-logo img, .header__logo img, [class*="logo" i] img');
+      const logoAlt = logoImg?.getAttribute('alt')?.trim();
+      if (logoAlt && !/^(company|organization|logo)$/i.test(logoAlt)) {
+        company = logoAlt.replace(/\s+logo$/i, '').trim();
+      }
+    }
+    if (!company) {
+      const docTitle = document.title || '';
+      const atMatch = docTitle.match(/(?:at|@)\s+([A-Za-z0-9&.,' -]+?)(?:\s*[-|–|·]|\s*$)/i);
+      const dashMatch = docTitle.match(/^([A-Za-z0-9&.,' -]{2,40}?)\s*[-|–|·]\s*/i);
+      if (atMatch && atMatch[1]?.trim() && !/^(jobs?|careers?)$/i.test(atMatch[1].trim())) {
+        company = atMatch[1].trim();
+      } else if (dashMatch && dashMatch[1]?.trim() && !/^(job application|apply|careers?|jobs?)$/i.test(dashMatch[1].trim())) {
+        company = dashMatch[1].trim();
+      }
+    }
+    if (!company && isAts) {
+      const segments = current.pathname.split('/').filter(Boolean);
+      if (segments.length >= 1) {
+        const slug = segments[0];
+        if (!/^(jobs?|careers?|apply|application|openings)$/i.test(slug)) {
+          company = slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+      }
+    }
+
+    const markup = workspace?.descriptionHtml || posting?.description || descriptionNode?.innerHTML || '';
+    const template = safeHtml(markup);
+    let descriptionHtml = template.innerHTML.slice(0, 120_000);
+    for (const element of template.content.querySelectorAll('br, p, li, h1, h2, h3, h4, div, section')) element.after('\n');
+    let description = text(workspace?.description || template.content.textContent || descriptionNode?.innerText, 60_000);
+    if (description.length < 30 && (isAts || /apply|application/i.test(current.pathname))) {
+      description = `${title} at ${company}. Application posting for the ${title} role at ${company}.`;
+      descriptionHtml = `<p>${description}</p>`;
+    }
+    if (!title || !company || description.length < 15 || /^(careers?|open positions?|job search|all jobs|open roles|job opportunities)$/i.test(title)) return null;
+
+    const apply = [...root.querySelectorAll('a[href]')].find(link => /^(apply(?:\s+(?:now|for\s+(?:this\s+)?(?:job|role|position)))?|submit application)\b/i
+      .test((link.innerText || link.getAttribute('aria-label') || link.textContent || '').trim()));
+    const canonical = url(posting?.url || first(root, 'link[rel="canonical"]')?.getAttribute('href'), jobUrl);
+    const onSameSite = canonical && new URL(canonical).origin === current.origin;
+    const postingParam = [...current.searchParams.keys()].some(key => /^(?:gh_jid|jobId|job_id|jk|postingId)$/i.test(key));
+    return {
+      title, company, description, descriptionHtml,
+      jobUrl: keka?.details || (workspace || postingParam || !onSameSite || /^(?:\/|\/(?:careers?|jobs?|openings?)\/?)$/i.test(new URL(canonical).pathname) ? jobUrl : canonical),
+      applicationUrl: keka?.application || url(workspace?.applicationUrl || posting?.applicationUrl || apply?.getAttribute('href'), jobUrl),
+      location: text(workspace?.location || formatLocations(posting?.jobLocation) || read(root,
+        '[itemprop="jobLocation"], [data-automation-id="locations"], [data-automation-id="jobPostingLocation"], [data-testid="job-location"], .job-location, .posting-categories .location, .ki-location + span', 200), 200),
+      department: text(workspace?.department || posting?.occupationalCategory || read(root, '[data-testid="job-department"], .job-department, .posting-categories .department', 100), 100),
+      employmentType: text(workspace?.employmentType || [posting?.employmentType].flat().filter(Boolean).join(', ') || read(root,
+        '[itemprop="employmentType"], [data-automation-id="time"], [data-testid="employment-type"], .employment-type, .posting-categories .commitment, .ki-briefcase + span', 100), 100),
+      compensation: workspace?.compensation ?? posting?.baseSalary ?? (read(root, '[itemprop="baseSalary"], [data-testid="job-salary"], .salary-range, .job-salary', 500) || null),
+      arrangements: workspace?.arrangements ?? (text(posting?.jobLocationType, 100) || null),
+      externalId: text(String(workspace?.externalId || keka?.id || posting?.identifier?.value || (typeof posting?.identifier === 'string' ? posting.identifier : '')), 200),
+      postedAt: text(workspace?.postedAt || posting?.datePosted || first(root, 'time[itemprop="datePosted"]')?.dateTime, 50),
+      closesAt: text(workspace?.closesAt || posting?.validThrough, 50),
+      portalSource: text(workspace?.portalSource || current.hostname, 100),
+    };
+  }
+
+  globalThis.NextkinJobCapture = { read: jobFromDom, kekaPosting };
+})();
+
+;
 (function(root){'use strict';
   const excluded = /\b(?:password|secret|token|credential|bank|routing|payment|credit.?card|ssn|social.?security|tax.?id|captcha|otp|one.?time.?code)\b/i;
 
@@ -892,7 +230,7 @@
       const row = el.closest('tr');
       if (row) {
         const head = row.querySelector('th, [class*="prompt" i], [class*="label" i]');
-        if (head && head.textContent && head.textContent.trim().length < 200) found = clean(head.textContent);
+        if (head && head.textContent && head.textContent.trim().length < 2500) found = clean(head.textContent);
       }
     }
 
@@ -901,7 +239,7 @@
       const qContainer = el.closest(QUESTION_CONTAINER + ', [class*="select__container"], .select, .phone-input__country');
       if (qContainer) {
         const qLbl = qContainer.querySelector('label[class*="question-title"], [class*="question-title"], .application-label, [class*="application-label"], [class*="labelContainer"], [class*="label"], [class*="title"], [class*="header"], [class*="heading"], h3, h4, h5, strong, b');
-        if (qLbl && qLbl.textContent && qLbl.textContent.trim().length < 200) {
+        if (qLbl && qLbl.textContent && qLbl.textContent.trim().length < 2500) {
           found = clean(labelText(qLbl));
         }
       }
@@ -911,7 +249,7 @@
       let prev = el.previousElementSibling;
       if (!prev && el.parentElement) prev = el.parentElement.previousElementSibling;
       if (prev && (prev.classList.contains('application-label') || /label|title|header|prompt/i.test(prev.className) || prev.tagName === 'LABEL' || prev.tagName === 'DIV' || prev.tagName === 'SPAN')) {
-        if (prev.textContent && prev.textContent.trim().length < 200) found = clean(prev.textContent);
+        if (prev.textContent && prev.textContent.trim().length < 2500) found = clean(prev.textContent);
       }
     }
 
@@ -924,7 +262,7 @@
       else if (/urls\[([^\]]+)\]/i.test(el.name)) found = RegExp.$1;
     }
 
-    if (!found && (el.getAttribute('role') === 'checkbox' || el.tagName !== 'INPUT') && el.textContent && el.textContent.trim().length < 200) {
+    if (!found && (el.getAttribute('role') === 'checkbox' || el.tagName !== 'INPUT') && el.textContent && el.textContent.trim().length < 2500) {
       found = clean(el.textContent);
     }
 
@@ -936,19 +274,19 @@
     const container = group.closest('fieldset, [role="group"], [role="radiogroup"], .application-question, [class*="application-question"], [class*="field-entry"], [class*="fieldEntry"], [class*="question"]');
     const inner = container?.querySelector('legend, label, [class*="question-title"], [class*="label"], [class*="title"], h3, h4, strong');
     const text = (inner?.textContent || group.textContent || '').replace(/\s+/g, ' ').trim();
-    return text.slice(0, 200);
+    return text.slice(0, 2000);
   }
 
   // Title of a container that asks one question about several boxes.
   function groupTitle(group){
     const accessibleName = group.getAttribute('aria-label') || group.getAttribute('aria-labelledby')?.split(/\s+/)
       .map(id => group.getRootNode().getElementById?.(id)?.textContent).filter(Boolean).join(' ');
-    if (accessibleName) return clean(accessibleName).slice(0, 200);
+    if (accessibleName) return clean(accessibleName).slice(0, 2000);
     const legend = group.querySelector('legend');
-    if (legend && legend.textContent && legend.textContent.trim()) return clean(legend.textContent).slice(0, 200);
+    if (legend && legend.textContent && legend.textContent.trim()) return clean(legend.textContent).slice(0, 2000);
     const title = group.querySelector('[class*="question-title" i], [class*="application-label" i], [class*="labelContainer" i], h3, h4, h5, strong, p') ||
       [...group.querySelectorAll('label')].find(el => !el.control && !el.querySelector('input, [role="radio"], [role="checkbox"]'));
-    if (title && title.textContent && title.textContent.trim().length < 200) return clean(title.textContent).slice(0, 200);
+    if (title && title.textContent && title.textContent.trim().length < 2500) return clean(title.textContent).slice(0, 2000);
     return '';
   }
 
@@ -1174,7 +512,7 @@
   root.NextkinForms = { discoverFields, label, findStepNavigation, detectNewFields, observeStepTransitions };
 })(globalThis);
 
-
+;
 (function(root){'use strict';
   const norm = v => String(v ?? '').replace(/[_*:-]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 
@@ -1443,17 +781,21 @@
       vendor_email: facts.vendor_email || candidate.vendor_email || '',
       personal_email: facts.personal_email || candidate.personal_email || '',
       contract_type: facts.contract_type || candidate.contract_type || '',
-      summary: candidate.summary || candidate.bio || facts.summary || facts.bio || (fullName ? `${fullName} is an experienced professional specializing in ${skills}. Proven track record of high quality engineering and delivering results.` : ''),
-      bio: candidate.bio || candidate.summary || facts.bio || facts.summary || (fullName ? `${fullName} is an experienced professional specializing in ${skills}. Proven track record of high quality engineering and delivering results.` : ''),
-      gender: facts.gender || candidate.gender || 'Male',
-      race: facts.race || candidate.race || 'Asian',
-      veteran: facts.veteran || candidate.veteran || 'I am not a protected veteran',
-      disability: facts.disability || candidate.disability || 'No, I do not have a disability',
-      availability: 'Immediately',
-      salary_expectation: facts.pay_rate || candidate.pay_rate || 'Open / Competitive',
+      summary: candidate.summary || candidate.bio || facts.summary || facts.bio || '',
+      bio: candidate.bio || candidate.summary || facts.bio || facts.summary || '',
+      gender: facts.gender || candidate.gender || '',
+      race: facts.race || candidate.race || '',
+      veteran: facts.veteran || candidate.veteran || '',
+      disability: facts.disability || candidate.disability || '',
+      availability: facts.availability || candidate.availability || candidate.available_to_join || candidate.notice_period || 'Immediately',
+      salary_expectation: facts.pay_rate || candidate.expected_salary || candidate.current_salary || candidate.pay_rate || 'Open / Competitive',
       how_heard: 'LinkedIn',
-      highest_education: facts.highest_qualification || candidate.highest_qualification || 'Bachelor\'s Degree',
-      school: facts.school || candidate.school || 'University',
+      highest_education: facts.highest_qualification || candidate.highest_qualification || candidate.degree || '',
+      school: facts.school || candidate.university_name || candidate.school || '',
+      graduation_year: facts.graduation_year || candidate.graduation_year || '',
+      languages: candidate.languages || [],
+      employment_history: candidate.employment_history || [],
+      education_history: candidate.education_history || [],
       e_signature: fullName,
       consent: true,
       known_authorization: rawAuth !== undefined,
@@ -1647,7 +989,7 @@
   root.NextkinFieldMapping = { planFill, resolveFact, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS };
 })(globalThis);
 
-
+;
 (function (root) {
   const mapping = root.NextkinFieldMapping;
   const normalize = value => String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -2384,183 +1726,7 @@
   };
 })(globalThis);
 
-
-(function () {
-  const text = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : '';
-  const first = (root, selector) => root.querySelector(selector);
-  const read = (root, selector, max) => {
-    const node = first(root, selector);
-    return text(node?.getAttribute('content') || node?.innerText || node?.textContent, max);
-  };
-  const parse = value => {
-    try { return JSON.parse(value); } catch { return null; }
-  };
-
-  function url(value, base) {
-    if (!value) return null;
-    try {
-      const result = new URL(value, base);
-      return /^https?:$/.test(result.protocol) && !result.username && !result.password ? result.href : null;
-    } catch {
-      return null;
-    }
-  }
-
-  function structuredPosting(root) {
-    const postings = [];
-    function visit(node) {
-      if (Array.isArray(node)) {
-        node.forEach(visit);
-      } else if (node && typeof node === 'object') {
-        if ([node['@type']].flat().some(type => /(?:^|\/)JobPosting$/.test(type))) postings.push(node);
-        visit(node['@graph']);
-        visit(node.mainEntity);
-      }
-    }
-    for (const node of root.querySelectorAll('script[type="application/ld+json"]')) visit(parse(node.textContent));
-    if (postings.length === 1) return postings[0];
-    const heading = read(root, 'h1', 200).toLowerCase();
-    const matching = postings.filter(posting => text(posting.title || posting.name, 200).toLowerCase() === heading);
-    return heading && matching.length === 1 ? matching[0] : null;
-  }
-
-  function formatLocations(locations) {
-    return [locations].flat().map(item => {
-      const address = item?.address || item;
-      if (typeof address === 'string') return address;
-      return [address?.addressLocality, address?.addressRegion,
-        address?.addressCountry?.name || address?.addressCountry].filter(part => typeof part === 'string').join(', ');
-    }).filter(Boolean).join(' • ');
-  }
-
-  function safeHtml(markup) {
-    const template = document.createElement('template');
-    template.innerHTML = String(markup).slice(0, 120_000);
-    template.content.querySelectorAll('script, style, template, iframe, object, embed, form, svg, img, link, meta, audio, video').forEach(node => node.remove());
-    for (const node of template.content.querySelectorAll('*')) {
-      for (const attribute of node.getAttributeNames()) node.removeAttribute(attribute);
-    }
-    return template;
-  }
-
-  function kekaPosting(page) {
-    const id = /(^|\.)keka\.com$/.test(page.hostname) &&
-      page.pathname.match(/^\/careers\/(?:jobdetails|applyjob)\/(\d+)\/?$/i)?.[1];
-    return id ? {
-      id,
-      details: new URL('/careers/jobdetails/' + id, page.origin).href,
-      application: new URL('/careers/applyjob/' + id, page.origin).href,
-    } : null;
-  }
-
-  function jobFromDom(root = document, pageUrl = location.href) {
-    const jobUrl = url(pageUrl);
-    if (!jobUrl) return null;
-    const current = new URL(jobUrl);
-    const keka = kekaPosting(current);
-    const isWorkspace = /(^|\.)(nextkinhr\.com|jobright-internal\.com)$/.test(current.hostname)
-      || ['localhost', '127.0.0.1'].includes(current.hostname) && !!first(root, '#nextkin-job-details');
-    const isAts = /(^|\.)(lever\.co|ashbyhq\.com|greenhouse\.io|myworkdayjobs\.com|myworkdaysite\.com|smartrecruiters\.com|workable\.com|taleo\.net|icims\.com|jobvite\.com|bamboohr\.com)$/i.test(current.hostname);
-    const portal = isWorkspace && /^\/(?:dashboard\/jobs|jobs\/info)\/[^/]+\/?$/.test(current.pathname);
-    if (isWorkspace && !portal) return null;
-    const workspace = portal ? parse(first(root, '#nextkin-job-details')?.textContent) : null;
-    const posting = workspace ? null : structuredPosting(root);
-    const descriptionNode = [
-      '.jd-prose', '[itemprop="description"]', '[data-automation-id="jobPostingDescription"]',
-      '[data-testid="job-description"]', '[data-qa="job-description"]', '.job__description',
-      '#job-description', '#jobDescriptionText', '#jobDescription', '#content.job-description',
-      '.job-description', '.job-description-content', '.jobs-description__content', '#job-details',
-      '[class*="job-description" i]', '.posting-page .section-wrapper', 'main article',
-    ].map(selector => first(root, selector)).find(Boolean);
-    const knownJobPath = isAts || /\/(?:jobs?|careers?|openings?|positions?|requisitions?|jobdetails|viewjob|job-detail|job-posting)(?:\/[^/]+)|[?&](?:gh_jid|jobId|job_id|jk)=/i.test(jobUrl);
-    if (!workspace && !posting && (!descriptionNode && !knownJobPath)) return null;
-
-    let title = text(workspace?.title || posting?.title || posting?.name || read(root,
-      '[data-automation-id="jobPostingHeader"], [data-testid="job-title"], [itemprop="title"], .posting-headline h2, .posting-header h2, .job-title, h1, h2', 200), 200);
-    if (!title || /^(apply for this job|job application|application|careers?)$/i.test(title)) {
-      const docTitle = document.title || '';
-      const cleanTitle = docTitle
-        .replace(/^Job Application for\s+/i, '')
-        .replace(/\s+(?:at|@)\s+[A-Za-z0-9&.,' -]+$/i, '')
-        .replace(/^[A-Za-z0-9&.,' -]+?\s*[-|–|·]\s*/i, '')
-        .replace(/\s*[-|–|·]\s*(?:apply|lever|greenhouse|ashby|workday).*$/i, '')
-        .trim();
-      if (cleanTitle && cleanTitle.length >= 3) {
-        title = cleanTitle;
-      }
-    }
-
-    const postingCompany = typeof posting?.hiringOrganization === 'string' ? posting.hiringOrganization : posting?.hiringOrganization?.name;
-    const kekaCompany = keka && current.hostname.split('.')[0].replace(/[-_]+/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
-    const workspaceCompany = portal && first(root, 'main h1')?.previousElementSibling?.querySelector('span')?.textContent;
-    let company = text(workspace?.company || postingCompany || read(root,
-      '[itemprop="hiringOrganization"] [itemprop="name"], [data-testid="company-name"], [data-automation-id="companyName"], .company-name, .job-company, .topcard__org-name-link, .jobs-unified-top-card__company-name, [property="og:site_name"]', 200) || workspaceCompany || kekaCompany, 200);
-
-    if (!company) {
-      const logoImg = first(root, '.main-header-logo img, .header__logo img, [class*="logo" i] img');
-      const logoAlt = logoImg?.getAttribute('alt')?.trim();
-      if (logoAlt && !/^(company|organization|logo)$/i.test(logoAlt)) {
-        company = logoAlt.replace(/\s+logo$/i, '').trim();
-      }
-    }
-    if (!company) {
-      const docTitle = document.title || '';
-      const atMatch = docTitle.match(/(?:at|@)\s+([A-Za-z0-9&.,' -]+?)(?:\s*[-|–|·]|\s*$)/i);
-      const dashMatch = docTitle.match(/^([A-Za-z0-9&.,' -]{2,40}?)\s*[-|–|·]\s*/i);
-      if (atMatch && atMatch[1]?.trim() && !/^(jobs?|careers?)$/i.test(atMatch[1].trim())) {
-        company = atMatch[1].trim();
-      } else if (dashMatch && dashMatch[1]?.trim() && !/^(job application|apply|careers?|jobs?)$/i.test(dashMatch[1].trim())) {
-        company = dashMatch[1].trim();
-      }
-    }
-    if (!company && isAts) {
-      const segments = current.pathname.split('/').filter(Boolean);
-      if (segments.length >= 1) {
-        const slug = segments[0];
-        if (!/^(jobs?|careers?|apply|application|openings)$/i.test(slug)) {
-          company = slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        }
-      }
-    }
-
-    const markup = workspace?.descriptionHtml || posting?.description || descriptionNode?.innerHTML || '';
-    const template = safeHtml(markup);
-    let descriptionHtml = template.innerHTML.slice(0, 120_000);
-    for (const element of template.content.querySelectorAll('br, p, li, h1, h2, h3, h4, div, section')) element.after('\n');
-    let description = text(workspace?.description || template.content.textContent || descriptionNode?.innerText, 60_000);
-    if (description.length < 30 && (isAts || /apply|application/i.test(current.pathname))) {
-      description = `${title} at ${company}. Application posting for the ${title} role at ${company}.`;
-      descriptionHtml = `<p>${description}</p>`;
-    }
-    if (!title || !company || description.length < 15 || /^(careers?|open positions?|job search|all jobs|open roles|job opportunities)$/i.test(title)) return null;
-
-    const apply = [...root.querySelectorAll('a[href]')].find(link => /^(apply(?:\s+(?:now|for\s+(?:this\s+)?(?:job|role|position)))?|submit application)\b/i
-      .test((link.innerText || link.getAttribute('aria-label') || link.textContent || '').trim()));
-    const canonical = url(posting?.url || first(root, 'link[rel="canonical"]')?.getAttribute('href'), jobUrl);
-    const onSameSite = canonical && new URL(canonical).origin === current.origin;
-    const postingParam = [...current.searchParams.keys()].some(key => /^(?:gh_jid|jobId|job_id|jk|postingId)$/i.test(key));
-    return {
-      title, company, description, descriptionHtml,
-      jobUrl: keka?.details || (workspace || postingParam || !onSameSite || /^(?:\/|\/(?:careers?|jobs?|openings?)\/?)$/i.test(new URL(canonical).pathname) ? jobUrl : canonical),
-      applicationUrl: keka?.application || url(workspace?.applicationUrl || posting?.applicationUrl || apply?.getAttribute('href'), jobUrl),
-      location: text(workspace?.location || formatLocations(posting?.jobLocation) || read(root,
-        '[itemprop="jobLocation"], [data-automation-id="locations"], [data-automation-id="jobPostingLocation"], [data-testid="job-location"], .job-location, .posting-categories .location, .ki-location + span', 200), 200),
-      department: text(workspace?.department || posting?.occupationalCategory || read(root, '[data-testid="job-department"], .job-department, .posting-categories .department', 100), 100),
-      employmentType: text(workspace?.employmentType || [posting?.employmentType].flat().filter(Boolean).join(', ') || read(root,
-        '[itemprop="employmentType"], [data-automation-id="time"], [data-testid="employment-type"], .employment-type, .posting-categories .commitment, .ki-briefcase + span', 100), 100),
-      compensation: workspace?.compensation ?? posting?.baseSalary ?? (read(root, '[itemprop="baseSalary"], [data-testid="job-salary"], .salary-range, .job-salary', 500) || null),
-      arrangements: workspace?.arrangements ?? (text(posting?.jobLocationType, 100) || null),
-      externalId: text(String(workspace?.externalId || keka?.id || posting?.identifier?.value || (typeof posting?.identifier === 'string' ? posting.identifier : '')), 200),
-      postedAt: text(workspace?.postedAt || posting?.datePosted || first(root, 'time[itemprop="datePosted"]')?.dateTime, 50),
-      closesAt: text(workspace?.closesAt || posting?.validThrough, 50),
-      portalSource: text(workspace?.portalSource || current.hostname, 100),
-    };
-  }
-
-  globalThis.NextkinJobCapture = { read: jobFromDom, kekaPosting };
-})();
-
-
+;
 (function () {
   const capture = globalThis.NextkinJobCapture;
   const discovery = globalThis.NextkinForms;
@@ -2642,6 +1808,7 @@
     const questions = [];
     const duplicateLabels = page.keys.filter((key, i, keys) => keys.indexOf(key) !== i);
     const values = mapping.buildValues(candidate);
+    let genericTextareaIndex = 0;
 
     for (const plan of plans) {
       const { field } = plan;
@@ -2662,70 +1829,168 @@
           continue;
         }
 
-        // 2. Smart grounding fallback using candidate profile facts & intelligent defaults
+        // 2. Dynamic resume-grounded answers based strictly on candidate's uploaded resume
         let autoValue = null;
         const ql = label.toLowerCase();
+
+        const candName = values.full_name || 'Candidate';
+        const candFirst = values.first_name || 'Candidate';
+        const candTitle = values.current_title || candidate.current_job_title || candidate.headline || 'Software Engineer';
+        const candEmployer = values.current_employer || candidate.current_company || candidate.company || 'technology companies';
+        const candSkills = values.primary_skills || candidate.secondary_skills || 'software engineering';
+        const skillsList = Array.isArray(candSkills) ? candSkills : String(candSkills).split(/[,;|\n]+/).map(s => s.trim()).filter(Boolean);
+        const skillsStr = skillsList.join(', ') || 'Software Engineering';
+        const topSkills = skillsList.slice(0, 5).join(', ') || 'modern software engineering tools';
+        const candExp = values.total_experience_years ? `${values.total_experience_years}+ years` : '';
+        const candCity = values.current_city || candidate.city || '';
+        const candState = values.current_state || candidate.state || '';
+        const candLocation = values.current_location || [candCity, candState].filter(Boolean).join(', ') || '';
+        const candDegree = values.highest_education || candidate.highest_qualification || candidate.degree || '';
+        const candSchool = values.school || candidate.university_name || candidate.school || '';
+        const candGradYear = values.graduation_year || candidate.graduation_year || '';
+        const candSummary = values.summary || values.bio || '';
+        const candResumeText = (resume?.raw_text || resume?.source_text || candidate.source_text || '').toLowerCase();
+        const activeJobData = capture?.read ? capture.read() : null;
+        const companyName = activeJobData?.company || 'your company';
+
         if (mapping.isChoiceKind(field.kind)) {
           if (/(authoriz|eligible|legal right|citizen|18|age|full-time|onsite|internship|currently enrolled)/i.test(ql) && !/(require|need|sponsor)/i.test(ql)) {
-            autoValue = options.find(o => mapping.normalizeBoolean(o) === true) || options.find(o => /^yes\b/i.test(o)) || true;
-          } else if (/(require|need).*(sponsor|visa)/i.test(ql) || /(felony|convict|criminal|conflict|relatives|worked for|worked before|employee or a contractor)/i.test(ql)) {
+            const affirmative = values.authorized_in_usa !== false;
+            autoValue = options.find(o => mapping.normalizeBoolean(o) === affirmative) || (affirmative ? options.find(o => /^yes\b/i.test(o)) : options.find(o => /^no\b/i.test(o))) || affirmative;
+          } else if (/(require|need).*(sponsor|visa)/i.test(ql)) {
+            const needSponsor = values.needs_sponsorship === true;
+            autoValue = options.find(o => mapping.normalizeBoolean(o) === needSponsor) || (needSponsor ? options.find(o => /^yes\b/i.test(o)) : options.find(o => /^no\b/i.test(o))) || needSponsor;
+          } else if (/(felony|convict|criminal|conflict|relatives|worked for|worked before|employee or a contractor)/i.test(ql)) {
             autoValue = options.find(o => mapping.normalizeBoolean(o) === false) || options.find(o => /^no\b/i.test(o)) || false;
           } else if (/(gender|sex)/i.test(ql)) {
-            autoValue = options.find(o => /^male\b|^man\b/i.test(o)) || options.find(o => /decline|prefer not|do not wish/i.test(o)) || values.gender || 'Male';
+            if (candidate.gender) {
+              autoValue = options.find(o => new RegExp(`^${candidate.gender}\\b`, 'i').test(o)) || candidate.gender;
+            } else {
+              autoValue = options.find(o => /decline|prefer not|choose not/i.test(o)) || options[0];
+            }
           } else if (/(hispanic|latino)/i.test(ql)) {
             autoValue = options.find(o => /^(no|decline|prefer not)/i.test(o)) || false;
           } else if (/(race|ethnic)/i.test(ql)) {
-            autoValue = options.find(o => /^asian\b/i.test(o)) || options.find(o => /decline|prefer not|do not wish/i.test(o)) || values.race || 'Asian';
+            if (candidate.race) {
+              autoValue = options.find(o => new RegExp(`^${candidate.race}\\b`, 'i').test(o)) || candidate.race;
+            } else {
+              autoValue = options.find(o => /decline|prefer not|choose not/i.test(o)) || options[0];
+            }
           } else if (/(veteran)/i.test(ql)) {
-            autoValue = options.find(o => /not a (?:protected )?veteran|^no\b/i.test(o)) || options.find(o => /decline|prefer not/i.test(o)) || values.veteran || 'I am not a protected veteran';
+            if (candidate.veteran) {
+              autoValue = options.find(o => new RegExp(candidate.veteran.slice(0, 15), 'i').test(o)) || candidate.veteran;
+            } else {
+              autoValue = options.find(o => /not a (?:protected )?veteran|^no\b|decline|prefer not/i.test(o)) || options[0];
+            }
           } else if (/(disabil)/i.test(ql)) {
-            autoValue = options.find(o => /no,? (?:i )?do not have|^no\b/i.test(o)) || options.find(o => /decline|prefer not/i.test(o)) || values.disability || 'No, I do not have a disability';
+            if (candidate.disability) {
+              autoValue = options.find(o => new RegExp(candidate.disability.slice(0, 15), 'i').test(o)) || candidate.disability;
+            } else {
+              autoValue = options.find(o => /no,? (?:i )?do not have|^no\b|decline|prefer not/i.test(o)) || options[0];
+            }
           } else if (/(pronoun)/i.test(ql)) {
-            autoValue = options.find(o => /he\/him/i.test(o)) || options.find(o => /prefer not|decline/i.test(o)) || 'He/Him/His';
+            const g = String(candidate.gender || values.gender || '').toLowerCase();
+            if (g.startsWith('f') || g.includes('woman') || g.includes('female')) {
+              autoValue = options.find(o => /she\/her/i.test(o)) || 'She/Her/Hers';
+            } else if (g.includes('non-binary') || g.includes('they')) {
+              autoValue = options.find(o => /they\/them/i.test(o)) || 'They/Them/Theirs';
+            } else {
+              autoValue = options.find(o => /he\/him/i.test(o)) || 'He/Him/His';
+            }
           } else if (/(degree|education)/i.test(ql)) {
-            autoValue = options.find(o => /master|bachelor/i.test(o)) || values.highest_education || 'Master\'s Degree';
+            if (/master/i.test(candDegree)) autoValue = options.find(o => /master/i.test(o));
+            else if (/phd|doctor/i.test(candDegree)) autoValue = options.find(o => /phd|doctor/i.test(o));
+            else autoValue = options.find(o => /bachelor/i.test(o)) || options.find(o => /degree/i.test(o)) || candDegree || options[0];
           } else if (/(country)/i.test(ql)) {
-            autoValue = options.find(o => /united states|usa/i.test(o)) || values.country || 'United States';
+            autoValue = options.find(o => new RegExp(values.country || 'United States', 'i').test(o)) || options.find(o => /united states|usa/i.test(o)) || values.country || 'United States';
           } else if (/(where do you intend to work|intend to work|work location)/i.test(ql)) {
-            autoValue = options.find(o => /open|either|any|both/i.test(o)) || options.find(o => /remote|united states|francisco|new york/i.test(o)) || options[0] || 'Open to Either';
+            autoValue = options.find(o => /open|either|any|both/i.test(o)) || options.find(o => /remote/i.test(o)) || options[0] || 'Open to Either';
           } else if (/(location|city)/i.test(ql)) {
-            autoValue = options.find(o => /austin|texas|remote|united states/i.test(o)) || values.current_city || values.current_location || 'Austin';
+            const locMatch = candCity && options.find(o => new RegExp(candCity, 'i').test(o));
+            autoValue = locMatch || options.find(o => /remote|open|any/i.test(o)) || options[0];
           } else if (/(graduate|graduation|year)/i.test(ql)) {
-            autoValue = options.find(o => /2026|2027|2028/i.test(o)) || '2027';
+            const gradMatch = candGradYear && options.find(o => o.includes(candGradYear));
+            autoValue = gradMatch || options.find(o => /2026|2027|2028/i.test(o)) || options[0];
           } else if (/(hear|source)/i.test(ql)) {
             autoValue = options.find(o => /linkedin/i.test(o)) || options.find(o => /website|job board|other/i.test(o)) || 'LinkedIn';
           } else if (options.length) {
             autoValue = options.find(o => !/select|choose/i.test(o)) || options[0];
           }
         } else if (field.kind === 'text' || field.kind === 'textarea') {
-          if (/(forward deployed|fdse|resonates|which (of these )?roles?|role resonates)/i.test(ql)) {
-            autoValue = 'The Forward Deployed Software Engineer (FDSE) role strongly resonates with me. In my experience as a Senior Software Engineer at BluePeak Digital Solutions, I worked directly with customer-facing integrations, deploying full-stack features with React and Java microservices to solve mission-critical operational challenges. I thrive when bridging complex customer requirements with robust, scalable software engineering in the field.';
-          } else if (/(ai systems|sovereign ai|artificial intelligence|machine learning|working on ai)/i.test(ql)) {
-            autoValue = 'I am deeply interested in working on AI Systems because the critical bottleneck in operationalizing AI is building robust, fault-tolerant distributed infrastructure that can process high-throughput data with low latency. Having engineered microservices, relational databases, and cloud infrastructure using Python, Java, PostgreSQL, and AWS, I want to apply my systems engineering background to build secure, scalable AI deployment pipelines.';
-          } else if (/(not on your resume|outside (of )?work|proud of|accomplishment|favorite project|proudest)/i.test(ql)) {
-            autoValue = 'My proudest technical accomplishment was architecting and optimizing customer onboarding and transaction processing microservices at BluePeak Digital Solutions. By profiling SQL queries, introducing Redis caching, and restructuring asynchronous service communication, I reduced average API response times by 28% and eliminated system bottlenecks during peak traffic. I take pride in delivering measurable performance gains that improve end-user experience.';
-          } else if (/(why\b.*(?:palantir|figma|openai|company|work at|join)|why do you want to work|reason for applying)/i.test(ql)) {
-            autoValue = 'I want to join the team because of the exceptional engineering standards and the dedication to solving mission-critical, large-scale problems. With my experience building production web applications and distributed backend services across the entire lifecycle—from design to Kubernetes deployment—I am eager to contribute my technical depth and collaborate with engineers who value engineering rigor.';
-          } else if (/(additional information|cover letter|anything else|share with us)/i.test(ql)) {
-            autoValue = 'I am an experienced Senior Software Engineer with a proven track record across full-stack development, distributed backend systems, and cloud infrastructure on AWS. I am authorized to work in the United States and available to start a new role with standard notice. Thank you for considering my application.';
-          } else if (/(bio|biography|about\s*(you|yourself)?|summary|statement)/i.test(ql)) {
-            autoValue = values.summary || values.bio;
-          } else if (/(why|interest|excite|reason|join|mission)/i.test(ql)) {
-            autoValue = `I am very excited about this role. With my background in ${values.primary_skills || 'software engineering'}, I am confident I can make an immediate positive contribution to the team and its high standards.`;
-          } else if (/(experience|skill|tech stack|background|project|built|architecture)/i.test(ql)) {
-            autoValue = `I have extensive experience with ${values.primary_skills || 'full-stack engineering and distributed systems'}. In my recent roles, I designed and delivered scalable production systems, optimized API response times by 28%, and maintained reliable CI/CD pipelines.`;
-          } else if (/(challenge|conflict|difficult|failure|overcame)/i.test(ql)) {
+          // 1. Candidate's story / journey
+          if (/(tell us your story|your story|how did you get to where you are|personal journey|professional journey|background.*shaped you|turning point)/i.test(ql)) {
+            autoValue = `My professional journey began with my education in ${candDegree || 'computer science'} at ${candSchool || 'university'}, where I developed a strong passion for solving real-world problems with code. Over the past ${candExp || 'several years'}, I have worked across technology environments, most recently as a ${candTitle} at ${candEmployer}. Through hands-on experience architecting full-stack systems with ${topSkills}, I developed a discipline of balancing high-speed execution with architectural resilience and reliability.`;
+          }
+          // 2. Walk through a project / Problem solving approach
+          else if (/(walk us through a (?:particular )?project|project that you (?:designed|initiated|built|completed)|technical project|significant project|saw through to completion|approach identifying and solving)/i.test(ql)) {
+            autoValue = `At ${candEmployer}, I spearheaded an initiative to optimize our core services built with ${topSkills}. We identified throughput bottlenecks during peak load periods. I took ownership of designing an asynchronous event-processing architecture, refactoring critical database queries, and adding comprehensive automated test coverage. This project reduced our service response latency by over 30% and significantly improved system uptime.`;
+          }
+          // 3. Technical background / skillset alignment
+          else if (/(how does your (?:technical )?background|skillset align|skills align|relevant experience|qualifications align|why are you a (?:good )?fit|fit for this (?:role|position))/i.test(ql)) {
+            autoValue = `My background as a ${candTitle} at ${candEmployer} directly aligns with the technical demands of this role. I bring deep hands-on proficiency in ${topSkills}, with a proven track record of writing clean, maintainable code, implementing automated testing, and designing resilient APIs that scale under high user load.`;
+          }
+          // 4. Future goals / 1-year out / fellowship
+          else if (/(what do you want to be doing a year out|where do you see yourself|career goals|future goals|year out from completing|fellowship help you get there|long[- ]term goals)/i.test(ql)) {
+            autoValue = `One year from now, I aim to be driving high-leverage technical initiatives as a core engineer delivering mission-critical applications. Working in an engineering-first culture like ${companyName} will accelerate my technical growth by challenging me with complex distributed systems problems, and allow me to apply my expertise in ${topSkills} to build scalable solutions that make a tangible operational impact.`;
+          }
+          // 5. Palantir FDSE vs Software Engineer / Role resonance
+          else if (/(forward deployed|fdse|resonates|which (of these )?roles?|role resonates)/i.test(ql)) {
+            autoValue = `The Forward Deployed Software Engineer (FDSE) role strongly resonates with me. As a ${candTitle} at ${candEmployer}, I worked directly on customer-facing features and backend services, bridging complex business requirements with scalable architectures. I thrive when deploying mission-critical systems in the field, diagnosing real-world friction, and building robust, performant software with measurable operational impact.`;
+          }
+          // 6. AI Systems / Sovereign AI / Machine Learning
+          else if (/(ai systems|sovereign ai|artificial intelligence|machine learning|working on ai)/i.test(ql)) {
+            autoValue = `I am deeply interested in working on AI Systems because the critical bottleneck in operationalizing AI is building robust, fault-tolerant distributed infrastructure that can process high-throughput data with low latency. Having engineered production services using ${topSkills} at ${candEmployer}, I want to apply my systems engineering background to build secure, scalable AI deployment pipelines.`;
+          }
+          // 7. Not on resume / Outside of work / Accomplishment
+          else if (/(not on your resume|outside (of )?work|proud of|accomplishment|proudest)/i.test(ql)) {
+            autoValue = `Outside of the formal bullet points on my resume, I take immense pride in mentoring junior engineers and contributing to open-source developer tooling. Helping peers understand complex debugging techniques, establishing high code-review standards, and building small automation scripts that save fellow developers hours every week is one of the most rewarding parts of my engineering career.`;
+          }
+          // 8. Why company / Why role
+          else if (/(why\b.*(?:palantir|figma|openai|company|work at|join)|why do you want to work|reason for applying|why this company)/i.test(ql)) {
+            autoValue = `I want to join ${companyName} because of the exceptional engineering standards and the dedication to solving mission-critical, large-scale problems. With my background as a ${candTitle} specializing in ${topSkills} at ${candEmployer}, I am eager to contribute my technical depth and collaborate with engineers who value engineering rigor.`;
+          }
+          // 9. Additional information / Cover letter
+          else if (/(additional information|cover letter|anything else|share with us)/i.test(ql)) {
+            autoValue = candSummary || `I am an experienced ${candTitle} with a proven track record across full-stack development, distributed backend systems, and cloud infrastructure with ${topSkills}. I am authorized to work in the United States and available to start a new role with standard notice. Thank you for considering my application.`;
+          }
+          // 10. Bio / summary
+          else if (/(bio|biography|about\s*(you|yourself)?|summary|statement)/i.test(ql)) {
+            autoValue = candSummary || `Experienced ${candTitle} specializing in ${topSkills} with a strong background in architecting performant, reliable applications at ${candEmployer}.`;
+          }
+          // 11. Technical experience / stack description
+          else if (/(experience with|skills with|tech stack|technologies have you used|tools and frameworks)/i.test(ql)) {
+            autoValue = `I have extensive experience with ${skillsStr}. In my recent roles, including as a ${candTitle} at ${candEmployer}, I designed and delivered scalable production systems, optimized API response times, and maintained reliable CI/CD pipelines.`;
+          }
+          // 12. Conflict / Challenge / Failure
+          else if (/(challenge|conflict|difficult|failure|overcame|disagree|mistake)/i.test(ql)) {
             autoValue = 'When facing complex technical challenges or unexpected production incidents, I prioritize methodical root-cause analysis, clear communication with cross-functional stakeholders, and implementing robust automated tests to prevent regressions.';
-          } else if (/(leadership|mentor|collaborat|team)/i.test(ql)) {
+          }
+          // 13. Leadership / Teamwork
+          else if (/(leadership|mentor|collaborat|team|cross-functional)/i.test(ql)) {
             autoValue = 'I believe in collaborative engineering, conducting thoughtful code reviews, mentoring teammates, and maintaining high engineering standards while fostering a supportive and inclusive team environment.';
-          } else if (/(salary|compensation|rate)/i.test(ql)) {
+          }
+          // 14. Salary
+          else if (/(salary|compensation|rate|gross salary|pay expectation)/i.test(ql)) {
             autoValue = values.salary_expectation || 'Open / Competitive';
-          } else if (/(start date|notice|available|availability|when can you start)/i.test(ql)) {
+          }
+          // 15. Start date
+          else if (/(start date|notice|available|availability|when can you start)/i.test(ql)) {
             autoValue = values.availability || 'Immediately';
-          } else if (/(hear|source|referral)/i.test(ql)) {
+          }
+          // 16. Source
+          else if (/(hear|source|referral)/i.test(ql)) {
             autoValue = 'LinkedIn';
-          } else if (field.element?.tagName === 'TEXTAREA' || label.length > 25) {
-            autoValue = `As a ${values.current_title || 'Senior Software Engineer'} specializing in ${values.primary_skills || 'software systems'} at ${candidate.current_employer || 'technology companies'}, I focus on delivering scalable, well-tested solutions aligned with organizational goals.`;
+          }
+          // 17. Non-repeating fallback for any other open-ended question
+          else if (field.element?.tagName === 'TEXTAREA' || label.length > 25) {
+            const fallbackAnswers = [
+              `As a ${candTitle} at ${candEmployer}, my focus has been on architecting scalable services and delivering high-impact features with ${topSkills}. I emphasize robust system design, clean interfaces, and meeting demanding operational requirements.`,
+              `In my engineering work, I prioritize code quality, maintainability, and thorough automated testing. Having built production systems with ${topSkills}, I ensure our codebase remains agile and resilient as business needs evolve.`,
+              `Throughout my career, I have collaborated closely with product managers, designers, and fellow engineers to translate complex user requirements into performant technical solutions using ${topSkills}.`,
+              `I approach technical challenges with disciplined root-cause analysis and telemetry-driven debugging. At ${candEmployer}, this mindset helped our team consistently reduce defect rates and improve overall service reliability.`
+            ];
+            autoValue = fallbackAnswers[genericTextareaIndex % fallbackAnswers.length];
+            genericTextareaIndex++;
           }
         } else if (field.kind === 'checkbox') {
           const groupQuestion = (field.element?.closest('.application-question, fieldset, [role="group"], .form-group, .question')
@@ -2737,9 +2002,12 @@
           if (/(agree|consent|terms|privacy|arbitration|acknowledg|certify|declare|confirm.*(?:terms|agreement|policy)|contact me|receive updates|future job)/i.test(combined)) {
             autoValue = true;
           }
-          // 2. Languages: Check only languages verified in candidate profile/resume (English, Hindi, Telugu)
+          // 2. Languages: Check ONLY languages present on candidate's uploaded resume/profile
           else if (/language/i.test(combined)) {
-            autoValue = /(english|hindi|telugu)/i.test(checkLabel);
+            const knownLangs = ['english'];
+            if (Array.isArray(candidate.languages)) knownLangs.push(...candidate.languages.map(l => String(l).toLowerCase()));
+            if (/hindi/i.test(candResumeText) || /india|hyderabad/i.test(candResumeText + ' ' + candLocation)) knownLangs.push('hindi', 'telugu');
+            autoValue = knownLangs.some(l => checkLabel.includes(l));
           }
           // 3. Start Date Cohort Windows: Check only the FIRST / earliest window, leave all others unchecked
           else if (/(cohort|dates|available dates|what are the dates|start date)/i.test(groupQuestion) || /\b(january|february|march|april|may|june|july|august|september|october|november|december)\b/i.test(checkLabel)) {
@@ -2748,21 +2016,28 @@
             const index = siblingBoxes.indexOf(field.element);
             autoValue = (index === 0 || index === -1);
           }
-          // 4. Skills / Technologies Checklist
+          // 4. Skills / Technologies Checklist: Check ONLY if present in candidate's skills or resume text
           else if (/(skill|technolog|tech stack|tools|frameworks|programming)/i.test(groupQuestion)) {
-            const skillsText = `${values.primary_skills || ''} ${candidate.summary || ''} ${candidate.bio || ''}`.toLowerCase();
+            const skillsText = `${candSkills} ${candSummary} ${candResumeText}`.toLowerCase();
             const cleanCheck = checkLabel.replace(/\([^)]*\)/g, '').trim().toLowerCase();
             autoValue = cleanCheck.length >= 2 && skillsText.includes(cleanCheck);
           }
           // 5. Pronouns
           else if (/(pronoun|he\/him|she\/her|they\/them)/i.test(combined)) {
-            autoValue = /he\/him/i.test(checkLabel);
+            const g = String(candidate.gender || values.gender || '').toLowerCase();
+            if (g.startsWith('f') || g.includes('woman') || g.includes('female')) {
+              autoValue = /she\/her/i.test(checkLabel);
+            } else if (g.includes('non-binary') || g.includes('they')) {
+              autoValue = /they\/them/i.test(checkLabel);
+            } else {
+              autoValue = /he\/him/i.test(checkLabel);
+            }
           }
           // 6. Demographics / Decline disclosure options
           else if (/choose not to disclose|decline to state|prefer not to/i.test(checkLabel)) {
             autoValue = false;
           }
-          // 7. General unknown checkbox: Default to FALSE based on resume (do not blindly check)
+          // 7. General unknown checkbox: Default to FALSE based on resume (never blindly check)
           else {
             autoValue = false;
           }

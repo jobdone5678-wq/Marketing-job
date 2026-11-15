@@ -54,7 +54,7 @@
       const row = el.closest('tr');
       if (row) {
         const head = row.querySelector('th, [class*="prompt" i], [class*="label" i]');
-        if (head && head.textContent && head.textContent.trim().length < 200) found = clean(head.textContent);
+        if (head && head.textContent && head.textContent.trim().length < 2500) found = clean(head.textContent);
       }
     }
 
@@ -63,7 +63,7 @@
       const qContainer = el.closest(QUESTION_CONTAINER + ', [class*="select__container"], .select, .phone-input__country');
       if (qContainer) {
         const qLbl = qContainer.querySelector('label[class*="question-title"], [class*="question-title"], .application-label, [class*="application-label"], [class*="labelContainer"], [class*="label"], [class*="title"], [class*="header"], [class*="heading"], h3, h4, h5, strong, b');
-        if (qLbl && qLbl.textContent && qLbl.textContent.trim().length < 200) {
+        if (qLbl && qLbl.textContent && qLbl.textContent.trim().length < 2500) {
           found = clean(labelText(qLbl));
         }
       }
@@ -73,7 +73,7 @@
       let prev = el.previousElementSibling;
       if (!prev && el.parentElement) prev = el.parentElement.previousElementSibling;
       if (prev && (prev.classList.contains('application-label') || /label|title|header|prompt/i.test(prev.className) || prev.tagName === 'LABEL' || prev.tagName === 'DIV' || prev.tagName === 'SPAN')) {
-        if (prev.textContent && prev.textContent.trim().length < 200) found = clean(prev.textContent);
+        if (prev.textContent && prev.textContent.trim().length < 2500) found = clean(prev.textContent);
       }
     }
 
@@ -86,7 +86,7 @@
       else if (/urls\[([^\]]+)\]/i.test(el.name)) found = RegExp.$1;
     }
 
-    if (!found && (el.getAttribute('role') === 'checkbox' || el.tagName !== 'INPUT') && el.textContent && el.textContent.trim().length < 200) {
+    if (!found && (el.getAttribute('role') === 'checkbox' || el.tagName !== 'INPUT') && el.textContent && el.textContent.trim().length < 2500) {
       found = clean(el.textContent);
     }
 
@@ -98,19 +98,19 @@
     const container = group.closest('fieldset, [role="group"], [role="radiogroup"], .application-question, [class*="application-question"], [class*="field-entry"], [class*="fieldEntry"], [class*="question"]');
     const inner = container?.querySelector('legend, label, [class*="question-title"], [class*="label"], [class*="title"], h3, h4, strong');
     const text = (inner?.textContent || group.textContent || '').replace(/\s+/g, ' ').trim();
-    return text.slice(0, 200);
+    return text.slice(0, 2000);
   }
 
   // Title of a container that asks one question about several boxes.
   function groupTitle(group){
     const accessibleName = group.getAttribute('aria-label') || group.getAttribute('aria-labelledby')?.split(/\s+/)
       .map(id => group.getRootNode().getElementById?.(id)?.textContent).filter(Boolean).join(' ');
-    if (accessibleName) return clean(accessibleName).slice(0, 200);
+    if (accessibleName) return clean(accessibleName).slice(0, 2000);
     const legend = group.querySelector('legend');
-    if (legend && legend.textContent && legend.textContent.trim()) return clean(legend.textContent).slice(0, 200);
+    if (legend && legend.textContent && legend.textContent.trim()) return clean(legend.textContent).slice(0, 2000);
     const title = group.querySelector('[class*="question-title" i], [class*="application-label" i], [class*="labelContainer" i], h3, h4, h5, strong, p') ||
       [...group.querySelectorAll('label')].find(el => !el.control && !el.querySelector('input, [role="radio"], [role="checkbox"]'));
-    if (title && title.textContent && title.textContent.trim().length < 200) return clean(title.textContent).slice(0, 200);
+    if (title && title.textContent && title.textContent.trim().length < 2500) return clean(title.textContent).slice(0, 2000);
     return '';
   }
 
