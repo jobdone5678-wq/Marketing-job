@@ -97,8 +97,8 @@
     vendor_email: ['vendor email', 'vendor contact email', 'recruiter email', 'staffing email', 'vendor contact', 'vendor e-mail'],
     personal_email: ['personal email', 'personal email address', 'personal e-mail', 'personal email id'],
     contract_type: ['contract type', 'employment type', 'w2', 'c2c', '1099', 'contractor', 'independent contractor', 'w-2', 'c2c contractor', 'type of employment', 'type of contract'],
-    summary: ['summary', 'bio', 'biography', 'about you', 'about yourself', 'tell us about yourself', 'personal statement', 'profile summary', 'cover letter', 'brief bio', 'brief description', 'why figma', 'why do you want to work', 'why are you interested', 'why are you interested in this role', 'tell us why', 'additional information', 'anything else', 'statement', 'notes'],
-    bio: ['bio', 'biography', 'short bio', 'about me', 'about yourself'],
+    summary: ['professional summary', 'executive summary', 'profile summary', 'candidate summary'],
+    bio: ['short bio', 'candidate bio', 'professional bio'],
     gender: ['gender', 'sex', 'gender identity', 'what is your gender', 'how do you identify your gender', 'voluntary self-identification of gender', 'demographic gender'],
     race: ['race', 'ethnicity', 'race and ethnicity', 'racial background', 'ethnic background', 'race ethnicity', 'hispanic or latino', 'demographic race', 'demographics race', 'are you hispanic or latino', 'voluntary self-identification of race', 'what is your race', 'race/ethnicity'],
     veteran: ['veteran', 'veteran status', 'military status', 'protected veteran', 'are you a veteran', 'u.s. veteran status', 'voluntary self-identification of veteran', 'veteran classification', 'military service'],
@@ -376,7 +376,7 @@
           (field.label || '').trim().length > 25 ||
           /\b(bio|biography|summary|about\s*(you|yourself)?|cover\s*letter|tell\s*us|interest(ed)?\s*in|why|experience\s*with|describe|explain|qualification|overview|motivation|background|statement)\b/i.test(field.label || '') ||
           /\b(bio|summary|cover\s*letter|describe|explain)\b/i.test(field.hint || ''));
-        if (field.kind === 'text' && isBioOrScreening) return aiPlan(field, 'Write a concise first-person answer grounded in the resume.');
+        if ((field.kind === 'textarea' || field.kind === 'text') && isBioOrScreening) return aiPlan(field, 'Write a concise first-person answer grounded in the resume.');
         return { field, status: 'needs_review', reason: 'No unambiguous profile fact.' };
       }
 

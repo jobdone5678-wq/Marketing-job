@@ -1274,8 +1274,8 @@
     vendor_email: ['vendor email', 'vendor contact email', 'recruiter email', 'staffing email', 'vendor contact', 'vendor e-mail'],
     personal_email: ['personal email', 'personal email address', 'personal e-mail', 'personal email id'],
     contract_type: ['contract type', 'employment type', 'w2', 'c2c', '1099', 'contractor', 'independent contractor', 'w-2', 'c2c contractor', 'type of employment', 'type of contract'],
-    summary: ['summary', 'bio', 'biography', 'about you', 'about yourself', 'tell us about yourself', 'personal statement', 'profile summary', 'cover letter', 'brief bio', 'brief description', 'why figma', 'why do you want to work', 'why are you interested', 'why are you interested in this role', 'tell us why', 'additional information', 'anything else', 'statement', 'notes'],
-    bio: ['bio', 'biography', 'short bio', 'about me', 'about yourself'],
+    summary: ['professional summary', 'executive summary', 'profile summary', 'candidate summary'],
+    bio: ['short bio', 'candidate bio', 'professional bio'],
     gender: ['gender', 'sex', 'gender identity', 'what is your gender', 'how do you identify your gender', 'voluntary self-identification of gender', 'demographic gender'],
     race: ['race', 'ethnicity', 'race and ethnicity', 'racial background', 'ethnic background', 'race ethnicity', 'hispanic or latino', 'demographic race', 'demographics race', 'are you hispanic or latino', 'voluntary self-identification of race', 'what is your race', 'race/ethnicity'],
     veteran: ['veteran', 'veteran status', 'military status', 'protected veteran', 'are you a veteran', 'u.s. veteran status', 'voluntary self-identification of veteran', 'veteran classification', 'military service'],
@@ -1553,7 +1553,7 @@
           (field.label || '').trim().length > 25 ||
           /\b(bio|biography|summary|about\s*(you|yourself)?|cover\s*letter|tell\s*us|interest(ed)?\s*in|why|experience\s*with|describe|explain|qualification|overview|motivation|background|statement)\b/i.test(field.label || '') ||
           /\b(bio|summary|cover\s*letter|describe|explain)\b/i.test(field.hint || ''));
-        if (field.kind === 'text' && isBioOrScreening) return aiPlan(field, 'Write a concise first-person answer grounded in the resume.');
+        if ((field.kind === 'textarea' || field.kind === 'text') && isBioOrScreening) return aiPlan(field, 'Write a concise first-person answer grounded in the resume.');
         return { field, status: 'needs_review', reason: 'No unambiguous profile fact.' };
       }
 
@@ -2698,14 +2698,20 @@
             autoValue = options.find(o => !/select|choose/i.test(o)) || options[0];
           }
         } else if (field.kind === 'text' || field.kind === 'textarea') {
-          if (/(not on your resume|outside (of )?work|proud of|accomplishment)/i.test(ql)) {
-            autoValue = 'Outside of work and my core resume, I take pride in mentoring early-career engineers, contributing to open-source developer tooling, and building practical automation scripts that solve real community needs. I value continuous learning, curiosity, and delivering robust engineering outcomes.';
-          } else if (/(forward deployed|fdse|software engineer.*resonates|which (of these )?roles?|role resonates)/i.test(ql)) {
-            autoValue = 'The Forward Deployed Software Engineer role strongly resonates with me because I thrive working directly at the intersection of high-stakes customer missions and complex distributed software systems. I enjoy diagnosing technical friction on the front lines and deploying production-grade solutions with measurable real-world impact.';
-          } else if (/(bio|biography|about\s*(you|yourself)?|summary|statement|cover letter)/i.test(ql)) {
+          if (/(forward deployed|fdse|resonates|which (of these )?roles?|role resonates)/i.test(ql)) {
+            autoValue = 'The Forward Deployed Software Engineer (FDSE) role strongly resonates with me. In my experience as a Senior Software Engineer at BluePeak Digital Solutions, I worked directly with customer-facing integrations, deploying full-stack features with React and Java microservices to solve mission-critical operational challenges. I thrive when bridging complex customer requirements with robust, scalable software engineering in the field.';
+          } else if (/(ai systems|sovereign ai|artificial intelligence|machine learning|working on ai)/i.test(ql)) {
+            autoValue = 'I am deeply interested in working on AI Systems because the critical bottleneck in operationalizing AI is building robust, fault-tolerant distributed infrastructure that can process high-throughput data with low latency. Having engineered microservices, relational databases, and cloud infrastructure using Python, Java, PostgreSQL, and AWS, I want to apply my systems engineering background to build secure, scalable AI deployment pipelines.';
+          } else if (/(not on your resume|outside (of )?work|proud of|accomplishment|favorite project|proudest)/i.test(ql)) {
+            autoValue = 'My proudest technical accomplishment was architecting and optimizing customer onboarding and transaction processing microservices at BluePeak Digital Solutions. By profiling SQL queries, introducing Redis caching, and restructuring asynchronous service communication, I reduced average API response times by 28% and eliminated system bottlenecks during peak traffic. I take pride in delivering measurable performance gains that improve end-user experience.';
+          } else if (/(why\b.*(?:palantir|figma|openai|company|work at|join)|why do you want to work|reason for applying)/i.test(ql)) {
+            autoValue = 'I want to join the team because of the exceptional engineering standards and the dedication to solving mission-critical, large-scale problems. With my experience building production web applications and distributed backend services across the entire lifecycle—from design to Kubernetes deployment—I am eager to contribute my technical depth and collaborate with engineers who value engineering rigor.';
+          } else if (/(additional information|cover letter|anything else|share with us)/i.test(ql)) {
+            autoValue = 'I am an experienced Senior Software Engineer with a proven track record across full-stack development, distributed backend systems, and cloud infrastructure on AWS. I am authorized to work in the United States and available to start a new role with standard notice. Thank you for considering my application.';
+          } else if (/(bio|biography|about\s*(you|yourself)?|summary|statement)/i.test(ql)) {
             autoValue = values.summary || values.bio;
           } else if (/(why|interest|excite|reason|join|mission)/i.test(ql)) {
-            autoValue = `I am very excited about this role and the company mission. With my background in ${values.primary_skills || 'software engineering'}, I am confident I can make an immediate positive contribution to the team and its high standards.`;
+            autoValue = `I am very excited about this role. With my background in ${values.primary_skills || 'software engineering'}, I am confident I can make an immediate positive contribution to the team and its high standards.`;
           } else if (/(experience|skill|tech stack|background|project|built|architecture)/i.test(ql)) {
             autoValue = `I have extensive experience with ${values.primary_skills || 'full-stack engineering and distributed systems'}. In my recent roles, I designed and delivered scalable production systems, optimized API response times by 28%, and maintained reliable CI/CD pipelines.`;
           } else if (/(challenge|conflict|difficult|failure|overcame)/i.test(ql)) {
@@ -2719,13 +2725,46 @@
           } else if (/(hear|source|referral)/i.test(ql)) {
             autoValue = 'LinkedIn';
           } else if (field.element?.tagName === 'TEXTAREA' || label.length > 25) {
-            autoValue = values.summary || `${values.full_name} - ${values.current_title}`;
+            autoValue = `As a ${values.current_title || 'Senior Software Engineer'} specializing in ${values.primary_skills || 'software systems'} at ${candidate.current_employer || 'technology companies'}, I focus on delivering scalable, well-tested solutions aligned with organizational goals.`;
           }
         } else if (field.kind === 'checkbox') {
-          if (/(she\/her|they\/them|xe\/xem|ze\/hir|fae\/faer|ey\/em|hir\/hir|hu\/hu|use name only|custom)/i.test(ql)) {
-            autoValue = false;
-          } else {
+          const groupQuestion = (field.element?.closest('.application-question, fieldset, [role="group"], .form-group, .question')
+            ?.querySelector('.application-label, legend, .question-title, [class*="label" i]')?.innerText || '').toLowerCase();
+          const checkLabel = ql;
+          const combined = `${groupQuestion} ${checkLabel}`;
+
+          // 1. Legal / Consent / Terms / Acknowledgment / Arbitration / Future Contact
+          if (/(agree|consent|terms|privacy|arbitration|acknowledg|certify|declare|confirm.*(?:terms|agreement|policy)|contact me|receive updates|future job)/i.test(combined)) {
             autoValue = true;
+          }
+          // 2. Languages: Check only languages verified in candidate profile/resume (English, Hindi, Telugu)
+          else if (/language/i.test(combined)) {
+            autoValue = /(english|hindi|telugu)/i.test(checkLabel);
+          }
+          // 3. Start Date Cohort Windows: Check only the FIRST / earliest window, leave all others unchecked
+          else if (/(cohort|dates|available dates|what are the dates|start date)/i.test(groupQuestion) || /\b(january|february|march|april|may|june|july|august|september|october|november|december)\b/i.test(checkLabel)) {
+            const groupEl = field.element.closest('.application-question, fieldset, [role="group"], .form-group, .question, ul, div');
+            const siblingBoxes = groupEl ? Array.from(groupEl.querySelectorAll('input[type="checkbox"]')) : [];
+            const index = siblingBoxes.indexOf(field.element);
+            autoValue = (index === 0 || index === -1);
+          }
+          // 4. Skills / Technologies Checklist
+          else if (/(skill|technolog|tech stack|tools|frameworks|programming)/i.test(groupQuestion)) {
+            const skillsText = `${values.primary_skills || ''} ${candidate.summary || ''} ${candidate.bio || ''}`.toLowerCase();
+            const cleanCheck = checkLabel.replace(/\([^)]*\)/g, '').trim().toLowerCase();
+            autoValue = cleanCheck.length >= 2 && skillsText.includes(cleanCheck);
+          }
+          // 5. Pronouns
+          else if (/(pronoun|he\/him|she\/her|they\/them)/i.test(combined)) {
+            autoValue = /he\/him/i.test(checkLabel);
+          }
+          // 6. Demographics / Decline disclosure options
+          else if (/choose not to disclose|decline to state|prefer not to/i.test(checkLabel)) {
+            autoValue = false;
+          }
+          // 7. General unknown checkbox: Default to FALSE based on resume (do not blindly check)
+          else {
+            autoValue = false;
           }
         }
 
