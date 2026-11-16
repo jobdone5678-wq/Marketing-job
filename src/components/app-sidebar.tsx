@@ -45,7 +45,7 @@ const candidateNavItems: NavItem[] = [
   },
   {
     id: "candidates",
-    title: "My Profile & Resume",
+    title: "My Applications and Resume",
     url: "/dashboard/candidates",
     icon: <UserCheckIcon className="size-4 stroke-[1.8]" />,
   },

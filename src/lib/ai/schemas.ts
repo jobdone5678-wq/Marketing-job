@@ -1,5 +1,6 @@
 import {z} from 'zod';
 export const textFields=['full_name','email','phone','linkedin_url','current_city','current_state','full_address','visa_status',
+  'work_authorization','gender','veteran','veteran_status','disability','disability_status',
   'current_employer','current_job_title','employment_status','total_experience_years','relevant_experience_years','notice_period','available_to_join',
   'interview_availability','preferred_work_type','preferred_locations','current_salary','expected_salary','highest_qualification','university_name',
   'graduation_year','target_job_titles','primary_skills','secondary_skills','certifications'] as const;

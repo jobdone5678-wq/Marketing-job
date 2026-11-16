@@ -1609,9 +1609,9 @@
     'first_name', 'last_name', 'full_name', 'email', 'phone', 'current_city', 'current_state',
     'current_location', 'zip_code', 'country', 'full_address', 'linkedin_url', 'github_url', 'website',
     'current_employer', 'current_title', 'total_experience_years', 'primary_skills',
-    'authorized_in_usa', 'needs_sponsorship', 'open_to_relocation',
+    'authorized_in_usa', 'needs_sponsorship', 'open_to_relocation', 'visa_status', 'work_authorization',
     'end_client', 'point_of_contact', 'pay_rate', 'vendor_email', 'personal_email', 'contract_type',
-    'summary', 'bio', 'gender', 'race', 'veteran', 'disability', 'availability', 'salary_expectation',
+    'summary', 'bio', 'gender', 'race', 'veteran', 'veteran_status', 'disability', 'disability_status', 'availability', 'salary_expectation',
     'how_heard', 'highest_education', 'school', 'e_signature', 'consent'
   ]);
 
@@ -1680,6 +1680,11 @@
       'need sponsorship now',
       'need sponsorship future'
     ],
+    visa_status: [
+      'visa status', 'visa', 'current visa', 'work authorization status', 'current work authorization',
+      'immigration status', 'work eligibility', 'work authorization type', 'visa type', 'employment authorization status',
+      'us work authorization', 'visa sponsorship status', 'work authorization'
+    ],
     open_to_relocation: ['willing to relocate', 'are you willing to relocate', 'open to relocation', 'willing to move', 'are you open to relocation', 'open to moving'],
     end_client: ['end client', 'client', 'client company', 'client name', 'customer', 'customer company', 'end client company', 'client organization'],
     point_of_contact: ['point of contact', 'poc', 'contact person', 'client contact', 'hiring manager', 'recruiter contact', 'vendor contact'],
@@ -1689,10 +1694,10 @@
     contract_type: ['contract type', 'employment type', 'w2', 'c2c', '1099', 'contractor', 'independent contractor', 'w-2', 'c2c contractor', 'type of employment', 'type of contract'],
     summary: ['professional summary', 'executive summary', 'profile summary', 'candidate summary'],
     bio: ['short bio', 'candidate bio', 'professional bio'],
-    gender: ['gender', 'sex', 'gender identity', 'what is your gender', 'how do you identify your gender', 'voluntary self-identification of gender', 'demographic gender'],
+    gender: ['gender', 'sex', 'gender identity', 'what is your gender', 'how do you identify your gender', 'voluntary self-identification of gender', 'demographic gender', 'please select your gender', 'gender self-identification'],
     race: ['race', 'ethnicity', 'race and ethnicity', 'racial background', 'ethnic background', 'race ethnicity', 'hispanic or latino', 'demographic race', 'demographics race', 'are you hispanic or latino', 'voluntary self-identification of race', 'what is your race', 'race/ethnicity'],
-    veteran: ['veteran', 'veteran status', 'military status', 'protected veteran', 'are you a veteran', 'u.s. veteran status', 'voluntary self-identification of veteran', 'veteran classification', 'military service'],
-    disability: ['disability', 'disability status', 'voluntary self identification of disability', 'do you have a disability', 'physical or mental disability', 'individual with a disability', 'disability self-identification'],
+    veteran: ['veteran', 'veteran status', 'military status', 'protected veteran', 'are you a veteran', 'u.s. veteran status', 'voluntary self-identification of veteran', 'veteran classification', 'military service', 'please select your veteran status', 'veteran self-identification'],
+    disability: ['disability', 'disability status', 'voluntary self identification of disability', 'do you have a disability', 'physical or mental disability', 'individual with a disability', 'disability self-identification', 'disability disclosure'],
     availability: ['availability', 'start date', 'earliest start date', 'when can you start', 'notice period', 'available to start', 'available for a full-time', 'full-time internship', 'available for internship', 'summer internship', 'available for full-time', 'availability date', 'earliest possible start date'],
     salary_expectation: ['salary', 'expected salary', 'desired salary', 'compensation expectation', 'desired compensation', 'salary expectations', 'compensation', 'target salary', 'pay expectation', 'minimum salary', 'hourly rate expectation'],
     how_heard: ['how did you hear about us', 'how did you hear about this role', 'how did you hear about this opportunity', 'how did you find this job', 'referral source', 'source', 'application source', 'where did you hear about us', 'how did you hear'],
@@ -1781,9 +1786,33 @@
       if (t === 'no' || t === 'yes' || t === 'true' || t === 'false') return false;
       if (d && t.length >= 3 && (d.includes(t) || t.includes(d))) return true;
       if (d === 'male' && /^male\b|^man\b/i.test(t)) return true;
+      if (d === 'female' && /^female\b|^woman\b/i.test(t)) return true;
+      if (d.includes('non binary') || d.includes('non-binary')) {
+        if (/non[- ]?binary/i.test(t)) return true;
+      }
       if (d === 'asian' && /^asian\b/i.test(t)) return true;
-      if (d.includes('not a protected veteran') && (/not a (?:protected )?veteran|^no\b|neither|do not identify/i.test(t))) return true;
-      if (d.includes('do not have a disability') && (/no,? (?:i )?do not have|no disability|^no\b/i.test(t))) return true;
+      // Veteran matching
+      if (d.includes('not a protected veteran') || d === 'not a veteran') {
+        if (/not a (?:protected )?veteran|^no\b|neither|do not identify|not a veteran/i.test(t)) return true;
+      }
+      if (d.includes('identify as one or more') || d === 'protected veteran' || d === 'veteran') {
+        if (/i identify as one or more|protected veteran|active duty|veteran\b/i.test(t) && !/not a/i.test(t)) return true;
+      }
+      // Disability matching
+      if (d.includes('not have a disability') || d === 'no disability') {
+        if (/no,? (?:i )?do not have|no disability|^no\b/i.test(t)) return true;
+      }
+      if (d.includes('have a disability') && !d.includes('not')) {
+        if (/yes,? (?:i )?(?:have|do have)|have a disability|^yes\b/i.test(t)) return true;
+      }
+      // Work auth & Visa matching
+      if (d.includes('citizen') && /citizen|u\.s\. citizen/i.test(t)) return true;
+      if ((d.includes('green card') || d.includes('permanent resident')) && /green card|permanent resident/i.test(t)) return true;
+      if ((d.includes('h-1b') || d.includes('h1b')) && /h-?1b/i.test(t)) return true;
+      if ((d.includes('opt') || d.includes('stem') || d.includes('f-1')) && /opt|stem|f-?1/i.test(t)) return true;
+      if (d.includes('tn') && /tn/i.test(t)) return true;
+      if (d.includes('ead') && /ead|employment authorization/i.test(t)) return true;
+      if (d.includes('sponsorship') && /sponsor/i.test(t)) return true;
       return false;
     });
     if (fuzzyMatches.length >= 1) return fuzzyMatches[0];
@@ -1816,13 +1845,22 @@
       : sponsorPrimary === false && sponsorFuture === false ? false : null;
     const skills = facts.primary_skills || candidate.primary_skills || (Array.isArray(candidate.skills) ? candidate.skills.join(', ') : candidate.skills || '');
 
-    const city = facts.current_city || candidate.current_city || candidate.city || '';
-    const state = facts.current_state || candidate.current_state || candidate.state || '';
     const rawPhone = String(facts.phone || candidate.phone || '').trim();
     const phoneDigits = rawPhone.replace(/\D/g, '');
     const phone = phoneDigits.length >= 10 ? phoneDigits.slice(-10) : rawPhone;
 
     const preferredFirst = candidate.preferred_name || candidate.preferred_first_name || candidate.first_name || names[0] || '';
+
+    const candFacts = candidate.confirmed_facts || {};
+    const gender = facts.gender || candidate.gender || candFacts.gender || '';
+    const veteran = facts.veteran || candidate.veteran || facts.veteran_status || candidate.veteran_status || candFacts.veteran || candFacts.veteran_status || '';
+    const disability = facts.disability || candidate.disability || facts.disability_status || candidate.disability_status || candFacts.disability || candFacts.disability_status || '';
+    const visaStatus = facts.visa_status || candidate.visa_status || facts.work_authorization || candidate.work_authorization || candFacts.visa_status || candFacts.work_authorization || '';
+    const workAuth = facts.work_authorization || candidate.work_authorization || facts.visa_status || candidate.visa_status || candFacts.work_authorization || candFacts.visa_status || '';
+    const linkedin = facts.linkedin_url || candidate.linkedin_url || candFacts.linkedin_url || '';
+    const city = facts.current_city || candidate.current_city || candFacts.current_city || candidate.city || '';
+    const state = facts.current_state || candidate.current_state || candFacts.current_state || candidate.state || '';
+    const loc = facts.location || candidate.location || candFacts.location || [city, state].filter(Boolean).join(', ') || facts.full_address || candidate.full_address || candFacts.full_address || facts.preferred_locations || candidate.preferred_locations || '';
 
     return {
       ...facts,
@@ -1835,13 +1873,14 @@
       phone: phone,
       current_city: city,
       current_state: state,
-      current_location: [city, state].filter(Boolean).join(', '),
+      current_location: loc,
+      location: loc,
       zip_code: facts.zip_code || candidate.zip_code || candidate.zip || candidate.postal_code || '',
       country: facts.country ?? candidate.country ?? '',
       full_address: facts.full_address || candidate.full_address || candidate.address || candidate.street_address || [city, state, candidate.country || facts.country].filter(Boolean).join(', '),
       current_employer: facts.current_employer || candidate.current_employer || facts.current_company || candidate.current_company || candidate.company || '',
       current_title: facts.current_job_title || candidate.current_job_title || candidate.headline || '',
-      linkedin_url: facts.linkedin_url || candidate.linkedin_url || '',
+      linkedin_url: linkedin,
       github_url: facts.github_url || candidate.github_url || '',
       website: facts.website || candidate.website || candidate.portfolio_url || '',
       total_experience_years: facts.total_experience_years !== undefined ? facts.total_experience_years
@@ -1850,6 +1889,8 @@
       primary_skills: skills,
       authorized_in_usa: authKnown,
       needs_sponsorship: sponsorKnown,
+      visa_status: visaStatus,
+      work_authorization: workAuth,
       open_to_relocation: typeof (facts.open_to_relocation ?? candidate.open_to_relocation) === 'boolean' ? (facts.open_to_relocation ?? candidate.open_to_relocation) : '',
       end_client: facts.end_client || candidate.end_client || '',
       point_of_contact: facts.point_of_contact || candidate.point_of_contact || '',
@@ -1859,10 +1900,12 @@
       contract_type: facts.contract_type || candidate.contract_type || '',
       summary: candidate.summary || candidate.bio || facts.summary || facts.bio || '',
       bio: candidate.bio || candidate.summary || facts.bio || facts.summary || '',
-      gender: facts.gender || candidate.gender || '',
+      gender: gender,
       race: facts.race || candidate.race || '',
-      veteran: facts.veteran || candidate.veteran || '',
-      disability: facts.disability || candidate.disability || '',
+      veteran: veteran,
+      veteran_status: veteran,
+      disability: disability,
+      disability_status: disability,
       availability: facts.availability || candidate.availability || candidate.available_to_join || candidate.notice_period || '',
       salary_expectation: facts.pay_rate || candidate.expected_salary || candidate.current_salary || candidate.pay_rate || '',
       how_heard: facts.how_heard || candidate.how_heard || '',
@@ -1913,6 +1956,9 @@
     const exactMatches = matches.filter(m => m.exact);
     const candidatesList = (exactMatches.length ? exactMatches : matches).sort((a, b) => b.length - a.length);
     let uniqueKeys = [...new Set(candidatesList.map(m => m.key))];
+    if (uniqueKeys.includes('veteran') && uniqueKeys.includes('veteran_status')) uniqueKeys = uniqueKeys.filter(k => k !== 'veteran_status');
+    if (uniqueKeys.includes('disability') && uniqueKeys.includes('disability_status')) uniqueKeys = uniqueKeys.filter(k => k !== 'disability_status');
+    if (uniqueKeys.includes('visa_status') && uniqueKeys.includes('work_authorization')) uniqueKeys = uniqueKeys.filter(k => k !== 'work_authorization');
     if (uniqueKeys.length > 1 && candidatesList[0].length > candidatesList[1].length) uniqueKeys = [candidatesList[0].key];
     if (uniqueKeys.length !== 1) return null;
 
@@ -3299,7 +3345,22 @@
         const companyName = activeJobData?.company || '';
 
         if (mapping.isChoiceKind(field.kind)) {
-          if (/(authoriz|eligible|legal right|citizen|18|age|full-time|onsite|internship|currently enrolled)/i.test(ql) && !/(require|need|sponsor)/i.test(ql)) {
+          const targetVisa = values.visa_status || candidate.visa_status || values.work_authorization || candidate.work_authorization || '';
+          if (/(visa status|immigration status|work authorization status|work authorization type|type of visa)/i.test(ql) || (/(authoriz|visa)/i.test(ql) && options.some(o => /citizen|green card|permanent|h-?1b|opt|stem|f-?1|ead|sponsor/i.test(o)))) {
+            if (targetVisa) {
+              const tvNorm = targetVisa.toLowerCase();
+              autoValue = options.find(o => {
+                const ot = String(o).toLowerCase();
+                if (tvNorm.includes('citizen') && ot.includes('citizen')) return true;
+                if ((tvNorm.includes('green card') || tvNorm.includes('permanent')) && (ot.includes('green card') || ot.includes('permanent'))) return true;
+                if ((tvNorm.includes('h-1b') || tvNorm.includes('h1b')) && (ot.includes('h-1b') || ot.includes('h1b'))) return true;
+                if ((tvNorm.includes('opt') || tvNorm.includes('stem') || tvNorm.includes('f-1')) && (ot.includes('opt') || ot.includes('stem') || ot.includes('f-1') || ot.includes('ead'))) return true;
+                if (tvNorm.includes('tn') && ot.includes('tn')) return true;
+                if (tvNorm.includes('sponsor') && ot.includes('sponsor')) return true;
+                return ot.includes(tvNorm) || tvNorm.includes(ot);
+              }) || options.find(o => new RegExp(`^${targetVisa}\\b`, 'i').test(o)) || targetVisa;
+            }
+          } else if (/(authoriz|eligible|legal right|citizen|18|age|full-time|onsite|internship|currently enrolled)/i.test(ql) && !/(require|need|sponsor)/i.test(ql)) {
             const affirmative = values.authorized_in_usa !== false;
             autoValue = options.find(o => mapping.normalizeBoolean(o) === affirmative) || (affirmative ? options.find(o => /^yes\b/i.test(o)) : options.find(o => /^no\b/i.test(o))) || affirmative;
           } else if (/(require|need).*(sponsor|visa)/i.test(ql)) {
@@ -3308,8 +3369,9 @@
           } else if (/(felony|convict|criminal|conflict|relatives|worked for|worked before|employee or a contractor)/i.test(ql)) {
             autoValue = options.find(o => mapping.normalizeBoolean(o) === false) || options.find(o => /^no\b/i.test(o)) || false;
           } else if (/(gender|sex)/i.test(ql)) {
-            if (candidate.gender) {
-              autoValue = options.find(o => new RegExp(`^${candidate.gender}\\b`, 'i').test(o)) || candidate.gender;
+            const candGender = candidate.gender || candidate.confirmed_facts?.gender || values.gender;
+            if (candGender) {
+              autoValue = options.find(o => new RegExp(`^${candGender}\\b`, 'i').test(o)) || options.find(o => new RegExp(candGender, 'i').test(o)) || candGender;
             } else {
               autoValue = options.find(o => /decline|prefer not|choose not/i.test(o)) || options[0];
             }
@@ -3322,14 +3384,34 @@
               autoValue = options.find(o => /decline|prefer not|choose not/i.test(o)) || options[0];
             }
           } else if (/(veteran)/i.test(ql)) {
-            if (candidate.veteran) {
-              autoValue = options.find(o => new RegExp(candidate.veteran.slice(0, 15), 'i').test(o)) || candidate.veteran;
+            const candVet = candidate.veteran || candidate.veteran_status || candidate.confirmed_facts?.veteran || candidate.confirmed_facts?.veteran_status || values.veteran;
+            if (candVet) {
+              const cvNorm = candVet.toLowerCase();
+              if (cvNorm.includes('not a protected veteran') || cvNorm.includes('not a veteran')) {
+                autoValue = options.find(o => /not a (?:protected )?veteran|^no\b|neither|do not identify|not a veteran/i.test(o)) || candVet;
+              } else if (cvNorm.includes('identify as one or more') || cvNorm.includes('protected veteran')) {
+                autoValue = options.find(o => /i identify as one or more|protected veteran|active duty|veteran\b/i.test(o) && !/not a/i.test(o)) || candVet;
+              } else if (cvNorm.includes('do not wish') || cvNorm.includes('prefer not')) {
+                autoValue = options.find(o => /prefer not|choose not|decline|do not wish/i.test(o)) || candVet;
+              } else {
+                autoValue = options.find(o => new RegExp(candVet.slice(0, 15), 'i').test(o)) || candVet;
+              }
             } else {
               autoValue = options.find(o => /not a (?:protected )?veteran|^no\b|decline|prefer not/i.test(o)) || options[0];
             }
           } else if (/(disabil)/i.test(ql)) {
-            if (candidate.disability) {
-              autoValue = options.find(o => new RegExp(candidate.disability.slice(0, 15), 'i').test(o)) || candidate.disability;
+            const candDis = candidate.disability || candidate.disability_status || candidate.confirmed_facts?.disability || candidate.confirmed_facts?.disability_status || values.disability;
+            if (candDis) {
+              const cdNorm = candDis.toLowerCase();
+              if (cdNorm.includes('not have a disability') || cdNorm.includes('no disability')) {
+                autoValue = options.find(o => /no,? (?:i )?do not have|no disability|^no\b/i.test(o)) || candDis;
+              } else if (cdNorm.includes('have a disability') && !cdNorm.includes('not')) {
+                autoValue = options.find(o => /yes,? (?:i )?(?:have|do have)|have a disability|^yes\b/i.test(o)) || candDis;
+              } else if (cdNorm.includes('do not wish') || cdNorm.includes('prefer not')) {
+                autoValue = options.find(o => /prefer not|choose not|decline|do not wish/i.test(o)) || candDis;
+              } else {
+                autoValue = options.find(o => new RegExp(candDis.slice(0, 15), 'i').test(o)) || candDis;
+              }
             } else {
               autoValue = options.find(o => /no,? (?:i )?do not have|^no\b|decline|prefer not/i.test(o)) || options[0];
             }
@@ -3436,6 +3518,24 @@
           else if (/(experience with|skills with|tech stack|technologies have you used|tools and frameworks)/i.test(ql)) {
             if (skillsStr) {
               autoValue = skillsStr;
+            }
+          }
+          // LinkedIn profile
+          else if (/(linkedin|linked\s*in)/i.test(ql)) {
+            if (values.linkedin_url || candidate.linkedin_url) {
+              autoValue = values.linkedin_url || candidate.linkedin_url;
+            }
+          }
+          // Location / City
+          else if (/(current location|city|where are you located|present location)/i.test(ql) && !/(relocat|work location)/i.test(ql)) {
+            if (values.current_location || values.location || candCity) {
+              autoValue = values.current_location || values.location || candCity;
+            }
+          }
+          // Work authorization & Visa text
+          else if (/(work authorization|visa status|immigration status|work permit)/i.test(ql)) {
+            if (values.work_authorization || values.visa_status || candidate.work_authorization || candidate.visa_status) {
+              autoValue = values.work_authorization || values.visa_status || candidate.work_authorization || candidate.visa_status;
             }
           }
           // NO synthetic fallback essays or made-up narratives. If not in candidate profile, leave as null.

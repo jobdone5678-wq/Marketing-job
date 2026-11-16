@@ -69,6 +69,16 @@
     const candId = candidate?.id || (candidate?.email ? candidate.email.toLowerCase() : 'cand_' + Date.now());
     if (candidate) {
       if (!candidate.id) candidate.id = candId;
+      const facts = candidate.confirmed_facts || {};
+      candidate.gender = candidate.gender || facts.gender || '';
+      candidate.veteran = candidate.veteran || facts.veteran || candidate.veteran_status || facts.veteran_status || '';
+      candidate.veteran_status = candidate.veteran_status || facts.veteran_status || candidate.veteran || facts.veteran || '';
+      candidate.disability = candidate.disability || facts.disability || candidate.disability_status || facts.disability_status || '';
+      candidate.disability_status = candidate.disability_status || facts.disability_status || candidate.disability || facts.disability || '';
+      candidate.work_authorization = candidate.work_authorization || facts.work_authorization || candidate.visa_status || facts.visa_status || '';
+      candidate.visa_status = candidate.visa_status || facts.visa_status || candidate.work_authorization || facts.work_authorization || '';
+      candidate.linkedin_url = candidate.linkedin_url || facts.linkedin_url || '';
+      candidate.location = candidate.location || [candidate.current_city || facts.current_city, candidate.current_state || facts.current_state].filter(Boolean).join(', ') || candidate.full_address || facts.full_address || '';
       savedProfiles[candId] = candidate;
     }
 

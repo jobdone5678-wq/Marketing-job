@@ -38,11 +38,19 @@ export interface Candidate {
   current_state?: string | null;
   full_address?: string | null;
 
-  // Work Authorization
+  // Work Authorization & Job Portal Details
   visa_status: string | null;
+  work_authorization?: string | null;
   authorized_in_usa: boolean | null;
   need_sponsorship_now: boolean | null;
   need_sponsorship_future: boolean | null;
+
+  // Demographics & Job Portal Fields
+  gender?: string | null;
+  veteran?: string | null;
+  veteran_status?: string | null;
+  disability?: string | null;
+  disability_status?: string | null;
 
   // Employment Information
   current_employer?: string | null;

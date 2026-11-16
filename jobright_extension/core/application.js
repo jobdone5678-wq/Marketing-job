@@ -125,7 +125,22 @@
         const companyName = activeJobData?.company || '';
 
         if (mapping.isChoiceKind(field.kind)) {
-          if (/(authoriz|eligible|legal right|citizen|18|age|full-time|onsite|internship|currently enrolled)/i.test(ql) && !/(require|need|sponsor)/i.test(ql)) {
+          const targetVisa = values.visa_status || candidate.visa_status || values.work_authorization || candidate.work_authorization || '';
+          if (/(visa status|immigration status|work authorization status|work authorization type|type of visa)/i.test(ql) || (/(authoriz|visa)/i.test(ql) && options.some(o => /citizen|green card|permanent|h-?1b|opt|stem|f-?1|ead|sponsor/i.test(o)))) {
+            if (targetVisa) {
+              const tvNorm = targetVisa.toLowerCase();
+              autoValue = options.find(o => {
+                const ot = String(o).toLowerCase();
+                if (tvNorm.includes('citizen') && ot.includes('citizen')) return true;
+                if ((tvNorm.includes('green card') || tvNorm.includes('permanent')) && (ot.includes('green card') || ot.includes('permanent'))) return true;
+                if ((tvNorm.includes('h-1b') || tvNorm.includes('h1b')) && (ot.includes('h-1b') || ot.includes('h1b'))) return true;
+                if ((tvNorm.includes('opt') || tvNorm.includes('stem') || tvNorm.includes('f-1')) && (ot.includes('opt') || ot.includes('stem') || ot.includes('f-1') || ot.includes('ead'))) return true;
+                if (tvNorm.includes('tn') && ot.includes('tn')) return true;
+                if (tvNorm.includes('sponsor') && ot.includes('sponsor')) return true;
+                return ot.includes(tvNorm) || tvNorm.includes(ot);
+              }) || options.find(o => new RegExp(`^${targetVisa}\\b`, 'i').test(o)) || targetVisa;
+            }
+          } else if (/(authoriz|eligible|legal right|citizen|18|age|full-time|onsite|internship|currently enrolled)/i.test(ql) && !/(require|need|sponsor)/i.test(ql)) {
             const affirmative = values.authorized_in_usa !== false;
             autoValue = options.find(o => mapping.normalizeBoolean(o) === affirmative) || (affirmative ? options.find(o => /^yes\b/i.test(o)) : options.find(o => /^no\b/i.test(o))) || affirmative;
           } else if (/(require|need).*(sponsor|visa)/i.test(ql)) {
@@ -134,8 +149,9 @@
           } else if (/(felony|convict|criminal|conflict|relatives|worked for|worked before|employee or a contractor)/i.test(ql)) {
             autoValue = options.find(o => mapping.normalizeBoolean(o) === false) || options.find(o => /^no\b/i.test(o)) || false;
           } else if (/(gender|sex)/i.test(ql)) {
-            if (candidate.gender) {
-              autoValue = options.find(o => new RegExp(`^${candidate.gender}\\b`, 'i').test(o)) || candidate.gender;
+            const candGender = candidate.gender || candidate.confirmed_facts?.gender || values.gender;
+            if (candGender) {
+              autoValue = options.find(o => new RegExp(`^${candGender}\\b`, 'i').test(o)) || options.find(o => new RegExp(candGender, 'i').test(o)) || candGender;
             } else {
               autoValue = options.find(o => /decline|prefer not|choose not/i.test(o)) || options[0];
             }
@@ -148,14 +164,34 @@
               autoValue = options.find(o => /decline|prefer not|choose not/i.test(o)) || options[0];
             }
           } else if (/(veteran)/i.test(ql)) {
-            if (candidate.veteran) {
-              autoValue = options.find(o => new RegExp(candidate.veteran.slice(0, 15), 'i').test(o)) || candidate.veteran;
+            const candVet = candidate.veteran || candidate.veteran_status || candidate.confirmed_facts?.veteran || candidate.confirmed_facts?.veteran_status || values.veteran;
+            if (candVet) {
+              const cvNorm = candVet.toLowerCase();
+              if (cvNorm.includes('not a protected veteran') || cvNorm.includes('not a veteran')) {
+                autoValue = options.find(o => /not a (?:protected )?veteran|^no\b|neither|do not identify|not a veteran/i.test(o)) || candVet;
+              } else if (cvNorm.includes('identify as one or more') || cvNorm.includes('protected veteran')) {
+                autoValue = options.find(o => /i identify as one or more|protected veteran|active duty|veteran\b/i.test(o) && !/not a/i.test(o)) || candVet;
+              } else if (cvNorm.includes('do not wish') || cvNorm.includes('prefer not')) {
+                autoValue = options.find(o => /prefer not|choose not|decline|do not wish/i.test(o)) || candVet;
+              } else {
+                autoValue = options.find(o => new RegExp(candVet.slice(0, 15), 'i').test(o)) || candVet;
+              }
             } else {
               autoValue = options.find(o => /not a (?:protected )?veteran|^no\b|decline|prefer not/i.test(o)) || options[0];
             }
           } else if (/(disabil)/i.test(ql)) {
-            if (candidate.disability) {
-              autoValue = options.find(o => new RegExp(candidate.disability.slice(0, 15), 'i').test(o)) || candidate.disability;
+            const candDis = candidate.disability || candidate.disability_status || candidate.confirmed_facts?.disability || candidate.confirmed_facts?.disability_status || values.disability;
+            if (candDis) {
+              const cdNorm = candDis.toLowerCase();
+              if (cdNorm.includes('not have a disability') || cdNorm.includes('no disability')) {
+                autoValue = options.find(o => /no,? (?:i )?do not have|no disability|^no\b/i.test(o)) || candDis;
+              } else if (cdNorm.includes('have a disability') && !cdNorm.includes('not')) {
+                autoValue = options.find(o => /yes,? (?:i )?(?:have|do have)|have a disability|^yes\b/i.test(o)) || candDis;
+              } else if (cdNorm.includes('do not wish') || cdNorm.includes('prefer not')) {
+                autoValue = options.find(o => /prefer not|choose not|decline|do not wish/i.test(o)) || candDis;
+              } else {
+                autoValue = options.find(o => new RegExp(candDis.slice(0, 15), 'i').test(o)) || candDis;
+              }
             } else {
               autoValue = options.find(o => /no,? (?:i )?do not have|^no\b|decline|prefer not/i.test(o)) || options[0];
             }
@@ -262,6 +298,24 @@
           else if (/(experience with|skills with|tech stack|technologies have you used|tools and frameworks)/i.test(ql)) {
             if (skillsStr) {
               autoValue = skillsStr;
+            }
+          }
+          // LinkedIn profile
+          else if (/(linkedin|linked\s*in)/i.test(ql)) {
+            if (values.linkedin_url || candidate.linkedin_url) {
+              autoValue = values.linkedin_url || candidate.linkedin_url;
+            }
+          }
+          // Location / City
+          else if (/(current location|city|where are you located|present location)/i.test(ql) && !/(relocat|work location)/i.test(ql)) {
+            if (values.current_location || values.location || candCity) {
+              autoValue = values.current_location || values.location || candCity;
+            }
+          }
+          // Work authorization & Visa text
+          else if (/(work authorization|visa status|immigration status|work permit)/i.test(ql)) {
+            if (values.work_authorization || values.visa_status || candidate.work_authorization || candidate.visa_status) {
+              autoValue = values.work_authorization || values.visa_status || candidate.work_authorization || candidate.visa_status;
             }
           }
           // NO synthetic fallback essays or made-up narratives. If not in candidate profile, leave as null.

@@ -1,0 +1,185 @@
+import test from 'node:test';
+import assert from 'node:assert';
+import fs from 'node:fs';
+import vm from 'node:vm';
+
+const bundleCode = fs.readFileSync('tests/autofill-bundle.js', 'utf8');
+
+function createTestSandbox() {
+  const sandbox = {
+    window: {},
+    document: {
+      querySelectorAll: () => [],
+      querySelector: () => null,
+      getElementById: () => null
+    },
+    location: {
+      href: 'https://boards.greenhouse.io/testco/jobs/12345',
+      pathname: '/testco/jobs/12345',
+      search: ''
+    },
+    navigator: { userAgent: 'test' },
+    console: console,
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(bundleCode, sandbox);
+  return sandbox;
+}
+
+test('Autofill uses manual profile details: gender, veteran, work auth, linkedin, and location', () => {
+  const sandbox = createTestSandbox();
+  const mapping = sandbox.NextkinFieldMapping;
+
+  const candidateJane = {
+    id: 'cand_jane_101',
+    full_name: 'Jane Smith',
+    email: 'jane.smith@example.com',
+    phone: '4155551234',
+    current_city: 'San Francisco',
+    current_state: 'CA',
+    linkedin_url: 'https://www.linkedin.com/in/janesmith',
+    gender: 'Female',
+    veteran_status: 'I am not a protected veteran',
+    veteran: 'I am not a protected veteran',
+    disability_status: 'No, I do not have a disability',
+    disability: 'No, I do not have a disability',
+    visa_status: 'H-1B',
+    work_authorization: 'H-1B',
+    authorized_in_usa: true,
+    need_sponsorship_now: false,
+    need_sponsorship_future: true,
+    primary_skills: 'React, TypeScript, Node.js',
+    current_job_title: 'Staff Software Engineer',
+    current_employer: 'Fintech Corp'
+  };
+
+  const values = mapping.buildValues(candidateJane);
+
+  assert.strictEqual(values.full_name, 'Jane Smith');
+  assert.strictEqual(values.linkedin_url, 'https://www.linkedin.com/in/janesmith');
+  assert.strictEqual(values.current_city, 'San Francisco');
+  assert.strictEqual(values.current_state, 'CA');
+  assert.strictEqual(values.current_location, 'San Francisco, CA');
+  assert.strictEqual(values.gender, 'Female');
+  assert.strictEqual(values.veteran, 'I am not a protected veteran');
+  assert.strictEqual(values.disability, 'No, I do not have a disability');
+  assert.strictEqual(values.visa_status, 'H-1B');
+  assert.strictEqual(values.work_authorization, 'H-1B');
+
+  // Test field planning across common ATS fields
+  const fields = [
+    { label: 'Full Name', kind: 'text' },
+    { label: 'LinkedIn Profile', kind: 'text' },
+    { label: 'Current Location', kind: 'text' },
+    { label: 'Gender', kind: 'choice', options: ['Female', 'Male', 'Non-Binary', 'Decline to self-identify'] },
+    { label: 'Veteran Status', kind: 'choice', options: [
+      'I am not a protected veteran',
+      'I identify as one or more classifications of protected veteran',
+      'I do not wish to answer'
+    ] },
+    { label: 'Disability Status', kind: 'choice', options: [
+      'No, I do not have a disability',
+      'Yes, I have a disability',
+      'I do not wish to answer'
+    ] },
+    { label: 'What is your work authorization status?', kind: 'choice', options: [
+      'US Citizen',
+      'Permanent Resident (Green Card)',
+      'H-1B',
+      'STEM OPT',
+      'Requires Sponsorship'
+    ] },
+    { label: 'Are you legally authorized to work in the United States?', kind: 'choice', options: ['Yes', 'No'] },
+    { label: 'Will you now or in the future require visa sponsorship?', kind: 'choice', options: ['Yes', 'No'] }
+  ];
+
+  const plan = mapping.planFill(fields, candidateJane);
+
+  const linkedinPlan = plan.find(p => p.field.label === 'LinkedIn Profile');
+  assert.strictEqual(linkedinPlan.value, 'https://www.linkedin.com/in/janesmith');
+
+  const locationPlan = plan.find(p => p.field.label === 'Current Location');
+  assert.strictEqual(locationPlan.value, 'San Francisco, CA');
+
+  const genderPlan = plan.find(p => p.field.label === 'Gender');
+  assert.strictEqual(genderPlan.value, 'Female');
+
+  const veteranPlan = plan.find(p => p.field.label === 'Veteran Status');
+  assert.strictEqual(veteranPlan.value, 'I am not a protected veteran');
+
+  const disabilityPlan = plan.find(p => p.field.label === 'Disability Status');
+  assert.strictEqual(disabilityPlan.value, 'No, I do not have a disability');
+
+  const visaPlan = plan.find(p => p.field.label.includes('work authorization status'));
+  assert.strictEqual(visaPlan.value, 'H-1B');
+
+  const authPlan = plan.find(p => p.field.label.includes('legally authorized'));
+  assert.strictEqual(authPlan.value, 'Yes');
+
+  const sponsorPlan = plan.find(p => p.field.label.includes('require visa sponsorship'));
+  assert.strictEqual(sponsorPlan.value, 'Yes');
+});
+
+test('Autofill works for candidate with confirmed_facts from database', () => {
+  const sandbox = createTestSandbox();
+  const mapping = sandbox.NextkinFieldMapping;
+
+  const candidateBob = {
+    id: 'cand_bob_202',
+    provenance_status: 'confirmed',
+    full_name: 'Bob Miller',
+    confirmed_facts: {
+      full_name: 'Bob Miller',
+      email: 'bob@example.com',
+      linkedin_url: 'https://linkedin.com/in/bobmiller',
+      current_city: 'New York',
+      current_state: 'NY',
+      gender: 'Male',
+      veteran_status: 'I identify as one or more classifications of protected veteran',
+      disability_status: 'No, I do not have a disability',
+      visa_status: 'US Citizen',
+      work_authorization: 'US Citizen',
+      authorized_in_usa: true,
+      need_sponsorship_now: false,
+      need_sponsorship_future: false
+    }
+  };
+
+  const values = mapping.buildValues(candidateBob);
+
+  assert.strictEqual(values.full_name, 'Bob Miller');
+  assert.strictEqual(values.linkedin_url, 'https://linkedin.com/in/bobmiller');
+  assert.strictEqual(values.current_city, 'New York');
+  assert.strictEqual(values.current_state, 'NY');
+  assert.strictEqual(values.current_location, 'New York, NY');
+  assert.strictEqual(values.gender, 'Male');
+  assert.strictEqual(values.veteran, 'I identify as one or more classifications of protected veteran');
+  assert.strictEqual(values.visa_status, 'US Citizen');
+
+  const fields = [
+    { label: 'LinkedIn Profile URL', kind: 'text' },
+    { label: 'City', kind: 'text' },
+    { label: 'Gender', kind: 'choice', options: ['Female', 'Male', 'Decline'] },
+    { label: 'Veteran Status', kind: 'choice', options: [
+      'I am not a protected veteran',
+      'I identify as one or more classifications of protected veteran',
+      'Decline'
+    ] },
+    { label: 'Current Work Authorization', kind: 'choice', options: [
+      'US Citizen',
+      'Permanent Resident',
+      'H-1B',
+      'Other'
+    ] }
+  ];
+
+  const plan = mapping.planFill(fields, candidateBob);
+
+  assert.strictEqual(plan.find(p => p.field.label.includes('LinkedIn')).value, 'https://linkedin.com/in/bobmiller');
+  assert.strictEqual(plan.find(p => p.field.label === 'City').value, 'New York');
+  assert.strictEqual(plan.find(p => p.field.label === 'Gender').value, 'Male');
+  assert.strictEqual(plan.find(p => p.field.label === 'Veteran Status').value, 'I identify as one or more classifications of protected veteran');
+  assert.strictEqual(plan.find(p => p.field.label.includes('Work Authorization')).value, 'US Citizen');
+});

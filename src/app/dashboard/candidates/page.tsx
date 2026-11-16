@@ -10,6 +10,13 @@ import {
   Users,
   ChevronLeft,
   ChevronRight,
+  Pencil,
+  MapPin,
+  Globe,
+  Sparkles,
+  FileText,
+  Briefcase,
+  ExternalLink,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import type { Candidate } from "@/types/database";
@@ -95,10 +102,41 @@ export default function CandidatesPage() {
       {/* Workspace Header */}
       <WorkspaceHeading
         eyebrow="Talent workspace"
-        title={role === "candidate" ? "My profile & resume" : "Bench candidates"}
-        description="Reviewed talent, ready for the right opportunity. Keep candidate facts and documents together."
+        title={role === "candidate" ? "My Applications and Resume" : "Bench candidates"}
+        description={
+          role === "candidate"
+            ? "Manage your resume, manual profile details, and job portal autofill information."
+            : "Reviewed talent, ready for the right opportunity. Keep candidate facts and documents together."
+        }
         actions={
-          (role !== "candidate" || !total) && (
+          role === "candidate" ? (
+            items.length > 0 ? (
+              <div className="flex items-center gap-2">
+                <Button
+                  render={<Link href={`/dashboard/candidates/${items[0].id}/edit`} />}
+                  className="h-9 px-3.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs hover:shadow active:scale-[0.99] transition-all flex items-center gap-1.5 cursor-pointer text-xs"
+                >
+                  <Pencil className="size-3.5" />
+                  <span>Edit Profile & Resume</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  render={<Link href={`/dashboard/candidates/${items[0].id}`} />}
+                  className="h-9 px-3 rounded-lg text-xs font-medium cursor-pointer"
+                >
+                  <span>View 360 Profile</span>
+                </Button>
+              </div>
+            ) : (
+              <Button
+                render={<Link href="/dashboard/candidates/new" />}
+                className="h-9 px-3.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs hover:shadow active:scale-[0.99] transition-all flex items-center gap-1.5 cursor-pointer text-xs"
+              >
+                <Plus className="size-4" />
+                <span>Upload Resume & Fill Details</span>
+              </Button>
+            )
+          ) : (
             <Button
               render={<Link href="/dashboard/candidates/new" />}
               className="h-9 px-3.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs hover:shadow active:scale-[0.99] transition-all flex items-center gap-1.5 cursor-pointer text-xs"
@@ -109,6 +147,117 @@ export default function CandidatesPage() {
           )
         }
       />
+
+      {/* Candidate Profile Quick Edit Banner for Job Seekers */}
+      {role === "candidate" && items[0] && (
+        <section
+          aria-label="Candidate Profile Summary"
+          className="rounded-2xl border border-primary/30 bg-gradient-to-r from-card via-primary/5 to-card p-5 sm:p-6 shadow-xs space-y-4"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-xl font-bold tracking-tight text-foreground">
+                  {items[0].full_name}
+                </h2>
+                <span className="status-chip status-positive text-[11px] inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
+                  <ShieldCheck className="size-3" />
+                  Active Profile & Autofill Ready
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <Briefcase className="size-3.5 text-muted-foreground/70" />
+                <span>
+                  {items[0].target_job_titles || items[0].current_job_title || "Target role not specified"}
+                </span>
+              </p>
+            </div>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <Button
+                render={<Link href={`/dashboard/candidates/${items[0].id}/edit`} />}
+                className="h-9 px-4 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs hover:shadow flex items-center gap-1.5 cursor-pointer text-xs"
+              >
+                <Pencil className="size-3.5" />
+                <span>Edit Profile Details</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* Key Facts Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+            <div className="p-3 rounded-xl bg-background/80 border border-border/60 space-y-0.5">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                Location (Mandatory)
+              </span>
+              <p className="font-medium text-foreground truncate flex items-center gap-1">
+                <MapPin className="size-3 text-primary shrink-0" />
+                <span>
+                  {[items[0].current_city, items[0].current_state].filter(Boolean).join(", ") ||
+                    items[0].full_address ||
+                    "Location not set"}
+                </span>
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-background/80 border border-border/60 space-y-0.5">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                LinkedIn (Mandatory)
+              </span>
+              <p className="font-medium text-foreground truncate">
+                {items[0].linkedin_url ? (
+                  <a
+                    href={items[0].linkedin_url.startsWith("http") ? items[0].linkedin_url : `https://${items[0].linkedin_url}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-primary hover:underline inline-flex items-center gap-1"
+                  >
+                    <span>View Profile</span>
+                    <ExternalLink className="size-2.5" />
+                  </a>
+                ) : (
+                  <span className="text-amber-600 dark:text-amber-400 font-medium">Missing</span>
+                )}
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-background/80 border border-border/60 space-y-0.5">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                Work Authorization
+              </span>
+              <p className="font-medium text-foreground truncate">
+                {items[0].work_authorization || items[0].visa_status || (items[0].authorized_in_usa ? "Authorized (USA)" : "Requires Sponsorship")}
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-background/80 border border-border/60 space-y-0.5">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                Gender
+              </span>
+              <p className="font-medium text-foreground truncate">
+                {items[0].gender || (items[0].confirmed_facts as any)?.gender || "Not specified"}
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-background/80 border border-border/60 space-y-0.5">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                Veteran Status
+              </span>
+              <p className="font-medium text-foreground truncate">
+                {items[0].veteran || items[0].veteran_status || (items[0].confirmed_facts as any)?.veteran || (items[0].confirmed_facts as any)?.veteran_status || "Not specified"}
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-background/80 border border-border/60 space-y-0.5">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                Disability Status
+              </span>
+              <p className="font-medium text-foreground truncate">
+                {items[0].disability || items[0].disability_status || (items[0].confirmed_facts as any)?.disability || (items[0].confirmed_facts as any)?.disability_status || "Not specified"}
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Metrics Section */}
       <section

@@ -152,11 +152,25 @@ export async function GET(request: Request) {
       }
     }
 
+    const resolvedCandidates = (candidates || []).map((c: any) => {
+      const facts = (c.confirmed_facts || {}) as Record<string, any>;
+      return {
+        ...c,
+        gender: c.gender || facts.gender || null,
+        veteran: c.veteran || facts.veteran || facts.veteran_status || null,
+        veteran_status: c.veteran_status || facts.veteran_status || facts.veteran || null,
+        disability: c.disability || facts.disability || facts.disability_status || null,
+        disability_status: c.disability_status || facts.disability_status || facts.disability || null,
+        work_authorization: c.work_authorization || facts.work_authorization || c.visa_status || null,
+        location: [c.current_city, c.current_state].filter(Boolean).join(', ') || c.full_address || c.preferred_locations || null
+      };
+    });
+
     return {
-      candidates: candidates || [],
+      candidates: resolvedCandidates,
       actorId: profile.id,
       role: profile.role,
-      ownCandidateId: candidates?.[0]?.id || null,
+      ownCandidateId: resolvedCandidates?.[0]?.id || null,
     };
   });
 }

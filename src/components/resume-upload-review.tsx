@@ -53,9 +53,12 @@ export function ResumeUploadReview({
         ? f.need_sponsorship_future
         : (f?.need_sponsorship_future === 'true' ? true : false);
       const visaStatus = String(f?.visa_status || '');
-      const workAuth = isAuthorizedInUsa
+      const gender = String(f?.gender || '');
+      const veteran = String(f?.veteran || f?.veteran_status || '');
+      const disability = String(f?.disability || f?.disability_status || '');
+      const workAuth = String(f?.work_authorization || '') || (isAuthorizedInUsa
         ? (visaStatus ? `Authorized in USA (${visaStatus})` : 'Authorized to work in the US')
-        : (visaStatus || 'Requires sponsorship');
+        : (visaStatus || 'Requires sponsorship'));
 
       const candPayload = {
         id: resolvedCandidateId,
@@ -82,6 +85,11 @@ export function ResumeUploadReview({
         visa_status: visaStatus,
         work_authorization: workAuth,
         work_auth: workAuth,
+        gender: gender,
+        veteran: veteran,
+        veteran_status: veteran,
+        disability: disability,
+        disability_status: disability,
         linkedin_url: String(f?.linkedin_url || ''),
         highest_qualification: String(f?.highest_qualification || ''),
         degree: String(f?.highest_qualification || ''),
@@ -110,6 +118,11 @@ export function ResumeUploadReview({
           visa_status: visaStatus,
           work_authorization: workAuth,
           work_auth: workAuth,
+          gender: gender,
+          veteran: veteran,
+          veteran_status: veteran,
+          disability: disability,
+          disability_status: disability,
           primary_skills: Array.isArray(skills) ? skills.join(', ') : String(skills || ''),
           linkedin_url: String(f?.linkedin_url || ''),
           highest_qualification: String(f?.highest_qualification || ''),

@@ -285,7 +285,12 @@ export function CandidateProfileWorkspace({
                 <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
                   <FactCard label="Direct Email" value={candidate.email} />
                   <FactCard label="Phone Contact" value={candidate.phone} />
-                  <FactCard label="Target Location" value={candidate.preferred_locations} icon={MapPin} />
+                  <FactCard label="Location (Mandatory)" value={[candidate.current_city, candidate.current_state].filter(Boolean).join(", ") || candidate.full_address || candidate.preferred_locations} icon={MapPin} />
+                  <FactCard label="LinkedIn URL (Mandatory)" value={candidate.linkedin_url} />
+                  <FactCard label="Work Authorization / Visa" value={candidate.work_authorization || candidate.visa_status || (candidate.authorized_in_usa ? "Authorized to work in USA" : "Requires Sponsorship")} />
+                  <FactCard label="Gender" value={candidate.gender || (candidate.confirmed_facts as any)?.gender} />
+                  <FactCard label="Veteran Status" value={candidate.veteran || candidate.veteran_status || (candidate.confirmed_facts as any)?.veteran || (candidate.confirmed_facts as any)?.veteran_status} />
+                  <FactCard label="Disability Status" value={candidate.disability || candidate.disability_status || (candidate.confirmed_facts as any)?.disability || (candidate.confirmed_facts as any)?.disability_status} />
                   <FactCard label="Expected Compensation" value={candidate.expected_salary} icon={Coins} />
                   <FactCard
                     label="Availability to Join"

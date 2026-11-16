@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Coins,
   BadgeCheck,
+  Pencil,
 } from "lucide-react";
 import type { Candidate } from "@/types/database";
 import { Button } from "@/components/ui/button";
@@ -188,6 +189,16 @@ export function CandidateRoster({
                   {/* Actions Column */}
                   <td data-label="Actions" className="px-4 py-3.5 align-top">
                     <div className="flex items-center gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        aria-label={`Edit ${candidate.full_name}`}
+                        render={<Link href={`/dashboard/candidates/${candidate.id}/edit`} />}
+                        className="h-8 px-2.5 text-xs font-semibold border-primary/30 text-primary hover:bg-primary/10 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      >
+                        <Pencil className="size-3.5" />
+                        <span>Edit</span>
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
