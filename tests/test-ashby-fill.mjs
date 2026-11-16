@@ -21,8 +21,8 @@ const candidate = {
   authorized_in_usa: true,
   need_sponsorship_now: false,
   need_sponsorship_future: false,
-  gender: 'Male',
-  race: 'Asian',
+  gender: 'Female',
+  race: 'Hispanic or Latino',
   veteran: 'I am not a protected veteran',
   disability: 'No, I do not have a disability',
   linkedin_url: 'https://linkedin.com/in/bhargav-reddy-sample',
@@ -57,15 +57,30 @@ async function testAshby() {
     console.log(`  ${idx + 1}. [${item.key}] "${item.label}" => "${item.value}" (ai: ${!!item.ai})`);
   });
 
-  if (res.questions.length > 0) {
-    console.log('\nUnfilled / Questions:');
-    res.questions.forEach((q, idx) => {
-      console.log(`  ${idx + 1}. [${q.id}] "${q.label}" (type: ${q.type})`);
-    });
+  const checkedDetails = await page.evaluate(() => {
+    const radios = Array.from(document.querySelectorAll('input[type="radio"]'));
+    return radios.filter(r => r.checked).map(r => ({
+      id: r.id,
+      label: document.querySelector(`label[for="${r.id}"]`)?.textContent?.trim(),
+      checked: r.checked,
+      parentClass: r.parentElement?.className
+    }));
+  });
+  console.log('Visually checked radios on the page:', JSON.stringify(checkedDetails, null, 2));
+
+  // Scroll to Gender section and take a screenshot
+  const genderEl = await page.$('input[type="radio"]');
+  if (genderEl) {
+    await genderEl.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(500);
   }
 
-  await page.screenshot({ path: 'ashby_autofill_result.png', fullPage: true });
-  console.log('Saved ashby_autofill_result.png');
+  await page.screenshot({ path: 'ashby_gender_veteran_checked.png', fullPage: false });
+  console.log('Saved ashby_gender_veteran_checked.png');
+
+  // Also take a full page screenshot
+  await page.screenshot({ path: 'ashby_full_page_checked.png', fullPage: true });
+  console.log('Saved ashby_full_page_checked.png');
 
   await browser.close();
 }

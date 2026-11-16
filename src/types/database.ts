@@ -47,6 +47,8 @@ export interface Candidate {
 
   // Demographics & Job Portal Fields
   gender?: string | null;
+  race?: string | null;
+  race_ethnicity?: string | null;
   veteran?: string | null;
   veteran_status?: string | null;
   disability?: string | null;

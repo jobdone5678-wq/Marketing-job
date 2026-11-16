@@ -183,3 +183,80 @@ test('Autofill works for candidate with confirmed_facts from database', () => {
   assert.strictEqual(plan.find(p => p.field.label === 'Veteran Status').value, 'I identify as one or more classifications of protected veteran');
   assert.strictEqual(plan.find(p => p.field.label.includes('Work Authorization')).value, 'US Citizen');
 });
+
+test('Autofill maps and selects all 8 Race / Ethnicity categories accurately', () => {
+  const sandbox = createTestSandbox();
+  const mapping = sandbox.NextkinFieldMapping;
+
+  const ashbyRaceOptions = [
+    'Hispanic or Latino',
+    'White (Not Hispanic or Latino)',
+    'Black or African American (Not Hispanic or Latino)',
+    'Native Hawaiian or Other Pacific Islander (Not Hispanic or Latino)',
+    'Asian (Not Hispanic or Latino)',
+    'American Indian or Alaska Native (Not Hispanic or Latino)',
+    'Two or More Races (Not Hispanic or Latino)',
+    'Decline to self-identify'
+  ];
+
+  const categories = [
+    { input: 'Hispanic or Latino', expected: 'Hispanic or Latino' },
+    { input: 'White (Not Hispanic or Latino)', expected: 'White (Not Hispanic or Latino)' },
+    { input: 'Black or African American (Not Hispanic or Latino)', expected: 'Black or African American (Not Hispanic or Latino)' },
+    { input: 'Native Hawaiian or Other Pacific Islander (Not Hispanic or Latino)', expected: 'Native Hawaiian or Other Pacific Islander (Not Hispanic or Latino)' },
+    { input: 'Asian (Not Hispanic or Latino)', expected: 'Asian (Not Hispanic or Latino)' },
+    { input: 'American Indian or Alaska Native (Not Hispanic or Latino)', expected: 'American Indian or Alaska Native (Not Hispanic or Latino)' },
+    { input: 'Two or More Races (Not Hispanic or Latino)', expected: 'Two or More Races (Not Hispanic or Latino)' },
+    { input: 'Decline to self-identify', expected: 'Decline to self-identify' }
+  ];
+
+  for (const { input, expected } of categories) {
+    const candidate = {
+      id: 'cand_test',
+      full_name: 'Test Candidate',
+      race: input
+    };
+    const values = mapping.buildValues(candidate);
+    assert.strictEqual(values.race, input);
+
+    const plan = mapping.planFill([
+      { label: 'Race', kind: 'choice', options: ashbyRaceOptions }
+    ], candidate);
+    assert.strictEqual(plan[0].value, expected, `Failed for race category ${input}`);
+  }
+
+  // Also test short options on other ATS portals
+  const shortRaceOptions = [
+    'Hispanic or Latino',
+    'White',
+    'Black or African American',
+    'Native Hawaiian / Pacific Islander',
+    'Asian',
+    'American Indian or Alaska Native',
+    'Two or More Races',
+    'I choose not to disclose'
+  ];
+
+  const shortCategories = [
+    { input: 'Hispanic or Latino', expected: 'Hispanic or Latino' },
+    { input: 'White (Not Hispanic or Latino)', expected: 'White' },
+    { input: 'Black or African American (Not Hispanic or Latino)', expected: 'Black or African American' },
+    { input: 'Native Hawaiian or Other Pacific Islander (Not Hispanic or Latino)', expected: 'Native Hawaiian / Pacific Islander' },
+    { input: 'Asian (Not Hispanic or Latino)', expected: 'Asian' },
+    { input: 'American Indian or Alaska Native (Not Hispanic or Latino)', expected: 'American Indian or Alaska Native' },
+    { input: 'Two or More Races (Not Hispanic or Latino)', expected: 'Two or More Races' },
+    { input: 'Decline to self-identify', expected: 'I choose not to disclose' }
+  ];
+
+  for (const { input, expected } of shortCategories) {
+    const candidate = {
+      id: 'cand_test_short',
+      full_name: 'Test Candidate',
+      confirmed_facts: { race: input }
+    };
+    const plan = mapping.planFill([
+      { label: 'Race / Ethnicity', kind: 'choice', options: shortRaceOptions }
+    ], candidate);
+    assert.strictEqual(plan[0].value, expected, `Failed for short race category ${input}`);
+  }
+});

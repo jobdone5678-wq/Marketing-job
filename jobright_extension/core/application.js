@@ -102,6 +102,7 @@
 
         // 2. Dynamic resume-grounded answers based strictly on candidate's uploaded resume
         let autoValue = null;
+        let fromFact = false;
         const ql = label.toLowerCase();
 
         const candName = values.full_name || '';
@@ -139,27 +140,84 @@
                 if (tvNorm.includes('sponsor') && ot.includes('sponsor')) return true;
                 return ot.includes(tvNorm) || tvNorm.includes(ot);
               }) || options.find(o => new RegExp(`^${targetVisa}\\b`, 'i').test(o)) || targetVisa;
+              fromFact = true;
             }
           } else if (/(authoriz|eligible|legal right|citizen|18|age|full-time|onsite|internship|currently enrolled)/i.test(ql) && !/(require|need|sponsor)/i.test(ql)) {
             const affirmative = values.authorized_in_usa !== false;
             autoValue = options.find(o => mapping.normalizeBoolean(o) === affirmative) || (affirmative ? options.find(o => /^yes\b/i.test(o)) : options.find(o => /^no\b/i.test(o))) || affirmative;
+            fromFact = true;
           } else if (/(require|need).*(sponsor|visa)/i.test(ql)) {
             const needSponsor = values.needs_sponsorship === true;
             autoValue = options.find(o => mapping.normalizeBoolean(o) === needSponsor) || (needSponsor ? options.find(o => /^yes\b/i.test(o)) : options.find(o => /^no\b/i.test(o))) || needSponsor;
+            fromFact = true;
           } else if (/(felony|convict|criminal|conflict|relatives|worked for|worked before|employee or a contractor)/i.test(ql)) {
             autoValue = options.find(o => mapping.normalizeBoolean(o) === false) || options.find(o => /^no\b/i.test(o)) || false;
           } else if (/(gender|sex)/i.test(ql)) {
             const candGender = candidate.gender || candidate.confirmed_facts?.gender || values.gender;
             if (candGender) {
               autoValue = options.find(o => new RegExp(`^${candGender}\\b`, 'i').test(o)) || options.find(o => new RegExp(candGender, 'i').test(o)) || candGender;
+              fromFact = true;
             } else {
               autoValue = options.find(o => /decline|prefer not|choose not/i.test(o)) || options[0];
             }
-          } else if (/(hispanic|latino)/i.test(ql)) {
-            autoValue = options.find(o => /^(no|decline|prefer not)/i.test(o)) || false;
+          } else if (/(hispanic|latino)/i.test(ql) && !/(race|ethnic)/i.test(ql)) {
+            const candRace = candidate.race || candidate.race_ethnicity || candidate.confirmed_facts?.race || candidate.confirmed_facts?.race_ethnicity || values.race;
+            const crNorm = String(candRace || '').toLowerCase();
+            if (crNorm.includes('hispanic') && !crNorm.includes('not hispanic') && !crNorm.includes('not latino')) {
+              autoValue = options.find(o => /^(yes|true)/i.test(o)) || 'Yes';
+            } else if (crNorm.includes('decline') || crNorm.includes('prefer not') || crNorm.includes('choose not')) {
+              autoValue = options.find(o => /decline|prefer not|choose not|do not wish/i.test(o)) || options.find(o => /^no\b/i.test(o)) || 'Decline';
+            } else {
+              autoValue = options.find(o => /^(no|false)/i.test(o)) || 'No';
+            }
+            if (candRace) fromFact = true;
           } else if (/(race|ethnic)/i.test(ql)) {
-            if (candidate.race) {
-              autoValue = options.find(o => new RegExp(`^${candidate.race}\\b`, 'i').test(o)) || candidate.race;
+            const candRace = candidate.race || candidate.race_ethnicity || candidate.confirmed_facts?.race || candidate.confirmed_facts?.race_ethnicity || values.race;
+            if (candRace) {
+              const crNorm = String(candRace).trim().toLowerCase();
+              const crClean = crNorm.replace(/\(not hispanic or latino\)/gi, '').trim();
+              let matched = null;
+
+              // 1. Direct match
+              matched = options.find(o => o.trim().toLowerCase() === crNorm);
+
+              // 2. Semantic EEOC category matching
+              if (!matched) {
+                if ((crNorm.includes('hispanic') || crNorm.includes('latino')) && !crNorm.includes('not hispanic') && !crNorm.includes('not latino')) {
+                  matched = options.find(o => {
+                    const ot = o.toLowerCase();
+                    return (ot.includes('hispanic') || ot.includes('latino')) && !ot.includes('not hispanic') && !ot.includes('not latino');
+                  });
+                } else if (crClean.includes('white') || crClean.includes('caucasian')) {
+                  matched = options.find(o => /white|caucasian/i.test(o.replace(/\(not hispanic or latino\)/gi, '')));
+                } else if (crClean.includes('black') || crClean.includes('african')) {
+                  matched = options.find(o => /black|african[ -]?american/i.test(o.replace(/\(not hispanic or latino\)/gi, '')));
+                } else if (crClean.includes('hawaiian') || crClean.includes('pacific islander')) {
+                  matched = options.find(o => /hawaiian|pacific\s*islander/i.test(o.replace(/\(not hispanic or latino\)/gi, '')));
+                } else if (crClean.includes('asian')) {
+                  matched = options.find(o => {
+                    const otClean = o.replace(/\(not hispanic or latino\)/gi, '').toLowerCase();
+                    return /asian/i.test(otClean) && !/pacific/i.test(otClean);
+                  });
+                } else if (crClean.includes('american indian') || crClean.includes('alaska') || crClean.includes('indigenous') || crClean.includes('native american')) {
+                  matched = options.find(o => /american\s*indian|alaska|native\s*american|indigenous/i.test(o.replace(/\(not hispanic or latino\)/gi, '')));
+                } else if (crClean.includes('two or more') || crClean.includes('multiracial')) {
+                  matched = options.find(o => /two\s*or\s*more|multiracial/i.test(o.replace(/\(not hispanic or latino\)/gi, '')));
+                } else if (crClean.includes('decline') || crClean.includes('prefer not') || crClean.includes('choose not') || crClean.includes('not self-identify') || crClean.includes('do not wish')) {
+                  matched = options.find(o => /decline|prefer not|choose not|do not wish/i.test(o));
+                }
+              }
+
+              // 3. Prefix or fuzzy fallback
+              if (!matched) {
+                matched = options.find(o => {
+                  const otClean = o.replace(/\(not hispanic or latino\)/gi, '').trim().toLowerCase();
+                  return otClean && (otClean.startsWith(crClean) || crClean.startsWith(otClean));
+                });
+              }
+
+              autoValue = matched || candRace;
+              fromFact = true;
             } else {
               autoValue = options.find(o => /decline|prefer not|choose not/i.test(o)) || options[0];
             }
@@ -176,6 +234,7 @@
               } else {
                 autoValue = options.find(o => new RegExp(candVet.slice(0, 15), 'i').test(o)) || candVet;
               }
+              fromFact = true;
             } else {
               autoValue = options.find(o => /not a (?:protected )?veteran|^no\b|decline|prefer not/i.test(o)) || options[0];
             }
@@ -192,6 +251,7 @@
               } else {
                 autoValue = options.find(o => new RegExp(candDis.slice(0, 15), 'i').test(o)) || candDis;
               }
+              fromFact = true;
             } else {
               autoValue = options.find(o => /no,? (?:i )?do not have|^no\b|decline|prefer not/i.test(o)) || options[0];
             }
@@ -372,7 +432,7 @@
         if (autoValue !== null && autoValue !== undefined) {
           plan.status = 'supported';
           plan.value = autoValue;
-          plan.ai = true;
+          plan.ai = !fromFact;
         } else if (aiAnswers) {
           questions.push({ id: key.slice(0, 200), label: label.slice(0, 2000), type: field.kind, options });
         }

@@ -54,6 +54,7 @@ export function ResumeUploadReview({
         : (f?.need_sponsorship_future === 'true' ? true : false);
       const visaStatus = String(f?.visa_status || '');
       const gender = String(f?.gender || '');
+      const race = String(f?.race || f?.race_ethnicity || '');
       const veteran = String(f?.veteran || f?.veteran_status || '');
       const disability = String(f?.disability || f?.disability_status || '');
       const workAuth = String(f?.work_authorization || '') || (isAuthorizedInUsa
@@ -86,6 +87,8 @@ export function ResumeUploadReview({
         work_authorization: workAuth,
         work_auth: workAuth,
         gender: gender,
+        race: race,
+        race_ethnicity: race,
         veteran: veteran,
         veteran_status: veteran,
         disability: disability,
@@ -119,6 +122,8 @@ export function ResumeUploadReview({
           work_authorization: workAuth,
           work_auth: workAuth,
           gender: gender,
+          race: race,
+          race_ethnicity: race,
           veteran: veteran,
           veteran_status: veteran,
           disability: disability,

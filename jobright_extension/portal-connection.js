@@ -71,6 +71,8 @@
       if (!candidate.id) candidate.id = candId;
       const facts = candidate.confirmed_facts || {};
       candidate.gender = candidate.gender || facts.gender || '';
+      candidate.race = candidate.race || facts.race || candidate.race_ethnicity || facts.race_ethnicity || '';
+      candidate.race_ethnicity = candidate.race_ethnicity || facts.race_ethnicity || candidate.race || facts.race || '';
       candidate.veteran = candidate.veteran || facts.veteran || candidate.veteran_status || facts.veteran_status || '';
       candidate.veteran_status = candidate.veteran_status || facts.veteran_status || candidate.veteran || facts.veteran || '';
       candidate.disability = candidate.disability || facts.disability || candidate.disability_status || facts.disability_status || '';

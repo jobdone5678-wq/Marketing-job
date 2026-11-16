@@ -289,6 +289,7 @@ export function CandidateProfileWorkspace({
                   <FactCard label="LinkedIn URL (Mandatory)" value={candidate.linkedin_url} />
                   <FactCard label="Work Authorization / Visa" value={candidate.work_authorization || candidate.visa_status || (candidate.authorized_in_usa ? "Authorized to work in USA" : "Requires Sponsorship")} />
                   <FactCard label="Gender" value={candidate.gender || (candidate.confirmed_facts as any)?.gender} />
+                  <FactCard label="Race / Ethnicity" value={candidate.race || (candidate.confirmed_facts as any)?.race || candidate.race_ethnicity || (candidate.confirmed_facts as any)?.race_ethnicity} />
                   <FactCard label="Veteran Status" value={candidate.veteran || candidate.veteran_status || (candidate.confirmed_facts as any)?.veteran || (candidate.confirmed_facts as any)?.veteran_status} />
                   <FactCard label="Disability Status" value={candidate.disability || candidate.disability_status || (candidate.confirmed_facts as any)?.disability || (candidate.confirmed_facts as any)?.disability_status} />
                   <FactCard label="Expected Compensation" value={candidate.expected_salary} icon={Coins} />

@@ -194,13 +194,43 @@
       const t = norm(optionText(o));
       if (!t) return false;
       if (t === 'no' || t === 'yes' || t === 'true' || t === 'false') return false;
-      if (d && t.length >= 3 && (d.includes(t) || t.includes(d))) return true;
+
+      // Clean out EEOC sub-clarifications like "(Not Hispanic or Latino)" so they don't falsely match Hispanic
+      const dClean = d.replace(/\(not hispanic or latino\)/gi, '').trim();
+      const tClean = t.replace(/\(not hispanic or latino\)/gi, '').trim();
+
+      // Race / Ethnicity matching
+      if ((d.includes('hispanic') || d.includes('latino')) && !d.includes('not hispanic') && !d.includes('not latino')) {
+        if ((t.includes('hispanic') || t.includes('latino')) && !t.includes('not hispanic') && !t.includes('not latino')) return true;
+      }
+      if (dClean.includes('white') || dClean.includes('caucasian')) {
+        if (/white|caucasian/i.test(tClean)) return true;
+      }
+      if (dClean.includes('black') || dClean.includes('african')) {
+        if (/black|african[ -]?american/i.test(tClean)) return true;
+      }
+      if (dClean.includes('hawaiian') || dClean.includes('pacific islander')) {
+        if (/hawaiian|pacific\s*islander/i.test(tClean)) return true;
+      }
+      if (dClean.includes('asian')) {
+        if (/asian/i.test(tClean) && !/pacific/i.test(tClean) && !/caucasian/i.test(tClean)) return true;
+      }
+      if (dClean.includes('american indian') || dClean.includes('alaska') || dClean.includes('indigenous') || dClean.includes('native american')) {
+        if (/american\s*indian|alaska\s*native|native\s*american|indigenous/i.test(tClean)) return true;
+      }
+      if (dClean.includes('two or more') || dClean.includes('multiracial')) {
+        if (/two\s*or\s*more|multiracial/i.test(tClean)) return true;
+      }
+      if (dClean.includes('decline') || dClean.includes('prefer not') || dClean.includes('do not wish') || dClean.includes('not self-identify')) {
+        if (/decline|prefer\s*not|choose\s*not|do\s*not\s*wish/i.test(tClean)) return true;
+      }
+
       if (d === 'male' && /^male\b|^man\b/i.test(t)) return true;
       if (d === 'female' && /^female\b|^woman\b/i.test(t)) return true;
       if (d.includes('non binary') || d.includes('non-binary')) {
         if (/non[- ]?binary/i.test(t)) return true;
       }
-      if (d === 'asian' && /^asian\b/i.test(t)) return true;
+
       // Veteran matching
       if (d.includes('not a protected veteran') || d === 'not a veteran') {
         if (/not a (?:protected )?veteran|^no\b|neither|do not identify|not a veteran/i.test(t)) return true;
@@ -223,6 +253,10 @@
       if (d.includes('tn') && /tn/i.test(t)) return true;
       if (d.includes('ead') && /ead|employment authorization/i.test(t)) return true;
       if (d.includes('sponsorship') && /sponsor/i.test(t)) return true;
+
+      // General substring inclusion fallback
+      if (dClean && tClean.length >= 3 && (dClean.includes(tClean) || tClean.includes(dClean))) return true;
+
       return false;
     });
     if (fuzzyMatches.length >= 1) return fuzzyMatches[0];
@@ -263,6 +297,7 @@
 
     const candFacts = candidate.confirmed_facts || {};
     const gender = facts.gender || candidate.gender || candFacts.gender || '';
+    const race = facts.race || candidate.race || candFacts.race || facts.race_ethnicity || candidate.race_ethnicity || candFacts.race_ethnicity || '';
     const veteran = facts.veteran || candidate.veteran || facts.veteran_status || candidate.veteran_status || candFacts.veteran || candFacts.veteran_status || '';
     const disability = facts.disability || candidate.disability || facts.disability_status || candidate.disability_status || candFacts.disability || candFacts.disability_status || '';
     const visaStatus = facts.visa_status || candidate.visa_status || facts.work_authorization || candidate.work_authorization || candFacts.visa_status || candFacts.work_authorization || '';
@@ -311,7 +346,8 @@
       summary: candidate.summary || candidate.bio || facts.summary || facts.bio || '',
       bio: candidate.bio || candidate.summary || facts.bio || facts.summary || '',
       gender: gender,
-      race: facts.race || candidate.race || '',
+      race: race,
+      race_ethnicity: race,
       veteran: veteran,
       veteran_status: veteran,
       disability: disability,

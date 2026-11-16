@@ -1784,13 +1784,43 @@
       const t = norm(optionText(o));
       if (!t) return false;
       if (t === 'no' || t === 'yes' || t === 'true' || t === 'false') return false;
-      if (d && t.length >= 3 && (d.includes(t) || t.includes(d))) return true;
+
+      // Clean out EEOC sub-clarifications like "(Not Hispanic or Latino)" so they don't falsely match Hispanic
+      const dClean = d.replace(/\(not hispanic or latino\)/gi, '').trim();
+      const tClean = t.replace(/\(not hispanic or latino\)/gi, '').trim();
+
+      // Race / Ethnicity matching
+      if ((d.includes('hispanic') || d.includes('latino')) && !d.includes('not hispanic') && !d.includes('not latino')) {
+        if ((t.includes('hispanic') || t.includes('latino')) && !t.includes('not hispanic') && !t.includes('not latino')) return true;
+      }
+      if (dClean.includes('white') || dClean.includes('caucasian')) {
+        if (/white|caucasian/i.test(tClean)) return true;
+      }
+      if (dClean.includes('black') || dClean.includes('african')) {
+        if (/black|african[ -]?american/i.test(tClean)) return true;
+      }
+      if (dClean.includes('hawaiian') || dClean.includes('pacific islander')) {
+        if (/hawaiian|pacific\s*islander/i.test(tClean)) return true;
+      }
+      if (dClean.includes('asian')) {
+        if (/asian/i.test(tClean) && !/pacific/i.test(tClean) && !/caucasian/i.test(tClean)) return true;
+      }
+      if (dClean.includes('american indian') || dClean.includes('alaska') || dClean.includes('indigenous') || dClean.includes('native american')) {
+        if (/american\s*indian|alaska\s*native|native\s*american|indigenous/i.test(tClean)) return true;
+      }
+      if (dClean.includes('two or more') || dClean.includes('multiracial')) {
+        if (/two\s*or\s*more|multiracial/i.test(tClean)) return true;
+      }
+      if (dClean.includes('decline') || dClean.includes('prefer not') || dClean.includes('do not wish') || dClean.includes('not self-identify')) {
+        if (/decline|prefer\s*not|choose\s*not|do\s*not\s*wish/i.test(tClean)) return true;
+      }
+
       if (d === 'male' && /^male\b|^man\b/i.test(t)) return true;
       if (d === 'female' && /^female\b|^woman\b/i.test(t)) return true;
       if (d.includes('non binary') || d.includes('non-binary')) {
         if (/non[- ]?binary/i.test(t)) return true;
       }
-      if (d === 'asian' && /^asian\b/i.test(t)) return true;
+
       // Veteran matching
       if (d.includes('not a protected veteran') || d === 'not a veteran') {
         if (/not a (?:protected )?veteran|^no\b|neither|do not identify|not a veteran/i.test(t)) return true;
@@ -1813,6 +1843,10 @@
       if (d.includes('tn') && /tn/i.test(t)) return true;
       if (d.includes('ead') && /ead|employment authorization/i.test(t)) return true;
       if (d.includes('sponsorship') && /sponsor/i.test(t)) return true;
+
+      // General substring inclusion fallback
+      if (dClean && tClean.length >= 3 && (dClean.includes(tClean) || tClean.includes(dClean))) return true;
+
       return false;
     });
     if (fuzzyMatches.length >= 1) return fuzzyMatches[0];
@@ -1853,6 +1887,7 @@
 
     const candFacts = candidate.confirmed_facts || {};
     const gender = facts.gender || candidate.gender || candFacts.gender || '';
+    const race = facts.race || candidate.race || candFacts.race || facts.race_ethnicity || candidate.race_ethnicity || candFacts.race_ethnicity || '';
     const veteran = facts.veteran || candidate.veteran || facts.veteran_status || candidate.veteran_status || candFacts.veteran || candFacts.veteran_status || '';
     const disability = facts.disability || candidate.disability || facts.disability_status || candidate.disability_status || candFacts.disability || candFacts.disability_status || '';
     const visaStatus = facts.visa_status || candidate.visa_status || facts.work_authorization || candidate.work_authorization || candFacts.visa_status || candFacts.work_authorization || '';
@@ -1901,7 +1936,8 @@
       summary: candidate.summary || candidate.bio || facts.summary || facts.bio || '',
       bio: candidate.bio || candidate.summary || facts.bio || facts.summary || '',
       gender: gender,
-      race: facts.race || candidate.race || '',
+      race: race,
+      race_ethnicity: race,
       veteran: veteran,
       veteran_status: veteran,
       disability: disability,
@@ -2191,7 +2227,7 @@
 
   const checked = el => {
     if (!el) return false;
-    if (el.tagName === 'INPUT' && el.type === 'checkbox') return Boolean(el.checked);
+    if (el.tagName === 'INPUT' && (el.type === 'checkbox' || el.type === 'radio')) return Boolean(el.checked);
     const aria = el.getAttribute('aria-checked');
     if (aria === 'true') return true;
     if (aria === 'false') return false;
@@ -2201,9 +2237,11 @@
     return Boolean(el.checked ?? (aria === 'true'));
   };
 
-  const selected = el => checked(el) || el.getAttribute('aria-selected') === 'true' ||
+  const selected = el => (el.tagName === 'INPUT' && (el.type === 'radio' || el.type === 'checkbox') ? checked(el) : (
+    checked(el) || el.getAttribute('aria-selected') === 'true' ||
     el.getAttribute('aria-pressed') === 'true' || el.getAttribute('data-selected') === 'true' ||
-    el.getAttribute('data-state') === 'checked' || (el.matches && el.matches('.active, .selected, .is-selected'));
+    el.getAttribute('data-state') === 'checked' || (el.matches && el.matches('.active, .selected, .is-selected'))
+  ));
 
   const YES_REGEX = /^(yes|y|true|1|eligible|authorized|absolutely|of course|correct|affirmative|immediately|available)$/i;
   const NO_REGEX = /^(no|n|false|0|not eligible|not authorized|incorrect|never|negative)$/i;
@@ -2308,73 +2346,78 @@
     const view = el.ownerDocument?.defaultView || globalThis;
     const target = findClickableTarget(el) || el;
 
-    // Native prototype setter on HTMLInputElement
-    if (el.tagName === 'INPUT' && el.type === 'checkbox') {
-      try {
-        const proto = view.HTMLInputElement?.prototype || HTMLInputElement.prototype;
-        const desc = Object.getOwnPropertyDescriptor(proto, 'checked') || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(proto), 'checked');
-        if (desc?.set) {
-          desc.set.call(el, boolVal);
-        } else {
-          el.checked = boolVal;
-        }
-      } catch {
-        el.checked = boolVal;
-      }
+    if (el.tagName === 'INPUT' && el.type === 'checkbox' && el.checked === boolVal) {
+      return true;
     }
 
-    // ARIA and custom state attributes
-    if (el.hasAttribute('aria-checked') || el.getAttribute('role') === 'checkbox' || el.getAttribute('role') === 'switch') {
-      el.setAttribute('aria-checked', boolVal ? 'true' : 'false');
-    }
-    if (el.hasAttribute('data-state')) {
-      el.setAttribute('data-state', boolVal ? 'checked' : 'unchecked');
-    }
-    if (target !== el) {
-      if (target.hasAttribute('aria-checked') || target.getAttribute('role') === 'checkbox' || target.getAttribute('role') === 'switch') {
-        target.setAttribute('aria-checked', boolVal ? 'true' : 'false');
-      }
-      if (target.hasAttribute('data-state')) {
-        target.setAttribute('data-state', boolVal ? 'checked' : 'unchecked');
-      }
-    }
+    const PointerEvt = view.PointerEvent || view.MouseEvent;
+    const MouseEvt = view.MouseEvent;
+    const downInit = { bubbles: true, composed: true, cancelable: true, view, button: 0, buttons: 1, detail: 1 };
+    const upInit = { bubbles: true, composed: true, cancelable: true, view, button: 0, buttons: 0, detail: 1 };
 
-    // Dispatch PointerEvent('pointerdown'), MouseEvent('mousedown'), el.click(), and Event('input'), Event('change')
     try {
-      const PointerEvt = view.PointerEvent || view.MouseEvent;
-      const MouseEvt = view.MouseEvent;
-      target.dispatchEvent(new PointerEvt('pointerdown', { bubbles: true, composed: true, cancelable: true, pointerType: 'mouse', isPrimary: true }));
-      target.dispatchEvent(new MouseEvt('mousedown', { bubbles: true, composed: true, cancelable: true }));
+      target.dispatchEvent(new PointerEvt('pointerdown', { ...downInit, pointerType: 'mouse', isPrimary: true }));
+      target.dispatchEvent(new MouseEvt('mousedown', downInit));
       target.focus?.({ preventScroll: true });
-      target.dispatchEvent(new PointerEvt('pointerup', { bubbles: true, composed: true, pointerType: 'mouse', isPrimary: true }));
-      target.dispatchEvent(new MouseEvt('mouseup', { bubbles: true, composed: true }));
+      target.dispatchEvent(new PointerEvt('pointerup', { ...upInit, pointerType: 'mouse', isPrimary: true }));
+      target.dispatchEvent(new MouseEvt('mouseup', upInit));
       target.click();
-      if (target !== el) {
-        el.click();
-      }
     } catch {
-      try { el.click(); } catch {}
+      try { target.click(); } catch {}
     }
 
-    try {
-      const Evt = view.Event;
-      el.dispatchEvent(new Evt('input', { bubbles: true, composed: true }));
-      el.dispatchEvent(new Evt('change', { bubbles: true }));
-    } catch {}
+    // If native checkbox and not matching targetChecked, try direct el.click() if target wasn't el
+    if (el.tagName === 'INPUT' && el.type === 'checkbox' && el.checked !== boolVal) {
+      if (target !== el) {
+        try {
+          el.dispatchEvent(new PointerEvt('pointerdown', { ...downInit, pointerType: 'mouse', isPrimary: true }));
+          el.dispatchEvent(new MouseEvt('mousedown', downInit));
+          el.dispatchEvent(new PointerEvt('pointerup', { ...upInit, pointerType: 'mouse', isPrimary: true }));
+          el.dispatchEvent(new MouseEvt('mouseup', upInit));
+          el.click();
+        } catch {
+          try { el.click(); } catch {}
+        }
+      }
+    }
 
-    // Verify native prototype setter holds
+    // If still not matching, force with descriptor & React tracker
     if (el.tagName === 'INPUT' && el.type === 'checkbox' && el.checked !== boolVal) {
       try {
         const proto = view.HTMLInputElement?.prototype || HTMLInputElement.prototype;
         const desc = Object.getOwnPropertyDescriptor(proto, 'checked') || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(proto), 'checked');
-        desc?.set?.call(el, boolVal);
+        if (desc?.set) desc.set.call(el, boolVal);
+        else el.checked = boolVal;
+        el._valueTracker?.setValue?.('');
+      } catch {
+        el.checked = boolVal;
+      }
+      try {
         const Evt = view.Event;
         el.dispatchEvent(new Evt('input', { bubbles: true, composed: true }));
         el.dispatchEvent(new Evt('change', { bubbles: true }));
       } catch {}
     }
 
-    return true;
+    // Custom widget attributes if not native input
+    if (el.tagName !== 'INPUT') {
+      if (el.hasAttribute('aria-checked') || el.getAttribute('role') === 'checkbox' || el.getAttribute('role') === 'switch') {
+        el.setAttribute('aria-checked', boolVal ? 'true' : 'false');
+      }
+      if (el.hasAttribute('data-state')) {
+        el.setAttribute('data-state', boolVal ? 'checked' : 'unchecked');
+      }
+      if (target !== el) {
+        if (target.hasAttribute('aria-checked') || target.getAttribute('role') === 'checkbox' || target.getAttribute('role') === 'switch') {
+          target.setAttribute('aria-checked', boolVal ? 'true' : 'false');
+        }
+        if (target.hasAttribute('data-state')) {
+          target.setAttribute('data-state', boolVal ? 'checked' : 'unchecked');
+        }
+      }
+    }
+
+    return el.tagName === 'INPUT' && el.type === 'checkbox' ? el.checked === boolVal : true;
   }
 
   function setRadio(option) {
@@ -2383,96 +2426,94 @@
     const view = el.ownerDocument?.defaultView || globalThis;
     const target = findClickableTarget(el) || el;
 
-    if (el.tagName === 'INPUT' && el.type === 'radio') {
-      try {
-        const proto = view.HTMLInputElement?.prototype || HTMLInputElement.prototype;
-        const desc = Object.getOwnPropertyDescriptor(proto, 'checked') || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(proto), 'checked');
-        if (desc?.set) {
-          desc.set.call(el, true);
-        } else {
-          el.checked = true;
-        }
-      } catch {
-        el.checked = true;
-      }
-    }
-
-    // Set ARIA and custom selection attributes
-    el.setAttribute('aria-checked', 'true');
-    el.setAttribute('aria-selected', 'true');
-    if (el.hasAttribute('aria-pressed') || el.tagName === 'BUTTON') {
-      el.setAttribute('aria-pressed', 'true');
-    }
-    el.setAttribute('data-state', 'checked');
-    el.setAttribute('data-selected', 'true');
-
-    if (target !== el) {
-      target.setAttribute('aria-checked', 'true');
-      target.setAttribute('aria-selected', 'true');
-      if (target.hasAttribute('aria-pressed') || target.tagName === 'BUTTON') {
-        target.setAttribute('aria-pressed', 'true');
-      }
-      target.setAttribute('data-state', 'checked');
-      target.setAttribute('data-selected', 'true');
-    }
-
-    // Uncheck peer siblings in same radio / choice group
-    try {
-      const container = el.closest('[role="radiogroup"], fieldset, [class*="yesno" i], [class*="choice" i]') || el.parentElement;
-      if (container) {
-        const peers = container.querySelectorAll('input[type="radio"], button, [role="radio"]');
-        for (const peer of peers) {
-          if (peer === el || peer === target) continue;
-          if (peer.tagName === 'INPUT' && peer.type === 'radio') {
-            try {
-              const proto = view.HTMLInputElement?.prototype || HTMLInputElement.prototype;
-              const desc = Object.getOwnPropertyDescriptor(proto, 'checked') || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(proto), 'checked');
-              desc?.set ? desc.set.call(peer, false) : (peer.checked = false);
-            } catch { peer.checked = false; }
-          }
-          if (peer.getAttribute('aria-checked') === 'true') peer.setAttribute('aria-checked', 'false');
-          if (peer.getAttribute('aria-selected') === 'true') peer.setAttribute('aria-selected', 'false');
-          if (peer.getAttribute('aria-pressed') === 'true') peer.setAttribute('aria-pressed', 'false');
-          if (peer.getAttribute('data-state') === 'checked') peer.setAttribute('data-state', 'unchecked');
-          if (peer.getAttribute('data-selected') === 'true') peer.setAttribute('data-selected', 'false');
-        }
-      }
-    } catch {}
+    // Dispatch PointerEvent and Click on target
+    const PointerEvt = view.PointerEvent || view.MouseEvent;
+    const MouseEvt = view.MouseEvent;
+    const downInit = { bubbles: true, composed: true, cancelable: true, view, button: 0, buttons: 1, detail: 1 };
+    const upInit = { bubbles: true, composed: true, cancelable: true, view, button: 0, buttons: 0, detail: 1 };
 
     try {
-      const PointerEvt = view.PointerEvent || view.MouseEvent;
-      const MouseEvt = view.MouseEvent;
-      target.dispatchEvent(new PointerEvt('pointerdown', { bubbles: true, composed: true, cancelable: true, pointerType: 'mouse', isPrimary: true }));
-      target.dispatchEvent(new MouseEvt('mousedown', { bubbles: true, composed: true, cancelable: true }));
+      target.dispatchEvent(new PointerEvt('pointerdown', { ...downInit, pointerType: 'mouse', isPrimary: true }));
+      target.dispatchEvent(new MouseEvt('mousedown', downInit));
       target.focus?.({ preventScroll: true });
-      target.dispatchEvent(new PointerEvt('pointerup', { bubbles: true, composed: true, pointerType: 'mouse', isPrimary: true }));
-      target.dispatchEvent(new MouseEvt('mouseup', { bubbles: true, composed: true }));
+      target.dispatchEvent(new PointerEvt('pointerup', { ...upInit, pointerType: 'mouse', isPrimary: true }));
+      target.dispatchEvent(new MouseEvt('mouseup', upInit));
       target.click();
-      if (target !== el) {
-        el.click();
-      }
     } catch {
-      try { el.click(); } catch {}
+      try { target.click(); } catch {}
     }
 
-    try {
-      const Evt = view.Event;
-      el.dispatchEvent(new Evt('input', { bubbles: true, composed: true }));
-      el.dispatchEvent(new Evt('change', { bubbles: true }));
-    } catch {}
+    // If native radio and still not checked, try direct el.click() if target wasn't el
+    if (el.tagName === 'INPUT' && el.type === 'radio' && !el.checked) {
+      if (target !== el) {
+        try {
+          el.dispatchEvent(new PointerEvt('pointerdown', { ...downInit, pointerType: 'mouse', isPrimary: true }));
+          el.dispatchEvent(new MouseEvt('mousedown', downInit));
+          el.dispatchEvent(new PointerEvt('pointerup', { ...upInit, pointerType: 'mouse', isPrimary: true }));
+          el.dispatchEvent(new MouseEvt('mouseup', upInit));
+          el.click();
+        } catch {
+          try { el.click(); } catch {}
+        }
+      }
+    }
 
+    // If still not checked, force with descriptor & React value tracker
     if (el.tagName === 'INPUT' && el.type === 'radio' && !el.checked) {
       try {
         const proto = view.HTMLInputElement?.prototype || HTMLInputElement.prototype;
         const desc = Object.getOwnPropertyDescriptor(proto, 'checked') || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(proto), 'checked');
-        desc?.set ? desc.set.call(el, true) : (el.checked = true);
+        if (desc?.set) desc.set.call(el, true);
+        else el.checked = true;
+        el._valueTracker?.setValue?.('');
+      } catch {
+        el.checked = true;
+      }
+      try {
         const Evt = view.Event;
         el.dispatchEvent(new Evt('input', { bubbles: true, composed: true }));
-        el.dispatchEvent(new Evt('change', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
       } catch {}
     }
 
-    return true;
+    // Set ARIA and custom selection attributes for custom widgets only
+    if (el.tagName !== 'INPUT') {
+      el.setAttribute('aria-checked', 'true');
+      el.setAttribute('aria-selected', 'true');
+      if (el.hasAttribute('aria-pressed') || el.tagName === 'BUTTON') {
+        el.setAttribute('aria-pressed', 'true');
+      }
+      el.setAttribute('data-state', 'checked');
+      el.setAttribute('data-selected', 'true');
+
+      if (target !== el) {
+        target.setAttribute('aria-checked', 'true');
+        target.setAttribute('aria-selected', 'true');
+        if (target.hasAttribute('aria-pressed') || target.tagName === 'BUTTON') {
+          target.setAttribute('aria-pressed', 'true');
+        }
+        target.setAttribute('data-state', 'checked');
+        target.setAttribute('data-selected', 'true');
+      }
+
+      // Uncheck peer siblings for custom widgets
+      try {
+        const container = el.closest('[role="radiogroup"], fieldset, [class*="yesno" i], [class*="choice" i]') || el.parentElement;
+        if (container) {
+          const peers = container.querySelectorAll('button, [role="radio"]');
+          for (const peer of peers) {
+            if (peer === el || peer === target) continue;
+            if (peer.getAttribute('aria-checked') === 'true') peer.setAttribute('aria-checked', 'false');
+            if (peer.getAttribute('aria-selected') === 'true') peer.setAttribute('aria-selected', 'false');
+            if (peer.getAttribute('aria-pressed') === 'true') peer.setAttribute('aria-pressed', 'false');
+            if (peer.getAttribute('data-state') === 'checked') peer.setAttribute('data-state', 'unchecked');
+            if (peer.getAttribute('data-selected') === 'true') peer.setAttribute('data-selected', 'false');
+          }
+        }
+      } catch {}
+    }
+
+    return el.tagName === 'INPUT' && el.type === 'radio' ? el.checked : true;
   }
 
   function comboInput(el) {
@@ -3322,6 +3363,7 @@
 
         // 2. Dynamic resume-grounded answers based strictly on candidate's uploaded resume
         let autoValue = null;
+        let fromFact = false;
         const ql = label.toLowerCase();
 
         const candName = values.full_name || '';
@@ -3359,27 +3401,84 @@
                 if (tvNorm.includes('sponsor') && ot.includes('sponsor')) return true;
                 return ot.includes(tvNorm) || tvNorm.includes(ot);
               }) || options.find(o => new RegExp(`^${targetVisa}\\b`, 'i').test(o)) || targetVisa;
+              fromFact = true;
             }
           } else if (/(authoriz|eligible|legal right|citizen|18|age|full-time|onsite|internship|currently enrolled)/i.test(ql) && !/(require|need|sponsor)/i.test(ql)) {
             const affirmative = values.authorized_in_usa !== false;
             autoValue = options.find(o => mapping.normalizeBoolean(o) === affirmative) || (affirmative ? options.find(o => /^yes\b/i.test(o)) : options.find(o => /^no\b/i.test(o))) || affirmative;
+            fromFact = true;
           } else if (/(require|need).*(sponsor|visa)/i.test(ql)) {
             const needSponsor = values.needs_sponsorship === true;
             autoValue = options.find(o => mapping.normalizeBoolean(o) === needSponsor) || (needSponsor ? options.find(o => /^yes\b/i.test(o)) : options.find(o => /^no\b/i.test(o))) || needSponsor;
+            fromFact = true;
           } else if (/(felony|convict|criminal|conflict|relatives|worked for|worked before|employee or a contractor)/i.test(ql)) {
             autoValue = options.find(o => mapping.normalizeBoolean(o) === false) || options.find(o => /^no\b/i.test(o)) || false;
           } else if (/(gender|sex)/i.test(ql)) {
             const candGender = candidate.gender || candidate.confirmed_facts?.gender || values.gender;
             if (candGender) {
               autoValue = options.find(o => new RegExp(`^${candGender}\\b`, 'i').test(o)) || options.find(o => new RegExp(candGender, 'i').test(o)) || candGender;
+              fromFact = true;
             } else {
               autoValue = options.find(o => /decline|prefer not|choose not/i.test(o)) || options[0];
             }
-          } else if (/(hispanic|latino)/i.test(ql)) {
-            autoValue = options.find(o => /^(no|decline|prefer not)/i.test(o)) || false;
+          } else if (/(hispanic|latino)/i.test(ql) && !/(race|ethnic)/i.test(ql)) {
+            const candRace = candidate.race || candidate.race_ethnicity || candidate.confirmed_facts?.race || candidate.confirmed_facts?.race_ethnicity || values.race;
+            const crNorm = String(candRace || '').toLowerCase();
+            if (crNorm.includes('hispanic') && !crNorm.includes('not hispanic') && !crNorm.includes('not latino')) {
+              autoValue = options.find(o => /^(yes|true)/i.test(o)) || 'Yes';
+            } else if (crNorm.includes('decline') || crNorm.includes('prefer not') || crNorm.includes('choose not')) {
+              autoValue = options.find(o => /decline|prefer not|choose not|do not wish/i.test(o)) || options.find(o => /^no\b/i.test(o)) || 'Decline';
+            } else {
+              autoValue = options.find(o => /^(no|false)/i.test(o)) || 'No';
+            }
+            if (candRace) fromFact = true;
           } else if (/(race|ethnic)/i.test(ql)) {
-            if (candidate.race) {
-              autoValue = options.find(o => new RegExp(`^${candidate.race}\\b`, 'i').test(o)) || candidate.race;
+            const candRace = candidate.race || candidate.race_ethnicity || candidate.confirmed_facts?.race || candidate.confirmed_facts?.race_ethnicity || values.race;
+            if (candRace) {
+              const crNorm = String(candRace).trim().toLowerCase();
+              const crClean = crNorm.replace(/\(not hispanic or latino\)/gi, '').trim();
+              let matched = null;
+
+              // 1. Direct match
+              matched = options.find(o => o.trim().toLowerCase() === crNorm);
+
+              // 2. Semantic EEOC category matching
+              if (!matched) {
+                if ((crNorm.includes('hispanic') || crNorm.includes('latino')) && !crNorm.includes('not hispanic') && !crNorm.includes('not latino')) {
+                  matched = options.find(o => {
+                    const ot = o.toLowerCase();
+                    return (ot.includes('hispanic') || ot.includes('latino')) && !ot.includes('not hispanic') && !ot.includes('not latino');
+                  });
+                } else if (crClean.includes('white') || crClean.includes('caucasian')) {
+                  matched = options.find(o => /white|caucasian/i.test(o.replace(/\(not hispanic or latino\)/gi, '')));
+                } else if (crClean.includes('black') || crClean.includes('african')) {
+                  matched = options.find(o => /black|african[ -]?american/i.test(o.replace(/\(not hispanic or latino\)/gi, '')));
+                } else if (crClean.includes('hawaiian') || crClean.includes('pacific islander')) {
+                  matched = options.find(o => /hawaiian|pacific\s*islander/i.test(o.replace(/\(not hispanic or latino\)/gi, '')));
+                } else if (crClean.includes('asian')) {
+                  matched = options.find(o => {
+                    const otClean = o.replace(/\(not hispanic or latino\)/gi, '').toLowerCase();
+                    return /asian/i.test(otClean) && !/pacific/i.test(otClean);
+                  });
+                } else if (crClean.includes('american indian') || crClean.includes('alaska') || crClean.includes('indigenous') || crClean.includes('native american')) {
+                  matched = options.find(o => /american\s*indian|alaska|native\s*american|indigenous/i.test(o.replace(/\(not hispanic or latino\)/gi, '')));
+                } else if (crClean.includes('two or more') || crClean.includes('multiracial')) {
+                  matched = options.find(o => /two\s*or\s*more|multiracial/i.test(o.replace(/\(not hispanic or latino\)/gi, '')));
+                } else if (crClean.includes('decline') || crClean.includes('prefer not') || crClean.includes('choose not') || crClean.includes('not self-identify') || crClean.includes('do not wish')) {
+                  matched = options.find(o => /decline|prefer not|choose not|do not wish/i.test(o));
+                }
+              }
+
+              // 3. Prefix or fuzzy fallback
+              if (!matched) {
+                matched = options.find(o => {
+                  const otClean = o.replace(/\(not hispanic or latino\)/gi, '').trim().toLowerCase();
+                  return otClean && (otClean.startsWith(crClean) || crClean.startsWith(otClean));
+                });
+              }
+
+              autoValue = matched || candRace;
+              fromFact = true;
             } else {
               autoValue = options.find(o => /decline|prefer not|choose not/i.test(o)) || options[0];
             }
@@ -3396,6 +3495,7 @@
               } else {
                 autoValue = options.find(o => new RegExp(candVet.slice(0, 15), 'i').test(o)) || candVet;
               }
+              fromFact = true;
             } else {
               autoValue = options.find(o => /not a (?:protected )?veteran|^no\b|decline|prefer not/i.test(o)) || options[0];
             }
@@ -3412,6 +3512,7 @@
               } else {
                 autoValue = options.find(o => new RegExp(candDis.slice(0, 15), 'i').test(o)) || candDis;
               }
+              fromFact = true;
             } else {
               autoValue = options.find(o => /no,? (?:i )?do not have|^no\b|decline|prefer not/i.test(o)) || options[0];
             }
@@ -3592,7 +3693,7 @@
         if (autoValue !== null && autoValue !== undefined) {
           plan.status = 'supported';
           plan.value = autoValue;
-          plan.ai = true;
+          plan.ai = !fromFact;
         } else if (aiAnswers) {
           questions.push({ id: key.slice(0, 200), label: label.slice(0, 2000), type: field.kind, options });
         }
