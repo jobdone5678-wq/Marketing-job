@@ -682,9 +682,12 @@
       const isCountryCodeOnly = field.kind === 'text' && (field.element?.type === 'tel' || /phone/i.test(field.hint || field.label)) && /^\+?\d{1,3}\s*$/.test(String(previous).trim());
       const hasAnswer = !isCountryCodeOnly && (Array.isArray(previous) ? previous.length > 0 : (typeof previous === 'boolean' ? previous : Boolean(previous && String(previous).trim().length > 0)));
       let write;
-      if (hasAnswer) {
+      const isProfileFact = Boolean(plan.factKey && !plan.ai);
+      if (hasAnswer && !isProfileFact) {
         const option = field.options?.length ? choose(field, value) : null;
         if (equals(previous, option?.label ?? value)) write = { expected: previous };
+      } else if (hasAnswer && isProfileFact && equals(previous, value)) {
+        write = { expected: previous };
       } else if (field.kind === 'combobox') {
         write = await fillCombo(field, value, session.isCurrent);
       } else if (field.kind === 'multi-combobox') {

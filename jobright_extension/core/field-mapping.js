@@ -140,7 +140,7 @@
 
   const YES_OPTION = /^(yes|y|true|1|eligible|authorized|absolutely|of course|correct|affirmative)$/i;
   const NO_OPTION = /^(no|n|false|0|not eligible|not authorized|incorrect|never|negative)$/i;
-  const optionText = o => String(o?.label ?? o?.value ?? '').trim();
+  const optionText = o => (typeof o === 'string' ? o : String(o?.label ?? o?.value ?? '')).trim();
 
   function normalizeBoolean(v) {
     if (typeof v === 'boolean') return v;
@@ -188,7 +188,8 @@
     const fuzzyMatches = opts.filter(o => {
       const t = norm(optionText(o));
       if (!t) return false;
-      if (d && (d.includes(t) || t.includes(d))) return true;
+      if (t === 'no' || t === 'yes' || t === 'true' || t === 'false') return false;
+      if (d && t.length >= 3 && (d.includes(t) || t.includes(d))) return true;
       if (d === 'male' && /^male\b|^man\b/i.test(t)) return true;
       if (d === 'asian' && /^asian\b/i.test(t)) return true;
       if (d.includes('not a protected veteran') && (/not a (?:protected )?veteran|^no\b|neither|do not identify/i.test(t))) return true;
@@ -247,7 +248,7 @@
       current_location: [city, state].filter(Boolean).join(', '),
       zip_code: facts.zip_code || candidate.zip_code || candidate.zip || candidate.postal_code || '',
       country: facts.country ?? candidate.country ?? '',
-      full_address: facts.full_address || candidate.full_address || candidate.address || candidate.street_address || '',
+      full_address: facts.full_address || candidate.full_address || candidate.address || candidate.street_address || [city, state, candidate.country || facts.country].filter(Boolean).join(', '),
       current_employer: facts.current_employer || candidate.current_employer || facts.current_company || candidate.current_company || candidate.company || '',
       current_title: facts.current_job_title || candidate.current_job_title || candidate.headline || '',
       linkedin_url: facts.linkedin_url || candidate.linkedin_url || '',
@@ -272,11 +273,11 @@
       race: facts.race || candidate.race || '',
       veteran: facts.veteran || candidate.veteran || '',
       disability: facts.disability || candidate.disability || '',
-      availability: facts.availability || candidate.availability || candidate.available_to_join || candidate.notice_period || 'Immediately',
-      salary_expectation: facts.pay_rate || candidate.expected_salary || candidate.current_salary || candidate.pay_rate || 'Open / Competitive',
-      how_heard: 'LinkedIn',
-      highest_education: facts.highest_qualification || candidate.highest_qualification || candidate.degree || '',
-      school: facts.school || candidate.university_name || candidate.school || '',
+      availability: facts.availability || candidate.availability || candidate.available_to_join || candidate.notice_period || '',
+      salary_expectation: facts.pay_rate || candidate.expected_salary || candidate.current_salary || candidate.pay_rate || '',
+      how_heard: facts.how_heard || candidate.how_heard || '',
+      highest_education: facts.highest_qualification || candidate.highest_qualification || candidate.degree || candidate.highest_education || '',
+      school: facts.school || candidate.university_name || candidate.school || candidate.institution || '',
       graduation_year: facts.graduation_year || candidate.graduation_year || '',
       languages: candidate.languages || [],
       employment_history: candidate.employment_history || [],
@@ -440,6 +441,30 @@
           country: values.country,
           reason: 'Exact profile field mapping.'
         };
+      }
+      if (factKey === 'highest_education' && isChoiceKind(field.kind)) {
+        const hasYes = field.options?.some(o => /^(yes|true)$/i.test(optionText(o)));
+        const hasNo = field.options?.some(o => /^(no|false)$/i.test(optionText(o)));
+        if (hasYes && hasNo) {
+          const ql = (field.label || '').toLowerCase();
+          const candidateHasBachelor = /bachelor|b\.?tech|b\.?s|b\.?a|undergraduate/i.test(String(val)) || /bachelor/i.test(candidate.source_text || '') || /bachelor/i.test(candidate.summary || '');
+          const candidateHasMaster = /master|m\.?s|m\.?tech|mba/i.test(String(val));
+          const candidateHasDoctorate = /phd|doctor/i.test(String(val));
+
+          let satisfies = false;
+          if (/(master|graduate degree)/i.test(ql)) {
+            satisfies = candidateHasMaster || candidateHasDoctorate;
+          } else if (/(phd|doctorate)/i.test(ql)) {
+            satisfies = candidateHasDoctorate;
+          } else if (/(bachelor|undergraduate|degree|education|college|university|completed.*degree)/i.test(ql)) {
+            satisfies = candidateHasBachelor || candidateHasMaster || candidateHasDoctorate;
+          }
+
+          const opt = pickBooleanOption(field.options, satisfies);
+          if (opt) {
+            return { field, factKey, value: optionText(opt), status: 'supported', exactMatch: true, matchLength: resolved.length, reason: 'Candidate education qualification evaluated.' };
+          }
+        }
       }
       if (isChoiceKind(field.kind)) {
         const opt = pickOption(field, val);

@@ -6,7 +6,7 @@ const availableStatuses = ['queued', 'processing', 'review', 'confirmed'];
 export async function extensionDocumentAccess(ownerId: string) {
   const { data: candidates, error } = await database().from('candidates')
     .select('id')
-    .eq('user_id', ownerId);
+    .or(`user_id.eq.${ownerId},created_by.eq.${ownerId}`);
   checkDb(error);
   const ids = (candidates || []).map(candidate => candidate.id);
   const unlinked = `and(owner_id.eq.${ownerId},candidate_id.is.null)`;

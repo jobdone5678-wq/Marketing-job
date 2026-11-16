@@ -104,25 +104,25 @@
         let autoValue = null;
         const ql = label.toLowerCase();
 
-        const candName = values.full_name || 'Candidate';
-        const candFirst = values.first_name || 'Candidate';
-        const candTitle = values.current_title || candidate.current_job_title || candidate.headline || 'Software Engineer';
-        const candEmployer = values.current_employer || candidate.current_company || candidate.company || 'technology companies';
-        const candSkills = values.primary_skills || candidate.secondary_skills || 'software engineering';
+        const candName = values.full_name || '';
+        const candFirst = values.first_name || '';
+        const candTitle = values.current_title || candidate.current_job_title || candidate.headline || '';
+        const candEmployer = values.current_employer || candidate.current_company || candidate.company || '';
+        const candSkills = values.primary_skills || candidate.secondary_skills || '';
         const skillsList = Array.isArray(candSkills) ? candSkills : String(candSkills).split(/[,;|\n]+/).map(s => s.trim()).filter(Boolean);
-        const skillsStr = skillsList.join(', ') || 'Software Engineering';
-        const topSkills = skillsList.slice(0, 5).join(', ') || 'modern software engineering tools';
+        const skillsStr = skillsList.join(', ');
+        const topSkills = skillsList.slice(0, 5).join(', ');
         const candExp = values.total_experience_years ? `${values.total_experience_years}+ years` : '';
         const candCity = values.current_city || candidate.city || '';
         const candState = values.current_state || candidate.state || '';
-        const candLocation = values.current_location || [candCity, candState].filter(Boolean).join(', ') || '';
+        const candLocation = values.current_location || [candCity, candState].filter(Boolean).join(', ');
         const candDegree = values.highest_education || candidate.highest_qualification || candidate.degree || '';
         const candSchool = values.school || candidate.university_name || candidate.school || '';
         const candGradYear = values.graduation_year || candidate.graduation_year || '';
         const candSummary = values.summary || values.bio || '';
         const candResumeText = (resume?.raw_text || resume?.source_text || candidate.source_text || '').toLowerCase();
         const activeJobData = capture?.read ? capture.read() : null;
-        const companyName = activeJobData?.company || 'your company';
+        const companyName = activeJobData?.company || '';
 
         if (mapping.isChoiceKind(field.kind)) {
           if (/(authoriz|eligible|legal right|citizen|18|age|full-time|onsite|internship|currently enrolled)/i.test(ql) && !/(require|need|sponsor)/i.test(ql)) {
@@ -160,109 +160,111 @@
               autoValue = options.find(o => /no,? (?:i )?do not have|^no\b|decline|prefer not/i.test(o)) || options[0];
             }
           } else if (/(pronoun)/i.test(ql)) {
-            const g = String(candidate.gender || values.gender || '').toLowerCase();
-            if (g.startsWith('f') || g.includes('woman') || g.includes('female')) {
-              autoValue = options.find(o => /she\/her/i.test(o)) || 'She/Her/Hers';
-            } else if (g.includes('non-binary') || g.includes('they')) {
-              autoValue = options.find(o => /they\/them/i.test(o)) || 'They/Them/Theirs';
+            const explicit = candidate.pronouns || values.pronouns || '';
+            if (explicit) {
+              autoValue = options.find(o => new RegExp(explicit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(o)) || explicit;
             } else {
-              autoValue = options.find(o => /he\/him/i.test(o)) || 'He/Him/His';
+              const g = String(candidate.gender || values.gender || '').toLowerCase();
+              if (g.startsWith('f') || g.includes('woman') || g.includes('female')) {
+                autoValue = options.find(o => /she\/her/i.test(o)) || options.find(o => /decline|prefer not/i.test(o));
+              } else if (g.includes('non-binary') || g.includes('they')) {
+                autoValue = options.find(o => /they\/them/i.test(o)) || options.find(o => /decline|prefer not/i.test(o));
+              } else if (g.startsWith('m') || g.includes('man') || g.includes('male')) {
+                autoValue = options.find(o => /he\/him/i.test(o)) || options.find(o => /decline|prefer not/i.test(o));
+              } else {
+                autoValue = options.find(o => /decline|prefer not|choose not|not specified/i.test(o)) || null;
+              }
             }
-          } else if (/(degree|education)/i.test(ql)) {
-            if (/master/i.test(candDegree)) autoValue = options.find(o => /master/i.test(o));
-            else if (/phd|doctor/i.test(candDegree)) autoValue = options.find(o => /phd|doctor/i.test(o));
-            else autoValue = options.find(o => /bachelor/i.test(o)) || options.find(o => /degree/i.test(o)) || candDegree || options[0];
+          } else if (/(degree|education|bachelor|master|phd|doctor|college|university|qualification)/i.test(ql)) {
+            const isYesNo = options.some(o => /^(yes|true)$/i.test(o)) && options.some(o => /^(no|false)$/i.test(o));
+            if (isYesNo) {
+              const candidateHasBachelor = /bachelor|b\.?tech|b\.?s|b\.?a|undergraduate/i.test(candDegree) || /bachelor/i.test(candResumeText);
+              const candidateHasMaster = /master|m\.?s|m\.?tech|mba/i.test(candDegree) || /master/i.test(candResumeText);
+              const candidateHasDoctorate = /phd|doctor/i.test(candDegree);
+
+              let satisfies = false;
+              if (/(master|graduate degree)/i.test(ql)) {
+                satisfies = candidateHasMaster || candidateHasDoctorate;
+              } else if (/(phd|doctorate)/i.test(ql)) {
+                satisfies = candidateHasDoctorate;
+              } else if (/(bachelor|undergraduate|degree|education|college|university|completed.*degree)/i.test(ql)) {
+                satisfies = candidateHasBachelor || candidateHasMaster || candidateHasDoctorate;
+              }
+
+              if (satisfies) {
+                autoValue = options.find(o => /^(yes|true)$/i.test(o)) || true;
+              } else {
+                autoValue = options.find(o => /^(no|false)$/i.test(o)) || false;
+              }
+            } else {
+              if (/master/i.test(candDegree)) {
+                autoValue = options.find(o => /master/i.test(o));
+              } else if (/phd|doctor/i.test(candDegree)) {
+                autoValue = options.find(o => /phd|doctor/i.test(o));
+              } else if (/bachelor|b\.?tech|b\.?s|b\.?a/i.test(candDegree) || /bachelor/i.test(candResumeText)) {
+                autoValue = options.find(o => /bachelor|undergraduate|b\.?s|b\.?a|b\.?tech/i.test(o)) || options.find(o => /college|degree/i.test(o));
+              } else if (candDegree) {
+                autoValue = options.find(o => new RegExp(candDegree.slice(0, 15), 'i').test(o));
+              }
+            }
           } else if (/(country)/i.test(ql)) {
-            autoValue = options.find(o => new RegExp(values.country || 'United States', 'i').test(o)) || options.find(o => /united states|usa/i.test(o)) || values.country || 'United States';
+            const targetCountry = values.country || candidate.country || '';
+            if (targetCountry) {
+              autoValue = options.find(o => new RegExp(`^${targetCountry}$`, 'i').test(o)) || options.find(o => new RegExp(targetCountry, 'i').test(o)) || targetCountry;
+            }
           } else if (/(where do you intend to work|intend to work|work location)/i.test(ql)) {
-            autoValue = options.find(o => /open|either|any|both/i.test(o)) || options.find(o => /remote/i.test(o)) || options[0] || 'Open to Either';
+            const pref = candidate.preferred_work_type || '';
+            if (pref) {
+              autoValue = options.find(o => new RegExp(pref, 'i').test(o));
+            } else {
+              autoValue = options.find(o => /remote|open|either|any/i.test(o));
+            }
           } else if (/(location|city)/i.test(ql)) {
-            const locMatch = candCity && options.find(o => new RegExp(candCity, 'i').test(o));
-            autoValue = locMatch || options.find(o => /remote|open|any/i.test(o)) || options[0];
+            if (candCity) {
+              autoValue = options.find(o => new RegExp(`\\b${candCity}\\b`, 'i').test(o));
+            }
           } else if (/(graduate|graduation|year)/i.test(ql)) {
-            const gradMatch = candGradYear && options.find(o => o.includes(candGradYear));
-            autoValue = gradMatch || options.find(o => /2026|2027|2028/i.test(o)) || options[0];
-          } else if (/(hear|source)/i.test(ql)) {
-            autoValue = options.find(o => /linkedin/i.test(o)) || options.find(o => /website|job board|other/i.test(o)) || 'LinkedIn';
-          } else if (options.length) {
-            autoValue = options.find(o => !/select|choose/i.test(o)) || options[0];
+            if (candGradYear) {
+              autoValue = options.find(o => o.includes(candGradYear));
+            }
+          } else if (/(hear|source|how did you)/i.test(ql)) {
+            const src = values.how_heard || candidate.how_heard || '';
+            if (src) {
+              autoValue = options.find(o => new RegExp(src, 'i').test(o)) || src;
+            }
           }
         } else if (field.kind === 'text' || field.kind === 'textarea') {
-          // 1. Candidate's story / journey
-          if (/(tell us your story|your story|how did you get to where you are|personal journey|professional journey|background.*shaped you|turning point)/i.test(ql)) {
-            autoValue = `My professional journey began with my education in ${candDegree || 'computer science'} at ${candSchool || 'university'}, where I developed a strong passion for solving real-world problems with code. Over the past ${candExp || 'several years'}, I have worked across technology environments, most recently as a ${candTitle} at ${candEmployer}. Through hands-on experience architecting full-stack systems with ${topSkills}, I developed a discipline of balancing high-speed execution with architectural resilience and reliability.`;
+          // Bio / summary / statement / cover letter
+          if (/(additional information|cover letter|anything else|share with us|bio|biography|about\s*(you|yourself)?|summary|statement)/i.test(ql)) {
+            if (candSummary) {
+              autoValue = candSummary;
+            }
           }
-          // 2. Walk through a project / Problem solving approach
-          else if (/(walk us through a (?:particular )?project|project that you (?:designed|initiated|built|completed)|technical project|significant project|saw through to completion|approach identifying and solving)/i.test(ql)) {
-            autoValue = `At ${candEmployer}, I spearheaded an initiative to optimize our core services built with ${topSkills}. We identified throughput bottlenecks during peak load periods. I took ownership of designing an asynchronous event-processing architecture, refactoring critical database queries, and adding comprehensive automated test coverage. This project reduced our service response latency by over 30% and significantly improved system uptime.`;
-          }
-          // 3. Technical background / skillset alignment
-          else if (/(how does your (?:technical )?background|skillset align|skills align|relevant experience|qualifications align|why are you a (?:good )?fit|fit for this (?:role|position))/i.test(ql)) {
-            autoValue = `My background as a ${candTitle} at ${candEmployer} directly aligns with the technical demands of this role. I bring deep hands-on proficiency in ${topSkills}, with a proven track record of writing clean, maintainable code, implementing automated testing, and designing resilient APIs that scale under high user load.`;
-          }
-          // 4. Future goals / 1-year out / fellowship
-          else if (/(what do you want to be doing a year out|where do you see yourself|career goals|future goals|year out from completing|fellowship help you get there|long[- ]term goals)/i.test(ql)) {
-            autoValue = `One year from now, I aim to be driving high-leverage technical initiatives as a core engineer delivering mission-critical applications. Working in an engineering-first culture like ${companyName} will accelerate my technical growth by challenging me with complex distributed systems problems, and allow me to apply my expertise in ${topSkills} to build scalable solutions that make a tangible operational impact.`;
-          }
-          // 5. Palantir FDSE vs Software Engineer / Role resonance
-          else if (/(forward deployed|fdse|resonates|which (of these )?roles?|role resonates)/i.test(ql)) {
-            autoValue = `The Forward Deployed Software Engineer (FDSE) role strongly resonates with me. As a ${candTitle} at ${candEmployer}, I worked directly on customer-facing features and backend services, bridging complex business requirements with scalable architectures. I thrive when deploying mission-critical systems in the field, diagnosing real-world friction, and building robust, performant software with measurable operational impact.`;
-          }
-          // 6. AI Systems / Sovereign AI / Machine Learning
-          else if (/(ai systems|sovereign ai|artificial intelligence|machine learning|working on ai)/i.test(ql)) {
-            autoValue = `I am deeply interested in working on AI Systems because the critical bottleneck in operationalizing AI is building robust, fault-tolerant distributed infrastructure that can process high-throughput data with low latency. Having engineered production services using ${topSkills} at ${candEmployer}, I want to apply my systems engineering background to build secure, scalable AI deployment pipelines.`;
-          }
-          // 7. Not on resume / Outside of work / Accomplishment
-          else if (/(not on your resume|outside (of )?work|proud of|accomplishment|proudest)/i.test(ql)) {
-            autoValue = `Outside of the formal bullet points on my resume, I take immense pride in mentoring junior engineers and contributing to open-source developer tooling. Helping peers understand complex debugging techniques, establishing high code-review standards, and building small automation scripts that save fellow developers hours every week is one of the most rewarding parts of my engineering career.`;
-          }
-          // 8. Why company / Why role
-          else if (/(why\b.*(?:palantir|figma|openai|company|work at|join)|why do you want to work|reason for applying|why this company)/i.test(ql)) {
-            autoValue = `I want to join ${companyName} because of the exceptional engineering standards and the dedication to solving mission-critical, large-scale problems. With my background as a ${candTitle} specializing in ${topSkills} at ${candEmployer}, I am eager to contribute my technical depth and collaborate with engineers who value engineering rigor.`;
-          }
-          // 9. Additional information / Cover letter
-          else if (/(additional information|cover letter|anything else|share with us)/i.test(ql)) {
-            autoValue = candSummary || `I am an experienced ${candTitle} with a proven track record across full-stack development, distributed backend systems, and cloud infrastructure with ${topSkills}. I am authorized to work in the United States and available to start a new role with standard notice. Thank you for considering my application.`;
-          }
-          // 10. Bio / summary
-          else if (/(bio|biography|about\s*(you|yourself)?|summary|statement)/i.test(ql)) {
-            autoValue = candSummary || `Experienced ${candTitle} specializing in ${topSkills} with a strong background in architecting performant, reliable applications at ${candEmployer}.`;
-          }
-          // 11. Technical experience / stack description
-          else if (/(experience with|skills with|tech stack|technologies have you used|tools and frameworks)/i.test(ql)) {
-            autoValue = `I have extensive experience with ${skillsStr}. In my recent roles, including as a ${candTitle} at ${candEmployer}, I designed and delivered scalable production systems, optimized API response times, and maintained reliable CI/CD pipelines.`;
-          }
-          // 12. Conflict / Challenge / Failure
-          else if (/(challenge|conflict|difficult|failure|overcame|disagree|mistake)/i.test(ql)) {
-            autoValue = 'When facing complex technical challenges or unexpected production incidents, I prioritize methodical root-cause analysis, clear communication with cross-functional stakeholders, and implementing robust automated tests to prevent regressions.';
-          }
-          // 13. Leadership / Teamwork
-          else if (/(leadership|mentor|collaborat|team|cross-functional)/i.test(ql)) {
-            autoValue = 'I believe in collaborative engineering, conducting thoughtful code reviews, mentoring teammates, and maintaining high engineering standards while fostering a supportive and inclusive team environment.';
-          }
-          // 14. Salary
+          // Salary / compensation
           else if (/(salary|compensation|rate|gross salary|pay expectation)/i.test(ql)) {
-            autoValue = values.salary_expectation || 'Open / Competitive';
+            if (values.salary_expectation || candidate.salary_expectation) {
+              autoValue = values.salary_expectation || candidate.salary_expectation;
+            }
           }
-          // 15. Start date
+          // Start date / availability
           else if (/(start date|notice|available|availability|when can you start)/i.test(ql)) {
-            autoValue = values.availability || 'Immediately';
+            if (values.availability || candidate.availability) {
+              autoValue = values.availability || candidate.availability;
+            }
           }
-          // 16. Source
+          // Source / How did you hear
           else if (/(hear|source|referral)/i.test(ql)) {
-            autoValue = 'LinkedIn';
+            if (values.how_heard || candidate.how_heard) {
+              autoValue = values.how_heard || candidate.how_heard;
+            }
           }
-          // 17. Non-repeating fallback for any other open-ended question
-          else if (field.element?.tagName === 'TEXTAREA' || label.length > 25) {
-            const fallbackAnswers = [
-              `As a ${candTitle} at ${candEmployer}, my focus has been on architecting scalable services and delivering high-impact features with ${topSkills}. I emphasize robust system design, clean interfaces, and meeting demanding operational requirements.`,
-              `In my engineering work, I prioritize code quality, maintainability, and thorough automated testing. Having built production systems with ${topSkills}, I ensure our codebase remains agile and resilient as business needs evolve.`,
-              `Throughout my career, I have collaborated closely with product managers, designers, and fellow engineers to translate complex user requirements into performant technical solutions using ${topSkills}.`,
-              `I approach technical challenges with disciplined root-cause analysis and telemetry-driven debugging. At ${candEmployer}, this mindset helped our team consistently reduce defect rates and improve overall service reliability.`
-            ];
-            autoValue = fallbackAnswers[genericTextareaIndex % fallbackAnswers.length];
-            genericTextareaIndex++;
+          // Skills / Tech stack overview
+          else if (/(experience with|skills with|tech stack|technologies have you used|tools and frameworks)/i.test(ql)) {
+            if (skillsStr) {
+              autoValue = skillsStr;
+            }
           }
+          // NO synthetic fallback essays or made-up narratives. If not in candidate profile, leave as null.
         } else if (field.kind === 'checkbox') {
           const groupQuestion = (field.element?.closest('.application-question, fieldset, [role="group"], .form-group, .question')
             ?.querySelector('.application-label, legend, .question-title, [class*="label" i]')?.innerText || '').toLowerCase();
@@ -277,7 +279,6 @@
           else if (/language/i.test(combined)) {
             const knownLangs = ['english'];
             if (Array.isArray(candidate.languages)) knownLangs.push(...candidate.languages.map(l => String(l).toLowerCase()));
-            if (/hindi/i.test(candResumeText) || /india|hyderabad/i.test(candResumeText + ' ' + candLocation)) knownLangs.push('hindi', 'telugu');
             autoValue = knownLangs.some(l => checkLabel.includes(l));
           }
           // 3. Start Date Cohort Windows: Check only the FIRST / earliest window, leave all others unchecked

@@ -1,3 +1,1416 @@
+// === File: jobright_extension/adapters/ats-adapters.js ===
+/**
+ * NextKinHR Universal ATS Portal Adapters Registry
+ * Reverse-Engineered & Hardened Portal Field Adapters for ATS Platforms, Job Boards & Direct Career Sites
+ * Nextkinlife LLC
+ */
+(function(root) {
+  'use strict';
+
+  root.NextkinAdapters = root.NextkinAdapters || [];
+
+  // Canonical profile facts an adapter may point at. Field mapping turns these straight into values.
+  const CANON_RULES = [
+    ['linkedin_url', /linked\s*in/i],
+    ['github_url', /github/i],
+    ['website', /website|portfolio|homepage|personal\s*site|personal\s*url|blog\s*url/i],
+    ['email', /e-?mail/i],
+    ['phone', /phone|mobile|cell|telephone|contact\s*number/i],
+    ['first_name', /first[\s._-]*name|given[\s._-]*name|forename|fname/i],
+    ['last_name', /last[\s._-]*name|family[\s._-]*name|surname|lname/i],
+    ['full_name', /full[\s._-]*name|applicant[\s._-]*name|candidate[\s._-]*name|your[\s._-]*name|system\s*field\s*name/i],
+    ['current_employer', /current[\s._-]*(employer|company|organization|organisation)|employer|company[\s._-]*name|organization|organisation/i],
+    ['current_title', /current[\s._-]*(job[\s._-]*)?title|job[\s._-]*title|headline|designation/i],
+    ['current_city', /\bcity\b|\btown\b|municipality|\blocation\b/i],
+    ['current_state', /\bstate\b|province|\bregion\b/i],
+    ['zip_code', /zip|postal/i],
+    ['country', /country|nationality/i],
+    ['full_address', /address|street/i],
+    ['total_experience_years', /years?[\s._-]*of[\s._-]*experience|experience[\s._-]*years/i],
+    ['primary_skills', /skills|technolog|stack|expertise|competenc/i],
+    ['authorized_in_usa', /legally\s*authorized|authorized\s*to\s*work|right\s*to\s*work/i],
+    ['needs_sponsorship', /visa\s*sponsorship|require\s*sponsorship/i],
+    ['salary_expectation', /salary|compensation|expected\s*pay|desired\s*salary/i],
+    ['highest_education', /highest[\s._-]*education|highest[\s._-]*degree|degree[\s._-]*level/i],
+    ['gender', /\bgender\b|\bsex\b/i],
+    ['race', /\brace\b|\bethnicity\b/i],
+    ['veteran', /\bveteran\b/i],
+    ['disability', /\bdisability\b/i],
+    ['how_heard', /how\s*did\s*you\s*hear|referral\s*source|application\s*source/i]
+  ];
+
+  // A confirmation or repeat field is not the primary field.
+  const NOT_PRIMARY = /e?mail[\s._-]*(confirm|confirmation|retype|re-?enter|again|verify)|confirm[\s._-]*e?mail/i;
+
+  const camel = s => String(s || '').replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+
+  const descriptor = el => camel([
+    el.getAttribute('name'), el.getAttribute('id'), el.getAttribute('placeholder'),
+    el.getAttribute('aria-label'), el.getAttribute('data-testid'), el.getAttribute('data-test'),
+    el.getAttribute('data-automation-id'), el.getAttribute('data-ui'), el.getAttribute('data-field-name'),
+    el.getAttribute('data-field-id'), el.getAttribute('title')
+  ].filter(Boolean).join(' '))
+    .replace(/[_\-.]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+  // Best-effort canonical fact for any element, used as the base for every adapter.
+  function canonicalHint(el) {
+    if (!el || !el.getAttribute) return '';
+    const desc = descriptor(el);
+    if (!desc || NOT_PRIMARY.test(desc)) return '';
+    for (const [key, re] of CANON_RULES) {
+      if (re.test(desc)) return key;
+    }
+    return '';
+  }
+
+  root.canonicalHint = canonicalHint;
+
+  const hostIs = re => host => re.test(String(host || '').toLowerCase());
+
+  const adapters = [
+    // 1. Ashby
+    {
+      id: 'ashby',
+      name: 'Ashby',
+      matches: hostIs(/(^|\.)ashbyhq\.com$/i),
+      hint: el => {
+        const name = el.getAttribute('name') || '';
+        if (name === '_systemfield_name') return 'full_name';
+        if (name === '_systemfield_email') return 'email';
+        if (name === '_systemfield_location') return 'current_city';
+        if (name === '_systemfield_phone') return 'phone';
+        if (/urls\[([^\]]+)\]/i.test(name)) {
+          const key = RegExp.$1.toLowerCase();
+          if (/linkedin/.test(key)) return 'linkedin_url';
+          if (/github/.test(key)) return 'github_url';
+          if (/twitter|portfolio|website|other|url/.test(key)) return 'website';
+        }
+        return canonicalHint(el) || el.getAttribute('data-testid') || '';
+      }
+    },
+
+    // 2. Greenhouse
+    {
+      id: 'greenhouse',
+      name: 'Greenhouse',
+      matches: hostIs(/(^|\.)greenhouse\.io$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const id = (el.id || '').toLowerCase();
+        if (id === 'first_name' || name === 'first_name') return 'first_name';
+        if (id === 'last_name' || name === 'last_name') return 'last_name';
+        if (id === 'email' || name === 'email') return 'email';
+        if (id === 'phone' || name === 'phone') return 'phone';
+        if (id === 'country' || name === 'country') return 'country';
+        if (id === 'candidate-location' || /job_application\[location\]/i.test(name)) return 'current_city';
+        if (id === 'gender' || name === 'gender') return 'gender';
+        if (id === 'veteran_status' || /veteran/i.test(name)) return 'veteran';
+        if (id === 'hispanic_ethnicity' || /hispanic/i.test(name)) return 'race';
+        if (id.includes('degree') || name.includes('degree')) return 'highest_education';
+        if (/job_application\[answers\]/i.test(name)) return '';
+        return canonicalHint(el);
+      }
+    },
+
+    // 3. Lever
+    {
+      id: 'lever',
+      name: 'Lever',
+      matches: hostIs(/(^|\.)lever\.co$/i),
+      hint: el => {
+        const name = el.getAttribute('name') || '';
+        if (name === 'name') return 'full_name';
+        if (name === 'email') return 'email';
+        if (name === 'phone') return 'phone';
+        if (name === 'org') return 'current_employer';
+        if (name === 'location') return 'current_city';
+        if (/urls\[linkedin\]/i.test(name)) return 'linkedin_url';
+        if (/urls\[github\]/i.test(name)) return 'github_url';
+        if (/urls\[portfolio\]|urls\[website\]|urls\[other\]/i.test(name)) return 'website';
+        if (/urls\[twitter\]/i.test(name)) return 'website';
+        return canonicalHint(el);
+      }
+    },
+
+    // 4. Workday
+    {
+      id: 'workday',
+      name: 'Workday',
+      matches: hostIs(/(^|\.)myworkday(jobs|site)?\.com$/i),
+      hint: el => {
+        const autoId = (el.getAttribute('data-automation-id') || '').toLowerCase();
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const desc = `${autoId} ${id} ${name}`;
+        if (desc.includes('legalname_firstname') || desc.includes('legalnamesection_firstname')) return 'first_name';
+        if (desc.includes('legalname_lastname') || desc.includes('legalnamesection_lastname')) return 'last_name';
+        if (desc.includes('email') || desc.includes('emailaddress')) return 'email';
+        if (desc.includes('phone') || desc.includes('phonenumber')) return 'phone';
+        if (desc.includes('addresssection_addressline1')) return 'full_address';
+        if (desc.includes('addresssection_city')) return 'current_city';
+        if (desc.includes('addresssection_countryregion')) return 'current_state';
+        if (desc.includes('addresssection_postalcode')) return 'zip_code';
+        if (desc.includes('countrydropdown')) return 'country';
+        if (desc.includes('sourceprompt') || desc.includes('source')) return 'how_heard';
+        if (desc.includes('gender')) return 'gender';
+        if (desc.includes('veteran')) return 'veteran';
+        if (desc.includes('disability')) return 'disability';
+        return canonicalHint(el);
+      }
+    },
+
+    // 5. iCIMS
+    {
+      id: 'icims',
+      name: 'iCIMS',
+      matches: hostIs(/(^|\.)icims\.com$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/firstname|first_name|fname/.test(id || name)) return 'first_name';
+        if (/lastname|last_name|lname/.test(id || name)) return 'last_name';
+        if (/email/.test(id || name)) return 'email';
+        if (/phone.*type|type.*phone/.test(id || name)) return 'phone';
+        if (/phone|mobile|cell|tel/.test(id || name)) return 'phone';
+        if (/address/.test(id || name)) return 'full_address';
+        if (/city/.test(id || name)) return 'current_city';
+        if (/state|province/.test(id || name)) return 'current_state';
+        if (/zip|postal/.test(id || name)) return 'zip_code';
+        if (/country/.test(id || name)) return 'country';
+        if (/salutation|honorific/.test(id || name)) return '';
+        return canonicalHint(el);
+      }
+    },
+
+    // 6. SmartRecruiters
+    {
+      id: 'smartrecruiters',
+      name: 'SmartRecruiters',
+      matches: hostIs(/(^|\.)(smartrecruiters\.com|smartr\.me)$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const testId = (el.getAttribute('data-test') || '').toLowerCase();
+        if (name === 'firstname' || testId.includes('first-name')) return 'first_name';
+        if (name === 'lastname' || testId.includes('last-name')) return 'last_name';
+        if (name === 'email' || testId.includes('email')) return 'email';
+        if (name === 'phonenumber' || testId.includes('phone')) return 'phone';
+        if (name.includes('city') || testId.includes('city')) return 'current_city';
+        if (testId.includes('country')) return 'country';
+        return canonicalHint(el);
+      }
+    },
+
+    // 7. ClearCompany / HRMDirect
+    {
+      id: 'clearcompany',
+      name: 'ClearCompany',
+      matches: hostIs(/(^|\.)(clearcompany\.com|hrmdirect\.com)$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const id = (el.id || '').toLowerCase();
+        if (/first_name|fname/i.test(name || id)) return 'first_name';
+        if (/last_name|lname/i.test(name || id)) return 'last_name';
+        if (/email/i.test(name || id)) return 'email';
+        if (/phone|mobile/i.test(name || id)) return 'phone';
+        if (/address|street/i.test(name || id)) return 'full_address';
+        if (/city/i.test(name || id)) return 'current_city';
+        if (/state/i.test(name || id)) return 'current_state';
+        if (/zip|postal/i.test(name || id)) return 'zip_code';
+        if (/salary|pay/i.test(name || id)) return 'salary_expectation';
+        if (/hear|source/i.test(name || id)) return 'how_heard';
+        return canonicalHint(el);
+      }
+    },
+
+    // 8. Paycor / Newton Software
+    {
+      id: 'paycor',
+      name: 'Paycor (Newton)',
+      matches: hostIs(/(^|\.)(paycor\.com|newtonsoftware\.com)$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/gnewtonfirstname|firstname/i.test(id || name)) return 'first_name';
+        if (/gnewtonlastname|lastname/i.test(id || name)) return 'last_name';
+        if (/gnewtonemail|email/i.test(id || name)) return 'email';
+        if (/gnewtonmobilephone|gnewtonhomephone|phone/i.test(id || name)) return 'phone';
+        if (/gnewtonaddress|address/i.test(id || name)) return 'full_address';
+        if (/gnewtoncity|city/i.test(id || name)) return 'current_city';
+        if (/gnewtonstate|state/i.test(id || name)) return 'current_state';
+        if (/gnewtonzip|zip/i.test(id || name)) return 'zip_code';
+        if (/gnewtonsalary/i.test(id || name)) return 'salary_expectation';
+        return canonicalHint(el);
+      }
+    },
+
+    // 9. IBM BrassRing (Kenexa)
+    {
+      id: 'brassring',
+      name: 'IBM BrassRing',
+      matches: hostIs(/(^|\.)brassring\.com$/i),
+      hint: el => {
+        const model = (el.getAttribute('ng-model') || '').toLowerCase();
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const desc = `${model} ${id} ${name}`;
+        if (/firstname|first_name/.test(desc)) return 'first_name';
+        if (/lastname|last_name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        if (/address|street/.test(desc)) return 'full_address';
+        if (/city/.test(desc)) return 'current_city';
+        if (/state|province/.test(desc)) return 'current_state';
+        if (/zip|postal/.test(desc)) return 'zip_code';
+        if (/country/.test(desc)) return 'country';
+        return canonicalHint(el);
+      }
+    },
+
+    // 10. Oracle Cloud HCM (Fusion / Candidate Experience)
+    {
+      id: 'oraclecloud',
+      name: 'Oracle Cloud HCM',
+      matches: hostIs(/(^|\.)(oraclecloud|oraclegovcloud)\.com$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+        const desc = `${id} ${name} ${aria}`;
+        if (/firstname|first_name/.test(desc)) return 'first_name';
+        if (/lastname|last_name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        if (/addressline|address_line|street/.test(desc)) return 'full_address';
+        if (/\bcity\b/.test(desc)) return 'current_city';
+        if (/\bstate\b|province/.test(desc)) return 'current_state';
+        if (/postal|zip/.test(desc)) return 'zip_code';
+        if (/country/.test(desc)) return 'country';
+        return canonicalHint(el);
+      }
+    },
+
+    // 11. Taleo (Oracle Taleo Enterprise / Business Edition)
+    {
+      id: 'taleo',
+      name: 'Taleo',
+      matches: hostIs(/(^|\.)(taleo\.net|burnsmcd\.com)$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const desc = `${id} ${name}`;
+        if (/candidatefirstname|first_name|fname/.test(desc)) return 'first_name';
+        if (/candidatelastname|last_name|lname/.test(desc)) return 'last_name';
+        if (/candidateemail|email/.test(desc)) return 'email';
+        if (/candidatephone|phone|mobile/.test(desc)) return 'phone';
+        if (/candidateaddress|address/.test(desc)) return 'full_address';
+        if (/candidatecity|city/.test(desc)) return 'current_city';
+        if (/candidatestate|state/.test(desc)) return 'current_state';
+        if (/candidatezip|zip|postal/.test(desc)) return 'zip_code';
+        if (/candidatecountry|country/.test(desc)) return 'country';
+        return canonicalHint(el);
+      }
+    },
+
+    // 12. SAP SuccessFactors
+    {
+      id: 'successfactors',
+      name: 'SuccessFactors',
+      matches: hostIs(/(^|\.)(successfactors|sapsf)\.(com|eu|net)$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const desc = `${id} ${name}`;
+        if (/fbclc_fname|firstname|first_name/.test(desc)) return 'first_name';
+        if (/fbclc_lname|lastname|last_name/.test(desc)) return 'last_name';
+        if (/fbclc_email|email/.test(desc)) return 'email';
+        if (/fbclc_phone|phone|mobile/.test(desc)) return 'phone';
+        if (/fbclc_address|address/.test(desc)) return 'full_address';
+        if (/fbclc_city|city/.test(desc)) return 'current_city';
+        if (/fbclc_state|state/.test(desc)) return 'current_state';
+        if (/fbclc_postalcode|postal|zip/.test(desc)) return 'zip_code';
+        if (/fbclc_country|country/.test(desc)) return 'country';
+        return canonicalHint(el);
+      }
+    },
+
+    // 13. BambooHR
+    {
+      id: 'bamboohr',
+      name: 'BambooHR',
+      matches: hostIs(/(^|\.)bamboohr\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (name === 'firstname') return 'first_name';
+        if (name === 'lastname') return 'last_name';
+        if (name === 'email') return 'email';
+        if (name === 'phone') return 'phone';
+        if (name === 'streetaddress') return 'full_address';
+        if (name === 'city') return 'current_city';
+        if (name === 'state') return 'current_state';
+        if (name === 'zipcode') return 'zip_code';
+        if (name === 'linkedinurl') return 'linkedin_url';
+        return canonicalHint(el);
+      }
+    },
+
+    // 14. Workable
+    {
+      id: 'workable',
+      name: 'Workable',
+      matches: hostIs(/(^|\.)workable\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const ui = (el.getAttribute('data-ui') || '').toLowerCase();
+        if (name === 'firstname' || ui.includes('firstname')) return 'first_name';
+        if (name === 'lastname' || ui.includes('lastname')) return 'last_name';
+        if (name === 'email' || ui.includes('email')) return 'email';
+        if (name === 'phone' || ui.includes('phone')) return 'phone';
+        if (name === 'address') return 'full_address';
+        if (name === 'city') return 'current_city';
+        return canonicalHint(el);
+      }
+    },
+
+    // 15. Jobvite
+    {
+      id: 'jobvite',
+      name: 'Jobvite',
+      matches: hostIs(/(^|\.)jobvite\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (name.includes('jvfirstname') || name === 'firstname') return 'first_name';
+        if (name.includes('jvlastname') || name === 'lastname') return 'last_name';
+        if (name.includes('jvemail') || name === 'email') return 'email';
+        if (name.includes('jvphone') || name === 'phone') return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 16. JazzHR (ApplyToJob)
+    {
+      id: 'jazzhr',
+      name: 'JazzHR',
+      matches: hostIs(/(^|\.)(jazzhr\.com|applytojob\.com)$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (name.includes('applicant_first_name')) return 'first_name';
+        if (name.includes('applicant_last_name')) return 'last_name';
+        if (name.includes('applicant_email')) return 'email';
+        if (name.includes('applicant_phone')) return 'phone';
+        if (name.includes('applicant_street_address')) return 'full_address';
+        if (name.includes('applicant_city')) return 'current_city';
+        if (name.includes('applicant_state')) return 'current_state';
+        if (name.includes('applicant_zip')) return 'zip_code';
+        return canonicalHint(el);
+      }
+    },
+
+    // 17. Breezy HR
+    {
+      id: 'breezy',
+      name: 'BreezyHR',
+      matches: hostIs(/(^|\.)breezy\.hr$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (name === 'name') return 'full_name';
+        if (name === 'email') return 'email';
+        if (name === 'phone_number' || name === 'phone') return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 18. Personio
+    {
+      id: 'personio',
+      name: 'Personio',
+      matches: hostIs(/(^|\.)personio\.(de|com)$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (name === 'first_name') return 'first_name';
+        if (name === 'last_name') return 'last_name';
+        if (name === 'email') return 'email';
+        if (name === 'phone') return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 19. Rippling / Rippling ATS
+    {
+      id: 'rippling',
+      name: 'Rippling ATS',
+      matches: hostIs(/(^|\.)(rippling\.com|rippling-ats\.com)$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 20. Paylocity
+    {
+      id: 'paylocity',
+      name: 'Paylocity',
+      matches: hostIs(/(^|\.)paylocity\.com$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const desc = `${id} ${name}`;
+        if (/firstname/.test(desc)) return 'first_name';
+        if (/lastname/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        if (/street|address/.test(desc)) return 'full_address';
+        if (/city/.test(desc)) return 'current_city';
+        if (/state/.test(desc)) return 'current_state';
+        if (/zip|postal/.test(desc)) return 'zip_code';
+        return canonicalHint(el);
+      }
+    },
+
+    // 21. Paycom Online
+    {
+      id: 'paycom',
+      name: 'Paycom',
+      matches: hostIs(/(^|\.)paycom(online)?\.(com|net)$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const id = (el.id || '').toLowerCase();
+        const desc = `${name} ${id}`;
+        if (/fname|firstname/.test(desc)) return 'first_name';
+        if (/lname|lastname/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        if (/addr|street/.test(desc)) return 'full_address';
+        if (/city/.test(desc)) return 'current_city';
+        if (/state/.test(desc)) return 'current_state';
+        if (/zip/.test(desc)) return 'zip_code';
+        return canonicalHint(el);
+      }
+    },
+
+    // 22. ADP (Workforce Now, Recruiting, MyJobs)
+    {
+      id: 'adp',
+      name: 'ADP',
+      matches: hostIs(/(^|\.)adp\.com$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/firstname|first_name/.test(desc)) return 'first_name';
+        if (/lastname|last_name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        if (/address|street/.test(desc)) return 'full_address';
+        if (/city/.test(desc)) return 'current_city';
+        if (/state/.test(desc)) return 'current_state';
+        if (/postal|zip/.test(desc)) return 'zip_code';
+        return canonicalHint(el);
+      }
+    },
+
+    // 23. Dayforce HCM
+    {
+      id: 'dayforce',
+      name: 'Dayforce',
+      matches: hostIs(/(^|\.)dayforce(hcm)?\.com$/i),
+      hint: el => {
+        const fieldId = (el.getAttribute('data-field-id') || el.id || '').toLowerCase();
+        if (fieldId.includes('firstname')) return 'first_name';
+        if (fieldId.includes('lastname')) return 'last_name';
+        if (fieldId.includes('email')) return 'email';
+        if (fieldId.includes('phone')) return 'phone';
+        if (fieldId.includes('address')) return 'full_address';
+        if (fieldId.includes('city')) return 'current_city';
+        if (fieldId.includes('state')) return 'current_state';
+        if (fieldId.includes('postal') || fieldId.includes('zip')) return 'zip_code';
+        return canonicalHint(el);
+      }
+    },
+
+    // 24. UKG Pro / UltiPro
+    {
+      id: 'ultipro',
+      name: 'UKG / Ultipro',
+      matches: hostIs(/(^|\.)(ultipro\.com|ultipro\.ca|rec\.pro\.ukg\.net)$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const desc = `${id} ${name}`;
+        if (/firstname/.test(desc)) return 'first_name';
+        if (/lastname/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        if (/address/.test(desc)) return 'full_address';
+        if (/city/.test(desc)) return 'current_city';
+        if (/state/.test(desc)) return 'current_state';
+        if (/postal|zip/.test(desc)) return 'zip_code';
+        return canonicalHint(el);
+      }
+    },
+
+    // 25. Eightfold AI
+    {
+      id: 'eightfold',
+      name: 'Eightfold.ai',
+      matches: hostIs(/(^|\.)eightfold\.ai$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/firstname|first_name/.test(desc)) return 'first_name';
+        if (/lastname|last_name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        if (/location|city/.test(desc)) return 'current_city';
+        return canonicalHint(el);
+      }
+    },
+
+    // 26. Phenom People
+    {
+      id: 'phenom',
+      name: 'Phenom',
+      matches: hostIs(/(^|\.)(phenom(people)?\.com|jobs\.bswhealth\.com|careers\.uvahealth\.org|careers\.dukehealth\.org|careers\.mastercard\.com|careers\.mcafee\.com|vcacareers\.com)$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/root_firstname|firstname/i.test(id || name)) return 'first_name';
+        if (/root_lastname|lastname/i.test(id || name)) return 'last_name';
+        if (/root_email|email/i.test(id || name)) return 'email';
+        if (/root_phone|phone/i.test(id || name)) return 'phone';
+        if (/root_city|city/i.test(id || name)) return 'current_city';
+        if (/root_state|state/i.test(id || name)) return 'current_state';
+        if (/root_zip|zip/i.test(id || name)) return 'zip_code';
+        return canonicalHint(el);
+      }
+    },
+
+    // 27. Zoho Recruit
+    {
+      id: 'zohorecruit',
+      name: 'Zoho Recruit',
+      matches: hostIs(/(^|\.)zohorecruit\.(com|in|eu|ca)$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        if (/city/.test(desc)) return 'current_city';
+        if (/state/.test(desc)) return 'current_state';
+        return canonicalHint(el);
+      }
+    },
+
+    // 28. Teamtailor
+    {
+      id: 'teamtailor',
+      name: 'Teamtailor',
+      matches: hostIs(/(^|\.)teamtailor\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (name.includes('[first_name]')) return 'first_name';
+        if (name.includes('[last_name]')) return 'last_name';
+        if (name.includes('[email]')) return 'email';
+        if (name.includes('[phone]')) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 29. Recruitee
+    {
+      id: 'recruitee',
+      name: 'Recruitee',
+      matches: hostIs(/(^|\.)recruitee\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (name.includes('[name]')) return 'full_name';
+        if (name.includes('[email]')) return 'email';
+        if (name.includes('[phone]')) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 30. Pinpoint HQ
+    {
+      id: 'pinpoint',
+      name: 'Pinpoint',
+      matches: hostIs(/(^|\.)pinpointhq\.com$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 31. Avature
+    {
+      id: 'avature',
+      name: 'Avature',
+      matches: hostIs(/(^|\.)(avature\.net|careers\.arcb\.com|apply\.deloitte\.com|careers\.cbre\.com|careers\.ibm\.com|careers\.tql\.com|careers\.mantech\.com)$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const id = (el.id || '').toLowerCase();
+        const desc = `${name} ${id}`;
+        if (/firstname|first_name/.test(desc)) return 'first_name';
+        if (/lastname|last_name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        if (/address|street/.test(desc)) return 'full_address';
+        if (/city/.test(desc)) return 'current_city';
+        if (/state/.test(desc)) return 'current_state';
+        if (/country/.test(desc)) return 'country';
+        return canonicalHint(el);
+      }
+    },
+
+    // 32. Gusto
+    {
+      id: 'gusto',
+      name: 'Gusto',
+      matches: hostIs(/(^|\.)gusto\.com$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/applicant_first_name|first_name/i.test(id || name)) return 'first_name';
+        if (/applicant_last_name|last_name/i.test(id || name)) return 'last_name';
+        if (/applicant_email|email/i.test(id || name)) return 'email';
+        if (/applicant_phone|phone/i.test(id || name)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 33. Gem
+    {
+      id: 'gem',
+      name: 'Gem',
+      matches: hostIs(/(^|\.)gem\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (name === 'fullname') return 'full_name';
+        if (name === 'firstname') return 'first_name';
+        if (name === 'lastname') return 'last_name';
+        if (name === 'email') return 'email';
+        if (name === 'phonenumber' || name === 'phone') return 'phone';
+        if (name === 'linkedinurl') return 'linkedin_url';
+        return canonicalHint(el);
+      }
+    },
+
+    // 34. HiringThing / Rippling ATS / White-Label Portals
+    {
+      id: 'hiringthing',
+      name: 'HiringThing',
+      matches: hostIs(/(^|\.)(hiringthing\.com|oasisrecruit\.com|elevate-ats\.com|prismhr-hire\.com|gnahiring\.com)$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/first_name/i.test(name)) return 'first_name';
+        if (/last_name/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        if (/address/i.test(name)) return 'full_address';
+        if (/city/i.test(name)) return 'current_city';
+        if (/state/i.test(name)) return 'current_state';
+        if (/zip/i.test(name)) return 'zip_code';
+        return canonicalHint(el);
+      }
+    },
+
+    // 35. JobScore
+    {
+      id: 'jobscore',
+      name: 'JobScore',
+      matches: hostIs(/(^|\.)jobscore\.com$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/candidate_first_name|first_name/i.test(id || name)) return 'first_name';
+        if (/candidate_last_name|last_name/i.test(id || name)) return 'last_name';
+        if (/candidate_email|email/i.test(id || name)) return 'email';
+        if (/candidate_phone|phone/i.test(id || name)) return 'phone';
+        if (/city/i.test(id || name)) return 'current_city';
+        if (/state/i.test(id || name)) return 'current_state';
+        if (/postal_code|zip/i.test(id || name)) return 'zip_code';
+        return canonicalHint(el);
+      }
+    },
+
+    // 36. CareerPlug
+    {
+      id: 'careerplug',
+      name: 'CareerPlug',
+      matches: hostIs(/(^|\.)(careerplug\.com|sfagentjobs\.com|sfagentcareers\.com|apscareerportal\.com)$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/applicant_first_name|first_name/i.test(id || name)) return 'first_name';
+        if (/applicant_last_name|last_name/i.test(id || name)) return 'last_name';
+        if (/applicant_email|email/i.test(id || name)) return 'email';
+        if (/applicant_phone|phone/i.test(id || name)) return 'phone';
+        if (/applicant_address|address/i.test(id || name)) return 'full_address';
+        if (/applicant_city|city/i.test(id || name)) return 'current_city';
+        if (/applicant_state|state/i.test(id || name)) return 'current_state';
+        if (/applicant_zip|zip/i.test(id || name)) return 'zip_code';
+        return canonicalHint(el);
+      }
+    },
+
+    // 37. CatsOne
+    {
+      id: 'catsone',
+      name: 'CatsOne',
+      matches: hostIs(/(^|\.)catsone\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (name === 'first_name') return 'first_name';
+        if (name === 'last_name') return 'last_name';
+        if (name === 'email') return 'email';
+        if (name === 'phone') return 'phone';
+        if (name === 'address') return 'full_address';
+        if (name === 'city') return 'current_city';
+        if (name === 'state') return 'current_state';
+        if (name === 'zip') return 'zip_code';
+        return canonicalHint(el);
+      }
+    },
+
+    // 38. Recruiterflow
+    {
+      id: 'recruiterflow',
+      name: 'Recruiterflow',
+      matches: hostIs(/(^|\.)recruiterflow\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (name === 'name') return 'full_name';
+        if (name === 'email') return 'email';
+        if (name === 'phone') return 'phone';
+        if (name === 'location') return 'current_city';
+        if (name === 'linkedin') return 'linkedin_url';
+        return canonicalHint(el);
+      }
+    },
+
+    // 39. Trakstar Hire (Recruiterbox)
+    {
+      id: 'trakstar',
+      name: 'Trakstar Hire',
+      matches: hostIs(/(^|\.)(trakstar\.com|recruiterbox\.com)$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/candidate_name|name/i.test(name)) return 'full_name';
+        if (/candidate_email|email/i.test(name)) return 'email';
+        if (/candidate_phone|phone/i.test(name)) return 'phone';
+        if (/candidate_city|city/i.test(name)) return 'current_city';
+        return canonicalHint(el);
+      }
+    },
+
+    // 40. Polymer
+    {
+      id: 'polymer',
+      name: 'Polymer',
+      matches: hostIs(/(^|\.)polymer\.co$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/firstname/i.test(name)) return 'first_name';
+        if (/lastname/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        if (/linkedin/i.test(name)) return 'linkedin_url';
+        return canonicalHint(el);
+      }
+    },
+
+    // 41. GoHire
+    {
+      id: 'gohire',
+      name: 'GoHire',
+      matches: hostIs(/(^|\.)gohire\.io$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/first_name/i.test(name)) return 'first_name';
+        if (/last_name/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 42. TriNet Hire
+    {
+      id: 'trinethire',
+      name: 'TriNet Hire',
+      matches: hostIs(/(^|\.)trinethire\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/first_name/i.test(name)) return 'first_name';
+        if (/last_name/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 43. Kula
+    {
+      id: 'kula',
+      name: 'Kula',
+      matches: hostIs(/(^|\.)kula\.ai$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/firstname/i.test(name)) return 'first_name';
+        if (/lastname/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 44. Dover
+    {
+      id: 'dover',
+      name: 'Dover',
+      matches: hostIs(/(^|\.)dover\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/firstname/i.test(name)) return 'first_name';
+        if (/lastname/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        if (/linkedin/i.test(name)) return 'linkedin_url';
+        return canonicalHint(el);
+      }
+    },
+
+    // 45. Toast Careers
+    {
+      id: 'toasttab',
+      name: 'Toast Careers',
+      matches: hostIs(/(^|\.)toasttab\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/firstname/i.test(name)) return 'first_name';
+        if (/lastname/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 46. HubSpot Careers
+    {
+      id: 'hubspot',
+      name: 'HubSpot Careers',
+      matches: hostIs(/(^|\.)hubspot\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/firstname/i.test(name)) return 'first_name';
+        if (/lastname/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 47. Waymo Careers
+    {
+      id: 'waymo',
+      name: 'Waymo Careers',
+      matches: hostIs(/(^|\.)withwaymo\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/first_name/i.test(name)) return 'first_name';
+        if (/last_name/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 48. Y Combinator / Work at a Startup
+    {
+      id: 'ycombinator',
+      name: 'Y Combinator',
+      matches: hostIs(/(^|\.)(ycombinator\.com|workatastartup\.com)$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/first_name|firstname/i.test(name)) return 'first_name';
+        if (/last_name|lastname/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        if (/linkedin/i.test(name)) return 'linkedin_url';
+        if (/github/i.test(name)) return 'github_url';
+        return canonicalHint(el);
+      }
+    },
+
+    // 49. GovernmentJobs / NeoGov
+    {
+      id: 'governmentjobs',
+      name: 'GovernmentJobs (NeoGov)',
+      matches: hostIs(/(^|\.)(governmentjobs|neogov)\.com$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/txtfirstname|firstname/i.test(id || name)) return 'first_name';
+        if (/txtlastname|lastname/i.test(id || name)) return 'last_name';
+        if (/txtemail|email/i.test(id || name)) return 'email';
+        if (/txthomephone|txtmobilephone|phone/i.test(id || name)) return 'phone';
+        if (/txtaddress|address/i.test(id || name)) return 'full_address';
+        if (/txtcity|city/i.test(id || name)) return 'current_city';
+        if (/ddlstate|state/i.test(id || name)) return 'current_state';
+        if (/txtzip|zip/i.test(id || name)) return 'zip_code';
+        return canonicalHint(el);
+      }
+    },
+
+    // 50. USAJobs
+    {
+      id: 'usajobs',
+      name: 'USAJobs',
+      matches: hostIs(/(^|\.)usajobs\.gov$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 51. WOTC Tax Credit Questionnaires (Walton, TaxCreditCo, ADP TCS, JobCredits)
+    {
+      id: 'taxcredits',
+      name: 'WOTC Tax Credit Questionnaire',
+      matches: hostIs(/(^|\.)(waltonmgt\.com|taxcreditco\.com|jobcredits\.com|tcs\.adp\.com)$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || el.id || '').toLowerCase();
+        if (/first_name|fname/i.test(name)) return 'first_name';
+        if (/last_name|lname/i.test(name)) return 'last_name';
+        if (/appssn|ssn/i.test(name)) return ''; // Security: do not auto-fill SSN
+        if (/address/i.test(name)) return 'full_address';
+        if (/city/i.test(name)) return 'current_city';
+        if (/state/i.test(name)) return 'current_state';
+        if (/zip/i.test(name)) return 'zip_code';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 52. Freshteam
+    {
+      id: 'freshteam',
+      name: 'Freshteam',
+      matches: hostIs(/(^|\.)freshteam\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/first_name/i.test(name)) return 'first_name';
+        if (/last_name/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 53. Comeet
+    {
+      id: 'comeet',
+      name: 'Comeet',
+      matches: hostIs(/(^|\.)comeet\.(com|co)$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (name === 'name') return 'full_name';
+        if (name === 'email') return 'email';
+        if (name === 'phone') return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 54. Keka / Foxsense
+    {
+      id: 'keka',
+      name: 'Keka',
+      matches: hostIs(/(^|\.)(keka\.com|foxsense\.com)$/i),
+      hint: el => {
+        const formGroup = el.closest ? el.closest('.form-group, .keka-form-group') : null;
+        const label = formGroup ? (formGroup.querySelector('label')?.textContent || '') : '';
+        return label || canonicalHint(el);
+      }
+    },
+
+    // 55. isolved Hire
+    {
+      id: 'isolved',
+      name: 'isolved Hire',
+      matches: hostIs(/(^|\.)(isolved\.com|isolvedhire\.com)$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 56. JobDiva
+    {
+      id: 'jobdiva',
+      name: 'JobDiva',
+      matches: hostIs(/(^|\.)jobdiva\.com$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 57. LinkedIn
+    {
+      id: 'linkedin',
+      name: 'LinkedIn',
+      matches: hostIs(/(^|\.)linkedin\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const id = (el.getAttribute('id') || '').toLowerCase();
+        if (name === 'firstname' || id === 'input-first-name') return 'first_name';
+        if (name === 'lastname' || id === 'input-last-name') return 'last_name';
+        if (name === 'email' || id === 'input-email') return 'email';
+        if (name === 'phonenumber' || id === 'input-phone-number') return 'phone';
+        if (name === 'location' || id === 'input-location') return 'current_city';
+        if (name === 'company' || id === 'input-current-company') return 'current_employer';
+        if (name === 'currentposition' || id === 'input-current-position') return 'current_title';
+        if (name === 'linkedin' || id === 'input-linkedin') return 'linkedin_url';
+        if (name === 'yearsexperience' || id === 'input-years-experience') return 'total_experience_years';
+        return canonicalHint(el);
+      }
+    },
+
+    // 58. Indeed
+    {
+      id: 'indeed',
+      name: 'Indeed',
+      matches: hostIs(/(^|\.)indeed\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const id = (el.getAttribute('id') || '').toLowerCase();
+        if (name === 'fullname' || id === 'fullname') return 'full_name';
+        if (name === 'email' || id === 'email') return 'email';
+        if (name === 'phone' || id === 'phone') return 'phone';
+        if (name === 'city' || id === 'city') return 'current_city';
+        if (name === 'state' || id === 'state') return 'current_state';
+        if (name === 'street' || id === 'street') return 'full_address';
+        if (name === 'zipcode' || id === 'zipcode') return 'zip_code';
+        return canonicalHint(el);
+      }
+    },
+
+    // 59. Wellfound (AngelList)
+    {
+      id: 'wellfound',
+      name: 'Wellfound',
+      matches: hostIs(/(^|\.)wellfound\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (name.includes('candidate[first_name]')) return 'first_name';
+        if (name.includes('candidate[last_name]')) return 'last_name';
+        if (name.includes('candidate[email]')) return 'email';
+        if (name.includes('candidate[phone]')) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 60. Dice
+    {
+      id: 'dice',
+      name: 'Dice',
+      matches: hostIs(/(^|\.)dice\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 61. ZipRecruiter
+    {
+      id: 'ziprecruiter',
+      name: 'ZipRecruiter',
+      matches: hostIs(/(^|\.)ziprecruiter\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 62. BuiltIn
+    {
+      id: 'builtin',
+      name: 'BuiltIn',
+      matches: hostIs(/(^|\.)builtin\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 63. Naukri
+    {
+      id: 'naukri',
+      name: 'Naukri',
+      matches: hostIs(/(^|\.)naukri\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 64. Foundit (Monster India)
+    {
+      id: 'foundit',
+      name: 'Foundit',
+      matches: hostIs(/(^|\.)foundit\.in$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 65. CutShort
+    {
+      id: 'cutshort',
+      name: 'CutShort',
+      matches: hostIs(/(^|\.)cutshort\.io$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 66. Bayt
+    {
+      id: 'bayt',
+      name: 'Bayt',
+      matches: hostIs(/(^|\.)bayt\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 67. Jobstreet
+    {
+      id: 'jobstreet',
+      name: 'Jobstreet',
+      matches: hostIs(/(^|\.)jobstreet\.(com\.my|com\.ph|com\.sg)$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 68. Welcome to the Jungle / Otta
+    {
+      id: 'welcometothejungle',
+      name: 'Welcome to the Jungle',
+      matches: hostIs(/(^|\.)welcometothejungle\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 69. SEEK
+    {
+      id: 'seek',
+      name: 'SEEK',
+      matches: hostIs(/(^|\.)seek\.com\.(au|nz)$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 70. Reed
+    {
+      id: 'reed',
+      name: 'Reed',
+      matches: hostIs(/(^|\.)reed\.co\.uk$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 71. Totaljobs
+    {
+      id: 'totaljobs',
+      name: 'Totaljobs',
+      matches: hostIs(/(^|\.)totaljobs\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 72. Amazon Careers & Amazon University
+    {
+      id: 'amazon',
+      name: 'Amazon Jobs',
+      matches: hostIs(/(^|\.)amazon(university)?\.jobs$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        if (/city/.test(desc)) return 'current_city';
+        if (/address|street/.test(desc)) return 'full_address';
+        return canonicalHint(el);
+      }
+    },
+
+    // 73. Google Careers
+    {
+      id: 'google',
+      name: 'Google Careers',
+      matches: host => /(^|\.)google\.com$/i.test(String(host || '')) && (typeof location === 'undefined' || location.pathname.includes('/about/careers')),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 74. Apple Jobs
+    {
+      id: 'apple',
+      name: 'Apple Jobs',
+      matches: hostIs(/(^|\.)jobs\.apple\.com$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const desc = descriptor(el);
+        if (id === 'firstname' || /first[\s._-]*name/.test(desc)) return 'first_name';
+        if (id === 'lastname' || /last[\s._-]*name/.test(desc)) return 'last_name';
+        if (id === 'email' || /email/.test(desc)) return 'email';
+        if (id === 'phone' || /phone/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 75. Meta Careers
+    {
+      id: 'meta',
+      name: 'Meta Careers',
+      matches: hostIs(/(^|\.)metacareers\.com$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 76. Tesla Careers
+    {
+      id: 'tesla',
+      name: 'Tesla Careers',
+      matches: host => /(^|\.)(jobs\.tesla\.com|tesla\.com)$/i.test(String(host || '')) && (typeof location === 'undefined' || location.pathname.includes('/careers') || location.hostname.includes('jobs.tesla')),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (name === 'first_name') return 'first_name';
+        if (name === 'last_name') return 'last_name';
+        if (name === 'email') return 'email';
+        if (name === 'phone') return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 77. TikTok / ByteDance Careers
+    {
+      id: 'tiktok',
+      name: 'TikTok / ByteDance',
+      matches: hostIs(/(^|\.)(lifeattiktok\.com|careers\.tiktok\.com|jobs\.bytedance\.com|tiktokusds\.com|joinbytedance\.com)$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/mobile|phone/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 78. Uber Careers
+    {
+      id: 'uber',
+      name: 'Uber Careers',
+      matches: host => /(^|\.)uber\.com$/i.test(String(host || '')) && (typeof location === 'undefined' || location.pathname.includes('/careers')),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (name === 'firstname') return 'first_name';
+        if (name === 'lastname') return 'last_name';
+        if (name === 'email') return 'email';
+        if (name === 'phone') return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 79. Walmart Careers
+    {
+      id: 'walmart',
+      name: 'Walmart Careers',
+      matches: hostIs(/(^|\.)careers\.walmart\.com$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 80. Cisco Careers
+    {
+      id: 'cisco',
+      name: 'Cisco Careers',
+      matches: hostIs(/(^|\.)careers\.cisco\.com$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 81. Jacobs Careers
+    {
+      id: 'jacobs',
+      name: 'Jacobs Careers',
+      matches: hostIs(/(^|\.)careers\.jacobs\.com$/i),
+      hint: el => canonicalHint(el)
+    }
+  ];
+
+  // Register without duplicating: a later file for the same portal replaces the earlier entry.
+  function registerAdapter(adapter) {
+    if (!adapter || !adapter.id) return adapter;
+    const list = root.NextkinAdapters;
+    const index = list.findIndex(a => a.id === adapter.id);
+    if (index >= 0) list[index] = adapter; else list.push(adapter);
+    return adapter;
+  }
+
+  root.registerAdapter = registerAdapter;
+
+  for (const a of adapters) registerAdapter(a);
+
+  // Active Adapter Resolver: a portal-specific adapter always wins over the generic fallback.
+  root.resolveActiveAdapter = function(urlOrHost) {
+    let raw = String(urlOrHost || (typeof window !== 'undefined' ? window.location?.hostname : (typeof location !== 'undefined' ? location?.hostname : '')) || '').toLowerCase();
+    try {
+      if (raw.includes('://')) {
+        raw = new URL(raw).hostname.toLowerCase();
+      }
+    } catch {}
+    const host = raw;
+    const list = root.NextkinAdapters || [];
+    let generic = null;
+    for (const a of list) {
+      if (!a || typeof a.matches !== 'function') continue;
+      if (a.id === 'generic') { generic = generic || a; continue; }
+      if (a.matches(host)) return a;
+    }
+    return generic || null;
+  };
+
+  console.info(`[NextKin Adapters] Loaded ${(root.NextkinAdapters || []).length} portal adapters.`);
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+
+// === File: jobright_extension/core/job-capture.js ===
 (function () {
   const text = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : '';
   const first = (root, selector) => root.querySelector(selector);
@@ -73,7 +1486,7 @@
     const keka = kekaPosting(current);
     const isWorkspace = /(^|\.)(nextkinhr\.com|jobright-internal\.com)$/.test(current.hostname)
       || ['localhost', '127.0.0.1'].includes(current.hostname) && !!first(root, '#nextkin-job-details');
-    const isAts = /(^|\.)(lever\.co|ashbyhq\.com|greenhouse\.io|myworkdayjobs\.com|myworkdaysite\.com|smartrecruiters\.com|workable\.com|taleo\.net|icims\.com|jobvite\.com|bamboohr\.com)$/i.test(current.hostname);
+    const isAts = /(^|\.)(lever\.co|ashbyhq\.com|greenhouse\.io|myworkdayjobs\.com|myworkdaysite\.com|smartrecruiters\.com|smartr\.me|workable\.com|taleo\.net|icims\.com|jobvite\.com|bamboohr\.com|clearcompany\.com|hrmdirect\.com|oraclecloud\.com|oraclegovcloud\.com|successfactors\.(?:com|eu)|sapsf\.com|brassring\.com|dayforce(hcm)?\.com|phenompeople\.com|avature\.net|paycom(online)?\.(?:com|net)|paylocity\.com|paycor\.com|newtonsoftware\.com|gusto\.com|gem\.com|hiringthing\.com|oasisrecruit\.com|careerplug\.com|catsone\.com|recruiterflow\.com|trakstar\.com|polymer\.co|gohire\.io|trinethire\.com|kula\.ai|dover\.com|eightfold\.ai|ultipro\.(?:com|ca)|rec\.pro\.ukg\.net|zohorecruit\.(?:com|ca|eu|in)|personio\.(?:de|com)|breezy\.hr|teamtailor\.com|recruitee\.com|pinpointhq\.com|freshteam\.com|comeet\.(?:com|co)|jobscore\.com|isolvedhire\.com|jobdiva\.com|applytojob\.com|toasttab\.com|withwaymo\.com|governmentjobs\.com|usajobs\.gov|ycombinator\.com|workatastartup\.com)$/i.test(current.hostname);
     const portal = isWorkspace && /^\/(?:dashboard\/jobs|jobs\/info)\/[^/]+\/?$/.test(current.pathname);
     if (isWorkspace && !portal) return null;
     const workspace = portal ? parse(first(root, '#nextkin-job-details')?.textContent) : null;
@@ -173,346 +1586,8 @@
   globalThis.NextkinJobCapture = { read: jobFromDom, kekaPosting };
 })();
 
-;
-(function(root){'use strict';
-  const excluded = /\b(?:password|secret|token|credential|bank|routing|payment|credit.?card|ssn|social.?security|tax.?id|captcha|otp|one.?time.?code)\b/i;
 
-  // Every control shape a job application uses, across portals.
-  const COMBO_SELECTOR = '[role="combobox"], [aria-haspopup="listbox"], input[list], .select2-selection, .ng-select, kendo-dropdownlist, kendo-multiselect, button[class*="select-trigger" i], button[class*="selectTrigger" i], button[data-testid*="select" i], button[data-testid*="combobox" i], [data-slot="select-trigger"], [data-automation-id*="prompt" i], [data-automation-id*="select" i], [id^="headlessui-listbox-button"]';
-  const CONTROL_SELECTOR = 'input, textarea, select, [role="checkbox"], [role="switch"], [data-slot="checkbox"], [data-slot="switch"], [contenteditable=""], [contenteditable="true"], iframe, ' + COMBO_SELECTOR;
-  const available = el => !el.disabled && !el.readOnly && el.getAttribute('aria-disabled') !== 'true' && el.getAttribute('aria-hidden') !== 'true';
-  const visible = el => available(el) && !!el.getClientRects().length && el.ownerDocument.defaultView.getComputedStyle(el).visibility !== 'hidden';
-  const visibleChoice = el => available(el) && (visible(el) || [...(el.labels || [])].some(visible));
-  const multiComboSelector = '[aria-multiselectable="true"], [multiple], [data-multiple="true"], .ng-select-multiple, .select2-selection--multiple, kendo-multiselect';
-
-  // Containers that hold a repeated history: a single fact never fills those.
-  const HISTORY_SELECTOR = 'fieldset, [data-automation-id="workExperience"], [data-automation-id="education"], [data-automation-id*="workexperience" i], [data-automation-id*="education" i], [class*="work-experience" i], [class*="workexperience" i], [class*="employment-history" i], [class*="education-history" i]';
-
-  // Containers that name the question a control answers.
-  const QUESTION_CONTAINER = '.application-question, [class*="application-question"], [class*="fieldContainer"], [class*="field-container"], [class*="field_container"], [class*="fieldWrapper"], [class*="field-wrapper"], [class*="field-entry"], [class*="fieldEntry"], .form-group, .form-item, [class*="question"], [class*="formRow"], [class*="form-row"], [class*="form-field" i], [class*="formField" i]';
-
-  // Portals decorate labels with required markers and punctuation.
-  function clean(text){
-    return String(text || '')
-      .replace(/\s+/g, ' ')
-      .replace(/[*:]+$/, '')
-      .replace(/\s*\(\s*(required|optional)\s*\)\s*$/i, '')
-      .trim();
-  }
-
-  function labelText(node) {
-    if (!node?.querySelector('select, textarea, button, [role="listbox"]')) return node?.textContent;
-    const copy = node.cloneNode(true);
-    copy.querySelectorAll('select, textarea, button, [role="listbox"]').forEach(control => control.remove());
-    return copy.textContent;
-  }
-
-  function label(el){
-    const tree = el.getRootNode();
-    const ids = (el.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean);
-    let found = clean(el.getAttribute('aria-label') || ids.map(id => labelText(tree.getElementById?.(id))).filter(Boolean).join(' ') || Array.from(el.labels || []).map(labelText).filter(Boolean).join(' '));
-
-    if (!found && el.id) {
-      try {
-        const scope = tree.querySelector ? tree : document;
-        const explicitLbl = scope.querySelector(`label[for="${CSS.escape(el.id)}"]`);
-        if (explicitLbl) found = clean(labelText(explicitLbl));
-      } catch {}
-    }
-
-    if (!found) {
-      const parentLbl = el.closest('label');
-      if (parentLbl) found = clean(labelText(parentLbl));
-    }
-
-    // Table based layouts (Taleo, PeopleSoft): the row header names the field.
-    if (!found) {
-      const row = el.closest('tr');
-      if (row) {
-        const head = row.querySelector('th, [class*="prompt" i], [class*="label" i]');
-        if (head && head.textContent && head.textContent.trim().length < 2500) found = clean(head.textContent);
-      }
-    }
-
-    if (!found) {
-      // Modern ATS container search: Ashby, Greenhouse, Lever, Workday, BambooHR
-      const qContainer = el.closest(QUESTION_CONTAINER + ', [class*="select__container"], .select, .phone-input__country');
-      if (qContainer) {
-        const qLbl = qContainer.querySelector('label[class*="question-title"], [class*="question-title"], .application-label, [class*="application-label"], [class*="labelContainer"], [class*="label"], [class*="title"], [class*="header"], [class*="heading"], h3, h4, h5, strong, b');
-        if (qLbl && qLbl.textContent && qLbl.textContent.trim().length < 2500) {
-          found = clean(labelText(qLbl));
-        }
-      }
-    }
-
-    if (!found) {
-      let prev = el.previousElementSibling;
-      if (!prev && el.parentElement) prev = el.parentElement.previousElementSibling;
-      if (prev && (prev.classList.contains('application-label') || /label|title|header|prompt/i.test(prev.className) || prev.tagName === 'LABEL' || prev.tagName === 'DIV' || prev.tagName === 'SPAN')) {
-        if (prev.textContent && prev.textContent.trim().length < 2500) found = clean(prev.textContent);
-      }
-    }
-
-    // Direct ATS system field attribute hint
-    if (!found && el.name) {
-      if (el.name === '_systemfield_name') found = 'Full Name';
-      else if (el.name === '_systemfield_email') found = 'Email';
-      else if (el.name === '_systemfield_location') found = 'Location';
-      else if (el.name === '_systemfield_phone') found = 'Phone';
-      else if (/urls\[([^\]]+)\]/i.test(el.name)) found = RegExp.$1;
-    }
-
-    if (!found && (el.getAttribute('role') === 'checkbox' || el.tagName !== 'INPUT') && el.textContent && el.textContent.trim().length < 2500) {
-      found = clean(el.textContent);
-    }
-
-    return found || clean(el.getAttribute('placeholder')) || clean(el.getAttribute('name')?.replace(/[_-]+/g, ' '));
-  }
-
-  // Question text for a control group: its own legend/label, else the label of the enclosing question entry.
-  function questionTitle(group){
-    const container = group.closest('fieldset, [role="group"], [role="radiogroup"], .application-question, [class*="application-question"], [class*="field-entry"], [class*="fieldEntry"], [class*="question"]');
-    const inner = container?.querySelector('legend, label, [class*="question-title"], [class*="label"], [class*="title"], h3, h4, strong');
-    const text = (inner?.textContent || group.textContent || '').replace(/\s+/g, ' ').trim();
-    return text.slice(0, 2000);
-  }
-
-  // Title of a container that asks one question about several boxes.
-  function groupTitle(group){
-    const accessibleName = group.getAttribute('aria-label') || group.getAttribute('aria-labelledby')?.split(/\s+/)
-      .map(id => group.getRootNode().getElementById?.(id)?.textContent).filter(Boolean).join(' ');
-    if (accessibleName) return clean(accessibleName).slice(0, 2000);
-    const legend = group.querySelector('legend');
-    if (legend && legend.textContent && legend.textContent.trim()) return clean(legend.textContent).slice(0, 2000);
-    const title = group.querySelector('[class*="question-title" i], [class*="application-label" i], [class*="labelContainer" i], h3, h4, h5, strong, p') ||
-      [...group.querySelectorAll('label')].find(el => !el.control && !el.querySelector('input, [role="radio"], [role="checkbox"]'));
-    if (title && title.textContent && title.textContent.trim().length < 2500) return clean(title.textContent).slice(0, 2000);
-    return '';
-  }
-
-  function choiceQuestion(el) {
-    const group = el.closest('fieldset, [role="radiogroup"], [role="group"], ' + QUESTION_CONTAINER);
-    return group && (group.querySelector('legend') || !group.querySelector('input:not([type=radio]):not([type=checkbox]):not([type=hidden]), select, textarea'))
-      ? groupTitle(group) : '';
-  }
-
-  // The portal adapter for this page: a specific one always beats the generic fallback.
-  function activeAdapter(){
-    const host = (typeof location !== 'undefined' ? location.hostname : '');
-    if (typeof root.resolveActiveAdapter === 'function') return root.resolveActiveAdapter(host);
-    const list = root.NextkinAdapters || [];
-    for (const a of list) {
-      if (!a || a.id === 'generic' || typeof a.matches !== 'function') continue;
-      try { if (a.matches(host)) return a; } catch {}
-    }
-    return list.find(a => a && a.id === 'generic') || null;
-  }
-
-  function discoverFields(tree = document) {
-    const fields = [], seen = new Set();
-    const adapter = activeAdapter();
-    const walk = scope => {
-      // A checkbox group asks one question about several boxes, so the group is the field.
-      for (const group of scope.querySelectorAll('fieldset, [role="group"], [class*="checkbox-group" i], [class*="checkboxGroup" i], [class*="checkbox_group" i], [data-testid*="checkbox" i]')) {
-        if (group.closest('#mp-copilot-root') || !group.getClientRects().length) continue;
-        if (group.querySelector('button[data-option]')) continue; // yes/no groups are choices
-        const boxes = Array.from(group.querySelectorAll('input[type="checkbox"], [role="checkbox"]')).filter(visibleChoice);
-        if (boxes.length < 2 || boxes.some(b => seen.has(b)) ||
-          group.querySelector('input:not([type=checkbox]):not([type=hidden]), select, textarea, fieldset')) continue;
-        const title = groupTitle(group);
-        if (!title) continue;
-        boxes.forEach(b => seen.add(b));
-        const groupHint = adapter?.hint(group) || '';
-        fields.push({
-          element: group, elements: boxes, key: 'checkbox-group:' + fields.length,
-          label: title, hint: groupHint, kind: 'checkbox-group',
-          options: boxes.map(box => ({ label: label(box), value: box.value || '', element: box })), scope: '',
-          excluded: excluded.test([title, groupHint, group.id || ''].join(' ').replace(/[_-]/g, ' ')),
-          adapter: adapter?.id || 'generic'
-        });
-      }
-
-      for (const el of scope.querySelectorAll(CONTROL_SELECTOR)) {
-        if (el.closest('#mp-copilot-root') || !visibleChoice(el)) continue;
-        if (seen.has(el)) continue;
-        if (el.tagName === 'INPUT' && el.tabIndex === -1 && !el.id && !el.name && !el.getAttribute('role')) continue;
-        if (el.tagName === 'INPUT' && el.id && el.id.startsWith('iti-') && el.id.endsWith('search-input')) continue;
-        if (el.tagName === 'IFRAME') {
-          let inner = 0;
-          try {
-            if (el.contentDocument && el.contentDocument.body) {
-              const before = fields.length;
-              walk(el.contentDocument);
-              inner = fields.length - before;
-              if (inner > 0) continue;
-            }
-          } catch {}
-          fields.push({ element: el, key: 'frame:' + fields.length, label: 'Embedded application requires manual review', kind: 'inaccessible', scope: '' });
-          continue;
-        }
-        const role = el.getAttribute('role');
-        if (['hidden', 'file', 'password', 'submit', 'reset', 'button'].includes(el.type) && role !== 'combobox' && role !== 'checkbox' && el.getAttribute('aria-haspopup') !== 'listbox') continue;
-        // A yes/no group owns the hidden box behind its buttons.
-        if (el.type === 'checkbox' && el.closest('.ashby-application-form-input-yesno, [class*="yesno" i], [class*="yes-no" i], [data-option]')) continue;
-        const text = label(el), hint = adapter?.hint(el) || '';
-        const group = el.closest(HISTORY_SELECTOR);
-        const groupLabel = group?.querySelector('legend')?.textContent?.trim() || group?.getAttribute('data-automation-id') || '';
-        const isCombo = el.tagName !== 'SELECT' && el.matches(COMBO_SELECTOR);
-        if (el.tagName !== 'INPUT' && el.tagName !== 'SELECT' && el.tagName !== 'TEXTAREA' && el.querySelector('input[role="combobox"], input.select__input, select, textarea')) continue;
-        if (el.parentElement?.closest(COMBO_SELECTOR) && (isCombo || el.tagName === 'INPUT') && !el.matches('[role="combobox"]')) continue;
-        const isCheck = el.type === 'checkbox' || role === 'checkbox' || role === 'switch';
-        const isEditable = el.getAttribute('contenteditable') === '' || el.getAttribute('contenteditable') === 'true';
-        const controlledList = isCombo && el.getRootNode().getElementById?.(el.getAttribute('aria-controls'));
-        const multiCombo = isCombo && (el.matches(multiComboSelector) || controlledList?.matches(multiComboSelector));
-        const kind = isCombo ? (multiCombo ? 'multi-combobox' : 'combobox')
-          : el.tagName === 'SELECT' ? (el.multiple ? 'multi-select' : 'select') : el.type === 'radio' ? 'radio' : isCheck ? 'checkbox' : 'text';
-        let elements = [el];
-        if (kind === 'radio') {
-          const radioGroup = el.closest('[role="radiogroup"], fieldset, ' + QUESTION_CONTAINER);
-          elements = Array.from((el.name ? scope : radioGroup || scope).querySelectorAll('input[type="radio"]'))
-            .filter(r => visibleChoice(r) && (el.name ? r.name === el.name && r.form === el.form : radioGroup ? !r.name : r === el));
-          if (elements.some(r => seen.has(r))) continue; elements.forEach(r => seen.add(r));
-        }
-        const options = ['select', 'multi-select'].includes(kind)
-          ? Array.from(el.options).filter(o => !o.disabled && !o.parentElement.disabled && o.value).map(o => ({ label: o.textContent.trim(), value: o.value, element: o }))
-          : kind === 'radio' ? elements.map(r => ({ label: label(r) || r.value, value: r.value, element: r }))
-          : el.list ? [...el.list.options].filter(available).map(o => ({ label: o.label || o.value, value: o.value, element: o })) : [];
-        const question = kind === 'radio' ? choiceQuestion(el) || groupLabel || text : text;
-        fields.push({ element: el, elements, key: 'field:' + fields.length + ':' + (el.id || el.name || hint), label: question, hint, kind, options, scope: groupLabel, excluded: excluded.test([question, hint, el.id, el.name, groupLabel].join(' ').replace(/[_-]/g, ' ')), adapter: adapter?.id || 'generic', editable: isEditable });
-      }
-
-      // Button-based choice groups (Ashby/Greenhouse/Lever Yes/No and segmented radio groups)
-      for (const group of scope.querySelectorAll('fieldset, [role="group"], [role="radiogroup"], .application-question, [class*="application-question"], [class*="question"], div[data-testid*="question"]')) {
-        if (group.closest('#mp-copilot-root') || !group.getClientRects().length) continue;
-        const buttons = Array.from(group.querySelectorAll('button, [role="radio"], [role="button"]')).filter(b => {
-          const t = label(b);
-          return t && t.length <= 200 && visible(b) && !/^(submit|apply|continue|next|back|save|upload|attach|remove|delete|cancel|sign in|log in)\b/i.test(t);
-        });
-        const yesNo = buttons.filter(b => /^(yes|no)$/i.test((b.textContent || '').trim()));
-        const isChoice = yesNo.length >= 2 || (group.getAttribute('role') === 'radiogroup' && buttons.length >= 2);
-        if (!isChoice) continue;
-        const opts = yesNo.length >= 2 ? yesNo : buttons;
-        if (opts.some(b => seen.has(b))) continue;
-        opts.forEach(b => seen.add(b));
-        const qLabel = groupTitle(group) || questionTitle(group);
-        fields.push({ element: group, elements: opts, key: 'choice:' + fields.length, label: qLabel, hint: adapter?.hint(group) || '', kind: 'choice', options: opts.map(b => ({ label: label(b), value: b.getAttribute('data-value') || label(b), element: b })), scope: '', excluded: excluded.test(qLabel.replace(/[_-]/g, ' ')), adapter: adapter?.id || 'generic' });
-      }
-      // Yes/No button groups that carry no question text of their own (Ashby keeps them in a labelled field entry
-      // and backs them with a hidden input that is not the visible control).
-      const yesNoGroups = new Set();
-      for (const btn of scope.querySelectorAll('button[data-option]')) {
-        const group = btn.parentElement;
-        if (!group || yesNoGroups.has(group) || group.closest('#mp-copilot-root') || !group.getClientRects().length) continue;
-        const opts = Array.from(group.querySelectorAll('button[data-option]'));
-        if (opts.length < 2 || opts.some(b => seen.has(b))) continue;
-        yesNoGroups.add(group);
-        opts.forEach(b => seen.add(b));
-        const qLabel = questionTitle(group);
-        fields.push({ element: group, elements: opts, key: 'choice:' + fields.length, label: qLabel, hint: adapter?.hint(group) || '', kind: 'choice', options: opts.map(b => ({ label: (b.textContent || '').trim(), value: (b.textContent || '').trim(), element: b })), scope: '', excluded: excluded.test(qLabel.replace(/[_-]/g, ' ')), adapter: adapter?.id || 'generic' });
-      }
-      for (const el of scope.querySelectorAll('*')) if (el.shadowRoot && el.id !== 'mp-copilot-root') walk(el.shadowRoot);
-    };
-    walk(tree);
-    return fields;
-  }
-
-  // Wizard / Multi-Step transition support
-  const NEXT_TEXT_REGEX = /^(next|continue|proceed|save and continue|save & continue|next step|review & submit|review|next page|step \d+)\b/i;
-
-  function findStepNavigation(scope = document) {
-    const root = scope?.nodeType === 9 ? scope : (scope?.ownerDocument || document);
-    const container = scope?.nodeType === 9 ? (scope.body || scope) : scope;
-    const buttons = Array.from(container.querySelectorAll('button, input[type=button], input[type=submit], a[role=button], [role="button"]'));
-    const nextButton = buttons.find(b => {
-      if (!visibleChoice(b)) return false;
-      const t = clean(b.textContent || b.value || b.getAttribute('aria-label'));
-      const autoId = b.getAttribute('data-automation-id') || b.getAttribute('data-testid') || '';
-      return NEXT_TEXT_REGEX.test(t) || /(?:^|[_-])(?:next|continue|nextstep)(?:$|[_-])/i.test(autoId);
-    }) || null;
-    return { nextButton };
-  }
-
-  function detectNewFields(previousFields, currentFields) {
-    if (!Array.isArray(previousFields) || !previousFields.length) return currentFields || [];
-    const prevElements = new Set(previousFields.map(f => f.element).filter(Boolean));
-    const prevKeys = new Set(previousFields.map(f => f.key).filter(Boolean));
-    return (currentFields || []).filter(f => !prevElements.has(f.element) && !prevKeys.has(f.key));
-  }
-
-  function observeStepTransitions(scope = document, callback) {
-    let prevFields = discoverFields(scope);
-    let timer = null;
-
-    const check = triggerType => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        try {
-          const currentFields = discoverFields(scope);
-          const newFields = detectNewFields(prevFields, currentFields);
-          if (newFields.length > 0 || currentFields.length !== prevFields.length) {
-            const oldFields = prevFields;
-            prevFields = currentFields;
-            callback?.({ newFields, allFields: currentFields, oldFields, triggerType });
-          }
-        } catch (err) {
-          console.error('[NextkinForms] Step transition error:', err);
-        }
-      }, 150);
-    };
-
-    const clickHandler = event => {
-      const target = event.target?.closest?.('button, input[type=submit], input[type=button], a[role=button], [role="button"]');
-      if (!target) return;
-      const text = clean(target.textContent || target.value || target.getAttribute('aria-label'));
-      const autoId = target.getAttribute('data-automation-id') || target.getAttribute('data-testid') || '';
-      if (NEXT_TEXT_REGEX.test(text) || /(?:^|[_-])(?:next|continue)(?:$|[_-])/i.test(autoId)) {
-        check('next_click');
-      }
-    };
-
-    const doc = scope?.nodeType === 9 ? scope : (scope?.ownerDocument || document);
-    doc.addEventListener('click', clickHandler, true);
-
-    let observer = null;
-    const targetNode = scope.body || (scope.nodeType === 1 ? scope : doc.body);
-    if (targetNode && typeof MutationObserver !== 'undefined') {
-      observer = new MutationObserver(mutations => {
-        let significant = false;
-        for (const m of mutations) {
-          if (m.addedNodes.length > 0) {
-            for (const node of m.addedNodes) {
-              if (node.nodeType === 1 && (node.matches?.('input, select, textarea, [role="combobox"], [role="radiogroup"], fieldset, form') || node.querySelector?.('input, select, textarea, [role="combobox"]'))) {
-                significant = true;
-                break;
-              }
-            }
-          }
-          if (m.type === 'attributes' && ['style', 'class', 'hidden', 'aria-hidden'].includes(m.attributeName)) {
-            significant = true;
-          }
-          if (significant) break;
-        }
-        if (significant) check('mutation');
-      });
-      observer.observe(targetNode, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class', 'hidden', 'aria-hidden'] });
-    }
-
-    return {
-      disconnect() {
-        if (timer) clearTimeout(timer);
-        doc.removeEventListener('click', clickHandler, true);
-        observer?.disconnect();
-      },
-      triggerCheck() {
-        check('manual');
-      }
-    };
-  }
-
-  root.NextkinForms = { discoverFields, label, findStepNavigation, detectNewFields, observeStepTransitions };
-})(globalThis);
-
-;
+// === File: jobright_extension/core/field-mapping.js ===
 (function(root){'use strict';
   const norm = v => String(v ?? '').replace(/[_*:-]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 
@@ -655,7 +1730,7 @@
 
   const YES_OPTION = /^(yes|y|true|1|eligible|authorized|absolutely|of course|correct|affirmative)$/i;
   const NO_OPTION = /^(no|n|false|0|not eligible|not authorized|incorrect|never|negative)$/i;
-  const optionText = o => String(o?.label ?? o?.value ?? '').trim();
+  const optionText = o => (typeof o === 'string' ? o : String(o?.label ?? o?.value ?? '')).trim();
 
   function normalizeBoolean(v) {
     if (typeof v === 'boolean') return v;
@@ -703,7 +1778,8 @@
     const fuzzyMatches = opts.filter(o => {
       const t = norm(optionText(o));
       if (!t) return false;
-      if (d && (d.includes(t) || t.includes(d))) return true;
+      if (t === 'no' || t === 'yes' || t === 'true' || t === 'false') return false;
+      if (d && t.length >= 3 && (d.includes(t) || t.includes(d))) return true;
       if (d === 'male' && /^male\b|^man\b/i.test(t)) return true;
       if (d === 'asian' && /^asian\b/i.test(t)) return true;
       if (d.includes('not a protected veteran') && (/not a (?:protected )?veteran|^no\b|neither|do not identify/i.test(t))) return true;
@@ -762,7 +1838,7 @@
       current_location: [city, state].filter(Boolean).join(', '),
       zip_code: facts.zip_code || candidate.zip_code || candidate.zip || candidate.postal_code || '',
       country: facts.country ?? candidate.country ?? '',
-      full_address: facts.full_address || candidate.full_address || candidate.address || candidate.street_address || '',
+      full_address: facts.full_address || candidate.full_address || candidate.address || candidate.street_address || [city, state, candidate.country || facts.country].filter(Boolean).join(', '),
       current_employer: facts.current_employer || candidate.current_employer || facts.current_company || candidate.current_company || candidate.company || '',
       current_title: facts.current_job_title || candidate.current_job_title || candidate.headline || '',
       linkedin_url: facts.linkedin_url || candidate.linkedin_url || '',
@@ -787,11 +1863,11 @@
       race: facts.race || candidate.race || '',
       veteran: facts.veteran || candidate.veteran || '',
       disability: facts.disability || candidate.disability || '',
-      availability: facts.availability || candidate.availability || candidate.available_to_join || candidate.notice_period || 'Immediately',
-      salary_expectation: facts.pay_rate || candidate.expected_salary || candidate.current_salary || candidate.pay_rate || 'Open / Competitive',
-      how_heard: 'LinkedIn',
-      highest_education: facts.highest_qualification || candidate.highest_qualification || candidate.degree || '',
-      school: facts.school || candidate.university_name || candidate.school || '',
+      availability: facts.availability || candidate.availability || candidate.available_to_join || candidate.notice_period || '',
+      salary_expectation: facts.pay_rate || candidate.expected_salary || candidate.current_salary || candidate.pay_rate || '',
+      how_heard: facts.how_heard || candidate.how_heard || '',
+      highest_education: facts.highest_qualification || candidate.highest_qualification || candidate.degree || candidate.highest_education || '',
+      school: facts.school || candidate.university_name || candidate.school || candidate.institution || '',
       graduation_year: facts.graduation_year || candidate.graduation_year || '',
       languages: candidate.languages || [],
       employment_history: candidate.employment_history || [],
@@ -956,6 +2032,30 @@
           reason: 'Exact profile field mapping.'
         };
       }
+      if (factKey === 'highest_education' && isChoiceKind(field.kind)) {
+        const hasYes = field.options?.some(o => /^(yes|true)$/i.test(optionText(o)));
+        const hasNo = field.options?.some(o => /^(no|false)$/i.test(optionText(o)));
+        if (hasYes && hasNo) {
+          const ql = (field.label || '').toLowerCase();
+          const candidateHasBachelor = /bachelor|b\.?tech|b\.?s|b\.?a|undergraduate/i.test(String(val)) || /bachelor/i.test(candidate.source_text || '') || /bachelor/i.test(candidate.summary || '');
+          const candidateHasMaster = /master|m\.?s|m\.?tech|mba/i.test(String(val));
+          const candidateHasDoctorate = /phd|doctor/i.test(String(val));
+
+          let satisfies = false;
+          if (/(master|graduate degree)/i.test(ql)) {
+            satisfies = candidateHasMaster || candidateHasDoctorate;
+          } else if (/(phd|doctorate)/i.test(ql)) {
+            satisfies = candidateHasDoctorate;
+          } else if (/(bachelor|undergraduate|degree|education|college|university|completed.*degree)/i.test(ql)) {
+            satisfies = candidateHasBachelor || candidateHasMaster || candidateHasDoctorate;
+          }
+
+          const opt = pickBooleanOption(field.options, satisfies);
+          if (opt) {
+            return { field, factKey, value: optionText(opt), status: 'supported', exactMatch: true, matchLength: resolved.length, reason: 'Candidate education qualification evaluated.' };
+          }
+        }
+      }
       if (isChoiceKind(field.kind)) {
         const opt = pickOption(field, val);
         if (opt) return { field, factKey, value: optionText(opt), status: 'supported', exactMatch: resolved.exact, matchLength: resolved.length, reason: 'Profile fact matched an option.' };
@@ -989,7 +2089,8 @@
   root.NextkinFieldMapping = { planFill, resolveFact, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS };
 })(globalThis);
 
-;
+
+// === File: jobright_extension/core/field-writer.js ===
 (function (root) {
   const mapping = root.NextkinFieldMapping;
   const normalize = value => String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -1674,9 +2775,12 @@
       const isCountryCodeOnly = field.kind === 'text' && (field.element?.type === 'tel' || /phone/i.test(field.hint || field.label)) && /^\+?\d{1,3}\s*$/.test(String(previous).trim());
       const hasAnswer = !isCountryCodeOnly && (Array.isArray(previous) ? previous.length > 0 : (typeof previous === 'boolean' ? previous : Boolean(previous && String(previous).trim().length > 0)));
       let write;
-      if (hasAnswer) {
+      const isProfileFact = Boolean(plan.factKey && !plan.ai);
+      if (hasAnswer && !isProfileFact) {
         const option = field.options?.length ? choose(field, value) : null;
         if (equals(previous, option?.label ?? value)) write = { expected: previous };
+      } else if (hasAnswer && isProfileFact && equals(previous, value)) {
+        write = { expected: previous };
       } else if (field.kind === 'combobox') {
         write = await fillCombo(field, value, session.isCurrent);
       } else if (field.kind === 'multi-combobox') {
@@ -1726,7 +2830,348 @@
   };
 })(globalThis);
 
-;
+
+// === File: jobright_extension/core/form-discovery.js ===
+(function(root){'use strict';
+  const excluded = /\b(?:password|secret|token|credential|bank|routing|payment|credit.?card|ssn|social.?security|tax.?id|captcha|otp|one.?time.?code)\b/i;
+
+  // Every control shape a job application uses, across portals.
+  const COMBO_SELECTOR = '[role="combobox"], [aria-haspopup="listbox"], input[list], .select2-selection, .ng-select, kendo-dropdownlist, kendo-multiselect, button[class*="select-trigger" i], button[class*="selectTrigger" i], button[data-testid*="select" i], button[data-testid*="combobox" i], [data-slot="select-trigger"], [data-automation-id*="prompt" i], [data-automation-id*="select" i], [id^="headlessui-listbox-button"]';
+  const CONTROL_SELECTOR = 'input, textarea, select, [role="checkbox"], [role="switch"], [data-slot="checkbox"], [data-slot="switch"], [contenteditable=""], [contenteditable="true"], iframe, ' + COMBO_SELECTOR;
+  const available = el => !el.disabled && !el.readOnly && el.getAttribute('aria-disabled') !== 'true' && el.getAttribute('aria-hidden') !== 'true';
+  const visible = el => available(el) && !!el.getClientRects().length && el.ownerDocument.defaultView.getComputedStyle(el).visibility !== 'hidden';
+  const visibleChoice = el => available(el) && (visible(el) || [...(el.labels || [])].some(visible));
+  const multiComboSelector = '[aria-multiselectable="true"], [multiple], [data-multiple="true"], .ng-select-multiple, .select2-selection--multiple, kendo-multiselect';
+
+  // Containers that hold a repeated history: a single fact never fills those.
+  const HISTORY_SELECTOR = 'fieldset, [data-automation-id="workExperience"], [data-automation-id="education"], [data-automation-id*="workexperience" i], [data-automation-id*="education" i], [class*="work-experience" i], [class*="workexperience" i], [class*="employment-history" i], [class*="education-history" i]';
+
+  // Containers that name the question a control answers.
+  const QUESTION_CONTAINER = '.application-question, [class*="application-question"], [class*="fieldContainer"], [class*="field-container"], [class*="field_container"], [class*="fieldWrapper"], [class*="field-wrapper"], [class*="field-entry"], [class*="fieldEntry"], .form-group, .form-item, [class*="question"], [class*="formRow"], [class*="form-row"], [class*="form-field" i], [class*="formField" i]';
+
+  // Portals decorate labels with required markers and punctuation.
+  function clean(text){
+    return String(text || '')
+      .replace(/\s+/g, ' ')
+      .replace(/[*:]+$/, '')
+      .replace(/\s*\(\s*(required|optional)\s*\)\s*$/i, '')
+      .trim();
+  }
+
+  function labelText(node) {
+    if (!node?.querySelector('select, textarea, button, [role="listbox"]')) return node?.textContent;
+    const copy = node.cloneNode(true);
+    copy.querySelectorAll('select, textarea, button, [role="listbox"]').forEach(control => control.remove());
+    return copy.textContent;
+  }
+
+  function label(el){
+    const tree = el.getRootNode();
+    const ids = (el.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean);
+    let found = clean(el.getAttribute('aria-label') || ids.map(id => labelText(tree.getElementById?.(id))).filter(Boolean).join(' ') || Array.from(el.labels || []).map(labelText).filter(Boolean).join(' '));
+
+    if (!found && el.id) {
+      try {
+        const scope = tree.querySelector ? tree : document;
+        const explicitLbl = scope.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+        if (explicitLbl) found = clean(labelText(explicitLbl));
+      } catch {}
+    }
+
+    if (!found) {
+      const parentLbl = el.closest('label');
+      if (parentLbl) found = clean(labelText(parentLbl));
+    }
+
+    // Table based layouts (Taleo, PeopleSoft): the row header names the field.
+    if (!found) {
+      const row = el.closest('tr');
+      if (row) {
+        const head = row.querySelector('th, [class*="prompt" i], [class*="label" i]');
+        if (head && head.textContent && head.textContent.trim().length < 2500) found = clean(head.textContent);
+      }
+    }
+
+    if (!found) {
+      // Modern ATS container search: Ashby, Greenhouse, Lever, Workday, BambooHR
+      const qContainer = el.closest(QUESTION_CONTAINER + ', [class*="select__container"], .select, .phone-input__country');
+      if (qContainer) {
+        const qLbl = qContainer.querySelector('label[class*="question-title"], [class*="question-title"], .application-label, [class*="application-label"], [class*="labelContainer"], [class*="label"], [class*="title"], [class*="header"], [class*="heading"], h3, h4, h5, strong, b');
+        if (qLbl && qLbl.textContent && qLbl.textContent.trim().length < 2500) {
+          found = clean(labelText(qLbl));
+        }
+      }
+    }
+
+    if (!found) {
+      let prev = el.previousElementSibling;
+      if (!prev && el.parentElement) prev = el.parentElement.previousElementSibling;
+      if (prev && (prev.classList.contains('application-label') || /label|title|header|prompt/i.test(prev.className) || prev.tagName === 'LABEL' || prev.tagName === 'DIV' || prev.tagName === 'SPAN')) {
+        if (prev.textContent && prev.textContent.trim().length < 2500) found = clean(prev.textContent);
+      }
+    }
+
+    // Direct ATS system field attribute hint
+    if (!found && el.name) {
+      if (el.name === '_systemfield_name') found = 'Full Name';
+      else if (el.name === '_systemfield_email') found = 'Email';
+      else if (el.name === '_systemfield_location') found = 'Location';
+      else if (el.name === '_systemfield_phone') found = 'Phone';
+      else if (/urls\[([^\]]+)\]/i.test(el.name)) found = RegExp.$1;
+    }
+
+    if (!found && (el.getAttribute('role') === 'checkbox' || el.tagName !== 'INPUT') && el.textContent && el.textContent.trim().length < 2500) {
+      found = clean(el.textContent);
+    }
+
+    return found || clean(el.getAttribute('placeholder')) || clean(el.getAttribute('name')?.replace(/[_-]+/g, ' '));
+  }
+
+  // Question text for a control group: its own legend/label, else the label of the enclosing question entry.
+  function questionTitle(group){
+    const container = group.closest('fieldset, [role="group"], [role="radiogroup"], .application-question, [class*="application-question"], [class*="field-entry"], [class*="fieldEntry"], [class*="question"]');
+    const inner = container?.querySelector('legend, label, [class*="question-title"], [class*="label"], [class*="title"], h3, h4, strong');
+    const text = (inner?.textContent || group.textContent || '').replace(/\s+/g, ' ').trim();
+    return text.slice(0, 2000);
+  }
+
+  // Title of a container that asks one question about several boxes.
+  function groupTitle(group){
+    const accessibleName = group.getAttribute('aria-label') || group.getAttribute('aria-labelledby')?.split(/\s+/)
+      .map(id => group.getRootNode().getElementById?.(id)?.textContent).filter(Boolean).join(' ');
+    if (accessibleName) return clean(accessibleName).slice(0, 2000);
+    const legend = group.querySelector('legend');
+    if (legend && legend.textContent && legend.textContent.trim()) return clean(legend.textContent).slice(0, 2000);
+    const title = group.querySelector('[class*="question-title" i], [class*="application-label" i], [class*="labelContainer" i], h3, h4, h5, strong, p') ||
+      [...group.querySelectorAll('label')].find(el => !el.control && !el.querySelector('input, [role="radio"], [role="checkbox"]'));
+    if (title && title.textContent && title.textContent.trim().length < 2500) return clean(title.textContent).slice(0, 2000);
+    return '';
+  }
+
+  function choiceQuestion(el) {
+    const group = el.closest('fieldset, [role="radiogroup"], [role="group"], ' + QUESTION_CONTAINER);
+    return group && (group.querySelector('legend') || !group.querySelector('input:not([type=radio]):not([type=checkbox]):not([type=hidden]), select, textarea'))
+      ? groupTitle(group) : '';
+  }
+
+  // The portal adapter for this page: a specific one always beats the generic fallback.
+  function activeAdapter(){
+    const host = (typeof location !== 'undefined' ? location.hostname : '');
+    if (typeof root.resolveActiveAdapter === 'function') return root.resolveActiveAdapter(host);
+    const list = root.NextkinAdapters || [];
+    for (const a of list) {
+      if (!a || a.id === 'generic' || typeof a.matches !== 'function') continue;
+      try { if (a.matches(host)) return a; } catch {}
+    }
+    return list.find(a => a && a.id === 'generic') || null;
+  }
+
+  function discoverFields(tree = document) {
+    const fields = [], seen = new Set();
+    const adapter = activeAdapter();
+    const walk = scope => {
+      // A checkbox group asks one question about several boxes, so the group is the field.
+      for (const group of scope.querySelectorAll('fieldset, [role="group"], [class*="checkbox-group" i], [class*="checkboxGroup" i], [class*="checkbox_group" i], [data-testid*="checkbox" i]')) {
+        if (group.closest('#mp-copilot-root') || !group.getClientRects().length) continue;
+        if (group.querySelector('button[data-option]')) continue; // yes/no groups are choices
+        const boxes = Array.from(group.querySelectorAll('input[type="checkbox"], [role="checkbox"]')).filter(visibleChoice);
+        if (boxes.length < 2 || boxes.some(b => seen.has(b)) ||
+          group.querySelector('input:not([type=checkbox]):not([type=hidden]), select, textarea, fieldset')) continue;
+        const title = groupTitle(group);
+        if (!title) continue;
+        boxes.forEach(b => seen.add(b));
+        const groupHint = adapter?.hint(group) || '';
+        fields.push({
+          element: group, elements: boxes, key: 'checkbox-group:' + fields.length,
+          label: title, hint: groupHint, kind: 'checkbox-group',
+          options: boxes.map(box => ({ label: label(box), value: box.value || '', element: box })), scope: '',
+          excluded: excluded.test([title, groupHint, group.id || ''].join(' ').replace(/[_-]/g, ' ')),
+          adapter: adapter?.id || 'generic'
+        });
+      }
+
+      for (const el of scope.querySelectorAll(CONTROL_SELECTOR)) {
+        if (el.closest('#mp-copilot-root') || !visibleChoice(el)) continue;
+        if (seen.has(el)) continue;
+        if (el.tagName === 'INPUT' && el.tabIndex === -1 && !el.id && !el.name && !el.getAttribute('role')) continue;
+        if (el.tagName === 'INPUT' && el.id && el.id.startsWith('iti-') && el.id.endsWith('search-input')) continue;
+        if (el.tagName === 'IFRAME') {
+          let inner = 0;
+          try {
+            if (el.contentDocument && el.contentDocument.body) {
+              const before = fields.length;
+              walk(el.contentDocument);
+              inner = fields.length - before;
+              if (inner > 0) continue;
+            }
+          } catch {}
+          fields.push({ element: el, key: 'frame:' + fields.length, label: 'Embedded application requires manual review', kind: 'inaccessible', scope: '' });
+          continue;
+        }
+        const role = el.getAttribute('role');
+        if (['hidden', 'file', 'password', 'submit', 'reset', 'button'].includes(el.type) && role !== 'combobox' && role !== 'checkbox' && el.getAttribute('aria-haspopup') !== 'listbox') continue;
+        // A yes/no group owns the hidden box behind its buttons.
+        if (el.type === 'checkbox' && el.closest('.ashby-application-form-input-yesno, [class*="yesno" i], [class*="yes-no" i], [data-option]')) continue;
+        const text = label(el), hint = adapter?.hint(el) || '';
+        const group = el.closest(HISTORY_SELECTOR);
+        const groupLabel = group?.querySelector('legend')?.textContent?.trim() || group?.getAttribute('data-automation-id') || '';
+        const isCombo = el.tagName !== 'SELECT' && el.matches(COMBO_SELECTOR);
+        if (el.tagName !== 'INPUT' && el.tagName !== 'SELECT' && el.tagName !== 'TEXTAREA' && el.querySelector('input[role="combobox"], input.select__input, select, textarea')) continue;
+        if (el.parentElement?.closest(COMBO_SELECTOR) && (isCombo || el.tagName === 'INPUT') && !el.matches('[role="combobox"]')) continue;
+        const isCheck = el.type === 'checkbox' || role === 'checkbox' || role === 'switch';
+        const isEditable = el.getAttribute('contenteditable') === '' || el.getAttribute('contenteditable') === 'true';
+        const controlledList = isCombo && el.getRootNode().getElementById?.(el.getAttribute('aria-controls'));
+        const multiCombo = isCombo && (el.matches(multiComboSelector) || controlledList?.matches(multiComboSelector));
+        const kind = isCombo ? (multiCombo ? 'multi-combobox' : 'combobox')
+          : el.tagName === 'SELECT' ? (el.multiple ? 'multi-select' : 'select') : el.type === 'radio' ? 'radio' : isCheck ? 'checkbox' : 'text';
+        let elements = [el];
+        if (kind === 'radio') {
+          const radioGroup = el.closest('[role="radiogroup"], fieldset, ' + QUESTION_CONTAINER);
+          elements = Array.from((el.name ? scope : radioGroup || scope).querySelectorAll('input[type="radio"]'))
+            .filter(r => visibleChoice(r) && (el.name ? r.name === el.name && r.form === el.form : radioGroup ? !r.name : r === el));
+          if (elements.some(r => seen.has(r))) continue; elements.forEach(r => seen.add(r));
+        }
+        const options = ['select', 'multi-select'].includes(kind)
+          ? Array.from(el.options).filter(o => !o.disabled && !o.parentElement.disabled && o.value).map(o => ({ label: o.textContent.trim(), value: o.value, element: o }))
+          : kind === 'radio' ? elements.map(r => ({ label: label(r) || r.value, value: r.value, element: r }))
+          : el.list ? [...el.list.options].filter(available).map(o => ({ label: o.label || o.value, value: o.value, element: o })) : [];
+        const question = kind === 'radio' ? choiceQuestion(el) || groupLabel || text : text;
+        fields.push({ element: el, elements, key: 'field:' + fields.length + ':' + (el.id || el.name || hint), label: question, hint, kind, options, scope: groupLabel, excluded: excluded.test([question, hint, el.id, el.name, groupLabel].join(' ').replace(/[_-]/g, ' ')), adapter: adapter?.id || 'generic', editable: isEditable });
+      }
+
+      // Button-based choice groups (Ashby/Greenhouse/Lever Yes/No and segmented radio groups)
+      for (const group of scope.querySelectorAll('fieldset, [role="group"], [role="radiogroup"], .application-question, [class*="application-question"], [class*="question"], div[data-testid*="question"]')) {
+        if (group.closest('#mp-copilot-root') || !group.getClientRects().length) continue;
+        const buttons = Array.from(group.querySelectorAll('button, [role="radio"], [role="button"]')).filter(b => {
+          const t = label(b);
+          return t && t.length <= 200 && visible(b) && !/^(submit|apply|continue|next|back|save|upload|attach|remove|delete|cancel|sign in|log in)\b/i.test(t);
+        });
+        const yesNo = buttons.filter(b => /^(yes|no)$/i.test((b.textContent || '').trim()));
+        const isChoice = yesNo.length >= 2 || (group.getAttribute('role') === 'radiogroup' && buttons.length >= 2);
+        if (!isChoice) continue;
+        const opts = yesNo.length >= 2 ? yesNo : buttons;
+        if (opts.some(b => seen.has(b))) continue;
+        opts.forEach(b => seen.add(b));
+        const qLabel = groupTitle(group) || questionTitle(group);
+        fields.push({ element: group, elements: opts, key: 'choice:' + fields.length, label: qLabel, hint: adapter?.hint(group) || '', kind: 'choice', options: opts.map(b => ({ label: label(b), value: b.getAttribute('data-value') || label(b), element: b })), scope: '', excluded: excluded.test(qLabel.replace(/[_-]/g, ' ')), adapter: adapter?.id || 'generic' });
+      }
+      // Yes/No button groups that carry no question text of their own (Ashby keeps them in a labelled field entry
+      // and backs them with a hidden input that is not the visible control).
+      const yesNoGroups = new Set();
+      for (const btn of scope.querySelectorAll('button[data-option]')) {
+        const group = btn.parentElement;
+        if (!group || yesNoGroups.has(group) || group.closest('#mp-copilot-root') || !group.getClientRects().length) continue;
+        const opts = Array.from(group.querySelectorAll('button[data-option]'));
+        if (opts.length < 2 || opts.some(b => seen.has(b))) continue;
+        yesNoGroups.add(group);
+        opts.forEach(b => seen.add(b));
+        const qLabel = questionTitle(group);
+        fields.push({ element: group, elements: opts, key: 'choice:' + fields.length, label: qLabel, hint: adapter?.hint(group) || '', kind: 'choice', options: opts.map(b => ({ label: (b.textContent || '').trim(), value: (b.textContent || '').trim(), element: b })), scope: '', excluded: excluded.test(qLabel.replace(/[_-]/g, ' ')), adapter: adapter?.id || 'generic' });
+      }
+      for (const el of scope.querySelectorAll('*')) if (el.shadowRoot && el.id !== 'mp-copilot-root') walk(el.shadowRoot);
+    };
+    walk(tree);
+    return fields;
+  }
+
+  // Wizard / Multi-Step transition support
+  const NEXT_TEXT_REGEX = /^(next|continue|proceed|save and continue|save & continue|next step|review & submit|review|next page|step \d+)\b/i;
+
+  function findStepNavigation(scope = document) {
+    const root = scope?.nodeType === 9 ? scope : (scope?.ownerDocument || document);
+    const container = scope?.nodeType === 9 ? (scope.body || scope) : scope;
+    const buttons = Array.from(container.querySelectorAll('button, input[type=button], input[type=submit], a[role=button], [role="button"]'));
+    const nextButton = buttons.find(b => {
+      if (!visibleChoice(b)) return false;
+      const t = clean(b.textContent || b.value || b.getAttribute('aria-label'));
+      const autoId = b.getAttribute('data-automation-id') || b.getAttribute('data-testid') || '';
+      return NEXT_TEXT_REGEX.test(t) || /(?:^|[_-])(?:next|continue|nextstep)(?:$|[_-])/i.test(autoId);
+    }) || null;
+    return { nextButton };
+  }
+
+  function detectNewFields(previousFields, currentFields) {
+    if (!Array.isArray(previousFields) || !previousFields.length) return currentFields || [];
+    const prevElements = new Set(previousFields.map(f => f.element).filter(Boolean));
+    const prevKeys = new Set(previousFields.map(f => f.key).filter(Boolean));
+    return (currentFields || []).filter(f => !prevElements.has(f.element) && !prevKeys.has(f.key));
+  }
+
+  function observeStepTransitions(scope = document, callback) {
+    let prevFields = discoverFields(scope);
+    let timer = null;
+
+    const check = triggerType => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        try {
+          const currentFields = discoverFields(scope);
+          const newFields = detectNewFields(prevFields, currentFields);
+          if (newFields.length > 0 || currentFields.length !== prevFields.length) {
+            const oldFields = prevFields;
+            prevFields = currentFields;
+            callback?.({ newFields, allFields: currentFields, oldFields, triggerType });
+          }
+        } catch (err) {
+          console.error('[NextkinForms] Step transition error:', err);
+        }
+      }, 150);
+    };
+
+    const clickHandler = event => {
+      const target = event.target?.closest?.('button, input[type=submit], input[type=button], a[role=button], [role="button"]');
+      if (!target) return;
+      const text = clean(target.textContent || target.value || target.getAttribute('aria-label'));
+      const autoId = target.getAttribute('data-automation-id') || target.getAttribute('data-testid') || '';
+      if (NEXT_TEXT_REGEX.test(text) || /(?:^|[_-])(?:next|continue)(?:$|[_-])/i.test(autoId)) {
+        check('next_click');
+      }
+    };
+
+    const doc = scope?.nodeType === 9 ? scope : (scope?.ownerDocument || document);
+    doc.addEventListener('click', clickHandler, true);
+
+    let observer = null;
+    const targetNode = scope.body || (scope.nodeType === 1 ? scope : doc.body);
+    if (targetNode && typeof MutationObserver !== 'undefined') {
+      observer = new MutationObserver(mutations => {
+        let significant = false;
+        for (const m of mutations) {
+          if (m.addedNodes.length > 0) {
+            for (const node of m.addedNodes) {
+              if (node.nodeType === 1 && (node.matches?.('input, select, textarea, [role="combobox"], [role="radiogroup"], fieldset, form') || node.querySelector?.('input, select, textarea, [role="combobox"]'))) {
+                significant = true;
+                break;
+              }
+            }
+          }
+          if (m.type === 'attributes' && ['style', 'class', 'hidden', 'aria-hidden'].includes(m.attributeName)) {
+            significant = true;
+          }
+          if (significant) break;
+        }
+        if (significant) check('mutation');
+      });
+      observer.observe(targetNode, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class', 'hidden', 'aria-hidden'] });
+    }
+
+    return {
+      disconnect() {
+        if (timer) clearTimeout(timer);
+        doc.removeEventListener('click', clickHandler, true);
+        observer?.disconnect();
+      },
+      triggerCheck() {
+        check('manual');
+      }
+    };
+  }
+
+  root.NextkinForms = { discoverFields, label, findStepNavigation, detectNewFields, observeStepTransitions };
+})(globalThis);
+
+
+// === File: jobright_extension/core/application.js ===
 (function () {
   const capture = globalThis.NextkinJobCapture;
   const discovery = globalThis.NextkinForms;
@@ -1833,25 +3278,25 @@
         let autoValue = null;
         const ql = label.toLowerCase();
 
-        const candName = values.full_name || 'Candidate';
-        const candFirst = values.first_name || 'Candidate';
-        const candTitle = values.current_title || candidate.current_job_title || candidate.headline || 'Software Engineer';
-        const candEmployer = values.current_employer || candidate.current_company || candidate.company || 'technology companies';
-        const candSkills = values.primary_skills || candidate.secondary_skills || 'software engineering';
+        const candName = values.full_name || '';
+        const candFirst = values.first_name || '';
+        const candTitle = values.current_title || candidate.current_job_title || candidate.headline || '';
+        const candEmployer = values.current_employer || candidate.current_company || candidate.company || '';
+        const candSkills = values.primary_skills || candidate.secondary_skills || '';
         const skillsList = Array.isArray(candSkills) ? candSkills : String(candSkills).split(/[,;|\n]+/).map(s => s.trim()).filter(Boolean);
-        const skillsStr = skillsList.join(', ') || 'Software Engineering';
-        const topSkills = skillsList.slice(0, 5).join(', ') || 'modern software engineering tools';
+        const skillsStr = skillsList.join(', ');
+        const topSkills = skillsList.slice(0, 5).join(', ');
         const candExp = values.total_experience_years ? `${values.total_experience_years}+ years` : '';
         const candCity = values.current_city || candidate.city || '';
         const candState = values.current_state || candidate.state || '';
-        const candLocation = values.current_location || [candCity, candState].filter(Boolean).join(', ') || '';
+        const candLocation = values.current_location || [candCity, candState].filter(Boolean).join(', ');
         const candDegree = values.highest_education || candidate.highest_qualification || candidate.degree || '';
         const candSchool = values.school || candidate.university_name || candidate.school || '';
         const candGradYear = values.graduation_year || candidate.graduation_year || '';
         const candSummary = values.summary || values.bio || '';
         const candResumeText = (resume?.raw_text || resume?.source_text || candidate.source_text || '').toLowerCase();
         const activeJobData = capture?.read ? capture.read() : null;
-        const companyName = activeJobData?.company || 'your company';
+        const companyName = activeJobData?.company || '';
 
         if (mapping.isChoiceKind(field.kind)) {
           if (/(authoriz|eligible|legal right|citizen|18|age|full-time|onsite|internship|currently enrolled)/i.test(ql) && !/(require|need|sponsor)/i.test(ql)) {
@@ -1889,109 +3334,111 @@
               autoValue = options.find(o => /no,? (?:i )?do not have|^no\b|decline|prefer not/i.test(o)) || options[0];
             }
           } else if (/(pronoun)/i.test(ql)) {
-            const g = String(candidate.gender || values.gender || '').toLowerCase();
-            if (g.startsWith('f') || g.includes('woman') || g.includes('female')) {
-              autoValue = options.find(o => /she\/her/i.test(o)) || 'She/Her/Hers';
-            } else if (g.includes('non-binary') || g.includes('they')) {
-              autoValue = options.find(o => /they\/them/i.test(o)) || 'They/Them/Theirs';
+            const explicit = candidate.pronouns || values.pronouns || '';
+            if (explicit) {
+              autoValue = options.find(o => new RegExp(explicit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(o)) || explicit;
             } else {
-              autoValue = options.find(o => /he\/him/i.test(o)) || 'He/Him/His';
+              const g = String(candidate.gender || values.gender || '').toLowerCase();
+              if (g.startsWith('f') || g.includes('woman') || g.includes('female')) {
+                autoValue = options.find(o => /she\/her/i.test(o)) || options.find(o => /decline|prefer not/i.test(o));
+              } else if (g.includes('non-binary') || g.includes('they')) {
+                autoValue = options.find(o => /they\/them/i.test(o)) || options.find(o => /decline|prefer not/i.test(o));
+              } else if (g.startsWith('m') || g.includes('man') || g.includes('male')) {
+                autoValue = options.find(o => /he\/him/i.test(o)) || options.find(o => /decline|prefer not/i.test(o));
+              } else {
+                autoValue = options.find(o => /decline|prefer not|choose not|not specified/i.test(o)) || null;
+              }
             }
-          } else if (/(degree|education)/i.test(ql)) {
-            if (/master/i.test(candDegree)) autoValue = options.find(o => /master/i.test(o));
-            else if (/phd|doctor/i.test(candDegree)) autoValue = options.find(o => /phd|doctor/i.test(o));
-            else autoValue = options.find(o => /bachelor/i.test(o)) || options.find(o => /degree/i.test(o)) || candDegree || options[0];
+          } else if (/(degree|education|bachelor|master|phd|doctor|college|university|qualification)/i.test(ql)) {
+            const isYesNo = options.some(o => /^(yes|true)$/i.test(o)) && options.some(o => /^(no|false)$/i.test(o));
+            if (isYesNo) {
+              const candidateHasBachelor = /bachelor|b\.?tech|b\.?s|b\.?a|undergraduate/i.test(candDegree) || /bachelor/i.test(candResumeText);
+              const candidateHasMaster = /master|m\.?s|m\.?tech|mba/i.test(candDegree) || /master/i.test(candResumeText);
+              const candidateHasDoctorate = /phd|doctor/i.test(candDegree);
+
+              let satisfies = false;
+              if (/(master|graduate degree)/i.test(ql)) {
+                satisfies = candidateHasMaster || candidateHasDoctorate;
+              } else if (/(phd|doctorate)/i.test(ql)) {
+                satisfies = candidateHasDoctorate;
+              } else if (/(bachelor|undergraduate|degree|education|college|university|completed.*degree)/i.test(ql)) {
+                satisfies = candidateHasBachelor || candidateHasMaster || candidateHasDoctorate;
+              }
+
+              if (satisfies) {
+                autoValue = options.find(o => /^(yes|true)$/i.test(o)) || true;
+              } else {
+                autoValue = options.find(o => /^(no|false)$/i.test(o)) || false;
+              }
+            } else {
+              if (/master/i.test(candDegree)) {
+                autoValue = options.find(o => /master/i.test(o));
+              } else if (/phd|doctor/i.test(candDegree)) {
+                autoValue = options.find(o => /phd|doctor/i.test(o));
+              } else if (/bachelor|b\.?tech|b\.?s|b\.?a/i.test(candDegree) || /bachelor/i.test(candResumeText)) {
+                autoValue = options.find(o => /bachelor|undergraduate|b\.?s|b\.?a|b\.?tech/i.test(o)) || options.find(o => /college|degree/i.test(o));
+              } else if (candDegree) {
+                autoValue = options.find(o => new RegExp(candDegree.slice(0, 15), 'i').test(o));
+              }
+            }
           } else if (/(country)/i.test(ql)) {
-            autoValue = options.find(o => new RegExp(values.country || 'United States', 'i').test(o)) || options.find(o => /united states|usa/i.test(o)) || values.country || 'United States';
+            const targetCountry = values.country || candidate.country || '';
+            if (targetCountry) {
+              autoValue = options.find(o => new RegExp(`^${targetCountry}$`, 'i').test(o)) || options.find(o => new RegExp(targetCountry, 'i').test(o)) || targetCountry;
+            }
           } else if (/(where do you intend to work|intend to work|work location)/i.test(ql)) {
-            autoValue = options.find(o => /open|either|any|both/i.test(o)) || options.find(o => /remote/i.test(o)) || options[0] || 'Open to Either';
+            const pref = candidate.preferred_work_type || '';
+            if (pref) {
+              autoValue = options.find(o => new RegExp(pref, 'i').test(o));
+            } else {
+              autoValue = options.find(o => /remote|open|either|any/i.test(o));
+            }
           } else if (/(location|city)/i.test(ql)) {
-            const locMatch = candCity && options.find(o => new RegExp(candCity, 'i').test(o));
-            autoValue = locMatch || options.find(o => /remote|open|any/i.test(o)) || options[0];
+            if (candCity) {
+              autoValue = options.find(o => new RegExp(`\\b${candCity}\\b`, 'i').test(o));
+            }
           } else if (/(graduate|graduation|year)/i.test(ql)) {
-            const gradMatch = candGradYear && options.find(o => o.includes(candGradYear));
-            autoValue = gradMatch || options.find(o => /2026|2027|2028/i.test(o)) || options[0];
-          } else if (/(hear|source)/i.test(ql)) {
-            autoValue = options.find(o => /linkedin/i.test(o)) || options.find(o => /website|job board|other/i.test(o)) || 'LinkedIn';
-          } else if (options.length) {
-            autoValue = options.find(o => !/select|choose/i.test(o)) || options[0];
+            if (candGradYear) {
+              autoValue = options.find(o => o.includes(candGradYear));
+            }
+          } else if (/(hear|source|how did you)/i.test(ql)) {
+            const src = values.how_heard || candidate.how_heard || '';
+            if (src) {
+              autoValue = options.find(o => new RegExp(src, 'i').test(o)) || src;
+            }
           }
         } else if (field.kind === 'text' || field.kind === 'textarea') {
-          // 1. Candidate's story / journey
-          if (/(tell us your story|your story|how did you get to where you are|personal journey|professional journey|background.*shaped you|turning point)/i.test(ql)) {
-            autoValue = `My professional journey began with my education in ${candDegree || 'computer science'} at ${candSchool || 'university'}, where I developed a strong passion for solving real-world problems with code. Over the past ${candExp || 'several years'}, I have worked across technology environments, most recently as a ${candTitle} at ${candEmployer}. Through hands-on experience architecting full-stack systems with ${topSkills}, I developed a discipline of balancing high-speed execution with architectural resilience and reliability.`;
+          // Bio / summary / statement / cover letter
+          if (/(additional information|cover letter|anything else|share with us|bio|biography|about\s*(you|yourself)?|summary|statement)/i.test(ql)) {
+            if (candSummary) {
+              autoValue = candSummary;
+            }
           }
-          // 2. Walk through a project / Problem solving approach
-          else if (/(walk us through a (?:particular )?project|project that you (?:designed|initiated|built|completed)|technical project|significant project|saw through to completion|approach identifying and solving)/i.test(ql)) {
-            autoValue = `At ${candEmployer}, I spearheaded an initiative to optimize our core services built with ${topSkills}. We identified throughput bottlenecks during peak load periods. I took ownership of designing an asynchronous event-processing architecture, refactoring critical database queries, and adding comprehensive automated test coverage. This project reduced our service response latency by over 30% and significantly improved system uptime.`;
-          }
-          // 3. Technical background / skillset alignment
-          else if (/(how does your (?:technical )?background|skillset align|skills align|relevant experience|qualifications align|why are you a (?:good )?fit|fit for this (?:role|position))/i.test(ql)) {
-            autoValue = `My background as a ${candTitle} at ${candEmployer} directly aligns with the technical demands of this role. I bring deep hands-on proficiency in ${topSkills}, with a proven track record of writing clean, maintainable code, implementing automated testing, and designing resilient APIs that scale under high user load.`;
-          }
-          // 4. Future goals / 1-year out / fellowship
-          else if (/(what do you want to be doing a year out|where do you see yourself|career goals|future goals|year out from completing|fellowship help you get there|long[- ]term goals)/i.test(ql)) {
-            autoValue = `One year from now, I aim to be driving high-leverage technical initiatives as a core engineer delivering mission-critical applications. Working in an engineering-first culture like ${companyName} will accelerate my technical growth by challenging me with complex distributed systems problems, and allow me to apply my expertise in ${topSkills} to build scalable solutions that make a tangible operational impact.`;
-          }
-          // 5. Palantir FDSE vs Software Engineer / Role resonance
-          else if (/(forward deployed|fdse|resonates|which (of these )?roles?|role resonates)/i.test(ql)) {
-            autoValue = `The Forward Deployed Software Engineer (FDSE) role strongly resonates with me. As a ${candTitle} at ${candEmployer}, I worked directly on customer-facing features and backend services, bridging complex business requirements with scalable architectures. I thrive when deploying mission-critical systems in the field, diagnosing real-world friction, and building robust, performant software with measurable operational impact.`;
-          }
-          // 6. AI Systems / Sovereign AI / Machine Learning
-          else if (/(ai systems|sovereign ai|artificial intelligence|machine learning|working on ai)/i.test(ql)) {
-            autoValue = `I am deeply interested in working on AI Systems because the critical bottleneck in operationalizing AI is building robust, fault-tolerant distributed infrastructure that can process high-throughput data with low latency. Having engineered production services using ${topSkills} at ${candEmployer}, I want to apply my systems engineering background to build secure, scalable AI deployment pipelines.`;
-          }
-          // 7. Not on resume / Outside of work / Accomplishment
-          else if (/(not on your resume|outside (of )?work|proud of|accomplishment|proudest)/i.test(ql)) {
-            autoValue = `Outside of the formal bullet points on my resume, I take immense pride in mentoring junior engineers and contributing to open-source developer tooling. Helping peers understand complex debugging techniques, establishing high code-review standards, and building small automation scripts that save fellow developers hours every week is one of the most rewarding parts of my engineering career.`;
-          }
-          // 8. Why company / Why role
-          else if (/(why\b.*(?:palantir|figma|openai|company|work at|join)|why do you want to work|reason for applying|why this company)/i.test(ql)) {
-            autoValue = `I want to join ${companyName} because of the exceptional engineering standards and the dedication to solving mission-critical, large-scale problems. With my background as a ${candTitle} specializing in ${topSkills} at ${candEmployer}, I am eager to contribute my technical depth and collaborate with engineers who value engineering rigor.`;
-          }
-          // 9. Additional information / Cover letter
-          else if (/(additional information|cover letter|anything else|share with us)/i.test(ql)) {
-            autoValue = candSummary || `I am an experienced ${candTitle} with a proven track record across full-stack development, distributed backend systems, and cloud infrastructure with ${topSkills}. I am authorized to work in the United States and available to start a new role with standard notice. Thank you for considering my application.`;
-          }
-          // 10. Bio / summary
-          else if (/(bio|biography|about\s*(you|yourself)?|summary|statement)/i.test(ql)) {
-            autoValue = candSummary || `Experienced ${candTitle} specializing in ${topSkills} with a strong background in architecting performant, reliable applications at ${candEmployer}.`;
-          }
-          // 11. Technical experience / stack description
-          else if (/(experience with|skills with|tech stack|technologies have you used|tools and frameworks)/i.test(ql)) {
-            autoValue = `I have extensive experience with ${skillsStr}. In my recent roles, including as a ${candTitle} at ${candEmployer}, I designed and delivered scalable production systems, optimized API response times, and maintained reliable CI/CD pipelines.`;
-          }
-          // 12. Conflict / Challenge / Failure
-          else if (/(challenge|conflict|difficult|failure|overcame|disagree|mistake)/i.test(ql)) {
-            autoValue = 'When facing complex technical challenges or unexpected production incidents, I prioritize methodical root-cause analysis, clear communication with cross-functional stakeholders, and implementing robust automated tests to prevent regressions.';
-          }
-          // 13. Leadership / Teamwork
-          else if (/(leadership|mentor|collaborat|team|cross-functional)/i.test(ql)) {
-            autoValue = 'I believe in collaborative engineering, conducting thoughtful code reviews, mentoring teammates, and maintaining high engineering standards while fostering a supportive and inclusive team environment.';
-          }
-          // 14. Salary
+          // Salary / compensation
           else if (/(salary|compensation|rate|gross salary|pay expectation)/i.test(ql)) {
-            autoValue = values.salary_expectation || 'Open / Competitive';
+            if (values.salary_expectation || candidate.salary_expectation) {
+              autoValue = values.salary_expectation || candidate.salary_expectation;
+            }
           }
-          // 15. Start date
+          // Start date / availability
           else if (/(start date|notice|available|availability|when can you start)/i.test(ql)) {
-            autoValue = values.availability || 'Immediately';
+            if (values.availability || candidate.availability) {
+              autoValue = values.availability || candidate.availability;
+            }
           }
-          // 16. Source
+          // Source / How did you hear
           else if (/(hear|source|referral)/i.test(ql)) {
-            autoValue = 'LinkedIn';
+            if (values.how_heard || candidate.how_heard) {
+              autoValue = values.how_heard || candidate.how_heard;
+            }
           }
-          // 17. Non-repeating fallback for any other open-ended question
-          else if (field.element?.tagName === 'TEXTAREA' || label.length > 25) {
-            const fallbackAnswers = [
-              `As a ${candTitle} at ${candEmployer}, my focus has been on architecting scalable services and delivering high-impact features with ${topSkills}. I emphasize robust system design, clean interfaces, and meeting demanding operational requirements.`,
-              `In my engineering work, I prioritize code quality, maintainability, and thorough automated testing. Having built production systems with ${topSkills}, I ensure our codebase remains agile and resilient as business needs evolve.`,
-              `Throughout my career, I have collaborated closely with product managers, designers, and fellow engineers to translate complex user requirements into performant technical solutions using ${topSkills}.`,
-              `I approach technical challenges with disciplined root-cause analysis and telemetry-driven debugging. At ${candEmployer}, this mindset helped our team consistently reduce defect rates and improve overall service reliability.`
-            ];
-            autoValue = fallbackAnswers[genericTextareaIndex % fallbackAnswers.length];
-            genericTextareaIndex++;
+          // Skills / Tech stack overview
+          else if (/(experience with|skills with|tech stack|technologies have you used|tools and frameworks)/i.test(ql)) {
+            if (skillsStr) {
+              autoValue = skillsStr;
+            }
           }
+          // NO synthetic fallback essays or made-up narratives. If not in candidate profile, leave as null.
         } else if (field.kind === 'checkbox') {
           const groupQuestion = (field.element?.closest('.application-question, fieldset, [role="group"], .form-group, .question')
             ?.querySelector('.application-label, legend, .question-title, [class*="label" i]')?.innerText || '').toLowerCase();
@@ -2006,7 +3453,6 @@
           else if (/language/i.test(combined)) {
             const knownLangs = ['english'];
             if (Array.isArray(candidate.languages)) knownLangs.push(...candidate.languages.map(l => String(l).toLowerCase()));
-            if (/hindi/i.test(candResumeText) || /india|hyderabad/i.test(candResumeText + ' ' + candLocation)) knownLangs.push('hindi', 'telugu');
             autoValue = knownLangs.some(l => checkLabel.includes(l));
           }
           // 3. Start Date Cohort Windows: Check only the FIRST / earliest window, leave all others unchecked

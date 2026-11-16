@@ -17,7 +17,7 @@ const profileLabels = {
   linkedin_url: 'LinkedIn URL',
 };
 
-let connection, candidate, currentTab, currentForm, documents = [], selected, preferences = {};
+let connection, candidate, currentTab, currentForm, documents = [], selected, preferences = {}, allProfilesMap = new Map();
 let refreshNumber = 0;
 let refreshTimer;
 let refreshing = false;
@@ -142,7 +142,8 @@ function renderAccount() {
     $('upload-form').hidden = true;
   }
   $('resume-select').replaceChildren(...documents.map(doc => {
-    const option = new Option(doc.filename + (doc.status === 'failed' ? ' (processing failed)' : ''), doc.id);
+    const label = (doc.displayName || doc.filename) + (doc.status === 'failed' ? ' (processing failed)' : '');
+    const option = new Option(label, doc.id);
     option.disabled = doc.status === 'failed';
     return option;
   }));
@@ -271,7 +272,7 @@ async function refresh() {
   const number = ++refreshNumber;
   const [[tab], storage] = await Promise.all([
     chrome.tabs.query({ active: true, currentWindow: true }),
-    chrome.storage.local.get(['origin', 'token', 'user', 'resumePreferences', 'candidateProfile', 'resumeData']),
+    chrome.storage.local.get(['origin', 'token', 'user', 'resumePreferences', 'candidateProfile', 'resumeData', 'savedProfiles', 'savedResumes', 'activeCandidateId']),
   ]);
   if (number !== refreshNumber || busy) return;
   const session = (workspaceUrl(storage.origin) && storage.token && storage.user?.id)
@@ -361,37 +362,66 @@ async function refresh() {
   if (number !== refreshNumber || busy) return;
   connection = authenticated ? session : (storage.candidateProfile && session ? session : null);
   resumeEndpointAvailable = canUpload;
-  const localCandidate = storage.candidateProfile || null;
-  const apiCandidate = account?.candidates?.[0] || null;
-  if (apiCandidate && localCandidate) {
-    candidate = { ...localCandidate };
-    for (const [k, v] of Object.entries(apiCandidate)) {
-      if (v !== null && v !== undefined && v !== '') {
-        candidate[k] = v;
-      }
-    }
-  } else {
-    candidate = apiCandidate || localCandidate || null;
+  allProfilesMap.clear();
+  // 1. Load candidates from API account
+  for (const c of account?.candidates || []) {
+    if (c?.id) allProfilesMap.set(c.id, c);
+  }
+  // 2. Load candidates from local storage savedProfiles (ensures NO candidate is wiped)
+  for (const [id, c] of Object.entries(storage.savedProfiles || {})) {
+    if (c && (c.id || id)) allProfilesMap.set(c.id || id, c);
+  }
+  // 3. Include active candidateProfile if present
+  if (storage.candidateProfile) {
+    const id = storage.candidateProfile.id || storage.activeCandidateId || 'current_candidate';
+    allProfilesMap.set(id, storage.candidateProfile);
   }
 
-  documents = resumeList.filter(doc => !candidate || !doc.candidate_id || doc.candidate_id === candidate.id);
+  preferences = storage.resumePreferences || {};
+  const preferenceKey = connection && connection.origin + '|' + connection.user.id;
+
+  // Determine active candidate ID
+  let activeCandId = storage.activeCandidateId || preferences?.[preferenceKey + '|candidate'] || storage.candidateProfile?.id || null;
+  if (!activeCandId && allProfilesMap.size > 0) {
+    activeCandId = allProfilesMap.keys().next().value;
+  }
+
+  candidate = (activeCandId && allProfilesMap.get(activeCandId)) || storage.candidateProfile || account?.candidates?.[0] || null;
+
+  // Preserve and build all documents from API and local savedResumes
+  const docMap = new Map();
+  for (const doc of resumeList || []) {
+    if (doc?.id) docMap.set(doc.id, doc);
+  }
+  for (const [docId, doc] of Object.entries(storage.savedResumes || {})) {
+    if (doc?.id || docId) docMap.set(doc?.id || docId, doc);
+  }
   if (storage.resumeData) {
-    const resDoc = {
-      id: storage.resumeData.id || 'dashboard-resume',
+    const rId = storage.resumeData.id || 'dashboard-resume';
+    docMap.set(rId, {
+      ...storage.resumeData,
+      id: rId,
       filename: storage.resumeData.filename || `${candidate?.full_name || 'Candidate'}_Resume.pdf`,
       candidate_id: candidate?.id,
       status: 'confirmed',
       raw_text: storage.resumeData.raw_text || storage.resumeData.source_text || ''
-    };
-    if (!documents.some(d => d.id === resDoc.id || d.filename === resDoc.filename)) {
-      documents.unshift(resDoc);
-    }
+    });
   }
-  preferences = storage.resumePreferences || {};
-  const preferenceKey = connection && connection.origin + '|' + connection.user.id;
+
+  documents = [...docMap.values()].map(doc => {
+    const docCand = doc.candidate_id ? allProfilesMap.get(doc.candidate_id) : null;
+    const candName = doc.candidate_name || docCand?.full_name || (candidate && doc.candidate_id === candidate.id ? candidate.full_name : '');
+    return {
+      ...doc,
+      displayName: candName ? `${candName} — ${doc.filename}` : doc.filename
+    };
+  });
+
   const usable = documents.filter(doc => doc.status !== 'failed');
-  selected = usable.find(doc => doc.id === preferences[preferenceKey]) || usable[0] || null;
-  if (documents.some(doc => doc.id === preferences[preferenceKey] && doc.status === 'failed')) {
+  selected = usable.find(doc => doc.id === preferences[preferenceKey]) ||
+    usable.find(doc => candidate && doc.candidate_id === candidate.id) ||
+    usable[0] || null;
+  if (documents.some(doc => doc.id === preferences?.[preferenceKey] && doc.status === 'failed')) {
     notice('upload-status', 'Resume processing failed. Choose another PDF or DOCX.', true);
   }
   currentForm = frames.find(frame => frame.frameId === 0 && frame.result?.hasForm) ||
@@ -553,6 +583,15 @@ $('resume-select').addEventListener('change', async event => {
   if (!connection) return;
   const key = connection.origin + '|' + connection.user.id;
   selected = documents.find(doc => doc.id === event.target.value) || null;
+  // If the selected resume belongs to a specific candidate, switch active candidate cleanly!
+  if (selected?.candidate_id && allProfilesMap.has(selected.candidate_id)) {
+    candidate = allProfilesMap.get(selected.candidate_id);
+    await chrome.storage.local.set({
+      activeCandidateId: selected.candidate_id,
+      candidateProfile: candidate,
+      resumeData: selected
+    });
+  }
   renderAccount();
   ++matchRequest;
   if (activeJob) renderMatch('Updating resume comparison…');
@@ -777,6 +816,7 @@ $('autofill').addEventListener('click', async () => {
 });
 
 function clearResumeMatch() {
+  answerReview = null;
   ++matchRequest;
   $('match-panel').hidden = true;
   renderMatch('');

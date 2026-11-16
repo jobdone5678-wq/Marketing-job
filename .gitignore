@@ -48,6 +48,9 @@ next-env.d.ts
 /.taste-skill/
 /test-results/
 /playwright-report/
+/jobright_crx_extracted/
+*.crx
+
 *.zip
 jobright_extension (2)/
 prompt-master/

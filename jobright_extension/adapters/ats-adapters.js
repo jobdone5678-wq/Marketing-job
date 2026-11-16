@@ -1,6 +1,6 @@
 /**
  * NextKinHR Universal ATS Portal Adapters Registry
- * Portal-agnostic field hints for job boards, ATS platforms and custom career sites.
+ * Reverse-Engineered & Hardened Portal Field Adapters for ATS Platforms, Job Boards & Direct Career Sites
  * Nextkinlife LLC
  */
 (function(root) {
@@ -12,7 +12,7 @@
   const CANON_RULES = [
     ['linkedin_url', /linked\s*in/i],
     ['github_url', /github/i],
-    ['website', /website|portfolio|homepage|personal\s*site|personal\s*url/i],
+    ['website', /website|portfolio|homepage|personal\s*site|personal\s*url|blog\s*url/i],
     ['email', /e-?mail/i],
     ['phone', /phone|mobile|cell|telephone|contact\s*number/i],
     ['first_name', /first[\s._-]*name|given[\s._-]*name|forename|fname/i],
@@ -26,7 +26,16 @@
     ['country', /country|nationality/i],
     ['full_address', /address|street/i],
     ['total_experience_years', /years?[\s._-]*of[\s._-]*experience|experience[\s._-]*years/i],
-    ['primary_skills', /skills|technolog|stack|expertise|competenc/i]
+    ['primary_skills', /skills|technolog|stack|expertise|competenc/i],
+    ['authorized_in_usa', /legally\s*authorized|authorized\s*to\s*work|right\s*to\s*work/i],
+    ['needs_sponsorship', /visa\s*sponsorship|require\s*sponsorship/i],
+    ['salary_expectation', /salary|compensation|expected\s*pay|desired\s*salary/i],
+    ['highest_education', /highest[\s._-]*education|highest[\s._-]*degree|degree[\s._-]*level/i],
+    ['gender', /\bgender\b|\bsex\b/i],
+    ['race', /\brace\b|\bethnicity\b/i],
+    ['veteran', /\bveteran\b/i],
+    ['disability', /\bdisability\b/i],
+    ['how_heard', /how\s*did\s*you\s*hear|referral\s*source|application\s*source/i]
   ];
 
   // A confirmation or repeat field is not the primary field.
@@ -38,7 +47,7 @@
     el.getAttribute('name'), el.getAttribute('id'), el.getAttribute('placeholder'),
     el.getAttribute('aria-label'), el.getAttribute('data-testid'), el.getAttribute('data-test'),
     el.getAttribute('data-automation-id'), el.getAttribute('data-ui'), el.getAttribute('data-field-name'),
-    el.getAttribute('title')
+    el.getAttribute('data-field-id'), el.getAttribute('title')
   ].filter(Boolean).join(' '))
     .replace(/[_\-.]+/g, ' ')
     .replace(/\s+/g, ' ')
@@ -98,7 +107,7 @@
         if (id === 'candidate-location' || /job_application\[location\]/i.test(name)) return 'current_city';
         if (id === 'gender' || name === 'gender') return 'gender';
         if (id === 'veteran_status' || /veteran/i.test(name)) return 'veteran';
-        if (id === 'hispanic_ethnicity' || /hispanic/i.test(name)) return '';
+        if (id === 'hispanic_ethnicity' || /hispanic/i.test(name)) return 'race';
         if (id.includes('degree') || name.includes('degree')) return 'highest_education';
         if (/job_application\[answers\]/i.test(name)) return '';
         return canonicalHint(el);
@@ -132,16 +141,22 @@
       matches: hostIs(/(^|\.)myworkday(jobs|site)?\.com$/i),
       hint: el => {
         const autoId = (el.getAttribute('data-automation-id') || '').toLowerCase();
-        if (autoId.includes('legalname_firstname') || autoId.includes('legalnamesection_firstname')) return 'first_name';
-        if (autoId.includes('legalname_lastname') || autoId.includes('legalnamesection_lastname')) return 'last_name';
-        if (autoId.includes('email') || autoId.includes('emailaddress')) return 'email';
-        if (autoId.includes('phone') || autoId.includes('phonenumber')) return 'phone';
-        if (autoId.includes('addresssection_addressline1')) return 'full_address';
-        if (autoId.includes('addresssection_city')) return 'current_city';
-        if (autoId.includes('addresssection_countryregion')) return 'current_state';
-        if (autoId.includes('addresssection_postalcode')) return 'zip_code';
-        if (autoId.includes('countrydropdown')) return 'country';
-        if (autoId.includes('sourceprompt')) return '';
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const desc = `${autoId} ${id} ${name}`;
+        if (desc.includes('legalname_firstname') || desc.includes('legalnamesection_firstname')) return 'first_name';
+        if (desc.includes('legalname_lastname') || desc.includes('legalnamesection_lastname')) return 'last_name';
+        if (desc.includes('email') || desc.includes('emailaddress')) return 'email';
+        if (desc.includes('phone') || desc.includes('phonenumber')) return 'phone';
+        if (desc.includes('addresssection_addressline1')) return 'full_address';
+        if (desc.includes('addresssection_city')) return 'current_city';
+        if (desc.includes('addresssection_countryregion')) return 'current_state';
+        if (desc.includes('addresssection_postalcode')) return 'zip_code';
+        if (desc.includes('countrydropdown')) return 'country';
+        if (desc.includes('sourceprompt') || desc.includes('source')) return 'how_heard';
+        if (desc.includes('gender')) return 'gender';
+        if (desc.includes('veteran')) return 'veteran';
+        if (desc.includes('disability')) return 'disability';
         return canonicalHint(el);
       }
     },
@@ -173,7 +188,7 @@
     {
       id: 'smartrecruiters',
       name: 'SmartRecruiters',
-      matches: hostIs(/(^|\.)smartrecruiters\.com$/i),
+      matches: hostIs(/(^|\.)(smartrecruiters\.com|smartr\.me)$/i),
       hint: el => {
         const name = (el.getAttribute('name') || '').toLowerCase();
         const testId = (el.getAttribute('data-test') || '').toLowerCase();
@@ -187,23 +202,140 @@
       }
     },
 
-    // 7. Taleo (Oracle Taleo Enterprise / Business Edition)
+    // 7. ClearCompany / HRMDirect
+    {
+      id: 'clearcompany',
+      name: 'ClearCompany',
+      matches: hostIs(/(^|\.)(clearcompany\.com|hrmdirect\.com)$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const id = (el.id || '').toLowerCase();
+        if (/first_name|fname/i.test(name || id)) return 'first_name';
+        if (/last_name|lname/i.test(name || id)) return 'last_name';
+        if (/email/i.test(name || id)) return 'email';
+        if (/phone|mobile/i.test(name || id)) return 'phone';
+        if (/address|street/i.test(name || id)) return 'full_address';
+        if (/city/i.test(name || id)) return 'current_city';
+        if (/state/i.test(name || id)) return 'current_state';
+        if (/zip|postal/i.test(name || id)) return 'zip_code';
+        if (/salary|pay/i.test(name || id)) return 'salary_expectation';
+        if (/hear|source/i.test(name || id)) return 'how_heard';
+        return canonicalHint(el);
+      }
+    },
+
+    // 8. Paycor / Newton Software
+    {
+      id: 'paycor',
+      name: 'Paycor (Newton)',
+      matches: hostIs(/(^|\.)(paycor\.com|newtonsoftware\.com)$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/gnewtonfirstname|firstname/i.test(id || name)) return 'first_name';
+        if (/gnewtonlastname|lastname/i.test(id || name)) return 'last_name';
+        if (/gnewtonemail|email/i.test(id || name)) return 'email';
+        if (/gnewtonmobilephone|gnewtonhomephone|phone/i.test(id || name)) return 'phone';
+        if (/gnewtonaddress|address/i.test(id || name)) return 'full_address';
+        if (/gnewtoncity|city/i.test(id || name)) return 'current_city';
+        if (/gnewtonstate|state/i.test(id || name)) return 'current_state';
+        if (/gnewtonzip|zip/i.test(id || name)) return 'zip_code';
+        if (/gnewtonsalary/i.test(id || name)) return 'salary_expectation';
+        return canonicalHint(el);
+      }
+    },
+
+    // 9. IBM BrassRing (Kenexa)
+    {
+      id: 'brassring',
+      name: 'IBM BrassRing',
+      matches: hostIs(/(^|\.)brassring\.com$/i),
+      hint: el => {
+        const model = (el.getAttribute('ng-model') || '').toLowerCase();
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const desc = `${model} ${id} ${name}`;
+        if (/firstname|first_name/.test(desc)) return 'first_name';
+        if (/lastname|last_name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        if (/address|street/.test(desc)) return 'full_address';
+        if (/city/.test(desc)) return 'current_city';
+        if (/state|province/.test(desc)) return 'current_state';
+        if (/zip|postal/.test(desc)) return 'zip_code';
+        if (/country/.test(desc)) return 'country';
+        return canonicalHint(el);
+      }
+    },
+
+    // 10. Oracle Cloud HCM (Fusion / Candidate Experience)
+    {
+      id: 'oraclecloud',
+      name: 'Oracle Cloud HCM',
+      matches: hostIs(/(^|\.)(oraclecloud|oraclegovcloud)\.com$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+        const desc = `${id} ${name} ${aria}`;
+        if (/firstname|first_name/.test(desc)) return 'first_name';
+        if (/lastname|last_name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        if (/addressline|address_line|street/.test(desc)) return 'full_address';
+        if (/\bcity\b/.test(desc)) return 'current_city';
+        if (/\bstate\b|province/.test(desc)) return 'current_state';
+        if (/postal|zip/.test(desc)) return 'zip_code';
+        if (/country/.test(desc)) return 'country';
+        return canonicalHint(el);
+      }
+    },
+
+    // 11. Taleo (Oracle Taleo Enterprise / Business Edition)
     {
       id: 'taleo',
       name: 'Taleo',
-      matches: hostIs(/(^|\.)taleo\.net$/i),
-      hint: el => canonicalHint(el)
+      matches: hostIs(/(^|\.)(taleo\.net|burnsmcd\.com)$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const desc = `${id} ${name}`;
+        if (/candidatefirstname|first_name|fname/.test(desc)) return 'first_name';
+        if (/candidatelastname|last_name|lname/.test(desc)) return 'last_name';
+        if (/candidateemail|email/.test(desc)) return 'email';
+        if (/candidatephone|phone|mobile/.test(desc)) return 'phone';
+        if (/candidateaddress|address/.test(desc)) return 'full_address';
+        if (/candidatecity|city/.test(desc)) return 'current_city';
+        if (/candidatestate|state/.test(desc)) return 'current_state';
+        if (/candidatezip|zip|postal/.test(desc)) return 'zip_code';
+        if (/candidatecountry|country/.test(desc)) return 'country';
+        return canonicalHint(el);
+      }
     },
 
-    // 8. SAP SuccessFactors
+    // 12. SAP SuccessFactors
     {
       id: 'successfactors',
       name: 'SuccessFactors',
       matches: hostIs(/(^|\.)(successfactors|sapsf)\.(com|eu|net)$/i),
-      hint: el => canonicalHint(el)
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const desc = `${id} ${name}`;
+        if (/fbclc_fname|firstname|first_name/.test(desc)) return 'first_name';
+        if (/fbclc_lname|lastname|last_name/.test(desc)) return 'last_name';
+        if (/fbclc_email|email/.test(desc)) return 'email';
+        if (/fbclc_phone|phone|mobile/.test(desc)) return 'phone';
+        if (/fbclc_address|address/.test(desc)) return 'full_address';
+        if (/fbclc_city|city/.test(desc)) return 'current_city';
+        if (/fbclc_state|state/.test(desc)) return 'current_state';
+        if (/fbclc_postalcode|postal|zip/.test(desc)) return 'zip_code';
+        if (/fbclc_country|country/.test(desc)) return 'country';
+        return canonicalHint(el);
+      }
     },
 
-    // 9. BambooHR
+    // 13. BambooHR
     {
       id: 'bamboohr',
       name: 'BambooHR',
@@ -223,7 +355,7 @@
       }
     },
 
-    // 10. Workable
+    // 14. Workable
     {
       id: 'workable',
       name: 'Workable',
@@ -241,7 +373,7 @@
       }
     },
 
-    // 11. Jobvite
+    // 15. Jobvite
     {
       id: 'jobvite',
       name: 'Jobvite',
@@ -256,7 +388,7 @@
       }
     },
 
-    // 12. JazzHR (ApplyToJob)
+    // 16. JazzHR (ApplyToJob)
     {
       id: 'jazzhr',
       name: 'JazzHR',
@@ -275,7 +407,7 @@
       }
     },
 
-    // 13. Breezy HR
+    // 17. Breezy HR
     {
       id: 'breezy',
       name: 'BreezyHR',
@@ -289,7 +421,7 @@
       }
     },
 
-    // 14. Personio
+    // 18. Personio
     {
       id: 'personio',
       name: 'Personio',
@@ -304,55 +436,83 @@
       }
     },
 
-    // 15. Rippling
+    // 19. Rippling / Rippling ATS
     {
       id: 'rippling',
       name: 'Rippling ATS',
-      matches: hostIs(/(^|\.)rippling\.com$/i),
-      hint: el => canonicalHint(el)
+      matches: hostIs(/(^|\.)(rippling\.com|rippling-ats\.com)$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
     },
 
-    // 16. Paylocity
+    // 20. Paylocity
     {
       id: 'paylocity',
       name: 'Paylocity',
       matches: hostIs(/(^|\.)paylocity\.com$/i),
-      hint: el => canonicalHint(el)
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const desc = `${id} ${name}`;
+        if (/firstname/.test(desc)) return 'first_name';
+        if (/lastname/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        if (/street|address/.test(desc)) return 'full_address';
+        if (/city/.test(desc)) return 'current_city';
+        if (/state/.test(desc)) return 'current_state';
+        if (/zip|postal/.test(desc)) return 'zip_code';
+        return canonicalHint(el);
+      }
     },
 
-    // 17. Paycom
+    // 21. Paycom Online
     {
       id: 'paycom',
       name: 'Paycom',
       matches: hostIs(/(^|\.)paycom(online)?\.(com|net)$/i),
-      hint: el => canonicalHint(el)
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const id = (el.id || '').toLowerCase();
+        const desc = `${name} ${id}`;
+        if (/fname|firstname/.test(desc)) return 'first_name';
+        if (/lname|lastname/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        if (/addr|street/.test(desc)) return 'full_address';
+        if (/city/.test(desc)) return 'current_city';
+        if (/state/.test(desc)) return 'current_state';
+        if (/zip/.test(desc)) return 'zip_code';
+        return canonicalHint(el);
+      }
     },
 
-    // 18. ADP (Workforce Now & Recruiting)
+    // 22. ADP (Workforce Now, Recruiting, MyJobs)
     {
       id: 'adp',
       name: 'ADP',
       matches: hostIs(/(^|\.)adp\.com$/i),
-      hint: el => canonicalHint(el)
+      hint: el => {
+        const desc = descriptor(el);
+        if (/firstname|first_name/.test(desc)) return 'first_name';
+        if (/lastname|last_name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        if (/address|street/.test(desc)) return 'full_address';
+        if (/city/.test(desc)) return 'current_city';
+        if (/state/.test(desc)) return 'current_state';
+        if (/postal|zip/.test(desc)) return 'zip_code';
+        return canonicalHint(el);
+      }
     },
 
-    // 19. Oracle Cloud HCM
-    {
-      id: 'oraclecloud',
-      name: 'Oracle Cloud HCM',
-      matches: hostIs(/(^|\.)oracle(cloud|govcloud)\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 20. IBM BrassRing
-    {
-      id: 'brassring',
-      name: 'IBM BrassRing',
-      matches: hostIs(/(^|\.)brassring\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 21. Dayforce HCM
+    // 23. Dayforce HCM
     {
       id: 'dayforce',
       name: 'Dayforce',
@@ -363,43 +523,88 @@
         if (fieldId.includes('lastname')) return 'last_name';
         if (fieldId.includes('email')) return 'email';
         if (fieldId.includes('phone')) return 'phone';
+        if (fieldId.includes('address')) return 'full_address';
+        if (fieldId.includes('city')) return 'current_city';
+        if (fieldId.includes('state')) return 'current_state';
+        if (fieldId.includes('postal') || fieldId.includes('zip')) return 'zip_code';
         return canonicalHint(el);
       }
     },
 
-    // 22. UKG Pro / UltiPro
+    // 24. UKG Pro / UltiPro
     {
       id: 'ultipro',
       name: 'UKG / Ultipro',
       matches: hostIs(/(^|\.)(ultipro\.com|ultipro\.ca|rec\.pro\.ukg\.net)$/i),
-      hint: el => canonicalHint(el)
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const desc = `${id} ${name}`;
+        if (/firstname/.test(desc)) return 'first_name';
+        if (/lastname/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        if (/address/.test(desc)) return 'full_address';
+        if (/city/.test(desc)) return 'current_city';
+        if (/state/.test(desc)) return 'current_state';
+        if (/postal|zip/.test(desc)) return 'zip_code';
+        return canonicalHint(el);
+      }
     },
 
-    // 23. Eightfold AI
+    // 25. Eightfold AI
     {
       id: 'eightfold',
       name: 'Eightfold.ai',
       matches: hostIs(/(^|\.)eightfold\.ai$/i),
-      hint: el => canonicalHint(el)
+      hint: el => {
+        const desc = descriptor(el);
+        if (/firstname|first_name/.test(desc)) return 'first_name';
+        if (/lastname|last_name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        if (/location|city/.test(desc)) return 'current_city';
+        return canonicalHint(el);
+      }
     },
 
-    // 24. Phenom People
+    // 26. Phenom People
     {
       id: 'phenom',
       name: 'Phenom',
-      matches: hostIs(/(^|\.)phenom(people)?\.com$/i),
-      hint: el => canonicalHint(el)
+      matches: hostIs(/(^|\.)(phenom(people)?\.com|jobs\.bswhealth\.com|careers\.uvahealth\.org|careers\.dukehealth\.org|careers\.mastercard\.com|careers\.mcafee\.com|vcacareers\.com)$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/root_firstname|firstname/i.test(id || name)) return 'first_name';
+        if (/root_lastname|lastname/i.test(id || name)) return 'last_name';
+        if (/root_email|email/i.test(id || name)) return 'email';
+        if (/root_phone|phone/i.test(id || name)) return 'phone';
+        if (/root_city|city/i.test(id || name)) return 'current_city';
+        if (/root_state|state/i.test(id || name)) return 'current_state';
+        if (/root_zip|zip/i.test(id || name)) return 'zip_code';
+        return canonicalHint(el);
+      }
     },
 
-    // 25. Zoho Recruit
+    // 27. Zoho Recruit
     {
       id: 'zohorecruit',
       name: 'Zoho Recruit',
-      matches: hostIs(/(^|\.)zohorecruit\.(com|in|eu)$/i),
-      hint: el => canonicalHint(el)
+      matches: hostIs(/(^|\.)zohorecruit\.(com|in|eu|ca)$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        if (/city/.test(desc)) return 'current_city';
+        if (/state/.test(desc)) return 'current_state';
+        return canonicalHint(el);
+      }
     },
 
-    // 26. Teamtailor
+    // 28. Teamtailor
     {
       id: 'teamtailor',
       name: 'Teamtailor',
@@ -414,7 +619,7 @@
       }
     },
 
-    // 27. Recruitee
+    // 29. Recruitee
     {
       id: 'recruitee',
       name: 'Recruitee',
@@ -428,35 +633,397 @@
       }
     },
 
-    // 28. Pinpoint HQ
+    // 30. Pinpoint HQ
     {
       id: 'pinpoint',
       name: 'Pinpoint',
       matches: hostIs(/(^|\.)pinpointhq\.com$/i),
-      hint: el => canonicalHint(el)
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
     },
 
-    // 29. Avature
+    // 31. Avature
     {
       id: 'avature',
       name: 'Avature',
-      matches: hostIs(/(^|\.)avature\.net$/i),
-      hint: el => canonicalHint(el)
+      matches: hostIs(/(^|\.)(avature\.net|careers\.arcb\.com|apply\.deloitte\.com|careers\.cbre\.com|careers\.ibm\.com|careers\.tql\.com|careers\.mantech\.com)$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const id = (el.id || '').toLowerCase();
+        const desc = `${name} ${id}`;
+        if (/firstname|first_name/.test(desc)) return 'first_name';
+        if (/lastname|last_name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        if (/address|street/.test(desc)) return 'full_address';
+        if (/city/.test(desc)) return 'current_city';
+        if (/state/.test(desc)) return 'current_state';
+        if (/country/.test(desc)) return 'country';
+        return canonicalHint(el);
+      }
     },
 
-    // 30. Freshteam
+    // 32. Gusto
+    {
+      id: 'gusto',
+      name: 'Gusto',
+      matches: hostIs(/(^|\.)gusto\.com$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/applicant_first_name|first_name/i.test(id || name)) return 'first_name';
+        if (/applicant_last_name|last_name/i.test(id || name)) return 'last_name';
+        if (/applicant_email|email/i.test(id || name)) return 'email';
+        if (/applicant_phone|phone/i.test(id || name)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 33. Gem
+    {
+      id: 'gem',
+      name: 'Gem',
+      matches: hostIs(/(^|\.)gem\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (name === 'fullname') return 'full_name';
+        if (name === 'firstname') return 'first_name';
+        if (name === 'lastname') return 'last_name';
+        if (name === 'email') return 'email';
+        if (name === 'phonenumber' || name === 'phone') return 'phone';
+        if (name === 'linkedinurl') return 'linkedin_url';
+        return canonicalHint(el);
+      }
+    },
+
+    // 34. HiringThing / Rippling ATS / White-Label Portals
+    {
+      id: 'hiringthing',
+      name: 'HiringThing',
+      matches: hostIs(/(^|\.)(hiringthing\.com|oasisrecruit\.com|elevate-ats\.com|prismhr-hire\.com|gnahiring\.com)$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/first_name/i.test(name)) return 'first_name';
+        if (/last_name/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        if (/address/i.test(name)) return 'full_address';
+        if (/city/i.test(name)) return 'current_city';
+        if (/state/i.test(name)) return 'current_state';
+        if (/zip/i.test(name)) return 'zip_code';
+        return canonicalHint(el);
+      }
+    },
+
+    // 35. JobScore
+    {
+      id: 'jobscore',
+      name: 'JobScore',
+      matches: hostIs(/(^|\.)jobscore\.com$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/candidate_first_name|first_name/i.test(id || name)) return 'first_name';
+        if (/candidate_last_name|last_name/i.test(id || name)) return 'last_name';
+        if (/candidate_email|email/i.test(id || name)) return 'email';
+        if (/candidate_phone|phone/i.test(id || name)) return 'phone';
+        if (/city/i.test(id || name)) return 'current_city';
+        if (/state/i.test(id || name)) return 'current_state';
+        if (/postal_code|zip/i.test(id || name)) return 'zip_code';
+        return canonicalHint(el);
+      }
+    },
+
+    // 36. CareerPlug
+    {
+      id: 'careerplug',
+      name: 'CareerPlug',
+      matches: hostIs(/(^|\.)(careerplug\.com|sfagentjobs\.com|sfagentcareers\.com|apscareerportal\.com)$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/applicant_first_name|first_name/i.test(id || name)) return 'first_name';
+        if (/applicant_last_name|last_name/i.test(id || name)) return 'last_name';
+        if (/applicant_email|email/i.test(id || name)) return 'email';
+        if (/applicant_phone|phone/i.test(id || name)) return 'phone';
+        if (/applicant_address|address/i.test(id || name)) return 'full_address';
+        if (/applicant_city|city/i.test(id || name)) return 'current_city';
+        if (/applicant_state|state/i.test(id || name)) return 'current_state';
+        if (/applicant_zip|zip/i.test(id || name)) return 'zip_code';
+        return canonicalHint(el);
+      }
+    },
+
+    // 37. CatsOne
+    {
+      id: 'catsone',
+      name: 'CatsOne',
+      matches: hostIs(/(^|\.)catsone\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (name === 'first_name') return 'first_name';
+        if (name === 'last_name') return 'last_name';
+        if (name === 'email') return 'email';
+        if (name === 'phone') return 'phone';
+        if (name === 'address') return 'full_address';
+        if (name === 'city') return 'current_city';
+        if (name === 'state') return 'current_state';
+        if (name === 'zip') return 'zip_code';
+        return canonicalHint(el);
+      }
+    },
+
+    // 38. Recruiterflow
+    {
+      id: 'recruiterflow',
+      name: 'Recruiterflow',
+      matches: hostIs(/(^|\.)recruiterflow\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (name === 'name') return 'full_name';
+        if (name === 'email') return 'email';
+        if (name === 'phone') return 'phone';
+        if (name === 'location') return 'current_city';
+        if (name === 'linkedin') return 'linkedin_url';
+        return canonicalHint(el);
+      }
+    },
+
+    // 39. Trakstar Hire (Recruiterbox)
+    {
+      id: 'trakstar',
+      name: 'Trakstar Hire',
+      matches: hostIs(/(^|\.)(trakstar\.com|recruiterbox\.com)$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/candidate_name|name/i.test(name)) return 'full_name';
+        if (/candidate_email|email/i.test(name)) return 'email';
+        if (/candidate_phone|phone/i.test(name)) return 'phone';
+        if (/candidate_city|city/i.test(name)) return 'current_city';
+        return canonicalHint(el);
+      }
+    },
+
+    // 40. Polymer
+    {
+      id: 'polymer',
+      name: 'Polymer',
+      matches: hostIs(/(^|\.)polymer\.co$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/firstname/i.test(name)) return 'first_name';
+        if (/lastname/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        if (/linkedin/i.test(name)) return 'linkedin_url';
+        return canonicalHint(el);
+      }
+    },
+
+    // 41. GoHire
+    {
+      id: 'gohire',
+      name: 'GoHire',
+      matches: hostIs(/(^|\.)gohire\.io$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/first_name/i.test(name)) return 'first_name';
+        if (/last_name/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 42. TriNet Hire
+    {
+      id: 'trinethire',
+      name: 'TriNet Hire',
+      matches: hostIs(/(^|\.)trinethire\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/first_name/i.test(name)) return 'first_name';
+        if (/last_name/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 43. Kula
+    {
+      id: 'kula',
+      name: 'Kula',
+      matches: hostIs(/(^|\.)kula\.ai$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/firstname/i.test(name)) return 'first_name';
+        if (/lastname/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 44. Dover
+    {
+      id: 'dover',
+      name: 'Dover',
+      matches: hostIs(/(^|\.)dover\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/firstname/i.test(name)) return 'first_name';
+        if (/lastname/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        if (/linkedin/i.test(name)) return 'linkedin_url';
+        return canonicalHint(el);
+      }
+    },
+
+    // 45. Toast Careers
+    {
+      id: 'toasttab',
+      name: 'Toast Careers',
+      matches: hostIs(/(^|\.)toasttab\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/firstname/i.test(name)) return 'first_name';
+        if (/lastname/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 46. HubSpot Careers
+    {
+      id: 'hubspot',
+      name: 'HubSpot Careers',
+      matches: hostIs(/(^|\.)hubspot\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/firstname/i.test(name)) return 'first_name';
+        if (/lastname/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 47. Waymo Careers
+    {
+      id: 'waymo',
+      name: 'Waymo Careers',
+      matches: hostIs(/(^|\.)withwaymo\.com$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/first_name/i.test(name)) return 'first_name';
+        if (/last_name/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 48. Y Combinator / Work at a Startup
+    {
+      id: 'ycombinator',
+      name: 'Y Combinator',
+      matches: hostIs(/(^|\.)(ycombinator\.com|workatastartup\.com)$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/first_name|firstname/i.test(name)) return 'first_name';
+        if (/last_name|lastname/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        if (/linkedin/i.test(name)) return 'linkedin_url';
+        if (/github/i.test(name)) return 'github_url';
+        return canonicalHint(el);
+      }
+    },
+
+    // 49. GovernmentJobs / NeoGov
+    {
+      id: 'governmentjobs',
+      name: 'GovernmentJobs (NeoGov)',
+      matches: hostIs(/(^|\.)(governmentjobs|neogov)\.com$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/txtfirstname|firstname/i.test(id || name)) return 'first_name';
+        if (/txtlastname|lastname/i.test(id || name)) return 'last_name';
+        if (/txtemail|email/i.test(id || name)) return 'email';
+        if (/txthomephone|txtmobilephone|phone/i.test(id || name)) return 'phone';
+        if (/txtaddress|address/i.test(id || name)) return 'full_address';
+        if (/txtcity|city/i.test(id || name)) return 'current_city';
+        if (/ddlstate|state/i.test(id || name)) return 'current_state';
+        if (/txtzip|zip/i.test(id || name)) return 'zip_code';
+        return canonicalHint(el);
+      }
+    },
+
+    // 50. USAJobs
+    {
+      id: 'usajobs',
+      name: 'USAJobs',
+      matches: hostIs(/(^|\.)usajobs\.gov$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 51. WOTC Tax Credit Questionnaires (Walton, TaxCreditCo, ADP TCS, JobCredits)
+    {
+      id: 'taxcredits',
+      name: 'WOTC Tax Credit Questionnaire',
+      matches: hostIs(/(^|\.)(waltonmgt\.com|taxcreditco\.com|jobcredits\.com|tcs\.adp\.com)$/i),
+      hint: el => {
+        const name = (el.getAttribute('name') || el.id || '').toLowerCase();
+        if (/first_name|fname/i.test(name)) return 'first_name';
+        if (/last_name|lname/i.test(name)) return 'last_name';
+        if (/appssn|ssn/i.test(name)) return ''; // Security: do not auto-fill SSN
+        if (/address/i.test(name)) return 'full_address';
+        if (/city/i.test(name)) return 'current_city';
+        if (/state/i.test(name)) return 'current_state';
+        if (/zip/i.test(name)) return 'zip_code';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 52. Freshteam
     {
       id: 'freshteam',
       name: 'Freshteam',
       matches: hostIs(/(^|\.)freshteam\.com$/i),
-      hint: el => canonicalHint(el)
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (/first_name/i.test(name)) return 'first_name';
+        if (/last_name/i.test(name)) return 'last_name';
+        if (/email/i.test(name)) return 'email';
+        if (/phone/i.test(name)) return 'phone';
+        return canonicalHint(el);
+      }
     },
 
-    // 31. Comeet
+    // 53. Comeet
     {
       id: 'comeet',
       name: 'Comeet',
-      matches: hostIs(/(^|\.)comeet\.com$/i),
+      matches: hostIs(/(^|\.)comeet\.(com|co)$/i),
       hint: el => {
         const name = (el.getAttribute('name') || '').toLowerCase();
         if (name === 'name') return 'full_name';
@@ -466,139 +1033,49 @@
       }
     },
 
-    // 32. Keka / Foxsense
+    // 54. Keka / Foxsense
     {
       id: 'keka',
       name: 'Keka',
       matches: hostIs(/(^|\.)(keka\.com|foxsense\.com)$/i),
       hint: el => {
-        const formGroup = el.closest('.form-group, .keka-form-group');
+        const formGroup = el.closest ? el.closest('.form-group, .keka-form-group') : null;
         const label = formGroup ? (formGroup.querySelector('label')?.textContent || '') : '';
         return label || canonicalHint(el);
       }
     },
 
-    // 33. Recruit.io
-    {
-      id: 'recruitio',
-      name: 'Recruit.io',
-      matches: hostIs(/(^|\.)recruit\.io$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 34. Cruit
-    {
-      id: 'cruit',
-      name: 'Cruit',
-      matches: hostIs(/(^|\.)cruit\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 35. Crelly
-    {
-      id: 'crelly',
-      name: 'Crelly',
-      matches: hostIs(/(^|\.)crelly\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 36. Sprocket
-    {
-      id: 'sprocket',
-      name: 'Sprocket',
-      matches: hostIs(/(^|\.)sprocket\.live$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 37. Sona
-    {
-      id: 'sona',
-      name: 'Sona',
-      matches: hostIs(/(^|\.)sona\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 38. Paradox
-    {
-      id: 'paradox',
-      name: 'Paradox',
-      matches: hostIs(/(^|\.)paradox\.ai$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 39. Moka
-    {
-      id: 'moka',
-      name: 'Moka',
-      matches: hostIs(/(^|\.)moka\.io$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 40. Movio
-    {
-      id: 'movio',
-      name: 'Movio',
-      matches: hostIs(/(^|\.)movio\.co$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 41. Brax
-    {
-      id: 'brax',
-      name: 'Brax',
-      matches: hostIs(/(^|\.)brax\.(co|com)$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 42. Employment Hero
-    {
-      id: 'employmenthero',
-      name: 'Employment Hero',
-      matches: hostIs(/(^|\.)employmenthero\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 43. Paycor
-    {
-      id: 'paycor',
-      name: 'Paycor',
-      matches: hostIs(/(^|\.)paycor\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 44. isolved
+    // 55. isolved Hire
     {
       id: 'isolved',
-      name: 'isolved',
-      matches: hostIs(/(^|\.)isolved\.com$/i),
-      hint: el => canonicalHint(el)
+      name: 'isolved Hire',
+      matches: hostIs(/(^|\.)(isolved\.com|isolvedhire\.com)$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
     },
 
-    // 45. Vndly
-    {
-      id: 'vndly',
-      name: 'Vndly',
-      matches: hostIs(/(^|\.)vndly\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 46. Xero
-    {
-      id: 'xero',
-      name: 'Xero',
-      matches: hostIs(/(^|\.)xero\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 47. JobDiva
+    // 56. JobDiva
     {
       id: 'jobdiva',
       name: 'JobDiva',
       matches: hostIs(/(^|\.)jobdiva\.com$/i),
-      hint: el => canonicalHint(el)
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
     },
 
-    // 48. LinkedIn
+    // 57. LinkedIn
     {
       id: 'linkedin',
       name: 'LinkedIn',
@@ -619,7 +1096,7 @@
       }
     },
 
-    // 49. Indeed
+    // 58. Indeed
     {
       id: 'indeed',
       name: 'Indeed',
@@ -638,47 +1115,7 @@
       }
     },
 
-    // 50. Glassdoor
-    {
-      id: 'glassdoor',
-      name: 'Glassdoor',
-      matches: hostIs(/(^|\.)glassdoor\.(com|co\.in)$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 51. Monster
-    {
-      id: 'monster',
-      name: 'Monster',
-      matches: hostIs(/(^|\.)monster\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 52. Dice
-    {
-      id: 'dice',
-      name: 'Dice',
-      matches: hostIs(/(^|\.)dice\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 53. ZipRecruiter
-    {
-      id: 'ziprecruiter',
-      name: 'ZipRecruiter',
-      matches: hostIs(/(^|\.)ziprecruiter\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 54. BuiltIn
-    {
-      id: 'builtin',
-      name: 'BuiltIn',
-      matches: hostIs(/(^|\.)builtin\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 55. Wellfound
+    // 59. Wellfound (AngelList)
     {
       id: 'wellfound',
       name: 'Wellfound',
@@ -693,7 +1130,31 @@
       }
     },
 
-    // 56. Naukri
+    // 60. Dice
+    {
+      id: 'dice',
+      name: 'Dice',
+      matches: hostIs(/(^|\.)dice\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 61. ZipRecruiter
+    {
+      id: 'ziprecruiter',
+      name: 'ZipRecruiter',
+      matches: hostIs(/(^|\.)ziprecruiter\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 62. BuiltIn
+    {
+      id: 'builtin',
+      name: 'BuiltIn',
+      matches: hostIs(/(^|\.)builtin\.com$/i),
+      hint: el => canonicalHint(el)
+    },
+
+    // 63. Naukri
     {
       id: 'naukri',
       name: 'Naukri',
@@ -701,7 +1162,7 @@
       hint: el => canonicalHint(el)
     },
 
-    // 57. Foundit (Monster India)
+    // 64. Foundit (Monster India)
     {
       id: 'foundit',
       name: 'Foundit',
@@ -709,7 +1170,7 @@
       hint: el => canonicalHint(el)
     },
 
-    // 58. CutShort
+    // 65. CutShort
     {
       id: 'cutshort',
       name: 'CutShort',
@@ -717,7 +1178,7 @@
       hint: el => canonicalHint(el)
     },
 
-    // 59. Bayt
+    // 66. Bayt
     {
       id: 'bayt',
       name: 'Bayt',
@@ -725,7 +1186,7 @@
       hint: el => canonicalHint(el)
     },
 
-    // 60. Jobstreet
+    // 67. Jobstreet
     {
       id: 'jobstreet',
       name: 'Jobstreet',
@@ -733,7 +1194,7 @@
       hint: el => canonicalHint(el)
     },
 
-    // 61. Welcome to the Jungle / Otta
+    // 68. Welcome to the Jungle / Otta
     {
       id: 'welcometothejungle',
       name: 'Welcome to the Jungle',
@@ -741,7 +1202,7 @@
       hint: el => canonicalHint(el)
     },
 
-    // 62. SEEK
+    // 69. SEEK
     {
       id: 'seek',
       name: 'SEEK',
@@ -749,23 +1210,7 @@
       hint: el => canonicalHint(el)
     },
 
-    // 63. Jobserve
-    {
-      id: 'jobserve',
-      name: 'Jobserve',
-      matches: hostIs(/(^|\.)jobserve\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 64. Totaljobs
-    {
-      id: 'totaljobs',
-      name: 'Totaljobs',
-      matches: hostIs(/(^|\.)totaljobs\.com$/i),
-      hint: el => canonicalHint(el)
-    },
-
-    // 65. Reed
+    // 70. Reed
     {
       id: 'reed',
       name: 'Reed',
@@ -773,35 +1218,157 @@
       hint: el => canonicalHint(el)
     },
 
-    // 66. SimplyHired
+    // 71. Totaljobs
     {
-      id: 'simplyhired',
-      name: 'SimplyHired',
-      matches: hostIs(/(^|\.)simplyhired\.com$/i),
+      id: 'totaljobs',
+      name: 'Totaljobs',
+      matches: hostIs(/(^|\.)totaljobs\.com$/i),
       hint: el => canonicalHint(el)
     },
 
-    // 67. LHH
+    // 72. Amazon Careers & Amazon University
     {
-      id: 'lhh',
-      name: 'LHH',
-      matches: hostIs(/(^|\.)lhh\.com$/i),
-      hint: el => canonicalHint(el)
+      id: 'amazon',
+      name: 'Amazon Jobs',
+      matches: hostIs(/(^|\.)amazon(university)?\.jobs$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        if (/city/.test(desc)) return 'current_city';
+        if (/address|street/.test(desc)) return 'full_address';
+        return canonicalHint(el);
+      }
     },
 
-    // 68. Ximble
+    // 73. Google Careers
     {
-      id: 'ximble',
-      name: 'Ximble',
-      matches: hostIs(/(^|\.)ximble\.com$/i),
-      hint: el => canonicalHint(el)
+      id: 'google',
+      name: 'Google Careers',
+      matches: host => /(^|\.)google\.com$/i.test(String(host || '')) && (typeof location === 'undefined' || location.pathname.includes('/about/careers')),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
     },
 
-    // 69. Big Tech Direct Platforms (Google, Amazon, Apple, Meta, Tesla, Uber, TikTok)
+    // 74. Apple Jobs
     {
-      id: 'bigtech',
-      name: 'Enterprise Career Portals',
-      matches: host => /(amazon\.jobs|jobs\.apple\.com|careers\.google\.com|metacareers\.com|uber\.com|careers\.tiktok\.com|jobs\.bytedance\.com)$/i.test(String(host || '').toLowerCase()),
+      id: 'apple',
+      name: 'Apple Jobs',
+      matches: hostIs(/(^|\.)jobs\.apple\.com$/i),
+      hint: el => {
+        const id = (el.id || '').toLowerCase();
+        const desc = descriptor(el);
+        if (id === 'firstname' || /first[\s._-]*name/.test(desc)) return 'first_name';
+        if (id === 'lastname' || /last[\s._-]*name/.test(desc)) return 'last_name';
+        if (id === 'email' || /email/.test(desc)) return 'email';
+        if (id === 'phone' || /phone/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 75. Meta Careers
+    {
+      id: 'meta',
+      name: 'Meta Careers',
+      matches: hostIs(/(^|\.)metacareers\.com$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 76. Tesla Careers
+    {
+      id: 'tesla',
+      name: 'Tesla Careers',
+      matches: host => /(^|\.)(jobs\.tesla\.com|tesla\.com)$/i.test(String(host || '')) && (typeof location === 'undefined' || location.pathname.includes('/careers') || location.hostname.includes('jobs.tesla')),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (name === 'first_name') return 'first_name';
+        if (name === 'last_name') return 'last_name';
+        if (name === 'email') return 'email';
+        if (name === 'phone') return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 77. TikTok / ByteDance Careers
+    {
+      id: 'tiktok',
+      name: 'TikTok / ByteDance',
+      matches: hostIs(/(^|\.)(lifeattiktok\.com|careers\.tiktok\.com|jobs\.bytedance\.com|tiktokusds\.com|joinbytedance\.com)$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/mobile|phone/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 78. Uber Careers
+    {
+      id: 'uber',
+      name: 'Uber Careers',
+      matches: host => /(^|\.)uber\.com$/i.test(String(host || '')) && (typeof location === 'undefined' || location.pathname.includes('/careers')),
+      hint: el => {
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        if (name === 'firstname') return 'first_name';
+        if (name === 'lastname') return 'last_name';
+        if (name === 'email') return 'email';
+        if (name === 'phone') return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 79. Walmart Careers
+    {
+      id: 'walmart',
+      name: 'Walmart Careers',
+      matches: hostIs(/(^|\.)careers\.walmart\.com$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 80. Cisco Careers
+    {
+      id: 'cisco',
+      name: 'Cisco Careers',
+      matches: hostIs(/(^|\.)careers\.cisco\.com$/i),
+      hint: el => {
+        const desc = descriptor(el);
+        if (/first[\s._-]*name/.test(desc)) return 'first_name';
+        if (/last[\s._-]*name/.test(desc)) return 'last_name';
+        if (/email/.test(desc)) return 'email';
+        if (/phone|mobile/.test(desc)) return 'phone';
+        return canonicalHint(el);
+      }
+    },
+
+    // 81. Jacobs Careers
+    {
+      id: 'jacobs',
+      name: 'Jacobs Careers',
+      matches: hostIs(/(^|\.)careers\.jacobs\.com$/i),
       hint: el => canonicalHint(el)
     }
   ];
@@ -821,7 +1388,13 @@
 
   // Active Adapter Resolver: a portal-specific adapter always wins over the generic fallback.
   root.resolveActiveAdapter = function(urlOrHost) {
-    const host = (urlOrHost || (typeof window !== 'undefined' ? window.location.hostname : '')).toLowerCase();
+    let raw = String(urlOrHost || (typeof window !== 'undefined' ? window.location?.hostname : (typeof location !== 'undefined' ? location?.hostname : '')) || '').toLowerCase();
+    try {
+      if (raw.includes('://')) {
+        raw = new URL(raw).hostname.toLowerCase();
+      }
+    } catch {}
+    const host = raw;
     const list = root.NextkinAdapters || [];
     let generic = null;
     for (const a of list) {

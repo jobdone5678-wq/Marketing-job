@@ -22,7 +22,7 @@ export function ResumeUploadReview({
   const [processingNote,setProcessingNote]=useState('');
   const [fileName, setFileName] = useState('');
 
-  const broadcastResume = (docId: string, extData: ResumeExtraction, fName?: string) => {
+  const broadcastResume = (docId: string, extData: ResumeExtraction, fName?: string, savedCandidateId?: string) => {
     if (typeof window === 'undefined') return;
     try {
       const f = (extData.fields || {}) as Record<string, unknown>;
@@ -41,6 +41,7 @@ export function ResumeUploadReview({
       const city = String(f?.current_city || f?.city || '');
       const state = String(f?.current_state || f?.state || '');
       const loc = [city, state].filter(Boolean).join(', ') || String(f?.full_address || f?.preferred_locations || '');
+      const resolvedCandidateId = savedCandidateId || candidateId || docId;
 
       const isAuthorizedInUsa = typeof f?.authorized_in_usa === 'boolean'
         ? f.authorized_in_usa
@@ -57,7 +58,8 @@ export function ResumeUploadReview({
         : (visaStatus || 'Requires sponsorship');
 
       const candPayload = {
-        id: docId,
+        id: resolvedCandidateId,
+        candidate_id: resolvedCandidateId,
         full_name: fn,
         first_name: fn.split(/\s+/)[0] || '',
         last_name: fn.split(/\s+/).slice(1).join(' ') || '',
@@ -81,6 +83,15 @@ export function ResumeUploadReview({
         work_authorization: workAuth,
         work_auth: workAuth,
         linkedin_url: String(f?.linkedin_url || ''),
+        highest_qualification: String(f?.highest_qualification || ''),
+        degree: String(f?.highest_qualification || ''),
+        university_name: String(f?.university_name || ''),
+        school: String(f?.university_name || ''),
+        graduation_year: String(f?.graduation_year || ''),
+        total_experience_years: f?.total_experience_years ? String(f.total_experience_years) : null,
+        certifications: String(f?.certifications || ''),
+        employment_history: Array.isArray(f?.employment_history) ? f.employment_history : [],
+        education_history: Array.isArray(f?.education_history) ? f.education_history : [],
         source_text: rawText,
         confirmed_facts: {
           full_name: fn,
@@ -101,6 +112,13 @@ export function ResumeUploadReview({
           work_auth: workAuth,
           primary_skills: Array.isArray(skills) ? skills.join(', ') : String(skills || ''),
           linkedin_url: String(f?.linkedin_url || ''),
+          highest_qualification: String(f?.highest_qualification || ''),
+          degree: String(f?.highest_qualification || ''),
+          university_name: String(f?.university_name || ''),
+          school: String(f?.university_name || ''),
+          graduation_year: String(f?.graduation_year || ''),
+          total_experience_years: f?.total_experience_years ? String(f.total_experience_years) : null,
+          certifications: String(f?.certifications || ''),
           summary: dynamicBio,
           bio: dynamicBio,
           raw_text: rawText,
@@ -264,14 +282,14 @@ export function ResumeUploadReview({
         employment_history: extraction.employmentHistory,
         education_history: extraction.educationHistory
       };
-      await api(`/api/resumes/${documentId}/confirm`, {
+      const result = await api<{ candidateId?: string }>(`/api/resumes/${documentId}/confirm`, {
         method: 'POST',
         body: JSON.stringify({
           version: null,
           fields
         })
       });
-      broadcastResume(documentId, extraction, fileName);
+      broadcastResume(documentId, extraction, fileName, result?.candidateId);
     } catch (e) {
       setError((e as Error).message);
     } finally {

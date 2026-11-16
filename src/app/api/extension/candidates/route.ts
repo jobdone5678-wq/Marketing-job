@@ -50,10 +50,10 @@ async function ownCandidates(profileId: string, status: 'confirmed' | 'legacy_un
     .from('candidates')
     .select(CANDIDATE_FIELDS)
     .eq('provenance_status', status)
-    .eq('user_id', profileId)
+    .or(`user_id.eq.${profileId},created_by.eq.${profileId}`)
     .order('updated_at', { ascending: false })
     .order('id')
-    .limit(1);
+    .limit(50);
   checkDb(error);
   return (data || []) as Candidate[];
 }

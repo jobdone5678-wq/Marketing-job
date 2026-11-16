@@ -58,10 +58,42 @@
       token = 'nextkin_local_' + (candidate.id || 'candidate').replace(/[^A-Za-z0-9_-]/g, '_').padEnd(20, '0');
     }
 
+    let savedProfiles = {};
+    let savedResumes = {};
+    try {
+      const existing = await chrome.storage.local.get(['savedProfiles', 'savedResumes']);
+      savedProfiles = existing?.savedProfiles || {};
+      savedResumes = existing?.savedResumes || {};
+    } catch {}
+
+    const candId = candidate?.id || (candidate?.email ? candidate.email.toLowerCase() : 'cand_' + Date.now());
+    if (candidate) {
+      if (!candidate.id) candidate.id = candId;
+      savedProfiles[candId] = candidate;
+    }
+
+    let resumeDoc = null;
+    if (resume) {
+      const docId = resume.id || ('doc_' + candId);
+      resumeDoc = {
+        ...resume,
+        id: docId,
+        candidate_id: candId,
+        candidate_name: candidate?.full_name || '',
+        filename: resume.filename || `${candidate?.full_name || 'Candidate'}_Resume.pdf`,
+        status: 'confirmed',
+        raw_text: resume.raw_text || resume.source_text || ''
+      };
+      savedResumes[docId] = resumeDoc;
+    }
+
     const toStore = {
       origin: location.origin,
-      ...(candidate ? { candidateProfile: candidate } : {}),
-      ...(resume ? { resumeData: resume } : {}),
+      activeCandidateId: candId,
+      candidateProfile: candidate, // active candidate profile
+      resumeData: resumeDoc || resume, // active resume
+      savedProfiles, // all candidates preserved individually without wiping
+      savedResumes, // all resumes preserved individually without wiping
       ...(token ? { token } : {}),
       ...(user ? { user } : {})
     };
