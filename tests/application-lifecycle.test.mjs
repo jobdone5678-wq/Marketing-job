@@ -1,28 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { registerHooks } from 'node:module';
 import { isAppliedApplication, applicationUrlKey, withoutAppliedJobs } from '../src/lib/jobs/application-state.ts';
 
-function allowedCaptureUrl(observed, application) {
-  try {
-    const current = new URL(observed), expected = new URL(application);
-    if (current.protocol !== 'https:' || current.origin !== expected.origin || current.username || current.password) return false;
-    const observedKey = applicationUrlKey(observed), expectedKey = applicationUrlKey(application);
-    return !!observedKey && observedKey === expectedKey;
-  } catch { return false; }
-}
-
-function validateObservation(status, evidence) {
-  if (status === 'started') return false;
-  if (status === 'submitted' || status === 'confirmed') {
-    const text = evidence.replace(/\s+/g, ' ').trim();
-    if (/\b(?:if|once|after|when|before|until|unless)\b.{0,50}\b(?:application|submit(?:ted)?|receiv(?:e|ed))\b|\b(?:not (?:been )?(?:submitted|received|sent)|unable to submit|submission failed|not successful)\b/i.test(text)) return false;
-    if (/^(?:thank you for (?:applying|your application)|(?:your )?application (?:has been |was |is )?(?:successfully )?(?:submitted|received|sent)|(?:we|we've) (?:have )?received your application|you(?: have|'ve) successfully applied)(?=$|[.!,:]|\s+(?:to|for|successfully)\b)/i.test(text)) return true;
-    if (/\b(?:confirmation|thank[-_]?you|thankyou|applied|application[-_]submitted|application[-_]success|submission[-_]success|success)\b/i.test(text)) return true;
-    return false;
-  }
-  if (status === 'failed') return /required|invalid|unable to submit|submission failed|error/i.test(evidence);
-  return ['in_progress', 'submit_attempted'].includes(status);
-}
+// Next.js resolves this extensionless TypeScript import. Resolve it in Node's test runner too.
+const hooks = registerHooks({
+  resolve(specifier, context, nextResolve) {
+    return nextResolve(specifier === '../jobs/application-state' ? specifier + '.ts' : specifier, context);
+  },
+});
+const { allowedCaptureUrl, validateObservation } = await import('../src/lib/capture/validation.ts');
+hooks.deregister();
 
 test('Application Lifecycle: isAppliedApplication enforces strict confirmation rules', () => {
   // Started or in-progress states must NEVER be considered applied
@@ -81,6 +69,7 @@ test('Application Lifecycle: validateObservation accepts hardened confirmation h
   assert.equal(validateObservation('confirmed', 'Thank you for applying to Acme Corp'), true);
   assert.equal(validateObservation('confirmed', 'Your application has been received'), true);
   assert.equal(validateObservation('confirmed', 'Application submitted successfully'), true);
+  assert.equal(validateObservation('confirmed', 'Submission received'), true);
   assert.equal(validateObservation('submitted', 'Thank you for your application'), true);
 
   // Accepts URL path evidence
@@ -92,6 +81,7 @@ test('Application Lifecycle: validateObservation accepts hardened confirmation h
   // Rejects false-positive phrases
   assert.equal(validateObservation('confirmed', 'Your application was not submitted due to an error'), false);
   assert.equal(validateObservation('confirmed', 'If your application is received before tomorrow'), false);
+  assert.equal(validateObservation('confirmed', 'Application confirmation settings'), false);
 });
 
 test('Application Lifecycle: allowedCaptureUrl matches confirmation URLs against original job application URL', () => {
@@ -103,6 +93,21 @@ test('Application Lifecycle: allowedCaptureUrl matches confirmation URLs against
   assert.equal(allowedCaptureUrl(confirmationUrl, applicationUrl), true);
   assert.equal(allowedCaptureUrl(thankYouUrl, applicationUrl), true);
   assert.equal(allowedCaptureUrl(appliedUrl, applicationUrl), true);
+  assert.equal(allowedCaptureUrl(`${applicationUrl}/apply/application-submitted`, applicationUrl), true);
+  assert.equal(allowedCaptureUrl(confirmationUrl, applicationUrl, 'confirmed', 'URL confirmation path: /acme/jobs/998877/confirmation'), true);
+  assert.equal(allowedCaptureUrl(applicationUrl, applicationUrl, 'confirmed', 'URL confirmation path: /acme/jobs/998877/confirmation'), false);
+});
+
+test('Application Lifecycle: a shared receipt requires success text and the same portal', () => {
+  const posting = 'https://jobs.lever.co/acme/posting-123/apply';
+  const receipt = 'https://jobs.lever.co/acme/thanks';
+  const heading = 'Thank you for applying';
+  assert.equal(allowedCaptureUrl(receipt, posting, 'confirmed', heading), true);
+  assert.equal(allowedCaptureUrl(receipt, posting, 'confirmed', 'URL confirmation path: /acme/thanks'), false);
+  assert.equal(allowedCaptureUrl(receipt, posting, 'in_progress', heading), false);
+  assert.equal(allowedCaptureUrl(receipt + '?jobId=other', posting, 'confirmed', heading), false);
+  assert.equal(allowedCaptureUrl('https://jobs.lever.co/other/thanks', posting, 'confirmed', heading), false);
+  assert.equal(allowedCaptureUrl('https://example.test/thanks', posting, 'confirmed', heading), false);
 });
 
 test('Application Lifecycle: external job payload retains all required fields for outside_jobs', () => {

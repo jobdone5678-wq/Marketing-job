@@ -777,8 +777,17 @@ $('autofill').addEventListener('click', async () => {
   const frame = currentForm;
   const session = connection;
   const profile = candidate;
-  const job = activeJob;
+  // Ensure we have the latest job details
+  const job = activeJob || (await scan(tab)).find(f => f.result?.job)?.result.job;
   const useAI = $('ai-screening').checked;
+  
+  if (!job) {
+    notice('notice', 'Could not detect job details. Please ensure the job page is open.', true);
+    busy = false;
+    $('autofill').disabled = false;
+    return;
+  }
+  
   busy = true;
   $('autofill').disabled = true;
   $('review-answers').disabled = true;
@@ -826,6 +835,7 @@ $('autofill').addEventListener('click', async () => {
       notice('notice', completed.filled.some(field => field.ai) ? 'Review the AI drafts before submitting.' : 'AI found no supported answers for the remaining questions.');
     }
     // Option A: Only save the job after successful autofill
+    console.log('Attempting to save external job:', job);
     await api('save-external-job', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -833,7 +843,10 @@ $('autofill').addEventListener('click', async () => {
         matchScore: null, matchedSkills: [], missingSkills: [], extractedSkills: [],
       }),
     }, session);
+    lastCapture = { ...job, ownerId: connection.user.id };
+    console.log('Job saved successfully');
   } catch (error) {
+    console.error('Failed to save job:', error);
     notice('notice', error.message, true);
   } finally {
     busy = false;

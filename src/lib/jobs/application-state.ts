@@ -21,8 +21,8 @@ export function applicationUrlKey(value:string|null|undefined){
   const greenhouse=url.hostname==='greenhouse.io'||url.hostname.endsWith('.greenhouse.io');
   for(const [name,value] of url.searchParams){const key=name.toLowerCase();if(fields.has(key)||(greenhouse&&['for','token'].includes(key)))identity.append(key,value);}
   identity.sort();
-  const path = url.pathname.replace(/\/(?:application|apply)(?:\/(?:confirmation|thank[-_]?you|thankyou|success|applied))?\/?$/i,'')
-    .replace(/\/(?:confirmation|thank[-_]?you|thankyou|success|applied)\/?$/i,'').replace(/\/$/,'');
+  const path = url.pathname.replace(/\/(?:confirmation|thank[-_]?you|thankyou|thanks|applied|application[-_](?:submitted|success)|submission[-_]success|success|submitted)\/?$/i,'')
+    .replace(/\/(?:application|apply)\/?$/i,'').replace(/\/$/,'');
   const postingPath = /(^|\.)keka\.com$/i.test(url.hostname) ? path.replace(/^\/careers\/applyjob\/(\d+)$/i, '/careers/jobdetails/$1') : path;
   return url.origin+postingPath+(identity.size?'?'+identity.toString():'');
  }catch{return null;}

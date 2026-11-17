@@ -8,7 +8,7 @@
     /\b(?:thank you for (?:applying|your application)|(?:we|we've) received your application)\b/i
   ];
 
-  const confirmationUrlPattern = /(?:\/|^)(?:confirmation|thank[-_]?you|thankyou|applied|application[-_]submitted|application[-_]success|submission[-_]success|success|submitted)(?:\/|$|\?|#)/i;
+  const confirmationUrlPattern = /\/(?:confirmation|thank[-_]?you|thankyou|thanks|applied|application[-_]submitted|application[-_]success|submission[-_]success|success|submitted)\/?$/i;
 
   const selectors = 'h1, h2, h3, [role="status"], [role="alert"], [data-testid*="success" i], [data-testid*="confirmation" i], main p';
   let timer;
@@ -30,13 +30,6 @@
   function detectConfirmation() {
     if (hasActiveSubmitButton()) return null;
 
-    // 1. Check URL path (e.g. /confirmation, /thank-you, /applied, /success)
-    const pathname = window.location.pathname.toLowerCase();
-    if (confirmationUrlPattern.test(pathname)) {
-      return `URL confirmation path: ${pathname}`;
-    }
-
-    // 2. Check visible headings and status banners
     const candidates = [...document.querySelectorAll(selectors)];
     for (const element of candidates) {
       if (!isVisible(element) || element.closest('footer, [hidden], [aria-hidden="true"]')) continue;
@@ -56,7 +49,8 @@
       }
     }
 
-    return null;
+    const pathname = window.location.pathname.toLowerCase();
+    return confirmationUrlPattern.test(pathname) ? `URL confirmation path: ${pathname}` : null;
   }
 
   async function check() {
@@ -67,7 +61,7 @@
     pending = true;
     attempts++;
     try {
-      if (await chrome.runtime.sendMessage({ type: 'application-confirmation', evidence, status: 'confirmed' })) {
+      if (await chrome.runtime.sendMessage({ type: 'application-confirmation', evidence })) {
         observer.disconnect();
         clearTimeout(timer);
         return;

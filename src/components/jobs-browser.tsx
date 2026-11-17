@@ -76,6 +76,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [candidateId, setCandidateId] = useState('');
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
+  const applicationCandidateId = recommendation?.candidateId || candidateId || candidates[0]?.id;
   const [dbLoading, setDbLoading] = useState(true);
   const [reload, setReload] = useState(0);
   const liveRequest = useRef(0);
@@ -155,8 +156,16 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   };
 
   const handleApplyDirectly = async (job: LiveJob | StoredJob) => {
+    if (!applicationCandidateId) {
+      setError('Set up your candidate profile before starting a tracked application.');
+      return;
+    }
     const tab = window.open('about:blank', '_blank');
-    if (tab) tab.opener = null;
+    if (!tab) {
+      setError('Allow pop-ups for this workspace to open the application.');
+      return;
+    }
+    tab.opener = null;
     const isStored = 'id' in job;
     const contentHash = isStored ? (job as StoredJob).id : (job as LiveJob).content_hash;
     setApplyingJobHash(contentHash);
@@ -164,41 +173,30 @@ export function JobsBrowser({ provider }: { provider?: string }) {
       let targetJobId = '';
       if (!isStored) {
         const live = job as LiveJob;
-        try {
-          const result = await api<{ jobId: string }>('/api/jobs/import', {
-            method: 'POST',
-            body: JSON.stringify({
-              provider: live.provider,
-              board: live.board_slug,
-              externalId: live.external_id,
-            }),
-          });
-          targetJobId = result.jobId;
-        } catch {}
+        const result = await api<{ jobId: string }>('/api/jobs/import', {
+          method: 'POST',
+          body: JSON.stringify({
+            provider: live.provider,
+            board: live.board_slug,
+            externalId: live.external_id,
+          }),
+        });
+        targetJobId = result.jobId;
       } else {
         targetJobId = (job as StoredJob).id;
       }
 
-      const activeCandId = candidateId || recommendation?.candidateId || candidates[0]?.id;
-      let appUrl = job.application_url;
-
-      if (activeCandId && targetJobId) {
-        try {
-          const r = await api<{ intent: { id: string; job: { application_url: string } } }>('/api/application-intents', {
-            method: 'POST',
-            body: JSON.stringify({ candidateId: activeCandId, jobId: targetJobId }),
-          });
-          if (r?.intent?.id) {
-            const u = new URL(r.intent.job?.application_url || appUrl);
-            u.hash = 'marketing-intent=' + r.intent.id;
-            appUrl = u.toString();
-          }
-        } catch {}
-      }
-
-      if (tab) tab.location.href = appUrl;
-    } catch {
-      if (tab) tab.location.href = job.application_url;
+      const { intent } = await api<{ intent: { id: string; job: { application_url: string } } }>('/api/application-intents', {
+        method: 'POST',
+        body: JSON.stringify({ candidateId: applicationCandidateId, jobId: targetJobId }),
+      });
+      const appUrl = new URL(intent.job.application_url);
+      appUrl.hash = 'marketing-intent=' + intent.id;
+      tab.location.href = appUrl.toString();
+      setError('');
+    } catch (error) {
+      tab.close();
+      setError((error as Error).message);
     } finally {
       setApplyingJobHash('');
     }
@@ -361,7 +359,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   // Real-time updates via Supabase Realtime for immediate UI updates when applications are submitted
   // NOTE: Keep subscription active regardless of applicationView so Applied tab also gets immediate updates
   useEffect(() => {
-    if (!candidateId) return;
+    if (!applicationCandidateId) return;
     const supabase = createClient();
 
     let active = true;
@@ -375,7 +373,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           event: "*",
           schema: "public",
           table: "job_submissions",
-          filter: `candidate_id=eq.${candidateId}`,
+          filter: `candidate_id=eq.${applicationCandidateId}`,
         },
         async (payload) => {
           if (!active) return;
@@ -385,7 +383,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           const wasApplied = isAppliedApplication(previous.status || '', previous.capture_status);
           if (!applied && !wasApplied) return;
           try {
-            const data = await api<AppliedJobsResponse>(`/api/jobs/applications?page=0&candidateId=${encodeURIComponent(candidateId)}`);
+            const data = await api<AppliedJobsResponse>(`/api/jobs/applications?page=0&candidateId=${encodeURIComponent(applicationCandidateId)}`);
             if (active && (mode === 'db' || mode === 'live')) {
               if (mode === 'live') {
                 setLiveJobs(jobs => withoutAppliedJobs(jobs, data.appliedKeys));
@@ -395,8 +393,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
             }
             // Also refresh applied data if we're on the Applied tab
             if (active && applicationView === 'applied') {
-              void api<AppliedJobsResponse>(`/api/jobs/applications?page=${dbPage}${savedFilterParam + candidateParam}`)
-                .then(data => { if (active) { setAppliedData(data); } });
+              setReload(value => value + 1);
             }
             if (applied && !wasApplied) toast.success(`Application submitted: ${row.company_name || 'Application'} — ${row.job_title || 'Role'}`);
           } catch (e) {
@@ -415,7 +412,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           event: "*",
           schema: "public",
           table: "outside_jobs",
-          filter: `candidate_id=eq.${candidateId}`,
+          filter: `candidate_id=eq.${applicationCandidateId}`,
         },
         async (payload) => {
           if (!active) return;
@@ -425,7 +422,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           const wasApplied = previous.status === 'Applied' && !!previous.applied_at;
           if (!applied && !wasApplied) return;
           try {
-            const data = await api<AppliedJobsResponse>(`/api/jobs/applications?page=0&candidateId=${encodeURIComponent(candidateId)}`);
+            const data = await api<AppliedJobsResponse>(`/api/jobs/applications?page=0&candidateId=${encodeURIComponent(applicationCandidateId)}`);
             if (active && (mode === 'db' || mode === 'live')) {
               if (mode === 'live') {
                 setLiveJobs(jobs => withoutAppliedJobs(jobs, data.appliedKeys));
@@ -435,8 +432,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
             }
             // Also refresh applied data if we're on the Applied tab
             if (active && applicationView === 'applied') {
-              void api<AppliedJobsResponse>(`/api/jobs/applications?page=${dbPage}${savedFilterParam + candidateParam}`)
-                .then(data => { if (active) { setAppliedData(data); } });
+              setReload(value => value + 1);
             }
             if (applied && !wasApplied) toast.success(`Application submitted: ${row.company || 'Application'} — ${row.title || 'Role'}`);
           } catch (e) {
@@ -451,7 +447,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
       supabase.removeChannel(portalChannel);
       supabase.removeChannel(outsideChannel);
     };
-  }, [candidateId, mode, applicationView, dbPage, savedFilterParam, candidateParam]);
+  }, [applicationCandidateId, mode, applicationView]);
 
   // Load the candidate's own confirmed profile.
   useEffect(() => {
@@ -461,7 +457,9 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   }, [canSelectCandidate]);
 
   // Active selected detail data
-  const activeJob = mode === 'db' ? selectedDbJob : selectedLiveJob;
+  const activeJob = mode === 'db'
+    ? dbJobs.find(job => job.id === selectedDbJob?.id) ?? dbJobs[0]
+    : liveJobs.find(job => job.content_hash === selectedLiveJob?.content_hash) ?? liveJobs[0];
   const activeExtracted = activeJob?.description ? extractCompleteJobDetails(activeJob.description, activeJob.title) : null;
 
   return (

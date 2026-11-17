@@ -24,20 +24,12 @@ export async function recommendationContext(profile: UserProfile, params: URLSea
     // 2. Fall back to matching by user email
     if (!candidate && profile.email) {
       const { data: byEmail, error: errEmail } = await database().from('candidates').select('*')
-        .ilike('email', profile.email)
+        .ilike('email', profile.email.replace(/[\\%_]/g, '\\$&'))
         .order('updated_at', { ascending: false }).order('id').limit(1).maybeSingle();
       checkDb(errEmail);
       candidate = byEmail as Candidate | null;
     }
 
-    // 3. Fall back to confirmed candidate without user_id or latest confirmed candidate
-    if (!candidate) {
-      const { data: fallback, error: errFallback } = await database().from('candidates').select('*')
-        .eq('provenance_status', 'confirmed')
-        .order('updated_at', { ascending: false }).order('id').limit(1).maybeSingle();
-      checkDb(errFallback);
-      candidate = fallback as Candidate | null;
-    }
   }
 
   // Candidates browse the public feed ranked against their own reviewed resume.

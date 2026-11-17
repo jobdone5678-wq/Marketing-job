@@ -69,7 +69,7 @@ async function recordConfirmation(message, sender) {
   const response = await fetch(context.workspace + '/api/extension/events', {
     ...options, method: 'POST', body: JSON.stringify({
       intentId: context.intentId, eventKey: context.eventKey, attempt: Math.max(1, detail.attempt),
-      status: message.status || 'confirmed', url: url.href, evidence: message.evidence, observedAt: new Date().toISOString(),
+      status: 'confirmed', url: url.href, evidence: message.evidence, observedAt: new Date().toISOString(),
     }),
   });
   if (!response.ok) return false;
