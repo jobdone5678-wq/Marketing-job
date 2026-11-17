@@ -15,6 +15,7 @@ const autoSubmitSchema = z.object({
   companyName: z.string().trim().min(1).max(200), 
   jobTitle: z.string().trim().min(1).max(200),
   jobUrl: z.string().url().max(2000).optional().nullable(), 
+  confirmationUrl: z.url({ protocol: /^https$/ }).max(2000).optional(),
   portalSource: z.string().max(100).optional().nullable(),
   jobLocation: z.string().max(200).optional().nullable(), 
   jobDescription: z.string().optional().nullable(),
@@ -49,6 +50,9 @@ export async function POST(request: Request) {
     
     if (!validateObservation('submitted', body.evidence || '')) {
       throw new CaptureError('Application success was not observed. Review this application manually.', 422);
+    }
+    if (body.confirmationUrl && (!body.jobUrl || !allowedCaptureUrl(body.confirmationUrl, body.jobUrl, 'submitted', body.evidence || ''))) {
+      throw new CaptureError('The confirmation could not be matched to this application.', 422);
     }
 
     let answers: any = null;
@@ -152,9 +156,12 @@ export async function POST(request: Request) {
       // Look for an existing submission with the same candidate and matching job_url
       let existingSubmission: any = null;
       if (safeJobUrl) {
-        const { data: existingSubs, error: existingSubsError } = await database().from('job_submissions')
+        let existingQuery = database().from('job_submissions')
           .select('*').eq('candidate_id', candidateId)
-          .in('status', ['Draft', 'Applied']).order('created_at', { ascending: false }).limit(50);
+          .order('created_at', { ascending: false }).limit(50);
+        if (body.confirmationUrl) existingQuery = existingQuery.eq('job_url', safeJobUrl);
+        else existingQuery = existingQuery.in('status', ['Draft', 'Applied']);
+        const { data: existingSubs, error: existingSubsError } = await existingQuery;
         checkDb(existingSubsError);
         existingSubmission = (existingSubs || []).find(sub => {
           const subKey = applicationUrlKey(sub.job_url);
@@ -168,7 +175,9 @@ export async function POST(request: Request) {
       const userNotes = body.notes || (body.manualAttestation ? 'Manual attestation: ' + (body.evidence || 'Applicant reports submission') : (body.evidence || 'Application submission observed by browser extension'));
       const finalNotes = [atsNote, userNotes].filter(Boolean).join(' • ');
 
-      if (existingSubmission) {
+      if (existingSubmission && body.confirmationUrl && existingSubmission.status !== 'Draft') {
+        result = { submission: existingSubmission, duplicate: existingSubmission.duplicate_flag, replayed: true };
+      } else if (existingSubmission) {
         const updatePayload: any = {
           status: 'Applied',
           capture_status: 'submitted',
@@ -187,6 +196,33 @@ export async function POST(request: Request) {
         existingSubmission.source_type = 'extension';
         if (resolvedJobId) existingSubmission.job_id = resolvedJobId;
         result = { submission: existingSubmission, duplicate: false, replayed: true };
+      } else if (body.confirmationUrl) {
+        // A stable event ID makes retries idempotent without creating a catalog posting for an outside job.
+        const db = database();
+        const { data: inserted, error: insertError } = await db.from('job_submissions').upsert({
+          id: eventKey,
+          candidate_id: candidateId,
+          job_id: resolvedJobId,
+          company_name: body.companyName,
+          job_title: body.jobTitle,
+          job_url: safeJobUrl,
+          portal_source: body.portalSource || new URL(body.confirmationUrl).hostname,
+          job_location: body.jobLocation || null,
+          status: 'Applied',
+          capture_status: 'submitted',
+          source_type: 'extension',
+          notes: finalNotes,
+        }, { onConflict: 'id', ignoreDuplicates: true, defaultToNull: false }).select('*').maybeSingle();
+        checkDb(insertError);
+        if (inserted) {
+          result = { submission: inserted, duplicate: inserted.duplicate_flag };
+        } else {
+          const { data: existing, error } = await db.from('job_submissions').select('*')
+            .eq('id', eventKey).eq('candidate_id', candidateId).eq('job_url', safeJobUrl!).maybeSingle();
+          checkDb(error);
+          if (!existing) throw new CaptureError('Submission event does not match this posting.', 409);
+          result = { submission: existing, duplicate: existing.duplicate_flag, replayed: true };
+        }
       } else {
         try {
           const { data, error } = await database().rpc('record_extension_submission', {
@@ -289,7 +325,12 @@ export async function POST(request: Request) {
       };
 
       const table = database().from('outside_jobs');
-      if (typeof table?.select === 'function' && typeof table?.insert === 'function') {
+      if (body.confirmationUrl) {
+        const { error } = await table.upsert({
+          ...outsideJobPayload, capture_owner_id: actor.id,
+        }, { onConflict: 'capture_owner_id,job_url', defaultToNull: false });
+        checkDb(error);
+      } else if (typeof table?.select === 'function' && typeof table?.insert === 'function') {
         const { data: existingOutside } = await table
           .select('id').eq('candidate_id', candidateId).eq('job_url', safeJobUrl)
           .order('capture_owner_id', { ascending: false, nullsFirst: false })
@@ -302,6 +343,7 @@ export async function POST(request: Request) {
         }
       }
     } catch (outsideErr) {
+      if (body.confirmationUrl) throw outsideErr;
       console.warn('[Outside Jobs Save Warn]', outsideErr);
     }
     return { success: true, submission: result.submission, isDuplicate: result.duplicate, replayed: Boolean(result.replayed), snapshot };

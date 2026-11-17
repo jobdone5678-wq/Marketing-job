@@ -549,4 +549,19 @@
     fill,
     savedAnswers,
   };
+
+  // A manually filled application can navigate away as soon as its form is submitted.
+  if (typeof window !== 'undefined' && window.top === window && !globalThis.nextkinSubmitObserver
+    && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+    globalThis.nextkinSubmitObserver = true;
+    document.addEventListener('submit', event => {
+      if (!event.isTrusted || event.target?.tagName !== 'FORM') return;
+      const submitter = event.submitter;
+      const label = submitter && (submitter.innerText || submitter.value || submitter.getAttribute('aria-label'));
+      if (label && !/\b(?:submit|apply|send|finish|complete)\b/i.test(label)) return;
+      const { job, hasForm, url } = globalThis.NextkinApplication.scan();
+      if (!job || !hasForm) return;
+      void chrome.runtime.sendMessage({ action: 'prepare_application_tracking', url, job, submitted: true }).catch(() => {});
+    }, true);
+  }
 })();

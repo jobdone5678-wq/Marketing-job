@@ -45,8 +45,6 @@ const captureSchema = z.object({
   missingSkills: z.array(z.string().max(200)).max(200).optional(),
   extractedSkills: z.array(z.string().max(200)).max(200).optional(),
   candidateId: z.string().uuid().nullish(),
-  status: z.enum(['Discovered', 'Applied', 'Draft']).optional(),
-  appliedAt: shortText(50),
 });
 
 function cleanUrl(value: string) {
@@ -102,13 +100,16 @@ export async function POST(request: Request) {
     };
 
     const db = database();
-    const { data: candidate, error: candidateError } = await db.from('candidates')
+    const candidateQuery = db.from('candidates')
       .select('id, full_name, primary_skills, secondary_skills, current_job_title, highest_qualification, confirmed_facts, authorized_in_usa, open_to_relocation, preferred_locations, total_experience_years')
-      .eq('user_id', profile.id)
+      .eq('user_id', profile.id);
+    if (body.candidateId) candidateQuery.eq('id', body.candidateId);
+    const { data: candidate, error: candidateError } = await candidateQuery
       .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle();
     checkDb(candidateError);
+    if (body.candidateId && !candidate) throw new CaptureError('Candidate profile not found.', 404);
     const hasEvidence = candidate && [candidate.primary_skills, candidate.secondary_skills, candidate.current_job_title,
       candidate.highest_qualification, ...Object.values(candidate.confirmed_facts || {})].some(value => typeof value === 'string' && value.trim());
     const fit = !body.matchSource && hasEvidence ? analyzeCandidateFit(candidate as Candidate, details.description, details.title) : null;
@@ -136,29 +137,27 @@ export async function POST(request: Request) {
       return { success: true, jobId: job.id, table: 'portal_job_captures', match };
     }
 
-    const resolvedCandidateId = body.candidateId || candidate?.id || null;
-    const outsideJobPayload: Record<string, unknown> = {
+    const metadata = {
       ...details,
-      capture_owner_id: profile.id,
-      candidate_id: resolvedCandidateId,
       match_score: match?.score ?? null,
       matched_skills: match?.matched ?? [],
       missing_skills: match?.missing ?? [],
       extracted_skills: body.extractedSkills ?? (match ? [...match.matched, ...match.missing] : []),
       updated_at: capturedAt,
     };
-    if (body.status) {
-      outsideJobPayload.status = body.status;
-      if (body.status === 'Applied') {
-        outsideJobPayload.applied_at = dateValue(body.appliedAt) || capturedAt;
-      }
+    // Autofill saves posting details. Confirmation owns the applied status and date.
+    const { data: inserted, error: insertError } = await db.from('outside_jobs').upsert({
+      ...metadata, capture_owner_id: profile.id, candidate_id: candidate?.id || null,
+      status: 'Discovered', applied_at: null,
+    }, { onConflict: 'capture_owner_id,job_url', ignoreDuplicates: true }).select('id').maybeSingle();
+    checkDb(insertError);
+    let job = inserted;
+    if (!job) {
+      const { data: existing, error: updateError } = await db.from('outside_jobs').update(metadata)
+        .eq('capture_owner_id', profile.id).eq('job_url', jobUrl).select('id').single();
+      checkDb(updateError);
+      job = existing;
     }
-
-    const { data: job, error } = await db.from('outside_jobs').upsert(
-      outsideJobPayload,
-      { onConflict: 'capture_owner_id,job_url', defaultToNull: false }
-    ).select('id').single();
-    checkDb(error);
     if (!job) throw new CaptureError('Failed to save outside job.', 500);
     outsideJobsCache.clear();
     return { success: true, jobId: job.id, table: 'outside_jobs', match };

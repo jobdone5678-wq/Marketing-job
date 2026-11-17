@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
+import { runInNewContext } from 'node:vm';
 import { isAppliedApplication, applicationUrlKey, withoutAppliedJobs } from '../src/lib/jobs/application-state.ts';
 
 // Next.js resolves this extensionless TypeScript import. Resolve it in Node's test runner too.
@@ -108,6 +110,117 @@ test('Application Lifecycle: a shared receipt requires success text and the same
   assert.equal(allowedCaptureUrl(receipt + '?jobId=other', posting, 'confirmed', heading), false);
   assert.equal(allowedCaptureUrl('https://jobs.lever.co/other/thanks', posting, 'confirmed', heading), false);
   assert.equal(allowedCaptureUrl('https://example.test/thanks', posting, 'confirmed', heading), false);
+});
+
+test('Application Lifecycle: autofill restores tracking on an already-open posting and records its receipt', async () => {
+  const intentId = '8b1d6779-6dc3-419c-855a-fa293123aba0';
+  const posting = 'https://jobs.lever.co/fixture/123/apply';
+  const tab = { id: 17, url: posting + '?email=private@example.test' };
+  const state = {};
+  const noop = { addListener() {} };
+  const workspace = 'https://www.nextkinhr.com';
+  const requests = [];
+  const scripts = [];
+  let resolvedIntentId = intentId;
+  const worker = {
+    URL,
+    URLSearchParams,
+    AbortSignal,
+    crypto,
+    chrome: {
+      runtime: { onInstalled: noop, onStartup: noop, onConnect: noop, onMessage: noop },
+      tabs: { onUpdated: noop, onRemoved: noop, get: async () => tab },
+      storage: {
+        local: { get: async () => ({ origin: workspace, token: 'fixture' }) },
+        session: {
+          get: async key => ({ [key]: state[key] }),
+          set: async records => Object.assign(state, records),
+        },
+      },
+      scripting: { executeScript: async options => scripts.push(options.files[0]) },
+    },
+    fetch: async (url, options) => {
+      const body = options.body && JSON.parse(options.body);
+      requests.push({ url, body });
+      if (url.endsWith('/resolve')) return Response.json({ intentId: resolvedIntentId });
+      if (url.endsWith(intentId)) return Response.json({ intent: { id: intentId, attempt: 0 } });
+      if (url.endsWith('/auto-submit')) return Response.json({ success: true });
+      return Response.json({ status: 'confirmed' });
+    },
+  };
+  runInNewContext(readFileSync(new URL('../jobright_extension/background.js', import.meta.url), 'utf8'), worker);
+
+  await assert.rejects(worker.prepareApplication(tab.id, posting), /tab changed/);
+  assert.equal(await worker.prepareApplication(tab.id, tab.url), true);
+  assert.equal(requests[0].url, workspace + '/api/extension/intents/resolve');
+  assert.deepEqual(requests[0].body, { url: posting });
+  assert.deepEqual(scripts, ['application-confirmation.js']);
+
+  const sender = { tab, frameId: 0, url: 'https://jobs.lever.co/fixture/thanks' };
+  assert.equal(await worker.recordConfirmation({ evidence: 'Thank you for applying' }, sender), true);
+  assert.equal(requests[2].body.intentId, intentId);
+  assert.equal(requests[2].body.status, 'confirmed');
+  assert.equal(await worker.recordConfirmation({ evidence: 'Thank you for applying' }, sender), true);
+  assert.equal(requests.length, 3);
+
+  resolvedIntentId = null;
+  tab.id++;
+  const outsidePosting = 'https://careers.example.test/jobs/123/apply';
+  const confirmationUrl = 'https://careers.example.test/jobs/123/confirmation';
+  tab.url = confirmationUrl;
+  assert.equal(await worker.prepareApplication(tab.id, outsidePosting, {
+    title: 'Software Engineer', company: 'Fixture Company', location: 'Remote',
+  }, undefined, true), true);
+  assert.equal(requests.length, 4, 'Submitting the form only prepares tracking');
+
+  const outsideSender = { tab, frameId: 0, url: confirmationUrl };
+  assert.equal(await worker.recordConfirmation({ evidence: 'Application submitted' }, outsideSender), true);
+  const outside = requests[4];
+  assert.equal(outside.url, workspace + '/api/extension/auto-submit');
+  assert.equal(outside.body.jobUrl, outsidePosting);
+  assert.equal(outside.body.confirmationUrl, confirmationUrl);
+  assert.equal(outside.body.candidateId, 'current');
+  assert.equal(outside.body.jobTitle, 'Software Engineer');
+  assert.equal(outside.body.companyName, 'Fixture Company');
+  assert.equal(await worker.recordConfirmation({ evidence: 'Application submitted' }, outsideSender), true);
+  assert.equal(requests.length, 5, 'A repeated receipt must not resubmit the record');
+});
+
+test('Application Lifecycle: manual application tracking starts only for a real job form submission', () => {
+  const job = { title: 'Software Engineer', company: 'Company' };
+  const location = new URL('https://careers.example.test/jobs/123/apply');
+  const messages = [];
+  let onSubmit;
+  let capturedJob = job;
+  const window = {};
+  window.top = window;
+  const document = {
+    querySelectorAll: () => [],
+    addEventListener(type, callback, capture) {
+      assert.equal(type, 'submit');
+      assert.equal(capture, true);
+      onSubmit = callback;
+    },
+  };
+  runInNewContext(readFileSync(new URL('../jobright_extension/core/application.js', import.meta.url), 'utf8'), {
+    window, document, location,
+    NextkinJobCapture: { read: () => capturedJob },
+    NextkinForms: { discoverFields: () => [{ label: 'Name' }] },
+    NextkinFieldMapping: { resolveFact: () => ({ key: 'full_name' }) },
+    chrome: { runtime: { sendMessage: async message => messages.push(message) } },
+  });
+  const event = { isTrusted: true, target: { tagName: 'FORM' }, submitter: { innerText: 'Submit application' } };
+  onSubmit({ ...event, isTrusted: false });
+  onSubmit({ ...event, submitter: { innerText: 'Next' } });
+  capturedJob = null;
+  onSubmit(event);
+  assert.equal(messages.length, 0);
+  capturedJob = job;
+  onSubmit(event);
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].action, 'prepare_application_tracking');
+  assert.equal(messages[0].submitted, true);
+  assert.equal(messages[0].job, job);
 });
 
 test('Application Lifecycle: external job payload retains all required fields for outside_jobs', () => {

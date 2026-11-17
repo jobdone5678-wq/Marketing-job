@@ -621,8 +621,15 @@
           throw new Error('Autofill engine is not loaded on this page.');
         }
 
+        const url = window.location.href;
+        const page = globalThis.NextkinApplication.scan?.();
+        if (page?.hasForm && page.job) {
+          await chrome.runtime.sendMessage({
+            action: 'prepare_application_tracking', url, job: page.job, candidateId: currentCandidate.id,
+          }).catch(() => {});
+        }
         const res = await globalThis.NextkinApplication.fill(
-          window.location.href,
+          url,
           currentCandidate,
           currentResume,
           {},

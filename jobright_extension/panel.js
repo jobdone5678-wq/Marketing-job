@@ -818,6 +818,10 @@ $('autofill').addEventListener('click', async () => {
       }
     }
     await checkFormContext(tab, session);
+    const tracking = await chrome.runtime.sendMessage({
+      action: 'prepare_application_tracking', tabId: tab.id, url: tab.url, job, candidateId: profile.id,
+    }).catch(() => ({ error: 'Application tracking could not start.' }));
+    await checkFormContext(tab, session);
     const scope = answerScope(session, profile);
     const storage = await chrome.storage.local.get(scope);
     const reusable = storage[scope] || {};
@@ -834,19 +838,14 @@ $('autofill').addEventListener('click', async () => {
       renderResults({ filled: [...fields.values()], total: completed.total });
       notice('notice', completed.filled.some(field => field.ai) ? 'Review the AI drafts before submitting.' : 'AI found no supported answers for the remaining questions.');
     }
-    // Option A: Only save the job after successful autofill
-    console.log('Attempting to save external job:', job);
     await api('save-external-job', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...job, applicationUrl: job.applicationUrl ?? undefined, matchSource: 'autofill',
-        matchScore: null, matchedSkills: [], missingSkills: [], extractedSkills: [],
-      }),
+      body: JSON.stringify({ ...job, applicationUrl: job.applicationUrl ?? undefined }),
     }, session);
-    lastCapture = { ...job, ownerId: connection.user.id };
-    console.log('Job saved successfully');
+    lastCapture = { ...job, ownerId: session.user.id };
+    if (tracking?.error) notice('notice', tracking.error, true);
   } catch (error) {
-    console.error('Failed to save job:', error);
     notice('notice', error.message, true);
   } finally {
     busy = false;

@@ -104,7 +104,8 @@ export async function GET(request: Request) {
       return row;
     });
 
-    const enrichedOutside = (outsideJobs || []).map(oj => {
+    const submissionIds = new Set(enrichedPortal.map(row => row.id));
+    const enrichedOutside = (outsideJobs || []).filter(oj => !submissionIds.has(oj.submission_id)).map(oj => {
       const candidate = candidateMap.get(oj.candidate_id);
       return transformOutsideJob(oj, candidate);
     });

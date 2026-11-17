@@ -19,6 +19,75 @@ function workspaceOrigin(value) {
   return null;
 }
 
+function workspaceRequest(token) {
+  return { credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(10000),
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' } };
+}
+
+function cleanApplicationUrl(url) {
+  const fields = new Set(['id', 'jobid', 'job_id', 'gh_jid', 'postingid', 'posting_id', 'requisitionid', 'requisition_id', 'jk']);
+  if (/(^|\.)greenhouse\.io$/.test(url.hostname)) {
+    fields.add('for');
+    fields.add('token');
+  }
+  for (const name of [...url.searchParams.keys()]) {
+    if (!fields.has(name.toLowerCase())) url.searchParams.delete(name);
+  }
+  url.hash = '';
+  return url.href;
+}
+
+async function prepareApplication(tabId, expectedUrl, job, candidateId, submittedFromPage = false) {
+  const url = new URL(expectedUrl);
+  if (url.protocol !== 'https:') return false;
+  const stillOnApplication = async () => {
+    const urlNow = (await chrome.tabs.get(tabId)).url;
+    return urlNow === expectedUrl || (submittedFromPage && urlNow && new URL(urlNow).origin === url.origin);
+  };
+  if (!await stillOnApplication()) throw new Error('The application tab changed. Try autofill again.');
+  const { origin, token } = await chrome.storage.local.get(['origin', 'token']);
+  const workspace = workspaceOrigin(origin);
+  if (!workspace || !token) return false;
+
+  let intentId = new URLSearchParams(url.hash.slice(1)).get('marketing-intent');
+  const jobUrl = cleanApplicationUrl(url);
+  if (!intentIdPattern.test(intentId || '')) {
+    const response = await fetch(workspace + '/api/extension/intents/resolve', {
+      ...workspaceRequest(token), method: 'POST', body: JSON.stringify({ url: jobUrl }),
+    });
+    if (!response.ok) throw new Error('Could not link this form to your NextKinHR application.');
+    ({ intentId } = await response.json());
+  }
+  const key = trackedKey(tabId);
+  const context = (await chrome.storage.session.get(key))[key];
+  const text = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : '';
+  let externalJob;
+  if (!intentIdPattern.test(intentId || '')) {
+    intentId = null;
+    if (url.origin === workspace || /(^|\.)(nextkinhr\.com|jobright-internal\.com)$/.test(url.hostname)) return false;
+    const jobTitle = text(job?.title, 200);
+    const companyName = text(job?.company, 200);
+    if (!jobTitle || !companyName) return false;
+    const previousCandidate = context?.token === token && context.workspace === workspace && context.externalJob?.jobUrl === jobUrl
+      ? context.externalJob.candidateId : null;
+    externalJob = {
+      candidateId: intentIdPattern.test(candidateId || '') ? candidateId : previousCandidate || 'current',
+      jobUrl, jobTitle, companyName, portalSource: text(job.portalSource, 100) || url.hostname,
+      jobLocation: text(job.location, 200), department: text(job.department, 100),
+      employmentType: text(job.employmentType, 50), jobDescription: text(job.description, 60000),
+      externalId: text(job.externalId, 200) || null,
+    };
+  }
+  if (!await stillOnApplication()) throw new Error('The application tab changed. Try autofill again.');
+
+  if (context?.intentId !== intentId || context.jobOrigin !== url.origin || context.token !== token || context.workspace !== workspace
+    || context.externalJob?.jobUrl !== externalJob?.jobUrl || context.externalJob?.candidateId !== externalJob?.candidateId) {
+    await chrome.storage.session.set({ [key]: { intentId, externalJob, jobOrigin: url.origin, workspace, token, eventKey: crypto.randomUUID() } });
+  }
+  await chrome.scripting.executeScript({ target: { tabId }, files: ['application-confirmation.js'] });
+  return true;
+}
+
 async function trackApplication(tabId, tabUrl) {
   if (!tabUrl || !/^https:\/\//i.test(tabUrl)) return;
   const url = new URL(tabUrl);
@@ -59,28 +128,33 @@ async function recordConfirmation(message, sender) {
   if (context.reported) return true;
   const current = await chrome.storage.local.get(['origin', 'token']);
   if (workspaceOrigin(current.origin) !== context.workspace || current.token !== context.token) return false;
-  const options = { credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(10000),
-    headers: { Authorization: 'Bearer ' + current.token, 'Content-Type': 'application/json' } };
-  const intent = await fetch(context.workspace + '/api/extension/intents/' + context.intentId, options);
-  if (!intent.ok) return false;
-  const { intent: detail } = await intent.json();
-  if (detail?.id !== context.intentId || !Number.isInteger(detail.attempt)) return false;
-  url.hash = '';
-  const response = await fetch(context.workspace + '/api/extension/events', {
-    ...options, method: 'POST', body: JSON.stringify({
-      intentId: context.intentId, eventKey: context.eventKey, attempt: Math.max(1, detail.attempt),
-      status: 'confirmed', url: url.href, evidence: message.evidence, observedAt: new Date().toISOString(),
-    }),
+  const receiptUrl = cleanApplicationUrl(url);
+  let endpoint = 'auto-submit';
+  let payload = { ...context.externalJob, confirmationUrl: receiptUrl };
+  if (context.intentId) {
+    const intent = await fetch(context.workspace + '/api/extension/intents/' + context.intentId, workspaceRequest(current.token));
+    if (!intent.ok) return false;
+    const { intent: detail } = await intent.json();
+    if (detail?.id !== context.intentId || !Number.isInteger(detail.attempt)) return false;
+    endpoint = 'events';
+    payload = { intentId: context.intentId, attempt: Math.max(1, detail.attempt), status: 'confirmed',
+      url: receiptUrl, observedAt: new Date().toISOString() };
+  } else if (!context.externalJob) return false;
+
+  const response = await fetch(context.workspace + '/api/extension/' + endpoint, {
+    ...workspaceRequest(current.token), method: 'POST',
+    body: JSON.stringify({ ...payload, eventKey: context.eventKey, evidence: message.evidence }),
   });
   if (!response.ok) return false;
-  const { status } = await response.json();
-  if (status !== 'submitted' && status !== 'confirmed') return false;
+  const saved = await response.json();
+  if (context.intentId ? !['submitted', 'confirmed'].includes(saved.status) : saved.success !== true) return false;
   const latest = (await chrome.storage.session.get(key))[key];
   if (latest?.eventKey === context.eventKey) await chrome.storage.session.set({ [key]: { ...context, reported: true } });
   return true;
 }
 
 const connectedPanels = new Set();
+const pendingTracking = new Map();
 
 chrome.runtime.onConnect.addListener(port => {
   if (port.name === 'nextkin_side_panel') {
@@ -105,6 +179,22 @@ chrome.runtime.onConnect.addListener(port => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  if (message?.action === 'prepare_application_tracking' && typeof message.url === 'string') {
+    const panel = sender.url === chrome.runtime.getURL('panel.html');
+    const applicationPage = sender.url === message.url && sender.frameId === 0;
+    const tabId = panel ? message.tabId : applicationPage ? sender.tab?.id : undefined;
+    if (!Number.isInteger(tabId)) return false;
+    const tracking = prepareApplication(tabId, message.url, message.job, message.candidateId,
+      applicationPage && message.submitted === true);
+    pendingTracking.set(tabId, tracking);
+    void tracking.then(
+      tracked => reply({ tracked }),
+      error => reply({ error: error.message }),
+    ).finally(() => {
+      if (pendingTracking.get(tabId) === tracking) pendingTracking.delete(tabId);
+    });
+    return true;
+  }
   if (message?.action === 'check_side_panel_state') {
     reply({ isOpen: connectedPanels.size > 0 });
     return false;
@@ -128,7 +218,11 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   }
   if (message?.type !== 'application-confirmation' || typeof message.evidence !== 'string' || message.evidence.length > 200) return;
   void (async () => {
-    try { reply(await recordConfirmation(message, sender)); }
+    try {
+      const tracking = pendingTracking.get(sender.tab?.id);
+      if (tracking && !await tracking) { reply(false); return; }
+      reply(await recordConfirmation(message, sender));
+    }
     catch { reply(false); }
   })();
   return true;

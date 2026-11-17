@@ -49,6 +49,12 @@
       }
     }
 
+    const title = document.title.trim();
+    if (title.length <= 200 && !/\b(?:if|once|after|when|before|until|unless)\b/i.test(title)) {
+      const match = confirmationPatterns.slice(0, 2).map(pattern => pattern.exec(title)).find(Boolean);
+      if (match) return match[0];
+    }
+
     const pathname = window.location.pathname.toLowerCase();
     return confirmationUrlPattern.test(pathname) ? `URL confirmation path: ${pathname}` : null;
   }
