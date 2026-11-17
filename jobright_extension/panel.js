@@ -25,6 +25,7 @@ const profileLabels = {
   current_job_title: 'Current title',
   current_city: 'City',
   current_state: 'State',
+  zip_code: 'Postal Code',
   authorized_in_usa: 'Authorized to work in the US',
   need_sponsorship_now: 'Requires sponsorship now',
   need_sponsorship_future: 'Requires future sponsorship',
@@ -164,6 +165,7 @@ function renderAccount() {
   }));
   if (selected) $('resume-select').value = selected.id;
   showFacts('profile-facts', Object.entries(profileLabels).map(([key, label]) => [label, candidate?.[key]]));
+  $('zip-code-input').value = candidate?.zip_code || '';
   $('autofill').disabled = busy || !currentForm || !candidate;
   $('ai-screening-option').hidden = !currentForm || !candidate;
   $('review-answers').hidden = !currentForm || !candidate;
@@ -418,6 +420,8 @@ async function refresh() {
     const rId = storage.resumeData.id || 'dashboard-resume';
     docMap.set(rId, {
       ...storage.resumeData,
+      base64: storage.resumeData.base64,
+      mimeType: storage.resumeData.mimeType,
       id: rId,
       filename: storage.resumeData.filename || `${candidate?.full_name || 'Candidate'}_Resume.pdf`,
       candidate_id: candidate?.id,
@@ -568,6 +572,13 @@ function renderResults(result) {
   }
   if ($('unfilled-section')) $('unfilled-section').hidden = !unfilledCount;
 }
+
+$('zip-code-input').addEventListener('change', async () => {
+  if (!candidate) return;
+  candidate.zip_code = $('zip-code-input').value;
+  await chrome.storage.local.set({ candidateProfile: candidate });
+  scheduleRefresh(0);
+});
 
 $('connect').addEventListener('click', async () => {
   if (pairing) return;

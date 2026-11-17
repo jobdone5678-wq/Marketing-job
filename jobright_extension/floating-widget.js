@@ -73,10 +73,8 @@
 
   function isJobPortal() {
     const host = location.hostname.toLowerCase();
-    const path = location.pathname.toLowerCase();
-    const search = location.search.toLowerCase();
-
-    // 1. Known ATS & Job Portal host domains
+    
+    // 1. Known ATS & Job Portal host domains (Strict whitelist)
     const atsDomains = [
       'ashbyhq.com', 'greenhouse.io', 'lever.co', 'myworkdayjobs.com', 'myworkday.com',
       'workday.com', 'smartrecruiters.com', 'jobvite.com', 'taleo.net', 'icims.com',
@@ -104,28 +102,7 @@
       }
     }
 
-    // 3. Application or career URL paths
-    if (/(?:^|[/?=_-])(?:apply|application|applyjob|jobapply|jobs?|careers?|positions?|openings?)(?:$|[/?=_-])/i.test(path + search)) {
-      return true;
-    }
-
-    // 4. Jobright / Nextkin tracking parameters
-    if (search.includes('jr_id=') || search.includes('marketing-intent=')) {
-      return true;
-    }
-
-    // 5. Form discovery: Presence of ATS application input fields
-    try {
-      const inputs = document.querySelectorAll('input, select, textarea');
-      if (inputs.length >= 2) {
-        const hasAtsFields = Array.from(inputs).some(el => {
-          const name = [el.name, el.id, el.getAttribute('aria-label'), el.getAttribute('data-automation-id')].join(' ').toLowerCase();
-          return /_systemfield_|applicant|candidate|resume|cover_?letter|first_?name|last_?name/i.test(name);
-        });
-        if (hasAtsFields) return true;
-      }
-    } catch {}
-
+    // Completely removed generic path matching to prevent false positives on non-job websites.
     return false;
   }
 
