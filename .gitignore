@@ -23,6 +23,9 @@
 # misc
 .DS_Store
 *.pem
+*_checked.png
+*_result.png
+figma_autofill_result.png
 
 # debug
 npm-debug.log*

@@ -80,7 +80,52 @@ async function recordConfirmation(message, sender) {
   return true;
 }
 
+const connectedPanels = new Set();
+
+chrome.runtime.onConnect.addListener(port => {
+  if (port.name === 'nextkin_side_panel') {
+    connectedPanels.add(port);
+    // Broadcast to tabs that side panel is now open
+    chrome.tabs.query({}).then(tabs => {
+      for (const tab of tabs) {
+        if (tab.id) chrome.tabs.sendMessage(tab.id, { type: 'NEXTKIN_SIDE_PANEL_STATE', isOpen: true }).catch(() => {});
+      }
+    }).catch(() => {});
+
+    port.onDisconnect.addListener(() => {
+      connectedPanels.delete(port);
+      const isOpen = connectedPanels.size > 0;
+      chrome.tabs.query({}).then(tabs => {
+        for (const tab of tabs) {
+          if (tab.id) chrome.tabs.sendMessage(tab.id, { type: 'NEXTKIN_SIDE_PANEL_STATE', isOpen }).catch(() => {});
+        }
+      }).catch(() => {});
+    });
+  }
+});
+
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  if (message?.action === 'check_side_panel_state') {
+    reply({ isOpen: connectedPanels.size > 0 });
+    return false;
+  }
+  if (message?.action === 'open_side_panel') {
+    if (chrome.sidePanel?.open && sender.tab?.id) {
+      chrome.sidePanel.open({ tabId: sender.tab.id }).catch(() => {
+        if (sender.tab?.windowId) {
+          chrome.sidePanel.open({ windowId: sender.tab.windowId }).catch(() => {});
+        }
+      });
+      // Notify sender tab immediately that panel is opening
+      if (sender.tab.id) {
+        chrome.tabs.sendMessage(sender.tab.id, { type: 'NEXTKIN_SIDE_PANEL_STATE', isOpen: true }).catch(() => {});
+      }
+      reply(true);
+      return true;
+    }
+    reply(false);
+    return false;
+  }
   if (message?.type !== 'application-confirmation' || typeof message.evidence !== 'string' || message.evidence.length > 200) return;
   void (async () => {
     try { reply(await recordConfirmation(message, sender)); }

@@ -1,5 +1,20 @@
 const $ = id => document.getElementById(id);
 const portalOrigin = 'https://www.nextkinhr.com';
+let sidePanelPort;
+try {
+  if (typeof chrome !== 'undefined' && chrome.runtime?.connect) {
+    sidePanelPort = chrome.runtime.connect({ name: 'nextkin_side_panel' });
+  }
+} catch {}
+window.addEventListener('beforeunload', () => {
+  try {
+    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+      if (tab?.id) {
+        chrome.tabs.sendMessage(tab.id, { type: 'NEXTKIN_SIDE_PANEL_STATE', isOpen: false }).catch(() => {});
+      }
+    }).catch(() => {});
+  } catch {}
+});
 const captureScripts = ['adapters/ats-adapters.js', 'core/form-discovery.js', 'core/field-mapping.js',
   'core/field-writer.js', 'core/job-capture.js', 'core/application.js'];
 const profileLabels = {
@@ -301,6 +316,9 @@ async function refresh() {
     notice('upload-status', '');
   }
   currentTab = tab;
+  if (tab?.id) {
+    chrome.tabs.sendMessage(tab.id, { type: 'NEXTKIN_SIDE_PANEL_STATE', isOpen: true }).catch(() => {});
+  }
   const scans = scan(tab);
   let account;
   let resumeList = [];
@@ -513,16 +531,42 @@ function renderResults(result) {
   $('verified').hidden = !result.filled.length;
   $('results-title').textContent = `Filled ${result.filled.length} out of ${result.total} fields`;
   $('results-summary').textContent = result.filled.length === result.total
-    ? 'Candidate details populated in the application form.'
-    : 'Review the application form and complete the remaining fields.';
-  $('fields-filled').hidden = !result.filled.length;
+    ? 'All application details were populated from your candidate profile.'
+    : 'Review the populated details below and complete the remaining unfilled fields before submitting.';
+
+  // Filled section
+  const filledCount = result.filled.length;
+  if ($('filled-count')) $('filled-count').textContent = String(filledCount);
+  $('fields-filled').hidden = !filledCount;
+  if ($('filled-section')) $('filled-section').hidden = !filledCount;
   $('fields-filled').replaceChildren(...result.filled.map(field => {
     const item = document.createElement('li');
+    item.className = 'filled-item';
     const label = document.createElement('strong');
     label.textContent = field.label + (field.ai ? ' (AI draft)' : field.learned ? ' (Saved answer)' : '');
     item.append(label, document.createTextNode(' — ' + field.value));
     return item;
   }));
+
+  // Unfilled section
+  const unfilledList = (result.unfilled && result.unfilled.length)
+    ? result.unfilled
+    : (result.questions || []).map(q => ({ label: q.label || q.id, reason: 'Missing in candidate details' }));
+  const unfilledCount = unfilledList.length;
+  if ($('unfilled-count')) $('unfilled-count').textContent = String(unfilledCount);
+  if ($('fields-unfilled')) {
+    $('fields-unfilled').hidden = !unfilledCount;
+    $('fields-unfilled').replaceChildren(...unfilledList.map(field => {
+      const item = document.createElement('li');
+      item.className = 'unfilled-item';
+      const label = document.createElement('strong');
+      label.textContent = field.label;
+      const reasonText = field.reason ? ` — ${field.reason}` : ' — Needs manual answer';
+      item.append(label, document.createTextNode(reasonText));
+      return item;
+    }));
+  }
+  if ($('unfilled-section')) $('unfilled-section').hidden = !unfilledCount;
 }
 
 $('connect').addEventListener('click', async () => {

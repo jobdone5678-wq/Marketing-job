@@ -759,25 +759,7 @@ export default function RTRManagementPage() {
                 />
               </div>
 
-              {/* Agreement Status */}
-              <div className="space-y-1">
-                <Label className="text-xs font-medium">Agreement Status</Label>
-                <select
-                  value={extractedData.rtr_status || "received"}
-                  onChange={(e) =>
-                    setExtractedData({
-                      ...extractedData,
-                      rtr_status: e.target.value as RTRItem["rtr_status"],
-                    })
-                  }
-                  className="w-full h-9 rounded-lg border border-border bg-background px-3 text-xs"
-                >
-                  <option value="received">Received (Awaiting Signature)</option>
-                  <option value="signed">Signed / Executed</option>
-                  <option value="expired">Expired</option>
-                  <option value="rejected">Rejected</option>
-                </select>
-              </div>
+             
 
               {/* Agreement Type */}
               <div className="space-y-1">

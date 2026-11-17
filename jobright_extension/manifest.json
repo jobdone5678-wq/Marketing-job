@@ -3,7 +3,7 @@
   "minimum_chrome_version": "116",
   "name": "NextKinHR Recruiting Copilot",
   "short_name": "NextKinHR",
-  "version": "3.3.5",
+  "version": "3.3.6",
   "description": "Sync your NextKinHR resume, capture job details, and fill application forms.",
   "icons": {
     "16": "icon16.plasmo.6c567d50.png",
@@ -24,16 +24,63 @@
     "http://127.0.0.1/*",
     "https://*.nextkinhr.com/*"
   ],
-  "content_scripts": [{
-    "matches": [
-      "https://*.nextkinhr.com/*",
-      "https://*.jobright-internal.com/*",
-      "http://localhost:3000/*",
-      "http://127.0.0.1:3000/*",
-      "http://localhost/*",
-      "http://127.0.0.1/*"
-    ],
-    "js": ["portal-connection.js"],
-    "run_at": "document_start"
-  }]
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.nextkinhr.com/*",
+        "https://*.jobright-internal.com/*",
+        "http://localhost:3000/*",
+        "http://127.0.0.1:3000/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": ["portal-connection.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://*/*",
+        "http://*/*"
+      ],
+      "exclude_matches": [
+        "https://*.nextkinhr.com/*",
+        "https://*.jobright-internal.com/*",
+        "http://localhost:3000/*",
+        "http://127.0.0.1:3000/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*",
+        "*://*.google.com/*",
+        "*://*.youtube.com/*",
+        "*://*.facebook.com/*",
+        "*://*.twitter.com/*",
+        "*://*.x.com/*",
+        "*://*.instagram.com/*",
+        "*://*.reddit.com/*",
+        "*://*.wikipedia.org/*",
+        "*://*.github.com/*",
+        "*://*.cloudflare.com/*"
+      ],
+      "js": [
+        "adapters/ats-adapters.js",
+        "core/job-capture.js",
+        "core/field-mapping.js",
+        "core/field-writer.js",
+        "core/form-discovery.js",
+        "core/application.js",
+        "floating-widget.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icon16.plasmo.6c567d50.png",
+        "icon32.plasmo.76b92899.png",
+        "icon48.plasmo.aced7582.png",
+        "icon128.plasmo.3c1ed2d2.png"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

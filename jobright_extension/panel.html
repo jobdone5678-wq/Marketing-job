@@ -65,7 +65,15 @@
       <section id="results" class="results" aria-labelledby="results-title" hidden>
         <div class="results-heading"><h2 id="results-title"></h2><span id="verified" class="badge">Verified</span></div>
         <p id="results-summary"></p>
-        <ul id="fields-filled"></ul>
+        <div id="filled-section" class="results-block">
+          <h3 class="results-subheading filled-subtitle">Autofilled Fields (<span id="filled-count">0</span>)</h3>
+          <ul id="fields-filled"></ul>
+        </div>
+        <div id="unfilled-section" class="results-block">
+          <h3 class="results-subheading unfilled-header">Unfilled Fields (<span id="unfilled-count">0</span>)</h3>
+          <p class="unfilled-description">These questions could not be populated from your uploaded resume/details and need your manual answer.</p>
+          <ul id="fields-unfilled"></ul>
+        </div>
       </section>
       <details id="match-panel" open hidden>
         <summary id="match-title">ATS Match</summary>

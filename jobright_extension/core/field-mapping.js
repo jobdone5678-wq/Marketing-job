@@ -260,8 +260,6 @@
       return false;
     });
     if (fuzzyMatches.length >= 1) return fuzzyMatches[0];
-    const decline = opts.find(o => /decline|prefer not|choose not|do not wish|not specify/i.test(optionText(o)));
-    if (decline && /(gender|race|ethnic|veteran|disabil)/i.test(field.label || '')) return decline;
     return null;
   }
 
@@ -439,18 +437,23 @@
       }
       // Date pickers / availability dates
       if (field.kind === 'text' && (isDateInput(field.element) || /\b(start date|availability date|when can you start|earliest start date)\b/i.test(nl) || field.placeholder === 'Pick date...')) {
-        const futureDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-        const mm = String(futureDate.getMonth() + 1).padStart(2, '0');
-        const dd = String(futureDate.getDate()).padStart(2, '0');
-        const yyyy = futureDate.getFullYear();
-        const dateVal = `${mm}/${dd}/${yyyy}`;
-        return { field, factKey: 'availability', value: dateVal, status: 'supported', reason: 'Calculated availability start date.' };
+        const avail = values.availability || candidate.availability || candidate.available_to_join;
+        if (avail) {
+          return { field, factKey: 'availability', value: String(avail), status: 'supported', reason: 'Candidate availability.' };
+        }
+        return { field, factKey: 'availability', status: 'unknown', reason: 'Candidate availability not provided.' };
       }
       // Legal acknowledgements and signatures:
       if (field.kind === 'checkbox' && /\b(agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare|confirm|read the above|understand)\b/i.test(nl)) {
+        if (!values.full_name && !values.email) {
+          return { field, factKey: 'consent', status: 'unknown', reason: 'No candidate details.' };
+        }
         return { field, factKey: 'consent', value: true, status: 'supported', reason: 'Consent acknowledgment.' };
       }
       if (/\b(signature|sign here|certify by entering your name)\b/i.test(nl)) {
+        if (!values.full_name) {
+          return { field, factKey: 'e_signature', status: 'unknown', reason: 'No candidate full name for signature.' };
+        }
         return { field, factKey: 'e_signature', value: values.full_name, status: 'supported', reason: 'Electronic signature.' };
       }
 
