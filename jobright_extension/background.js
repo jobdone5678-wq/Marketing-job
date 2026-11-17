@@ -179,6 +179,17 @@ chrome.runtime.onConnect.addListener(port => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  if (message?.type === 'application-intent-opened' && sender.frameId === 0
+    && Number.isInteger(sender.tab?.id) && typeof message.url === 'string') {
+    try {
+      const url = new URL(message.url);
+      const documentUrl = new URL(sender.url);
+      url.hash = '';
+      documentUrl.hash = '';
+      if (url.href === documentUrl.href) void trackApplication(sender.tab.id, message.url).catch(() => {});
+    } catch {}
+    return false;
+  }
   if (message?.action === 'prepare_application_tracking' && typeof message.url === 'string') {
     const panel = sender.url === chrome.runtime.getURL('panel.html');
     const applicationPage = sender.url === message.url && sender.frameId === 0;

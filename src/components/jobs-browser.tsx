@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api-client';
-import { createClient } from '@/lib/client';
+import { useApplicationRealtime } from '@/hooks/use-application-realtime';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -17,14 +17,13 @@ import { WorkspaceSkeleton } from '@/components/workspace-ui';
 import { JobDates } from '@/components/job-dates';
 import { PublicJobCatalog } from '@/components/public-job-catalog';
 import { AppliedJobsList } from '@/components/applied-jobs-list';
-import { isAppliedApplication, withoutAppliedJobs, type AppliedJobsResponse } from '@/lib/jobs/application-state';
+import { withoutAppliedJobs, type AppliedJobsResponse } from '@/lib/jobs/application-state';
 import { extractCompleteJobDetails, extractJobSkills } from '@/lib/jobs/skills-extractor';
 import { sanitizeJobHtml } from '@/lib/html-sanitizer';
 import { CompanyLogo } from '@/components/company-logo';
 import { SkillBadge } from '@/components/skill-badge';
 import { SkillMatcherDialog } from '@/components/skill-matcher-dialog';
 import type { SupportedJobProvider } from '@/lib/public-directory';
-import { toast } from 'sonner';
 import {
   Search,
   MapPin,
@@ -314,18 +313,11 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   // Live mode: fetch applied keys and filter live jobs on initial load and reload
   useEffect(() => {
     if (mode !== 'live' || applicationView !== 'available') return;
-    const active = true;
-    const loadAndFilter = async () => {
-      try {
-        const data = await api<AppliedJobsResponse>(`/api/jobs/applications?page=0${candidateParam}`);
-        if (active) {
-          setLiveJobs(jobs => withoutAppliedJobs(jobs, data.appliedKeys));
-        }
-      } catch (error) {
-        if (active) setError((error as Error).message);
-      }
-    };
-    loadAndFilter();
+    let active = true;
+    void api<AppliedJobsResponse>(`/api/jobs/applications?page=0${candidateParam}`)
+      .then(data => { if (active) setLiveJobs(jobs => withoutAppliedJobs(jobs, data.appliedKeys)); })
+      .catch(error => { if (active) setError(error.message); });
+    return () => { active = false; };
   }, [mode, applicationView, candidateParam, reload]);
 
   useEffect(() => {
@@ -340,114 +332,14 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   }, [profileLoading, applicationView, employmentType, search, dbPage, savedFilterParam, candidateParam, reload]);
 
   useEffect(() => {
-    let active = true, refreshing = false;
-    const refresh = async () => {
-      if (document.visibilityState !== 'visible' || refreshing) return;
-      refreshing = true; setReload(value => value + 1);
-      try {
-        if (mode === 'live' && applicationView === 'available') {
-          const data = await api<AppliedJobsResponse>(`/api/jobs/applications?page=0${candidateParam}`);
-          if (active) setLiveJobs(jobs => withoutAppliedJobs(jobs, data.appliedKeys));
-        }
-      } catch (error) { if (active) setError((error as Error).message); }
-      finally { refreshing = false; }
+    const refresh = () => {
+      if (document.visibilityState === 'visible') setReload(value => value + 1);
     };
     window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', refresh);
-    return () => { active = false; window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
-  }, [mode, applicationView, candidateParam]);
+    return () => { window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
+  }, []);
 
-  // Real-time updates via Supabase Realtime for immediate UI updates when applications are submitted
-  // NOTE: Keep subscription active regardless of applicationView so Applied tab also gets immediate updates
-  useEffect(() => {
-    if (!applicationCandidateId) return;
-    const supabase = createClient();
-
-    let active = true;
-
-    // Channel for job_submissions (portal/inside applications)
-    const portalChannel = supabase
-      .channel("job_submissions_realtime_filter")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "job_submissions",
-          filter: `candidate_id=eq.${applicationCandidateId}`,
-        },
-        async (payload) => {
-          if (!active) return;
-          const row = payload.new as { status?: string; capture_status?: string | null; company_name?: string; job_title?: string };
-          const previous = payload.old as { status?: string; capture_status?: string | null };
-          const applied = isAppliedApplication(row.status || '', row.capture_status);
-          const wasApplied = isAppliedApplication(previous.status || '', previous.capture_status);
-          if (!applied && !wasApplied) return;
-          try {
-            const data = await api<AppliedJobsResponse>(`/api/jobs/applications?page=0&candidateId=${encodeURIComponent(applicationCandidateId)}`);
-            if (active && (mode === 'db' || mode === 'live')) {
-              if (mode === 'live') {
-                setLiveJobs(jobs => withoutAppliedJobs(jobs, data.appliedKeys));
-              } else {
-                setDbJobs(jobs => withoutAppliedJobs(jobs, data.appliedKeys));
-              }
-            }
-            // Also refresh applied data if we're on the Applied tab
-            if (active && applicationView === 'applied') {
-              setReload(value => value + 1);
-            }
-            if (applied && !wasApplied) toast.success(`Application submitted: ${row.company_name || 'Application'} — ${row.job_title || 'Role'}`);
-          } catch (e) {
-            console.error('[Realtime Job Browser Error]', e);
-          }
-        }
-      )
-      .subscribe();
-
-    // Channel for outside_jobs (extension-captured outside applications)
-    const outsideChannel = supabase
-      .channel("outside_jobs_realtime_filter")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "outside_jobs",
-          filter: `candidate_id=eq.${applicationCandidateId}`,
-        },
-        async (payload) => {
-          if (!active) return;
-          const row = payload.new as { status?: string; applied_at?: string; company?: string; title?: string };
-          const previous = payload.old as { status?: string; applied_at?: string };
-          const applied = row.status === 'Applied' && !!row.applied_at;
-          const wasApplied = previous.status === 'Applied' && !!previous.applied_at;
-          if (!applied && !wasApplied) return;
-          try {
-            const data = await api<AppliedJobsResponse>(`/api/jobs/applications?page=0&candidateId=${encodeURIComponent(applicationCandidateId)}`);
-            if (active && (mode === 'db' || mode === 'live')) {
-              if (mode === 'live') {
-                setLiveJobs(jobs => withoutAppliedJobs(jobs, data.appliedKeys));
-              } else {
-                setDbJobs(jobs => withoutAppliedJobs(jobs, data.appliedKeys));
-              }
-            }
-            // Also refresh applied data if we're on the Applied tab
-            if (active && applicationView === 'applied') {
-              setReload(value => value + 1);
-            }
-            if (applied && !wasApplied) toast.success(`Application submitted: ${row.company || 'Application'} — ${row.title || 'Role'}`);
-          } catch (e) {
-            console.error('[Realtime Outside Jobs Browser Error]', e);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      active = false;
-      supabase.removeChannel(portalChannel);
-      supabase.removeChannel(outsideChannel);
-    };
-  }, [applicationCandidateId, mode, applicationView]);
+  useApplicationRealtime(() => setReload(value => value + 1), isCandidate && !profileLoading, applicationCandidateId);
 
   // Load the candidate's own confirmed profile.
   useEffect(() => {

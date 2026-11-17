@@ -10,7 +10,8 @@
 
   const confirmationUrlPattern = /\/(?:confirmation|thank[-_]?you|thankyou|thanks|applied|application[-_]submitted|application[-_]success|submission[-_]success|success|submitted)\/?$/i;
 
-  const selectors = 'h1, h2, h3, [role="status"], [role="alert"], [data-testid*="success" i], [data-testid*="confirmation" i], main p';
+  const statusSelectors = '[role="status"], [role="alert"], [role="dialog"], dialog[open], [data-testid*="success" i], [data-testid*="confirmation" i], [class*="application-confirmation" i]';
+  const hiddenSelectors = 'footer, script, style, template, [hidden], [inert], [aria-hidden="true"]';
   let timer;
   let pending = false;
   let attempts = 0;
@@ -27,33 +28,43 @@
     return style.visibility !== 'hidden' && style.display !== 'none' && style.opacity !== '0';
   }
 
+  function confirmationEvidence(value, patterns = confirmationPatterns) {
+    const text = value?.replace(/\s+/g, ' ').trim();
+    if (!text || text.length > 320) return null;
+    if (/\b(?:if|once|after|when|before|until|unless)\b.{0,50}\b(?:application|submit(?:ted)?|receiv(?:e|ed))\b|\b(?:not (?:been )?(?:submitted|received|sent)|unable to submit|submission failed|not successful)\b/i.test(text)) return null;
+    for (const pattern of patterns) {
+      const match = pattern.exec(text);
+      if (match) return match[0];
+    }
+    return null;
+  }
+
   function detectConfirmation() {
+    for (const element of document.querySelectorAll(statusSelectors)) {
+      if (!isVisible(element) || element.closest(hiddenSelectors)) continue;
+      const evidence = confirmationEvidence(element.innerText, confirmationPatterns.slice(0, 2));
+      if (evidence) return evidence;
+    }
     if (hasActiveSubmitButton()) return null;
 
-    const candidates = [...document.querySelectorAll(selectors)];
-    for (const element of candidates) {
-      if (!isVisible(element) || element.closest('footer, [hidden], [aria-hidden="true"]')) continue;
-      const text = element.innerText?.replace(/\s+/g, ' ').trim();
-      if (!text || text.length > 320) continue;
+    for (const element of document.querySelectorAll('h1, h2, h3, p')) {
+      if (!isVisible(element) || element.closest(hiddenSelectors)) continue;
+      const evidence = confirmationEvidence(element.innerText);
+      if (evidence) return evidence;
+    }
 
-      // Negative check
-      if (/\b(?:if|once|after|when|before|until|unless)\b.{0,50}\b(?:application|submit(?:ted)?|receiv(?:e|ed))\b|\b(?:not (?:been )?(?:submitted|received|sent)|unable to submit|submission failed|not successful)\b/i.test(text)) {
-        continue;
-      }
-
-      for (const pattern of confirmationPatterns) {
-        const match = pattern.exec(text);
-        if (match) {
-          return match[0] || text.slice(0, 100);
-        }
-      }
+    const root = document.body || document.documentElement;
+    if (!root) return null;
+    const text = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let node = text.nextNode(); node; node = text.nextNode()) {
+      const evidence = confirmationEvidence(node.textContent);
+      const element = node.parentElement;
+      if (evidence && element && !element.closest(hiddenSelectors) && isVisible(element)) return evidence;
     }
 
     const title = document.title.trim();
-    if (title.length <= 200 && !/\b(?:if|once|after|when|before|until|unless)\b/i.test(title)) {
-      const match = confirmationPatterns.slice(0, 2).map(pattern => pattern.exec(title)).find(Boolean);
-      if (match) return match[0];
-    }
+    const titleEvidence = confirmationEvidence(title, confirmationPatterns.slice(0, 2));
+    if (titleEvidence) return titleEvidence;
 
     const pathname = window.location.pathname.toLowerCase();
     return confirmationUrlPattern.test(pathname) ? `URL confirmation path: ${pathname}` : null;

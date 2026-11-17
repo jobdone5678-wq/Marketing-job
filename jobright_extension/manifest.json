@@ -26,6 +26,11 @@
   ],
   "content_scripts": [
     {
+      "matches": ["https://*/*"],
+      "js": ["application-launch.js"],
+      "run_at": "document_start"
+    },
+    {
       "matches": [
         "https://*.nextkinhr.com/*",
         "https://*.jobright-internal.com/*",

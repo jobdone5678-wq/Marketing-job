@@ -223,6 +223,43 @@ test('Application Lifecycle: manual application tracking starts only for a real 
   assert.equal(messages[0].job, job);
 });
 
+test('Application Lifecycle: the Ashby success message is captured from ordinary page text', async () => {
+  const original = "Your application was successfully submitted. We'll contact you if there are next steps.";
+  const source = readFileSync(new URL('../jobright_extension/application-confirmation.js', import.meta.url), 'utf8');
+  const visible = { getClientRects: () => [{}], closest: () => null, innerText: original };
+
+  async function detect({ activeForm = false, dialog = false } = {}) {
+    const messages = [];
+    let callback;
+    const nodes = [{ textContent: original, parentElement: visible }];
+    runInNewContext(source, {
+      document: {
+        body: {},
+        title: 'Docker',
+        querySelectorAll: selector => selector.startsWith('form ')
+          ? (activeForm ? [{ ...visible, innerText: 'Submit application' }] : [])
+          : dialog ? [visible] : [],
+        createTreeWalker: () => ({ nextNode: () => nodes.shift() }),
+      },
+      window: { location: { pathname: '/docker/posting-id/application' } },
+      NodeFilter: { SHOW_TEXT: 4 },
+      MutationObserver: class { observe() {} disconnect() {} },
+      getComputedStyle: () => ({ display: 'block', visibility: 'visible', opacity: '1' }),
+      setTimeout: run => { callback = run; return 1; },
+      clearTimeout() {},
+      chrome: { runtime: { sendMessage: async message => { messages.push(message); return true; } } },
+    });
+    callback();
+    return messages[0]?.evidence;
+  }
+
+  const evidence = await detect();
+  assert.equal(evidence, 'Your application was successfully submitted');
+  assert.equal(validateObservation('confirmed', evidence), true);
+  assert.equal(await detect({ activeForm: true }), undefined);
+  assert.equal(await detect({ activeForm: true, dialog: true }), evidence);
+});
+
 test('Application Lifecycle: external job payload retains all required fields for outside_jobs', () => {
   const mockExternalJob = {
     title: 'Senior Marketing Manager',

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/client";
+import { useApplicationRealtime } from "@/hooks/use-application-realtime";
 import {
   getSubmissions,
   deleteSubmission,
@@ -65,6 +65,7 @@ export default function SubmissionsPage() {
   const { isCandidate } = useUserProfile();
   const canPushProfile = false;
   const [submissions, setSubmissions] = React.useState<JobSubmission[]>([]);
+  const submissionRequest = React.useRef(0);
   const [candidates, setCandidates] = React.useState<Candidate[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [loadError,setLoadError]=React.useState("");
@@ -87,13 +88,14 @@ export default function SubmissionsPage() {
 
   // Load data
   const loadData = React.useCallback(async () => {
+    const request = ++submissionRequest.current;
     setLoading(true);
     try {
       const [subsData, candsData] = await Promise.all([
         getSubmissions(),
         getCandidates(),
       ]);
-      setSubmissions(subsData);
+      if (request === submissionRequest.current) setSubmissions(subsData);
       setCandidates(candsData);
       setLoadError("");
     } catch {
@@ -110,104 +112,30 @@ export default function SubmissionsPage() {
     void Promise.resolve().then(loadData);
   }, [loadData]);
 
-  // Real-time updates via WebSockets (Supabase Realtime)
-  React.useEffect(() => {
-    const supabase = createClient();
-
-    // Channel for job_submissions (portal/inside applications)
-    const portalChannel = supabase
-      .channel("job_submissions_realtime_feed")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "job_submissions",
-        },
-        async (payload) => {
-          try {
-            const latest = await getSubmissions();
-            setSubmissions(latest);
-            if (payload.eventType === "INSERT") {
-              const row = payload.new as Record<string, unknown>;
-              const comp = (row?.company_name as string) || "Application";
-              const title = (row?.job_title as string) || "Role";
-              toast.success(`🎉 New application saved: ${comp} (${title})`);
-            } else if (payload.eventType === "UPDATE") {
-              const row = payload.new as Record<string, unknown>;
-              if (row?.status === "Applied" || row?.capture_status === "submitted") {
-                toast.success(`⚡ Application updated: ${(row?.company_name as string) || "Job"}`);
-              }
-            }
-          } catch (e) {
-            console.error("[Realtime Submissions Error]", e);
-          }
-        }
-      )
-      .subscribe();
-
-    // Channel for outside_jobs (extension-captured outside applications)
-    const outsideChannel = supabase
-      .channel("outside_jobs_realtime_feed")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "outside_jobs",
-        },
-        async (payload) => {
-          try {
-            const latest = await getSubmissions();
-            setSubmissions(latest);
-            if (payload.eventType === "INSERT") {
-              const row = payload.new as Record<string, unknown>;
-              const comp = (row?.company as string) || "Application";
-              const title = (row?.title as string) || "Role";
-              toast.success(`🌐 New extension application: ${comp} (${title})`);
-            } else if (payload.eventType === "UPDATE") {
-              const row = payload.new as Record<string, unknown>;
-              if (row?.status === "Applied") {
-                toast.success(`⚡ Extension application updated: ${(row?.company as string) || "Job"}`);
-              }
-            }
-          } catch (e) {
-            console.error("[Realtime Outside Jobs Error]", e);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(portalChannel);
-      supabase.removeChannel(outsideChannel);
-    };
+  const refreshSubmissions = React.useCallback(async () => {
+    const request = ++submissionRequest.current;
+    try {
+      const latest = await getSubmissions();
+      if (request === submissionRequest.current) setSubmissions(latest);
+    } catch {
+      // Keep the current records; the existing Refresh action can retry.
+    }
   }, []);
 
-  // Applications finish in another tab; refresh their status when returning.
+  useApplicationRealtime(() => { void refreshSubmissions(); }, isCandidate);
+
   React.useEffect(() => {
-    let active = true;
-    let refreshing = false;
-    const refreshSubmissions = async () => {
-      if (document.visibilityState !== "visible" || refreshing) return;
-      refreshing = true;
-      try {
-        const latest = await getSubmissions();
-        if (active) setSubmissions(latest);
-      } catch {
-        // Keep the current records; the existing Refresh action can retry.
-      } finally {
-        refreshing = false;
-      }
+    const refreshOnReturn = () => {
+      if (document.visibilityState === "visible") void refreshSubmissions();
     };
-    window.addEventListener("focus", refreshSubmissions);
-    document.addEventListener("visibilitychange", refreshSubmissions);
+    window.addEventListener("focus", refreshOnReturn);
+    document.addEventListener("visibilitychange", refreshOnReturn);
     return () => {
-      active = false;
-      window.removeEventListener("focus", refreshSubmissions);
-      document.removeEventListener("visibilitychange", refreshSubmissions);
+      submissionRequest.current++;
+      window.removeEventListener("focus", refreshOnReturn);
+      document.removeEventListener("visibilitychange", refreshOnReturn);
     };
-  }, []);
+  }, [refreshSubmissions]);
 
   // Status Badge Helper
   const getStatusBadge = (status: SubmissionStatus) => {
