@@ -456,7 +456,7 @@ async function refresh() {
   }
   activeJob = job;
   renderAccount();
-  renderJob(job, !!currentForm, !!job && lastCapture?.jobUrl === job.jobUrl && lastCapture.ownerId === connection?.user.id);
+  renderJob(job, !!currentForm, false);
   const resumeForMatch = selected;
   const matching = refreshResumeMatch(job, resumeForMatch, connection);
   if (issue) {
@@ -475,45 +475,8 @@ async function refresh() {
 
   const resumeMatch = await matching;
   if (number !== refreshNumber || busy || selected?.id !== resumeForMatch?.id) return;
-  const captureKey = JSON.stringify([connection.origin, connection.user.id, candidate?.id, candidate?.version, job,
-    resumeForMatch?.id, resumeMatch?.score, resumeMatch?.matched, resumeMatch?.missing]);
-  try {
-    if (portalJob) {
-      const origin = apiOrigin(connection.origin);
-      if (portalCaptureSupport?.origin !== origin || Date.now() >= portalCaptureSupport.expiresAt) {
-        const capabilities = await api('save-external-job', {}, connection).catch(error => {
-          if (recoverableResumeError(error)) return { portalCaptures: false };
-          throw error;
-        });
-        portalCaptureSupport = { origin, supported: capabilities.portalCaptures === true, expiresAt: Date.now() + 60000 };
-      }
-      if (!portalCaptureSupport.supported) {
-        notice('notice', 'Portal job saving requires the updated NextKinHR backend.');
-        $('notice').dataset.jobSave = 'true';
-        return;
-      }
-    }
-    const saved = lastCapture?.key === captureKey ? lastCapture.data : await api('save-external-job', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...job, applicationUrl: job.applicationUrl ?? undefined, matchSource: 'resume',
-        matchScore: resumeMatch?.score ?? null,
-        matchedSkills: resumeMatch?.matched ?? [],
-        missingSkills: resumeMatch?.missing ?? [],
-        extractedSkills: [...(resumeMatch?.matched ?? []), ...(resumeMatch?.missing ?? [])],
-      }),
-    }, connection);
-    if (number !== refreshNumber || busy) return;
-    if (saved.success !== true) throw new Error('NextKinHR did not confirm that the job was saved.');
-    lastCapture = { key: captureKey, data: saved, jobUrl: job.jobUrl, ownerId: connection.user.id };
-    if ($('notice').dataset.jobSave === 'true') notice('notice', '');
-    renderJob(job, !!currentForm, true);
-  } catch (error) {
-    if (number === refreshNumber && !busy) {
-      notice('notice', 'Job save: ' + error.message, true);
-      $('notice').dataset.jobSave = 'true';
-    }
-  }
+  // REMOVED automatic saving of external jobs
+  renderJob(job, !!currentForm, !!job && lastCapture?.jobUrl === job.jobUrl && lastCapture.ownerId === connection?.user.id);
 }
 
 function scheduleRefresh(delay = 250) {
@@ -862,6 +825,14 @@ $('autofill').addEventListener('click', async () => {
       renderResults({ filled: [...fields.values()], total: completed.total });
       notice('notice', completed.filled.some(field => field.ai) ? 'Review the AI drafts before submitting.' : 'AI found no supported answers for the remaining questions.');
     }
+    // Option A: Only save the job after successful autofill
+    await api('save-external-job', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...job, applicationUrl: job.applicationUrl ?? undefined, matchSource: 'autofill',
+        matchScore: null, matchedSkills: [], missingSkills: [], extractedSkills: [],
+      }),
+    }, session);
   } catch (error) {
     notice('notice', error.message, true);
   } finally {
