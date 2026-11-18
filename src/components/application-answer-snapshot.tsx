@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useState } from 'react';
 import { api } from '@/lib/api-client';
@@ -55,16 +55,23 @@ export function ApplicationAnswerSnapshot({ submissionId }: { submissionId: stri
 
   function copyAll() {
     if (!snapshots?.length) return;
-    const text = snapshots.map(s => {
-      const header = `${s.portal || 'Portal'} — Attempt ${s.attempt} · Revision ${s.revision} (${new Date(s.observed_at).toLocaleString()})`;
-      const body = s.answers.map(a => `${cleanFieldLabel(a.label, a.key)}:\n${a.value}`).join('\n\n');
-      return `${header}\n\n${body}`;
-    }).join('\n\n---\n\n');
+    const text = snapshots
+      .map((s) => {
+        const header = `${s.portal || 'Portal'} — Attempt ${s.attempt} · Revision ${s.revision} (${new Date(s.observed_at).toLocaleString()})`;
+        const body = s.answers
+          .map((a) => `${cleanFieldLabel(a.label, a.key)}:\n${a.value}`)
+          .join('\n\n');
+        return `${header}\n\n${body}`;
+      })
+      .join('\n\n---\n\n');
 
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }).catch(() => {});
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      })
+      .catch(() => {});
   }
 
   return (
@@ -72,7 +79,7 @@ export function ApplicationAnswerSnapshot({ submissionId }: { submissionId: stri
       <button
         type="button"
         onClick={handleOpen}
-        className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline cursor-pointer"
+        className="text-primary mt-2 inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium hover:underline"
         aria-haspopup="dialog"
       >
         <FileText className="size-3.5 shrink-0" />
@@ -82,7 +89,7 @@ export function ApplicationAnswerSnapshot({ submissionId }: { submissionId: stri
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="flex max-h-[88vh] flex-col sm:max-w-xl">
           <DialogHeader>
-            <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            <p className="text-muted-foreground mb-0.5 text-[10px] font-semibold tracking-widest uppercase">
               Extension observation
             </p>
             <DialogTitle>Captured Application Answers</DialogTitle>
@@ -91,58 +98,66 @@ export function ApplicationAnswerSnapshot({ submissionId }: { submissionId: stri
             </DialogDescription>
           </DialogHeader>
 
-          <div className="min-h-0 flex-1 overflow-y-auto space-y-4 pr-1">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
             {loading && (
-              <div className="py-10 text-center text-xs text-muted-foreground">
+              <div className="text-muted-foreground py-10 text-center text-xs">
                 Loading captured answers…
               </div>
             )}
 
             {error && (
-              <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+              <div
+                role="alert"
+                className="border-destructive/30 bg-destructive/10 text-destructive rounded-md border p-3 text-xs"
+              >
                 {error}
               </div>
             )}
 
             {!loading && !error && snapshots && snapshots.length === 0 && (
-              <div className="py-10 text-center text-xs text-muted-foreground">
+              <div className="text-muted-foreground py-10 text-center text-xs">
                 No answer snapshot was recorded for this application. Review manually if needed.
               </div>
             )}
 
-            {!loading && !error && snapshots?.map(snapshot => (
-              <section
-                key={snapshot.id}
-                className="rounded-lg border border-border bg-card p-4 shadow-xs space-y-3"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2 text-xs">
-                  <span className="font-semibold text-foreground flex items-center gap-1.5 capitalize">
-                    <Globe className="size-3.5 text-muted-foreground" />
-                    {snapshot.portal || 'Application portal'} · Attempt {snapshot.attempt} (Rev {snapshot.revision})
-                  </span>
-                  <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                    <Clock className="size-3" />
-                    {new Date(snapshot.observed_at).toLocaleString()}
-                  </span>
-                </div>
+            {!loading &&
+              !error &&
+              snapshots?.map((snapshot) => (
+                <section
+                  key={snapshot.id}
+                  className="border-border bg-card space-y-3 rounded-lg border p-4 shadow-xs"
+                >
+                  <div className="border-border/60 flex flex-wrap items-center justify-between gap-2 border-b pb-2 text-xs">
+                    <span className="text-foreground flex items-center gap-1.5 font-semibold capitalize">
+                      <Globe className="text-muted-foreground size-3.5" />
+                      {snapshot.portal || 'Application portal'} · Attempt {snapshot.attempt} (Rev{' '}
+                      {snapshot.revision})
+                    </span>
+                    <span className="text-muted-foreground flex items-center gap-1 text-[11px]">
+                      <Clock className="size-3" />
+                      {new Date(snapshot.observed_at).toLocaleString()}
+                    </span>
+                  </div>
 
-                <dl className="space-y-3">
-                  {snapshot.answers.map(answer => (
-                    <div key={answer.key} className="space-y-1">
-                      <dt className="text-xs font-semibold text-foreground">
-                        {cleanFieldLabel(answer.label, answer.key)}
-                      </dt>
-                      <dd className="rounded-md bg-muted/40 border border-border/40 px-3 py-2 text-xs text-foreground whitespace-pre-wrap break-words font-mono">
-                        {answer.value || <span className="italic text-muted-foreground">(blank)</span>}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              </section>
-            ))}
+                  <dl className="space-y-3">
+                    {snapshot.answers.map((answer) => (
+                      <div key={answer.key} className="space-y-1">
+                        <dt className="text-foreground text-xs font-semibold">
+                          {cleanFieldLabel(answer.label, answer.key)}
+                        </dt>
+                        <dd className="bg-muted/40 border-border/40 text-foreground rounded-md border px-3 py-2 font-mono text-xs break-words whitespace-pre-wrap">
+                          {answer.value || (
+                            <span className="text-muted-foreground italic">(blank)</span>
+                          )}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              ))}
           </div>
 
-          <DialogFooter className="flex flex-row items-center justify-between gap-2 border-t border-border/60 pt-3">
+          <DialogFooter className="border-border/60 flex flex-row items-center justify-between gap-2 border-t pt-3">
             <div>
               {snapshots && snapshots.length > 0 && (
                 <Button
@@ -152,17 +167,16 @@ export function ApplicationAnswerSnapshot({ submissionId }: { submissionId: stri
                   onClick={copyAll}
                   className="gap-1.5 text-xs"
                 >
-                  {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+                  {copied ? (
+                    <Check className="size-3.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="size-3.5" />
+                  )}
                   <span>{copied ? 'Copied' : 'Copy answers'}</span>
                 </Button>
               )}
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setOpen(false)}
-            >
+            <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
               Close
             </Button>
           </DialogFooter>

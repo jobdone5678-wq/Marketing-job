@@ -18,10 +18,13 @@ export async function GET(request: Request) {
   });
 }
 
-const webUrl = z.url({ protocol: /^https?$/ }).max(2000).refine(value => {
-  const url = new URL(value);
-  return !url.username && !url.password;
-});
+const webUrl = z
+  .url({ protocol: /^https?$/ })
+  .max(2000)
+  .refine((value) => {
+    const url = new URL(value);
+    return !url.username && !url.password;
+  });
 const shortText = (length: number) => z.string().trim().max(length).nullish();
 const captureSchema = z.object({
   title: z.string().trim().min(1).max(200),
@@ -52,8 +55,12 @@ function cleanUrl(value: string) {
   url.hash = '';
   for (const key of [...url.searchParams.keys()]) {
     const tracking = /^(utm_|ref$|source$|fbclid$|gclid$|trk$|trackingId$)/i.test(key);
-    const personal = /^(?:candidate[_-]?id|applicant[_-]?id|email|auth|authorization|code|session[_-]?id|access[_-]?token|refresh[_-]?token|auth[_-]?token)$/i.test(key);
-    const genericToken = key.toLowerCase() === 'token' && !/(^|\.)greenhouse\.io$/.test(url.hostname);
+    const personal =
+      /^(?:candidate[_-]?id|applicant[_-]?id|email|auth|authorization|code|session[_-]?id|access[_-]?token|refresh[_-]?token|auth[_-]?token)$/i.test(
+        key
+      );
+    const genericToken =
+      key.toLowerCase() === 'token' && !/(^|\.)greenhouse\.io$/.test(url.hostname);
     if (tracking || personal || genericToken) url.searchParams.delete(key);
   }
   url.searchParams.sort();
@@ -74,7 +81,8 @@ export async function POST(request: Request) {
       throw new CaptureError('The captured job exceeds the size limit.', 413);
     }
     const raw = await request.text();
-    if (raw.length > 1024 * 1024) throw new CaptureError('The captured job exceeds the size limit.', 413);
+    if (raw.length > 1024 * 1024)
+      throw new CaptureError('The captured job exceeds the size limit.', 413);
     const body = captureSchema.parse(JSON.parse(raw));
     const url = new URL(body.jobUrl);
     const jobUrl = cleanUrl(body.jobUrl);
@@ -100,8 +108,11 @@ export async function POST(request: Request) {
     };
 
     const db = database();
-    const candidateQuery = db.from('candidates')
-      .select('id, full_name, primary_skills, secondary_skills, current_job_title, highest_qualification, confirmed_facts, authorized_in_usa, open_to_relocation, preferred_locations, total_experience_years')
+    const candidateQuery = db
+      .from('candidates')
+      .select(
+        'id, full_name, primary_skills, secondary_skills, current_job_title, highest_qualification, confirmed_facts, authorized_in_usa, open_to_relocation, preferred_locations, total_experience_years'
+      )
       .eq('user_id', profile.id);
     if (body.candidateId) candidateQuery.eq('id', body.candidateId);
     const { data: candidate, error: candidateError } = await candidateQuery
@@ -110,29 +121,60 @@ export async function POST(request: Request) {
       .maybeSingle();
     checkDb(candidateError);
     if (body.candidateId && !candidate) throw new CaptureError('Candidate profile not found.', 404);
-    const hasEvidence = candidate && [candidate.primary_skills, candidate.secondary_skills, candidate.current_job_title,
-      candidate.highest_qualification, ...Object.values(candidate.confirmed_facts || {})].some(value => typeof value === 'string' && value.trim());
-    const fit = !body.matchSource && hasEvidence ? analyzeCandidateFit(candidate as Candidate, details.description, details.title) : null;
-    const match = body.matchSource === 'resume' ? (body.matchScore == null ? null : {
-      score: body.matchScore, matched: body.matchedSkills ?? [], missing: body.missingSkills ?? [],
-    }) : fit && (fit.matchedSkills.length || fit.missingSkills.length || fit.requirements.length) ? {
-      score: fit.matchScore,
-      matched: fit.matchedSkills.map(skill => skill.skill),
-      missing: fit.missingSkills,
-    } : null;
+    const hasEvidence =
+      candidate &&
+      [
+        candidate.primary_skills,
+        candidate.secondary_skills,
+        candidate.current_job_title,
+        candidate.highest_qualification,
+        ...Object.values(candidate.confirmed_facts || {}),
+      ].some((value) => typeof value === 'string' && value.trim());
+    const fit =
+      !body.matchSource && hasEvidence
+        ? analyzeCandidateFit(candidate as Candidate, details.description, details.title)
+        : null;
+    const match =
+      body.matchSource === 'resume'
+        ? body.matchScore == null
+          ? null
+          : {
+              score: body.matchScore,
+              matched: body.matchedSkills ?? [],
+              missing: body.missingSkills ?? [],
+            }
+        : fit && (fit.matchedSkills.length || fit.missingSkills.length || fit.requirements.length)
+          ? {
+              score: fit.matchScore,
+              matched: fit.matchedSkills.map((skill) => skill.skill),
+              missing: fit.missingSkills,
+            }
+          : null;
 
     const portalJobPath = /^\/(?:dashboard\/jobs|jobs\/info)\/([^/]+)\/?$/;
-    const isPortal = /(^|\.)(nextkinhr\.com|jobright-internal\.com)$/.test(url.hostname)
-      || (['localhost', '127.0.0.1'].includes(url.hostname) && portalJobPath.test(url.pathname));
+    const isPortal =
+      /(^|\.)(nextkinhr\.com|jobright-internal\.com)$/.test(url.hostname) ||
+      (['localhost', '127.0.0.1'].includes(url.hostname) && portalJobPath.test(url.pathname));
     if (isPortal) {
       const id = url.pathname.match(portalJobPath)?.[1];
-      if (!z.uuid().safeParse(id).success) throw new CaptureError('Open a NextKinHR job detail page.', 400);
-      const { data: job, error: jobError } = await db.from('jobs').select('id').eq('id', id).maybeSingle();
+      if (!z.uuid().safeParse(id).success)
+        throw new CaptureError('Open a NextKinHR job detail page.', 400);
+      const { data: job, error: jobError } = await db
+        .from('jobs')
+        .select('id')
+        .eq('id', id)
+        .maybeSingle();
       checkDb(jobError);
       if (!job) throw new CaptureError('Portal job not found.', 404);
-      const { error } = await db.from('portal_job_captures').upsert({
-        owner_id: profile.id, job_id: job.id, details: { ...details, match }, captured_at: capturedAt,
-      }, { onConflict: 'owner_id,job_id' });
+      const { error } = await db.from('portal_job_captures').upsert(
+        {
+          owner_id: profile.id,
+          job_id: job.id,
+          details: { ...details, match },
+          captured_at: capturedAt,
+        },
+        { onConflict: 'owner_id,job_id' }
+      );
       checkDb(error);
       return { success: true, jobId: job.id, table: 'portal_job_captures', match };
     }
@@ -146,15 +188,30 @@ export async function POST(request: Request) {
       updated_at: capturedAt,
     };
     // Autofill saves posting details. Confirmation owns the applied status and date.
-    const { data: inserted, error: insertError } = await db.from('outside_jobs').upsert({
-      ...metadata, capture_owner_id: profile.id, candidate_id: candidate?.id || null,
-      status: 'Discovered', applied_at: null,
-    }, { onConflict: 'capture_owner_id,job_url', ignoreDuplicates: true }).select('id').maybeSingle();
+    const { data: inserted, error: insertError } = await db
+      .from('outside_jobs')
+      .upsert(
+        {
+          ...metadata,
+          capture_owner_id: profile.id,
+          candidate_id: candidate?.id || null,
+          status: 'Discovered',
+          applied_at: null,
+        },
+        { onConflict: 'capture_owner_id,job_url', ignoreDuplicates: true }
+      )
+      .select('id')
+      .maybeSingle();
     checkDb(insertError);
     let job = inserted;
     if (!job) {
-      const { data: existing, error: updateError } = await db.from('outside_jobs').update(metadata)
-        .eq('capture_owner_id', profile.id).eq('job_url', jobUrl).select('id').single();
+      const { data: existing, error: updateError } = await db
+        .from('outside_jobs')
+        .update(metadata)
+        .eq('capture_owner_id', profile.id)
+        .eq('job_url', jobUrl)
+        .select('id')
+        .single();
       checkDb(updateError);
       job = existing;
     }

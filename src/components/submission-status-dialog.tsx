@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import * as React from "react";
+import * as React from 'react';
 import {
   Dialog,
   DialogContent,
@@ -8,46 +8,44 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { toast } from "sonner";
-import { updateSubmissionStatus } from "@/lib/submissions";
-import type { JobSubmission, SubmissionStatus } from "@/types/database";
-import {
-  CalendarIcon,
-} from "lucide-react";
+} from '@/components/ui/select';
+import { toast } from 'sonner';
+import { updateSubmissionStatus } from '@/lib/submissions';
+import type { JobSubmission, SubmissionStatus } from '@/types/database';
+import { CalendarIcon } from 'lucide-react';
 
 const STATUS_OPTIONS: { label: string; value: SubmissionStatus }[] = [
-  {label:"Draft (not submitted)",value:"Draft"},
-  { label: "1. Applied", value: "Applied" },
-  { label: "2. Vendor Screening", value: "Vendor_Screening" },
-  { label: "3. Submitted to Client", value: "Submitted_to_Client" },
-  { label: "4. Interview Scheduled", value: "Interview_Scheduled" },
-  { label: "5. Round 1 Interview", value: "Round_1" },
-  { label: "6. Round 2 Interview / Loop", value: "Round_2" },
-  { label: "7. Offer Received 🎉", value: "Offer_Received" },
-  { label: "8. Rejected", value: "Rejected" },
-  { label: "9. No Response", value: "No_Response" },
+  { label: 'Draft (not submitted)', value: 'Draft' },
+  { label: '1. Applied', value: 'Applied' },
+  { label: '2. Vendor Screening', value: 'Vendor_Screening' },
+  { label: '3. Submitted to Client', value: 'Submitted_to_Client' },
+  { label: '4. Interview Scheduled', value: 'Interview_Scheduled' },
+  { label: '5. Round 1 Interview', value: 'Round_1' },
+  { label: '6. Round 2 Interview / Loop', value: 'Round_2' },
+  { label: '7. Offer Received 🎉', value: 'Offer_Received' },
+  { label: '8. Rejected', value: 'Rejected' },
+  { label: '9. No Response', value: 'No_Response' },
 ];
 
 const INTERVIEW_MODES = [
-  "Zoom",
-  "Microsoft Teams",
-  "Google Meet",
-  "Phone Call",
-  "WebEx",
-  "In-Person",
+  'Zoom',
+  'Microsoft Teams',
+  'Google Meet',
+  'Phone Call',
+  'WebEx',
+  'In-Person',
 ];
 
 interface SubmissionStatusDialogProps {
@@ -63,34 +61,34 @@ export function SubmissionStatusDialog({
   onOpenChange,
   onSuccess,
 }: SubmissionStatusDialogProps) {
-  const [status, setStatus] = React.useState<SubmissionStatus>("Draft");
-  const [notes, setNotes] = React.useState("");
-  const [interviewTime, setInterviewTime] = React.useState("");
-  const [interviewMode, setInterviewMode] = React.useState("");
-  const [interviewMeetingLink, setInterviewMeetingLink] = React.useState("");
+  const [status, setStatus] = React.useState<SubmissionStatus>('Draft');
+  const [notes, setNotes] = React.useState('');
+  const [interviewTime, setInterviewTime] = React.useState('');
+  const [interviewMode, setInterviewMode] = React.useState('');
+  const [interviewMeetingLink, setInterviewMeetingLink] = React.useState('');
   const [loading, setLoading] = React.useState(false);
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
-    if (submission) {
-      setStatus(submission.status);
-      setNotes(submission.notes || "");
-      setInterviewTime(
-        submission.interview_time
-          ? new Date(submission.interview_time).toISOString().slice(0, 16)
-          : ""
-      );
-      setInterviewMode(submission.interview_mode || "");
-      setInterviewMeetingLink(submission.interview_meeting_link || "");
-    }
-    },0);
+      if (submission) {
+        setStatus(submission.status);
+        setNotes(submission.notes || '');
+        setInterviewTime(
+          submission.interview_time
+            ? new Date(submission.interview_time).toISOString().slice(0, 16)
+            : ''
+        );
+        setInterviewMode(submission.interview_mode || '');
+        setInterviewMeetingLink(submission.interview_meeting_link || '');
+      }
+    }, 0);
     return () => clearTimeout(timer);
   }, [submission]);
 
   if (!submission) return null;
 
   const isInterview =
-    status === "Interview_Scheduled" || status === "Round_1" || status === "Round_2";
+    status === 'Interview_Scheduled' || status === 'Round_1' || status === 'Round_2';
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,9 +97,7 @@ export function SubmissionStatusDialog({
     try {
       const interviewDetails = isInterview
         ? {
-            interview_time: interviewTime
-              ? new Date(interviewTime).toISOString()
-              : undefined,
+            interview_time: interviewTime ? new Date(interviewTime).toISOString() : undefined,
             interview_mode: interviewMode,
             interview_meeting_link: interviewMeetingLink.trim() || undefined,
           }
@@ -115,16 +111,16 @@ export function SubmissionStatusDialog({
       );
 
       if (error) {
-        toast.error("Failed to update status", { description: error });
+        toast.error('Failed to update status', { description: error });
       } else if (data) {
-        toast.success("Submission Status Updated!", {
-          description: `${data.company_name} status moved to ${status.replace(/_/g, " ")}.`,
+        toast.success('Submission Status Updated!', {
+          description: `${data.company_name} status moved to ${status.replace(/_/g, ' ')}.`,
         });
         onSuccess?.(data);
         onOpenChange(false);
       }
     } catch {
-      toast.error("An error occurred updating the status.");
+      toast.error('An error occurred updating the status.');
     } finally {
       setLoading(false);
     }
@@ -139,10 +135,8 @@ export function SubmissionStatusDialog({
               Quick Pipeline Transition
             </Badge>
           </div>
-          <DialogTitle className="text-lg font-bold">
-            Update Submission Stage
-          </DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">
+          <DialogTitle className="text-lg font-bold">Update Submission Stage</DialogTitle>
+          <DialogDescription className="text-muted-foreground text-xs">
             {submission.company_name} — {submission.job_title}
             {submission.candidate?.full_name ? ` (${submission.candidate.full_name})` : ''}
           </DialogDescription>
@@ -153,11 +147,8 @@ export function SubmissionStatusDialog({
             <Label htmlFor="quick-status" className="text-xs font-medium">
               New Status Stage
             </Label>
-            <Select
-              value={status}
-              onValueChange={(v) => setStatus(v as SubmissionStatus)}
-            >
-              <SelectTrigger id="quick-status" className="h-8 text-xs bg-background">
+            <Select value={status} onValueChange={(v) => setStatus(v as SubmissionStatus)}>
+              <SelectTrigger id="quick-status" className="bg-background h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -171,8 +162,8 @@ export function SubmissionStatusDialog({
           </div>
 
           {isInterview && (
-            <div className="p-3 rounded-lg border border-border/80 bg-muted/40 space-y-3">
-              <div className="flex items-center gap-1.5 font-medium text-foreground">
+            <div className="border-border/80 bg-muted/40 space-y-3 rounded-lg border p-3">
+              <div className="text-foreground flex items-center gap-1.5 font-medium">
                 <CalendarIcon className="size-3.5" />
                 Interview Details
               </div>
@@ -186,7 +177,7 @@ export function SubmissionStatusDialog({
                   type="datetime-local"
                   value={interviewTime}
                   onChange={(e) => setInterviewTime(e.target.value)}
-                  className="h-8 text-xs bg-background"
+                  className="bg-background h-8 text-xs"
                 />
               </div>
 
@@ -197,9 +188,9 @@ export function SubmissionStatusDialog({
                   </Label>
                   <Select
                     value={interviewMode}
-                    onValueChange={(val) => setInterviewMode(val ?? "Zoom")}
+                    onValueChange={(val) => setInterviewMode(val ?? 'Zoom')}
                   >
-                    <SelectTrigger id="quick-mode" className="h-8 text-xs bg-background">
+                    <SelectTrigger id="quick-mode" className="bg-background h-8 text-xs">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -221,7 +212,7 @@ export function SubmissionStatusDialog({
                     placeholder="https://zoom.us/..."
                     value={interviewMeetingLink}
                     onChange={(e) => setInterviewMeetingLink(e.target.value)}
-                    className="h-8 text-xs bg-background"
+                    className="bg-background h-8 text-xs"
                   />
                 </div>
               </div>
@@ -238,7 +229,7 @@ export function SubmissionStatusDialog({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              className="text-xs bg-background"
+              className="bg-background text-xs"
             />
           </div>
 
@@ -248,7 +239,7 @@ export function SubmissionStatusDialog({
               variant="outline"
               size="sm"
               onClick={() => onOpenChange(false)}
-              className="text-xs cursor-pointer"
+              className="cursor-pointer text-xs"
             >
               Cancel
             </Button>
@@ -256,9 +247,9 @@ export function SubmissionStatusDialog({
               type="submit"
               size="sm"
               disabled={loading}
-              className="text-xs bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer shadow-xs"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer text-xs shadow-xs"
             >
-              {loading ? "Saving..." : "Save Status"}
+              {loading ? 'Saving...' : 'Save Status'}
             </Button>
           </DialogFooter>
         </form>

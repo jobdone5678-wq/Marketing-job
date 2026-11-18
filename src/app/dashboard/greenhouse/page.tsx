@@ -1,1 +1,4 @@
-import {JobsBrowser} from '@/components/jobs-browser';export default function Page(){return <JobsBrowser provider="greenhouse"/>;}
+import { JobsBrowser } from '@/components/jobs-browser';
+export default function Page() {
+  return <JobsBrowser provider="greenhouse" />;
+}

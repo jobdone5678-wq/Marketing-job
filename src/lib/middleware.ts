@@ -1,20 +1,23 @@
-import { createServerClient } from '@supabase/ssr'
-import { NextResponse, type NextRequest } from 'next/server'
+import { createServerClient } from '@supabase/ssr';
+import { NextResponse, type NextRequest } from 'next/server';
 
-const middlewareProfileCache = new Map<string, { role: string; status: string; expiresAt: number }>();
+const middlewareProfileCache = new Map<
+  string,
+  { role: string; status: string; expiresAt: number }
+>();
 
 export async function updateSession(request: NextRequest) {
-  const pathname = request.nextUrl.pathname
+  const pathname = request.nextUrl.pathname;
 
   // API routes handle authentication internally via protectedRoute.
   // Bypassing middleware auth check on /api saves 300ms-600ms of network overhead per API call.
   if (pathname.startsWith('/api')) {
-    return NextResponse.next({ request })
+    return NextResponse.next({ request });
   }
 
   let supabaseResponse = NextResponse.next({
     request,
-  })
+  });
 
   // With Fluid compute, don't put this client in a global environment
   // variable. Always create a new one on each request.
@@ -24,20 +27,20 @@ export async function updateSession(request: NextRequest) {
     {
       cookies: {
         getAll() {
-          return request.cookies.getAll()
+          return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           supabaseResponse = NextResponse.next({
             request,
-          })
+          });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
-          )
+          );
         },
       },
     }
-  )
+  );
 
   // Do not run code between createServerClient and
   // supabase.auth.getClaims(). A simple mistake could make it very hard to debug
@@ -45,39 +48,50 @@ export async function updateSession(request: NextRequest) {
 
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await supabase.auth.getUser();
 
   // Unauthenticated user trying to access protected /dashboard routes
   if (!user && pathname.startsWith('/dashboard')) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/'
-    return NextResponse.redirect(url)
+    const url = request.nextUrl.clone();
+    url.pathname = '/';
+    return NextResponse.redirect(url);
   }
 
-  let profile: {role:string;status:string}|null=null;
-  if(user&&(pathname==='/'||pathname.startsWith('/dashboard'))){
+  let profile: { role: string; status: string } | null = null;
+  if (user && (pathname === '/' || pathname.startsWith('/dashboard'))) {
     const isLive = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'production';
     const cached = isLive ? middlewareProfileCache.get(user.id) : null;
     if (cached && cached.expiresAt > Date.now()) {
       profile = { role: cached.role, status: cached.status };
     } else {
-      const result=await supabase.from('profiles').select('role,status').eq('id',user.id).single();
-      profile=result.error?null:result.data;
+      const result = await supabase
+        .from('profiles')
+        .select('role,status')
+        .eq('id', user.id)
+        .single();
+      profile = result.error ? null : result.data;
       if (isLive && profile) {
         middlewareProfileCache.set(user.id, { ...profile, expiresAt: Date.now() + 2500 });
       }
     }
-    if(pathname.startsWith('/dashboard')&&profile?.status!=='active'){
-      const url=request.nextUrl.clone();url.pathname='/';url.search='';
+    if (pathname.startsWith('/dashboard') && profile?.status !== 'active') {
+      const url = request.nextUrl.clone();
+      url.pathname = '/';
+      url.search = '';
       return NextResponse.redirect(url);
     }
   }
   // Signed-in candidates stay on the sign-in/status page rather than redirecting in a loop.
-  if (user && pathname === '/' && profile?.status==='active' && !request.nextUrl.searchParams.has('error')) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
+  if (
+    user &&
+    pathname === '/' &&
+    profile?.status === 'active' &&
+    !request.nextUrl.searchParams.has('error')
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/dashboard';
+    return NextResponse.redirect(url);
   }
 
-  return supabaseResponse
+  return supabaseResponse;
 }

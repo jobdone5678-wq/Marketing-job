@@ -1,57 +1,56 @@
-"use client";
+'use client';
 
-import { CheckCircle2, Sparkles, Users } from "lucide-react";
+import { CheckCircle2, Sparkles, Users } from 'lucide-react';
 
 const VIDEO_SRC =
-  "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260314_131748_f2ca2a28-fed7-44c8-b9a9-bd9acdd5ec31.mp4";
+  'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260314_131748_f2ca2a28-fed7-44c8-b9a9-bd9acdd5ec31.mp4';
 
 export function MotionHero() {
   return (
-    <div className="relative hidden lg:flex items-center justify-center h-full overflow-hidden bg-black select-none">
+    <div className="relative hidden h-full items-center justify-center overflow-hidden bg-black select-none lg:flex">
       {/* Fullscreen Video Background */}
       <video
         autoPlay
         loop
         muted
         playsInline
-        className="absolute inset-0 w-full h-full object-cover z-0 pointer-events-none opacity-85"
+        className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover opacity-85"
       >
         <source src={VIDEO_SRC} type="video/mp4" />
       </video>
 
       {/* Cinematic Vignette Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/30 z-[1] pointer-events-none" />
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-t from-black/90 via-black/40 to-black/30" />
 
       {/* Centered Cinematic Headline & Subtext */}
-      <div className="relative z-10 flex flex-col items-center justify-center text-center px-8 xl:px-12 max-w-2xl mx-auto">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-white/90 text-xs font-medium mb-6 shadow-lg">
+      <div className="relative z-10 mx-auto flex max-w-2xl flex-col items-center justify-center px-8 text-center xl:px-12">
+        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-white/90 shadow-lg backdrop-blur-md">
           <Sparkles className="size-3.5 text-amber-300" />
           Next-Generation Recruiting Infrastructure
         </div>
 
         <h1
-          className="text-5xl xl:text-6xl 2xl:text-7xl leading-[0.98] tracking-[-1.8px] font-normal text-white animate-fade-rise drop-shadow-sm"
+          className="animate-fade-rise text-5xl leading-[0.98] font-normal tracking-[-1.8px] text-white drop-shadow-sm xl:text-6xl 2xl:text-7xl"
           style={{ fontFamily: "'Instrument Serif', serif" }}
         >
-          Where{" "}
-          <em className="not-italic text-zinc-300">dreams</em> rise{" "}
-          <em className="not-italic text-zinc-300">through the silence.</em>
+          Where <em className="text-zinc-300 not-italic">dreams</em> rise{' '}
+          <em className="text-zinc-300 not-italic">through the silence.</em>
         </h1>
 
-        <p className="text-zinc-300/95 text-sm xl:text-base max-w-lg mt-6 leading-relaxed animate-fade-rise-delay">
-          Connecting top marketing talent, recruiters, and forward-thinking clients.
-          Discover curated opportunities, track hiring pipelines, and build
-          exceptional teams in one unified portal.
+        <p className="animate-fade-rise-delay mt-6 max-w-lg text-sm leading-relaxed text-zinc-300/95 xl:text-base">
+          Connecting top marketing talent, recruiters, and forward-thinking clients. Discover
+          curated opportunities, track hiring pipelines, and build exceptional teams in one unified
+          portal.
         </p>
 
         {/* Feature Pills */}
-        <div className="flex flex-wrap items-center justify-center gap-3 mt-8">
-          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white/80 text-xs">
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3.5 py-1.5 text-xs text-white/80 backdrop-blur-md">
             <CheckCircle2 className="size-3.5 text-emerald-400" />
             <span>Curated Bench Network</span>
           </div>
-          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white/80 text-xs">
-            <Users className="size-3.5 text-primary" />
+          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3.5 py-1.5 text-xs text-white/80 backdrop-blur-md">
+            <Users className="text-primary size-3.5" />
             <span>Verified Candidate Matching</span>
           </div>
         </div>

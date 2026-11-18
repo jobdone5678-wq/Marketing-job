@@ -15,27 +15,23 @@ export function WorkspaceHeading({
   badge?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between pb-1 animate-fade-rise">
+    <div className="animate-fade-rise flex flex-col gap-4 pb-1 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0 flex-1">
         {eyebrow && (
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-semibold tracking-wide uppercase mb-2">
+          <div className="bg-primary/10 text-primary mb-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide uppercase">
             <span>{eyebrow}</span>
           </div>
         )}
         <div className="flex flex-wrap items-center gap-2.5">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-            {title}
-          </h1>
+          <h1 className="text-foreground text-xl font-bold tracking-tight sm:text-2xl">{title}</h1>
           {badge}
         </div>
-        <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+        <p className="text-muted-foreground mt-1 max-w-3xl text-sm leading-relaxed">
           {description}
         </p>
       </div>
       {actions && (
-        <div className="flex flex-wrap items-center gap-2 shrink-0 sm:pt-1">
-          {actions}
-        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:pt-1">{actions}</div>
       )}
     </div>
   );
@@ -46,7 +42,7 @@ export function WorkspaceSkeleton({ rows = 5 }: { rows?: number }) {
     <div
       role="status"
       aria-label="Loading workspace"
-      className="divide-y divide-border/60 rounded-xl border border-border/80 bg-card overflow-hidden shadow-xs animate-fade-in"
+      className="divide-border/60 border-border/80 bg-card animate-fade-in divide-y overflow-hidden rounded-xl border shadow-xs"
     >
       <span className="sr-only">Loading saved records…</span>
       {Array.from({ length: rows }, (_, i) => (
@@ -75,38 +71,30 @@ export function WorkspaceEmpty({
   icon?: typeof Inbox;
 }) {
   return (
-    <div className="flex min-h-[18rem] flex-col items-center justify-center gap-3.5 rounded-2xl border border-dashed border-border/80 bg-card/60 p-8 text-center animate-fade-rise">
-      <div className="relative flex size-12 items-center justify-center rounded-2xl border border-border/80 bg-muted/40 shadow-xs">
-        <Icon className="size-5 text-muted-foreground" />
+    <div className="border-border/80 bg-card/60 animate-fade-rise flex min-h-[18rem] flex-col items-center justify-center gap-3.5 rounded-2xl border border-dashed p-8 text-center">
+      <div className="border-border/80 bg-muted/40 relative flex size-12 items-center justify-center rounded-2xl border shadow-xs">
+        <Icon className="text-muted-foreground size-5" />
       </div>
       <div className="max-w-md">
-        <h2 className="text-base font-semibold text-foreground tracking-tight">{title}</h2>
-        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-          {description}
-        </p>
+        <h2 className="text-foreground text-base font-semibold tracking-tight">{title}</h2>
+        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">{description}</p>
       </div>
       {action && <div className="mt-2">{action}</div>}
     </div>
   );
 }
 
-export function WorkspaceError({
-  message,
-  children,
-}: {
-  message: string;
-  children?: ReactNode;
-}) {
+export function WorkspaceError({ message, children }: { message: string; children?: ReactNode }) {
   return (
     <div
       role="alert"
-      className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm shadow-xs animate-fade-rise"
+      className="border-destructive/30 bg-destructive/5 animate-fade-rise flex items-start gap-3 rounded-xl border p-4 text-sm shadow-xs"
     >
-      <div className="size-7 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0 mt-0.5">
-        <AlertCircle className="size-4 text-destructive" />
+      <div className="bg-destructive/10 mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg">
+        <AlertCircle className="text-destructive size-4" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="font-medium text-destructive">{message}</p>
+        <p className="text-destructive font-medium">{message}</p>
         {children && <div className="mt-2.5">{children}</div>}
       </div>
     </div>
@@ -129,31 +117,39 @@ export function WorkspaceStatCard({
   description?: string;
 }) {
   return (
-    <div className="rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-xs transition-all duration-200 hover:shadow-sm hover:border-border">
+    <div className="border-border/80 bg-card hover:border-border rounded-xl border p-4 shadow-xs transition-all duration-200 hover:shadow-sm sm:p-5">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground tracking-wide uppercase">{title}</span>
+        <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+          {title}
+        </span>
         {Icon && (
-          <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+          <div className="bg-primary/10 text-primary flex size-8 items-center justify-center rounded-lg">
             <Icon className="size-4" />
           </div>
         )}
       </div>
       <div className="mt-3 flex items-baseline gap-2">
-        <span className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-mono tabular-nums">
+        <span className="text-foreground font-mono text-2xl font-bold tracking-tight tabular-nums sm:text-3xl">
           {value}
         </span>
         {change && (
           <span
             className={`inline-flex items-center text-xs font-semibold ${
-              isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+              isPositive
+                ? 'text-emerald-600 dark:text-emerald-400'
+                : 'text-rose-600 dark:text-rose-400'
             }`}
           >
-            {isPositive ? <ArrowUpRight className="size-3 mr-0.5" /> : <ArrowDownRight className="size-3 mr-0.5" />}
+            {isPositive ? (
+              <ArrowUpRight className="mr-0.5 size-3" />
+            ) : (
+              <ArrowDownRight className="mr-0.5 size-3" />
+            )}
             {change}
           </span>
         )}
       </div>
-      {description && <p className="mt-1 text-xs text-muted-foreground">{description}</p>}
+      {description && <p className="text-muted-foreground mt-1 text-xs">{description}</p>}
     </div>
   );
 }

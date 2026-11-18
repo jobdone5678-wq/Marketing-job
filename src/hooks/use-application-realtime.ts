@@ -1,9 +1,13 @@
-"use client";
+'use client';
 
-import { useEffect, useEffectEvent } from "react";
-import { createClient } from "@/lib/client";
+import { useEffect, useEffectEvent } from 'react';
+import { createClient } from '@/lib/client';
 
-export function useApplicationRealtime(refresh: () => void, enabled: boolean, candidateId?: string) {
+export function useApplicationRealtime(
+  refresh: () => void,
+  enabled: boolean,
+  candidateId?: string
+) {
   const refreshApplications = useEffectEvent(refresh);
 
   useEffect(() => {
@@ -20,11 +24,20 @@ export function useApplicationRealtime(refresh: () => void, enabled: boolean, ca
       }, 50);
     };
 
-    const channel = supabase.channel(`application-updates-${crypto.randomUUID()}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "job_submissions", ...filter }, scheduleRefresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "outside_jobs", ...filter }, scheduleRefresh)
-      .subscribe(status => {
-        if (status === "SUBSCRIBED") scheduleRefresh();
+    const channel = supabase
+      .channel(`application-updates-${crypto.randomUUID()}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'job_submissions', ...filter },
+        scheduleRefresh
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'outside_jobs', ...filter },
+        scheduleRefresh
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') scheduleRefresh();
       });
 
     return () => {

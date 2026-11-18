@@ -1,10 +1,10 @@
-import { WorkspaceSkeleton } from "@/components/workspace-ui";
+import { WorkspaceSkeleton } from '@/components/workspace-ui';
 
 export default function Loading() {
   return (
-    <main className="portal-page space-y-6 animate-fade-in" aria-busy="true">
+    <main className="portal-page animate-fade-in space-y-6" aria-busy="true">
       {/* Header Skeleton */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between pb-1">
+      <div className="flex flex-col gap-4 pb-1 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-2">
           <div className="skeleton h-4 w-28 rounded-full" />
           <div className="skeleton h-7 w-64 rounded-lg" />
@@ -19,10 +19,7 @@ export default function Loading() {
       {/* Metric Cards Skeleton */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div
-            key={i}
-            className="rounded-xl border border-border/70 bg-card p-4 space-y-3"
-          >
+          <div key={i} className="border-border/70 bg-card space-y-3 rounded-xl border p-4">
             <div className="flex justify-between">
               <div className="skeleton h-3 w-20 rounded" />
               <div className="skeleton size-7 rounded-lg" />

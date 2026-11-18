@@ -43,10 +43,7 @@
       "run_at": "document_start"
     },
     {
-      "matches": [
-        "https://*/*",
-        "http://*/*"
-      ],
+      "matches": ["https://*/*", "http://*/*"],
       "exclude_matches": [
         "https://*.nextkinhr.com/*",
         "https://*.jobright-internal.com/*",

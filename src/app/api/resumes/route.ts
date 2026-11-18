@@ -6,7 +6,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  return protectedRoute(request, async profile => {
+  return protectedRoute(request, async (profile) => {
     const form = await resumeUploadForm(request);
     const candidateId = String(form.get('candidateId') || '');
     const candidate = candidateId ? await candidateAccess(profile, candidateId) : null;

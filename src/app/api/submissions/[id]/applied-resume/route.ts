@@ -5,7 +5,7 @@ import type { AppliedResumeSnapshot } from '@/types/database';
 import { z } from 'zod';
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
-  return protectedRoute(request,async profile => {
+  return protectedRoute(request, async (profile) => {
     const id = z.uuid().parse((await context.params).id);
     const db = database();
     const { data: submission, error } = await db
@@ -18,7 +18,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
     await candidateAccess(profile, submission.candidate_id);
 
-    const applied: AppliedResumeSnapshot | null = submission.applied_resume as AppliedResumeSnapshot | null;
+    const applied: AppliedResumeSnapshot | null =
+      submission.applied_resume as AppliedResumeSnapshot | null;
 
     if (!applied) {
       throw new CaptureError('No applied resume is available for this submission.', 404);
@@ -28,7 +29,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     const wantsDownload = url.searchParams.get('download') === '1';
 
     if (wantsDownload) {
-      if (!applied.base64) throw new CaptureError('Original applied resume bytes were not recorded. The saved text remains available in the preview.', 404);
+      if (!applied.base64)
+        throw new CaptureError(
+          'Original applied resume bytes were not recorded. The saved text remains available in the preview.',
+          404
+        );
       const fileBuffer = Buffer.from(applied.base64, 'base64');
       const mimeType = applied.mimeType || 'application/octet-stream';
       const filename = applied.filename || 'applied-resume.docx';

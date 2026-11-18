@@ -5,13 +5,15 @@
 ### 1. `jobright_extension/content.js`
 
 #### Added Functions:
+
 - **`highlightFieldAnimated(el)`** (lines ~148-175): Blue pulse animation when actively filling a field
 - **`showFillProgress(filled, total, currentLabel)`** (lines ~177-189): Shows progress bar in floating widget
 - **`hideFillProgress()`** (lines ~191-194): Hides progress bar when done
 - **Message listener for `get_field_stats`** (lines ~3397-3405): Returns field count to popup
 
 #### Modified Functions:
-- **`autofillCandidate(candidate, force, onProgress)`** (lines ~1665-1923): 
+
+- **`autofillCandidate(candidate, force, onProgress)`** (lines ~1665-1923):
   - Now **async** with batch processing (3 fields per batch)
   - Yields to main thread between batches using `requestAnimationFrame` + `setTimeout`
   - Accepts optional `onProgress` callback: `(filled, total, label) => void`
@@ -21,7 +23,7 @@
 
 - **`chooseCandidate(id)`** (lines ~1076-1100): Now uses async autofill with progress toasts
 
-- **Fill Job Form button handler** (lines ~3112-3165): 
+- **Fill Job Form button handler** (lines ~3112-3165):
   - Shows "⟳ Filling fields..." loading state on button
   - Disables button during operation
   - Uses async autofill with progress callback updating button text
@@ -30,6 +32,7 @@
 - **`scheduleAutofill()`** (lines ~1925-1934): Added `.catch()` to handle async autofill errors
 
 #### Added UI Elements in Floating Widget:
+
 - Progress bar container `#mp-field-progress` with:
   - `.mp-progress-bar` / `.mp-progress-fill` - animated progress bar
   - `#mp-progress-label` - "Filling: Field Name"
@@ -39,6 +42,7 @@
 ### 2. `jobright_extension/popup.html`
 
 #### Added Field Stats Panel:
+
 - New `#field-stats-panel` div inside candidate-active-card (shown when resume uploaded)
 - Shows:
   - **Fields captured on page:** (from content script discovery)
@@ -48,6 +52,7 @@
 ### 3. `jobright_extension/popup.js`
 
 #### Added:
+
 - **`fetchFieldStats()`** function: Queries content script via `chrome.tabs.sendMessage` for `get_field_stats`
 - **Modified `renderState()`**: Shows field stats panel when candidate active, calls `fetchFieldStats()`
 - Field stats update in real-time when popup opens
@@ -57,22 +62,25 @@
 ## Key Improvements
 
 ### Performance
-| Before | After |
-|--------|-------|
-| Synchronous loop blocking main thread | Async batch processing (3 fields/frame) |
-| No yield - UI freezes on large forms | Yields via `requestAnimationFrame` + `setTimeout(16ms)` |
-| 800-2000ms for 30+ fields | Same work, but UI stays responsive |
+
+| Before                                | After                                                   |
+| ------------------------------------- | ------------------------------------------------------- |
+| Synchronous loop blocking main thread | Async batch processing (3 fields/frame)                 |
+| No yield - UI freezes on large forms  | Yields via `requestAnimationFrame` + `setTimeout(16ms)` |
+| 800-2000ms for 30+ fields             | Same work, but UI stays responsive                      |
 
 ### User Experience
-| Before | After |
-|--------|-------|
-| No visual feedback during fill | Blue pulse animation on each field being filled |
-| No progress indicator | Real-time progress bar in floating widget |
-| No field counts | "Filled 5 of 23 fields" in widget + popup |
-| Button shows no state | Button shows "⟳ Filling 3/23..." during operation |
-| No stats in popup | Popup shows "Fields captured: 23" and "Last filled: 18" |
+
+| Before                         | After                                                   |
+| ------------------------------ | ------------------------------------------------------- |
+| No visual feedback during fill | Blue pulse animation on each field being filled         |
+| No progress indicator          | Real-time progress bar in floating widget               |
+| No field counts                | "Filled 5 of 23 fields" in widget + popup               |
+| Button shows no state          | Button shows "⟳ Filling 3/23..." during operation       |
+| No stats in popup              | Popup shows "Fields captured: 23" and "Last filled: 18" |
 
 ### Animation Details
+
 - **Field highlight**: Blue glow (3px outline + box-shadow) for 900ms with fade-out, applied **after** the fill completes so it overrides the green `nativeSet()` highlight
 - **Progress bar**: Smooth width transition (0.3s ease) with gradient fill
 - **Button text**: Updates in real-time "⟳ Filling 5/23..."
@@ -99,6 +107,7 @@
 ## Architecture Notes
 
 The async autofill uses a **batched cooperative scheduling** pattern:
+
 ```javascript
 for (let i = 0; i < fields.length; i += BATCH_SIZE) {
   const batch = fields.slice(i, i + BATCH_SIZE);
@@ -111,6 +120,7 @@ for (let i = 0; i < fields.length; i += BATCH_SIZE) {
 ```
 
 This ensures:
+
 - Main thread free for user interactions (scrolling, clicking)
 - 60fps UI responsiveness
 - Visual feedback on every field

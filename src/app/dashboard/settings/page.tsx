@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
   User,
   Cpu,
@@ -14,17 +14,13 @@ import {
   Save,
   Phone,
   Mail,
-} from "lucide-react";
-import { api } from "@/lib/api-client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import {
-  WorkspaceHeading,
-  WorkspaceSkeleton,
-  WorkspaceError,
-} from "@/components/workspace-ui";
-import type { UserProfile } from "@/types/database";
+} from 'lucide-react';
+import { api } from '@/lib/api-client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { WorkspaceHeading, WorkspaceSkeleton, WorkspaceError } from '@/components/workspace-ui';
+import type { UserProfile } from '@/types/database';
 
 type Settings = {
   company_name: string | null;
@@ -37,11 +33,11 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [ai, setAi] = useState(false);
   const [aiSetup, setAiSetup] = useState<string[]>([]);
-  const [model, setModel] = useState("");
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+  const [model, setModel] = useState('');
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState("");
+  const [busy, setBusy] = useState('');
   const [revision, setRevision] = useState(0);
 
   useEffect(() => {
@@ -55,20 +51,20 @@ export default function SettingsPage() {
         missing?: string[];
         issues?: string[];
       };
-    }>("/api/settings")
+    }>('/api/settings')
       .then((result) => {
         if (!active) return;
         setProfile(result.profile);
         setSettings(result.settings);
         setAi(result.ai.configured);
-        setModel(result.ai.model || "");
+        setModel(result.ai.model || '');
         setAiSetup([
           ...(result.ai.missing || []).map(
-            (name) => "Set " + name + " in each service that executes AI tasks."
+            (name) => 'Set ' + name + ' in each service that executes AI tasks.'
           ),
           ...(result.ai.issues || []),
         ]);
-        setError("");
+        setError('');
       })
       .catch((e) => active && setError(e.message))
       .finally(() => active && setLoading(false));
@@ -79,12 +75,12 @@ export default function SettingsPage() {
   }, [revision]);
 
   async function save() {
-    setBusy("account");
-    setError("");
-    setMessage("");
+    setBusy('account');
+    setError('');
+    setMessage('');
     try {
-      await api("/api/settings", {
-        method: "PATCH",
+      await api('/api/settings', {
+        method: 'PATCH',
         body: JSON.stringify({
           profile: {
             full_name: profile?.full_name,
@@ -93,17 +89,17 @@ export default function SettingsPage() {
           },
         }),
       });
-      setMessage("Account details saved successfully.");
-      setTimeout(() => setMessage(""), 4000);
+      setMessage('Account details saved successfully.');
+      setTimeout(() => setMessage(''), 4000);
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setBusy("");
+      setBusy('');
     }
   }
 
   return (
-    <main className="portal-page max-w-4xl space-y-6 animate-fade-rise">
+    <main className="portal-page animate-fade-rise max-w-4xl space-y-6">
       <WorkspaceHeading
         eyebrow="Preferences"
         title="Settings & Workspace Configuration"
@@ -117,9 +113,9 @@ export default function SettingsPage() {
               setLoading(true);
               setRevision((v) => v + 1);
             }}
-            className="gap-2 cursor-pointer"
+            className="cursor-pointer gap-2"
           >
-            <RefreshCw className={loading ? "size-3.5 animate-spin" : "size-3.5"} />
+            <RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />
             <span>Refresh</span>
           </Button>
         }
@@ -130,7 +126,7 @@ export default function SettingsPage() {
       {message && (
         <div
           role="status"
-          className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-xs font-semibold text-emerald-800 dark:text-emerald-300 flex items-center gap-2 animate-fade-in"
+          className="animate-fade-in flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-xs font-semibold text-emerald-800 dark:text-emerald-300"
         >
           <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
           <span>{message}</span>
@@ -142,14 +138,21 @@ export default function SettingsPage() {
       ) : (
         profile && (
           <Tabs defaultValue="account" className="space-y-6">
-            <TabsList variant="line" className="w-full justify-start border-b border-border/70 pb-px">
-              <TabsTrigger value="account" className="cursor-pointer">My Account</TabsTrigger>
-              <TabsTrigger value="ai" className="cursor-pointer">AI Engine</TabsTrigger>
+            <TabsList
+              variant="line"
+              className="border-border/70 w-full justify-start border-b pb-px"
+            >
+              <TabsTrigger value="account" className="cursor-pointer">
+                My Account
+              </TabsTrigger>
+              <TabsTrigger value="ai" className="cursor-pointer">
+                AI Engine
+              </TabsTrigger>
             </TabsList>
 
             {/* Account Settings Tab */}
             <TabsContent value="account" className="space-y-6 pt-2">
-              <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs">
+              <div className="border-border/80 bg-card rounded-2xl border p-6 shadow-xs">
                 <form
                   className="space-y-5"
                   onSubmit={(event) => {
@@ -157,17 +160,15 @@ export default function SettingsPage() {
                     void save();
                   }}
                 >
-                  <div className="border-b border-border/60 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="border-border/60 flex flex-col justify-between gap-2 border-b pb-3 sm:flex-row sm:items-center">
                     <div>
-                      <h2 className="text-sm font-bold text-foreground">
-                        Profile & Identity
-                      </h2>
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                      <h2 className="text-foreground text-sm font-bold">Profile & Identity</h2>
+                      <p className="text-muted-foreground mt-0.5 text-xs">
                         Your identity displayed across candidate matches and application receipts
                       </p>
                     </div>
                     <div className="flex items-center gap-2 self-start sm:self-auto">
-                      <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-muted/60 text-muted-foreground border border-border/60">
+                      <span className="bg-muted/60 text-muted-foreground border-border/60 rounded border px-2 py-0.5 font-mono text-[11px]">
                         {profile.email}
                       </span>
                       <span className="status-chip status-positive capitalize">
@@ -176,15 +177,15 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                        <User className="size-3.5 text-muted-foreground" />
+                      <label className="text-foreground flex items-center gap-1.5 text-xs font-semibold">
+                        <User className="text-muted-foreground size-3.5" />
                         <span>Full Name</span>
                       </label>
                       <Input
                         autoComplete="name"
-                        value={profile.full_name || ""}
+                        value={profile.full_name || ''}
                         onChange={(event) =>
                           setProfile({ ...profile, full_name: event.target.value })
                         }
@@ -193,26 +194,24 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                        <Phone className="size-3.5 text-muted-foreground" />
+                      <label className="text-foreground flex items-center gap-1.5 text-xs font-semibold">
+                        <Phone className="text-muted-foreground size-3.5" />
                         <span>Contact Phone</span>
                       </label>
                       <Input
                         type="tel"
                         autoComplete="tel"
-                        value={profile.phone || ""}
-                        onChange={(event) =>
-                          setProfile({ ...profile, phone: event.target.value })
-                        }
+                        value={profile.phone || ''}
+                        onChange={(event) => setProfile({ ...profile, phone: event.target.value })}
                         className="h-9 text-xs"
                       />
                     </div>
                   </div>
 
-                  <div className="pt-2 flex items-center justify-between border-t border-border/60">
+                  <div className="border-border/60 flex items-center justify-between border-t pt-2">
                     <Link
                       href="/dashboard/integrations"
-                      className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                      className="text-primary flex items-center gap-1 text-xs font-semibold hover:underline"
                     >
                       <span>View authorized integrations</span>
                       <ArrowUpRight className="size-3.5" />
@@ -225,7 +224,7 @@ export default function SettingsPage() {
                       className="cursor-pointer gap-1.5"
                     >
                       <Save className="size-3.5" />
-                      <span>{busy === "account" ? "Saving…" : "Save Changes"}</span>
+                      <span>{busy === 'account' ? 'Saving…' : 'Save Changes'}</span>
                     </Button>
                   </div>
                 </form>
@@ -234,37 +233,35 @@ export default function SettingsPage() {
 
             {/* AI Engine Tab */}
             <TabsContent value="ai" className="space-y-6 pt-2">
-              <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs space-y-5">
-                <div className="border-b border-border/60 pb-3 flex items-center justify-between">
+              <div className="border-border/80 bg-card space-y-5 rounded-2xl border p-6 shadow-xs">
+                <div className="border-border/60 flex items-center justify-between border-b pb-3">
                   <div>
-                    <h2 className="text-sm font-bold text-foreground">
+                    <h2 className="text-foreground text-sm font-bold">
                       AI Application & Skills Extraction Engine
                     </h2>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="text-muted-foreground mt-0.5 text-xs">
                       Model weights powering resume parsing and ATS question autofill
                     </p>
                   </div>
-                  <span
-                    className={`status-chip ${
-                      ai ? "status-positive" : "status-warning"
-                    }`}
-                  >
-                    {ai ? "Configured & Active" : "Unconfigured"}
+                  <span className={`status-chip ${ai ? 'status-positive' : 'status-warning'}`}>
+                    {ai ? 'Configured & Active' : 'Unconfigured'}
                   </span>
                 </div>
 
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-xl border border-border/60 bg-muted/20 space-y-1">
-                    <span className="text-xs text-muted-foreground font-medium">Engine Status</span>
-                    <p className="text-sm font-bold text-foreground">
-                      {ai ? "Online (API Key Authenticated)" : "Missing Configuration"}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="border-border/60 bg-muted/20 space-y-1 rounded-xl border p-4">
+                    <span className="text-muted-foreground text-xs font-medium">Engine Status</span>
+                    <p className="text-foreground text-sm font-bold">
+                      {ai ? 'Online (API Key Authenticated)' : 'Missing Configuration'}
                     </p>
                   </div>
 
-                  <div className="p-4 rounded-xl border border-border/60 bg-muted/20 space-y-1">
-                    <span className="text-xs text-muted-foreground font-medium">Configured Model</span>
-                    <p className="text-xs font-mono font-bold text-primary">
-                      {model || "gpt-4o / gpt-4o-mini (Default)"}
+                  <div className="border-border/60 bg-muted/20 space-y-1 rounded-xl border p-4">
+                    <span className="text-muted-foreground text-xs font-medium">
+                      Configured Model
+                    </span>
+                    <p className="text-primary font-mono text-xs font-bold">
+                      {model || 'gpt-4o / gpt-4o-mini (Default)'}
                     </p>
                   </div>
                 </div>
@@ -273,14 +270,15 @@ export default function SettingsPage() {
                   <WorkspaceError key={index} message={issue} />
                 ))}
 
-                <p className="text-xs text-muted-foreground leading-relaxed pt-1">
-                  Worker health is monitored continuously. Separate processing workers require independent API tokens for background OCR and email parsing.
+                <p className="text-muted-foreground pt-1 text-xs leading-relaxed">
+                  Worker health is monitored continuously. Separate processing workers require
+                  independent API tokens for background OCR and email parsing.
                 </p>
 
-                <div className="pt-2 border-t border-border/60">
+                <div className="border-border/60 border-t pt-2">
                   <Link
                     href="/dashboard/jobs"
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                    className="text-primary inline-flex items-center gap-1.5 text-xs font-semibold hover:underline"
                   >
                     <span>Manage Public Job Sources & Crawler</span>
                     <ArrowUpRight className="size-3.5" />

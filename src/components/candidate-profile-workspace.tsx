@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
   ArrowLeft,
   Download,
@@ -20,19 +20,19 @@ import {
   FileCode,
   Copy,
   Check,
-} from "lucide-react";
-import { api } from "@/lib/api-client";
-import { getCandidateById } from "@/lib/candidates";
-import { exportCandidateResume, candidateResumeMarkdown } from "@/lib/candidate-resume-export";
-import type { Candidate } from "@/types/database";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+} from 'lucide-react';
+import { api } from '@/lib/api-client';
+import { getCandidateById } from '@/lib/candidates';
+import { exportCandidateResume, candidateResumeMarkdown } from '@/lib/candidate-resume-export';
+import type { Candidate } from '@/types/database';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   WorkspaceHeading,
   WorkspaceSkeleton,
   WorkspaceError,
   WorkspaceEmpty,
-} from "@/components/workspace-ui";
+} from '@/components/workspace-ui';
 
 type Document = {
   id: string;
@@ -51,39 +51,35 @@ function FactCard({
   icon?: typeof MapPin;
 }) {
   const displayVal =
-    typeof value === "string" && value.trim()
+    typeof value === 'string' && value.trim()
       ? value
-      : typeof value === "boolean"
-      ? value
-        ? "Yes"
-        : "No"
-      : "Not specified";
+      : typeof value === 'boolean'
+        ? value
+          ? 'Yes'
+          : 'No'
+        : 'Not specified';
 
   return (
-    <div className="rounded-xl border border-border/70 bg-card p-3.5 shadow-xs transition-all hover:border-border">
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
-        {Icon && <Icon className="size-3.5 text-muted-foreground/70" />}
+    <div className="border-border/70 bg-card hover:border-border rounded-xl border p-3.5 shadow-xs transition-all">
+      <div className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
+        {Icon && <Icon className="text-muted-foreground/70 size-3.5" />}
         <span>{label}</span>
       </div>
-      <p className="mt-1.5 text-sm font-semibold text-foreground tracking-tight break-words">
+      <p className="text-foreground mt-1.5 text-sm font-semibold tracking-tight break-words">
         {displayVal}
       </p>
     </div>
   );
 }
 
-export function CandidateProfileWorkspace({
-  candidateId,
-}: {
-  candidateId: string;
-}) {
+export function CandidateProfileWorkspace({ candidateId }: { candidateId: string }) {
   const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [error, setError] = useState("");
-  const [docError, setDocError] = useState("");
+  const [error, setError] = useState('');
+  const [docError, setDocError] = useState('');
   const [loading, setLoading] = useState(true);
   const [docLoading, setDocLoading] = useState(true);
-  const [busy, setBusy] = useState("");
+  const [busy, setBusy] = useState('');
   const [revision, setRevision] = useState(0);
   const [copied, setCopied] = useState(false);
 
@@ -93,7 +89,7 @@ export function CandidateProfileWorkspace({
       .then((value) => {
         if (active) {
           setCandidate(value);
-          setError("");
+          setError('');
         }
       })
       .catch((e) => active && setError(e.message))
@@ -103,7 +99,7 @@ export function CandidateProfileWorkspace({
       .then((result) => {
         if (active) {
           setDocuments(result.documents);
-          setDocError("");
+          setDocError('');
         }
       })
       .catch((e) => active && setDocError(e.message))
@@ -114,16 +110,16 @@ export function CandidateProfileWorkspace({
     };
   }, [candidateId, revision]);
 
-  async function exportFile(format: "docx" | "pdf") {
+  async function exportFile(format: 'docx' | 'pdf') {
     if (!candidate) return;
     setBusy(format);
-    setDocError("");
+    setDocError('');
     try {
       await exportCandidateResume(candidate, format);
     } catch (e) {
       setDocError((e as Error).message);
     } finally {
-      setBusy("");
+      setBusy('');
     }
   }
 
@@ -136,28 +132,28 @@ export function CandidateProfileWorkspace({
 
   const initials = candidate?.full_name
     ? candidate.full_name
-        .split(" ")
+        .split(' ')
         .filter(Boolean)
         .slice(0, 2)
         .map((n) => n[0].toUpperCase())
-        .join("")
-    : "C";
+        .join('')
+    : 'C';
 
   return (
-    <main className="portal-page space-y-6 animate-fade-rise">
+    <main className="portal-page animate-fade-rise space-y-6">
       {/* Top back navigation */}
       <div className="flex items-center justify-between">
         <Link
           href="/dashboard/candidates"
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors group"
+          className="text-muted-foreground hover:text-foreground group inline-flex items-center gap-1.5 text-xs font-medium transition-colors"
         >
-          <ArrowLeft className="size-3.5 group-hover:-translate-x-0.5 transition-transform" />
+          <ArrowLeft className="size-3.5 transition-transform group-hover:-translate-x-0.5" />
           <span>Back to candidates bench</span>
         </Link>
 
         {candidate && (
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-muted-foreground">
+            <span className="text-muted-foreground font-mono text-xs">
               v{candidate.version || 1}
             </span>
           </div>
@@ -185,25 +181,25 @@ export function CandidateProfileWorkspace({
         candidate && (
           <>
             {/* Candidate 360 Profile Hero Card */}
-            <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs">
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-5">
+            <div className="border-border/80 bg-card rounded-2xl border p-6 shadow-xs">
+              <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
                 <div className="flex items-start gap-4">
-                  <div className="size-14 rounded-2xl bg-gradient-to-br from-primary/20 via-primary/10 to-transparent text-primary text-xl font-bold flex items-center justify-center border border-primary/25 shadow-2xs shrink-0">
+                  <div className="from-primary/20 via-primary/10 text-primary border-primary/25 flex size-14 shrink-0 items-center justify-center rounded-2xl border bg-gradient-to-br to-transparent text-xl font-bold shadow-2xs">
                     {initials}
                   </div>
                   <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-2.5">
-                      <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                      <h1 className="text-foreground text-2xl font-bold tracking-tight">
                         {candidate.full_name}
                       </h1>
                       <span
                         className={`status-chip ${
-                          candidate.provenance_status === "confirmed"
-                            ? "status-positive"
-                            : "status-warning"
+                          candidate.provenance_status === 'confirmed'
+                            ? 'status-positive'
+                            : 'status-warning'
                         }`}
                       >
-                        {candidate.provenance_status === "confirmed" ? (
+                        {candidate.provenance_status === 'confirmed' ? (
                           <>
                             <ShieldCheck className="size-3 text-emerald-600 dark:text-emerald-400" />
                             <span>Confirmed Profile</span>
@@ -217,29 +213,31 @@ export function CandidateProfileWorkspace({
                       </span>
                     </div>
 
-                    <p className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                    <p className="text-muted-foreground flex items-center gap-1.5 text-sm font-medium">
                       <Briefcase className="size-3.5" />
                       <span>
                         {candidate.target_job_titles ||
                           candidate.current_job_title ||
-                          "Target role not specified"}
+                          'Target role not specified'}
                       </span>
                     </p>
 
-                    <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-muted/50 border border-border/60">
+                    <div className="text-muted-foreground flex flex-wrap items-center gap-2 pt-1 text-xs">
+                      <span className="bg-muted/50 border-border/60 inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5">
                         <span
                           className={`size-1.5 rounded-full ${
-                            candidate.is_active_bench ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/60"
+                            candidate.is_active_bench
+                              ? 'animate-pulse bg-emerald-500'
+                              : 'bg-muted-foreground/60'
                           }`}
                         />
-                        {candidate.is_active_bench ? "Active on bench" : "Inactive"}
+                        {candidate.is_active_bench ? 'Active on bench' : 'Inactive'}
                       </span>
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-muted/50 border border-border/60">
-                        {candidate.visa_status || "Visa unknown"}
+                      <span className="bg-muted/50 border-border/60 inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5">
+                        {candidate.visa_status || 'Visa unknown'}
                       </span>
                       {candidate.preferred_locations && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-muted/50 border border-border/60">
+                        <span className="bg-muted/50 border-border/60 inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5">
                           <MapPin className="size-3" />
                           {candidate.preferred_locations}
                         </span>
@@ -262,7 +260,7 @@ export function CandidateProfileWorkspace({
                     variant="default"
                     size="sm"
                     render={<Link href={`/dashboard/jobs?candidateId=${candidate.id}`} />}
-                    className="gap-1.5 cursor-pointer"
+                    className="cursor-pointer gap-1.5"
                   >
                     <Sparkles className="size-3.5" />
                     <span>Find Matching Jobs</span>
@@ -273,11 +271,22 @@ export function CandidateProfileWorkspace({
 
             {/* Main Tabs Navigation */}
             <Tabs defaultValue="overview" className="space-y-6">
-              <TabsList variant="line" className="w-full justify-start border-b border-border/70 pb-px">
-                <TabsTrigger value="overview" className="cursor-pointer">Overview & Fit</TabsTrigger>
-                <TabsTrigger value="history" className="cursor-pointer">Work Experience</TabsTrigger>
-                <TabsTrigger value="documents" className="cursor-pointer">Documents & Resume</TabsTrigger>
-                <TabsTrigger value="evidence" className="cursor-pointer">Source Citations</TabsTrigger>
+              <TabsList
+                variant="line"
+                className="border-border/70 w-full justify-start border-b pb-px"
+              >
+                <TabsTrigger value="overview" className="cursor-pointer">
+                  Overview & Fit
+                </TabsTrigger>
+                <TabsTrigger value="history" className="cursor-pointer">
+                  Work Experience
+                </TabsTrigger>
+                <TabsTrigger value="documents" className="cursor-pointer">
+                  Documents & Resume
+                </TabsTrigger>
+                <TabsTrigger value="evidence" className="cursor-pointer">
+                  Source Citations
+                </TabsTrigger>
               </TabsList>
 
               {/* Overview Tab Content */}
@@ -285,14 +294,64 @@ export function CandidateProfileWorkspace({
                 <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
                   <FactCard label="Direct Email" value={candidate.email} />
                   <FactCard label="Phone Contact" value={candidate.phone} />
-                  <FactCard label="Location (Mandatory)" value={[candidate.current_city, candidate.current_state].filter(Boolean).join(", ") || candidate.full_address || candidate.preferred_locations} icon={MapPin} />
+                  <FactCard
+                    label="Location (Mandatory)"
+                    value={
+                      [candidate.current_city, candidate.current_state]
+                        .filter(Boolean)
+                        .join(', ') ||
+                      candidate.full_address ||
+                      candidate.preferred_locations
+                    }
+                    icon={MapPin}
+                  />
                   <FactCard label="LinkedIn URL (Mandatory)" value={candidate.linkedin_url} />
-                  <FactCard label="Work Authorization / Visa" value={candidate.work_authorization || candidate.visa_status || (candidate.authorized_in_usa ? "Authorized to work in USA" : "Requires Sponsorship")} />
-                  <FactCard label="Gender" value={candidate.gender || (candidate.confirmed_facts as any)?.gender} />
-                  <FactCard label="Race / Ethnicity" value={candidate.race || (candidate.confirmed_facts as any)?.race || candidate.race_ethnicity || (candidate.confirmed_facts as any)?.race_ethnicity} />
-                  <FactCard label="Veteran Status" value={candidate.veteran || candidate.veteran_status || (candidate.confirmed_facts as any)?.veteran || (candidate.confirmed_facts as any)?.veteran_status} />
-                  <FactCard label="Disability Status" value={candidate.disability || candidate.disability_status || (candidate.confirmed_facts as any)?.disability || (candidate.confirmed_facts as any)?.disability_status} />
-                  <FactCard label="Expected Compensation" value={candidate.expected_salary} icon={Coins} />
+                  <FactCard
+                    label="Work Authorization / Visa"
+                    value={
+                      candidate.work_authorization ||
+                      candidate.visa_status ||
+                      (candidate.authorized_in_usa
+                        ? 'Authorized to work in USA'
+                        : 'Requires Sponsorship')
+                    }
+                  />
+                  <FactCard
+                    label="Gender"
+                    value={candidate.gender || (candidate.confirmed_facts as any)?.gender}
+                  />
+                  <FactCard
+                    label="Race / Ethnicity"
+                    value={
+                      candidate.race ||
+                      (candidate.confirmed_facts as any)?.race ||
+                      candidate.race_ethnicity ||
+                      (candidate.confirmed_facts as any)?.race_ethnicity
+                    }
+                  />
+                  <FactCard
+                    label="Veteran Status"
+                    value={
+                      candidate.veteran ||
+                      candidate.veteran_status ||
+                      (candidate.confirmed_facts as any)?.veteran ||
+                      (candidate.confirmed_facts as any)?.veteran_status
+                    }
+                  />
+                  <FactCard
+                    label="Disability Status"
+                    value={
+                      candidate.disability ||
+                      candidate.disability_status ||
+                      (candidate.confirmed_facts as any)?.disability ||
+                      (candidate.confirmed_facts as any)?.disability_status
+                    }
+                  />
+                  <FactCard
+                    label="Expected Compensation"
+                    value={candidate.expected_salary}
+                    icon={Coins}
+                  />
                   <FactCard
                     label="Availability to Join"
                     value={candidate.available_to_join || candidate.notice_period}
@@ -300,17 +359,24 @@ export function CandidateProfileWorkspace({
                   />
                   <FactCard
                     label="Total Years Experience"
-                    value={candidate.total_experience_years ? `${candidate.total_experience_years} years` : null}
+                    value={
+                      candidate.total_experience_years
+                        ? `${candidate.total_experience_years} years`
+                        : null
+                    }
                     icon={Briefcase}
                   />
                   <FactCard label="US Work Authorization" value={candidate.authorized_in_usa} />
-                  <FactCard label="Visa Sponsorship Needed" value={candidate.need_sponsorship_now} />
+                  <FactCard
+                    label="Visa Sponsorship Needed"
+                    value={candidate.need_sponsorship_now}
+                  />
                   <FactCard label="Open to Relocation" value={candidate.open_to_relocation} />
                 </div>
 
                 {/* Primary Skills Cloud */}
-                <div className="rounded-2xl border border-border/80 bg-card p-5 space-y-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <div className="border-border/80 bg-card space-y-3 rounded-2xl border p-5">
+                  <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
                     Technical & Domain Competencies
                   </h3>
                   <div className="flex flex-wrap gap-1.5">
@@ -322,18 +388,18 @@ export function CandidateProfileWorkspace({
                         .map((skill) => (
                           <span
                             key={skill}
-                            className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+                            className="bg-primary/10 text-primary border-primary/20 inline-flex items-center rounded-lg border px-3 py-1 text-xs font-medium"
                           >
                             {skill}
                           </span>
                         ))
                     ) : (
-                      <p className="text-xs text-muted-foreground">No primary skills recorded.</p>
+                      <p className="text-muted-foreground text-xs">No primary skills recorded.</p>
                     )}
                   </div>
                   {candidate.secondary_skills && (
-                    <p className="text-xs text-muted-foreground pt-1">
-                      <span className="font-semibold text-foreground">Additional: </span>
+                    <p className="text-muted-foreground pt-1 text-xs">
+                      <span className="text-foreground font-semibold">Additional: </span>
                       {candidate.secondary_skills}
                     </p>
                   )}
@@ -345,18 +411,18 @@ export function CandidateProfileWorkspace({
                     variant="outline"
                     size="sm"
                     render={<Link href={`/dashboard/jobs?candidateId=${candidate.id}`} />}
-                    className="gap-2 cursor-pointer"
+                    className="cursor-pointer gap-2"
                   >
-                    <Briefcase className="size-3.5 text-primary" />
+                    <Briefcase className="text-primary size-3.5" />
                     <span>Find Matching Openings</span>
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     render={<Link href={`/dashboard/submissions?candidateId=${candidate.id}`} />}
-                    className="gap-2 cursor-pointer"
+                    className="cursor-pointer gap-2"
                   >
-                    <Send className="size-3.5 text-primary" />
+                    <Send className="text-primary size-3.5" />
                     <span>View Application Submissions</span>
                   </Button>
                 </div>
@@ -364,26 +430,30 @@ export function CandidateProfileWorkspace({
 
               {/* Work History Tab Content */}
               <TabsContent value="history" className="space-y-6 pt-2">
-                <section className="rounded-2xl border border-border/80 bg-card p-6 space-y-4">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <section className="border-border/80 bg-card space-y-4 rounded-2xl border p-6">
+                  <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
                     Employment History
                   </h3>
                   {candidate.employment_history?.length ? (
-                    <div className="divide-y divide-border/60">
+                    <div className="divide-border/60 divide-y">
                       {candidate.employment_history.map((row, index) => (
-                        <div key={index} className="py-4 first:pt-0 last:pb-0 grid sm:grid-cols-[180px_1fr] gap-3">
-                          <div className="font-mono text-xs text-muted-foreground">
-                            {[row.start, row.end].filter(Boolean).map(String).join(" – ") || "Dates unrecorded"}
+                        <div
+                          key={index}
+                          className="grid gap-3 py-4 first:pt-0 last:pb-0 sm:grid-cols-[180px_1fr]"
+                        >
+                          <div className="text-muted-foreground font-mono text-xs">
+                            {[row.start, row.end].filter(Boolean).map(String).join(' – ') ||
+                              'Dates unrecorded'}
                           </div>
                           <div className="space-y-1">
-                            <h4 className="text-sm font-bold text-foreground">
-                              {String(row.title || "Position Title")}
+                            <h4 className="text-foreground text-sm font-bold">
+                              {String(row.title || 'Position Title')}
                             </h4>
-                            <p className="text-xs font-semibold text-primary">
-                              {String(row.employer || "Employer")}
+                            <p className="text-primary text-xs font-semibold">
+                              {String(row.employer || 'Employer')}
                             </p>
-                            {typeof row.description === "string" && (
-                              <p className="mt-2 text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
+                            {typeof row.description === 'string' && (
+                              <p className="text-muted-foreground mt-2 text-xs leading-relaxed whitespace-pre-wrap">
                                 {row.description}
                               </p>
                             )}
@@ -392,32 +462,35 @@ export function CandidateProfileWorkspace({
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground">No employment history recorded.</p>
+                    <p className="text-muted-foreground text-xs">No employment history recorded.</p>
                   )}
                 </section>
 
-                <section className="rounded-2xl border border-border/80 bg-card p-6 space-y-4">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <section className="border-border/80 bg-card space-y-4 rounded-2xl border p-6">
+                  <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
                     Education & Credentials
                   </h3>
                   {candidate.education_history?.length ? (
-                    <div className="divide-y divide-border/60">
+                    <div className="divide-border/60 divide-y">
                       {candidate.education_history.map((row, index) => (
-                        <div key={index} className="py-3 first:pt-0 last:pb-0 flex items-start gap-3">
-                          <GraduationCap className="size-4 text-primary shrink-0 mt-0.5" />
+                        <div
+                          key={index}
+                          className="flex items-start gap-3 py-3 first:pt-0 last:pb-0"
+                        >
+                          <GraduationCap className="text-primary mt-0.5 size-4 shrink-0" />
                           <div>
-                            <p className="text-xs font-bold text-foreground">
-                              {String(row.degree || "Degree")}
+                            <p className="text-foreground text-xs font-bold">
+                              {String(row.degree || 'Degree')}
                             </p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {String(row.institution || row.school || "Institution")}
+                            <p className="text-muted-foreground mt-0.5 text-xs">
+                              {String(row.institution || row.school || 'Institution')}
                             </p>
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground">No education history recorded.</p>
+                    <p className="text-muted-foreground text-xs">No education history recorded.</p>
                   )}
                 </section>
               </TabsContent>
@@ -427,9 +500,9 @@ export function CandidateProfileWorkspace({
                 {docError && <WorkspaceError message={docError} />}
 
                 {/* Original Document Files */}
-                <section className="rounded-2xl border border-border/80 bg-card p-6 space-y-4">
-                  <div className="flex items-center justify-between pb-2 border-b border-border/60">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <section className="border-border/80 bg-card space-y-4 rounded-2xl border p-6">
+                  <div className="border-border/60 flex items-center justify-between border-b pb-2">
+                    <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
                       Original Uploaded Documents
                     </h3>
                   </div>
@@ -437,21 +510,21 @@ export function CandidateProfileWorkspace({
                   {docLoading ? (
                     <WorkspaceSkeleton rows={2} />
                   ) : documents.length ? (
-                    <div className="divide-y divide-border/60">
+                    <div className="divide-border/60 divide-y">
                       {documents.map((doc) => (
                         <div
                           key={doc.id}
                           className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
                         >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-lg">
                               <FileText className="size-4" />
                             </div>
                             <div className="min-w-0">
-                              <p className="text-xs font-semibold text-foreground truncate">
+                              <p className="text-foreground truncate text-xs font-semibold">
                                 {doc.filename}
                               </p>
-                              <p className="text-[11px] text-muted-foreground">
+                              <p className="text-muted-foreground text-[11px]">
                                 {doc.status} · {new Date(doc.created_at).toLocaleDateString()}
                               </p>
                             </div>
@@ -465,12 +538,12 @@ export function CandidateProfileWorkspace({
                                 const result = await api<{ url: string }>(
                                   `/api/resumes/${doc.id}/download`
                                 );
-                                window.open(result.url, "_blank", "noopener,noreferrer");
+                                window.open(result.url, '_blank', 'noopener,noreferrer');
                               } catch (e) {
                                 setDocError((e as Error).message);
                               }
                             }}
-                            className="gap-1.5 cursor-pointer"
+                            className="cursor-pointer gap-1.5"
                           >
                             <Download className="size-3.5" />
                             <span>Download Original</span>
@@ -488,13 +561,13 @@ export function CandidateProfileWorkspace({
                 </section>
 
                 {/* Confirmed Profile Resume Preview & Export */}
-                <section className="rounded-2xl border border-border/80 bg-card p-6 space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/60">
+                <section className="border-border/80 bg-card space-y-4 rounded-2xl border p-6">
+                  <div className="border-border/60 flex flex-col justify-between gap-3 border-b pb-3 sm:flex-row sm:items-center">
                     <div>
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
                         Confirmed Profile Resume
                       </h3>
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                      <p className="text-muted-foreground mt-0.5 text-xs">
                         Generated exclusively from verified career facts
                       </p>
                     </div>
@@ -504,7 +577,7 @@ export function CandidateProfileWorkspace({
                         size="sm"
                         variant="outline"
                         onClick={copyResumeMarkdown}
-                        className="gap-1.5 cursor-pointer text-xs"
+                        className="cursor-pointer gap-1.5 text-xs"
                       >
                         {copied ? (
                           <>
@@ -519,28 +592,29 @@ export function CandidateProfileWorkspace({
                         )}
                       </Button>
 
-                      {(["docx", "pdf"] as const).map((fmt) => (
+                      {(['docx', 'pdf'] as const).map((fmt) => (
                         <Button
                           key={fmt}
                           size="sm"
                           variant="outline"
-                          disabled={candidate.provenance_status !== "confirmed" || !!busy}
+                          disabled={candidate.provenance_status !== 'confirmed' || !!busy}
                           onClick={() => void exportFile(fmt)}
-                          className="text-xs cursor-pointer"
+                          className="cursor-pointer text-xs"
                         >
-                          {busy === fmt ? "Exporting…" : `Export ${fmt.toUpperCase()}`}
+                          {busy === fmt ? 'Exporting…' : `Export ${fmt.toUpperCase()}`}
                         </Button>
                       ))}
                     </div>
                   </div>
 
-                  {candidate.provenance_status === "confirmed" ? (
-                    <pre className="whitespace-pre-wrap rounded-xl border border-border/70 bg-muted/20 p-5 font-mono text-xs leading-relaxed max-h-96 overflow-y-auto">
+                  {candidate.provenance_status === 'confirmed' ? (
+                    <pre className="border-border/70 bg-muted/20 max-h-96 overflow-y-auto rounded-xl border p-5 font-mono text-xs leading-relaxed whitespace-pre-wrap">
                       {candidateResumeMarkdown(candidate)}
                     </pre>
                   ) : (
-                    <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 text-xs text-amber-800 dark:text-amber-300">
-                      Review and confirm this imported profile before generating an official profile resume export.
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-amber-800 dark:text-amber-300">
+                      Review and confirm this imported profile before generating an official profile
+                      resume export.
                     </div>
                   )}
                 </section>
@@ -548,21 +622,21 @@ export function CandidateProfileWorkspace({
 
               {/* Source Evidence Citations Tab Content */}
               <TabsContent value="evidence" className="pt-2">
-                <section className="rounded-2xl border border-border/80 bg-card p-6 space-y-4">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <section className="border-border/80 bg-card space-y-4 rounded-2xl border p-6">
+                  <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
                     Source Evidence & Facts Provenance
                   </h3>
                   {candidate.evidence?.length ? (
-                    <dl className="divide-y divide-border/60">
+                    <dl className="divide-border/60 divide-y">
                       {candidate.evidence.map((item, index) => (
                         <div key={index} className="py-3 first:pt-0 last:pb-0">
-                          <dt className="text-xs font-bold text-foreground uppercase tracking-wide">
-                            {item.field.replaceAll("_", " ")}
+                          <dt className="text-foreground text-xs font-bold tracking-wide uppercase">
+                            {item.field.replaceAll('_', ' ')}
                           </dt>
-                          <dd className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                          <dd className="text-muted-foreground mt-1 text-xs leading-relaxed">
                             &ldquo;{item.snippet}&rdquo;
                             {item.page !== null && (
-                              <span className="font-mono text-primary font-semibold ml-1.5">
+                              <span className="text-primary ml-1.5 font-mono font-semibold">
                                 [Page {item.page}]
                               </span>
                             )}
@@ -571,8 +645,9 @@ export function CandidateProfileWorkspace({
                       ))}
                     </dl>
                   ) : (
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      No source citations recorded. Confirmed facts indicate candidate or recruiter review; they do not imply automated third-party verification.
+                    <p className="text-muted-foreground text-xs leading-relaxed">
+                      No source citations recorded. Confirmed facts indicate candidate or recruiter
+                      review; they do not imply automated third-party verification.
                     </p>
                   )}
                 </section>

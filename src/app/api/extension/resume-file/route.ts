@@ -56,7 +56,9 @@ export async function GET(request: Request) {
 
     const documents = [...(linked || []), ...(owned || [])].sort((a, b) => {
       const rank = (row: { status: string }) => (row.status === 'confirmed' ? 0 : 1);
-      return rank(a) - rank(b) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      return (
+        rank(a) - rank(b) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
     });
 
     const doc = documents[0];
@@ -76,7 +78,7 @@ export async function GET(request: Request) {
           mimeType,
           base64,
           candidateName: candidate.full_name,
-          source: 'upload'
+          source: 'upload',
         };
       }
     }
@@ -86,20 +88,25 @@ export async function GET(request: Request) {
       if (candidate.resume_url.startsWith('data:')) {
         const matches = candidate.resume_url.match(/^data:([^;]+);base64,(.+)$/);
         if (matches) {
-          const extension = matches[1].toLowerCase() === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ? 'docx' : 'pdf';
+          const extension =
+            matches[1].toLowerCase() ===
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+              ? 'docx'
+              : 'pdf';
           return {
             filename: `${(candidate.full_name || 'Candidate').replace(/[^a-zA-Z0-9]/g, '_')}_Resume.${extension}`,
             mimeType: matches[1] || 'application/pdf',
             base64: matches[2],
             candidateName: candidate.full_name,
-            source: 'upload'
+            source: 'upload',
           };
         }
       }
     }
 
     if (params.get('originalOnly') === 'true') {
-      if (doc?.object_path) throw new CaptureError('The uploaded resume could not be downloaded.', 502);
+      if (doc?.object_path)
+        throw new CaptureError('The uploaded resume could not be downloaded.', 502);
       throw new CaptureError('No uploaded resume found.', 404);
     }
 
@@ -107,13 +114,18 @@ export async function GET(request: Request) {
     const name = candidate.full_name || 'Candidate';
     const email = candidate.email || '';
     const phone = candidate.phone || '';
-    const location = [candidate.current_city, candidate.current_state].filter(Boolean).join(', ') || candidate.full_address || '';
+    const location =
+      [candidate.current_city, candidate.current_state].filter(Boolean).join(', ') ||
+      candidate.full_address ||
+      '';
     const linkedin = candidate.linkedin_url || '';
     const contactLine = [email, phone, location, linkedin].filter(Boolean).join(' | ');
 
-    const roleTitle = candidate.current_job_title || candidate.target_job_titles || 'Software Professional';
+    const roleTitle =
+      candidate.current_job_title || candidate.target_job_titles || 'Software Professional';
     const primarySkills = candidate.primary_skills || (confirmed.primary_skills as string) || '';
-    const secondarySkills = candidate.secondary_skills || (confirmed.secondary_skills as string) || '';
+    const secondarySkills =
+      candidate.secondary_skills || (confirmed.secondary_skills as string) || '';
     const allSkills = [primarySkills, secondarySkills].filter(Boolean).join(', ');
 
     const lines: string[] = [
@@ -125,7 +137,7 @@ export async function GET(request: Request) {
       `Results-driven ${roleTitle} with extensive experience in ${primarySkills || 'software engineering and system design'}. Proven track record of architecting scalable applications, collaborating with cross-functional teams, and driving engineering excellence.`,
       '',
       'SKILLS',
-      allSkills || 'Software Development, Problem Solving, Analytical Skills, System Design'
+      allSkills || 'Software Development, Problem Solving, Analytical Skills, System Design',
     ];
 
     // Experience
@@ -143,16 +155,24 @@ export async function GET(request: Request) {
         } else if (typeof exp.description === 'string' && exp.description.trim()) {
           lines.push(`- ${exp.description.trim()}`);
         } else {
-          lines.push(`- Designed and developed production solutions utilizing ${primarySkills || 'modern technology stacks'}.`);
-          lines.push(`- Partnered with product and engineering teams to deliver high-quality, scalable deliverables.`);
+          lines.push(
+            `- Designed and developed production solutions utilizing ${primarySkills || 'modern technology stacks'}.`
+          );
+          lines.push(
+            `- Partnered with product and engineering teams to deliver high-quality, scalable deliverables.`
+          );
         }
       }
     } else {
       const employer = candidate.current_employer || 'Technology Solutions Inc.';
       lines.push(`${roleTitle} | ${employer}`);
       lines.push('2022 – Present');
-      lines.push(`- Engineered high-performance systems and workflows leveraging ${primarySkills || 'modern tech'}.`);
-      lines.push(`- Collaborated closely with cross-functional partners to execute critical technical roadmaps.`);
+      lines.push(
+        `- Engineered high-performance systems and workflows leveraging ${primarySkills || 'modern tech'}.`
+      );
+      lines.push(
+        `- Collaborated closely with cross-functional partners to execute critical technical roadmaps.`
+      );
     }
 
     // Education
@@ -178,7 +198,7 @@ export async function GET(request: Request) {
       mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       base64: docxBase64,
       candidateName: name,
-      source: 'generated'
+      source: 'generated',
     };
   });
   response.headers.set('Cache-Control', 'private, no-store');

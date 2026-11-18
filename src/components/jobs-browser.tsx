@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
@@ -53,7 +53,12 @@ interface LiveJob extends NormalizedJob {
   match_reasons?: string[];
 }
 
-type Recommendation = { enabled: boolean; requiresProfile: boolean; candidateId: string | null; candidateName: string | null };
+type Recommendation = {
+  enabled: boolean;
+  requiresProfile: boolean;
+  candidateId: string | null;
+  candidateName: string | null;
+};
 
 type Source = {
   id: string;
@@ -97,7 +102,9 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   const attemptedCatalogBootstrap = useRef(false);
   const catalogSyncInFlight = useRef(false);
   const [lastFetchedTime, setLastFetchedTime] = useState<string | null>(null);
-  const [liveSources, setLiveSources] = useState<{ company: string; count: number; error?: string }[]>([]);
+  const [liveSources, setLiveSources] = useState<
+    { company: string; count: number; error?: string }[]
+  >([]);
 
   // Database Mode states
   const [dbJobs, setDbJobs] = useState<StoredJob[]>([]);
@@ -117,7 +124,11 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   const [companyFilter, setCompanyFilter] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
   const [postedWithin, setPostedWithin] = useState('30');
-  const savedFilters = new URLSearchParams({ company: companyFilter, location: locationFilter, postedWithin });
+  const savedFilters = new URLSearchParams({
+    company: companyFilter,
+    location: locationFilter,
+    postedWithin,
+  });
   if (provider || portalFilter) savedFilters.set('provider', provider || portalFilter);
   const savedFilterParam = '&' + savedFilters.toString();
   const [employmentType, setEmploymentType] = useState('all');
@@ -130,30 +141,39 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   }, []);
 
   // Sync all configured software jobs to database
-  const syncSoftwareJobs = useCallback(async (bootstrap = false) => {
-    if (catalogSyncInFlight.current) return;
-    catalogSyncInFlight.current = true;
-    setSyncingSoftwareJobs(true);
-    setError('');
-    setNotice('');
-    try {
-      const filters = bootstrap ? '' : `&postedWithin=${postedWithin}${provider || portalFilter ? '&provider=' + encodeURIComponent(provider || portalFilter) : ''}`;
-      const res = await api<{persistedCount: number; sources?: { error?: string }[]}>(
-        `/api/jobs/live?saveToDb=true&summary=true${filters}`
-      );
-      setNotice(res.persistedCount > 0 ? 'Public jobs refreshed and saved.' : 'No jobs were saved. Review source errors or try another public board.');
-      const failures = res.sources?.flatMap(source => source.error ? [source.error] : []);
-      if (failures?.length) setError(failures.join(' '));
-      // Refresh DB jobs
-      setDbPage(0);
-      setReload(v => v + 1);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      catalogSyncInFlight.current = false;
-      setSyncingSoftwareJobs(false);
-    }
-  }, [portalFilter, postedWithin, provider]);
+  const syncSoftwareJobs = useCallback(
+    async (bootstrap = false) => {
+      if (catalogSyncInFlight.current) return;
+      catalogSyncInFlight.current = true;
+      setSyncingSoftwareJobs(true);
+      setError('');
+      setNotice('');
+      try {
+        const filters = bootstrap
+          ? ''
+          : `&postedWithin=${postedWithin}${provider || portalFilter ? '&provider=' + encodeURIComponent(provider || portalFilter) : ''}`;
+        const res = await api<{ persistedCount: number; sources?: { error?: string }[] }>(
+          `/api/jobs/live?saveToDb=true&summary=true${filters}`
+        );
+        setNotice(
+          res.persistedCount > 0
+            ? 'Public jobs refreshed and saved.'
+            : 'No jobs were saved. Review source errors or try another public board.'
+        );
+        const failures = res.sources?.flatMap((source) => (source.error ? [source.error] : []));
+        if (failures?.length) setError(failures.join(' '));
+        // Refresh DB jobs
+        setDbPage(0);
+        setReload((v) => v + 1);
+      } catch (err) {
+        setError((err as Error).message);
+      } finally {
+        catalogSyncInFlight.current = false;
+        setSyncingSoftwareJobs(false);
+      }
+    },
+    [portalFilter, postedWithin, provider]
+  );
 
   const handleApplyDirectly = async (job: LiveJob | StoredJob) => {
     if (!applicationCandidateId) {
@@ -186,10 +206,13 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         targetJobId = (job as StoredJob).id;
       }
 
-      const { intent } = await api<{ intent: { id: string; job: { application_url: string } } }>('/api/application-intents', {
-        method: 'POST',
-        body: JSON.stringify({ candidateId: applicationCandidateId, jobId: targetJobId }),
-      });
+      const { intent } = await api<{ intent: { id: string; job: { application_url: string } } }>(
+        '/api/application-intents',
+        {
+          method: 'POST',
+          body: JSON.stringify({ candidateId: applicationCandidateId, jobId: targetJobId }),
+        }
+      );
       const appUrl = new URL(intent.job.application_url);
       appUrl.hash = 'marketing-intent=' + intent.id;
       tab.location.href = appUrl.toString();
@@ -242,11 +265,16 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         }
         setLiveSources(res.sources || []);
         setLastFetchedTime(new Date(res.fetchedAt).toLocaleTimeString());
-        const failures = res.sources?.flatMap(source => source.error ? [source.error] : []);
+        const failures = res.sources?.flatMap((source) => (source.error ? [source.error] : []));
         if (failures?.length) setError(failures.join(' '));
         if (saveToDbOnFetch && res.persistedInDb) {
           setNotice(` Pulled ${res.jobs.length} software jobs and stored them in the database!`);
-          void api<{ jobs: StoredJob[]; total: number; hasMore: boolean; recommendation: Recommendation }>(
+          void api<{
+            jobs: StoredJob[];
+            total: number;
+            hasMore: boolean;
+            recommendation: Recommendation;
+          }>(
             `/api/jobs?type=${employmentType}&search=${encodeURIComponent(search)}&page=0${
               savedFilterParam + candidateParam
             }`
@@ -267,24 +295,48 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         if (requestId === liveRequest.current) setLiveLoading(false);
       }
     },
-    [liveBoard, liveProvider, employmentType, search, saveToDbOnFetch, candidateId, candidateParam, companyFilter, locationFilter, savedFilterParam, postedWithin]
+    [
+      liveBoard,
+      liveProvider,
+      employmentType,
+      search,
+      saveToDbOnFetch,
+      candidateId,
+      candidateParam,
+      companyFilter,
+      locationFilter,
+      savedFilterParam,
+      postedWithin,
+    ]
   );
 
   // Initial load for live jobs
   useEffect(() => {
     const request = liveRequest;
     const timer = setTimeout(() => {
-      if (!profileLoading && mode === 'live' && applicationView === 'available') void fetchLiveJobs();
+      if (!profileLoading && mode === 'live' && applicationView === 'available')
+        void fetchLiveJobs();
     }, 0);
-    return () => { clearTimeout(timer); request.current++; };
+    return () => {
+      clearTimeout(timer);
+      request.current++;
+    };
   }, [mode, fetchLiveJobs, profileLoading, applicationView]);
 
   // Load database jobs if in DB mode
   useEffect(() => {
     if (mode !== 'db' || profileLoading || applicationView !== 'available') return;
     let active = true;
-    queueMicrotask(() => { if (active) setDbLoading(true); });
-    api<{ jobs: StoredJob[]; total: number; hasMore: boolean; recommendation: Recommendation; catalogEmpty: boolean }>(
+    queueMicrotask(() => {
+      if (active) setDbLoading(true);
+    });
+    api<{
+      jobs: StoredJob[];
+      total: number;
+      hasMore: boolean;
+      recommendation: Recommendation;
+      catalogEmpty: boolean;
+    }>(
       `/api/jobs?type=${employmentType}&search=${encodeURIComponent(search)}&page=${dbPage}${
         savedFilterParam + candidateParam
       }`
@@ -296,7 +348,9 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           setDbTotal(r.total);
           setDbMore(r.hasMore);
           if (r.jobs.length > 0) {
-            setSelectedDbJob(prev => prev && r.jobs.some(j => j.id === prev.id) ? prev : r.jobs[0]);
+            setSelectedDbJob((prev) =>
+              prev && r.jobs.some((j) => j.id === prev.id) ? prev : r.jobs[0]
+            );
           } else {
             setSelectedDbJob(null);
           }
@@ -308,71 +362,133 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         }
       })
       .catch((e) => active && setError(e.message))
-      .finally(() => { if (active) setDbLoading(false); });
+      .finally(() => {
+        if (active) setDbLoading(false);
+      });
 
     return () => {
       active = false;
     };
-  }, [mode, employmentType, search, dbPage, savedFilterParam, candidateParam, profileLoading, reload, applicationView, syncSoftwareJobs]);
+  }, [
+    mode,
+    employmentType,
+    search,
+    dbPage,
+    savedFilterParam,
+    candidateParam,
+    profileLoading,
+    reload,
+    applicationView,
+    syncSoftwareJobs,
+  ]);
 
   // Live mode: fetch applied keys and filter live jobs on initial load and reload
   useEffect(() => {
     if (mode !== 'live' || applicationView !== 'available') return;
     let active = true;
     void api<AppliedJobsResponse>(`/api/jobs/applications?page=0${candidateParam}`)
-      .then(data => { if (active) setLiveJobs(jobs => withoutAppliedJobs(jobs, data.appliedKeys)); })
-      .catch(error => { if (active) setError(error.message); });
-    return () => { active = false; };
+      .then((data) => {
+        if (active) setLiveJobs((jobs) => withoutAppliedJobs(jobs, data.appliedKeys));
+      })
+      .catch((error) => {
+        if (active) setError(error.message);
+      });
+    return () => {
+      active = false;
+    };
   }, [mode, applicationView, candidateParam, reload]);
 
   useEffect(() => {
     if (profileLoading || applicationView !== 'applied') return;
     let active = true;
-    queueMicrotask(() => { if (active) { setAppliedLoading(true); setAppliedData(null); } });
-    void api<AppliedJobsResponse>(`/api/jobs/applications?type=${employmentType}&search=${encodeURIComponent(search)}&page=${dbPage}${savedFilterParam + candidateParam}`)
-      .then(data => { if (active) { setAppliedData(data); setError(''); } })
-      .catch(error => { if (active) setError(error.message); })
-      .finally(() => { if (active) setAppliedLoading(false); });
-    return () => { active = false; };
-  }, [profileLoading, applicationView, employmentType, search, dbPage, savedFilterParam, candidateParam, reload]);
+    queueMicrotask(() => {
+      if (active) {
+        setAppliedLoading(true);
+        setAppliedData(null);
+      }
+    });
+    void api<AppliedJobsResponse>(
+      `/api/jobs/applications?type=${employmentType}&search=${encodeURIComponent(search)}&page=${dbPage}${savedFilterParam + candidateParam}`
+    )
+      .then((data) => {
+        if (active) {
+          setAppliedData(data);
+          setError('');
+        }
+      })
+      .catch((error) => {
+        if (active) setError(error.message);
+      })
+      .finally(() => {
+        if (active) setAppliedLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    profileLoading,
+    applicationView,
+    employmentType,
+    search,
+    dbPage,
+    savedFilterParam,
+    candidateParam,
+    reload,
+  ]);
 
   useEffect(() => {
     const refresh = () => {
-      if (document.visibilityState === 'visible') setReload(value => value + 1);
+      if (document.visibilityState === 'visible') setReload((value) => value + 1);
     };
-    window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', refresh);
-    return () => { window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
   }, []);
 
-  useApplicationRealtime(() => setReload(value => value + 1), isCandidate && !profileLoading, applicationCandidateId);
+  useApplicationRealtime(
+    () => setReload((value) => value + 1),
+    isCandidate && !profileLoading,
+    applicationCandidateId
+  );
 
   // Load the candidate's own confirmed profile.
   useEffect(() => {
     if (canSelectCandidate) {
-      void getCandidates().then(items => setCandidates(items.filter(c => c.provenance_status === 'confirmed'))).catch(e => setError(e.message));
+      void getCandidates()
+        .then((items) => setCandidates(items.filter((c) => c.provenance_status === 'confirmed')))
+        .catch((e) => setError(e.message));
     }
   }, [canSelectCandidate]);
 
   // Active selected detail data
-  const activeJob = mode === 'db'
-    ? dbJobs.find(job => job.id === selectedDbJob?.id) ?? dbJobs[0]
-    : liveJobs.find(job => job.content_hash === selectedLiveJob?.content_hash) ?? liveJobs[0];
-  const activeExtracted = activeJob?.description ? extractCompleteJobDetails(activeJob.description, activeJob.title) : null;
+  const activeJob =
+    mode === 'db'
+      ? (dbJobs.find((job) => job.id === selectedDbJob?.id) ?? dbJobs[0])
+      : (liveJobs.find((job) => job.content_hash === selectedLiveJob?.content_hash) ?? liveJobs[0]);
+  const activeExtracted = activeJob?.description
+    ? extractCompleteJobDetails(activeJob.description, activeJob.title)
+    : null;
 
   return (
-    <main className="p-4 sm:p-6 max-w-[1600px] mx-auto space-y-4">
+    <main className="mx-auto max-w-[1600px] space-y-4 p-4 sm:p-6">
       {/* Top Header & Mode Toggle */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border/70 pb-4">
+      <div className="border-border/70 flex flex-col items-start justify-between gap-4 border-b pb-4 sm:flex-row sm:items-center">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+            <h1 className="text-foreground text-xl font-bold tracking-tight sm:text-2xl">
               {provider ? provider.toUpperCase() + ' Roles' : 'Discover Opportunities'}
             </h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
-              <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+              <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
               Verified Tech Roles
             </span>
-            <Badge variant="outline" className="text-xs px-2 py-0.5 rounded-full border-border/70 capitalize font-medium">
+            <Badge
+              variant="outline"
+              className="border-border/70 rounded-full px-2 py-0.5 text-xs font-medium capitalize"
+            >
               {isCandidate ? 'Candidate Mode' : 'All Openings'}
             </Badge>
           </div>
@@ -382,26 +498,39 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         </div>
 
         {/* View Mode Switcher */}
-        <div className="inline-flex items-center p-1 rounded-xl bg-muted/60 border border-border/70 shadow-2xs">
+        <div className="bg-muted/60 border-border/70 inline-flex items-center rounded-xl border p-1 shadow-2xs">
           <Button
             size="sm"
             variant={mode === 'db' ? 'default' : 'ghost'}
-            onClick={() => { setMode('db'); setApplicationView('available'); setDbPage(0); }}
-            className={`text-xs h-8 px-3.5 rounded-lg font-medium transition-all ${
+            onClick={() => {
+              setMode('db');
+              setApplicationView('available');
+              setDbPage(0);
+            }}
+            className={`h-8 rounded-lg px-3.5 text-xs font-medium transition-all ${
               mode === 'db'
-                ? 'bg-background text-foreground shadow-xs font-semibold'
+                ? 'bg-background text-foreground font-semibold shadow-xs'
                 : 'text-muted-foreground hover:text-foreground hover:bg-background/40'
             }`}
           >
-            Saved Catalog <span className="ml-1.5 font-mono text-[11px] tabular-nums opacity-80">({dbTotal})</span>
+            Saved Catalog{' '}
+            <span className="ml-1.5 font-mono text-[11px] tabular-nums opacity-80">
+              ({dbTotal})
+            </span>
           </Button>
           <Button
             size="sm"
             variant={mode === 'live' ? 'default' : 'ghost'}
-            onClick={() => { setLiveProvider(provider || portalFilter || 'all'); setLiveBoard(''); setMode('live'); setApplicationView('available'); setDbPage(0); }}
-            className={`text-xs h-8 px-3.5 rounded-lg font-medium transition-all ${
+            onClick={() => {
+              setLiveProvider(provider || portalFilter || 'all');
+              setLiveBoard('');
+              setMode('live');
+              setApplicationView('available');
+              setDbPage(0);
+            }}
+            className={`h-8 rounded-lg px-3.5 text-xs font-medium transition-all ${
               mode === 'live'
-                ? 'bg-background text-foreground shadow-xs font-semibold'
+                ? 'bg-background text-foreground font-semibold shadow-xs'
                 : 'text-muted-foreground hover:text-foreground hover:bg-background/40'
             }`}
           >
@@ -412,11 +541,15 @@ export function JobsBrowser({ provider }: { provider?: string }) {
 
       {/* Available / Applied Filter Tabs */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex items-center p-1 rounded-xl bg-card border border-border/70 shadow-2xs">
+        <div className="bg-card border-border/70 inline-flex items-center rounded-xl border p-1 shadow-2xs">
           <button
             type="button"
-            onClick={() => { setApplicationView('available'); setDbPage(0); setAppliedData(null); }}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+            onClick={() => {
+              setApplicationView('available');
+              setDbPage(0);
+              setAppliedData(null);
+            }}
+            className={`flex cursor-pointer items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
               applicationView === 'available'
                 ? 'bg-primary text-primary-foreground shadow-2xs'
                 : 'text-muted-foreground hover:text-foreground'
@@ -427,8 +560,11 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           </button>
           <button
             type="button"
-            onClick={() => { setApplicationView('applied'); setDbPage(0); }}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+            onClick={() => {
+              setApplicationView('applied');
+              setDbPage(0);
+            }}
+            className={`flex cursor-pointer items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
               applicationView === 'applied'
                 ? 'bg-primary text-primary-foreground shadow-2xs'
                 : 'text-muted-foreground hover:text-foreground'
@@ -445,8 +581,11 @@ export function JobsBrowser({ provider }: { provider?: string }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => { setDbPage(0); setReload(v => v + 1); }}
-              className="h-8 text-xs font-medium rounded-lg border-border/80 shadow-2xs gap-1.5"
+              onClick={() => {
+                setDbPage(0);
+                setReload((v) => v + 1);
+              }}
+              className="border-border/80 h-8 gap-1.5 rounded-lg text-xs font-medium shadow-2xs"
             >
               <RefreshCw className="size-3" />
               <span>Refresh</span>
@@ -455,7 +594,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
               size="sm"
               onClick={() => void syncSoftwareJobs()}
               disabled={syncingSoftwareJobs}
-              className="h-8 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs gap-1.5"
+              className="h-8 gap-1.5 rounded-lg bg-emerald-600 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700"
             >
               <Download className="size-3" />
               <span>{syncingSoftwareJobs ? 'Pulling...' : 'Sync Software Jobs'}</span>
@@ -465,51 +604,63 @@ export function JobsBrowser({ provider }: { provider?: string }) {
       </div>
 
       {/* SEARCH & FILTERS BAR (Jobright Style Clean Filter Strip) */}
-      <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-xs space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+      <section className="border-border/70 bg-card space-y-3 rounded-2xl border p-4 shadow-xs">
+        <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-12">
           {/* Main Keyword Search */}
-          <div className="sm:col-span-4 relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <div className="relative sm:col-span-4">
+            <Search className="text-muted-foreground absolute top-1/2 left-3.5 size-4 -translate-y-1/2" />
             <Input
               aria-label="Search jobs"
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setDbPage(0); }}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setDbPage(0);
+              }}
               placeholder="Search by job title, role or keywords..."
-              className="h-10 pl-10 rounded-xl bg-background border-border/80 text-xs sm:text-sm font-medium"
+              className="bg-background border-border/80 h-10 rounded-xl pl-10 text-xs font-medium sm:text-sm"
             />
           </div>
 
           {/* Location Filter */}
-          <div className="sm:col-span-3 relative">
-            <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <div className="relative sm:col-span-3">
+            <MapPin className="text-muted-foreground absolute top-1/2 left-3.5 size-4 -translate-y-1/2" />
             <Input
               aria-label="Filter by location"
               value={locationFilter}
-              onChange={(e) => { setLocationFilter(e.target.value); setDbPage(0); }}
+              onChange={(e) => {
+                setLocationFilter(e.target.value);
+                setDbPage(0);
+              }}
               placeholder="City, state or remote..."
-              className="h-10 pl-10 rounded-xl bg-background border-border/80 text-xs sm:text-sm font-medium"
+              className="bg-background border-border/80 h-10 rounded-xl pl-10 text-xs font-medium sm:text-sm"
             />
           </div>
 
           {/* Company Filter */}
-          <div className="sm:col-span-2 relative">
-            <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <div className="relative sm:col-span-2">
+            <Building2 className="text-muted-foreground absolute top-1/2 left-3.5 size-4 -translate-y-1/2" />
             <Input
               aria-label="Filter by company"
               value={companyFilter}
-              onChange={(e) => { setCompanyFilter(e.target.value); setDbPage(0); }}
+              onChange={(e) => {
+                setCompanyFilter(e.target.value);
+                setDbPage(0);
+              }}
               placeholder="Company name..."
-              className="h-10 pl-10 rounded-xl bg-background border-border/80 text-xs sm:text-sm font-medium"
+              className="bg-background border-border/80 h-10 rounded-xl pl-10 text-xs font-medium sm:text-sm"
             />
           </div>
 
           {/* Employment Type Dropdown */}
-          <div className="sm:col-span-3 flex items-center gap-2">
+          <div className="flex items-center gap-2 sm:col-span-3">
             <select
               aria-label="Employment type"
-              className="h-10 w-full rounded-xl border border-border/80 bg-background px-3 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              className="border-border/80 bg-background focus:ring-primary/20 focus:border-primary h-10 w-full rounded-xl border px-3 text-xs font-medium focus:ring-2 focus:outline-none sm:text-sm"
               value={employmentType}
-              onChange={(e) => { setEmploymentType(e.target.value); setDbPage(0); }}
+              onChange={(e) => {
+                setEmploymentType(e.target.value);
+                setDbPage(0);
+              }}
             >
               <option value="all">All Employment Types</option>
               <option value="contract">Contract (C2C/W2)</option>
@@ -522,16 +673,21 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         </div>
 
         {/* Secondary Filter Pills */}
-        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50 text-xs">
-          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Filters:</span>
+        <div className="border-border/50 flex flex-wrap items-center gap-2 border-t pt-2 text-xs">
+          <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+            Filters:
+          </span>
 
           {/* Date Posted Filter */}
           <select
             aria-label="Posted within"
             disabled={applicationView === 'applied'}
-            className="h-8 rounded-lg border border-border/80 bg-background px-2.5 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary"
+            className="border-border/80 bg-background focus:ring-primary h-8 rounded-lg border px-2.5 text-xs font-medium focus:ring-1 focus:outline-none"
             value={postedWithin}
-            onChange={(e) => { setPostedWithin(e.target.value); setDbPage(0); }}
+            onChange={(e) => {
+              setPostedWithin(e.target.value);
+              setDbPage(0);
+            }}
           >
             <option value="7">Posted: Last 7 days</option>
             <option value="30">Posted: Last 30 days</option>
@@ -542,10 +698,14 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           {/* Portal Filter */}
           <select
             aria-label="Filter by portal"
-            className="h-8 rounded-lg border border-border/80 bg-background px-2.5 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary"
+            className="border-border/80 bg-background focus:ring-primary h-8 rounded-lg border px-2.5 text-xs font-medium focus:ring-1 focus:outline-none"
             value={provider || portalFilter}
             disabled={Boolean(provider)}
-            onChange={(e) => { setPortalFilter(e.target.value); setCompanyFilter(''); setDbPage(0); }}
+            onChange={(e) => {
+              setPortalFilter(e.target.value);
+              setCompanyFilter('');
+              setDbPage(0);
+            }}
           >
             <option value="">Portal: All ATS</option>
             <option value="greenhouse">Greenhouse</option>
@@ -557,13 +717,13 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           </select>
 
           {mode === 'live' && applicationView === 'available' && (
-            <div className="flex items-center gap-2 ml-auto">
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+            <div className="ml-auto flex items-center gap-2">
+              <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs select-none">
                 <input
                   type="checkbox"
                   checked={saveToDbOnFetch}
                   onChange={(e) => setSaveToDbOnFetch(e.target.checked)}
-                  className="rounded border-border accent-primary"
+                  className="border-border accent-primary rounded"
                 />
                 <span>Auto-save to database</span>
               </label>
@@ -571,7 +731,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 size="sm"
                 onClick={() => void fetchLiveJobs()}
                 disabled={liveLoading}
-                className="h-8 px-3 rounded-lg text-xs font-semibold shadow-2xs"
+                className="h-8 rounded-lg px-3 text-xs font-semibold shadow-2xs"
               >
                 {liveLoading ? 'Fetching...' : 'Fetch Live'}
               </Button>
@@ -582,13 +742,19 @@ export function JobsBrowser({ provider }: { provider?: string }) {
 
       {/* Messages */}
       {error && (
-        <div role="alert" className="p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-xl text-xs flex items-center gap-2">
+        <div
+          role="alert"
+          className="bg-destructive/10 border-destructive/20 text-destructive flex items-center gap-2 rounded-xl border p-3 text-xs"
+        >
           <AlertCircle className="size-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
       {notice && (
-        <div role="status" className="p-3 bg-primary/10 border border-primary/20 text-primary rounded-xl text-xs flex items-center gap-2">
+        <div
+          role="status"
+          className="bg-primary/10 border-primary/20 text-primary flex items-center gap-2 rounded-xl border p-3 text-xs"
+        >
           <Sparkles className="size-4 shrink-0" />
           <span>{notice}</span>
         </div>
@@ -600,10 +766,20 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           <AppliedJobsList data={appliedData} loading={appliedLoading} />
           {!!appliedData && !appliedData.requiresCandidate && (
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" disabled={appliedLoading || !dbPage} onClick={() => setDbPage(page => page - 1)}>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={appliedLoading || !dbPage}
+                onClick={() => setDbPage((page) => page - 1)}
+              >
                 Previous
               </Button>
-              <Button size="sm" variant="outline" disabled={appliedLoading || !appliedData.hasMore} onClick={() => setDbPage(page => page + 1)}>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={appliedLoading || !appliedData.hasMore}
+                onClick={() => setDbPage((page) => page + 1)}
+              >
                 Next
               </Button>
             </div>
@@ -613,17 +789,24 @@ export function JobsBrowser({ provider }: { provider?: string }) {
 
       {/* ======================= JOBRIGHT MASTER-DETAIL SPLIT SCREEN ======================= */}
       {applicationView === 'available' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
           {/* LEFT COLUMN: SCROLLABLE FEED OF COMPACT CARDS (5 Cols on Large) */}
-          <div className="lg:col-span-5 space-y-4">
+          <div className="space-y-4 lg:col-span-5">
             {mode === 'db' ? (
               dbLoading ? (
                 <WorkspaceSkeleton rows={6} />
               ) : !dbJobs.length ? (
-                <div className="rounded-2xl border border-dashed border-border/80 bg-card p-10 text-center space-y-2">
-                  <Briefcase className="size-8 text-muted-foreground/60 mx-auto" />
-                  <p className="text-sm font-semibold text-foreground">{syncingSoftwareJobs ? 'Loading public jobs…' : 'No saved jobs found'}</p>
-                  {!syncingSoftwareJobs && <p className="text-xs text-muted-foreground">Try clearing filters or click &quot;Sync Software Jobs&quot; to fetch new roles.</p>}
+                <div className="border-border/80 bg-card space-y-2 rounded-2xl border border-dashed p-10 text-center">
+                  <Briefcase className="text-muted-foreground/60 mx-auto size-8" />
+                  <p className="text-foreground text-sm font-semibold">
+                    {syncingSoftwareJobs ? 'Loading public jobs…' : 'No saved jobs found'}
+                  </p>
+                  {!syncingSoftwareJobs && (
+                    <p className="text-muted-foreground text-xs">
+                      Try clearing filters or click &quot;Sync Software Jobs&quot; to fetch new
+                      roles.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <>
@@ -635,17 +818,15 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                   />
 
                   {/* Pagination */}
-                  <div className="flex items-center justify-between pt-2 px-1">
-                    <span className="text-xs text-muted-foreground">
-                      Page {dbPage + 1}
-                    </span>
+                  <div className="flex items-center justify-between px-1 pt-2">
+                    <span className="text-muted-foreground text-xs">Page {dbPage + 1}</span>
                     <div className="flex items-center gap-2">
                       <Button
                         disabled={!dbPage}
                         size="sm"
                         variant="outline"
                         onClick={() => setDbPage((p) => p - 1)}
-                        className="h-8 rounded-lg px-3 text-xs font-semibold shadow-2xs hover:bg-muted"
+                        className="hover:bg-muted h-8 rounded-lg px-3 text-xs font-semibold shadow-2xs"
                       >
                         Previous
                       </Button>
@@ -654,7 +835,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                         size="sm"
                         variant="outline"
                         onClick={() => setDbPage((p) => p + 1)}
-                        className="h-8 rounded-lg px-3 text-xs font-semibold shadow-2xs hover:bg-muted"
+                        className="hover:bg-muted h-8 rounded-lg px-3 text-xs font-semibold shadow-2xs"
                       >
                         Next
                       </Button>
@@ -662,125 +843,174 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                   </div>
                 </>
               )
+            ) : /* LIVE JOBS LIST */
+            liveLoading ? (
+              <div className="text-muted-foreground bg-card rounded-2xl border p-12 text-center">
+                <div className="border-primary mb-2 inline-block h-6 w-6 animate-spin rounded-full border-2 border-t-transparent"></div>
+                <p className="text-xs">Fetching live postings directly from ATS...</p>
+              </div>
+            ) : !liveJobs.length ? (
+              <div className="bg-card space-y-3 rounded-2xl border p-10 text-center">
+                <p className="text-muted-foreground text-xs">
+                  {liveBoard ? (
+                    <>
+                      No live jobs found for board &quot;<strong>{liveBoard}</strong>&quot;.
+                    </>
+                  ) : (
+                    'No live software jobs found across the available company boards.'
+                  )}
+                </p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      setLiveBoard('ramp');
+                      setLiveProvider('ashby');
+                      setCompanyFilter('');
+                    }}
+                  >
+                    Ramp (Ashby)
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      setLiveBoard('figma');
+                      setLiveProvider('greenhouse');
+                      setCompanyFilter('');
+                    }}
+                  >
+                    Figma (Greenhouse)
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      setLiveBoard('openai');
+                      setLiveProvider('ashby');
+                      setCompanyFilter('');
+                    }}
+                  >
+                    OpenAI (Ashby)
+                  </Button>
+                </div>
+              </div>
             ) : (
-              /* LIVE JOBS LIST */
-              liveLoading ? (
-                <div className="p-12 text-center text-muted-foreground border rounded-2xl bg-card">
-                  <div className="animate-spin inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full mb-2"></div>
-                  <p className="text-xs">Fetching live postings directly from ATS...</p>
-                </div>
-              ) : !liveJobs.length ? (
-                <div className="p-10 text-center border rounded-2xl bg-card space-y-3">
-                  <p className="text-xs text-muted-foreground">
-                    {liveBoard ? <>No live jobs found for board &quot;<strong>{liveBoard}</strong>&quot;.</> : 'No live software jobs found across the available company boards.'}
-                  </p>
-                  <div className="flex flex-wrap justify-center gap-2">
-                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setLiveBoard('ramp'); setLiveProvider('ashby'); setCompanyFilter(''); }}>
-                      Ramp (Ashby)
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setLiveBoard('figma'); setLiveProvider('greenhouse'); setCompanyFilter(''); }}>
-                      Figma (Greenhouse)
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setLiveBoard('openai'); setLiveProvider('ashby'); setCompanyFilter(''); }}>
-                      OpenAI (Ashby)
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-2.5">
-                  {liveJobs.map((job) => {
-                    const isSelected = selectedLiveJob?.content_hash === job.content_hash;
-                    const liveSkills = extractJobSkills(job.description || '', job.title).slice(0, 4);
+              <div className="space-y-2.5">
+                {liveJobs.map((job) => {
+                  const isSelected = selectedLiveJob?.content_hash === job.content_hash;
+                  const liveSkills = extractJobSkills(job.description || '', job.title).slice(0, 4);
 
-                    return (
-                      <article
-                        key={job.content_hash}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setSelectedLiveJob(job)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setSelectedLiveJob(job);
-                          }
-                        }}
-                        className={`group relative text-left w-full rounded-2xl p-4 transition-all duration-200 cursor-pointer ${
-                          isSelected
-                            ? 'bg-card border-2 border-primary shadow-sm ring-1 ring-primary/20'
-                            : 'bg-card border border-border/70 hover:border-border hover:shadow-xs'
-                        }`}
-                      >
-                        <div className="flex items-start gap-3.5">
-                          <CompanyLogo company={job.company} size="md" className="shrink-0 mt-0.5" />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <h3 className="text-sm font-bold text-foreground group-hover:text-primary transition-colors line-clamp-1">
-                                  {job.title}
-                                </h3>
-                                <p className="text-xs font-semibold text-muted-foreground mt-0.5">
-                                  {job.company}
-                                </p>
-                              </div>
-                              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80 px-2 py-0.5 rounded bg-muted/60 border border-border/50 shrink-0">
-                                {job.provider}
-                              </span>
+                  return (
+                    <article
+                      key={job.content_hash}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedLiveJob(job)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedLiveJob(job);
+                        }
+                      }}
+                      className={`group relative w-full cursor-pointer rounded-2xl p-4 text-left transition-all duration-200 ${
+                        isSelected
+                          ? 'bg-card border-primary ring-primary/20 border-2 shadow-sm ring-1'
+                          : 'bg-card border-border/70 hover:border-border border hover:shadow-xs'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3.5">
+                        <CompanyLogo company={job.company} size="md" className="mt-0.5 shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <h3 className="text-foreground group-hover:text-primary line-clamp-1 text-sm font-bold transition-colors">
+                                {job.title}
+                              </h3>
+                              <p className="text-muted-foreground mt-0.5 text-xs font-semibold">
+                                {job.company}
+                              </p>
                             </div>
+                            <span className="text-muted-foreground/80 bg-muted/60 border-border/50 shrink-0 rounded border px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase">
+                              {job.provider}
+                            </span>
+                          </div>
 
-                            <div className="flex flex-wrap items-center gap-1.5 mt-2 text-xs text-muted-foreground">
-                              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-foreground/85">
-                                <MapPin className="size-3 text-muted-foreground shrink-0" />
-                                <span className="truncate max-w-[170px]">{job.location || 'Remote / Unknown'}</span>
+                          <div className="text-muted-foreground mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+                            <span className="text-foreground/85 inline-flex items-center gap-1 text-[11px] font-medium">
+                              <MapPin className="text-muted-foreground size-3 shrink-0" />
+                              <span className="max-w-[170px] truncate">
+                                {job.location || 'Remote / Unknown'}
                               </span>
-                              <span>·</span>
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize border-border/60">
-                                {job.employment_type.replace('_', ' ')}
-                              </Badge>
-                            </div>
+                            </span>
+                            <span>·</span>
+                            <Badge
+                              variant="outline"
+                              className="border-border/60 px-1.5 py-0 text-[10px] capitalize"
+                            >
+                              {job.employment_type.replace('_', ' ')}
+                            </Badge>
+                          </div>
 
-                            {liveSkills.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5 mt-2.5">
-                                {liveSkills.map((s) => (
-                                  <SkillBadge key={s.name} name={s.name} category={s.category} size="xs" />
-                                ))}
-                              </div>
-                            )}
-
-                            <div className="mt-3 pt-2 border-t border-border/40 flex items-center justify-between text-[11px] text-muted-foreground">
-                              <JobDates posted_at={job.posted_at} closes_at={job.closes_at} provider={job.provider} />
-                              <span className="text-primary font-semibold text-xs inline-flex items-center gap-0.5">
-                                View details <ChevronRight className="size-3" />
-                              </span>
+                          {liveSkills.length > 0 && (
+                            <div className="mt-2.5 flex flex-wrap gap-1.5">
+                              {liveSkills.map((s) => (
+                                <SkillBadge
+                                  key={s.name}
+                                  name={s.name}
+                                  category={s.category}
+                                  size="xs"
+                                />
+                              ))}
                             </div>
+                          )}
+
+                          <div className="border-border/40 text-muted-foreground mt-3 flex items-center justify-between border-t pt-2 text-[11px]">
+                            <JobDates
+                              posted_at={job.posted_at}
+                              closes_at={job.closes_at}
+                              provider={job.provider}
+                            />
+                            <span className="text-primary inline-flex items-center gap-0.5 text-xs font-semibold">
+                              View details <ChevronRight className="size-3" />
+                            </span>
                           </div>
                         </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              )
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
             )}
           </div>
 
           {/* RIGHT COLUMN: DETAIL PREVIEW PANEL (7 Cols on Large, Sticky) */}
-          <div className="lg:col-span-7 lg:sticky lg:top-4">
+          <div className="lg:sticky lg:top-4 lg:col-span-7">
             {activeJob ? (
-              <div className="rounded-3xl border border-border/80 bg-card p-6 shadow-sm space-y-6 max-h-[calc(100vh-6rem)] overflow-y-auto scrollbar-thin">
+              <div className="border-border/80 bg-card max-h-[calc(100vh-6rem)] scrollbar-thin space-y-6 overflow-y-auto rounded-3xl border p-6 shadow-sm">
                 {/* Header: Company, Title, Actions */}
-                <div className="space-y-4 pb-5 border-b border-border/70">
+                <div className="border-border/70 space-y-4 border-b pb-5">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-4">
-                      <CompanyLogo company={activeJob.company} size="lg" className="shadow-xs shrink-0" />
+                      <CompanyLogo
+                        company={activeJob.company}
+                        size="lg"
+                        className="shrink-0 shadow-xs"
+                      />
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
+                          <span className="text-primary bg-primary/10 border-primary/20 rounded-md border px-2 py-0.5 text-xs font-bold tracking-wider uppercase">
                             {activeJob.company}
                           </span>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-muted-foreground text-xs">
                             {activeJob.location || 'Remote'}
                           </span>
                         </div>
-                        <h2 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight mt-1">
+                        <h2 className="text-foreground mt-1 text-xl font-extrabold tracking-tight sm:text-2xl">
                           {activeJob.title}
                         </h2>
                       </div>
@@ -791,7 +1021,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                       size="sm"
                       variant="outline"
                       onClick={() => setMatcherOpen(true)}
-                      className="shrink-0 h-9 rounded-xl border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-semibold text-xs gap-1.5 shadow-2xs hover:bg-emerald-500/20"
+                      className="h-9 shrink-0 gap-1.5 rounded-xl border-emerald-500/30 bg-emerald-500/10 text-xs font-semibold text-emerald-700 shadow-2xs hover:bg-emerald-500/20 dark:text-emerald-300"
                     >
                       <Sparkles className="size-3.5 text-emerald-600 dark:text-emerald-400" />
                       <span>Match Fit</span>
@@ -800,7 +1030,10 @@ export function JobsBrowser({ provider }: { provider?: string }) {
 
                   {/* Metadata Chips */}
                   <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <Badge variant="outline" className="capitalize text-xs font-medium border-border/70 bg-muted/20">
+                    <Badge
+                      variant="outline"
+                      className="border-border/70 bg-muted/20 text-xs font-medium capitalize"
+                    >
                       {activeJob.employment_type.replace('_', ' ')}
                     </Badge>
                     {'arrangements' in activeJob && activeJob.arrangements?.[0] && (
@@ -808,14 +1041,27 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                         {activeJob.arrangements[0]}
                       </Badge>
                     )}
-                    <Badge variant="outline" className="text-xs font-mono text-muted-foreground uppercase">
-                      {'source' in activeJob && activeJob.source?.provider ? activeJob.source.provider : ('provider' in activeJob ? (activeJob as LiveJob).provider : 'ATS')}
+                    <Badge
+                      variant="outline"
+                      className="text-muted-foreground font-mono text-xs uppercase"
+                    >
+                      {'source' in activeJob && activeJob.source?.provider
+                        ? activeJob.source.provider
+                        : 'provider' in activeJob
+                          ? (activeJob as LiveJob).provider
+                          : 'ATS'}
                     </Badge>
-                    <div className="text-xs text-muted-foreground ml-auto">
+                    <div className="text-muted-foreground ml-auto text-xs">
                       <JobDates
                         posted_at={activeJob.posted_at}
                         closes_at={activeJob.closes_at}
-                        provider={'source' in activeJob ? activeJob.source?.provider : ('provider' in activeJob ? (activeJob as LiveJob).provider : undefined)}
+                        provider={
+                          'source' in activeJob
+                            ? activeJob.source?.provider
+                            : 'provider' in activeJob
+                              ? (activeJob as LiveJob).provider
+                              : undefined
+                        }
                       />
                     </div>
                   </div>
@@ -824,9 +1070,14 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                   <div className="flex flex-wrap items-center gap-3 pt-2">
                     <Button
                       size="default"
-                      disabled={applyingJobHash === ('id' in activeJob ? (activeJob as StoredJob).id : (activeJob as LiveJob).content_hash)}
+                      disabled={
+                        applyingJobHash ===
+                        ('id' in activeJob
+                          ? (activeJob as StoredJob).id
+                          : (activeJob as LiveJob).content_hash)
+                      }
                       onClick={() => void handleApplyDirectly(activeJob)}
-                      className="flex-1 h-10 rounded-xl bg-primary text-primary-foreground font-bold text-xs sm:text-sm shadow-xs hover:bg-primary/90 transition-all gap-1.5"
+                      className="bg-primary text-primary-foreground hover:bg-primary/90 h-10 flex-1 gap-1.5 rounded-xl text-xs font-bold shadow-xs transition-all sm:text-sm"
                     >
                       <span>Apply Directly on Official Portal</span>
                       <ExternalLink className="size-3.5" />
@@ -835,7 +1086,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                     {'id' in activeJob && (
                       <Link
                         href={`/dashboard/jobs/${activeJob.id}${candidateId ? '?candidateId=' + encodeURIComponent(candidateId) : ''}`}
-                        className="inline-flex items-center justify-center h-10 px-4 rounded-xl border border-border/80 bg-background text-foreground text-xs font-semibold shadow-2xs hover:bg-muted transition-colors gap-1.5"
+                        className="border-border/80 bg-background text-foreground hover:bg-muted inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border px-4 text-xs font-semibold shadow-2xs transition-colors"
                       >
                         <span>Full Page View</span>
                         <ArrowUpRight className="size-3.5" />
@@ -847,8 +1098,8 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 {/* Key Skills Ribbon */}
                 {activeExtracted && activeExtracted.topTechStack.length > 0 && (
                   <div className="space-y-2">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                      <Layers className="size-3.5 text-primary" />
+                    <h3 className="text-muted-foreground flex items-center gap-1.5 text-xs font-bold tracking-wider uppercase">
+                      <Layers className="text-primary size-3.5" />
                       <span>Required Tech Stack</span>
                     </h3>
                     <div className="flex flex-wrap gap-1.5">
@@ -862,14 +1113,17 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 {/* Core Responsibilities */}
                 {activeExtracted && activeExtracted.responsibilities.length > 0 && (
                   <div className="space-y-2.5">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <h3 className="text-muted-foreground flex items-center gap-1.5 text-xs font-bold tracking-wider uppercase">
                       <CheckCircle2 className="size-3.5 text-emerald-600" />
                       <span>Key Responsibilities</span>
                     </h3>
                     <ul className="space-y-2">
                       {activeExtracted.responsibilities.slice(0, 5).map((resp, i) => (
-                        <li key={i} className="flex items-start gap-2.5 text-xs text-foreground/90 leading-relaxed">
-                          <span className="size-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                        <li
+                          key={i}
+                          className="text-foreground/90 flex items-start gap-2.5 text-xs leading-relaxed"
+                        >
+                          <span className="bg-primary mt-1.5 size-1.5 shrink-0 rounded-full" />
                           <span>{resp}</span>
                         </li>
                       ))}
@@ -880,15 +1134,18 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 {/* Qualifications & Must-Haves */}
                 {activeExtracted && activeExtracted.mustHaves.length > 0 && (
                   <div className="space-y-2.5">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                      <Sparkles className="size-3.5 text-primary" />
+                    <h3 className="text-muted-foreground flex items-center gap-1.5 text-xs font-bold tracking-wider uppercase">
+                      <Sparkles className="text-primary size-3.5" />
                       <span>Essential Qualifications</span>
                     </h3>
                     <div className="space-y-2">
                       {activeExtracted.mustHaves.slice(0, 4).map((req, i) => (
-                        <div key={i} className="rounded-xl border border-border/60 bg-muted/15 p-3 text-xs flex items-start gap-2.5">
-                          <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                          <span className="font-medium text-foreground leading-snug">{req}</span>
+                        <div
+                          key={i}
+                          className="border-border/60 bg-muted/15 flex items-start gap-2.5 rounded-xl border p-3 text-xs"
+                        >
+                          <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                          <span className="text-foreground leading-snug font-medium">{req}</span>
                         </div>
                       ))}
                     </div>
@@ -896,24 +1153,24 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 )}
 
                 {/* Full Description Section */}
-                <div className="space-y-3 pt-4 border-t border-border/60">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                <div className="border-border/60 space-y-3 border-t pt-4">
+                  <h3 className="text-muted-foreground flex items-center justify-between text-xs font-bold tracking-wider uppercase">
                     <span>Complete Description</span>
                     <a
                       href={activeJob.source_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-primary hover:underline lowercase font-normal inline-flex items-center gap-1"
+                      className="text-primary inline-flex items-center gap-1 font-normal lowercase hover:underline"
                     >
                       <span>open original</span>
                       <ExternalLink className="size-3" />
                     </a>
                   </h3>
                   <div
-                    className="jd-prose max-w-none text-xs text-foreground/80 leading-relaxed max-h-96 overflow-y-auto pr-2 scrollbar-thin"
+                    className="jd-prose text-foreground/80 max-h-96 max-w-none scrollbar-thin overflow-y-auto pr-2 text-xs leading-relaxed"
                     dangerouslySetInnerHTML={{
                       __html: sanitizeJobHtml(
-                        ('description_html' in activeJob && activeJob.description_html)
+                        'description_html' in activeJob && activeJob.description_html
                           ? activeJob.description_html
                           : (activeJob.description || '').replace(/\n/g, '<br/>')
                       ),
@@ -922,10 +1179,15 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 </div>
               </div>
             ) : (
-              <div className="rounded-3xl border border-dashed border-border/80 bg-card p-12 text-center space-y-2">
-                <Briefcase className="size-8 text-muted-foreground/60 mx-auto" />
-                <p className="text-sm font-semibold text-foreground">Select a job to view details</p>
-                <p className="text-xs text-muted-foreground">Click any card from the list to preview responsibilities, requirements, and apply directly.</p>
+              <div className="border-border/80 bg-card space-y-2 rounded-3xl border border-dashed p-12 text-center">
+                <Briefcase className="text-muted-foreground/60 mx-auto size-8" />
+                <p className="text-foreground text-sm font-semibold">
+                  Select a job to view details
+                </p>
+                <p className="text-muted-foreground text-xs">
+                  Click any card from the list to preview responsibilities, requirements, and apply
+                  directly.
+                </p>
               </div>
             )}
           </div>

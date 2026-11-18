@@ -1,20 +1,20 @@
-"use client";
+'use client';
 
-import { useState, useMemo, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ArrowLeft, Loader2, RotateCcw, ShieldCheck, ArrowRight } from "lucide-react";
-import { ensureSessionProfile } from "@/lib/auth/session-profile";
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { ArrowLeft, Loader2, RotateCcw, ShieldCheck, ArrowRight } from 'lucide-react';
+import { ensureSessionProfile } from '@/lib/auth/session-profile';
 
 export function JobseekerAuthCard() {
   const router = useRouter();
 
-  const [step, setStep] = useState<"email" | "otp">("email");
-  const [email, setEmail] = useState("");
-  const [otpCode, setOtpCode] = useState("");
+  const [step, setStep] = useState<'email' | 'otp'>('email');
+  const [email, setEmail] = useState('');
+  const [otpCode, setOtpCode] = useState('');
   const [countdown, setCountdown] = useState(0);
 
   const [loading, setLoading] = useState(false);
@@ -34,7 +34,7 @@ export function JobseekerAuthCard() {
   }, [countdown]);
 
   useEffect(() => {
-    if (step === "otp") {
+    if (step === 'otp') {
       const timer = setTimeout(() => {
         otpInputRef.current?.focus();
       }, 100);
@@ -48,8 +48,8 @@ export function JobseekerAuthCard() {
     setSuccessMsg(null);
 
     const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail || !cleanEmail.includes("@")) {
-      setErrorMsg("Please enter a valid email address.");
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setErrorMsg('Please enter a valid email address.');
       return;
     }
 
@@ -57,16 +57,16 @@ export function JobseekerAuthCard() {
 
     try {
       const redirectUrl =
-        typeof window !== "undefined"
+        typeof window !== 'undefined'
           ? `${window.location.origin}/auth/callback?next=/auth/jobseeker/connected`
-          : "";
+          : '';
 
       const { error } = await supabase.auth.signInWithOtp({
         email: cleanEmail,
         options: {
           shouldCreateUser: true,
           data: {
-            full_name: cleanEmail.split("@")[0] || "Candidate",
+            full_name: cleanEmail.split('@')[0] || 'Candidate',
           },
           emailRedirectTo: redirectUrl,
         },
@@ -75,20 +75,20 @@ export function JobseekerAuthCard() {
       if (error) {
         if (
           error.status === 429 ||
-          (error as { code?: string }).code === "over_email_send_rate_limit"
+          (error as { code?: string }).code === 'over_email_send_rate_limit'
         ) {
-          setErrorMsg("Rate limit reached. If you received a code recently, enter it below.");
-          setStep("otp");
+          setErrorMsg('Rate limit reached. If you received a code recently, enter it below.');
+          setStep('otp');
         } else {
           setErrorMsg(error.message);
         }
       } else {
-        setStep("otp");
+        setStep('otp');
         setCountdown(45);
         setSuccessMsg(`We dispatched a 6-digit access code to ${cleanEmail}`);
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to send code";
+      const msg = err instanceof Error ? err.message : 'Failed to send code';
       setErrorMsg(msg);
     } finally {
       setLoading(false);
@@ -102,7 +102,7 @@ export function JobseekerAuthCard() {
 
     const cleanCode = otpCode.trim();
     if (cleanCode.length < 6) {
-      setErrorMsg("Please enter all 6 digits of the code");
+      setErrorMsg('Please enter all 6 digits of the code');
       return;
     }
 
@@ -114,20 +114,20 @@ export function JobseekerAuthCard() {
       let { data, error } = await supabase.auth.verifyOtp({
         email: cleanEmail,
         token: cleanCode,
-        type: "email",
+        type: 'email',
       });
 
       if (
         error &&
-        (error.message.includes("invalid") ||
-          error.message.includes("expired") ||
+        (error.message.includes('invalid') ||
+          error.message.includes('expired') ||
           error.status === 400 ||
           error.status === 401)
       ) {
         const retryMagic = await supabase.auth.verifyOtp({
           email: cleanEmail,
           token: cleanCode,
-          type: "magiclink",
+          type: 'magiclink',
         });
 
         if (!retryMagic.error) {
@@ -137,7 +137,7 @@ export function JobseekerAuthCard() {
           const retrySignup = await supabase.auth.verifyOtp({
             email: cleanEmail,
             token: cleanCode,
-            type: "signup",
+            type: 'signup',
           });
           if (!retrySignup.error) {
             data = retrySignup.data;
@@ -147,16 +147,16 @@ export function JobseekerAuthCard() {
       }
 
       if (error) {
-        setErrorMsg(error.message || "Invalid or expired code. Please request a new code.");
+        setErrorMsg(error.message || 'Invalid or expired code. Please request a new code.');
       } else if (data.user) {
         await ensureSessionProfile(supabase, data.user, {
-          fullName: data.user.email?.split("@")[0] || "Candidate",
+          fullName: data.user.email?.split('@')[0] || 'Candidate',
         });
 
-        router.push("/auth/jobseeker/connected");
+        router.push('/auth/jobseeker/connected');
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Verification failed";
+      const msg = err instanceof Error ? err.message : 'Verification failed';
       setErrorMsg(msg);
     } finally {
       setLoading(false);
@@ -171,9 +171,9 @@ export function JobseekerAuthCard() {
 
     try {
       const redirectUrl =
-        typeof window !== "undefined"
+        typeof window !== 'undefined'
           ? `${window.location.origin}/auth/callback?next=/auth/jobseeker/connected`
-          : "";
+          : '';
 
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim().toLowerCase(),
@@ -187,10 +187,10 @@ export function JobseekerAuthCard() {
         setErrorMsg(error.message);
       } else {
         setCountdown(45);
-        setSuccessMsg("A fresh code was dispatched to your email");
+        setSuccessMsg('A fresh code was dispatched to your email');
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to resend code";
+      const msg = err instanceof Error ? err.message : 'Failed to resend code';
       setErrorMsg(msg);
     } finally {
       setLoading(false);
@@ -203,57 +203,57 @@ export function JobseekerAuthCard() {
       setErrorMsg(null);
       const redirectTo = `${window.location.origin}/auth/callback?next=/auth/jobseeker/connected`;
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
+        provider: 'google',
         options: {
           redirectTo,
           queryParams: {
-            access_type: "offline",
-            prompt: "consent",
+            access_type: 'offline',
+            prompt: 'consent',
           },
         },
       });
       if (error) throw error;
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Google authentication failed";
+      const msg = err instanceof Error ? err.message : 'Google authentication failed';
       setErrorMsg(msg);
       setGoogleLoading(false);
     }
   };
 
   return (
-    <div className="w-full max-w-[420px] rounded-xl border border-[#EAEAEA] bg-white p-7 sm:p-8 shadow-[0_1px_3px_rgba(0,0,0,0.02)] font-sans">
+    <div className="w-full max-w-[420px] rounded-xl border border-[#EAEAEA] bg-white p-7 font-sans shadow-[0_1px_3px_rgba(0,0,0,0.02)] sm:p-8">
       {/* Header */}
       <div className="mb-6 space-y-1.5">
-        <div className="flex items-center justify-between mb-3">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider bg-[#EDF3EC] text-[#346538]">
+        <div className="mb-3 flex items-center justify-between">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#EDF3EC] px-2.5 py-0.5 font-mono text-[10px] tracking-wider text-[#346538] uppercase">
             <span className="size-1.5 rounded-full bg-[#346538]" />
             Candidate Access
           </span>
-          <span className="text-[11px] font-mono text-[#787774]">Free account</span>
+          <span className="font-mono text-[11px] text-[#787774]">Free account</span>
         </div>
 
         <h2 className="text-xl font-medium tracking-tight text-[#111111]">
-          {step === "email" ? "Sign in with Email" : "Enter Verification Code"}
+          {step === 'email' ? 'Sign in with Email' : 'Enter Verification Code'}
         </h2>
-        <p className="text-xs text-[#787774] leading-relaxed">
-          {step === "email"
-            ? "Enter your email address to receive a secure six-digit login code."
+        <p className="text-xs leading-relaxed text-[#787774]">
+          {step === 'email'
+            ? 'Enter your email address to receive a secure six-digit login code.'
             : `Enter the six-digit code sent to ${email}`}
         </p>
       </div>
 
       {errorMsg && (
-        <div className="mb-4 rounded-[6px] border border-[#FDEBEC] bg-[#FDEBEC] px-3.5 py-2.5 text-xs text-[#9F2F2D] leading-relaxed">
+        <div className="mb-4 rounded-[6px] border border-[#FDEBEC] bg-[#FDEBEC] px-3.5 py-2.5 text-xs leading-relaxed text-[#9F2F2D]">
           {errorMsg}
         </div>
       )}
       {successMsg && (
-        <div className="mb-4 rounded-[6px] border border-[#EDF3EC] bg-[#EDF3EC] px-3.5 py-2.5 text-xs text-[#346538] leading-relaxed">
+        <div className="mb-4 rounded-[6px] border border-[#EDF3EC] bg-[#EDF3EC] px-3.5 py-2.5 text-xs leading-relaxed text-[#346538]">
           {successMsg}
         </div>
       )}
 
-      {step === "email" ? (
+      {step === 'email' ? (
         <div className="space-y-4">
           <form onSubmit={handleSendOtp} className="space-y-4">
             <div className="space-y-1.5">
@@ -268,7 +268,7 @@ export function JobseekerAuthCard() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoFocus
-                className="w-full h-10 rounded-[6px] border border-[#EAEAEA] bg-white px-3 text-xs text-[#111111] placeholder:text-[#787774]/60 focus:border-[#111111] focus:outline-none transition-colors"
+                className="h-10 w-full rounded-[6px] border border-[#EAEAEA] bg-white px-3 text-xs text-[#111111] transition-colors placeholder:text-[#787774]/60 focus:border-[#111111] focus:outline-none"
               />
             </div>
 
@@ -276,7 +276,7 @@ export function JobseekerAuthCard() {
             <button
               type="submit"
               disabled={loading || googleLoading || !email.trim()}
-              className="w-full h-10 rounded-[6px] bg-[#111111] hover:bg-[#262626] active:scale-[0.98] text-white text-xs font-medium transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-[6px] bg-[#111111] text-xs font-medium text-white transition-all hover:bg-[#262626] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {loading ? (
                 <>
@@ -293,7 +293,7 @@ export function JobseekerAuthCard() {
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-[#EAEAEA]" />
             </div>
-            <span className="relative bg-white px-2 text-[10px] text-[#787774] uppercase font-mono tracking-wider">
+            <span className="relative bg-white px-2 font-mono text-[10px] tracking-wider text-[#787774] uppercase">
               or
             </span>
           </div>
@@ -302,7 +302,7 @@ export function JobseekerAuthCard() {
             type="button"
             onClick={handleGoogleAuth}
             disabled={googleLoading || loading}
-            className="w-full h-10 rounded-[6px] border border-[#EAEAEA] bg-white hover:bg-[#F7F6F3] text-xs font-medium text-[#111111] transition-all flex items-center justify-center gap-2.5 active:scale-[0.98] cursor-pointer"
+            className="flex h-10 w-full cursor-pointer items-center justify-center gap-2.5 rounded-[6px] border border-[#EAEAEA] bg-white text-xs font-medium text-[#111111] transition-all hover:bg-[#F7F6F3] active:scale-[0.98]"
           >
             <svg className="size-3.5" viewBox="0 0 24 24">
               <path
@@ -322,7 +322,7 @@ export function JobseekerAuthCard() {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
               />
             </svg>
-            <span>{googleLoading ? "Connecting..." : "Continue with Google"}</span>
+            <span>{googleLoading ? 'Connecting...' : 'Continue with Google'}</span>
           </button>
         </div>
       ) : (
@@ -333,7 +333,7 @@ export function JobseekerAuthCard() {
                 <label htmlFor="candidate-otp" className="block text-xs font-medium text-[#111111]">
                   Verification code
                 </label>
-                <span className="text-[10px] font-mono text-[#787774]">6 digits</span>
+                <span className="font-mono text-[10px] text-[#787774]">6 digits</span>
               </div>
               <input
                 id="candidate-otp"
@@ -344,17 +344,17 @@ export function JobseekerAuthCard() {
                 maxLength={6}
                 placeholder="000000"
                 value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
                 required
                 autoFocus
-                className="w-full h-11 rounded-[6px] border border-[#EAEAEA] bg-white text-center text-lg font-mono tracking-[0.35em] tabular-nums text-[#111111] focus:border-[#111111] focus:outline-none transition-colors"
+                className="h-11 w-full rounded-[6px] border border-[#EAEAEA] bg-white text-center font-mono text-lg tracking-[0.35em] text-[#111111] tabular-nums transition-colors focus:border-[#111111] focus:outline-none"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading || otpCode.length < 6}
-              className="w-full h-10 rounded-[6px] bg-[#111111] hover:bg-[#262626] active:scale-[0.98] text-white text-xs font-medium transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-[6px] bg-[#111111] text-xs font-medium text-white transition-all hover:bg-[#262626] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {loading ? (
                 <>
@@ -367,16 +367,16 @@ export function JobseekerAuthCard() {
             </button>
           </form>
 
-          <div className="flex items-center justify-between text-xs pt-1 text-[#787774]">
+          <div className="flex items-center justify-between pt-1 text-xs text-[#787774]">
             <button
               type="button"
               onClick={() => {
-                setStep("email");
-                setOtpCode("");
+                setStep('email');
+                setOtpCode('');
                 setErrorMsg(null);
                 setSuccessMsg(null);
               }}
-              className="hover:text-[#111111] transition-colors cursor-pointer"
+              className="cursor-pointer transition-colors hover:text-[#111111]"
             >
               Use different email
             </button>
@@ -387,21 +387,22 @@ export function JobseekerAuthCard() {
               onClick={handleResendOtp}
               className={`cursor-pointer ${
                 countdown > 0
-                  ? "text-[#787774]/70 cursor-not-allowed"
-                  : "text-[#111111] hover:underline"
+                  ? 'cursor-not-allowed text-[#787774]/70'
+                  : 'text-[#111111] hover:underline'
               }`}
             >
-              {countdown > 0 ? `Resend in ${countdown}s` : "Resend code"}
+              {countdown > 0 ? `Resend in ${countdown}s` : 'Resend code'}
             </button>
           </div>
         </div>
       )}
 
       {/* Privacy Note */}
-      <div className="mt-6 pt-4 border-t border-[#EAEAEA] text-[11px] text-[#787774] leading-relaxed flex items-start gap-2">
-        <span className="size-1.5 rounded-full bg-[#346538] mt-1.5 shrink-0" />
+      <div className="mt-6 flex items-start gap-2 border-t border-[#EAEAEA] pt-4 text-[11px] leading-relaxed text-[#787774]">
+        <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[#346538]" />
         <span>
-          Applicant credentials pair directly with the NextKin browser extension and remain isolated in your personal encrypted vault.
+          Applicant credentials pair directly with the NextKin browser extension and remain isolated
+          in your personal encrypted vault.
         </span>
       </div>
     </div>

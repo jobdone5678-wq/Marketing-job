@@ -17,10 +17,7 @@
       "status": "active",
       "verifiedAt": "2026-11-07",
       "sla": "needs-review",
-      "appliesTo": [
-        "search",
-        "design-guidance"
-      ],
+      "appliesTo": ["search", "design-guidance"],
       "sources": [
         {
           "type": "official",
@@ -42,9 +39,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.88,
       "sources": [
         {
@@ -67,9 +62,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.92,
       "sources": [
         {
@@ -92,9 +85,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.93,
       "sources": [
         {
@@ -117,9 +108,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.93,
       "sources": [
         {
@@ -142,9 +131,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.94,
       "sources": [
         {
@@ -167,9 +154,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.91,
       "sources": [
         {
@@ -192,9 +177,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.93,
       "sources": [
         {
@@ -217,9 +200,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.9,
       "sources": [
         {
@@ -242,9 +223,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.89,
       "sources": [
         {
@@ -267,9 +246,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.93,
       "sources": [
         {
@@ -292,9 +269,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.9,
       "sources": [
         {
@@ -317,9 +292,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.92,
       "sources": [
         {
@@ -342,9 +315,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.88,
       "sources": [
         {
@@ -367,9 +338,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.93,
       "sources": [
         {
@@ -392,9 +361,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.91,
       "sources": [
         {
@@ -417,9 +384,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.95,
       "sources": [
         {
@@ -442,9 +407,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.92,
       "sources": [
         {
@@ -467,9 +430,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.93,
       "sources": [
         {
@@ -492,9 +453,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.89,
       "sources": [
         {
@@ -517,9 +476,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.9,
       "sources": [
         {
@@ -542,9 +499,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.94,
       "sources": [
         {
@@ -567,9 +522,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.89,
       "sources": [
         {
@@ -592,9 +545,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.93,
       "sources": [
         {
@@ -617,9 +568,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.91,
       "sources": [
         {
@@ -642,9 +591,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.92,
       "sources": [
         {
@@ -667,9 +614,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.94,
       "sources": [
         {
@@ -692,9 +637,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.93,
       "sources": [
         {
@@ -717,9 +660,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.92,
       "sources": [
         {
@@ -742,9 +683,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.88,
       "sources": [
         {
@@ -767,9 +706,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.91,
       "sources": [
         {
@@ -792,9 +729,7 @@
       "status": "active",
       "verifiedAt": "2026-08-12",
       "sla": "needs-review",
-      "appliesTo": [
-        "design-system"
-      ],
+      "appliesTo": ["design-system"],
       "confidence": 0.93,
       "sources": [
         {
@@ -817,10 +752,7 @@
       "status": "active",
       "verifiedAt": "2026-08-13",
       "sla": "manual-verified",
-      "appliesTo": [
-        "style-search",
-        "gallery"
-      ],
+      "appliesTo": ["style-search", "gallery"],
       "confidence": 0.94,
       "sources": [
         {
@@ -839,10 +771,7 @@
       "status": "active",
       "verifiedAt": "2026-08-13",
       "sla": "manual-verified",
-      "appliesTo": [
-        "style-search",
-        "gallery"
-      ],
+      "appliesTo": ["style-search", "gallery"],
       "confidence": 0.94,
       "sources": [
         {
@@ -861,10 +790,7 @@
       "status": "active",
       "verifiedAt": "2026-08-13",
       "sla": "manual-verified",
-      "appliesTo": [
-        "style-search",
-        "gallery"
-      ],
+      "appliesTo": ["style-search", "gallery"],
       "confidence": 0.94,
       "sources": [
         {
@@ -883,10 +809,7 @@
       "status": "active",
       "verifiedAt": "2026-08-13",
       "sla": "manual-verified",
-      "appliesTo": [
-        "style-search",
-        "gallery"
-      ],
+      "appliesTo": ["style-search", "gallery"],
       "confidence": 0.94,
       "sources": [
         {
@@ -905,10 +828,7 @@
       "status": "active",
       "verifiedAt": "2026-08-13",
       "sla": "manual-verified",
-      "appliesTo": [
-        "style-search",
-        "gallery"
-      ],
+      "appliesTo": ["style-search", "gallery"],
       "confidence": 0.94,
       "sources": [
         {
@@ -927,10 +847,7 @@
       "status": "supplemental",
       "verifiedAt": "2026-08-13",
       "sla": "manual-verified",
-      "appliesTo": [
-        "style-search",
-        "gallery"
-      ],
+      "appliesTo": ["style-search", "gallery"],
       "confidence": 0.94,
       "sources": [
         {
@@ -949,10 +866,7 @@
       "status": "active",
       "verifiedAt": "2026-11-04",
       "sla": "manual-verified",
-      "appliesTo": [
-        "style-search",
-        "gallery"
-      ],
+      "appliesTo": ["style-search", "gallery"],
       "confidence": 0.94,
       "sources": [
         {
@@ -972,10 +886,7 @@
       "status": "active",
       "verifiedAt": "2026-08-13",
       "sla": "manual-verified",
-      "appliesTo": [
-        "search",
-        "design-guidance"
-      ],
+      "appliesTo": ["search", "design-guidance"],
       "sources": [
         {
           "type": "official",
@@ -998,10 +909,7 @@
       "status": "active",
       "verifiedAt": "2026-08-13",
       "sla": "manual-verified",
-      "appliesTo": [
-        "search",
-        "design-guidance"
-      ],
+      "appliesTo": ["search", "design-guidance"],
       "sources": [
         {
           "type": "official",
@@ -1023,10 +931,7 @@
       "status": "active",
       "verifiedAt": "2026-08-13",
       "sla": "manual-verified",
-      "appliesTo": [
-        "search",
-        "design-guidance"
-      ],
+      "appliesTo": ["search", "design-guidance"],
       "sources": [
         {
           "type": "official",
@@ -1053,10 +958,7 @@
       "status": "active",
       "verifiedAt": "2026-08-13",
       "sla": "manual-verified",
-      "appliesTo": [
-        "search",
-        "design-guidance"
-      ],
+      "appliesTo": ["search", "design-guidance"],
       "sources": [
         {
           "type": "official",
@@ -1078,10 +980,7 @@
       "status": "active",
       "verifiedAt": "2026-08-13",
       "sla": "manual-verified",
-      "appliesTo": [
-        "search",
-        "design-guidance"
-      ],
+      "appliesTo": ["search", "design-guidance"],
       "sources": [
         {
           "type": "official",
@@ -1100,10 +999,7 @@
       "status": "active",
       "verifiedAt": "2026-08-13",
       "sla": "manual-verified",
-      "appliesTo": [
-        "search",
-        "design-guidance"
-      ],
+      "appliesTo": ["search", "design-guidance"],
       "sources": [
         {
           "type": "official",
@@ -1134,10 +1030,7 @@
       "status": "active",
       "verifiedAt": "2026-08-13",
       "sla": "manual-verified",
-      "appliesTo": [
-        "search",
-        "design-guidance"
-      ],
+      "appliesTo": ["search", "design-guidance"],
       "sources": [
         {
           "type": "official",
@@ -1167,10 +1060,7 @@
       "status": "active",
       "verifiedAt": "2026-08-13",
       "sla": "manual-verified",
-      "appliesTo": [
-        "search",
-        "design-guidance"
-      ],
+      "appliesTo": ["search", "design-guidance"],
       "sources": [
         {
           "type": "official",
@@ -1192,10 +1082,7 @@
       "status": "active",
       "verifiedAt": "2026-08-13",
       "sla": "manual-verified",
-      "appliesTo": [
-        "search",
-        "design-guidance"
-      ],
+      "appliesTo": ["search", "design-guidance"],
       "sources": [
         {
           "type": "official",
@@ -1221,10 +1108,7 @@
       "status": "active",
       "verifiedAt": "2026-08-13",
       "sla": "manual-verified",
-      "appliesTo": [
-        "search",
-        "design-guidance"
-      ],
+      "appliesTo": ["search", "design-guidance"],
       "sources": [
         {
           "type": "official",
@@ -1251,10 +1135,7 @@
       "status": "active",
       "verifiedAt": "2026-08-13",
       "sla": "manual-verified",
-      "appliesTo": [
-        "search",
-        "design-guidance"
-      ],
+      "appliesTo": ["search", "design-guidance"],
       "sources": [
         {
           "type": "official",
@@ -1313,10 +1194,7 @@
       "status": "active",
       "verifiedAt": "2026-08-13",
       "sla": "manual-verified",
-      "appliesTo": [
-        "search",
-        "design-guidance"
-      ],
+      "appliesTo": ["search", "design-guidance"],
       "sources": [
         {
           "type": "official",
@@ -1351,10 +1229,7 @@
       "status": "active",
       "verifiedAt": "2026-08-13",
       "sla": "manual-verified",
-      "appliesTo": [
-        "search",
-        "design-guidance"
-      ],
+      "appliesTo": ["search", "design-guidance"],
       "sources": [
         {
           "type": "official",
@@ -1377,10 +1252,7 @@
       "status": "active",
       "verifiedAt": "2026-08-13",
       "sla": "manual-verified",
-      "appliesTo": [
-        "search",
-        "design-guidance"
-      ],
+      "appliesTo": ["search", "design-guidance"],
       "sources": [
         {
           "type": "official",

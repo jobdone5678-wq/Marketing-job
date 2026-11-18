@@ -17,25 +17,42 @@ const starterBoards = [
   ['saronic', 'Saronic Technologies'],
   ['owner', 'Owner.com'],
   ['lavendo', 'Lavendo'],
-  ['quadrivia', 'Quadrivia']
+  ['quadrivia', 'Quadrivia'],
 ];
 
 async function main() {
   const db = database();
   if (process.argv.includes('--bootstrap')) {
-    const { data: owner, error } = await db.from('profiles').select('id').eq('status', 'active')
-      .eq('role', 'candidate').order('created_at').limit(1).maybeSingle();
+    const { data: owner, error } = await db
+      .from('profiles')
+      .select('id')
+      .eq('status', 'active')
+      .eq('role', 'candidate')
+      .order('created_at')
+      .limit(1)
+      .maybeSingle();
     checkDb(error);
     if (!owner) throw new Error('An active candidate account must own public job sources.');
-    const { data: saved, error: sourcesError } = await db.from('job_sources').select('id,provider,board_slug,enabled');
+    const { data: saved, error: sourcesError } = await db
+      .from('job_sources')
+      .select('id,provider,board_slug,enabled');
     checkDb(sourcesError);
-    const configured = new Map((saved || []).map(source => [`${source.provider}/${source.board_slug}`, source]));
-    const imports = await Promise.allSettled(PUBLIC_JOB_BOARDS.map(async board => {
-      const source = configured.get(`${board.provider}/${board.board_slug}`);
-      if (source?.enabled === false) return 0;
-      const snapshot = await fetchSnapshot(board);
-      return persistLiveJobs({ ...board, id: source?.id }, owner.id, snapshot.jobs.filter(isSoftwareJob), true);
-    }));
+    const configured = new Map(
+      (saved || []).map((source) => [`${source.provider}/${source.board_slug}`, source])
+    );
+    const imports = await Promise.allSettled(
+      PUBLIC_JOB_BOARDS.map(async (board) => {
+        const source = configured.get(`${board.provider}/${board.board_slug}`);
+        if (source?.enabled === false) return 0;
+        const snapshot = await fetchSnapshot(board);
+        return persistLiveJobs(
+          { ...board, id: source?.id },
+          owner.id,
+          snapshot.jobs.filter(isSoftwareJob),
+          true
+        );
+      })
+    );
     let savedCount = 0;
     imports.forEach((result, index) => {
       const company = PUBLIC_JOB_BOARDS[index].company;
@@ -43,7 +60,9 @@ async function main() {
         savedCount += result.value;
         console.log(`${company}: ${result.value} jobs saved.`);
       } else {
-        console.error(`${company}: ${result.reason instanceof Error ? result.reason.message : 'Import failed.'}`);
+        console.error(
+          `${company}: ${result.reason instanceof Error ? result.reason.message : 'Import failed.'}`
+        );
       }
     });
     if (!savedCount) throw new Error('No public jobs were saved.');
@@ -51,48 +70,89 @@ async function main() {
     return;
   }
   if (process.argv.includes('--starter')) {
-    const { data: owner, error } = await db.from('profiles').select('id').eq('status', 'active').eq('role', 'candidate').order('created_at').limit(1).maybeSingle();
+    const { data: owner, error } = await db
+      .from('profiles')
+      .select('id')
+      .eq('status', 'active')
+      .eq('role', 'candidate')
+      .order('created_at')
+      .limit(1)
+      .maybeSingle();
     checkDb(error);
     if (!owner) throw new Error('An active candidate account must own public job sources.');
     for (const [board_slug, company] of starterBoards) {
-      const { data: existing, error: lookup } = await db.from('job_sources').select('id').eq('provider', 'ashby').eq('board_slug', board_slug).maybeSingle();
+      const { data: existing, error: lookup } = await db
+        .from('job_sources')
+        .select('id')
+        .eq('provider', 'ashby')
+        .eq('board_slug', board_slug)
+        .maybeSingle();
       checkDb(lookup);
       if (existing) continue;
       const snapshot = await fetchSnapshot({ provider: 'ashby', board_slug, company });
-      if (snapshot.completeness !== 'complete' || !snapshot.jobs.some(j => j.employment_type === 'contract')) {
+      if (
+        snapshot.completeness !== 'complete' ||
+        !snapshot.jobs.some((j) => j.employment_type === 'contract')
+      ) {
         console.log(`${company}: no complete contract listings available; source not added.`);
         continue;
       }
-      const { error: insert } = await db.from('job_sources').upsert({ provider: 'ashby', board_slug, company, created_by: owner.id }, { onConflict: 'provider,board_slug', ignoreDuplicates: true });
+      const { error: insert } = await db
+        .from('job_sources')
+        .upsert(
+          { provider: 'ashby', board_slug, company, created_by: owner.id },
+          { onConflict: 'provider,board_slug', ignoreDuplicates: true }
+        );
       checkDb(insert);
       console.log(`${company}: verified public source connected.`);
     }
   }
 
-  const { data: sources, error } = await db.from('job_sources').select('id,company,created_by').eq('enabled', true).order('company');
+  const { data: sources, error } = await db
+    .from('job_sources')
+    .select('id,company,created_by')
+    .eq('enabled', true)
+    .order('company');
   checkDb(error);
-  if (!sources?.length) throw new Error('No enabled sources. Add a real board or run this command with --starter.');
+  if (!sources?.length)
+    throw new Error('No enabled sources. Add a real board or run this command with --starter.');
 
   let failures = 0;
   for (const source of sources) {
     let claimed: BackgroundTask | null = null;
     try {
-      const { data: id, error: enqueue } = await db.rpc('enqueue_source_sync', { p_actor: source.created_by, p_source: source.id });
+      const { data: id, error: enqueue } = await db.rpc('enqueue_source_sync', {
+        p_actor: source.created_by,
+        p_source: source.id,
+      });
       checkDb(enqueue);
-      const { data: task, error: lookup } = await db.from('background_tasks').select('*').eq('id', id).single();
+      const { data: task, error: lookup } = await db
+        .from('background_tasks')
+        .select('*')
+        .eq('id', id)
+        .single();
       checkDb(lookup);
       if (!canClaimPublicJobTask(task)) {
         console.log(`${source.company}: sync already running or waiting for retry; left intact.`);
         continue;
       }
       const now = Date.now();
-      const { data: lease, error: claim } = await db.from('background_tasks').update({
-        status: 'running',
-        attempts: task.attempts + 1,
-        lease_token: randomUUID(),
-        lease_until: new Date(now + 180000).toISOString(),
-        updated_at: new Date(now).toISOString()
-      }).eq('id', id).eq('kind', 'source_sync').eq('status', 'queued').eq('attempts', task.attempts).lte('available_at', new Date(now).toISOString()).select('*').maybeSingle();
+      const { data: lease, error: claim } = await db
+        .from('background_tasks')
+        .update({
+          status: 'running',
+          attempts: task.attempts + 1,
+          lease_token: randomUUID(),
+          lease_until: new Date(now + 180000).toISOString(),
+          updated_at: new Date(now).toISOString(),
+        })
+        .eq('id', id)
+        .eq('kind', 'source_sync')
+        .eq('status', 'queued')
+        .eq('attempts', task.attempts)
+        .lte('available_at', new Date(now).toISOString())
+        .select('*')
+        .maybeSingle();
       checkDb(claim);
       if (!lease) {
         console.log(`${source.company}: another worker claimed this sync.`);
@@ -100,7 +160,13 @@ async function main() {
       }
       claimed = lease as BackgroundTask;
       const result = await syncSource(claimed);
-      const { error: finish } = await db.rpc('finish_task', { p_task: claimed.id, p_lease: claimed.lease_token, p_result: result, p_error: null, p_transient: false });
+      const { error: finish } = await db.rpc('finish_task', {
+        p_task: claimed.id,
+        p_lease: claimed.lease_token,
+        p_result: result,
+        p_error: null,
+        p_transient: false,
+      });
       checkDb(finish);
       console.log(`${source.company}: ${JSON.stringify(result)}`);
     } catch (err: any) {
@@ -108,8 +174,18 @@ async function main() {
       const msg = err instanceof Error ? err.message : 'Public source sync failed.';
       console.error(`${source.company}: ${msg}`);
       if (claimed) {
-        await db.rpc('record_task_failure', { p_task: claimed.id, p_lease: claimed.lease_token, p_error: msg });
-        await db.rpc('finish_task', { p_task: claimed.id, p_lease: claimed.lease_token, p_result: null, p_error: msg, p_transient: false });
+        await db.rpc('record_task_failure', {
+          p_task: claimed.id,
+          p_lease: claimed.lease_token,
+          p_error: msg,
+        });
+        await db.rpc('finish_task', {
+          p_task: claimed.id,
+          p_lease: claimed.lease_token,
+          p_result: null,
+          p_error: msg,
+          p_transient: false,
+        });
       }
     }
   }
@@ -124,7 +200,7 @@ async function main() {
   if (failures) process.exitCode = 1;
 }
 
-main().catch(error => {
+main().catch((error) => {
   console.error(error instanceof Error ? error.message : 'Public job sync failed.');
   process.exitCode = 1;
 });

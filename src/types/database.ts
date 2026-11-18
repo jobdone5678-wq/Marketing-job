@@ -88,11 +88,11 @@ export interface Candidate {
   is_active_bench: boolean;
   notes?: string | null;
   version?: number;
-  provenance_status?: 'legacy_unconfirmed'|'confirmed';
-  confirmed_facts?: Record<string,unknown>;
-  employment_history?: Record<string,unknown>[];
-  education_history?: Record<string,unknown>[];
-  evidence?: {field:string;snippet:string;page:number|null;sourceId?:string}[];
+  provenance_status?: 'legacy_unconfirmed' | 'confirmed';
+  confirmed_facts?: Record<string, unknown>;
+  employment_history?: Record<string, unknown>[];
+  education_history?: Record<string, unknown>[];
+  evidence?: { field: string; snippet: string; page: number | null; sourceId?: string }[];
 
   created_at: string;
   updated_at: string;
@@ -127,7 +127,8 @@ export interface JobSubmission {
   notes?: string | null;
 
   duplicate_flag: boolean;
-  capture_status?: 'started' | 'in_progress' | 'submit_attempted' | 'submitted' | 'confirmed' | 'failed' | null;
+  capture_status?:
+    'started' | 'in_progress' | 'submit_attempted' | 'submitted' | 'confirmed' | 'failed' | null;
   email_confirmed_at?: string | null;
 
   // Applied Resume Snapshot
@@ -158,12 +159,30 @@ export interface AppliedResumeSnapshot {
 }
 
 export interface Placement {
-  id:string;candidate_id:string;submission_id:string|null;company:string;role_title:string;status:'offer_accepted'|'joining_scheduled'|'active'|'completed'|'ended_early'|'cancelled';
-  planned_start_date:string|null;actual_join_date:string|null;expected_end_date:string|null;actual_end_date:string|null;
-  candidate_monthly_amount:string|null;candidate_currency:string|null;candidate_compensation_visible:boolean;
+  id: string;
+  candidate_id: string;
+  submission_id: string | null;
+  company: string;
+  role_title: string;
+  status:
+    'offer_accepted' | 'joining_scheduled' | 'active' | 'completed' | 'ended_early' | 'cancelled';
+  planned_start_date: string | null;
+  actual_join_date: string | null;
+  expected_end_date: string | null;
+  actual_end_date: string | null;
+  candidate_monthly_amount: string | null;
+  candidate_currency: string | null;
+  candidate_compensation_visible: boolean;
 }
 export interface PlacementMonth {
-  id:string;placement_id:string;month_start:string;covered_start:string;covered_end:string;agreed_amount:string|null;currency:string|null;status:'scheduled'|'active'|'completed'|'cancelled';
+  id: string;
+  placement_id: string;
+  month_start: string;
+  covered_start: string;
+  covered_end: string;
+  agreed_amount: string | null;
+  currency: string | null;
+  status: 'scheduled' | 'active' | 'completed' | 'cancelled';
 }
 
 export type CandidateFormData = Omit<Candidate, 'id' | 'created_at' | 'updated_at'>;
@@ -215,4 +234,7 @@ export interface RTRDocumentReference {
   created_at: string;
 }
 
-export type JobSubmissionFormData = Omit<JobSubmission, 'id' | 'created_at' | 'updated_at' | 'candidate'>;
+export type JobSubmissionFormData = Omit<
+  JobSubmission,
+  'id' | 'created_at' | 'updated_at' | 'candidate'
+>;

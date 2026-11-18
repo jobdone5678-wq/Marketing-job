@@ -18,7 +18,11 @@ export async function resumeUploadForm(request: Request) {
   return form;
 }
 
-export async function uploadResume(ownerId: string, file: FormDataEntryValue | null, candidate: UploadCandidate | null) {
+export async function uploadResume(
+  ownerId: string,
+  file: FormDataEntryValue | null,
+  candidate: UploadCandidate | null
+) {
   if (!(file instanceof File) || !file.size || file.size > 10 * 1024 * 1024) {
     throw new CaptureError('Upload a PDF or DOCX of at most 10 MiB.');
   }
@@ -32,10 +36,13 @@ export async function uploadResume(ownerId: string, file: FormDataEntryValue | n
   const path = `${ownerId}/${documentId}/${filename}`;
   const db = database();
   const { error: uploadError } = await db.storage.from('candidate-resumes').upload(path, raw, {
-    contentType: pdf ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    contentType: pdf
+      ? 'application/pdf'
+      : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     upsert: false,
   });
-  if (uploadError) throw new CaptureError('Private resume upload failed. Check storage setup and retry.', 503);
+  if (uploadError)
+    throw new CaptureError('Private resume upload failed. Check storage setup and retry.', 503);
 
   try {
     const { data: taskId, error } = await db.rpc('register_resume', {

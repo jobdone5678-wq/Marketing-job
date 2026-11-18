@@ -10,12 +10,15 @@ export async function OPTIONS(request: Request) {
 export async function POST(request: Request) {
   return extensionRoute(request, async () => {
     const actor = await extensionProfile(request);
-    const { url } = z.object({ url: z.url({ protocol: /^https$/ }).max(2000) }).parse(await request.json());
+    const { url } = z
+      .object({ url: z.url({ protocol: /^https$/ }).max(2000) })
+      .parse(await request.json());
     const db = database();
     let intentId: string | null = null;
 
     for (let offset = 0; ; offset += 200) {
-      const { data, error } = await db.from('application_intents')
+      const { data, error } = await db
+        .from('application_intents')
         .select('id,job:jobs(application_url)')
         .eq('owner_id', actor.id)
         .order('id')
@@ -24,7 +27,11 @@ export async function POST(request: Request) {
       for (const row of data || []) {
         const job = Array.isArray(row.job) ? row.job[0] : row.job;
         if (!job?.application_url || !allowedCaptureUrl(url, job.application_url)) continue;
-        if (intentId) throw new CaptureError('Several drafts match this posting. Open it from Public Jobs to select the tracking link.', 409);
+        if (intentId)
+          throw new CaptureError(
+            'Several drafts match this posting. Open it from Public Jobs to select the tracking link.',
+            409
+          );
         intentId = row.id;
       }
       if (!data || data.length < 200) return { intentId };

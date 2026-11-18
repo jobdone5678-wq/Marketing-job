@@ -3,7 +3,7 @@ import { database, checkDb } from '@/lib/db/admin';
 import { candidateProfileCache, outsideJobsCache } from '@/lib/cache';
 
 export async function GET(request: Request) {
-  return protectedRoute(request,async (profile) => {
+  return protectedRoute(request, async (profile) => {
     const { searchParams } = new URL(request.url);
     const rawSearch = searchParams.get('q')?.trim() || '';
     const safeSearch = rawSearch.replace(/[%_,()'"\\:]/g, ' ').trim();
@@ -39,19 +39,25 @@ export async function GET(request: Request) {
       async () => {
         let query = database()
           .from('outside_jobs')
-          .select(`
+          .select(
+            `
             *,
             candidate:candidates(id, full_name, email, current_city)
-          `)
+          `
+          )
           .order('created_at', { ascending: false });
 
         query = candidateId
-          ? query.or(`capture_owner_id.eq.${profile.id},and(capture_owner_id.is.null,candidate_id.eq.${candidateId})`)
+          ? query.or(
+              `capture_owner_id.eq.${profile.id},and(capture_owner_id.is.null,candidate_id.eq.${candidateId})`
+            )
           : query.eq('capture_owner_id', profile.id);
 
         if (safeSearch) {
           const term = `%${safeSearch}%`;
-          query = query.or(`company.ilike.${term},title.ilike.${term},portal_source.ilike.${term},location.ilike.${term}`);
+          query = query.or(
+            `company.ilike.${term},title.ilike.${term},portal_source.ilike.${term},location.ilike.${term}`
+          );
         }
 
         const { data, error } = await query;

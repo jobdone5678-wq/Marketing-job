@@ -1,7 +1,10 @@
 import { cors, extensionProfile, extensionRoute } from '@/lib/capture/server';
 import { database, checkDb, CaptureError } from '@/lib/db/admin';
 import { resumeUploadForm, uploadResume } from '@/lib/resumes/upload';
-import { downloadExtensionDocument, extensionDocumentAccess } from '@/lib/resumes/extension-documents';
+import {
+  downloadExtensionDocument,
+  extensionDocumentAccess,
+} from '@/lib/resumes/extension-documents';
 import { z } from 'zod';
 
 export const runtime = 'nodejs';
@@ -29,7 +32,8 @@ export async function GET(request: Request) {
       };
     }
 
-    const { data: documents, error } = await db.from('candidate_documents')
+    const { data: documents, error } = await db
+      .from('candidate_documents')
       .select('id, candidate_id, filename, status')
       .or(documentAccess)
       .neq('status', 'deleted')
@@ -50,7 +54,8 @@ export async function POST(request: Request) {
     const candidateId = form.get('candidateId');
     let candidate = null;
     if (candidateId) {
-      const { data, error } = await database().from('candidates')
+      const { data, error } = await database()
+        .from('candidates')
         .select('id, version')
         .eq('id', z.uuid().parse(candidateId))
         .eq('user_id', profile.id)

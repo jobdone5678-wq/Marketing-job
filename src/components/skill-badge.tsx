@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import React from 'react';
 
@@ -187,20 +187,21 @@ export function SkillBadge({
 
   return (
     <span
-      className={`inline-flex items-center border transition-all duration-200 select-none ${sizeClasses} ${isMatched
-          ? 'bg-emerald-500/15 border-emerald-500/35 text-emerald-800 dark:text-emerald-300 font-bold shadow-2xs hover:bg-emerald-500/25'
+      className={`inline-flex items-center border transition-all duration-200 select-none ${sizeClasses} ${
+        isMatched
+          ? 'border-emerald-500/35 bg-emerald-500/15 font-bold text-emerald-800 shadow-2xs hover:bg-emerald-500/25 dark:text-emerald-300'
           : `${styles.bg} ${styles.text} ${styles.border} ${styles.hover}`
-        } hover:scale-[1.03] active:scale-95 cursor-default ${className}`}
+      } cursor-default hover:scale-[1.03] active:scale-95 ${className}`}
       title={`${name} · ${resolvedCategory}${isMatched ? ' (Matched with your profile)' : ''}`}
     >
       {isMatched ? (
-        <span className="flex size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+        <span className="flex size-1.5 animate-pulse rounded-full bg-emerald-500" />
       ) : showDot ? (
-        <span className={`size-1.5 rounded-full shrink-0 ${styles.dot}`} />
+        <span className={`size-1.5 shrink-0 rounded-full ${styles.dot}`} />
       ) : null}
-      <span className="truncate max-w-[160px]">{name}</span>
+      <span className="max-w-[160px] truncate">{name}</span>
       {count !== undefined && count > 1 && (
-        <span className="text-[10px] opacity-75 font-mono">×{count}</span>
+        <span className="font-mono text-[10px] opacity-75">×{count}</span>
       )}
     </span>
   );

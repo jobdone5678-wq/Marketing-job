@@ -74,7 +74,10 @@ export async function POST(request: Request) {
       return cors(
         request,
         Response.json(
-          { error: 'Profile not found. Please log in or complete your registration on NextKinHR first.' },
+          {
+            error:
+              'Profile not found. Please log in or complete your registration on NextKinHR first.',
+          },
           { status: 403 }
         )
       );
@@ -124,6 +127,9 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Quick pairing failed';
-    return cors(request, Response.json({ error: msg }, { status: error instanceof CaptureError ? error.status : 500 }));
+    return cors(
+      request,
+      Response.json({ error: msg }, { status: error instanceof CaptureError ? error.status : 500 })
+    );
   }
 }

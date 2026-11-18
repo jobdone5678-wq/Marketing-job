@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
   Mail,
   Monitor,
@@ -15,14 +15,10 @@ import {
   PlugZap,
   Building2,
   ExternalLink,
-} from "lucide-react";
-import { api } from "@/lib/api-client";
-import {
-  WorkspaceHeading,
-  WorkspaceSkeleton,
-  WorkspaceError,
-} from "@/components/workspace-ui";
-import { Button } from "@/components/ui/button";
+} from 'lucide-react';
+import { api } from '@/lib/api-client';
+import { WorkspaceHeading, WorkspaceSkeleton, WorkspaceError } from '@/components/workspace-ui';
+import { Button } from '@/components/ui/button';
 
 type Connection = {
   id: string;
@@ -56,25 +52,22 @@ export default function IntegrationsPage() {
   useEffect(() => {
     let active = true;
     void Promise.allSettled([
-      api<Setup>("/api/settings"),
-      api<{ connections: Connection[]; gmailConfigured: boolean }>(
-        "/api/email-connections"
-      ),
-      api<{ credentials: Credential[] }>("/api/extension/credentials"),
+      api<Setup>('/api/settings'),
+      api<{ connections: Connection[]; gmailConfigured: boolean }>('/api/email-connections'),
+      api<{ credentials: Credential[] }>('/api/extension/credentials'),
     ]).then(([settings, email, extension]) => {
       if (!active) return;
       const messages: string[] = [];
-      if (settings.status === "fulfilled") setSetup(settings.value);
-      else messages.push("Workspace configuration: " + settings.reason.message);
+      if (settings.status === 'fulfilled') setSetup(settings.value);
+      else messages.push('Workspace configuration: ' + settings.reason.message);
 
-      if (email.status === "fulfilled") {
+      if (email.status === 'fulfilled') {
         setMail(email.value.connections);
         setConfigured(email.value.gmailConfigured);
-      } else messages.push("Email connections: " + email.reason.message);
+      } else messages.push('Email connections: ' + email.reason.message);
 
-      if (extension.status === "fulfilled")
-        setCredentials(extension.value.credentials);
-      else messages.push("Extension connections: " + extension.reason.message);
+      if (extension.status === 'fulfilled') setCredentials(extension.value.credentials);
+      else messages.push('Extension connections: ' + extension.reason.message);
 
       setErrors(messages);
       setCheckedAt(Date.now());
@@ -91,7 +84,7 @@ export default function IntegrationsPage() {
   );
 
   return (
-    <main className="portal-page space-y-6 animate-fade-rise">
+    <main className="portal-page animate-fade-rise space-y-6">
       <WorkspaceHeading
         eyebrow="Ecosystem"
         title="Connected Integrations & Services"
@@ -105,9 +98,9 @@ export default function IntegrationsPage() {
               setLoading(true);
               setRevision((v) => v + 1);
             }}
-            className="gap-2 cursor-pointer"
+            className="cursor-pointer gap-2"
           >
-            <RefreshCw className={loading ? "size-3.5 animate-spin" : "size-3.5"} />
+            <RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />
             <span>Refresh Status</span>
           </Button>
         }
@@ -122,34 +115,33 @@ export default function IntegrationsPage() {
       ) : (
         <div className="grid gap-5">
           {/* Email Integration Card */}
-          <section className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-border/60 pb-4">
+          <section className="border-border/80 bg-card space-y-4 rounded-2xl border p-6 shadow-xs">
+            <div className="border-border/60 flex flex-col justify-between gap-4 border-b pb-4 sm:flex-row sm:items-start">
               <div className="flex items-start gap-3.5">
-                <div className="size-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex items-center justify-center shrink-0">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400">
                   <Mail className="size-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-base font-bold text-foreground">
+                    <h2 className="text-foreground text-base font-bold">
                       Gmail Application Receipt Sync
                     </h2>
                     <span
-                      className={`status-chip ${
-                        configured ? "status-positive" : "status-warning"
-                      }`}
+                      className={`status-chip ${configured ? 'status-positive' : 'status-warning'}`}
                     >
-                      {configured ? "Configured" : "Setup Required"}
+                      {configured ? 'Configured' : 'Setup Required'}
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Automatically ingests official ATS submission receipts from Greenhouse, Ashby, and Lever.
+                  <p className="text-muted-foreground mt-0.5 text-xs">
+                    Automatically ingests official ATS submission receipts from Greenhouse, Ashby,
+                    and Lever.
                   </p>
                 </div>
               </div>
 
               <Link
                 href="/dashboard/email-confirmations"
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline self-start"
+                className="text-primary inline-flex items-center gap-1.5 self-start text-xs font-semibold hover:underline"
               >
                 <span>Manage mailboxes</span>
                 <ArrowUpRight className="size-3.5" />
@@ -157,28 +149,26 @@ export default function IntegrationsPage() {
             </div>
 
             <div className="space-y-3">
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <div className="text-muted-foreground flex items-center justify-between text-xs">
                 <span className="font-medium">
-                  {mail.length} connected mailbox account{mail.length === 1 ? "" : "s"}
+                  {mail.length} connected mailbox account{mail.length === 1 ? '' : 's'}
                 </span>
-                <span className="text-[11px] font-mono">
-                  OAuth 2.0 Restricted Scope
-                </span>
+                <span className="font-mono text-[11px]">OAuth 2.0 Restricted Scope</span>
               </div>
 
               {mail.length > 0 ? (
-                <div className="divide-y divide-border/60 rounded-xl border border-border/60 bg-muted/20">
+                <div className="divide-border/60 border-border/60 bg-muted/20 divide-y rounded-xl border">
                   {mail.map((connection) => (
                     <div
                       key={connection.id}
-                      className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                      className="flex flex-col justify-between gap-2 p-3.5 text-xs sm:flex-row sm:items-center"
                     >
                       <div className="space-y-0.5">
-                        <span className="font-semibold text-foreground">
-                          {connection.mailbox_email || "Connected mailbox"}
+                        <span className="text-foreground font-semibold">
+                          {connection.mailbox_email || 'Connected mailbox'}
                         </span>
-                        <div className="flex items-center gap-2 text-muted-foreground text-[11px]">
-                          <span>Status: {connection.status || "active"}</span>
+                        <div className="text-muted-foreground flex items-center gap-2 text-[11px]">
+                          <span>Status: {connection.status || 'active'}</span>
                           {connection.last_synced_at && (
                             <>
                               <span>·</span>
@@ -191,7 +181,7 @@ export default function IntegrationsPage() {
                       </div>
 
                       {connection.last_error && (
-                        <span className="text-[11px] text-destructive bg-destructive/10 px-2.5 py-0.5 rounded-full border border-destructive/20 self-start sm:self-auto">
+                        <span className="text-destructive bg-destructive/10 border-destructive/20 self-start rounded-full border px-2.5 py-0.5 text-[11px] sm:self-auto">
                           {connection.last_error}
                         </span>
                       )}
@@ -199,59 +189,63 @@ export default function IntegrationsPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground bg-muted/30 p-3 rounded-xl border border-border/60">
-                  No dedicated mailbox connected yet. Connect your email to track real-time confirmations.
+                <p className="text-muted-foreground bg-muted/30 border-border/60 rounded-xl border p-3 text-xs">
+                  No dedicated mailbox connected yet. Connect your email to track real-time
+                  confirmations.
                 </p>
               )}
             </div>
           </section>
 
           {/* Browser Extension Card */}
-          <section className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-border/60 pb-4">
+          <section className="border-border/80 bg-card space-y-4 rounded-2xl border p-6 shadow-xs">
+            <div className="border-border/60 flex flex-col justify-between gap-4 border-b pb-4 sm:flex-row sm:items-start">
               <div className="flex items-start gap-3.5">
-                <div className="size-10 rounded-xl bg-primary/10 text-primary border border-primary/20 flex items-center justify-center shrink-0">
+                <div className="bg-primary/10 text-primary border-primary/20 flex size-10 shrink-0 items-center justify-center rounded-xl border">
                   <Monitor className="size-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-base font-bold text-foreground">
+                    <h2 className="text-foreground text-base font-bold">
                       NextKin Chrome Extension Copilot
                     </h2>
                     <span className="status-chip status-positive">v3.2 Active</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Assists candidate autofill on external company job boards and tracks applications.
+                  <p className="text-muted-foreground mt-0.5 text-xs">
+                    Assists candidate autofill on external company job boards and tracks
+                    applications.
                   </p>
                 </div>
               </div>
 
               <Link
                 href="/dashboard/help"
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline self-start"
+                className="text-primary inline-flex items-center gap-1.5 self-start text-xs font-semibold hover:underline"
               >
                 <span>Pairing instructions</span>
                 <ArrowUpRight className="size-3.5" />
               </Link>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-4 text-xs">
-              <div className="p-4 rounded-xl border border-border/60 bg-muted/20 space-y-1">
-                <span className="text-muted-foreground font-medium">Active Authorized Sessions</span>
-                <p className="text-xl font-bold text-foreground font-mono tabular-nums">
+            <div className="grid gap-4 text-xs sm:grid-cols-2">
+              <div className="border-border/60 bg-muted/20 space-y-1 rounded-xl border p-4">
+                <span className="text-muted-foreground font-medium">
+                  Active Authorized Sessions
+                </span>
+                <p className="text-foreground font-mono text-xl font-bold tabular-nums">
                   {activeCredentials.length}
                 </p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-muted-foreground text-[11px]">
                   Valid security tokens with 256-bit encryption.
                 </p>
               </div>
 
-              <div className="p-4 rounded-xl border border-border/60 bg-muted/20 space-y-1">
+              <div className="border-border/60 bg-muted/20 space-y-1 rounded-xl border p-4">
                 <span className="text-muted-foreground font-medium">Supported Platforms</span>
-                <p className="text-sm font-bold text-foreground">
+                <p className="text-foreground text-sm font-bold">
                   Greenhouse, Ashby, Lever, Workday
                 </p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-muted-foreground text-[11px]">
                   Zero hallucinations: only verified resume facts are autofilled.
                 </p>
               </div>
@@ -259,20 +253,20 @@ export default function IntegrationsPage() {
           </section>
 
           {/* ATS Portals & Direct Ingestion */}
-          <section className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-border/60 pb-4">
+          <section className="border-border/80 bg-card space-y-4 rounded-2xl border p-6 shadow-xs">
+            <div className="border-border/60 flex flex-col justify-between gap-4 border-b pb-4 sm:flex-row sm:items-start">
               <div className="flex items-start gap-3.5">
-                <div className="size-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                   <Building2 className="size-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-base font-bold text-foreground">
+                    <h2 className="text-foreground text-base font-bold">
                       Public ATS Portals & Feeds
                     </h2>
                     <span className="status-chip status-positive">Live Crawler Active</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
+                  <p className="text-muted-foreground mt-0.5 text-xs">
                     Direct board crawlers for Greenhouse and Ashby job boards.
                   </p>
                 </div>
@@ -281,28 +275,28 @@ export default function IntegrationsPage() {
               <div className="flex items-center gap-3">
                 <Link
                   href="/dashboard/greenhouse"
-                  className="text-xs font-semibold text-primary hover:underline"
+                  className="text-primary text-xs font-semibold hover:underline"
                 >
                   Greenhouse Portal
                 </Link>
                 <span className="text-border">·</span>
                 <Link
                   href="/dashboard/ashby"
-                  className="text-xs font-semibold text-primary hover:underline"
+                  className="text-primary text-xs font-semibold hover:underline"
                 >
                   Ashby Portal
                 </Link>
               </div>
             </div>
 
-            <div className="p-4 rounded-xl border border-border/60 bg-muted/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+            <div className="border-border/60 bg-muted/20 flex flex-col items-start justify-between gap-3 rounded-xl border p-4 text-xs sm:flex-row sm:items-center">
               <div>
-                <p className="font-semibold text-foreground">
-                  AI Matching & Extraction Engine
-                </p>
+                <p className="text-foreground font-semibold">AI Matching & Extraction Engine</p>
                 <p className="text-muted-foreground text-[11px]">
-                  {setup?.ai?.configured ? "Model configured and ready" : "AI model configuration pending"}
-                  {setup?.ai?.model ? ` (${setup.ai.model})` : ""}
+                  {setup?.ai?.configured
+                    ? 'Model configured and ready'
+                    : 'AI model configuration pending'}
+                  {setup?.ai?.model ? ` (${setup.ai.model})` : ''}
                 </p>
               </div>
               <Button

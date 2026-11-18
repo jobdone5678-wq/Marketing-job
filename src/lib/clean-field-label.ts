@@ -17,7 +17,10 @@ export function cleanFieldLabel(rawLabel: string, key?: string): string {
   text = text.replace(/\b[0-9a-f]{16,}\b/gi, ' ');
 
   // 2. Strip placeholder hints like 'Type here...', 'hello@example.com...', 'Pick date...', etc.
-  text = text.replace(/\b(type\s*here|start\s*typing|pick\s*date|select|choose|enter\s*here|e\.g\.)\b\.*/gi, ' ');
+  text = text.replace(
+    /\b(type\s*here|start\s*typing|pick\s*date|select|choose|enter\s*here|e\.g\.)\b\.*/gi,
+    ' '
+  );
   text = text.replace(/hello@example\.com\.*/gi, ' ');
   text = text.replace(/1-415-555-1234\.*/gi, ' ');
   text = text.replace(/https?:\/\/\S+/gi, ' ');
@@ -37,7 +40,7 @@ export function cleanFieldLabel(rawLabel: string, key?: string): string {
   const words = text.split(' ').filter(Boolean);
   const uniqueWords: string[] = [];
   for (const w of words) {
-    if (!uniqueWords.some(u => u.toLowerCase() === w.toLowerCase())) {
+    if (!uniqueWords.some((u) => u.toLowerCase() === w.toLowerCase())) {
       uniqueWords.push(w);
     }
   }
@@ -59,10 +62,20 @@ export function cleanFieldLabel(rawLabel: string, key?: string): string {
   if (lower.includes('email') || keyLower.includes('email')) {
     return 'Email Address';
   }
-  if (lower.includes('phone') || lower.includes('mobile') || keyLower.includes('phone') || keyLower.includes('mobile')) {
+  if (
+    lower.includes('phone') ||
+    lower.includes('mobile') ||
+    keyLower.includes('phone') ||
+    keyLower.includes('mobile')
+  ) {
     return 'Phone Number';
   }
-  if (lower === 'location' || lower.includes('city') || keyLower.includes('location') || keyLower.includes('city')) {
+  if (
+    lower === 'location' ||
+    lower.includes('city') ||
+    keyLower.includes('location') ||
+    keyLower.includes('city')
+  ) {
     return 'Location';
   }
   if (lower.includes('linkedin') || keyLower.includes('linkedin')) {
@@ -71,22 +84,35 @@ export function cleanFieldLabel(rawLabel: string, key?: string): string {
   if (lower.includes('github') || keyLower.includes('github')) {
     return 'GitHub Profile';
   }
-  if (lower.includes('portfolio') || lower.includes('website') || keyLower.includes('portfolio') || keyLower.includes('website')) {
+  if (
+    lower.includes('portfolio') ||
+    lower.includes('website') ||
+    keyLower.includes('portfolio') ||
+    keyLower.includes('website')
+  ) {
     return 'Portfolio / Website';
   }
-  if (lower.includes('salary') || lower.includes('compensation') || keyLower.includes('salary') || keyLower.includes('compensation')) {
+  if (
+    lower.includes('salary') ||
+    lower.includes('compensation') ||
+    keyLower.includes('salary') ||
+    keyLower.includes('compensation')
+  ) {
     return 'Desired Salary / Compensation';
   }
 
   if (deduped.length >= 2) {
     if (deduped.length <= 50) {
-      return deduped.replace(/\b\w/g, c => c.toUpperCase());
+      return deduped.replace(/\b\w/g, (c) => c.toUpperCase());
     }
     return deduped.charAt(0).toUpperCase() + deduped.slice(1);
   }
 
   if (key) {
-    const cleanKey = key.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+    const cleanKey = key
+      .replace(/[-_]/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+      .trim();
     if (cleanKey && cleanKey.length > 1) return cleanKey;
   }
 

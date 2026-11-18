@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { createClient } from "@/lib/client";
-import type { User } from "@supabase/supabase-js";
-import type { UserProfile, AppRole } from "@/types/database";
-import { readSessionProfile } from "@/lib/auth/session-profile";
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { createClient } from '@/lib/client';
+import type { User } from '@supabase/supabase-js';
+import type { UserProfile, AppRole } from '@/types/database';
+import { readSessionProfile } from '@/lib/auth/session-profile';
 
 export function useUserProfile() {
   const [user, setUser] = useState<User | null>(null);
@@ -15,31 +15,37 @@ export function useUserProfile() {
 
   const supabase = useMemo(() => createClient(), []);
 
-  const fetchProfile = useCallback(async (authUser: User | null) => {
-    const requestId = ++profileRequest.current;
-    setProfile(null);
-    setProfileError(null);
-    setLoading(true);
-    if (!authUser) {
+  const fetchProfile = useCallback(
+    async (authUser: User | null) => {
+      const requestId = ++profileRequest.current;
       setProfile(null);
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const data = await readSessionProfile(supabase, authUser.id);
-      if (requestId !== profileRequest.current) return;
-      if (!data) throw new Error("Your account profile is missing. Please contact an administrator.");
-      setProfile(data);
-    } catch (error) {
-      if (requestId === profileRequest.current) {
+      setProfileError(null);
+      setLoading(true);
+      if (!authUser) {
         setProfile(null);
-        setProfileError(error instanceof Error ? error.message : "Unable to load your account profile.");
+        setLoading(false);
+        return;
       }
-    } finally {
-      if (requestId === profileRequest.current) setLoading(false);
-    }
-  }, [supabase]);
+
+      try {
+        const data = await readSessionProfile(supabase, authUser.id);
+        if (requestId !== profileRequest.current) return;
+        if (!data)
+          throw new Error('Your account profile is missing. Please contact an administrator.');
+        setProfile(data);
+      } catch (error) {
+        if (requestId === profileRequest.current) {
+          setProfile(null);
+          setProfileError(
+            error instanceof Error ? error.message : 'Unable to load your account profile.'
+          );
+        }
+      } finally {
+        if (requestId === profileRequest.current) setLoading(false);
+      }
+    },
+    [supabase]
+  );
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -62,13 +68,13 @@ export function useUserProfile() {
   }, [supabase, fetchProfile]);
 
   const role: AppRole | null = profile?.role || null;
-  const isCandidate = profile?.status === "active" && role === "candidate";
+  const isCandidate = profile?.status === 'active' && role === 'candidate';
 
   return {
     user,
     profile,
     role,
-    status: profile?.status || "pending",
+    status: profile?.status || 'pending',
     loading,
     profileError,
     isCandidate,

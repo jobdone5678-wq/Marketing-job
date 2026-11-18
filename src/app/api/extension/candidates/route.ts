@@ -91,35 +91,45 @@ async function profileFromResumeUpload(profileId: string): Promise<string | null
   const payload = {
     ...fields,
     is_active_bench: true,
-    notes: 'Profile created from an uploaded resume. Review the extracted facts and edit anything that is wrong.',
+    notes:
+      'Profile created from an uploaded resume. Review the extracted facts and edit anything that is wrong.',
     employment_history: extracted.employmentHistory || [],
     education_history: extracted.educationHistory || [],
-    evidence: extracted.evidence || []
+    evidence: extracted.evidence || [],
   };
 
   const { data: candidateId, error } = await db.rpc('save_candidate_profile', {
     p_actor: profileId,
     p_id: null,
     p_expected: null,
-    p_fields: payload
+    p_fields: payload,
   });
   if (error) {
     // A profile already exists for this account: keep it and attach the document.
-    if (!String(error.message || '').includes('already exists')) throw new CaptureError('The uploaded resume could not be added to the profile.');
+    if (!String(error.message || '').includes('already exists'))
+      throw new CaptureError('The uploaded resume could not be added to the profile.');
     const existing = await ownCandidates(profileId, 'confirmed');
     const legacy = existing.length ? [] : await ownCandidates(profileId, 'legacy_unconfirmed');
     const current = existing[0] || legacy[0];
     if (!current) throw new CaptureError('The uploaded resume could not be added to the profile.');
-    const { error: linkError } = await db.from('candidate_documents')
-      .update({ candidate_id: current.id, candidate_version: current.version ?? null }).eq('id', document.id);
+    const { error: linkError } = await db
+      .from('candidate_documents')
+      .update({ candidate_id: current.id, candidate_version: current.version ?? null })
+      .eq('id', document.id);
     checkDb(linkError);
     return current.id;
   }
 
-  const { data: saved, error: versionError } = await db.from('candidates').select('version').eq('id', candidateId).maybeSingle();
+  const { data: saved, error: versionError } = await db
+    .from('candidates')
+    .select('version')
+    .eq('id', candidateId)
+    .maybeSingle();
   checkDb(versionError);
-  const { error: linkError } = await db.from('candidate_documents')
-    .update({ candidate_id: candidateId, candidate_version: saved?.version ?? null }).eq('id', document.id);
+  const { error: linkError } = await db
+    .from('candidate_documents')
+    .update({ candidate_id: candidateId, candidate_version: saved?.version ?? null })
+    .eq('id', document.id);
   checkDb(linkError);
   return candidateId;
 }
@@ -141,7 +151,8 @@ export async function GET(request: Request) {
         .limit(1);
       checkDb(error);
       candidates = (data || []) as Candidate[];
-      if (candidates.length === 0) throw new CaptureError('Candidate not found or not assigned to this account.', 404);
+      if (candidates.length === 0)
+        throw new CaptureError('Candidate not found or not assigned to this account.', 404);
     } else {
       candidates = await ownCandidates(profile.id, 'confirmed');
       if (!candidates.length) candidates = await ownCandidates(profile.id, 'legacy_unconfirmed');
@@ -160,9 +171,15 @@ export async function GET(request: Request) {
         veteran: c.veteran || facts.veteran || facts.veteran_status || null,
         veteran_status: c.veteran_status || facts.veteran_status || facts.veteran || null,
         disability: c.disability || facts.disability || facts.disability_status || null,
-        disability_status: c.disability_status || facts.disability_status || facts.disability || null,
-        work_authorization: c.work_authorization || facts.work_authorization || c.visa_status || null,
-        location: [c.current_city, c.current_state].filter(Boolean).join(', ') || c.full_address || c.preferred_locations || null
+        disability_status:
+          c.disability_status || facts.disability_status || facts.disability || null,
+        work_authorization:
+          c.work_authorization || facts.work_authorization || c.visa_status || null,
+        location:
+          [c.current_city, c.current_state].filter(Boolean).join(', ') ||
+          c.full_address ||
+          c.preferred_locations ||
+          null,
       };
     });
 

@@ -1,18 +1,29 @@
-"use client";
+'use client';
 
-import { useMemo } from "react";
+import { useMemo } from 'react';
 
 type Section = {
-  type: "header" | "contact" | "target" | "heading" | "summary-item" | "skills" | "experience-entry" | "experience-date" | "bullet" | "text" | "blank";
+  type:
+    | 'header'
+    | 'contact'
+    | 'target'
+    | 'heading'
+    | 'summary-item'
+    | 'skills'
+    | 'experience-entry'
+    | 'experience-date'
+    | 'bullet'
+    | 'text'
+    | 'blank';
   text: string;
 };
 
 const SECTION_HEADINGS = new Set([
-  "PROFESSIONAL SUMMARY",
-  "SKILLS",
-  "EXPERIENCE",
-  "EDUCATION",
-  "CERTIFICATIONS",
+  'PROFESSIONAL SUMMARY',
+  'SKILLS',
+  'EXPERIENCE',
+  'EDUCATION',
+  'CERTIFICATIONS',
 ]);
 
 function parseResumeContent(raw: string): Section[] {
@@ -20,78 +31,78 @@ function parseResumeContent(raw: string): Section[] {
   const sections: Section[] = [];
   let isFirstLine = true;
   let isSecondLine = false;
-  let prevHeading = "";
+  let prevHeading = '';
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
 
     if (!trimmed) {
-      sections.push({ type: "blank", text: "" });
+      sections.push({ type: 'blank', text: '' });
       continue;
     }
 
     // First non-blank line = candidate name
     if (isFirstLine) {
-      sections.push({ type: "header", text: trimmed });
+      sections.push({ type: 'header', text: trimmed });
       isFirstLine = false;
       isSecondLine = true;
       continue;
     }
 
     // Second non-blank line with pipes = contact info
-    if (isSecondLine && trimmed.includes(" | ")) {
-      sections.push({ type: "contact", text: trimmed });
+    if (isSecondLine && trimmed.includes(' | ')) {
+      sections.push({ type: 'contact', text: trimmed });
       isSecondLine = false;
       continue;
     }
     isSecondLine = false;
 
     // "Target role:" line
-    if (trimmed.startsWith("Target role:")) {
-      sections.push({ type: "target", text: trimmed });
+    if (trimmed.startsWith('Target role:')) {
+      sections.push({ type: 'target', text: trimmed });
       continue;
     }
 
     // Section headings
     if (SECTION_HEADINGS.has(trimmed)) {
       prevHeading = trimmed;
-      sections.push({ type: "heading", text: trimmed });
+      sections.push({ type: 'heading', text: trimmed });
       continue;
     }
 
     // Bullet points
     if (/^[-•]\s/.test(trimmed)) {
-      sections.push({ type: "bullet", text: trimmed.slice(2) });
+      sections.push({ type: 'bullet', text: trimmed.slice(2) });
       continue;
     }
 
     // Skills line (contains · separator)
-    if (prevHeading === "SKILLS" && trimmed.includes(" · ")) {
-      sections.push({ type: "skills", text: trimmed });
+    if (prevHeading === 'SKILLS' && trimmed.includes(' · ')) {
+      sections.push({ type: 'skills', text: trimmed });
       continue;
     }
 
     // Experience entries (lines with | under EXPERIENCE)
-    if (prevHeading === "EXPERIENCE" && trimmed.includes(" | ")) {
-      sections.push({ type: "experience-entry", text: trimmed });
+    if (prevHeading === 'EXPERIENCE' && trimmed.includes(' | ')) {
+      sections.push({ type: 'experience-entry', text: trimmed });
       continue;
     }
 
     // Date ranges under experience (e.g. "Jan 2020 – Dec 2022")
-    if (prevHeading === "EXPERIENCE" && /\d{4}/.test(trimmed) && trimmed.includes("–")) {
-      sections.push({ type: "experience-date", text: trimmed });
+    if (prevHeading === 'EXPERIENCE' && /\d{4}/.test(trimmed) && trimmed.includes('–')) {
+      sections.push({ type: 'experience-date', text: trimmed });
       continue;
     }
 
     // Summary items under professional summary
-    if (prevHeading === "PROFESSIONAL SUMMARY") {
-      sections.push({ type: "summary-item", text: trimmed });
+    if (prevHeading === 'PROFESSIONAL SUMMARY') {
+      sections.push({ type: 'summary-item', text: trimmed });
       continue;
     }
 
     // Default text
-    sections.push({ type: "text", text: trimmed });
+    sections.push({ type: 'text', text: trimmed });
   }
 
   return sections;
@@ -112,19 +123,25 @@ export function ResumePreview({ content }: { content: string }) {
     <div className="resume-preview" aria-label="Formatted resume preview">
       {sections.map((section, i) => {
         switch (section.type) {
-          case "header":
+          case 'header':
             return (
               <h2 key={i} className="resume-name">
                 {section.text}
               </h2>
             );
-          case "contact":
+          case 'contact':
             return (
               <div key={i} className="resume-contact">
-                {section.text.split(" | ").map((part, j) => (
+                {section.text.split(' | ').map((part, j) => (
                   <span key={j} className="resume-contact-item">
-                    {part.trim().startsWith("http") || part.trim().includes("linkedin") ? (
-                      <a href={part.trim().startsWith("http") ? part.trim() : `https://${part.trim()}`} target="_blank" rel="noopener noreferrer">
+                    {part.trim().startsWith('http') || part.trim().includes('linkedin') ? (
+                      <a
+                        href={
+                          part.trim().startsWith('http') ? part.trim() : `https://${part.trim()}`
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
                         {part.trim()}
                       </a>
                     ) : (
@@ -134,40 +151,42 @@ export function ResumePreview({ content }: { content: string }) {
                 ))}
               </div>
             );
-          case "target":
+          case 'target':
             return (
               <div key={i} className="resume-target">
-                <span className="resume-target-label">Target role:</span>{" "}
-                <span className="resume-target-value">{section.text.replace("Target role:", "").trim()}</span>
+                <span className="resume-target-label">Target role:</span>{' '}
+                <span className="resume-target-value">
+                  {section.text.replace('Target role:', '').trim()}
+                </span>
               </div>
             );
-          case "heading":
+          case 'heading':
             return (
               <h3 key={i} className="resume-section-heading">
                 {section.text}
               </h3>
             );
-          case "summary-item":
+          case 'summary-item':
             return (
               <p key={i} className="resume-summary-item">
                 {section.text}
               </p>
             );
-          case "skills":
+          case 'skills':
             return (
               <div key={i} className="resume-skills">
-                {section.text.split(" · ").map((skill, j) => (
+                {section.text.split(' · ').map((skill, j) => (
                   <span key={j} className="resume-skill-badge">
                     {skill.trim()}
                   </span>
                 ))}
               </div>
             );
-          case "experience-entry":
+          case 'experience-entry':
             return (
               <div key={i} className="resume-exp-entry">
                 {(() => {
-                  const parts = section.text.split(" | ");
+                  const parts = section.text.split(' | ');
                   return (
                     <>
                       <span className="resume-exp-title">{parts[0]?.trim()}</span>
@@ -177,20 +196,22 @@ export function ResumePreview({ content }: { content: string }) {
                 })()}
               </div>
             );
-          case "experience-date":
+          case 'experience-date':
             return (
               <p key={i} className="resume-exp-date">
                 {section.text}
               </p>
             );
-          case "bullet":
+          case 'bullet':
             return (
               <div key={i} className="resume-bullet">
-                <span className="resume-bullet-dot" aria-hidden="true">•</span>
+                <span className="resume-bullet-dot" aria-hidden="true">
+                  •
+                </span>
                 <span>{section.text}</span>
               </div>
             );
-          case "blank":
+          case 'blank':
             return <div key={i} className="resume-spacer" />;
           default:
             return (

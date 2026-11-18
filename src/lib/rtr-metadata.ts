@@ -18,7 +18,7 @@ export function buildRtrMetadataTag(metadata: RtrMetadata): string {
 }
 
 export function parseRtrMetadata(notes?: string | null): RtrMetadata | null {
-  if (!notes || typeof notes !== "string") return null;
+  if (!notes || typeof notes !== 'string') return null;
   const match = notes.match(RTR_METADATA_TAG);
   if (!match) return null;
 
@@ -26,7 +26,7 @@ export function parseRtrMetadata(notes?: string | null): RtrMetadata | null {
   if (!raw) return null;
 
   const candidates: string[] = [];
-  if (raw.startsWith("{")) candidates.push(raw);
+  if (raw.startsWith('{')) candidates.push(raw);
   // Legacy shape: the JSON object ended at the first closing brace.
   const legacy = raw.match(/^(\{[\s\S]*\})/);
   if (legacy && legacy[1] !== raw) candidates.push(legacy[1]);
@@ -34,7 +34,7 @@ export function parseRtrMetadata(notes?: string | null): RtrMetadata | null {
   for (const candidate of candidates) {
     try {
       const parsed = JSON.parse(candidate);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         return parsed as RtrMetadata;
       }
     } catch {
@@ -45,9 +45,9 @@ export function parseRtrMetadata(notes?: string | null): RtrMetadata | null {
 }
 
 export function stripRtrMetadata(notes?: string | null): string {
-  if (!notes || typeof notes !== "string") return "";
+  if (!notes || typeof notes !== 'string') return '';
   return notes
-    .replace(new RegExp(RTR_METADATA_TAG.source, "g"), "")
-    .replace(/\n{3,}/g, "\n\n")
+    .replace(new RegExp(RTR_METADATA_TAG.source, 'g'), '')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }

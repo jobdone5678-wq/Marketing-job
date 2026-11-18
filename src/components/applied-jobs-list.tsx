@@ -13,8 +13,8 @@ export function AppliedJobsList({
 }) {
   if (loading) {
     return (
-      <div className="py-16 text-center text-sm text-muted-foreground border rounded-2xl bg-card">
-        <div className="animate-spin inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full mb-2"></div>
+      <div className="text-muted-foreground bg-card rounded-2xl border py-16 text-center text-sm">
+        <div className="border-primary mb-2 inline-block h-6 w-6 animate-spin rounded-full border-2 border-t-transparent"></div>
         <p>Loading applied jobs…</p>
       </div>
     );
@@ -22,9 +22,9 @@ export function AppliedJobsList({
   if (!data) return null;
   if (data.requiresCandidate) {
     return (
-      <div className="rounded-2xl border border-dashed border-border/80 bg-card p-10 text-center">
-        <p className="text-sm font-semibold text-foreground">Candidate selection required</p>
-        <p className="mt-1 text-xs text-muted-foreground">
+      <div className="border-border/80 bg-card rounded-2xl border border-dashed p-10 text-center">
+        <p className="text-foreground text-sm font-semibold">Candidate selection required</p>
+        <p className="text-muted-foreground mt-1 text-xs">
           Select a candidate profile to view their application history.
         </p>
       </div>
@@ -32,60 +32,56 @@ export function AppliedJobsList({
   }
   if (!data.applications.length) {
     return (
-      <div className="rounded-2xl border border-dashed border-border/80 bg-card p-10 text-center">
-        <p className="text-sm font-semibold text-foreground">No applications recorded</p>
-        <p className="mt-1 text-xs text-muted-foreground max-w-sm mx-auto">
-          No applied jobs found for {data.candidateName || 'this candidate'} with the selected filters.
+      <div className="border-border/80 bg-card rounded-2xl border border-dashed p-10 text-center">
+        <p className="text-foreground text-sm font-semibold">No applications recorded</p>
+        <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-xs">
+          No applied jobs found for {data.candidateName || 'this candidate'} with the selected
+          filters.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-xs">
+    <div className="border-border/70 bg-card overflow-hidden rounded-2xl border shadow-xs">
       <div className="overflow-x-auto">
-        <table className="evidence-table w-full text-left border-collapse">
+        <table className="evidence-table w-full border-collapse text-left">
           <caption className="sr-only">
             Applied jobs for {data.candidateName || 'the selected candidate'}
           </caption>
           <thead>
-            <tr className="border-b border-border/70 bg-muted/40">
-              <th className="px-4 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <tr className="border-border/70 bg-muted/40 border-b">
+              <th className="text-muted-foreground px-4 py-3.5 text-[11px] font-semibold tracking-wider uppercase">
                 Role & Company
               </th>
-              <th className="px-4 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="text-muted-foreground px-4 py-3.5 text-[11px] font-semibold tracking-wider uppercase">
                 Portal & Location
               </th>
-              <th className="px-4 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="text-muted-foreground px-4 py-3.5 text-[11px] font-semibold tracking-wider uppercase">
                 Applied Date
               </th>
-              <th className="px-4 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="text-muted-foreground px-4 py-3.5 text-[11px] font-semibold tracking-wider uppercase">
                 Stage
               </th>
-              <th className="px-4 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-right">
+              <th className="text-muted-foreground px-4 py-3.5 text-right text-[11px] font-semibold tracking-wider uppercase">
                 Action
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-border/60">
+          <tbody className="divide-border/60 divide-y">
             {data.applications.map((row) => (
-              <tr
-                key={row.id}
-                className="group transition-colors duration-150 hover:bg-muted/30"
-              >
+              <tr key={row.id} className="group hover:bg-muted/30 transition-colors duration-150">
                 {/* Role & Company */}
                 <td data-label="Role & company" className="px-4 py-3.5 align-top">
                   <div className="flex items-start gap-3">
                     <CompanyLogo company={row.company} size="sm" />
                     <div className="min-w-0">
-                      <p className="font-bold text-sm text-foreground leading-snug">
-                        {row.title}
-                      </p>
-                      <p className="font-medium text-xs text-muted-foreground mt-0.5">
+                      <p className="text-foreground text-sm leading-snug font-bold">{row.title}</p>
+                      <p className="text-muted-foreground mt-0.5 text-xs font-medium">
                         {row.company}
                       </p>
                       {row.jobState === 'closed' && (
-                        <span className="inline-flex items-center text-[10px] font-medium text-amber-600 dark:text-amber-400 mt-1">
+                        <span className="mt-1 inline-flex items-center text-[10px] font-medium text-amber-600 dark:text-amber-400">
                           Posting closed · application retained
                         </span>
                       )}
@@ -95,10 +91,10 @@ export function AppliedJobsList({
 
                 {/* Portal & Location */}
                 <td data-label="Portal & location" className="px-4 py-3.5 align-top">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-muted text-muted-foreground border border-border/50">
+                  <span className="bg-muted text-muted-foreground border-border/50 inline-flex items-center rounded border px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase">
                     {row.provider}
                   </span>
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1.5">
+                  <div className="text-muted-foreground mt-1.5 flex items-center gap-1 text-xs">
                     <MapPin className="size-3 shrink-0" />
                     <span>{row.location || 'Location not recorded'}</span>
                   </div>
@@ -106,8 +102,8 @@ export function AppliedJobsList({
 
                 {/* Applied on */}
                 <td data-label="Applied on" className="px-4 py-3.5 align-top">
-                  <div className="flex items-center gap-1.5 text-xs text-foreground/90 font-medium">
-                    <Calendar className="size-3 text-muted-foreground shrink-0" />
+                  <div className="text-foreground/90 flex items-center gap-1.5 text-xs font-medium">
+                    <Calendar className="text-muted-foreground size-3 shrink-0" />
                     <span>{row.appliedAt}</span>
                   </div>
                 </td>
@@ -116,22 +112,22 @@ export function AppliedJobsList({
                 <td data-label="Stage" className="px-4 py-3.5 align-top">
                   <Badge
                     variant="outline"
-                    className="text-[11px] px-2.5 py-0.5 rounded-full capitalize font-semibold border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                    className="rounded-full border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 capitalize dark:text-emerald-300"
                   >
                     {row.status === 'Draft' ? 'Applied' : row.status.replaceAll('_', ' ')}
                   </Badge>
                 </td>
 
                 {/* History */}
-                <td data-label="History" className="px-4 py-3.5 align-top text-right">
+                <td data-label="History" className="px-4 py-3.5 text-right align-top">
                   <Link
-                    className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-border/80 bg-background text-foreground hover:bg-muted transition-colors shadow-2xs"
+                    className="border-border/80 bg-background text-foreground hover:bg-muted inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold shadow-2xs transition-colors"
                     href={`/dashboard/submissions?candidateId=${encodeURIComponent(
                       row.candidateId
                     )}`}
                   >
                     <span>View history</span>
-                    <ExternalLink className="size-3 text-muted-foreground" />
+                    <ExternalLink className="text-muted-foreground size-3" />
                   </Link>
                 </td>
               </tr>

@@ -35,7 +35,11 @@ export function checkRateLimit(
   }
 
   entry.count += 1;
-  return { allowed: true, remaining: options.max - entry.count, resetInMs: Math.max(0, entry.resetAt - now) };
+  return {
+    allowed: true,
+    remaining: options.max - entry.count,
+    resetInMs: Math.max(0, entry.resetAt - now),
+  };
 }
 
 export function getClientIp(request: Request): string {

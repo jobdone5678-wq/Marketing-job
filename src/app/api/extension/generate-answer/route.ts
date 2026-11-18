@@ -23,9 +23,12 @@ export async function PUT(request: Request) {
   try {
     const body = await request.json();
     const { question, key, answer, candidateId } = body;
-    const normKey = (key || normalizeQuestionKey(question));
+    const normKey = key || normalizeQuestionKey(question);
     if (!normKey || !answer) {
-      return cors(request, NextResponse.json({ ok: false, error: 'Question key and answer required' }, { status: 400 }));
+      return cors(
+        request,
+        NextResponse.json({ ok: false, error: 'Question key and answer required' }, { status: 400 })
+      );
     }
 
     if (candidateId && typeof candidateId === 'string' && candidateId.length === 36) {
@@ -41,7 +44,7 @@ export async function PUT(request: Request) {
           currentSaved[normKey] = {
             answer: String(answer).trim(),
             question: question || normKey,
-            updatedAt: new Date().toISOString()
+            updatedAt: new Date().toISOString(),
           };
           await database()
             .from('candidates')
@@ -70,8 +73,13 @@ export async function POST(request: Request) {
     } catch {
       // Allow browser extension or candidate app sessions without requiring pre-registered DB credentials
       const originHeader = request.headers.get('origin') || '';
-      const isExtension = originHeader.startsWith('chrome-extension://') || Boolean(request.headers.get('x-extension-id'));
-      const isLocalOrPortal = originHeader.includes('localhost') || originHeader.includes('127.0.0.1') || originHeader.includes('nextkinhr.com');
+      const isExtension =
+        originHeader.startsWith('chrome-extension://') ||
+        Boolean(request.headers.get('x-extension-id'));
+      const isLocalOrPortal =
+        originHeader.includes('localhost') ||
+        originHeader.includes('127.0.0.1') ||
+        originHeader.includes('nextkinhr.com');
       profileId = isExtension || isLocalOrPortal ? 'verified-extension' : 'public-copilot';
     }
 
@@ -79,7 +87,10 @@ export async function POST(request: Request) {
     if (!limit.allowed) {
       return cors(
         request,
-        NextResponse.json({ ok: false, error: 'Rate limit exceeded. Please wait a moment.' }, { status: 429 })
+        NextResponse.json(
+          { ok: false, error: 'Rate limit exceeded. Please wait a moment.' },
+          { status: 429 }
+        )
       );
     }
 
@@ -97,32 +108,56 @@ export async function POST(request: Request) {
         if (!choiceMode) {
           return cors(request, NextResponse.json({ ok: true, answer: answerVal, stored: true }));
         }
-        const match = (options as string[]).find(o => String(o).toLowerCase().trim() === answerVal.toLowerCase().trim())
-          || (options as string[]).find(o => answerVal.toLowerCase().includes(String(o).toLowerCase().trim()));
+        const match =
+          (options as string[]).find(
+            (o) => String(o).toLowerCase().trim() === answerVal.toLowerCase().trim()
+          ) ||
+          (options as string[]).find((o) =>
+            answerVal.toLowerCase().includes(String(o).toLowerCase().trim())
+          );
         if (match) {
-          return cors(request, NextResponse.json({ ok: true, answer: String(match), stored: true }));
+          return cors(
+            request,
+            NextResponse.json({ ok: true, answer: String(match), stored: true })
+          );
         }
       }
     }
 
-    const candName = candidate?.full_name || candidate?.name || [candidate?.first_name, candidate?.last_name].filter(Boolean).join(' ') || 'Applicant';
-    const skillsStr = Array.isArray(candidate?.skills) && candidate.skills.length > 0
-      ? candidate.skills.join(', ')
-      : (candidate?.primary_skills || '');
-    const candTitle = candidate?.current_job_title || candidate?.target_job_titles || jobTitle || '';
-    const candSummary = candidate?.summary || candidate?.bio || candidate?.confirmed_facts?.summary || '';
+    const candName =
+      candidate?.full_name ||
+      candidate?.name ||
+      [candidate?.first_name, candidate?.last_name].filter(Boolean).join(' ') ||
+      'Applicant';
+    const skillsStr =
+      Array.isArray(candidate?.skills) && candidate.skills.length > 0
+        ? candidate.skills.join(', ')
+        : candidate?.primary_skills || '';
+    const candTitle =
+      candidate?.current_job_title || candidate?.target_job_titles || jobTitle || '';
+    const candSummary =
+      candidate?.summary || candidate?.bio || candidate?.confirmed_facts?.summary || '';
 
     // 2. Check if this is a bio/summary question and candidate already has a confirmed summary/bio
-    const isBioQuestion = /\b(bio|biography|summary|about\s*(you|yourself)?|professional\s*summary|overview)\b/i.test(normKey);
+    const isBioQuestion =
+      /\b(bio|biography|summary|about\s*(you|yourself)?|professional\s*summary|overview)\b/i.test(
+        normKey
+      );
     if (isBioQuestion && candSummary && String(candSummary).trim().length > 20 && !choiceMode) {
-      return cors(request, NextResponse.json({ ok: true, answer: String(candSummary).trim(), stored: true }));
+      return cors(
+        request,
+        NextResponse.json({ ok: true, answer: String(candSummary).trim(), stored: true })
+      );
     }
 
     const apiKey = process.env.OPENAI_API_KEY?.trim();
     if (!apiKey) {
       return cors(
         request,
-        NextResponse.json({ ok: false, error: 'AI generation service is not configured.' }, { status: 503 })
+        NextResponse.json(
+          { ok: false, error: 'AI generation service is not configured.' },
+          { status: 503 }
+        )
       );
     }
 
@@ -154,13 +189,14 @@ Strict Rules:
 
     const userPrompt = choiceMode
       ? `Question: "${fieldLabel || prompt || 'Application question'}". Options: ${JSON.stringify(options)}. Return exactly one option label.`
-      : (prompt || `Write a professional response for application field: "${fieldLabel || 'Bio / Cover Letter'}"`);
+      : prompt ||
+        `Write a professional response for application field: "${fieldLabel || 'Bio / Cover Letter'}"`;
 
     const resp = await fetch(completionsUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model,
@@ -186,8 +222,9 @@ Strict Rules:
     let answer = rawAnswer.replace(/^["']|["']$/g, '').trim();
     if (choiceMode) {
       const lower = answer.toLowerCase();
-      const match = (options as string[]).find(o => String(o).toLowerCase().trim() === lower)
-        || (options as string[]).find(o => lower.includes(String(o).toLowerCase().trim()));
+      const match =
+        (options as string[]).find((o) => String(o).toLowerCase().trim() === lower) ||
+        (options as string[]).find((o) => lower.includes(String(o).toLowerCase().trim()));
       if (match) answer = String(match);
     }
 
@@ -202,7 +239,11 @@ Strict Rules:
         if (candRow) {
           const currentFacts = (candRow.confirmed_facts as Record<string, unknown>) || {};
           const currentSaved = (currentFacts.saved_answers as Record<string, unknown>) || {};
-          currentSaved[normKey] = { answer, question: fieldLabel || prompt, updatedAt: new Date().toISOString() };
+          currentSaved[normKey] = {
+            answer,
+            question: fieldLabel || prompt,
+            updatedAt: new Date().toISOString(),
+          };
           await database()
             .from('candidates')
             .update({ confirmed_facts: { ...currentFacts, saved_answers: currentSaved } })
@@ -218,14 +259,11 @@ Strict Rules:
       NextResponse.json({
         ok: true,
         answer,
-        stored: false
+        stored: false,
       })
     );
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error generating answer';
-    return cors(
-      request,
-      NextResponse.json({ ok: false, error: msg }, { status: 500 })
-    );
+    return cors(request, NextResponse.json({ ok: false, error: msg }, { status: 500 }));
   }
 }

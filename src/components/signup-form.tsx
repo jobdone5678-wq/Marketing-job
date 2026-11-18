@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import { useEffect, useState, useRef, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import type { User } from "@supabase/supabase-js";
-import type { UserProfile } from "@/types/database";
-import { ensureSessionProfile, readSessionProfile } from "@/lib/auth/session-profile";
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import type { User } from '@supabase/supabase-js';
+import type { UserProfile } from '@/types/database';
+import { ensureSessionProfile, readSessionProfile } from '@/lib/auth/session-profile';
 import {
   ArrowRightIcon,
   PhoneIcon,
@@ -18,16 +18,16 @@ import {
   RotateCcwIcon,
   ArrowLeftIcon,
   ShieldCheckIcon,
-} from "lucide-react";
+} from 'lucide-react';
 
 export function SignupForm() {
   const router = useRouter();
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState('');
 
   // OTP Verification state
   const [otpStep, setOtpStep] = useState(false);
-  const [otpCode, setOtpCode] = useState("");
+  const [otpCode, setOtpCode] = useState('');
   const [countdown, setCountdown] = useState(0);
 
   const [loading, setLoading] = useState(false);
@@ -41,24 +41,31 @@ export function SignupForm() {
 
   const supabase = useMemo(() => createClient(), []);
 
-  const loadProfile = useCallback(async (user: User | null) => {
-    const requestId = ++profileRequest.current;
-    setCurrentProfile(null);
-    setProfileLoading(!!user);
-    if (!user) {
-      return;
-    }
-    try {
-      const data = await readSessionProfile(supabase, user.id);
-      if (requestId !== profileRequest.current) return;
-      if (!data) throw new Error("Your account profile is missing. Please contact an administrator.");
-      setCurrentProfile(data);
-    } catch (error) {
-      if (requestId === profileRequest.current) setErrorMsg(error instanceof Error ? error.message : "Unable to load your account profile.");
-    } finally {
-      if (requestId === profileRequest.current) setProfileLoading(false);
-    }
-  }, [supabase]);
+  const loadProfile = useCallback(
+    async (user: User | null) => {
+      const requestId = ++profileRequest.current;
+      setCurrentProfile(null);
+      setProfileLoading(!!user);
+      if (!user) {
+        return;
+      }
+      try {
+        const data = await readSessionProfile(supabase, user.id);
+        if (requestId !== profileRequest.current) return;
+        if (!data)
+          throw new Error('Your account profile is missing. Please contact an administrator.');
+        setCurrentProfile(data);
+      } catch (error) {
+        if (requestId === profileRequest.current)
+          setErrorMsg(
+            error instanceof Error ? error.message : 'Unable to load your account profile.'
+          );
+      } finally {
+        if (requestId === profileRequest.current) setProfileLoading(false);
+      }
+    },
+    [supabase]
+  );
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -91,24 +98,25 @@ export function SignupForm() {
   }, [countdown]);
 
   useEffect(() => {
-    const timer=setTimeout(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const urlErrorDesc = params.get("error_description");
-      const urlError = params.get("error");
+    const timer = setTimeout(() => {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const urlErrorDesc = params.get('error_description');
+        const urlError = params.get('error');
 
-      if (urlErrorDesc) {
-        setErrorMsg(urlErrorDesc);
-      } else if (urlError) {
-        if (urlError === "auth-code-error") {
-          setErrorMsg("Authentication session timed out or was cancelled. Please request a new code.");
-        } else {
-          setErrorMsg(urlError);
+        if (urlErrorDesc) {
+          setErrorMsg(urlErrorDesc);
+        } else if (urlError) {
+          if (urlError === 'auth-code-error') {
+            setErrorMsg(
+              'Authentication session timed out or was cancelled. Please request a new code.'
+            );
+          } else {
+            setErrorMsg(urlError);
+          }
         }
       }
-
-    }
-    },0);
+    }, 0);
     return () => clearTimeout(timer);
   }, []);
 
@@ -119,10 +127,10 @@ export function SignupForm() {
     setSuccessMsg(null);
 
     const cleanEmail = email.trim();
-    const derivedName = cleanEmail.split("@")[0] || "User";
+    const derivedName = cleanEmail.split('@')[0] || 'User';
 
-    if (!cleanEmail || !cleanEmail.includes("@")) {
-      setErrorMsg("Please enter a valid email address.");
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setErrorMsg('Please enter a valid email address.');
       return;
     }
 
@@ -130,9 +138,9 @@ export function SignupForm() {
 
     try {
       const redirectUrl =
-        typeof window !== "undefined"
+        typeof window !== 'undefined'
           ? `${window.location.origin}/auth/callback?next=/dashboard`
-          : "";
+          : '';
 
       const { error } = await supabase.auth.signInWithOtp({
         email: cleanEmail,
@@ -146,10 +154,13 @@ export function SignupForm() {
       });
 
       if (error) {
-        if (error.status === 429 || (error as { code?: string }).code === "over_email_send_rate_limit") {
+        if (
+          error.status === 429 ||
+          (error as { code?: string }).code === 'over_email_send_rate_limit'
+        ) {
           // Free tier rate limit hit: explain clearly and still allow entering code if already sent
           setErrorMsg(
-            "Supabase email rate limit reached (free tier limit of 3 emails/hour). If you already received a verification code in your email earlier, enter it below."
+            'Supabase email rate limit reached (free tier limit of 3 emails/hour). If you already received a verification code in your email earlier, enter it below.'
           );
           setOtpStep(true);
         } else {
@@ -158,11 +169,12 @@ export function SignupForm() {
       } else {
         setOtpStep(true);
         setCountdown(45);
-        setSuccessMsg(`A verification code has been sent to ${cleanEmail}. Please check your inbox or spam.`);
+        setSuccessMsg(
+          `A verification code has been sent to ${cleanEmail}. Please check your inbox or spam.`
+        );
       }
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Failed to send verification code.";
+      const message = err instanceof Error ? err.message : 'Failed to send verification code.';
       setErrorMsg(message);
     } finally {
       setLoading(false);
@@ -177,7 +189,7 @@ export function SignupForm() {
 
     const cleanCode = otpCode.trim();
     if (!cleanCode || cleanCode.length < 6) {
-      setErrorMsg("Please enter the complete verification code.");
+      setErrorMsg('Please enter the complete verification code.');
       return;
     }
 
@@ -190,15 +202,21 @@ export function SignupForm() {
       let { data, error } = await supabase.auth.verifyOtp({
         email: cleanEmail,
         token: cleanCode,
-        type: "email",
+        type: 'email',
       });
 
       // If 'email' type fails, try 'magiclink' (used by Supabase for existing users) and 'signup' (for new user registrations)
-      if (error && (error.message.includes("invalid") || error.message.includes("expired") || error.status === 400 || error.status === 401)) {
+      if (
+        error &&
+        (error.message.includes('invalid') ||
+          error.message.includes('expired') ||
+          error.status === 400 ||
+          error.status === 401)
+      ) {
         const retryMagic = await supabase.auth.verifyOtp({
           email: cleanEmail,
           token: cleanCode,
-          type: "magiclink",
+          type: 'magiclink',
         });
         if (!retryMagic.error) {
           data = retryMagic.data;
@@ -207,7 +225,7 @@ export function SignupForm() {
           const retrySignup = await supabase.auth.verifyOtp({
             email: cleanEmail,
             token: cleanCode,
-            type: "signup",
+            type: 'signup',
           });
           if (!retrySignup.error) {
             data = retrySignup.data;
@@ -217,9 +235,12 @@ export function SignupForm() {
       }
 
       if (error) {
-        setErrorMsg(error.message || "Invalid or expired verification code. Please check the code or request a new one.");
+        setErrorMsg(
+          error.message ||
+            'Invalid or expired verification code. Please check the code or request a new one.'
+        );
       } else if (data.user) {
-        const derivedName = data.user.email?.split("@")[0] || "User";
+        const derivedName = data.user.email?.split('@')[0] || 'User';
         const prof = await ensureSessionProfile(supabase, data.user, {
           fullName: derivedName,
           phone: null,
@@ -229,16 +250,17 @@ export function SignupForm() {
         setCurrentProfile(prof);
         setProfileLoading(false);
 
-        if (prof.status === "active") {
-          setSuccessMsg("Verification successful! Opening dashboard...");
-          router.push("/dashboard");
+        if (prof.status === 'active') {
+          setSuccessMsg('Verification successful! Opening dashboard...');
+          router.push('/dashboard');
         } else {
-          setErrorMsg(`Your account is ${prof.status}. Please contact an administrator before accessing the portal.`);
+          setErrorMsg(
+            `Your account is ${prof.status}. Please contact an administrator before accessing the portal.`
+          );
         }
       }
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Verification failed. Please try again.";
+      const message = err instanceof Error ? err.message : 'Verification failed. Please try again.';
       setErrorMsg(message);
     } finally {
       setLoading(false);
@@ -254,9 +276,9 @@ export function SignupForm() {
 
     try {
       const redirectUrl =
-        typeof window !== "undefined"
+        typeof window !== 'undefined'
           ? `${window.location.origin}/auth/callback?next=/dashboard`
-          : "";
+          : '';
 
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim(),
@@ -273,8 +295,7 @@ export function SignupForm() {
         setSuccessMsg(`New verification code sent to ${email.trim()}.`);
       }
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Could not resend code.";
+      const message = err instanceof Error ? err.message : 'Could not resend code.';
       setErrorMsg(message);
     } finally {
       setLoading(false);
@@ -289,10 +310,12 @@ export function SignupForm() {
     try {
       // OAuth needs a full browser navigation so the server can set PKCE and
       // registration cookies before redirecting to Google.
-      window.location.assign(new URL(`/auth/google?next=${encodeURIComponent("/dashboard")}`, window.location.origin).href);
+      window.location.assign(
+        new URL(`/auth/google?next=${encodeURIComponent('/dashboard')}`, window.location.origin)
+          .href
+      );
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Failed to initiate Google login.";
+      const message = err instanceof Error ? err.message : 'Failed to initiate Google login.';
       setErrorMsg(message);
       setGoogleLoading(false);
     }
@@ -305,57 +328,77 @@ export function SignupForm() {
     setCurrentProfile(null);
     setErrorMsg(null);
     setOtpStep(false);
-    setOtpCode("");
-    setSuccessMsg("Signed out successfully.");
+    setOtpCode('');
+    setSuccessMsg('Signed out successfully.');
     setLoading(false);
   };
 
   // Authenticated State View
   if (currentUser) {
-    const badgeColor = "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30";
+    const badgeColor =
+      'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30';
 
     return (
-      <div className="flex flex-col gap-4 p-5 sm:p-6 border rounded-2xl border-border/70 bg-card/90 backdrop-blur-xs shadow-xs">
+      <div className="border-border/70 bg-card/90 flex flex-col gap-4 rounded-2xl border p-5 shadow-xs backdrop-blur-xs sm:p-6">
         <div className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">Current Session</span>
+          <span className="text-muted-foreground text-xs">Current Session</span>
           <Badge variant="outline" className={badgeColor}>
             Candidate
           </Badge>
         </div>
 
         <div>
-          <h2 className="text-lg font-bold tracking-tight text-foreground">
+          <h2 className="text-foreground text-lg font-bold tracking-tight">
             {currentProfile?.full_name || currentUser.user_metadata?.full_name || currentUser.email}
           </h2>
-          <p className="text-xs text-muted-foreground mt-0.5">{currentUser.email}</p>
+          <p className="text-muted-foreground mt-0.5 text-xs">{currentUser.email}</p>
           {currentProfile?.phone && (
-            <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-              <PhoneIcon className="size-3 text-primary" />
+            <p className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
+              <PhoneIcon className="text-primary size-3" />
               {currentProfile.phone}
             </p>
           )}
         </div>
 
-        {errorMsg && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">{errorMsg}</p>}
-        {currentProfile && ["rejected", "suspended"].includes(currentProfile.status) && <p role="alert" className="text-xs text-destructive">Your account is {currentProfile.status}. Contact an administrator to review access.</p>}
+        {errorMsg && (
+          <p
+            role="alert"
+            className="border-destructive/30 bg-destructive/10 text-destructive rounded-lg border p-3 text-xs"
+          >
+            {errorMsg}
+          </p>
+        )}
+        {currentProfile && ['rejected', 'suspended'].includes(currentProfile.status) && (
+          <p role="alert" className="text-destructive text-xs">
+            Your account is {currentProfile.status}. Contact an administrator to review access.
+          </p>
+        )}
 
         <div className="flex flex-col gap-2 pt-2">
           <Button
-            disabled={profileLoading || currentProfile?.status !== "active"}
-            onClick={() => router.push("/dashboard")}
-            className="w-full bg-primary text-primary-foreground font-medium flex items-center justify-center gap-1.5 cursor-pointer h-9 text-xs disabled:opacity-50"
+            disabled={profileLoading || currentProfile?.status !== 'active'}
+            onClick={() => router.push('/dashboard')}
+            className="bg-primary text-primary-foreground flex h-9 w-full cursor-pointer items-center justify-center gap-1.5 text-xs font-medium disabled:opacity-50"
           >
             Enter Portal Dashboard
             <ArrowRightIcon className="size-3.5" />
           </Button>
-          {!currentProfile && !profileLoading && <Button variant="outline" onClick={() => loadProfile(currentUser)} className="w-full h-9 text-xs">Retry Account Profile</Button>}
+          {!currentProfile && !profileLoading && (
+            <Button
+              variant="outline"
+              onClick={() => loadProfile(currentUser)}
+              className="h-9 w-full text-xs"
+            >
+              Retry Account Profile
+            </Button>
+          )}
           <Button
             onClick={handleSignOut}
             disabled={loading}
             variant="outline"
-            className="w-full cursor-pointer h-9 text-xs"
+            className="h-9 w-full cursor-pointer text-xs"
           >
-            {loading ? "Signing out..." : "Sign Out"}
+            {loading ? 'Signing out...' : 'Sign Out'}
           </Button>
         </div>
       </div>
@@ -367,16 +410,16 @@ export function SignupForm() {
     return (
       <div className="flex flex-col gap-4">
         <div className="flex flex-col items-center gap-1.5 text-center sm:items-start sm:text-left">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs text-primary font-semibold bg-primary/10 border border-primary/20">
+          <div className="text-primary bg-primary/10 border-primary/20 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold">
             <KeyRoundIcon className="size-3.5" />
             Verification Required
           </div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+          <h1 className="text-foreground text-xl font-bold tracking-tight sm:text-2xl">
             Enter Verification Code
           </h1>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            We sent a verification code and a sign-in link to{" "}
-            <span className="font-semibold text-foreground underline decoration-primary/40 underline-offset-2">
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            We sent a verification code and a sign-in link to{' '}
+            <span className="text-foreground decoration-primary/40 font-semibold underline underline-offset-2">
               {email}
             </span>
             . Enter the code below or click the sign-in link in your email.
@@ -384,24 +427,30 @@ export function SignupForm() {
         </div>
 
         {errorMsg && (
-          <div role="alert" className="p-3 text-xs rounded-xl bg-destructive/10 text-destructive border border-destructive/20 leading-relaxed">
+          <div
+            role="alert"
+            className="bg-destructive/10 text-destructive border-destructive/20 rounded-xl border p-3 text-xs leading-relaxed"
+          >
             {errorMsg}
           </div>
         )}
 
         {successMsg && (
-          <div role="status" className="p-3 text-xs rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 leading-relaxed">
+          <div
+            role="status"
+            className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs leading-relaxed text-emerald-600 dark:text-emerald-400"
+          >
             {successMsg}
           </div>
         )}
 
         <form onSubmit={handleVerifyOtp} className="flex flex-col gap-3.5">
           <div className="space-y-1.5">
-            <Label htmlFor="otpCode" className="text-xs font-semibold text-foreground/90">
+            <Label htmlFor="otpCode" className="text-foreground/90 text-xs font-semibold">
               Verification Code (OTP)
             </Label>
             <div className="relative">
-              <KeyRoundIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/70 pointer-events-none" />
+              <KeyRoundIcon className="text-muted-foreground/70 pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2" />
               <Input
                 id="otpCode"
                 type="text"
@@ -409,10 +458,10 @@ export function SignupForm() {
                 maxLength={10}
                 placeholder="123456"
                 value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
                 required
                 autoFocus
-                className="h-11 pl-10 pr-4 text-lg tracking-[0.25em] font-mono text-center font-bold bg-background/80 border-border/80 focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:border-primary rounded-xl shadow-2xs"
+                className="bg-background/80 border-border/80 focus-visible:ring-primary/25 focus-visible:border-primary h-11 rounded-xl pr-4 pl-10 text-center font-mono text-lg font-bold tracking-[0.25em] shadow-2xs focus-visible:ring-2"
               />
             </div>
           </div>
@@ -420,11 +469,11 @@ export function SignupForm() {
           <Button
             type="submit"
             disabled={loading || otpCode.length < 6}
-            className="w-full h-10 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs hover:shadow active:scale-[0.99] transition-all duration-150 cursor-pointer text-xs flex items-center justify-center gap-2"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-xl text-xs font-semibold shadow-xs transition-all duration-150 hover:shadow active:scale-[0.99]"
           >
             {loading ? (
               <>
-                <div className="size-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                <div className="border-primary-foreground size-3.5 animate-spin rounded-full border-2 border-t-transparent" />
                 <span>Verifying Code...</span>
               </>
             ) : (
@@ -435,16 +484,16 @@ export function SignupForm() {
             )}
           </Button>
 
-          <div className="flex items-center justify-between text-xs pt-2 border-t border-border/40">
+          <div className="border-border/40 flex items-center justify-between border-t pt-2 text-xs">
             <button
               type="button"
               onClick={() => {
                 setOtpStep(false);
-                setOtpCode("");
+                setOtpCode('');
                 setErrorMsg(null);
                 setSuccessMsg(null);
               }}
-              className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer text-xs font-medium"
+              className="text-muted-foreground hover:text-foreground inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium transition-colors"
             >
               <ArrowLeftIcon className="size-3.5" />
               Edit details
@@ -454,14 +503,14 @@ export function SignupForm() {
               type="button"
               onClick={handleResendOtp}
               disabled={countdown > 0 || loading}
-              className={`inline-flex items-center gap-1.5 transition-colors cursor-pointer text-xs font-medium ${
+              className={`inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium transition-colors ${
                 countdown > 0
-                  ? "text-muted-foreground cursor-not-allowed opacity-60"
-                  : "text-primary hover:underline"
+                  ? 'text-muted-foreground cursor-not-allowed opacity-60'
+                  : 'text-primary hover:underline'
               }`}
             >
               <RotateCcwIcon className="size-3.5" />
-              {countdown > 0 ? `Resend code (${countdown}s)` : "Resend code"}
+              {countdown > 0 ? `Resend code (${countdown}s)` : 'Resend code'}
             </button>
           </div>
         </form>
@@ -473,22 +522,29 @@ export function SignupForm() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col items-center gap-1 text-center sm:items-start sm:text-left">
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+        <h1 className="text-foreground text-xl font-bold tracking-tight sm:text-2xl">
           Portal Access
         </h1>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          Verify your email to create your candidate account. Existing accounts keep their saved profile.
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          Verify your email to create your candidate account. Existing accounts keep their saved
+          profile.
         </p>
       </div>
 
       {errorMsg && (
-        <div role="alert" className="p-3 text-xs rounded-xl bg-destructive/10 text-destructive border border-destructive/20 leading-relaxed">
+        <div
+          role="alert"
+          className="bg-destructive/10 text-destructive border-destructive/20 rounded-xl border p-3 text-xs leading-relaxed"
+        >
           {errorMsg}
         </div>
       )}
 
       {successMsg && (
-        <div role="status" className="p-3 text-xs rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 leading-relaxed">
+        <div
+          role="status"
+          className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs leading-relaxed text-emerald-600 dark:text-emerald-400"
+        >
           {successMsg}
         </div>
       )}
@@ -496,11 +552,11 @@ export function SignupForm() {
       <form onSubmit={handleSendOtp} className="flex flex-col gap-3.5">
         {/* Email Address */}
         <div className="space-y-1">
-          <Label htmlFor="email" className="text-xs font-medium text-foreground">
+          <Label htmlFor="email" className="text-foreground text-xs font-medium">
             Email Address <span className="text-destructive">*</span>
           </Label>
           <div className="relative">
-            <MailIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+            <MailIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
             <Input
               id="email"
               type="email"
@@ -508,7 +564,7 @@ export function SignupForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="h-9.5 pl-9 pr-3 text-xs bg-background border-border/80 rounded-lg shadow-2xs focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:border-primary"
+              className="bg-background border-border/80 focus-visible:ring-primary/20 focus-visible:border-primary h-9.5 rounded-lg pr-3 pl-9 text-xs shadow-2xs focus-visible:ring-2"
             />
           </div>
         </div>
@@ -517,24 +573,24 @@ export function SignupForm() {
         <Button
           type="submit"
           disabled={loading}
-          className="w-full mt-1 h-9.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs hover:shadow active:scale-[0.99] transition-all duration-150 cursor-pointer text-xs flex items-center justify-center gap-2 group"
+          className="bg-primary hover:bg-primary/90 text-primary-foreground group mt-1 flex h-9.5 w-full cursor-pointer items-center justify-center gap-2 rounded-lg text-xs font-semibold shadow-xs transition-all duration-150 hover:shadow active:scale-[0.99]"
         >
           {loading ? (
             <>
-              <div className="size-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+              <div className="border-primary-foreground size-3.5 animate-spin rounded-full border-2 border-t-transparent" />
               <span>Sending Verification Code...</span>
             </>
           ) : (
             <>
               <MailIcon className="size-3.5" />
               <span>Send Email OTP Code</span>
-              <ArrowRightIcon className="size-3 text-primary-foreground/70 transition-transform group-hover:translate-x-0.5" />
+              <ArrowRightIcon className="text-primary-foreground/70 size-3 transition-transform group-hover:translate-x-0.5" />
             </>
           )}
         </Button>
 
-        <div className="relative my-0.5 text-center text-xs after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t after:border-border/60">
-          <span className="relative z-10 bg-background px-2.5 text-[10px] font-medium text-muted-foreground">
+        <div className="after:border-border/60 relative my-0.5 text-center text-xs after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t">
+          <span className="bg-background text-muted-foreground relative z-10 px-2.5 text-[10px] font-medium">
             Or continue with Google
           </span>
         </div>
@@ -545,7 +601,7 @@ export function SignupForm() {
           variant="outline"
           onClick={handleGoogleSignIn}
           disabled={googleLoading}
-          className="w-full h-9.5 rounded-lg border-border/70 hover:border-border hover:bg-muted/50 bg-background cursor-pointer text-xs font-medium flex items-center justify-center gap-2.5 shadow-2xs active:scale-[0.99] transition-all"
+          className="border-border/70 hover:border-border hover:bg-muted/50 bg-background flex h-9.5 w-full cursor-pointer items-center justify-center gap-2.5 rounded-lg text-xs font-medium shadow-2xs transition-all active:scale-[0.99]"
         >
           <svg className="size-4 shrink-0" viewBox="0 0 24 24">
             <path
@@ -565,11 +621,11 @@ export function SignupForm() {
               fill="#EA4335"
             />
           </svg>
-          <span>{googleLoading ? "Connecting to Google..." : "Continue with Google"}</span>
+          <span>{googleLoading ? 'Connecting to Google...' : 'Continue with Google'}</span>
         </Button>
 
-        <div className="pt-2 border-t border-border/40 text-[10px] text-muted-foreground flex items-center justify-center gap-1.5 text-center">
-          <ShieldCheckIcon className="size-3 text-primary shrink-0" />
+        <div className="border-border/40 text-muted-foreground flex items-center justify-center gap-1.5 border-t pt-2 text-center text-[10px]">
+          <ShieldCheckIcon className="text-primary size-3 shrink-0" />
           <span>Passwordless login: Secure 6-digit OTP codes sent directly to your email.</span>
         </div>
       </form>

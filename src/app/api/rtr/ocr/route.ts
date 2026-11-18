@@ -1,12 +1,12 @@
-import { protectedRoute } from "@/lib/http/protected-route";
-import { CaptureError } from "@/lib/db/admin";
-import { getAIModel } from "@/lib/ai/config";
-import { readResume } from "@/lib/resumes/validation";
-import { toIsoDate, todayIsoDate } from "@/lib/rtr-dates";
-import OpenAI from "openai";
-import { z } from "zod";
+import { protectedRoute } from '@/lib/http/protected-route';
+import { CaptureError } from '@/lib/db/admin';
+import { getAIModel } from '@/lib/ai/config';
+import { readResume } from '@/lib/resumes/validation';
+import { toIsoDate, todayIsoDate } from '@/lib/rtr-dates';
+import OpenAI from 'openai';
+import { z } from 'zod';
 
-export const runtime = "nodejs";
+export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 // Matches the upload limit of POST /api/rtr so a document never scans successfully and then
@@ -22,15 +22,15 @@ const extractedSchema = z.object({
   vendor_contact_email: z.string().nullable().optional(),
   vendor_contact_phone: z.string().nullable().optional(),
   detected_companies: z.array(z.string()).default([]),
-  rtr_type: z.enum(["vendor_rtr", "client_rtr", "direct_rtr"]).default("vendor_rtr"),
-  rtr_status: z.enum(["received", "signed", "expired", "rejected"]).default("received"),
+  rtr_type: z.enum(['vendor_rtr', 'client_rtr', 'direct_rtr']).default('vendor_rtr'),
+  rtr_status: z.enum(['received', 'signed', 'expired', 'rejected']).default('received'),
   rtr_date: z.string().nullable().optional(),
   expiration_date: z.string().nullable().optional(),
   hourly_rate: z.string().nullable().optional(),
   daily_rate: z.string().nullable().optional(),
   monthly_rate: z.string().nullable().optional(),
   annual_rate: z.string().nullable().optional(),
-  currency: z.string().default("USD"),
+  currency: z.string().default('USD'),
   representation_clause: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
 });
@@ -45,7 +45,8 @@ function regexExtractFallback(text: string, filename: string): ExtractedRtrData 
   const phones = text.match(phoneRegex) || [];
 
   // Match rate like $75/hr, $75 / hour, $800/day
-  const rateRegex = /\$(\d+(?:\.\d{1,2})?)\s*(?:\/|\s*per\s*)?\s*(hr|hour|day|month|mo|annual|yr)?/i;
+  const rateRegex =
+    /\$(\d+(?:\.\d{1,2})?)\s*(?:\/|\s*per\s*)?\s*(hr|hour|day|month|mo|annual|yr)?/i;
   const rateMatch = text.match(rateRegex);
 
   let hourlyRate: string | null = null;
@@ -54,10 +55,10 @@ function regexExtractFallback(text: string, filename: string): ExtractedRtrData 
 
   if (rateMatch) {
     const amount = rateMatch[1];
-    const unit = (rateMatch[2] || "").toLowerCase();
-    if (unit.startsWith("d")) {
+    const unit = (rateMatch[2] || '').toLowerCase();
+    if (unit.startsWith('d')) {
       dailyRate = amount;
-    } else if (unit.startsWith("m")) {
+    } else if (unit.startsWith('m')) {
       monthlyRate = amount;
     } else {
       hourlyRate = amount;
@@ -65,12 +66,14 @@ function regexExtractFallback(text: string, filename: string): ExtractedRtrData 
   }
 
   // Check signed status
-  const isSigned = /(signed|electronically signed|docusign|completed|acknowledged and agreed|signature:?\s*[^\n]+)/i.test(
-    text
-  );
+  const isSigned =
+    /(signed|electronically signed|docusign|completed|acknowledged and agreed|signature:?\s*[^\n]+)/i.test(
+      text
+    );
 
   // Look for date
-  const dateRegex = /\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b|\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?\s+\d{4}\b/i;
+  const dateRegex =
+    /\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b|\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?\s+\d{4}\b/i;
   const dateMatch = text.match(dateRegex);
   // The database column is a DATE, so the value has to be a real calendar date. The raw text of
   // the document ("11/09/2026", "Nov 9, 2026") is normalised here instead of being written
@@ -79,7 +82,8 @@ function regexExtractFallback(text: string, filename: string): ExtractedRtrData 
 
   // Check representation clause snippet
   let clause: string | null = null;
-  const rtrSnippetRegex = /(?:right to represent|exclusive representation|authorizes?|agrees? to represent|representation agreement)[^\n.]{10,200}\.?/i;
+  const rtrSnippetRegex =
+    /(?:right to represent|exclusive representation|authorizes?|agrees? to represent|representation agreement)[^\n.]{10,200}\.?/i;
   const clauseMatch = text.match(rtrSnippetRegex);
   if (clauseMatch) {
     clause = clauseMatch[0].trim();
@@ -100,7 +104,9 @@ function regexExtractFallback(text: string, filename: string): ExtractedRtrData 
     if (m && m[1]) {
       const candidateCandidate = m[1].trim();
       if (
-        !/^(the|this|that|please|our|your|client|vendor|company|nextkin|nextkinlife|agency|contractor)\b/i.test(candidateCandidate) &&
+        !/^(the|this|that|please|our|your|client|vendor|company|nextkin|nextkinlife|agency|contractor)\b/i.test(
+          candidateCandidate
+        ) &&
         !/(?:llc|inc|corp|ltd|solutions|systems|technologies)$/i.test(candidateCandidate)
       ) {
         candidateName = candidateCandidate;
@@ -125,11 +131,17 @@ function regexExtractFallback(text: string, filename: string): ExtractedRtrData 
 
   // Extract different companies mentioned
   const detectedCompanies: string[] = [];
-  const companyPattern = /(?:client|company|customer|end\s*client|vendor|agency|employer|at|for)\s*[:\-]?\s*([A-Z][A-Za-z0-9&.,\s]{2,35}(?:Inc|LLC|Corp|Corporation|Technologies|Solutions|Services|Systems|Consulting|Group|Holdings)?)/gi;
+  const companyPattern =
+    /(?:client|company|customer|end\s*client|vendor|agency|employer|at|for)\s*[:\-]?\s*([A-Z][A-Za-z0-9&.,\s]{2,35}(?:Inc|LLC|Corp|Corporation|Technologies|Solutions|Services|Systems|Consulting|Group|Holdings)?)/gi;
   let compMatch;
   while ((compMatch = companyPattern.exec(text)) !== null) {
     const candidate = compMatch[1]?.trim().replace(/[\r\n,.]+$/, '');
-    if (candidate && candidate.length > 2 && !detectedCompanies.includes(candidate) && !/^(the|this|that|please|our|your)\b/i.test(candidate)) {
+    if (
+      candidate &&
+      candidate.length > 2 &&
+      !detectedCompanies.includes(candidate) &&
+      !/^(the|this|that|please|our|your)\b/i.test(candidate)
+    ) {
       detectedCompanies.push(candidate);
     }
   }
@@ -143,15 +155,15 @@ function regexExtractFallback(text: string, filename: string): ExtractedRtrData 
     vendor_contact_email: emails[0] || null,
     vendor_contact_phone: phones[0] || null,
     detected_companies: detectedCompanies,
-    rtr_type: "vendor_rtr",
-    rtr_status: isSigned ? "signed" : "received",
+    rtr_type: 'vendor_rtr',
+    rtr_status: isSigned ? 'signed' : 'received',
     rtr_date: foundDate,
     expiration_date: null,
     hourly_rate: hourlyRate,
     daily_rate: dailyRate,
     monthly_rate: monthlyRate,
     annual_rate: null,
-    currency: "USD",
+    currency: 'USD',
     representation_clause: clause,
     notes: `Extracted via text analysis from ${filename}.`,
   };
@@ -160,37 +172,40 @@ function regexExtractFallback(text: string, filename: string): ExtractedRtrData 
 export async function POST(request: Request) {
   return protectedRoute(request, async () => {
     const formData = await request.formData();
-    const file = formData.get("file");
+    const file = formData.get('file');
 
     if (!(file instanceof File) || !file.size) {
-      throw new CaptureError("Upload a valid image (PNG, JPG, WEBP) or PDF file up to 4 MiB.", 400);
+      throw new CaptureError('Upload a valid image (PNG, JPG, WEBP) or PDF file up to 4 MiB.', 400);
     }
 
     if (file.size > MAX_DOCUMENT_BYTES) {
-      throw new CaptureError("File size exceeds the 4 MiB limit.", 413);
+      throw new CaptureError('File size exceeds the 4 MiB limit.', 413);
     }
 
-    const filename = file.name.replace(/[^a-zA-Z0-9._ -]/g, "_").slice(-160);
+    const filename = file.name.replace(/[^a-zA-Z0-9._ -]/g, '_').slice(-160);
     const rawBuffer = Buffer.from(await file.arrayBuffer());
-    const mimeType = file.type || "application/octet-stream";
+    const mimeType = file.type || 'application/octet-stream';
 
-    const isPdf = /\.pdf$/i.test(filename) || mimeType === "application/pdf";
-    const isImage = /\.(png|jpe?g|webp|gif|bmp)$/i.test(filename) || mimeType.startsWith("image/");
+    const isPdf = /\.pdf$/i.test(filename) || mimeType === 'application/pdf';
+    const isImage = /\.(png|jpe?g|webp|gif|bmp)$/i.test(filename) || mimeType.startsWith('image/');
 
     if (!isPdf && !isImage) {
-      throw new CaptureError("Unsupported file type. Please upload a PDF or image (PNG, JPG, WEBP).", 400);
+      throw new CaptureError(
+        'Unsupported file type. Please upload a PDF or image (PNG, JPG, WEBP).',
+        400
+      );
     }
 
-    let rawText = "";
+    let rawText = '';
     let extracted: ExtractedRtrData | null = null;
 
     // 1. If PDF: Extract raw text
     if (isPdf) {
       try {
         const parsed = await readResume(rawBuffer, filename);
-        rawText = parsed.text || "";
+        rawText = parsed.text || '';
       } catch (err) {
-        console.warn("PDF text parse warning:", err);
+        console.warn('PDF text parse warning:', err);
       }
     }
 
@@ -246,19 +261,19 @@ Return ONLY valid JSON. No markdown backticks, no commentary.`;
         let messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
 
         if (isImage) {
-          const base64Image = `data:${mimeType};base64,${rawBuffer.toString("base64")}`;
+          const base64Image = `data:${mimeType};base64,${rawBuffer.toString('base64')}`;
           messages = [
-            { role: "system", content: systemPrompt },
+            { role: 'system', content: systemPrompt },
             {
-              role: "user",
+              role: 'user',
               content: [
                 {
-                  type: "text",
-                  text: "Please inspect this Right to Represent (RTR) document image and extract all fields.",
+                  type: 'text',
+                  text: 'Please inspect this Right to Represent (RTR) document image and extract all fields.',
                 },
                 {
-                  type: "image_url",
-                  image_url: { url: base64Image, detail: "high" },
+                  type: 'image_url',
+                  image_url: { url: base64Image, detail: 'high' },
                 },
               ],
             },
@@ -266,21 +281,21 @@ Return ONLY valid JSON. No markdown backticks, no commentary.`;
         } else {
           // PDF with text
           messages = [
-            { role: "system", content: systemPrompt },
+            { role: 'system', content: systemPrompt },
             {
-              role: "user",
-              content: `Document filename: ${filename}\n\nDocument text content:\n${rawText || "No machine text extracted; examine document headers."}`,
+              role: 'user',
+              content: `Document filename: ${filename}\n\nDocument text content:\n${rawText || 'No machine text extracted; examine document headers.'}`,
             },
           ];
         }
 
-        const selectedModel = model || "gpt-4o";
+        const selectedModel = model || 'gpt-4o';
         let content: string | null | undefined = null;
         try {
           const completion = await client.chat.completions.create({
             model: selectedModel,
             messages,
-            response_format: { type: "json_object" },
+            response_format: { type: 'json_object' },
             temperature: 0.1,
           });
           content = completion.choices[0]?.message?.content;
@@ -295,8 +310,8 @@ Return ONLY valid JSON. No markdown backticks, no commentary.`;
 
         if (content) {
           const cleanJson = content
-            .replace(/^```(?:json)?\s*/i, "")
-            .replace(/\s*```$/i, "")
+            .replace(/^```(?:json)?\s*/i, '')
+            .replace(/\s*```$/i, '')
             .trim();
           const parsedJson = JSON.parse(cleanJson);
           extracted = extractedSchema.parse(parsedJson);
@@ -309,11 +324,13 @@ Return ONLY valid JSON. No markdown backticks, no commentary.`;
           const allFound = new Set<string>(extracted.detected_companies || []);
           if (extracted.company_name) allFound.add(extracted.company_name);
           if (extracted.vendor_name) allFound.add(extracted.vendor_name);
-          extracted.detected_companies = Array.from(allFound).map((c) => c.trim()).filter(Boolean);
+          extracted.detected_companies = Array.from(allFound)
+            .map((c) => c.trim())
+            .filter(Boolean);
         }
       }
     } catch (aiError) {
-      console.warn("AI OCR parsing fallback triggered:", aiError);
+      console.warn('AI OCR parsing fallback triggered:', aiError);
     }
 
     // 3. Fallback to regex analysis if AI was unavailable or did not complete

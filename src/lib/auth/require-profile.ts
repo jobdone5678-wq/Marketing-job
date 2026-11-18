@@ -1,31 +1,42 @@
 import 'server-only';
-import {cookies} from 'next/headers';
-import {createClient} from '@/lib/server';
-import {database} from '@/lib/db/admin';
-import {CaptureError} from '@/lib/email-confirmations/server';
-import {profileAccess} from './profile-access';
-import type {UserProfile} from '@/types/database';
+import { cookies } from 'next/headers';
+import { createClient } from '@/lib/server';
+import { database } from '@/lib/db/admin';
+import { CaptureError } from '@/lib/email-confirmations/server';
+import { profileAccess } from './profile-access';
+import type { UserProfile } from '@/types/database';
 
 const inflightAuth = new Map<string, Promise<UserProfile>>();
 const profileCache = new Map<string, { profile: UserProfile; expiresAt: number }>();
 
 async function fetchProfile(): Promise<UserProfile> {
   const client = await createClient();
-  const {data:{user},error} = await client.auth.getUser();
-  if(error||!user) throw new CaptureError('Sign in to continue.',401);
+  const {
+    data: { user },
+    error,
+  } = await client.auth.getUser();
+  if (error || !user) throw new CaptureError('Sign in to continue.', 401);
   // Check current account status for every protected operation; a suspended session must stop immediately.
-  const {data:profile,error:profileError} = await database().from('profiles').select('*').eq('id',user.id).single();
-  if(profileError||!profile) throw new CaptureError('An approved active account is required.',403);
+  const { data: profile, error: profileError } = await database()
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single();
+  if (profileError || !profile)
+    throw new CaptureError('An approved active account is required.', 403);
   return profile as UserProfile;
 }
 
-export async function requireProfile():Promise<UserProfile> {
+export async function requireProfile(): Promise<UserProfile> {
   let sessionKey = '';
   try {
     const store = await cookies();
     const all = store.getAll();
-    if(all.length > 0) {
-      sessionKey = all.map(c => `${c.name}=${c.value}`).sort().join(';');
+    if (all.length > 0) {
+      sessionKey = all
+        .map((c) => `${c.name}=${c.value}`)
+        .sort()
+        .join(';');
     }
   } catch {
     // cookies() may throw outside request context
@@ -36,7 +47,8 @@ export async function requireProfile():Promise<UserProfile> {
   if (isLive && sessionKey) {
     const cached = profileCache.get(sessionKey);
     if (cached && cached.expiresAt > now) {
-      if(!profileAccess(cached.profile)) throw new CaptureError('An approved active account is required.',403);
+      if (!profileAccess(cached.profile))
+        throw new CaptureError('An approved active account is required.', 403);
       return cached.profile;
     }
   }
@@ -47,14 +59,16 @@ export async function requireProfile():Promise<UserProfile> {
     if (inflight) {
       profilePromise = inflight;
     } else {
-      profilePromise = fetchProfile().then(profile => {
-        if (isLive && sessionKey) {
-          profileCache.set(sessionKey, { profile, expiresAt: Date.now() + 2500 });
-        }
-        return profile;
-      }).finally(() => {
-        inflightAuth.delete(sessionKey);
-      });
+      profilePromise = fetchProfile()
+        .then((profile) => {
+          if (isLive && sessionKey) {
+            profileCache.set(sessionKey, { profile, expiresAt: Date.now() + 2500 });
+          }
+          return profile;
+        })
+        .finally(() => {
+          inflightAuth.delete(sessionKey);
+        });
       inflightAuth.set(sessionKey, profilePromise);
     }
   } else {
@@ -62,7 +76,7 @@ export async function requireProfile():Promise<UserProfile> {
   }
 
   const profile = await profilePromise;
-  if(!profileAccess(profile)) throw new CaptureError('An approved active account is required.',403);
+  if (!profileAccess(profile))
+    throw new CaptureError('An approved active account is required.', 403);
   return profile;
 }
-

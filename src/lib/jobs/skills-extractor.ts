@@ -24,7 +24,8 @@ export interface ExtractedSkill {
 
 export interface ExtractedRequirement {
   id: string;
-  category: 'Clearance & Location' | 'Experience & Education' | 'Technical Stack' | 'Key Responsibility';
+  category:
+    'Clearance & Location' | 'Experience & Education' | 'Technical Stack' | 'Key Responsibility';
   requirement: string;
   jobEvidence: string;
   status: 'met' | 'missing' | 'verification_needed';
@@ -64,7 +65,11 @@ export interface CandidateFitAnalysis {
 const SKILL_DATABASE: { name: string; aliases: string[]; category: SkillCategory }[] = [
   // 1. Languages & Core
   { name: 'Python', aliases: ['python3', 'python 3', 'pyspark'], category: 'Languages & Core' },
-  { name: 'Java', aliases: ['java 8', 'java 11', 'java 17', 'java 21', 'core java'], category: 'Languages & Core' },
+  {
+    name: 'Java',
+    aliases: ['java 8', 'java 11', 'java 17', 'java 21', 'core java'],
+    category: 'Languages & Core',
+  },
   { name: 'C++', aliases: ['cpp', 'c/c++'], category: 'Languages & Core' },
   { name: 'C', aliases: ['ansi c'], category: 'Languages & Core' },
   { name: 'Go', aliases: ['golang', 'go language'], category: 'Languages & Core' },
@@ -72,13 +77,21 @@ const SKILL_DATABASE: { name: string; aliases: string[]; category: SkillCategory
   { name: 'TypeScript', aliases: ['ts'], category: 'Languages & Core' },
   { name: 'JavaScript', aliases: ['js', 'es6', 'es2020', 'es2022'], category: 'Languages & Core' },
   { name: 'C#', aliases: ['csharp', '.net c#'], category: 'Languages & Core' },
-  { name: 'SQL', aliases: ['structured query language', 't-sql', 'pl/sql'], category: 'Languages & Core' },
+  {
+    name: 'SQL',
+    aliases: ['structured query language', 't-sql', 'pl/sql'],
+    category: 'Languages & Core',
+  },
   { name: 'Scala', aliases: [], category: 'Languages & Core' },
   { name: 'Kotlin', aliases: [], category: 'Languages & Core' },
   { name: 'Swift', aliases: ['swiftui'], category: 'Languages & Core' },
   { name: 'Ruby', aliases: ['ruby on rails', 'rails'], category: 'Languages & Core' },
   { name: 'PHP', aliases: ['laravel'], category: 'Languages & Core' },
-  { name: 'Bash / Shell', aliases: ['bash', 'shell scripting', 'sh', 'zsh', 'powershell'], category: 'Languages & Core' },
+  {
+    name: 'Bash / Shell',
+    aliases: ['bash', 'shell scripting', 'sh', 'zsh', 'powershell'],
+    category: 'Languages & Core',
+  },
 
   // 2. Frontend & Mobile
   { name: 'React', aliases: ['react.js', 'reactjs'], category: 'Frontend & Mobile' },
@@ -90,65 +103,186 @@ const SKILL_DATABASE: { name: string; aliases: string[]; category: SkillCategory
   { name: 'React Native', aliases: ['react-native'], category: 'Frontend & Mobile' },
   { name: 'Flutter', aliases: ['dart'], category: 'Frontend & Mobile' },
   { name: 'iOS Development', aliases: ['uikit', 'cocoa'], category: 'Frontend & Mobile' },
-  { name: 'Android Development', aliases: ['android sdk', 'jetpack compose'], category: 'Frontend & Mobile' },
+  {
+    name: 'Android Development',
+    aliases: ['android sdk', 'jetpack compose'],
+    category: 'Frontend & Mobile',
+  },
 
   // 3. Backend & APIs
   { name: 'Node.js', aliases: ['nodejs', 'node'], category: 'Backend & APIs' },
-  { name: 'Spring Boot', aliases: ['spring framework', 'springboot', 'spring mvc'], category: 'Backend & APIs' },
+  {
+    name: 'Spring Boot',
+    aliases: ['spring framework', 'springboot', 'spring mvc'],
+    category: 'Backend & APIs',
+  },
   { name: 'FastAPI', aliases: [], category: 'Backend & APIs' },
   { name: 'Django', aliases: [], category: 'Backend & APIs' },
   { name: 'Flask', aliases: [], category: 'Backend & APIs' },
   { name: 'ASP.NET Core', aliases: ['asp.net', '.net core'], category: 'Backend & APIs' },
   { name: 'Express.js', aliases: ['expressjs', 'express'], category: 'Backend & APIs' },
   { name: 'GraphQL', aliases: ['apollo', 'graphql schema'], category: 'Backend & APIs' },
-  { name: 'REST APIs', aliases: ['restful apis', 'rest api', 'restful'], category: 'Backend & APIs' },
+  {
+    name: 'REST APIs',
+    aliases: ['restful apis', 'rest api', 'restful'],
+    category: 'Backend & APIs',
+  },
   { name: 'gRPC', aliases: ['protobuf', 'protocol buffers'], category: 'Backend & APIs' },
-  { name: 'Microservices', aliases: ['micro-services', 'microservice architecture'], category: 'Backend & APIs' },
+  {
+    name: 'Microservices',
+    aliases: ['micro-services', 'microservice architecture'],
+    category: 'Backend & APIs',
+  },
   { name: 'WebSockets', aliases: ['socket.io'], category: 'Backend & APIs' },
 
   // 4. Cloud & DevOps
-  { name: 'AWS', aliases: ['amazon web services', 'ec2', 's3', 'lambda', 'ecs', 'eks'], category: 'Cloud & DevOps' },
-  { name: 'Google Cloud (GCP)', aliases: ['gcp', 'google cloud platform', 'bigquery', 'gke'], category: 'Cloud & DevOps' },
+  {
+    name: 'AWS',
+    aliases: ['amazon web services', 'ec2', 's3', 'lambda', 'ecs', 'eks'],
+    category: 'Cloud & DevOps',
+  },
+  {
+    name: 'Google Cloud (GCP)',
+    aliases: ['gcp', 'google cloud platform', 'bigquery', 'gke'],
+    category: 'Cloud & DevOps',
+  },
   { name: 'Microsoft Azure', aliases: ['azure', 'azure devops'], category: 'Cloud & DevOps' },
   { name: 'Docker', aliases: ['containerization', 'containers'], category: 'Cloud & DevOps' },
   { name: 'Kubernetes', aliases: ['k8s', 'helm'], category: 'Cloud & DevOps' },
-  { name: 'Terraform', aliases: ['iac', 'infrastructure as code', 'opentofu'], category: 'Cloud & DevOps' },
-  { name: 'Linux', aliases: ['unix', 'ubuntu', 'redhat', 'centos', 'debian'], category: 'Cloud & DevOps' },
-  { name: 'CI/CD', aliases: ['continuous integration', 'github actions', 'jenkins', 'gitlab ci', 'argo cd'], category: 'Cloud & DevOps' },
-  { name: 'Distributed Systems', aliases: ['distributed architecture', 'distributed computing', 'high availability'], category: 'Cloud & DevOps' },
+  {
+    name: 'Terraform',
+    aliases: ['iac', 'infrastructure as code', 'opentofu'],
+    category: 'Cloud & DevOps',
+  },
+  {
+    name: 'Linux',
+    aliases: ['unix', 'ubuntu', 'redhat', 'centos', 'debian'],
+    category: 'Cloud & DevOps',
+  },
+  {
+    name: 'CI/CD',
+    aliases: ['continuous integration', 'github actions', 'jenkins', 'gitlab ci', 'argo cd'],
+    category: 'Cloud & DevOps',
+  },
+  {
+    name: 'Distributed Systems',
+    aliases: ['distributed architecture', 'distributed computing', 'high availability'],
+    category: 'Cloud & DevOps',
+  },
   { name: 'Serverless', aliases: ['aws lambda', 'cloud functions'], category: 'Cloud & DevOps' },
-  { name: 'Observability', aliases: ['datadog', 'prometheus', 'grafana', 'opentelemetry', 'splunk', 'cloudwatch'], category: 'Cloud & DevOps' },
+  {
+    name: 'Observability',
+    aliases: ['datadog', 'prometheus', 'grafana', 'opentelemetry', 'splunk', 'cloudwatch'],
+    category: 'Cloud & DevOps',
+  },
 
   // 5. Data, AI & Storage
   { name: 'PostgreSQL', aliases: ['postgres', 'psql'], category: 'Data, AI & Storage' },
   { name: 'MySQL', aliases: ['mariadb'], category: 'Data, AI & Storage' },
   { name: 'MongoDB', aliases: ['mongo', 'nosql document store'], category: 'Data, AI & Storage' },
   { name: 'Redis', aliases: ['in-memory cache', 'redis cache'], category: 'Data, AI & Storage' },
-  { name: 'Apache Kafka', aliases: ['kafka', 'event streaming', 'pub/sub', 'message broker'], category: 'Data, AI & Storage' },
+  {
+    name: 'Apache Kafka',
+    aliases: ['kafka', 'event streaming', 'pub/sub', 'message broker'],
+    category: 'Data, AI & Storage',
+  },
   { name: 'Snowflake', aliases: ['data warehouse'], category: 'Data, AI & Storage' },
   { name: 'Apache Spark', aliases: ['spark', 'databricks'], category: 'Data, AI & Storage' },
-  { name: 'Elasticsearch', aliases: ['elastic search', 'elk stack', 'opensearch'], category: 'Data, AI & Storage' },
-  { name: 'Data Pipelines', aliases: ['etl', 'elt', 'data engineering', 'airflow', 'apache airflow'], category: 'Data, AI & Storage' },
-  { name: 'Machine Learning', aliases: ['deep learning', 'ml models', 'model training'], category: 'Data, AI & Storage' },
+  {
+    name: 'Elasticsearch',
+    aliases: ['elastic search', 'elk stack', 'opensearch'],
+    category: 'Data, AI & Storage',
+  },
+  {
+    name: 'Data Pipelines',
+    aliases: ['etl', 'elt', 'data engineering', 'airflow', 'apache airflow'],
+    category: 'Data, AI & Storage',
+  },
+  {
+    name: 'Machine Learning',
+    aliases: ['deep learning', 'ml models', 'model training'],
+    category: 'Data, AI & Storage',
+  },
   { name: 'PyTorch', aliases: ['torch'], category: 'Data, AI & Storage' },
   { name: 'TensorFlow', aliases: ['keras'], category: 'Data, AI & Storage' },
-  { name: 'LLM & Generative AI', aliases: ['large language models', 'openai', 'langchain', 'vector database', 'rag'], category: 'Data, AI & Storage' },
-  { name: 'Agentic AI & AI Agents', aliases: ['agentic', 'ai agents', 'autonomous agents', 'multi-agent', 'langgraph', 'crewai', 'autogen', 'agent framework'], category: 'Data, AI & Storage' },
-  { name: 'Prompt Engineering', aliases: ['prompt design', 'prompt evaluation'], category: 'Data, AI & Storage' },
-  { name: 'Software Engineering', aliases: ['software development', 'software systems', 'software design'], category: 'Practices & Architecture' },
+  {
+    name: 'LLM & Generative AI',
+    aliases: ['large language models', 'openai', 'langchain', 'vector database', 'rag'],
+    category: 'Data, AI & Storage',
+  },
+  {
+    name: 'Agentic AI & AI Agents',
+    aliases: [
+      'agentic',
+      'ai agents',
+      'autonomous agents',
+      'multi-agent',
+      'langgraph',
+      'crewai',
+      'autogen',
+      'agent framework',
+    ],
+    category: 'Data, AI & Storage',
+  },
+  {
+    name: 'Prompt Engineering',
+    aliases: ['prompt design', 'prompt evaluation'],
+    category: 'Data, AI & Storage',
+  },
+  {
+    name: 'Software Engineering',
+    aliases: ['software development', 'software systems', 'software design'],
+    category: 'Practices & Architecture',
+  },
 
   // 6. Security & Compliance
-  { name: 'US Government Work', aliases: ['us government', 'government work', 'dod', 'defense programs'], category: 'Security & Compliance' },
-  { name: 'Security Clearance', aliases: ['clearance', 'secret clearance', 'ts/sci', 'top secret', 'security check'], category: 'Security & Compliance' },
-  { name: 'Wiesbaden / Germany', aliases: ['wiesbaden', 'germany', 'relocation to germany', 'europe base'], category: 'Security & Compliance' },
-  { name: 'Application Security', aliases: ['appsec', 'owasp', 'penetration testing', 'soc2', 'hipaa', 'iso 27001'], category: 'Security & Compliance' },
-  { name: 'IAM / OAuth', aliases: ['oauth2', 'saml', 'single sign-on', 'sso', 'jwt'], category: 'Security & Compliance' },
+  {
+    name: 'US Government Work',
+    aliases: ['us government', 'government work', 'dod', 'defense programs'],
+    category: 'Security & Compliance',
+  },
+  {
+    name: 'Security Clearance',
+    aliases: ['clearance', 'secret clearance', 'ts/sci', 'top secret', 'security check'],
+    category: 'Security & Compliance',
+  },
+  {
+    name: 'Wiesbaden / Germany',
+    aliases: ['wiesbaden', 'germany', 'relocation to germany', 'europe base'],
+    category: 'Security & Compliance',
+  },
+  {
+    name: 'Application Security',
+    aliases: ['appsec', 'owasp', 'penetration testing', 'soc2', 'hipaa', 'iso 27001'],
+    category: 'Security & Compliance',
+  },
+  {
+    name: 'IAM / OAuth',
+    aliases: ['oauth2', 'saml', 'single sign-on', 'sso', 'jwt'],
+    category: 'Security & Compliance',
+  },
 
   // 7. Practices & Architecture
-  { name: 'System Design', aliases: ['software architecture', 'system architecture', 'design patterns', 'scalability'], category: 'Practices & Architecture' },
-  { name: 'Agile / Scrum', aliases: ['agile', 'scrum', 'kanban', 'sprint planning'], category: 'Practices & Architecture' },
-  { name: 'Unit & Integration Testing', aliases: ['unit testing', 'jest', 'junit', 'pytest', 'tdd', 'test driven development'], category: 'Practices & Architecture' },
-  { name: 'Git & Version Control', aliases: ['git', 'github', 'gitlab', 'code reviews'], category: 'Practices & Architecture' }
+  {
+    name: 'System Design',
+    aliases: ['software architecture', 'system architecture', 'design patterns', 'scalability'],
+    category: 'Practices & Architecture',
+  },
+  {
+    name: 'Agile / Scrum',
+    aliases: ['agile', 'scrum', 'kanban', 'sprint planning'],
+    category: 'Practices & Architecture',
+  },
+  {
+    name: 'Unit & Integration Testing',
+    aliases: ['unit testing', 'jest', 'junit', 'pytest', 'tdd', 'test driven development'],
+    category: 'Practices & Architecture',
+  },
+  {
+    name: 'Git & Version Control',
+    aliases: ['git', 'github', 'gitlab', 'code reviews'],
+    category: 'Practices & Architecture',
+  },
 ];
 
 function escapeRegex(text: string): string {
@@ -160,7 +294,10 @@ function textContains(source: string, term: string): boolean {
     const pattern = new RegExp(`(?:^|[^a-z0-9+#.])${escapeRegex(term)}(?=$|[^a-z0-9+#])`, 'i');
     return pattern.test(source);
   }
-  const pattern = new RegExp(`(?:^|[^a-z0-9+#.])${escapeRegex(term.toLowerCase())}(?=$|[^a-z0-9+#])`, 'i');
+  const pattern = new RegExp(
+    `(?:^|[^a-z0-9+#.])${escapeRegex(term.toLowerCase())}(?=$|[^a-z0-9+#])`,
+    'i'
+  );
   return pattern.test(source);
 }
 
@@ -195,7 +332,7 @@ export function extractJobSkills(description: string, title?: string): Extracted
         name: item.name,
         category: item.category,
         sourceSnippet: snippet || item.name,
-        count: matchCount
+        count: matchCount,
       });
     }
   }
@@ -213,7 +350,10 @@ export function extractJobSkills(description: string, title?: string): Extracted
  * - Location / Clearance constraints
  * - Skills
  */
-export function extractCompleteJobDetails(description: string, title?: string): StructuredJobDetails {
+export function extractCompleteJobDetails(
+  description: string,
+  title?: string
+): StructuredJobDetails {
   if (!description) {
     return {
       summary: '',
@@ -222,12 +362,15 @@ export function extractCompleteJobDetails(description: string, title?: string): 
       niceToHaves: [],
       constraints: [],
       skills: [],
-      topTechStack: []
+      topTechStack: [],
     };
   }
 
   const skills = extractJobSkills(description, title);
-  const rawLines = description.split('\n').map((l) => l.trim()).filter(Boolean);
+  const rawLines = description
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
 
   const responsibilities: string[] = [];
   const mustHaves: string[] = [];
@@ -236,29 +379,35 @@ export function extractCompleteJobDetails(description: string, title?: string): 
 
   // Identify Constraints
   if (/US Government|Clearance|DoD|Secret/i.test(description)) {
-    const line = rawLines.find((l) => /US Government|Clearance|DoD/i.test(l)) || 'Requires support of US Government work / clearance eligibility';
+    const line =
+      rawLines.find((l) => /US Government|Clearance|DoD/i.test(l)) ||
+      'Requires support of US Government work / clearance eligibility';
     constraints.push({
       type: 'clearance',
       title: 'US Government Support & Clearance',
-      description: line.replace(/^[•*\-\s]+/, '')
+      description: line.replace(/^[•*\-\s]+/, ''),
     });
   }
 
   if (/Wiesbaden|Germany|relocat|on-site|hybrid/i.test(description)) {
-    const line = rawLines.find((l) => /Wiesbaden|Germany|relocat/i.test(l)) || 'Location: Wiesbaden, Germany or on-site relocation required';
+    const line =
+      rawLines.find((l) => /Wiesbaden|Germany|relocat/i.test(l)) ||
+      'Location: Wiesbaden, Germany or on-site relocation required';
     constraints.push({
       type: 'location',
       title: 'Location & Relocation',
-      description: line.replace(/^[•*\-\s]+/, '')
+      description: line.replace(/^[•*\-\s]+/, ''),
     });
   }
 
-  const expMatch = description.match(/\b(\d{1,2})\+?\s*(?:-|–|to)?\s*\d*\s*years?\b.*?(?:experience|software|engineering)/i);
+  const expMatch = description.match(
+    /\b(\d{1,2})\+?\s*(?:-|–|to)?\s*\d*\s*years?\b.*?(?:experience|software|engineering)/i
+  );
   if (expMatch) {
     constraints.push({
       type: 'experience',
       title: 'Experience Level',
-      description: expMatch[0]
+      description: expMatch[0],
     });
   }
 
@@ -271,16 +420,32 @@ export function extractCompleteJobDetails(description: string, title?: string): 
     if (!clean) continue;
 
     // Detect section header changes
-    if (/(?:responsibilities|what you['’]ll do|the role|your impact|core duties|what you will be doing)/i.test(line) && line.length < 80) {
+    if (
+      /(?:responsibilities|what you['’]ll do|the role|your impact|core duties|what you will be doing)/i.test(
+        line
+      ) &&
+      line.length < 80
+    ) {
       currentSection = 'resp';
       continue;
-    } else if (/(?:requirements|qualifications|what we['’]re looking for|basic qualifications|minimum qualifications|must have|what you bring)/i.test(line) && line.length < 80) {
+    } else if (
+      /(?:requirements|qualifications|what we['’]re looking for|basic qualifications|minimum qualifications|must have|what you bring)/i.test(
+        line
+      ) &&
+      line.length < 80
+    ) {
       currentSection = 'must';
       continue;
-    } else if (/(?:preferred|nice to have|bonus|desired|what gives you an edge|good to have)/i.test(line) && line.length < 80) {
+    } else if (
+      /(?:preferred|nice to have|bonus|desired|what gives you an edge|good to have)/i.test(line) &&
+      line.length < 80
+    ) {
       currentSection = 'nice';
       continue;
-    } else if (/(?:about us|who we are|benefits|perks|compensation|equal opportunity)/i.test(line) && line.length < 80) {
+    } else if (
+      /(?:about us|who we are|benefits|perks|compensation|equal opportunity)/i.test(line) &&
+      line.length < 80
+    ) {
       currentSection = 'other';
       continue;
     }
@@ -306,9 +471,17 @@ export function extractCompleteJobDetails(description: string, title?: string): 
       const clean = line.replace(/^[•*\-\s]+/, '').trim();
       if (clean.length < 25) continue;
 
-      if (/architect|build|develop|design|lead|deploy|collaborate|implement|maintain|partner|deliver/i.test(clean)) {
+      if (
+        /architect|build|develop|design|lead|deploy|collaborate|implement|maintain|partner|deliver/i.test(
+          clean
+        )
+      ) {
         if (responsibilities.length < 8) responsibilities.push(clean);
-      } else if (/years|degree|bachelor|master|proficien|experience with|deep knowledge|strong background/i.test(clean)) {
+      } else if (
+        /years|degree|bachelor|master|proficien|experience with|deep knowledge|strong background/i.test(
+          clean
+        )
+      ) {
         if (mustHaves.length < 8) mustHaves.push(clean);
       }
     }
@@ -328,7 +501,7 @@ export function extractCompleteJobDetails(description: string, title?: string): 
     niceToHaves: niceToHaves.slice(0, 6),
     constraints,
     skills,
-    topTechStack
+    topTechStack,
   };
 }
 
@@ -338,7 +511,10 @@ export function extractCompleteJobDetails(description: string, title?: string): 
 export function extractKeyRequirements(description: string): ExtractedRequirement[] {
   if (!description) return [];
   const results: ExtractedRequirement[] = [];
-  const lines = description.split(/\n|(?<=[.!?])\s+(?=[A-Z])/).map((s) => s.trim()).filter((s) => s.length > 20);
+  const lines = description
+    .split(/\n|(?<=[.!?])\s+(?=[A-Z])/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 20);
 
   // 1. Check for Government / Clearance / Specific Location constraints
   for (const line of lines) {
@@ -348,7 +524,7 @@ export function extractKeyRequirements(description: string): ExtractedRequiremen
         category: 'Clearance & Location',
         requirement: line.replace(/^[•*\-\s]+/, '').slice(0, 140),
         jobEvidence: line,
-        status: 'verification_needed'
+        status: 'verification_needed',
       });
       if (results.length >= 2) break;
     }
@@ -356,13 +532,15 @@ export function extractKeyRequirements(description: string): ExtractedRequiremen
 
   // 2. Check for Experience & Education
   for (const line of lines) {
-    if (/\b\d+\+?\s*(?:-|–|to)?\s*\d*\s*years?\b|bachelor|master|degree|computer science/i.test(line)) {
+    if (
+      /\b\d+\+?\s*(?:-|–|to)?\s*\d*\s*years?\b|bachelor|master|degree|computer science/i.test(line)
+    ) {
       results.push({
         id: 'req_exp_' + results.length,
         category: 'Experience & Education',
         requirement: line.replace(/^[•*\-\s]+/, '').slice(0, 140),
         jobEvidence: line,
-        status: 'verification_needed'
+        status: 'verification_needed',
       });
       if (results.length >= 4) break;
     }
@@ -370,14 +548,18 @@ export function extractKeyRequirements(description: string): ExtractedRequiremen
 
   // 3. Check for Core Tech Stack / Systems Experience
   for (const line of lines) {
-    if (/distributed systems|microservices|backend|full stack|cloud|data pipelines|software engineer/i.test(line)) {
+    if (
+      /distributed systems|microservices|backend|full stack|cloud|data pipelines|software engineer/i.test(
+        line
+      )
+    ) {
       if (!results.some((r) => r.jobEvidence === line)) {
         results.push({
           id: 'req_tech_' + results.length,
           category: 'Technical Stack',
           requirement: line.replace(/^[•*\-\s]+/, '').slice(0, 140),
           jobEvidence: line,
-          status: 'verification_needed'
+          status: 'verification_needed',
         });
         if (results.length >= 6) break;
       }
@@ -400,10 +582,14 @@ export function analyzeCandidateFit(
 
   // Gather candidate text corpus
   const candidateCorpus: { field: string; text: string }[] = [];
-  if (candidate.primary_skills) candidateCorpus.push({ field: 'Primary Skills', text: candidate.primary_skills });
-  if (candidate.secondary_skills) candidateCorpus.push({ field: 'Secondary Skills', text: candidate.secondary_skills });
-  if (candidate.current_job_title) candidateCorpus.push({ field: 'Current Role', text: candidate.current_job_title });
-  if (candidate.highest_qualification) candidateCorpus.push({ field: 'Education', text: candidate.highest_qualification });
+  if (candidate.primary_skills)
+    candidateCorpus.push({ field: 'Primary Skills', text: candidate.primary_skills });
+  if (candidate.secondary_skills)
+    candidateCorpus.push({ field: 'Secondary Skills', text: candidate.secondary_skills });
+  if (candidate.current_job_title)
+    candidateCorpus.push({ field: 'Current Role', text: candidate.current_job_title });
+  if (candidate.highest_qualification)
+    candidateCorpus.push({ field: 'Education', text: candidate.highest_qualification });
   if (candidate.notes) candidateCorpus.push({ field: 'Candidate Facts', text: candidate.notes });
 
   // Add confirmed facts if any
@@ -438,7 +624,10 @@ export function analyzeCandidateFit(
     let proof = '';
 
     for (const item of candidateCorpus) {
-      const words = req.requirement.toLowerCase().split(/\s+/).filter((w) => w.length > 4);
+      const words = req.requirement
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((w) => w.length > 4);
       const matchedWords = words.filter((w) => item.text.toLowerCase().includes(w));
       if (matchedWords.length >= 2 || (words.length === 1 && matchedWords.length === 1)) {
         met = true;
@@ -449,8 +638,16 @@ export function analyzeCandidateFit(
 
     return {
       ...req,
-      status: met ? 'met' : req.category === 'Clearance & Location' ? 'verification_needed' : 'missing',
-      candidateEvidence: proof || (req.category === 'Clearance & Location' ? 'Requires manual recruiter confirmation' : 'Not explicitly cited in profile')
+      status: met
+        ? 'met'
+        : req.category === 'Clearance & Location'
+          ? 'verification_needed'
+          : 'missing',
+      candidateEvidence:
+        proof ||
+        (req.category === 'Clearance & Location'
+          ? 'Requires manual recruiter confirmation'
+          : 'Not explicitly cited in profile'),
     };
   });
 
@@ -463,8 +660,10 @@ export function analyzeCandidateFit(
     constraints.push({
       label: 'US Work Authorization & Clearance',
       requirement: 'Work requires US Government authorization or clearance eligibility',
-      candidateFact: candidate.authorized_in_usa ? 'Authorized in US' : 'Not recorded as US citizen / authorized',
-      status: isAuth ? 'met' : 'verification_needed'
+      candidateFact: candidate.authorized_in_usa
+        ? 'Authorized in US'
+        : 'Not recorded as US citizen / authorized',
+      status: isAuth ? 'met' : 'verification_needed',
     });
   }
 
@@ -474,8 +673,10 @@ export function analyzeCandidateFit(
     constraints.push({
       label: 'Role Location (Wiesbaden, Germany)',
       requirement: 'Position is on-site in Wiesbaden, Germany (US Gov work)',
-      candidateFact: candidate.open_to_relocation ? 'Candidate is open to relocation' : 'Candidate preferred locations: ' + (candidate.preferred_locations || 'Unknown'),
-      status: willing ? 'met' : 'verification_needed'
+      candidateFact: candidate.open_to_relocation
+        ? 'Candidate is open to relocation'
+        : 'Candidate preferred locations: ' + (candidate.preferred_locations || 'Unknown'),
+      status: willing ? 'met' : 'verification_needed',
     });
   }
 
@@ -488,14 +689,15 @@ export function analyzeCandidateFit(
       label: 'Experience Threshold',
       requirement: `Requires approx ${reqYears}+ years experience`,
       candidateFact: `${candidate.total_experience_years} years recorded`,
-      status: candYears >= reqYears ? 'met' : 'verification_needed'
+      status: candYears >= reqYears ? 'met' : 'verification_needed',
     });
   }
 
   // Calculate score
   const totalSkillsCount = extractedSkills.length || 1;
   const skillRatio = matchedSkills.length / totalSkillsCount;
-  const reqMetRatio = requirements.filter((r) => r.status === 'met').length / (requirements.length || 1);
+  const reqMetRatio =
+    requirements.filter((r) => r.status === 'met').length / (requirements.length || 1);
   const finalScore = Math.min(100, Math.round((skillRatio * 0.65 + reqMetRatio * 0.35) * 100));
 
   let verdict: CandidateFitAnalysis['verdict'] = 'Good Fit';
@@ -510,6 +712,6 @@ export function analyzeCandidateFit(
     missingSkills,
     requirements,
     constraints,
-    verdict
+    verdict,
   };
 }

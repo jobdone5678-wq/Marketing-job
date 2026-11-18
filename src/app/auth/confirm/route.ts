@@ -1,3 +1,3 @@
-import { GET as callbackGET } from "@/app/auth/callback/route";
+import { GET as callbackGET } from '@/app/auth/callback/route';
 
 export const GET = callbackGET;

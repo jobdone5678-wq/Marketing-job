@@ -3,7 +3,8 @@ import { database, checkDb } from '@/lib/db/admin';
 import { parseRtrMetadata } from '@/lib/rtr-metadata';
 import { z } from 'zod';
 
-const columns = '*,candidate:candidates(id,full_name,email,phone,visa_status,target_job_titles,primary_skills,current_city,current_state)';
+const columns =
+  '*,candidate:candidates(id,full_name,email,phone,visa_status,target_job_titles,primary_skills,current_city,current_state)';
 
 // Transform outside_jobs record to match JobSubmission format
 function transformOutsideJob(oj: any, candidate: any): any {
@@ -18,7 +19,9 @@ function transformOutsideJob(oj: any, candidate: any): any {
     job_location: oj.location,
     status: 'Applied',
     capture_status: 'submitted',
-    submission_date: oj.applied_at ? oj.applied_at.split('T')[0] : new Date().toISOString().split('T')[0],
+    submission_date: oj.applied_at
+      ? oj.applied_at.split('T')[0]
+      : new Date().toISOString().split('T')[0],
     employment_type: oj.employment_type || 'Full-time',
     vendor_company: null,
     vendor_contact_name: null,
@@ -47,10 +50,12 @@ export async function GET(request: Request) {
     // Get candidate IDs owned by this actor
     const { data: userCandidates, error: candErr } = await database()
       .from('candidates')
-      .select('id,full_name,email,phone,visa_status,target_job_titles,primary_skills,current_city,current_state')
+      .select(
+        'id,full_name,email,phone,visa_status,target_job_titles,primary_skills,current_city,current_state'
+      )
       .or(`user_id.eq.${actor.id},email.eq.${actor.email}`);
     checkDb(candErr);
-    const candidateMap = new Map((userCandidates || []).map(c => [c.id, c]));
+    const candidateMap = new Map((userCandidates || []).map((c) => [c.id, c]));
     const ownedIds = Array.from(candidateMap.keys());
 
     if (ownedIds.length === 0) return { submissions: [] };
@@ -81,7 +86,9 @@ export async function GET(request: Request) {
     // 2. Fetch from outside_jobs (extension-captured external applications)
     let outsideQuery = database()
       .from('outside_jobs')
-      .select('id,candidate_id,submission_id,title,company,job_url,portal_source,location,status,applied_at,employment_type,applied_resume,created_at,updated_at')
+      .select(
+        'id,candidate_id,submission_id,title,company,job_url,portal_source,location,status,applied_at,employment_type,applied_resume,created_at,updated_at'
+      )
       .eq('status', 'Applied')
       .order('applied_at', { ascending: false });
 
@@ -104,11 +111,13 @@ export async function GET(request: Request) {
       return row;
     });
 
-    const submissionIds = new Set(enrichedPortal.map(row => row.id));
-    const enrichedOutside = (outsideJobs || []).filter(oj => !submissionIds.has(oj.submission_id)).map(oj => {
-      const candidate = candidateMap.get(oj.candidate_id);
-      return transformOutsideJob(oj, candidate);
-    });
+    const submissionIds = new Set(enrichedPortal.map((row) => row.id));
+    const enrichedOutside = (outsideJobs || [])
+      .filter((oj) => !submissionIds.has(oj.submission_id))
+      .map((oj) => {
+        const candidate = candidateMap.get(oj.candidate_id);
+        return transformOutsideJob(oj, candidate);
+      });
 
     // 4. Merge and sort by date (newest first)
     const allSubmissions = [...enrichedPortal, ...enrichedOutside].sort((a, b) => {

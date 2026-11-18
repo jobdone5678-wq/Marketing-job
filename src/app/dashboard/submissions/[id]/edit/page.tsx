@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { useParams, useRouter } from "next/navigation";
-import { SubmissionForm } from "@/components/submission-form";
-import { getSubmissionById } from "@/lib/submissions";
-import type { JobSubmission } from "@/types/database";
-import {WorkspaceSkeleton} from "@/components/workspace-ui";
-import { toast } from "sonner";
+import * as React from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { SubmissionForm } from '@/components/submission-form';
+import { getSubmissionById } from '@/lib/submissions';
+import type { JobSubmission } from '@/types/database';
+import { WorkspaceSkeleton } from '@/components/workspace-ui';
+import { toast } from 'sonner';
 
 export default function EditSubmissionPage() {
   const params = useParams();
@@ -23,13 +23,13 @@ export default function EditSubmissionPage() {
         if (data) {
           setSubmission(data);
         } else {
-          toast.error("Submission not found");
-          router.push("/dashboard/submissions");
+          toast.error('Submission not found');
+          router.push('/dashboard/submissions');
         }
       })
       .catch(() => {
-        toast.error("Failed to load submission");
-        router.push("/dashboard/submissions");
+        toast.error('Failed to load submission');
+        router.push('/dashboard/submissions');
       })
       .finally(() => {
         setLoading(false);
@@ -38,16 +38,13 @@ export default function EditSubmissionPage() {
 
   if (loading) {
     return (
-      <div className="portal-page"><WorkspaceSkeleton/></div>
+      <div className="portal-page">
+        <WorkspaceSkeleton />
+      </div>
     );
   }
 
   if (!submission) return null;
 
-  return (
-    <SubmissionForm
-      initialSubmission={submission}
-      backUrl="/dashboard/submissions"
-    />
-  );
+  return <SubmissionForm initialSubmission={submission} backUrl="/dashboard/submissions" />;
 }

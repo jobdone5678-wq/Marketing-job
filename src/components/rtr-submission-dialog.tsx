@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import * as React from "react";
+import * as React from 'react';
 import {
   FileSignature,
   UploadCloud,
@@ -19,28 +19,28 @@ import {
   X,
   RefreshCw,
   BadgeCheck,
-} from "lucide-react";
+} from 'lucide-react';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { toast } from "sonner";
-import { toIsoDate } from "@/lib/rtr-dates";
-import type { Candidate } from "@/types/database";
+} from '@/components/ui/select';
+import { toast } from 'sonner';
+import { toIsoDate } from '@/lib/rtr-dates';
+import type { Candidate } from '@/types/database';
 
 interface RTRSubmissionDialogProps {
   open: boolean;
@@ -59,7 +59,11 @@ export function findCandidateMatch(
   list: Candidate[]
 ): Candidate | null {
   if (!extractedName || !extractedName.trim() || !list?.length) return null;
-  const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").trim();
+  const clean = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .trim();
   const query = clean(extractedName);
   if (!query) return null;
 
@@ -81,7 +85,9 @@ export function findCandidateMatch(
   let maxMatchedWords = 0;
 
   for (const c of list) {
-    const cWords = clean(c.full_name).split(/\s+/).filter((w) => w.length > 1);
+    const cWords = clean(c.full_name)
+      .split(/\s+/)
+      .filter((w) => w.length > 1);
     let matched = 0;
     for (const qw of qWords) {
       if (
@@ -112,8 +118,8 @@ interface ExtractedRTR {
   vendor_contact_email?: string | null;
   vendor_contact_phone?: string | null;
   detected_companies?: string[] | null;
-  rtr_type?: "vendor_rtr" | "client_rtr" | "direct_rtr";
-  rtr_status?: "received" | "signed" | "expired" | "rejected";
+  rtr_type?: 'vendor_rtr' | 'client_rtr' | 'direct_rtr';
+  rtr_status?: 'received' | 'signed' | 'expired' | 'rejected';
   rtr_date?: string | null;
   expiration_date?: string | null;
   hourly_rate?: string | null;
@@ -137,24 +143,28 @@ export function RTRSubmissionDialog({
 
   // Form fields
   const [selectedCandidateId, setSelectedCandidateId] = React.useState<string>(
-    defaultCandidateId || ""
+    defaultCandidateId || ''
   );
-  const [candidateName, setCandidateName] = React.useState("");
+  const [candidateName, setCandidateName] = React.useState('');
   const [autoMatchedCandidate, setAutoMatchedCandidate] = React.useState<Candidate | null>(null);
   const [detectedCompanies, setDetectedCompanies] = React.useState<string[]>([]);
-  const [companyName, setCompanyName] = React.useState("");
-  const [jobTitle, setJobTitle] = React.useState("");
-  const [vendorName, setVendorName] = React.useState("");
-  const [vendorContactName, setVendorContactName] = React.useState("");
-  const [vendorContactEmail, setVendorContactEmail] = React.useState("");
-  const [vendorContactPhone, setVendorContactPhone] = React.useState("");
-  const [hourlyRate, setHourlyRate] = React.useState("");
-  const [rtrType, setRtrType] = React.useState<"vendor_rtr" | "client_rtr" | "direct_rtr">("vendor_rtr");
-  const [rtrStatus, setRtrStatus] = React.useState<"received" | "signed" | "expired" | "rejected">("signed");
+  const [companyName, setCompanyName] = React.useState('');
+  const [jobTitle, setJobTitle] = React.useState('');
+  const [vendorName, setVendorName] = React.useState('');
+  const [vendorContactName, setVendorContactName] = React.useState('');
+  const [vendorContactEmail, setVendorContactEmail] = React.useState('');
+  const [vendorContactPhone, setVendorContactPhone] = React.useState('');
+  const [hourlyRate, setHourlyRate] = React.useState('');
+  const [rtrType, setRtrType] = React.useState<'vendor_rtr' | 'client_rtr' | 'direct_rtr'>(
+    'vendor_rtr'
+  );
+  const [rtrStatus, setRtrStatus] = React.useState<'received' | 'signed' | 'expired' | 'rejected'>(
+    'signed'
+  );
   const [rtrDate, setRtrDate] = React.useState(() => new Date().toISOString().slice(0, 10));
-  const [expirationDate, setExpirationDate] = React.useState("");
-  const [representationClause, setRepresentationClause] = React.useState("");
-  const [notes, setNotes] = React.useState("");
+  const [expirationDate, setExpirationDate] = React.useState('');
+  const [representationClause, setRepresentationClause] = React.useState('');
+  const [notes, setNotes] = React.useState('');
   const [extractedSummary, setExtractedSummary] = React.useState<ExtractedRTR | null>(null);
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -218,7 +228,7 @@ export function RTRSubmissionDialog({
   // Clean up preview object URL on unmount or file change
   React.useEffect(() => {
     return () => {
-      if (previewUrl && previewUrl.startsWith("blob:")) {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
         URL.revokeObjectURL(previewUrl);
       }
     };
@@ -233,7 +243,7 @@ export function RTRSubmissionDialog({
       abortRef.current = null;
       scanPromiseRef.current = null;
       setFile(null);
-      if (previewUrl && previewUrl.startsWith("blob:")) {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
         URL.revokeObjectURL(previewUrl);
       }
       setPreviewUrl(null);
@@ -241,24 +251,24 @@ export function RTRSubmissionDialog({
       setSaving(false);
       setAutoMatchedCandidate(null);
       if (!defaultCandidateId) {
-        setSelectedCandidateId("");
-        setCandidateName("");
+        setSelectedCandidateId('');
+        setCandidateName('');
       }
       setExtractedSummary(null);
       setDetectedCompanies([]);
-      setCompanyName("");
-      setJobTitle("");
-      setVendorName("");
-      setVendorContactName("");
-      setVendorContactEmail("");
-      setVendorContactPhone("");
-      setHourlyRate("");
-      setRtrType("vendor_rtr");
-      setRtrStatus("signed");
+      setCompanyName('');
+      setJobTitle('');
+      setVendorName('');
+      setVendorContactName('');
+      setVendorContactEmail('');
+      setVendorContactPhone('');
+      setHourlyRate('');
+      setRtrType('vendor_rtr');
+      setRtrStatus('signed');
       setRtrDate(new Date().toISOString().slice(0, 10));
-      setExpirationDate("");
-      setRepresentationClause("");
-      setNotes("");
+      setExpirationDate('');
+      setRepresentationClause('');
+      setNotes('');
     }
     onOpenChange(nextOpen);
   };
@@ -266,8 +276,8 @@ export function RTRSubmissionDialog({
   // Process chosen RTR file
   const handleProcessFile = async (chosenFile: File) => {
     if (chosenFile.size > MAX_DOCUMENT_BYTES) {
-      toast.error("That document is larger than 4 MB.", {
-        description: "Upload a compressed PDF or a lower resolution scan and try again.",
+      toast.error('That document is larger than 4 MB.', {
+        description: 'Upload a compressed PDF or a lower resolution scan and try again.',
       });
       return;
     }
@@ -281,7 +291,7 @@ export function RTRSubmissionDialog({
     setFile(chosenFile);
 
     // Setup preview
-    if (chosenFile.type.startsWith("image/")) {
+    if (chosenFile.type.startsWith('image/')) {
       const url = URL.createObjectURL(chosenFile);
       setPreviewUrl(url);
     } else {
@@ -293,39 +303,39 @@ export function RTRSubmissionDialog({
     setScanning(true);
     setExtractedSummary(null);
     setDetectedCompanies([]);
-    setCompanyName("");
-    setJobTitle("");
-    setVendorName("");
-    setVendorContactName("");
-    setVendorContactEmail("");
-    setVendorContactPhone("");
-    setHourlyRate("");
-    setRepresentationClause("");
-    setNotes("");
+    setCompanyName('');
+    setJobTitle('');
+    setVendorName('');
+    setVendorContactName('');
+    setVendorContactEmail('');
+    setVendorContactPhone('');
+    setHourlyRate('');
+    setRepresentationClause('');
+    setNotes('');
     formRef.current = {
       ...formRef.current,
-      companyName: "",
-      jobTitle: "",
-      vendorName: "",
-      vendorContactName: "",
-      vendorContactEmail: "",
-      vendorContactPhone: "",
-      hourlyRate: "",
-      representationClause: "",
-      notes: "",
+      companyName: '',
+      jobTitle: '',
+      vendorName: '',
+      vendorContactName: '',
+      vendorContactEmail: '',
+      vendorContactPhone: '',
+      hourlyRate: '',
+      representationClause: '',
+      notes: '',
     };
 
     // Trigger AI OCR Extraction
     const scan = (async (): Promise<ExtractedRTR | null> => {
       try {
         const formData = new FormData();
-        formData.append("file", chosenFile);
+        formData.append('file', chosenFile);
         if (selectedCandidateId) {
-          formData.append("candidateId", selectedCandidateId);
+          formData.append('candidateId', selectedCandidateId);
         }
 
-        const res = await fetch("/api/rtr/ocr", {
-          method: "POST",
+        const res = await fetch('/api/rtr/ocr', {
+          method: 'POST',
           body: formData,
           signal: controller.signal,
         });
@@ -335,7 +345,7 @@ export function RTRSubmissionDialog({
         const data = await res.json();
         if (seq !== requestSeq.current) return null;
         if (!res.ok) {
-          throw new Error(data.error || "Failed to scan RTR document.");
+          throw new Error(data.error || 'Failed to scan RTR document.');
         }
 
         const ext: ExtractedRTR = data.extracted || {};
@@ -350,7 +360,7 @@ export function RTRSubmissionDialog({
               setSelectedCandidateId(matched.id);
               setAutoMatchedCandidate(matched);
             } else {
-              setSelectedCandidateId("");
+              setSelectedCandidateId('');
               setAutoMatchedCandidate(null);
             }
           }
@@ -372,22 +382,22 @@ export function RTRSubmissionDialog({
         if (ext.vendor_contact_name) setVendorContactName(ext.vendor_contact_name);
         if (ext.vendor_contact_email) setVendorContactEmail(ext.vendor_contact_email);
         if (ext.vendor_contact_phone) setVendorContactPhone(ext.vendor_contact_phone);
-        if (ext.hourly_rate) setHourlyRate(ext.hourly_rate.replace(/[^0-9.]/g, ""));
+        if (ext.hourly_rate) setHourlyRate(ext.hourly_rate.replace(/[^0-9.]/g, ''));
         if (ext.rtr_type) setRtrType(ext.rtr_type);
         if (ext.rtr_status) setRtrStatus(ext.rtr_status);
-        if (ext.rtr_date) setRtrDate(toIsoDate(ext.rtr_date) || "");
-        if (ext.expiration_date) setExpirationDate(toIsoDate(ext.expiration_date) || "");
+        if (ext.rtr_date) setRtrDate(toIsoDate(ext.rtr_date) || '');
+        if (ext.expiration_date) setExpirationDate(toIsoDate(ext.expiration_date) || '');
         if (ext.representation_clause) setRepresentationClause(ext.representation_clause);
         if (ext.notes) setNotes(ext.notes);
 
-        toast.success("RTR agreement scanned successfully!", {
-          description: `Extracted: ${ext.candidate_name || "Candidate"} at ${ext.company_name || "Company"} (${ext.hourly_rate ? `$${ext.hourly_rate}/hr` : "Rate extracted"}).`,
+        toast.success('RTR agreement scanned successfully!', {
+          description: `Extracted: ${ext.candidate_name || 'Candidate'} at ${ext.company_name || 'Company'} (${ext.hourly_rate ? `$${ext.hourly_rate}/hr` : 'Rate extracted'}).`,
         });
         return ext;
       } catch (err: unknown) {
         // A cancelled request belongs to a document that was replaced. It must not show an error.
         if (controller.signal.aborted || seq !== requestSeq.current) return null;
-        toast.error(err instanceof Error ? err.message : "Error scanning RTR document.");
+        toast.error(err instanceof Error ? err.message : 'Error scanning RTR document.');
         return null;
       } finally {
         if (seq === requestSeq.current) {
@@ -412,7 +422,7 @@ export function RTRSubmissionDialog({
   // change event again. Without it the second upload was silently ignored.
   const openFilePicker = () => {
     if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+      fileInputRef.current.value = '';
       fileInputRef.current.click();
     }
   };
@@ -450,36 +460,37 @@ export function RTRSubmissionDialog({
         candidateObj?.full_name ||
         autoMatchedCandidate?.full_name ||
         scanned?.candidate_name?.trim() ||
-        "";
+        '';
 
       if (!form.selectedCandidateId && !effectiveCandidateName) {
-        toast.error("Please select a candidate or enter a candidate name.");
+        toast.error('Please select a candidate or enter a candidate name.');
         setSaving(false);
         return;
       }
 
-      const effectiveCompany = form.companyName.trim() || scanned?.company_name?.trim() || "Client";
-      const effectiveJobTitle = form.jobTitle.trim() || scanned?.job_title?.trim() || "Consultant";
+      const effectiveCompany = form.companyName.trim() || scanned?.company_name?.trim() || 'Client';
+      const effectiveJobTitle = form.jobTitle.trim() || scanned?.job_title?.trim() || 'Consultant';
 
       // The vendor recruiter email is mandatory: an agreement without a reachable agency
       // contact cannot be followed up.
-      const recruiterEmail = form.vendorContactEmail.trim() || scanned?.vendor_contact_email?.trim() || "";
+      const recruiterEmail =
+        form.vendorContactEmail.trim() || scanned?.vendor_contact_email?.trim() || '';
       if (!recruiterEmail) {
-        toast.error("Vendor recruiter email is required.");
+        toast.error('Vendor recruiter email is required.');
         setSaving(false);
         return;
       }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(recruiterEmail)) {
-        toast.error("Enter a valid vendor recruiter email address.");
+        toast.error('Enter a valid vendor recruiter email address.');
         setSaving(false);
         return;
       }
 
       // The scan only wins for a field the recruiter has not touched yet.
       const rtrType =
-        scanned?.rtr_type && form.rtrType === "vendor_rtr" ? scanned.rtr_type : form.rtrType;
+        scanned?.rtr_type && form.rtrType === 'vendor_rtr' ? scanned.rtr_type : form.rtrType;
       const rtrStatus =
-        scanned?.rtr_status && form.rtrStatus === "signed" ? scanned.rtr_status : form.rtrStatus;
+        scanned?.rtr_status && form.rtrStatus === 'signed' ? scanned.rtr_status : form.rtrStatus;
       const rtrDate =
         (form.rtrDate !== initialRtrDateRef.current ? toIsoDate(form.rtrDate) : null) ||
         toIsoDate(scanned?.rtr_date) ||
@@ -489,67 +500,70 @@ export function RTRSubmissionDialog({
       // Ensure valid UUID or null
       const validCandidateId =
         form.selectedCandidateId &&
-        form.selectedCandidateId !== "none" &&
-        form.selectedCandidateId !== "__none__" &&
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(form.selectedCandidateId)
+        form.selectedCandidateId !== 'none' &&
+        form.selectedCandidateId !== '__none__' &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          form.selectedCandidateId
+        )
           ? form.selectedCandidateId
           : null;
 
       const payload = {
         candidate_id: validCandidateId,
-        candidate_name: effectiveCandidateName || "Consultant",
-        filename: file?.name || `RTR_${effectiveCompany.replace(/\s+/g, "_")}.pdf`,
-        mime_type: file?.type || "application/pdf",
+        candidate_name: effectiveCandidateName || 'Consultant',
+        filename: file?.name || `RTR_${effectiveCompany.replace(/\s+/g, '_')}.pdf`,
+        mime_type: file?.type || 'application/pdf',
         rtr_type: rtrType,
         rtr_status: rtrStatus,
         rtr_date: rtrDate,
-        expiration_date: toIsoDate(form.expirationDate) || toIsoDate(scanned?.expiration_date) || null,
+        expiration_date:
+          toIsoDate(form.expirationDate) || toIsoDate(scanned?.expiration_date) || null,
         company_name: effectiveCompany,
         job_title: effectiveJobTitle,
         vendor_name: form.vendorName.trim() || scanned?.vendor_name?.trim() || null,
-        vendor_contact_name: form.vendorContactName.trim() || scanned?.vendor_contact_name?.trim() || null,
+        vendor_contact_name:
+          form.vendorContactName.trim() || scanned?.vendor_contact_name?.trim() || null,
         vendor_contact_email: recruiterEmail,
-        vendor_contact_phone: form.vendorContactPhone.trim() || scanned?.vendor_contact_phone?.trim() || null,
-        hourly_rate: form.hourlyRate.trim() || scanned?.hourly_rate?.replace(/[^0-9.]/g, "") || null,
-        currency: "USD",
+        vendor_contact_phone:
+          form.vendorContactPhone.trim() || scanned?.vendor_contact_phone?.trim() || null,
+        hourly_rate:
+          form.hourlyRate.trim() || scanned?.hourly_rate?.replace(/[^0-9.]/g, '') || null,
+        currency: 'USD',
         representation_clause:
           form.representationClause.trim() || scanned?.representation_clause?.trim() || null,
         notes:
           form.notes.trim() ||
-          `RTR Submission created for ${effectiveCandidateName || "Consultant"} at ${effectiveCompany}.`,
+          `RTR Submission created for ${effectiveCandidateName || 'Consultant'} at ${effectiveCompany}.`,
         create_submission: true,
       };
 
       // The document is sent as multipart form data. Encoding it as base64 inside the JSON body
       // made the request a third larger and dropped the file whenever the body was rejected.
       const formData = new FormData();
-      formData.append("payload", JSON.stringify(payload));
-      if (file) formData.append("file", file);
+      formData.append('payload', JSON.stringify(payload));
+      if (file) formData.append('file', file);
 
-      const res = await fetch("/api/rtr", {
-        method: "POST",
+      const res = await fetch('/api/rtr', {
+        method: 'POST',
         body: formData,
       });
 
       const result = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(result.error || "Failed to save RTR submission.");
+        throw new Error(result.error || 'Failed to save RTR submission.');
       }
 
       const warnings = Array.isArray(result.warnings) ? (result.warnings as string[]) : [];
-      toast.success(
-        `🎉 RTR Submission recorded for ${effectiveCandidateName || "Candidate"}!`,
-        {
-          description: warnings.length
-            ? warnings[0]
-            : `Logged representation at ${effectiveCompany} (${effectiveJobTitle}) with status: ${payload.rtr_status}.`,
-        }
-      );
+      toast.success(`🎉 RTR Submission recorded for ${effectiveCandidateName || 'Candidate'}!`, {
+        description: warnings.length
+          ? warnings[0]
+          : `Logged representation at ${effectiveCompany} (${effectiveJobTitle}) with status: ${payload.rtr_status}.`,
+      });
 
       handleOpenChange(false);
       onSuccess?.(result.submission_id, result.candidate_id);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to create RTR submission.");
+      toast.error(err instanceof Error ? err.message : 'Failed to create RTR submission.');
     } finally {
       setSaving(false);
     }
@@ -557,26 +571,27 @@ export function RTRSubmissionDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-6 sm:p-7">
-        <DialogHeader className="pb-3 border-b border-border/70">
+      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto p-6 sm:p-7">
+        <DialogHeader className="border-border/70 border-b pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="size-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-2xs">
+            <div className="bg-primary/10 border-primary/20 text-primary flex size-9 items-center justify-center rounded-xl border shadow-2xs">
               <FileSignature className="size-5" />
             </div>
             <div>
-              <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <DialogTitle className="flex items-center gap-2 text-lg font-bold">
                 Add RTR Submission
                 <Badge
                   variant="outline"
-                  className="bg-primary/5 text-primary border-primary/20 text-[10px] font-semibold tracking-wide py-0 h-4.5"
+                  className="bg-primary/5 text-primary border-primary/20 h-4.5 py-0 text-[10px] font-semibold tracking-wide"
                 >
-                  <Sparkles className="size-2.5 mr-1" />
+                  <Sparkles className="mr-1 size-2.5" />
                   Universal AI OCR
                 </Badge>
               </DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+              <DialogDescription className="text-muted-foreground mt-0.5 text-xs">
                 Upload ANY Right to Represent (RTR) document, vendor email screenshot, or agreement.
-                OCR automatically extracts all terms and logs representation without job restrictions.
+                OCR automatically extracts all terms and logs representation without job
+                restrictions.
               </DialogDescription>
             </div>
           </div>
@@ -602,54 +617,53 @@ export function RTRSubmissionDialog({
                 onDragLeave={() => setDragOver(false)}
                 onDrop={handleDrop}
                 onClick={openFilePicker}
-                className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center cursor-pointer transition-all ${
+                className={`cursor-pointer rounded-2xl border-2 border-dashed p-6 text-center transition-all sm:p-8 ${
                   dragOver
-                    ? "border-primary bg-primary/5 scale-[0.99]"
-                    : "border-border/80 bg-muted/20 hover:bg-muted/40 hover:border-primary/50"
+                    ? 'border-primary bg-primary/5 scale-[0.99]'
+                    : 'border-border/80 bg-muted/20 hover:bg-muted/40 hover:border-primary/50'
                 }`}
               >
-                <div className="size-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mx-auto mb-3 shadow-2xs">
+                <div className="bg-primary/10 border-primary/20 text-primary mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl border shadow-2xs">
                   <UploadCloud className="size-6" />
                 </div>
-                <h4 className="text-sm font-semibold text-foreground">
+                <h4 className="text-foreground text-sm font-semibold">
                   Drag and drop any RTR image, email screenshot, or PDF
                 </h4>
-                <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
-                  Accepts recruiter emails, vendor submittals, PDF agreements, and screenshot images (up to 4MB).
+                <p className="text-muted-foreground mx-auto mt-1 max-w-md text-xs">
+                  Accepts recruiter emails, vendor submittals, PDF agreements, and screenshot images
+                  (up to 4MB).
                 </p>
-                <div className="mt-3 inline-flex items-center gap-2 text-xs font-medium text-primary">
+                <div className="text-primary mt-3 inline-flex items-center gap-2 text-xs font-medium">
                   <span>Browse files</span>
                   <span className="text-muted-foreground/60">•</span>
-                  <span className="text-muted-foreground">Universal OCR auto-extracts all fields</span>
+                  <span className="text-muted-foreground">
+                    Universal OCR auto-extracts all fields
+                  </span>
                 </div>
               </div>
             ) : (
-              <div className="rounded-xl border border-border/80 bg-card p-3 sm:p-4 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
+              <div className="border-border/80 bg-card flex flex-col items-start justify-between gap-3 rounded-xl border p-3 shadow-2xs sm:flex-row sm:items-center sm:p-4">
+                <div className="flex min-w-0 items-center gap-3">
                   {previewUrl ? (
-                    <div className="relative size-14 shrink-0 rounded-lg overflow-hidden border border-border/80 bg-muted">
+                    <div className="border-border/80 bg-muted relative size-14 shrink-0 overflow-hidden rounded-lg border">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={previewUrl}
-                        alt="RTR Preview"
-                        className="size-full object-cover"
-                      />
+                      <img src={previewUrl} alt="RTR Preview" className="size-full object-cover" />
                     </div>
                   ) : (
-                    <div className="size-12 shrink-0 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                    <div className="bg-primary/10 border-primary/20 text-primary flex size-12 shrink-0 items-center justify-center rounded-lg border">
                       <FileText className="size-6" />
                     </div>
                   )}
 
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-foreground truncate max-w-sm">
+                    <p className="text-foreground max-w-sm truncate text-xs font-semibold">
                       {file.name}
                     </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {(file.size / 1024).toFixed(1)} KB • {file.type || "Document"}
+                    <p className="text-muted-foreground text-[11px]">
+                      {(file.size / 1024).toFixed(1)} KB • {file.type || 'Document'}
                     </p>
                     {scanning && (
-                      <div className="flex items-center gap-1.5 mt-1 text-[11px] font-medium text-primary animate-pulse">
+                      <div className="text-primary mt-1 flex animate-pulse items-center gap-1.5 text-[11px] font-medium">
                         <Loader2 className="size-3 animate-spin" />
                         AI Vision extracting candidate, client, rate, and terms...
                       </div>
@@ -657,14 +671,14 @@ export function RTRSubmissionDialog({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+                <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     disabled={saving}
                     onClick={openFilePicker}
-                    className="h-8 text-xs gap-1.5 rounded-lg border-border/70"
+                    className="border-border/70 h-8 gap-1.5 rounded-lg text-xs"
                   >
                     <RefreshCw className="size-3" />
                     Change Document
@@ -685,17 +699,17 @@ export function RTRSubmissionDialog({
                       setScanning(false);
                       setDetectedCompanies([]);
                       setExtractedSummary(null);
-                      setCompanyName("");
-                      setJobTitle("");
-                      setVendorName("");
-                      setVendorContactName("");
-                      setVendorContactEmail("");
-                      setVendorContactPhone("");
-                      setHourlyRate("");
-                      setRepresentationClause("");
-                      setNotes("");
+                      setCompanyName('');
+                      setJobTitle('');
+                      setVendorName('');
+                      setVendorContactName('');
+                      setVendorContactEmail('');
+                      setVendorContactPhone('');
+                      setHourlyRate('');
+                      setRepresentationClause('');
+                      setNotes('');
                     }}
-                    className="h-8 size-8 p-0 text-muted-foreground hover:text-destructive rounded-lg"
+                    className="text-muted-foreground hover:text-destructive size-8 h-8 rounded-lg p-0"
                   >
                     <X className="size-4" />
                   </Button>
@@ -706,46 +720,53 @@ export function RTRSubmissionDialog({
 
           {/* OCR Extracted Highlights Card */}
           {extractedSummary && (
-            <div className="p-3.5 rounded-xl border border-primary/25 bg-primary/5 space-y-2 text-xs shadow-2xs">
+            <div className="border-primary/25 bg-primary/5 space-y-2 rounded-xl border p-3.5 text-xs shadow-2xs">
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-primary flex items-center gap-1.5">
+                <span className="text-primary flex items-center gap-1.5 font-semibold">
                   <Sparkles className="size-3.5" />
                   AI OCR Extracted Details:
                 </span>
-                <Badge variant="outline" className="bg-background text-[10px] py-0 h-4.5 font-medium">
-                  {extractedSummary.rtr_status === "signed" ? "✓ Signed Agreement" : "Pending / Received"}
+                <Badge
+                  variant="outline"
+                  className="bg-background h-4.5 py-0 text-[10px] font-medium"
+                >
+                  {extractedSummary.rtr_status === 'signed'
+                    ? '✓ Signed Agreement'
+                    : 'Pending / Received'}
                 </Badge>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px]">
-                <div className="p-2 rounded-lg bg-background/80 border border-border/60">
-                  <span className="text-muted-foreground text-[10px] block">Candidate</span>
-                  <span className="font-semibold text-foreground truncate block">
-                    {extractedSummary.candidate_name || candidateName || "Not named"}
+              <div className="grid grid-cols-2 gap-2 pt-1 text-[11px] sm:grid-cols-4">
+                <div className="bg-background/80 border-border/60 rounded-lg border p-2">
+                  <span className="text-muted-foreground block text-[10px]">Candidate</span>
+                  <span className="text-foreground block truncate font-semibold">
+                    {extractedSummary.candidate_name || candidateName || 'Not named'}
                   </span>
                 </div>
-                <div className="p-2 rounded-lg bg-background/80 border border-border/60">
-                  <span className="text-muted-foreground text-[10px] block">Target Client</span>
-                  <span className="font-semibold text-foreground truncate block">
-                    {extractedSummary.company_name || companyName || "Client"}
+                <div className="bg-background/80 border-border/60 rounded-lg border p-2">
+                  <span className="text-muted-foreground block text-[10px]">Target Client</span>
+                  <span className="text-foreground block truncate font-semibold">
+                    {extractedSummary.company_name || companyName || 'Client'}
                   </span>
                 </div>
-                <div className="p-2 rounded-lg bg-background/80 border border-border/60">
-                  <span className="text-muted-foreground text-[10px] block">Role / Title</span>
-                  <span className="font-semibold text-foreground truncate block">
-                    {extractedSummary.job_title || jobTitle || "Consultant"}
+                <div className="bg-background/80 border-border/60 rounded-lg border p-2">
+                  <span className="text-muted-foreground block text-[10px]">Role / Title</span>
+                  <span className="text-foreground block truncate font-semibold">
+                    {extractedSummary.job_title || jobTitle || 'Consultant'}
                   </span>
                 </div>
-                <div className="p-2 rounded-lg bg-background/80 border border-border/60">
-                  <span className="text-muted-foreground text-[10px] block">Bill Rate</span>
-                  <span className="font-semibold text-primary truncate block">
-                    {extractedSummary.hourly_rate ? `$${extractedSummary.hourly_rate}/hr` : "Not specified"}
+                <div className="bg-background/80 border-border/60 rounded-lg border p-2">
+                  <span className="text-muted-foreground block text-[10px]">Bill Rate</span>
+                  <span className="text-primary block truncate font-semibold">
+                    {extractedSummary.hourly_rate
+                      ? `$${extractedSummary.hourly_rate}/hr`
+                      : 'Not specified'}
                   </span>
                 </div>
               </div>
 
               {representationClause && (
-                <div className="pt-1 text-[11px] text-foreground/80 italic line-clamp-2 border-t border-border/40 mt-1">
+                <div className="text-foreground/80 border-border/40 mt-1 line-clamp-2 border-t pt-1 text-[11px] italic">
                   &ldquo;{representationClause}&rdquo;
                 </div>
               )}
@@ -753,32 +774,35 @@ export function RTRSubmissionDialog({
           )}
 
           {/* Form Fields: Grid Layout */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {/* Candidate Selection & Name */}
             <div className="space-y-1.5 md:col-span-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="candidate" className="text-xs font-semibold flex items-center gap-1.5">
-                  <User className="size-3.5 text-primary" />
+                <Label
+                  htmlFor="candidate"
+                  className="flex items-center gap-1.5 text-xs font-semibold"
+                >
+                  <User className="text-primary size-3.5" />
                   Candidate <span className="text-destructive">*</span>
                 </Label>
                 {autoMatchedCandidate ? (
-                  <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] py-0 h-4.5 gap-1">
+                  <Badge className="h-4.5 gap-1 border-emerald-500/30 bg-emerald-500/15 py-0 text-[10px] text-emerald-700 dark:text-emerald-300">
                     <CheckCircle2 className="size-2.5" />
                     Auto-matched: {autoMatchedCandidate.full_name}
                   </Badge>
                 ) : candidateName ? (
-                  <Badge variant="outline" className="text-[10px] py-0 h-4.5 text-muted-foreground">
+                  <Badge variant="outline" className="text-muted-foreground h-4.5 py-0 text-[10px]">
                     Custom / Extracted Candidate
                   </Badge>
                 ) : null}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <Select
                   value={selectedCandidateId || undefined}
                   onValueChange={(val) => {
-                    if (!val || val === "__none__") {
-                      setSelectedCandidateId("");
+                    if (!val || val === '__none__') {
+                      setSelectedCandidateId('');
                       setAutoMatchedCandidate(null);
                     } else {
                       setSelectedCandidateId(val);
@@ -794,12 +818,15 @@ export function RTRSubmissionDialog({
                     <SelectValue placeholder="Select candidate for this RTR..." />
                   </SelectTrigger>
                   <SelectContent className="max-h-60">
-                    <SelectItem value="__none__" className="text-xs text-muted-foreground font-medium">
+                    <SelectItem
+                      value="__none__"
+                      className="text-muted-foreground text-xs font-medium"
+                    >
                       -- Independent RTR Candidate (type name below) --
                     </SelectItem>
                     {candidates.map((c) => (
                       <SelectItem key={c.id} value={c.id} className="text-xs">
-                        {c.full_name} {c.visa_status ? `(${c.visa_status})` : ""}
+                        {c.full_name} {c.visa_status ? `(${c.visa_status})` : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -817,7 +844,7 @@ export function RTRSubmissionDialog({
                         setSelectedCandidateId(match.id);
                         setAutoMatchedCandidate(match);
                       } else if (selectedCandidateId) {
-                        setSelectedCandidateId("");
+                        setSelectedCandidateId('');
                         setAutoMatchedCandidate(null);
                       }
                     }
@@ -829,58 +856,59 @@ export function RTRSubmissionDialog({
 
             {/* Different Companies Detected in Document */}
             {detectedCompanies.length > 0 && (
-              <div className="p-3 rounded-xl border border-primary/20 bg-primary/5 space-y-2 md:col-span-2 shadow-2xs">
+              <div className="border-primary/20 bg-primary/5 space-y-2 rounded-xl border p-3 shadow-2xs md:col-span-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
+                  <span className="text-primary flex items-center gap-1.5 text-xs font-semibold">
                     <Building2 className="size-3.5" />
                     Companies Detected by OCR ({detectedCompanies.length}):
                   </span>
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-muted-foreground text-[10px]">
                     Click to quickly assign as Client or Vendor
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {detectedCompanies.map((cName) => {
-                    const isClient = companyName.toLowerCase().trim() === cName.toLowerCase().trim();
+                    const isClient =
+                      companyName.toLowerCase().trim() === cName.toLowerCase().trim();
                     const isVendor = vendorName.toLowerCase().trim() === cName.toLowerCase().trim();
                     return (
                       <div
                         key={cName}
-                        className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-lg border text-xs transition-all ${
+                        className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1 text-xs transition-all ${
                           isClient
-                            ? "bg-primary/10 border-primary/40 text-primary font-medium"
+                            ? 'bg-primary/10 border-primary/40 text-primary font-medium'
                             : isVendor
-                            ? "bg-amber-500/10 border-amber-500/40 text-amber-700 dark:text-amber-300 font-medium"
-                            : "bg-background border-border/80 text-foreground"
+                              ? 'border-amber-500/40 bg-amber-500/10 font-medium text-amber-700 dark:text-amber-300'
+                              : 'bg-background border-border/80 text-foreground'
                         }`}
                       >
-                        <span className="font-semibold truncate max-w-[180px]" title={cName}>
+                        <span className="max-w-[180px] truncate font-semibold" title={cName}>
                           {cName}
                         </span>
-                        <div className="flex items-center gap-1 border-l border-border/60 pl-1.5 text-[10px]">
+                        <div className="border-border/60 flex items-center gap-1 border-l pl-1.5 text-[10px]">
                           <button
                             type="button"
                             onClick={() => setCompanyName(cName)}
-                            className={`px-1.5 py-0.5 rounded font-semibold transition-colors ${
+                            className={`rounded px-1.5 py-0.5 font-semibold transition-colors ${
                               isClient
-                                ? "bg-primary text-primary-foreground shadow-2xs"
-                                : "hover:bg-primary/10 text-muted-foreground hover:text-primary cursor-pointer"
+                                ? 'bg-primary text-primary-foreground shadow-2xs'
+                                : 'hover:bg-primary/10 text-muted-foreground hover:text-primary cursor-pointer'
                             }`}
                             title={`Assign "${cName}" as Client Company`}
                           >
-                            {isClient ? "✓ Client" : "Set Client"}
+                            {isClient ? '✓ Client' : 'Set Client'}
                           </button>
                           <button
                             type="button"
                             onClick={() => setVendorName(cName)}
-                            className={`px-1.5 py-0.5 rounded font-semibold transition-colors ${
+                            className={`rounded px-1.5 py-0.5 font-semibold transition-colors ${
                               isVendor
-                                ? "bg-amber-500 text-white shadow-2xs"
-                                : "hover:bg-amber-500/10 text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400 cursor-pointer"
+                                ? 'bg-amber-500 text-white shadow-2xs'
+                                : 'text-muted-foreground cursor-pointer hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400'
                             }`}
                             title={`Assign "${cName}" as Vendor Agency`}
                           >
-                            {isVendor ? "✓ Vendor" : "Set Vendor"}
+                            {isVendor ? '✓ Vendor' : 'Set Vendor'}
                           </button>
                         </div>
                       </div>
@@ -892,8 +920,11 @@ export function RTRSubmissionDialog({
 
             {/* End Client / Target Company */}
             <div className="space-y-1.5">
-              <Label htmlFor="companyName" className="text-xs font-semibold flex items-center gap-1.5">
-                <Building2 className="size-3.5 text-primary" />
+              <Label
+                htmlFor="companyName"
+                className="flex items-center gap-1.5 text-xs font-semibold"
+              >
+                <Building2 className="text-primary size-3.5" />
                 Client / Company Name
               </Label>
               <Input
@@ -907,8 +938,8 @@ export function RTRSubmissionDialog({
 
             {/* Job Title / Role */}
             <div className="space-y-1.5">
-              <Label htmlFor="jobTitle" className="text-xs font-semibold flex items-center gap-1.5">
-                <Briefcase className="size-3.5 text-primary" />
+              <Label htmlFor="jobTitle" className="flex items-center gap-1.5 text-xs font-semibold">
+                <Briefcase className="text-primary size-3.5" />
                 Target Job Title
               </Label>
               <Input
@@ -922,8 +953,11 @@ export function RTRSubmissionDialog({
 
             {/* Vendor Company */}
             <div className="space-y-1.5">
-              <Label htmlFor="vendorName" className="text-xs font-semibold flex items-center gap-1.5">
-                <Building2 className="size-3.5 text-primary" />
+              <Label
+                htmlFor="vendorName"
+                className="flex items-center gap-1.5 text-xs font-semibold"
+              >
+                <Building2 className="text-primary size-3.5" />
                 Vendor / Staffing Agency
               </Label>
               <Input
@@ -937,27 +971,33 @@ export function RTRSubmissionDialog({
 
             {/* Submitted Hourly Rate */}
             <div className="space-y-1.5">
-              <Label htmlFor="hourlyRate" className="text-xs font-semibold flex items-center gap-1.5">
-                <DollarSign className="size-3.5 text-primary" />
+              <Label
+                htmlFor="hourlyRate"
+                className="flex items-center gap-1.5 text-xs font-semibold"
+              >
+                <DollarSign className="text-primary size-3.5" />
                 Agreed Hourly Rate ($/hr)
               </Label>
               <div className="relative">
-                <span className="absolute left-3 top-2.5 text-xs text-muted-foreground">$</span>
+                <span className="text-muted-foreground absolute top-2.5 left-3 text-xs">$</span>
                 <Input
                   id="hourlyRate"
                   type="text"
                   placeholder="e.g. 75"
                   value={hourlyRate}
                   onChange={(e) => setHourlyRate(e.target.value)}
-                  className="h-9 text-xs pl-7"
+                  className="h-9 pl-7 text-xs"
                 />
               </div>
             </div>
 
             {/* Vendor Recruiter Name */}
             <div className="space-y-1.5">
-              <Label htmlFor="vendorContactName" className="text-xs font-semibold flex items-center gap-1.5">
-                <User className="size-3.5 text-primary" />
+              <Label
+                htmlFor="vendorContactName"
+                className="flex items-center gap-1.5 text-xs font-semibold"
+              >
+                <User className="text-primary size-3.5" />
                 Vendor Contact / Recruiter Name
               </Label>
               <Input
@@ -971,8 +1011,11 @@ export function RTRSubmissionDialog({
 
             {/* Vendor Recruiter Email */}
             <div className="space-y-1.5">
-              <Label htmlFor="vendorContactEmail" className="text-xs font-semibold flex items-center gap-1.5">
-                <Mail className="size-3.5 text-primary" />
+              <Label
+                htmlFor="vendorContactEmail"
+                className="flex items-center gap-1.5 text-xs font-semibold"
+              >
+                <Mail className="text-primary size-3.5" />
                 Vendor Recruiter Email <span className="text-destructive">*</span>
               </Label>
               <Input
@@ -988,8 +1031,11 @@ export function RTRSubmissionDialog({
 
             {/* Vendor Recruiter Phone */}
             <div className="space-y-1.5">
-              <Label htmlFor="vendorContactPhone" className="text-xs font-semibold flex items-center gap-1.5">
-                <Phone className="size-3.5 text-primary" />
+              <Label
+                htmlFor="vendorContactPhone"
+                className="flex items-center gap-1.5 text-xs font-semibold"
+              >
+                <Phone className="text-primary size-3.5" />
                 Vendor Recruiter Phone
               </Label>
               <Input
@@ -1004,13 +1050,18 @@ export function RTRSubmissionDialog({
 
             {/* RTR Status */}
             <div className="space-y-1.5">
-              <Label htmlFor="rtrStatus" className="text-xs font-semibold flex items-center gap-1.5">
-                <CheckCircle2 className="size-3.5 text-primary" />
+              <Label
+                htmlFor="rtrStatus"
+                className="flex items-center gap-1.5 text-xs font-semibold"
+              >
+                <CheckCircle2 className="text-primary size-3.5" />
                 RTR Agreement Status
               </Label>
               <Select
                 value={rtrStatus}
-                onValueChange={(val) => setRtrStatus(val as "received" | "signed" | "expired" | "rejected")}
+                onValueChange={(val) =>
+                  setRtrStatus(val as 'received' | 'signed' | 'expired' | 'rejected')
+                }
               >
                 <SelectTrigger id="rtrStatus" className="h-9 text-xs">
                   <SelectValue />
@@ -1034,13 +1085,15 @@ export function RTRSubmissionDialog({
 
             {/* RTR Type */}
             <div className="space-y-1.5">
-              <Label htmlFor="rtrType" className="text-xs font-semibold flex items-center gap-1.5">
-                <FileSignature className="size-3.5 text-primary" />
+              <Label htmlFor="rtrType" className="flex items-center gap-1.5 text-xs font-semibold">
+                <FileSignature className="text-primary size-3.5" />
                 Representation Agreement Type
               </Label>
               <Select
                 value={rtrType}
-                onValueChange={(val) => setRtrType(val as "vendor_rtr" | "client_rtr" | "direct_rtr")}
+                onValueChange={(val) =>
+                  setRtrType(val as 'vendor_rtr' | 'client_rtr' | 'direct_rtr')
+                }
               >
                 <SelectTrigger id="rtrType" className="h-9 text-xs">
                   <SelectValue />
@@ -1061,8 +1114,8 @@ export function RTRSubmissionDialog({
 
             {/* RTR Agreement Date */}
             <div className="space-y-1.5">
-              <Label htmlFor="rtrDate" className="text-xs font-semibold flex items-center gap-1.5">
-                <Calendar className="size-3.5 text-primary" />
+              <Label htmlFor="rtrDate" className="flex items-center gap-1.5 text-xs font-semibold">
+                <Calendar className="text-primary size-3.5" />
                 Agreement Date
               </Label>
               <Input
@@ -1076,8 +1129,11 @@ export function RTRSubmissionDialog({
 
             {/* Expiration Date */}
             <div className="space-y-1.5">
-              <Label htmlFor="expirationDate" className="text-xs font-semibold flex items-center gap-1.5">
-                <Calendar className="size-3.5 text-primary" />
+              <Label
+                htmlFor="expirationDate"
+                className="flex items-center gap-1.5 text-xs font-semibold"
+              >
+                <Calendar className="text-primary size-3.5" />
                 Expiration Date (Optional)
               </Label>
               <Input
@@ -1105,9 +1161,9 @@ export function RTRSubmissionDialog({
           </div>
 
           {/* Footer Actions */}
-          <div className="flex items-center justify-between pt-4 border-t border-border/70">
-            <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-              <BadgeCheck className="size-3.5 text-primary" />
+          <div className="border-border/70 flex items-center justify-between border-t pt-4">
+            <div className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
+              <BadgeCheck className="text-primary size-3.5" />
               Saves RTR agreement and records representation across the portal.
             </div>
 
@@ -1118,7 +1174,7 @@ export function RTRSubmissionDialog({
                 size="sm"
                 onClick={() => handleOpenChange(false)}
                 disabled={saving}
-                className="h-9 text-xs px-3 rounded-lg"
+                className="h-9 rounded-lg px-3 text-xs"
               >
                 Cancel
               </Button>
@@ -1126,7 +1182,7 @@ export function RTRSubmissionDialog({
                 type="submit"
                 size="sm"
                 disabled={saving || (!file && !companyName.trim())}
-                className="h-9 text-xs px-4 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold shadow-xs rounded-lg cursor-pointer"
+                className="bg-primary text-primary-foreground hover:bg-primary/90 h-9 cursor-pointer gap-1.5 rounded-lg px-4 text-xs font-semibold shadow-xs"
               >
                 {saving ? (
                   <>

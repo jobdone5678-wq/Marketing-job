@@ -4,11 +4,11 @@
 
 The Nextkinlife Recruiting Copilot extension has **three critical issues** causing slow autofill response and poor UX:
 
-| Issue | Severity | Impact |
-|-------|----------|--------|
-| **No visual feedback during field filling** | Critical | Users don't know autofill is working; appears "frozen" |
-| **Synchronous blocking DOM operations** | High | 200-500ms+ per field on complex forms; no yield to main thread |
-| **No progress indicators or field counts** | High | Users can't track what's filled vs remaining |
+| Issue                                       | Severity | Impact                                                         |
+| ------------------------------------------- | -------- | -------------------------------------------------------------- |
+| **No visual feedback during field filling** | Critical | Users don't know autofill is working; appears "frozen"         |
+| **Synchronous blocking DOM operations**     | High     | 200-500ms+ per field on complex forms; no yield to main thread |
+| **No progress indicators or field counts**  | High     | Users can't track what's filled vs remaining                   |
 
 ---
 
@@ -42,8 +42,9 @@ for (const el of controls) {
 ### 4. Content Script Widget (content.js:2223-3121)
 
 The floating widget has:
+
 - Match score badge (✓)
-- Job title/company (✓)  
+- Job title/company (✓)
 - **But NO field count display**
 - **NO progress bar during autofill**
 
@@ -72,10 +73,13 @@ async function autofillCandidate(candidate, force = false) {
 **File**: `content.js` - `injectFloatingWidget()` (lines 2715-3121)
 
 Add to card HTML:
+
 ```html
 <div id="mp-field-progress" class="mp-field-progress" style="display: none;">
   <div class="mp-progress-bar"><div class="mp-progress-fill"></div></div>
-  <span id="mp-progress-text">Filling fields... <span id="mp-filled-count">0</span>/<span id="mp-total-count">0</span></span>
+  <span id="mp-progress-text"
+    >Filling fields... <span id="mp-filled-count">0</span>/<span id="mp-total-count">0</span></span
+  >
 </div>
 ```
 
@@ -84,6 +88,7 @@ Add to card HTML:
 **File**: `popup.html` & `popup.js`
 
 Add to resume section:
+
 ```html
 <div class="field-stats">
   <span>Fields captured: <strong id="captured-count">0</strong></span>
@@ -110,13 +115,13 @@ card.querySelector('#mp-autofill-btn').addEventListener('click', async () => {
 
 ## Implementation Priority
 
-| Phase | Task | Files | Est. Time |
-|-------|------|-------|-----------|
-| 1 | Async field processor with progress callback | `content.js` | 2h |
-| 2 | Floating widget progress bar + field counter | `content.js` | 1h |
-| 3 | Per-field highlight animation during fill | `content.js` | 30m |
-| 4 | Popup field stats display | `popup.html`, `popup.js` | 1h |
-| 5 | Button loading states | `content.js`, `popup.js` | 30m |
+| Phase | Task                                         | Files                    | Est. Time |
+| ----- | -------------------------------------------- | ------------------------ | --------- |
+| 1     | Async field processor with progress callback | `content.js`             | 2h        |
+| 2     | Floating widget progress bar + field counter | `content.js`             | 1h        |
+| 3     | Per-field highlight animation during fill    | `content.js`             | 30m       |
+| 4     | Popup field stats display                    | `popup.html`, `popup.js` | 1h        |
+| 5     | Button loading states                        | `content.js`, `popup.js` | 30m       |
 
 ---
 
@@ -125,6 +130,7 @@ card.querySelector('#mp-autofill-btn').addEventListener('click', async () => {
 ### 1. content.js - Replace autofillCandidate (lines 1620-1830)
 
 Key changes:
+
 - Return `{ filled, total, skipped }` instead of just count
 - Accept `onProgress` callback: `(filled, total, currentFieldLabel) => void`
 - Use `requestAnimationFrame` batching for 60fps UI
@@ -152,10 +158,18 @@ function highlightFieldAnimated(el) {
 
 ```html
 <div id="mp-field-progress" class="mp-field-progress" style="display:none;margin-top:8px;">
-  <div class="mp-progress-bar" style="height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;">
-    <div class="mp-progress-fill" style="width:0%;height:100%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);transition:width 0.3s ease;"></div>
+  <div
+    class="mp-progress-bar"
+    style="height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;"
+  >
+    <div
+      class="mp-progress-fill"
+      style="width:0%;height:100%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);transition:width 0.3s ease;"
+    ></div>
   </div>
-  <div style="display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;margin-top:4px;">
+  <div
+    style="display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;margin-top:4px;"
+  >
     <span id="mp-progress-label">Filling fields...</span>
     <span id="mp-progress-count">0 / 0</span>
   </div>
@@ -165,6 +179,7 @@ function highlightFieldAnimated(el) {
 ### 4. popup.js - Add Field Stats
 
 In `renderState()`:
+
 ```javascript
 // Query content script for captured field count
 const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });

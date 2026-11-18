@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import * as React from 'react';
 import Link from 'next/link';
@@ -23,9 +23,19 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import type { ApplicationIdentity, CandidateIdentity, EmailConnectionSummary, EmailReceiptRecord } from '@/lib/email-confirmations/types';
+import type {
+  ApplicationIdentity,
+  CandidateIdentity,
+  EmailConnectionSummary,
+  EmailReceiptRecord,
+} from '@/lib/email-confirmations/types';
 
-type GmailSetup = { missing: string[]; invalid: string[]; appOrigin: string | null; redirectUri: string | null };
+type GmailSetup = {
+  missing: string[];
+  invalid: string[];
+  appOrigin: string | null;
+  redirectUri: string | null;
+};
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { ...options, cache: 'no-store' });
@@ -34,13 +44,25 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
   return result as T;
 }
 
-function GoogleIcon({ className = "h-4 w-4" }: { className?: string }) {
+function GoogleIcon({ className = 'h-4 w-4' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
-      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+      <path
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+        fill="#4285F4"
+      />
+      <path
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+        fill="#34A853"
+      />
+      <path
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+        fill="#FBBC05"
+      />
+      <path
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+        fill="#EA4335"
+      />
     </svg>
   );
 }
@@ -75,10 +97,18 @@ export default function EmailConfirmationsPage() {
     setGmailSetup(null);
     try {
       const [data, mail] = await Promise.allSettled([
-        api<{ receipts: EmailReceiptRecord[]; candidates: CandidateIdentity[]; applications: ApplicationIdentity[]; total: number; hasMore: boolean }>(
-          `/api/email-confirmations?disposition=${filter}&page=${page}`
-        ),
-        api<{ connections: EmailConnectionSummary[]; gmailConfigured: boolean; gmailSetup?: GmailSetup }>('/api/email-connections'),
+        api<{
+          receipts: EmailReceiptRecord[];
+          candidates: CandidateIdentity[];
+          applications: ApplicationIdentity[];
+          total: number;
+          hasMore: boolean;
+        }>(`/api/email-confirmations?disposition=${filter}&page=${page}`),
+        api<{
+          connections: EmailConnectionSummary[];
+          gmailConfigured: boolean;
+          gmailSetup?: GmailSetup;
+        }>('/api/email-connections'),
       ]);
       if (generation !== loadGeneration.current) return;
       const failures: string[] = [];
@@ -89,7 +119,10 @@ export default function EmailConfirmationsPage() {
         setTotal(data.value.total);
         setHasMore(data.value.hasMore);
       } else {
-        failures.push('Receipts: ' + (data.reason instanceof Error ? data.reason.message : 'Could not load receipts.'));
+        failures.push(
+          'Receipts: ' +
+            (data.reason instanceof Error ? data.reason.message : 'Could not load receipts.')
+        );
       }
       if (mail.status === 'fulfilled') {
         setConnections(mail.value.connections);
@@ -97,11 +130,17 @@ export default function EmailConfirmationsPage() {
         setGmailSetup(mail.value.gmailSetup ?? null);
       } else {
         setConnections([]);
-        failures.push('Gmail status: ' + (mail.reason instanceof Error ? mail.reason.message : 'Could not check mailbox configuration.'));
+        failures.push(
+          'Gmail status: ' +
+            (mail.reason instanceof Error
+              ? mail.reason.message
+              : 'Could not check mailbox configuration.')
+        );
       }
       setError(failures.join(' '));
     } catch (reason) {
-      if (generation === loadGeneration.current) setError(reason instanceof Error ? reason.message : 'Could not load confirmations.');
+      if (generation === loadGeneration.current)
+        setError(reason instanceof Error ? reason.message : 'Could not load confirmations.');
     } finally {
       if (generation === loadGeneration.current) setLoading(false);
     }
@@ -110,9 +149,14 @@ export default function EmailConfirmationsPage() {
   React.useEffect(() => {
     void Promise.resolve().then(load);
     const status = new URLSearchParams(window.location.search).get('mail');
-    if (status === 'connected') toast.success('Mailbox connected. Sync now to import recent receipts.');
-    if (status === 'connection_failed') toast.error('Mailbox was not connected. Check configuration and consent, then retry.');
-    if (status === 'reconnect') toast.info('You are now on the configured Gmail callback host. Connect Gmail again to continue.');
+    if (status === 'connected')
+      toast.success('Mailbox connected. Sync now to import recent receipts.');
+    if (status === 'connection_failed')
+      toast.error('Mailbox was not connected. Check configuration and consent, then retry.');
+    if (status === 'reconnect')
+      toast.info(
+        'You are now on the configured Gmail callback host. Connect Gmail again to continue.'
+      );
     if (status) window.history.replaceState(null, '', window.location.pathname);
     return () => {
       loadGeneration.current++;
@@ -142,51 +186,52 @@ export default function EmailConfirmationsPage() {
   const visible = receipts.filter((receipt) => filter === 'all' || receipt.disposition === filter);
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6 max-w-6xl w-full mx-auto">
+    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-4 lg:p-6">
       {/* Header section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
+      <div className="flex flex-col justify-between gap-4 pb-1 sm:flex-row sm:items-center">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary mb-1">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+          <div className="text-primary mb-1 flex items-center gap-2 text-xs font-semibold tracking-wider uppercase">
+            <span className="bg-primary inline-block h-1.5 w-1.5 animate-pulse rounded-full" />
             Communications & Inbound Tracking
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary shadow-2xs">
+          <h1 className="text-foreground flex items-center gap-2.5 text-2xl font-bold tracking-tight">
+            <span className="bg-primary/10 text-primary flex h-9 w-9 items-center justify-center rounded-xl shadow-2xs">
               <MailIcon className="h-5 w-5" />
             </span>
             Email confirmations
           </h1>
-          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            Connect the Gmail mailbox that receives job application confirmations. Recruiters track assigned candidates; candidates track their own applications.
+          <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
+            Connect the Gmail mailbox that receives job application confirmations. Recruiters track
+            assigned candidates; candidates track their own applications.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
-            className="h-9 rounded-xl border-border/80 px-3 text-xs font-medium shadow-xs hover:border-primary/50 transition-all cursor-pointer"
+            className="border-border/80 hover:border-primary/50 h-9 cursor-pointer rounded-xl px-3 text-xs font-medium shadow-xs transition-all"
             disabled={loading || !!busy}
             onClick={() => void load()}
           >
-            <RefreshCwIcon className={`h-3.5 w-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCwIcon className={`mr-1.5 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
           <Button
             variant="outline"
-            className="h-9 rounded-xl border-border/80 px-3 text-xs font-medium shadow-xs hover:border-primary/50 transition-all cursor-pointer"
+            className="border-border/80 hover:border-primary/50 h-9 cursor-pointer rounded-xl px-3 text-xs font-medium shadow-xs transition-all"
             disabled={!!busy}
             onClick={() => uploadRef.current?.click()}
           >
-            <UploadIcon className="h-3.5 w-3.5 mr-1.5 text-primary" />
+            <UploadIcon className="text-primary mr-1.5 h-3.5 w-3.5" />
             Import receipt
           </Button>
           <Button
             variant="outline"
-            className="h-9 rounded-xl border-border/80 px-3 text-xs font-medium shadow-xs hover:border-primary/50 transition-all cursor-pointer"
+            className="border-border/80 hover:border-primary/50 h-9 cursor-pointer rounded-xl px-3 text-xs font-medium shadow-xs transition-all"
             render={<Link href="/dashboard/submissions" />}
           >
             Applications
-            <ExternalLinkIcon className="h-3.5 w-3.5 ml-1.5 text-muted-foreground" />
+            <ExternalLinkIcon className="text-muted-foreground ml-1.5 h-3.5 w-3.5" />
           </Button>
         </div>
 
@@ -203,8 +248,17 @@ export default function EmailConfirmationsPage() {
             void run('import', async () => {
               const form = new FormData();
               form.append('receipt', file);
-              const result = await api<{ disposition: string; duplicate: boolean }>('/api/email-confirmations/import', { method: 'POST', body: form });
-              toast.success(result.duplicate ? 'This receipt was already imported.' : result.disposition === 'ignored' ? 'This email is not an application receipt.' : 'Receipt imported for review.');
+              const result = await api<{ disposition: string; duplicate: boolean }>(
+                '/api/email-confirmations/import',
+                { method: 'POST', body: form }
+              );
+              toast.success(
+                result.duplicate
+                  ? 'This receipt was already imported.'
+                  : result.disposition === 'ignored'
+                    ? 'This email is not an application receipt.'
+                    : 'Receipt imported for review.'
+              );
               await load();
             });
           }}
@@ -212,25 +266,29 @@ export default function EmailConfirmationsPage() {
       </div>
 
       {/* Connected mailboxes section */}
-      <section className="rounded-2xl border border-border/70 bg-card p-6 shadow-xs space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border/60">
+      <section className="border-border/70 bg-card space-y-5 rounded-2xl border p-6 shadow-xs">
+        <div className="border-border/60 flex flex-col justify-between gap-4 border-b pb-4 sm:flex-row sm:items-center">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <div className="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-xl">
               <MailIcon className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="font-semibold text-base text-foreground">Connected mailboxes</h2>
-              <p className="text-xs text-muted-foreground mt-0.5 max-w-xl">
-                Connect Gmail separately even if you signed in with Google. Read-only scanning finds application receipts; confirmed applications appear in My Applications. A receipt confirms submission, not a job offer.
+              <h2 className="text-foreground text-base font-semibold">Connected mailboxes</h2>
+              <p className="text-muted-foreground mt-0.5 max-w-xl text-xs">
+                Connect Gmail separately even if you signed in with Google. Read-only scanning finds
+                application receipts; confirmed applications appear in My Applications. A receipt
+                confirms submission, not a job offer.
               </p>
             </div>
           </div>
           <Button
             disabled={!configured || !!busy}
-            className="h-9 rounded-xl px-4 text-xs font-semibold bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 transition-all flex items-center gap-2 cursor-pointer self-start sm:self-auto shrink-0"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 flex h-9 shrink-0 cursor-pointer items-center gap-2 self-start rounded-xl px-4 text-xs font-semibold shadow-xs transition-all sm:self-auto"
             onClick={() =>
               void run('connect', async () => {
-                const result = await api<{ url: string }>('/api/email-connections/gmail/connect', { method: 'POST' });
+                const result = await api<{ url: string }>('/api/email-connections/gmail/connect', {
+                  method: 'POST',
+                });
                 window.location.assign(result.url);
               })
             }
@@ -241,39 +299,52 @@ export default function EmailConfirmationsPage() {
         </div>
 
         {!loading && configured === false && (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs font-medium text-amber-700 dark:text-amber-300 flex items-start gap-3">
-            <AlertCircleIcon className="h-4 w-4 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs font-medium text-amber-700 dark:text-amber-300">
+            <AlertCircleIcon className="mt-0.5 h-4 w-4 shrink-0" />
             <p className="leading-relaxed">
-              Gmail is not configured on this deployment. Your administrator must complete the email capture setup. Imported .eml receipts require review.
+              Gmail is not configured on this deployment. Your administrator must complete the email
+              capture setup. Imported .eml receipts require review.
             </p>
           </div>
         )}
 
         {gmailSetup && (
-          <details className="group rounded-xl border border-border/70 bg-muted/20 overflow-hidden text-xs" open={!configured}>
-            <summary className="flex items-center justify-between p-3.5 font-semibold cursor-pointer select-none text-foreground hover:bg-muted/40 transition-colors">
+          <details
+            className="group border-border/70 bg-muted/20 overflow-hidden rounded-xl border text-xs"
+            open={!configured}
+          >
+            <summary className="text-foreground hover:bg-muted/40 flex cursor-pointer items-center justify-between p-3.5 font-semibold transition-colors select-none">
               <div className="flex items-center gap-2">
-                <Settings2Icon className="h-4 w-4 text-muted-foreground" />
+                <Settings2Icon className="text-muted-foreground h-4 w-4" />
                 <span>Administrator Gmail setup</span>
               </div>
-              <ChevronDownIcon className="h-4 w-4 transition-transform group-open:rotate-180 text-muted-foreground" />
+              <ChevronDownIcon className="text-muted-foreground h-4 w-4 transition-transform group-open:rotate-180" />
             </summary>
-            <div className="p-4 border-t border-border/50 space-y-3 bg-background/50">
+            <div className="border-border/50 bg-background/50 space-y-3 border-t p-4">
               {gmailSetup.missing.length > 0 && (
                 <div className="text-destructive font-medium">
-                  Missing server variables: <span className="font-mono bg-destructive/10 px-1.5 py-0.5 rounded break-words">{gmailSetup.missing.join(', ')}</span>.
+                  Missing server variables:{' '}
+                  <span className="bg-destructive/10 rounded px-1.5 py-0.5 font-mono break-words">
+                    {gmailSetup.missing.join(', ')}
+                  </span>
+                  .
                 </div>
               )}
               {gmailSetup.invalid.map((issue) => (
-                <p key={issue} className="text-destructive font-medium">{issue}</p>
+                <p key={issue} className="text-destructive font-medium">
+                  {issue}
+                </p>
               ))}
               <p className="text-muted-foreground">
-                Set the server variables in this hosting project&apos;s Production environment, then redeploy. Local .env.local settings do not configure the hosted site.
+                Set the server variables in this hosting project&apos;s Production environment, then
+                redeploy. Local .env.local settings do not configure the hosted site.
               </p>
               {gmailSetup.redirectUri && (
                 <div className="space-y-1">
-                  <span className="text-muted-foreground">Register this exact authorized redirect URI in the Google OAuth web client:</span>
-                  <div className="p-2 rounded-lg bg-muted border border-border/80 font-mono text-[11px] text-foreground break-all select-all">
+                  <span className="text-muted-foreground">
+                    Register this exact authorized redirect URI in the Google OAuth web client:
+                  </span>
+                  <div className="bg-muted border-border/80 text-foreground rounded-lg border p-2 font-mono text-[11px] break-all select-all">
                     <code>{gmailSetup.redirectUri}</code>
                   </div>
                 </div>
@@ -281,7 +352,10 @@ export default function EmailConfirmationsPage() {
               {gmailSetup.appOrigin && (
                 <p className="text-muted-foreground">
                   Connect from{' '}
-                  <a className="font-medium text-primary underline" href={`${gmailSetup.appOrigin}/dashboard/email-confirmations`}>
+                  <a
+                    className="text-primary font-medium underline"
+                    href={`${gmailSetup.appOrigin}/dashboard/email-confirmations`}
+                  >
                     {gmailSetup.appOrigin}
                   </a>{' '}
                   so the sign-in session and consent cookie use the callback host.
@@ -292,8 +366,9 @@ export default function EmailConfirmationsPage() {
         )}
 
         {connections.length === 0 && !loading && !error && (
-          <div className="rounded-xl border border-dashed border-border/80 bg-muted/10 p-6 text-center text-xs text-muted-foreground">
-            No connected mailboxes. Click &quot;Connect Gmail&quot; above to link a mailbox or import an .eml receipt file.
+          <div className="border-border/80 bg-muted/10 text-muted-foreground rounded-xl border border-dashed p-6 text-center text-xs">
+            No connected mailboxes. Click &quot;Connect Gmail&quot; above to link a mailbox or
+            import an .eml receipt file.
           </div>
         )}
 
@@ -305,13 +380,17 @@ export default function EmailConfirmationsPage() {
               busy={!!busy}
               onSync={() =>
                 void run(connection.id, async () => {
-                  const result = await api<{ processed: number; confirmed: number; review: number; hasMore: boolean }>(
-                    `/api/email-connections/${connection.id}/sync`,
-                    { method: 'POST' }
-                  );
+                  const result = await api<{
+                    processed: number;
+                    confirmed: number;
+                    review: number;
+                    hasMore: boolean;
+                  }>(`/api/email-connections/${connection.id}/sync`, { method: 'POST' });
                   toast.success(
                     `${result.confirmed} confirmed, ${result.review} for review.${
-                      result.hasMore ? ' More messages remain; sync again or let the worker continue.' : ''
+                      result.hasMore
+                        ? ' More messages remain; sync again or let the worker continue.'
+                        : ''
                     }`
                   );
                   await load();
@@ -324,13 +403,18 @@ export default function EmailConfirmationsPage() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ senderDomains: domains }),
                   });
-                  toast.success('Approved sender domains saved. Existing receipts still require their recorded review.');
+                  toast.success(
+                    'Approved sender domains saved. Existing receipts still require their recorded review.'
+                  );
                   await load();
                 })
               }
               onDisconnect={() =>
                 void run(connection.id, async () => {
-                  const result = await api<{ providerRevoked: boolean }>(`/api/email-connections/${connection.id}`, { method: 'DELETE' });
+                  const result = await api<{ providerRevoked: boolean }>(
+                    `/api/email-connections/${connection.id}`,
+                    { method: 'DELETE' }
+                  );
                   toast.success(
                     result.providerRevoked
                       ? 'Mailbox disconnected and Google access revoked.'
@@ -346,30 +430,36 @@ export default function EmailConfirmationsPage() {
 
       {/* Error alert */}
       {error && (
-        <div role="alert" className="border border-destructive/40 bg-destructive/10 rounded-xl p-4 text-sm text-destructive flex items-start gap-2.5">
-          <AlertCircleIcon className="h-5 w-5 shrink-0 mt-0.5" />
+        <div
+          role="alert"
+          className="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2.5 rounded-xl border p-4 text-sm"
+        >
+          <AlertCircleIcon className="mt-0.5 h-5 w-5 shrink-0" />
           <span className="font-medium">{error}</span>
         </div>
       )}
 
       {/* Recent receipts section */}
       <section className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
           <div className="flex items-center gap-2">
-            <h2 className="font-bold text-lg text-foreground">Recent receipts</h2>
-            <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+            <h2 className="text-foreground text-lg font-bold">Recent receipts</h2>
+            <span className="bg-primary/10 text-primary inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold">
               {total}
             </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <label htmlFor="receipt-status-filter" className="text-xs font-medium text-muted-foreground sr-only">
+            <label
+              htmlFor="receipt-status-filter"
+              className="text-muted-foreground sr-only text-xs font-medium"
+            >
               Filter receipt status
             </label>
             <select
               id="receipt-status-filter"
               aria-label="Filter receipt status"
-              className="h-9 rounded-xl border border-input bg-background px-3 text-xs font-medium shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
+              className="border-input bg-background focus-visible:ring-ring h-9 cursor-pointer rounded-xl border px-3 text-xs font-medium shadow-xs focus-visible:ring-1 focus-visible:outline-none"
               value={filter}
               onChange={(event) => {
                 setFilter(event.target.value);
@@ -384,15 +474,17 @@ export default function EmailConfirmationsPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-border/70 bg-card p-3.5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-muted-foreground">
+        <div className="border-border/70 bg-card text-muted-foreground flex flex-col justify-between gap-3 rounded-xl border p-3.5 text-xs shadow-2xs sm:flex-row sm:items-center">
           <p>
-            <strong className="font-semibold text-foreground">{total} receipts</strong> in this view · Page {page + 1}. Automatic confirmation requires an authenticated approved sender and an unambiguous candidate and job match.
+            <strong className="text-foreground font-semibold">{total} receipts</strong> in this view
+            · Page {page + 1}. Automatic confirmation requires an authenticated approved sender and
+            an unambiguous candidate and job match.
           </p>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex shrink-0 items-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              className="h-8 rounded-lg px-3 text-xs font-medium cursor-pointer"
+              className="h-8 cursor-pointer rounded-lg px-3 text-xs font-medium"
               disabled={loading || !!busy || page === 0}
               onClick={() => setPage((value) => value - 1)}
             >
@@ -401,7 +493,7 @@ export default function EmailConfirmationsPage() {
             <Button
               variant="outline"
               size="sm"
-              className="h-8 rounded-lg px-3 text-xs font-medium cursor-pointer"
+              className="h-8 cursor-pointer rounded-lg px-3 text-xs font-medium"
               disabled={loading || !!busy || !hasMore}
               onClick={() => setPage((value) => value + 1)}
             >
@@ -413,13 +505,14 @@ export default function EmailConfirmationsPage() {
         {loading ? (
           <WorkspaceSkeleton rows={4} />
         ) : !error && visible.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border/80 bg-muted/10 p-10 text-center space-y-2">
-            <div className="flex h-10 w-10 mx-auto items-center justify-center rounded-xl bg-muted text-muted-foreground">
+          <div className="border-border/80 bg-muted/10 space-y-2 rounded-2xl border border-dashed p-10 text-center">
+            <div className="bg-muted text-muted-foreground mx-auto flex h-10 w-10 items-center justify-center rounded-xl">
               <MailIcon className="h-5 w-5" />
             </div>
-            <p className="text-sm font-semibold text-foreground">No receipts in this view</p>
-            <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-              Connect a mailbox or import an application receipt to start tracking inbound submission confirmations.
+            <p className="text-foreground text-sm font-semibold">No receipts in this view</p>
+            <p className="text-muted-foreground mx-auto max-w-sm text-xs">
+              Connect a mailbox or import an application receipt to start tracking inbound
+              submission confirmations.
             </p>
           </div>
         ) : null}
@@ -429,26 +522,28 @@ export default function EmailConfirmationsPage() {
             {visible.map((receipt) => (
               <article
                 key={receipt.id}
-                className="rounded-2xl border border-border/70 bg-card p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-primary/40 hover:shadow-sm transition-all"
+                className="border-border/70 bg-card hover:border-primary/40 flex flex-col justify-between gap-4 rounded-2xl border p-5 shadow-xs transition-all hover:shadow-sm md:flex-row md:items-center"
               >
                 <div className="min-w-0 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-semibold text-sm text-foreground break-words">{receipt.subject}</h3>
+                    <h3 className="text-foreground text-sm font-semibold break-words">
+                      {receipt.subject}
+                    </h3>
                     <Badge
                       variant="outline"
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                         receipt.disposition === 'confirmed'
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                           : receipt.disposition === 'needs_review'
-                          ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
-                          : 'bg-muted text-muted-foreground border-border'
+                            ? 'border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                            : 'bg-muted text-muted-foreground border-border'
                       }`}
                     >
                       {receipt.disposition.replaceAll('_', ' ')}
                     </Badge>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                  <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                     <span className="font-mono text-[11px] break-words">{receipt.sender}</span>
                     <span>·</span>
                     <span className="flex items-center gap-1">
@@ -458,18 +553,18 @@ export default function EmailConfirmationsPage() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                    <span className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2.5 py-1 text-xs font-semibold text-foreground border border-border/60">
-                      <BriefcaseIcon className="h-3 w-3 text-primary" />
+                    <span className="bg-muted/60 text-foreground border-border/60 inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold">
+                      <BriefcaseIcon className="text-primary h-3 w-3" />
                       {receipt.extracted_job_title || 'Role needs review'}
                     </span>
-                    <span className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2.5 py-1 text-xs font-semibold text-foreground border border-border/60">
-                      <BuildingIcon className="h-3 w-3 text-primary" />
+                    <span className="bg-muted/60 text-foreground border-border/60 inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold">
+                      <BuildingIcon className="text-primary h-3 w-3" />
                       {receipt.extracted_company || 'Company needs review'}
                     </span>
                   </div>
 
                   {receipt.review_reason && (
-                    <p className="text-xs text-muted-foreground italic font-sans bg-muted/20 rounded-md p-1.5 border border-border/40">
+                    <p className="text-muted-foreground bg-muted/20 border-border/40 rounded-md border p-1.5 font-sans text-xs italic">
                       {receipt.review_reason}
                     </p>
                   )}
@@ -479,8 +574,10 @@ export default function EmailConfirmationsPage() {
                   <Button
                     variant={receipt.disposition === 'needs_review' ? 'default' : 'outline'}
                     size="sm"
-                    className={`h-8 rounded-lg px-3.5 text-xs font-semibold cursor-pointer ${
-                      receipt.disposition === 'needs_review' ? 'bg-primary text-primary-foreground shadow-2xs hover:bg-primary/90' : 'border-border/80'
+                    className={`h-8 cursor-pointer rounded-lg px-3.5 text-xs font-semibold ${
+                      receipt.disposition === 'needs_review'
+                        ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xs'
+                        : 'border-border/80'
                     }`}
                     onClick={() => openReview(receipt)}
                   >
@@ -495,46 +592,59 @@ export default function EmailConfirmationsPage() {
 
       {/* Receipt review section */}
       {selected && (
-        <section className="rounded-2xl border border-primary/30 bg-card p-6 shadow-md space-y-5 animate-in fade-in-50" aria-label="Receipt review">
-          <div className="flex justify-between items-center gap-2 pb-3 border-b border-border/60">
+        <section
+          className="border-primary/30 bg-card animate-in fade-in-50 space-y-5 rounded-2xl border p-6 shadow-md"
+          aria-label="Receipt review"
+        >
+          <div className="border-border/60 flex items-center justify-between gap-2 border-b pb-3">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <div className="bg-primary/10 text-primary flex h-8 w-8 items-center justify-center rounded-lg">
                 <ShieldCheckIcon className="h-4 w-4" />
               </div>
               <div>
-                <h2 className="font-bold text-base text-foreground">
-                  {selected.disposition === 'needs_review' ? 'Review application receipt' : 'Receipt evidence'}
+                <h2 className="text-foreground text-base font-bold">
+                  {selected.disposition === 'needs_review'
+                    ? 'Review application receipt'
+                    : 'Receipt evidence'}
                 </h2>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-xs">
                   {selected.source === 'manual_import'
                     ? 'User-imported evidence: confirm its authenticity and details before recording the application.'
                     : 'Mailbox receipt: check candidate and application details.'}
                 </p>
               </div>
             </div>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground cursor-pointer" onClick={() => setSelected(null)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-foreground h-8 w-8 cursor-pointer p-0"
+              onClick={() => setSelected(null)}
+            >
               <XIcon className="h-4 w-4" />
               <span className="sr-only">Close</span>
             </Button>
           </div>
 
           <div className="space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Raw message excerpt:</span>
-            <pre className="text-xs font-mono whitespace-pre-wrap break-words max-h-64 overflow-y-auto bg-muted/30 border border-border/70 rounded-xl p-4 leading-relaxed text-foreground/90">
+            <span className="text-muted-foreground text-xs font-medium">Raw message excerpt:</span>
+            <pre className="bg-muted/30 border-border/70 text-foreground/90 max-h-64 overflow-y-auto rounded-xl border p-4 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap">
               {selected.body_text}
             </pre>
           </div>
 
           {selected.disposition === 'needs_review' && (
             <div className="space-y-4 pt-2">
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="receipt-candidate" className="text-xs font-medium text-foreground">
+                  <Label
+                    htmlFor="receipt-candidate"
+                    className="text-foreground text-xs font-medium"
+                  >
                     Candidate <span className="text-destructive">*</span>
                   </Label>
                   <select
                     id="receipt-candidate"
-                    className="w-full h-10 border border-input rounded-xl bg-background px-3 text-xs font-medium shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
+                    className="border-input bg-background focus-visible:ring-ring h-10 w-full cursor-pointer rounded-xl border px-3 text-xs font-medium shadow-xs focus-visible:ring-1 focus-visible:outline-none"
                     value={candidateId}
                     onChange={(event) => {
                       setCandidateId(event.target.value);
@@ -552,16 +662,21 @@ export default function EmailConfirmationsPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="receipt-application" className="text-xs font-medium text-foreground">
+                  <Label
+                    htmlFor="receipt-application"
+                    className="text-foreground text-xs font-medium"
+                  >
                     Existing application
                   </Label>
                   <select
                     id="receipt-application"
-                    className="w-full h-10 border border-input rounded-xl bg-background px-3 text-xs font-medium shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
+                    className="border-input bg-background focus-visible:ring-ring h-10 w-full cursor-pointer rounded-xl border px-3 text-xs font-medium shadow-xs focus-visible:ring-1 focus-visible:outline-none"
                     value={submissionId}
                     onChange={(event) => {
                       setSubmissionId(event.target.value);
-                      const application = applications.find((item) => item.id === event.target.value);
+                      const application = applications.find(
+                        (item) => item.id === event.target.value
+                      );
                       if (application) {
                         setCompany(application.company_name);
                         setJobTitle(application.job_title);
@@ -578,26 +693,26 @@ export default function EmailConfirmationsPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="receipt-company" className="text-xs font-medium text-foreground">
+                  <Label htmlFor="receipt-company" className="text-foreground text-xs font-medium">
                     Company <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="receipt-company"
                     maxLength={160}
-                    className="h-10 rounded-xl border-input bg-background text-xs shadow-xs"
+                    className="border-input bg-background h-10 rounded-xl text-xs shadow-xs"
                     value={company}
                     onChange={(event) => setCompany(event.target.value)}
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="receipt-role" className="text-xs font-medium text-foreground">
+                  <Label htmlFor="receipt-role" className="text-foreground text-xs font-medium">
                     Job title <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="receipt-role"
                     maxLength={160}
-                    className="h-10 rounded-xl border-input bg-background text-xs shadow-xs"
+                    className="border-input bg-background h-10 rounded-xl text-xs shadow-xs"
                     value={jobTitle}
                     onChange={(event) => setJobTitle(event.target.value)}
                   />
@@ -607,15 +722,23 @@ export default function EmailConfirmationsPage() {
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <Button
                   disabled={!!busy || !candidateId || !company.trim() || !jobTitle.trim()}
-                  className="h-10 rounded-xl px-5 text-xs font-semibold bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 transition-all flex items-center gap-2 cursor-pointer"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 flex h-10 cursor-pointer items-center gap-2 rounded-xl px-5 text-xs font-semibold shadow-xs transition-all"
                   onClick={() =>
                     void run('review', async () => {
                       await api(`/api/email-confirmations/${selected.id}/review`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'confirm', candidateId, company, jobTitle, submissionId: submissionId || null }),
+                        body: JSON.stringify({
+                          action: 'confirm',
+                          candidateId,
+                          company,
+                          jobTitle,
+                          submissionId: submissionId || null,
+                        }),
                       });
-                      toast.success('Application confirmation saved. Existing recruiting status is preserved.');
+                      toast.success(
+                        'Application confirmation saved. Existing recruiting status is preserved.'
+                      );
                       setSelected(null);
                       await load();
                     })
@@ -626,7 +749,7 @@ export default function EmailConfirmationsPage() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="h-10 rounded-xl px-4 text-xs font-medium border-border/80 shadow-xs hover:border-destructive/50 hover:text-destructive cursor-pointer"
+                  className="border-border/80 hover:border-destructive/50 hover:text-destructive h-10 cursor-pointer rounded-xl px-4 text-xs font-medium shadow-xs"
                   disabled={!!busy}
                   onClick={() =>
                     void run('dismiss', async () => {
@@ -650,11 +773,11 @@ export default function EmailConfirmationsPage() {
             <div className="pt-2">
               <Button
                 variant="outline"
-                className="h-9 rounded-xl border-border/80 text-xs font-medium shadow-xs hover:border-primary/50 cursor-pointer"
+                className="border-border/80 hover:border-primary/50 h-9 cursor-pointer rounded-xl text-xs font-medium shadow-xs"
                 render={<Link href="/dashboard/submissions" />}
               >
                 Open application tracker
-                <ExternalLinkIcon className="h-3.5 w-3.5 ml-1.5 text-muted-foreground" />
+                <ExternalLinkIcon className="text-muted-foreground ml-1.5 h-3.5 w-3.5" />
               </Button>
             </div>
           )}
@@ -681,25 +804,32 @@ function MailboxCard({
   const isConnected = connection.status === 'connected';
 
   return (
-    <div className="rounded-xl border border-border/70 bg-card p-5 space-y-4 shadow-2xs hover:border-primary/40 transition-all">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="border-border/70 bg-card hover:border-primary/40 space-y-4 rounded-xl border p-5 shadow-2xs transition-all">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div className="space-y-1">
           <div className="flex items-center gap-2.5">
-            <span className="font-semibold text-sm text-foreground">{connection.mailbox_email}</span>
+            <span className="text-foreground text-sm font-semibold">
+              {connection.mailbox_email}
+            </span>
             <span
               className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
                 isConnected
-                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                  : 'bg-muted text-muted-foreground border border-border'
+                  ? 'border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                  : 'bg-muted text-muted-foreground border-border border'
               }`}
             >
-              <span className={`inline-block h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-muted-foreground'}`} />
+              <span
+                className={`inline-block h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-muted-foreground'}`}
+              />
               {connection.status.replaceAll('_', ' ')}
             </span>
           </div>
-          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+          <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
             <ClockIcon className="h-3 w-3" />
-            Last checked: {connection.last_synced_at ? new Date(connection.last_synced_at).toLocaleString() : 'Not yet synchronized'}
+            Last checked:{' '}
+            {connection.last_synced_at
+              ? new Date(connection.last_synced_at).toLocaleString()
+              : 'Not yet synchronized'}
           </p>
         </div>
 
@@ -707,17 +837,17 @@ function MailboxCard({
           <Button
             variant="outline"
             size="sm"
-            className="h-8 rounded-lg px-3 text-xs font-semibold cursor-pointer border-border/80 hover:border-primary/50"
+            className="border-border/80 hover:border-primary/50 h-8 cursor-pointer rounded-lg px-3 text-xs font-semibold"
             disabled={busy || connection.status !== 'connected'}
             onClick={onSync}
           >
-            <RefreshCwIcon className={`h-3 w-3 mr-1.5 ${busy ? 'animate-spin' : ''}`} />
+            <RefreshCwIcon className={`mr-1.5 h-3 w-3 ${busy ? 'animate-spin' : ''}`} />
             Sync now
           </Button>
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 rounded-lg px-2.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer"
+            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-8 cursor-pointer rounded-lg px-2.5 text-xs"
             disabled={busy || connection.status === 'disconnected'}
             onClick={onDisconnect}
           >
@@ -727,20 +857,20 @@ function MailboxCard({
       </div>
 
       {connection.last_error && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive flex items-center gap-2">
+        <div className="border-destructive/30 bg-destructive/10 text-destructive flex items-center gap-2 rounded-lg border p-3 text-xs">
           <AlertCircleIcon className="h-4 w-4 shrink-0" />
           <span>{connection.last_error}</span>
         </div>
       )}
 
-      <div className="space-y-2 pt-2 border-t border-border/50">
-        <Label htmlFor={`senders-${connection.id}`} className="text-xs font-medium text-foreground">
+      <div className="border-border/50 space-y-2 border-t pt-2">
+        <Label htmlFor={`senders-${connection.id}`} className="text-foreground text-xs font-medium">
           Approved receipt sender domains
         </Label>
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <Input
             id={`senders-${connection.id}`}
-            className="flex-1 h-9 rounded-lg border-input bg-background text-xs shadow-2xs"
+            className="border-input bg-background h-9 flex-1 rounded-lg text-xs shadow-2xs"
             placeholder="Enter exact domains from verified receipts (e.g. greenhouse.io, lever.co)"
             value={domains}
             onChange={(event) => setDomains(event.target.value)}
@@ -748,15 +878,23 @@ function MailboxCard({
           <Button
             variant="outline"
             size="sm"
-            className="h-9 rounded-lg px-4 text-xs font-semibold border-border/80 shadow-2xs hover:border-primary/50 cursor-pointer shrink-0"
+            className="border-border/80 hover:border-primary/50 h-9 shrink-0 cursor-pointer rounded-lg px-4 text-xs font-semibold shadow-2xs"
             disabled={busy}
-            onClick={() => onSave(domains.split(',').map((value) => value.trim()).filter(Boolean))}
+            onClick={() =>
+              onSave(
+                domains
+                  .split(',')
+                  .map((value) => value.trim())
+                  .filter(Boolean)
+              )
+            }
           >
             Save domains
           </Button>
         </div>
-        <p className="text-[11px] text-muted-foreground">
-          Start with review. Approve only known application receipt senders; other messages always need review.
+        <p className="text-muted-foreground text-[11px]">
+          Start with review. Approve only known application receipt senders; other messages always
+          need review.
         </p>
       </div>
     </div>

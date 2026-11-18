@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import * as React from "react";
+import * as React from 'react';
 import {
   Select,
   SelectContent,
@@ -9,29 +9,29 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select';
 
 export const SUPPORTED_CURRENCIES = [
-  { code: "USD", symbol: "$", name: "US Dollar" },
-  { code: "EUR", symbol: "€", name: "Euro" },
-  { code: "GBP", symbol: "£", name: "British Pound" },
-  { code: "CAD", symbol: "CA$", name: "Canadian Dollar" },
-  { code: "AUD", symbol: "A$", name: "Australian Dollar" },
-  { code: "INR", symbol: "₹", name: "Indian Rupee" },
-  { code: "SGD", symbol: "S$", name: "Singapore Dollar" },
-  { code: "AED", symbol: "AED", name: "UAE Dirham" },
-  { code: "CHF", symbol: "CHF", name: "Swiss Franc" },
-  { code: "JPY", symbol: "¥", name: "Japanese Yen" },
-  { code: "NZD", symbol: "NZ$", name: "New Zealand Dollar" },
-  { code: "ZAR", symbol: "R", name: "South African Rand" },
-  { code: "SEK", symbol: "kr", name: "Swedish Krona" },
-  { code: "NOK", symbol: "kr", name: "Norwegian Krone" },
-  { code: "DKK", symbol: "kr", name: "Danish Krone" },
-  { code: "PLN", symbol: "zł", name: "Polish Zloty" },
-  { code: "MXN", symbol: "MX$", name: "Mexican Peso" },
-  { code: "BRL", symbol: "R$", name: "Brazilian Real" },
-  { code: "CNY", symbol: "¥", name: "Chinese Yuan" },
-  { code: "HKD", symbol: "HK$", name: "Hong Kong Dollar" },
+  { code: 'USD', symbol: '$', name: 'US Dollar' },
+  { code: 'EUR', symbol: '€', name: 'Euro' },
+  { code: 'GBP', symbol: '£', name: 'British Pound' },
+  { code: 'CAD', symbol: 'CA$', name: 'Canadian Dollar' },
+  { code: 'AUD', symbol: 'A$', name: 'Australian Dollar' },
+  { code: 'INR', symbol: '₹', name: 'Indian Rupee' },
+  { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar' },
+  { code: 'AED', symbol: 'AED', name: 'UAE Dirham' },
+  { code: 'CHF', symbol: 'CHF', name: 'Swiss Franc' },
+  { code: 'JPY', symbol: '¥', name: 'Japanese Yen' },
+  { code: 'NZD', symbol: 'NZ$', name: 'New Zealand Dollar' },
+  { code: 'ZAR', symbol: 'R', name: 'South African Rand' },
+  { code: 'SEK', symbol: 'kr', name: 'Swedish Krona' },
+  { code: 'NOK', symbol: 'kr', name: 'Norwegian Krone' },
+  { code: 'DKK', symbol: 'kr', name: 'Danish Krone' },
+  { code: 'PLN', symbol: 'zł', name: 'Polish Zloty' },
+  { code: 'MXN', symbol: 'MX$', name: 'Mexican Peso' },
+  { code: 'BRL', symbol: 'R$', name: 'Brazilian Real' },
+  { code: 'CNY', symbol: '¥', name: 'Chinese Yuan' },
+  { code: 'HKD', symbol: 'HK$', name: 'Hong Kong Dollar' },
 ] as const;
 
 export interface CurrencySelectProps {
@@ -46,8 +46,8 @@ export interface CurrencySelectProps {
 }
 
 export function CurrencySelect({
-  name = "currency",
-  defaultValue = "USD",
+  name = 'currency',
+  defaultValue = 'USD',
   value,
   onValueChange,
   label,
@@ -55,7 +55,7 @@ export function CurrencySelect({
   disabled = false,
   className,
 }: CurrencySelectProps) {
-  const [internalValue, setInternalValue] = React.useState(value ?? defaultValue ?? "USD");
+  const [internalValue, setInternalValue] = React.useState(value ?? defaultValue ?? 'USD');
 
   const effectiveValue = value !== undefined ? value : internalValue;
 
@@ -93,7 +93,7 @@ export function CurrencySelect({
     >
       <SelectTrigger
         aria-label={label || name}
-        className={`w-full min-w-0 h-9 bg-background ${className || ""}`}
+        className={`bg-background h-9 w-full min-w-0 ${className || ''}`}
       >
         <SelectValue placeholder="Select currency" />
       </SelectTrigger>
@@ -103,7 +103,9 @@ export function CurrencySelect({
           {currencyOptions.map((curr) => (
             <SelectItem key={curr.code} value={curr.code}>
               <span className="font-semibold">{curr.code}</span>
-              <span className="text-muted-foreground ml-1">({curr.symbol}) · {curr.name}</span>
+              <span className="text-muted-foreground ml-1">
+                ({curr.symbol}) · {curr.name}
+              </span>
             </SelectItem>
           ))}
         </SelectGroup>

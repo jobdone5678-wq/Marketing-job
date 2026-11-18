@@ -1,65 +1,60 @@
-"use client";
+'use client';
 
-import { useEffect, useState, useRef } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { getCandidates } from "@/lib/candidates";
-import { createSubmission, updateSubmission, checkDuplicate } from "@/lib/submissions";
+import { useEffect, useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { getCandidates } from '@/lib/candidates';
+import { createSubmission, updateSubmission, checkDuplicate } from '@/lib/submissions';
 import type {
   Candidate,
   JobSubmission,
   JobSubmissionFormData,
   SubmissionStatus,
   RTRDocumentReference,
-} from "@/types/database";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import {
-  Sparkles,
-  CheckCircle2,
-  Loader2,
-  Building2,
-} from "lucide-react";
-import { toast } from "sonner";
-import { findCandidateMatch } from "@/components/rtr-submission-dialog";
-import { buildRtrMetadataTag, stripRtrMetadata } from "@/lib/rtr-metadata";
+} from '@/types/database';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Sparkles, CheckCircle2, Loader2, Building2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { findCandidateMatch } from '@/components/rtr-submission-dialog';
+import { buildRtrMetadataTag, stripRtrMetadata } from '@/lib/rtr-metadata';
 
 const fields = [
-  "company_name",
-  "job_title",
-  "job_url",
-  "portal_source",
-  "job_location",
-  "vendor_company",
-  "vendor_contact_name",
-  "vendor_contact_email",
-  "vendor_contact_phone",
-  "submitted_rate",
-  "client_pay_rate",
-  "interview_time",
-  "interview_mode",
-  "interview_meeting_link",
-  "notes",
+  'company_name',
+  'job_title',
+  'job_url',
+  'portal_source',
+  'job_location',
+  'vendor_company',
+  'vendor_contact_name',
+  'vendor_contact_email',
+  'vendor_contact_phone',
+  'submitted_rate',
+  'client_pay_rate',
+  'interview_time',
+  'interview_mode',
+  'interview_meeting_link',
+  'notes',
 ] as const;
 
 const statuses: SubmissionStatus[] = [
-  "Draft",
-  "Applied",
-  "Vendor_Screening",
-  "Submitted_to_Client",
-  "Interview_Scheduled",
-  "Round_1",
-  "Round_2",
-  "Offer_Received",
-  "Rejected",
-  "No_Response",
+  'Draft',
+  'Applied',
+  'Vendor_Screening',
+  'Submitted_to_Client',
+  'Interview_Scheduled',
+  'Round_1',
+  'Round_2',
+  'Offer_Received',
+  'Rejected',
+  'No_Response',
 ];
 
 export function SubmissionForm({
   initialSubmission,
   initialCandidateId,
   initialJob,
-  backUrl = "/dashboard/submissions",
+  backUrl = '/dashboard/submissions',
   onSuccess,
 }: {
   initialSubmission?: JobSubmission | null;
@@ -70,7 +65,7 @@ export function SubmissionForm({
 }) {
   const router = useRouter();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [duplicate, setDuplicate] = useState(false);
   const [scanningRtr, setScanningRtr] = useState(false);
@@ -90,11 +85,10 @@ export function SubmissionForm({
         .filter((key) => (initialSubmission || initialJob)?.[key] !== undefined)
         .map((key) => [key, (initialSubmission || initialJob)?.[key]])
     ),
-    candidate_id: initialSubmission?.candidate_id || initialCandidateId || "",
+    candidate_id: initialSubmission?.candidate_id || initialCandidateId || '',
     job_id: initialSubmission?.job_id || initialJob?.job_id || null,
-    status: initialSubmission?.status || "Draft",
-    submission_date:
-      initialSubmission?.submission_date || new Date().toISOString().slice(0, 10),
+    status: initialSubmission?.status || 'Draft',
+    submission_date: initialSubmission?.submission_date || new Date().toISOString().slice(0, 10),
     rtr_document: initialSubmission?.rtr_document || null,
   }));
 
@@ -106,8 +100,8 @@ export function SubmissionForm({
 
   useEffect(() => {
     let cancelled = false;
-    const company = String(data.company_name || "");
-    const id = String(data.candidate_id || "");
+    const company = String(data.company_name || '');
+    const id = String(data.candidate_id || '');
     if (company && id) {
       const timer = setTimeout(
         () =>
@@ -129,18 +123,18 @@ export function SubmissionForm({
     setRtrFile(file);
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append('file', file);
       if (data.candidate_id) {
-        formData.append("candidateId", String(data.candidate_id));
+        formData.append('candidateId', String(data.candidate_id));
       }
 
-      const res = await fetch("/api/rtr/ocr", {
-        method: "POST",
+      const res = await fetch('/api/rtr/ocr', {
+        method: 'POST',
         body: formData,
       });
 
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed to scan RTR.");
+      if (!res.ok) throw new Error(json.error || 'Failed to scan RTR.');
 
       const ext = json.extracted || {};
       const nextData: Record<string, unknown> = { ...data };
@@ -167,8 +161,8 @@ export function SubmissionForm({
       if (ext.vendor_contact_email) nextData.vendor_contact_email = ext.vendor_contact_email;
       if (ext.vendor_contact_phone) nextData.vendor_contact_phone = ext.vendor_contact_phone;
       if (ext.hourly_rate) nextData.submitted_rate = `$${ext.hourly_rate}/hr`;
-      if (ext.rtr_status === "signed") nextData.status = "Submitted_to_Client";
-      else if (ext.rtr_status === "received") nextData.status = "Vendor_Screening";
+      if (ext.rtr_status === 'signed') nextData.status = 'Submitted_to_Client';
+      else if (ext.rtr_status === 'received') nextData.status = 'Vendor_Screening';
 
       const rtrRef: RTRDocumentReference = {
         id: crypto.randomUUID(),
@@ -178,12 +172,12 @@ export function SubmissionForm({
         vendor_contact_name: ext.vendor_contact_name || null,
         vendor_contact_email: ext.vendor_contact_email || null,
         vendor_contact_phone: ext.vendor_contact_phone || null,
-        rtr_type: ext.rtr_type || "vendor_rtr",
-        rtr_status: ext.rtr_status || "received",
+        rtr_type: ext.rtr_type || 'vendor_rtr',
+        rtr_status: ext.rtr_status || 'received',
         rtr_date: ext.rtr_date || new Date().toISOString().slice(0, 10),
         expiration_date: ext.expiration_date || null,
         hourly_rate: ext.hourly_rate || null,
-        currency: ext.currency || "USD",
+        currency: ext.currency || 'USD',
         created_at: new Date().toISOString(),
       };
 
@@ -192,11 +186,11 @@ export function SubmissionForm({
       setData(nextData);
       setDuplicate(false);
 
-      toast.success("RTR details auto-filled into form!", {
-        description: `Client: ${ext.company_name || "Extracted"} | Vendor: ${ext.vendor_name || "Direct"} | Rate: ${ext.hourly_rate ? `$${ext.hourly_rate}/hr` : "N/A"}`,
+      toast.success('RTR details auto-filled into form!', {
+        description: `Client: ${ext.company_name || 'Extracted'} | Vendor: ${ext.vendor_name || 'Direct'} | Rate: ${ext.hourly_rate ? `$${ext.hourly_rate}/hr` : 'N/A'}`,
       });
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "RTR scan failed");
+      toast.error(err instanceof Error ? err.message : 'RTR scan failed');
     } finally {
       setScanningRtr(false);
     }
@@ -204,10 +198,10 @@ export function SubmissionForm({
 
   async function save() {
     setBusy(true);
-    setError("");
+    setError('');
     try {
       const rtrToAttach = attachedRtr || (data.rtr_document as RTRDocumentReference | null) || null;
-      let finalNotes = String(data.notes || "");
+      let finalNotes = String(data.notes || '');
       if (rtrToAttach) {
         const cleanNotes = stripRtrMetadata(finalNotes);
         const rtrTag = buildRtrMetadataTag(rtrToAttach as unknown as Record<string, unknown>);
@@ -225,7 +219,7 @@ export function SubmissionForm({
         : await createSubmission(payload);
 
       if (result.error || !result.data) {
-        throw new Error(result.error || "Save failed");
+        throw new Error(result.error || 'Save failed');
       }
 
       // Upload the agreement file itself. Without this step the application only carried the
@@ -233,33 +227,36 @@ export function SubmissionForm({
       if (rtrFile) {
         const formData = new FormData();
         formData.append(
-          "payload",
+          'payload',
           JSON.stringify({
             submission_id: result.data.id,
             candidate_id: result.data.candidate_id || null,
             candidate_name: result.data.candidate?.full_name || null,
             filename: rtrFile.name,
-            mime_type: rtrFile.type || "application/pdf",
-            rtr_type: rtrToAttach?.rtr_type || "vendor_rtr",
-            rtr_status: rtrToAttach?.rtr_status || "received",
+            mime_type: rtrFile.type || 'application/pdf',
+            rtr_type: rtrToAttach?.rtr_type || 'vendor_rtr',
+            rtr_status: rtrToAttach?.rtr_status || 'received',
             rtr_date: rtrToAttach?.rtr_date || new Date().toISOString().slice(0, 10),
             expiration_date: rtrToAttach?.expiration_date || null,
             company_name: result.data.company_name || null,
             job_title: result.data.job_title || null,
             vendor_name: result.data.vendor_company || rtrToAttach?.vendor_name || null,
-            vendor_contact_name: result.data.vendor_contact_name || rtrToAttach?.vendor_contact_name || null,
-            vendor_contact_email: result.data.vendor_contact_email || rtrToAttach?.vendor_contact_email || null,
-            vendor_contact_phone: result.data.vendor_contact_phone || rtrToAttach?.vendor_contact_phone || null,
+            vendor_contact_name:
+              result.data.vendor_contact_name || rtrToAttach?.vendor_contact_name || null,
+            vendor_contact_email:
+              result.data.vendor_contact_email || rtrToAttach?.vendor_contact_email || null,
+            vendor_contact_phone:
+              result.data.vendor_contact_phone || rtrToAttach?.vendor_contact_phone || null,
             hourly_rate: rtrToAttach?.hourly_rate || null,
-            currency: rtrToAttach?.currency || "USD",
+            currency: rtrToAttach?.currency || 'USD',
             create_submission: false,
           })
         );
-        formData.append("file", rtrFile);
-        const upload = await fetch("/api/rtr", { method: "POST", body: formData });
+        formData.append('file', rtrFile);
+        const upload = await fetch('/api/rtr', { method: 'POST', body: formData });
         if (!upload.ok) {
           const uploadError = await upload.json().catch(() => ({}));
-          throw new Error(uploadError.error || "The RTR document could not be uploaded.");
+          throw new Error(uploadError.error || 'The RTR document could not be uploaded.');
         }
       }
 
@@ -276,17 +273,20 @@ export function SubmissionForm({
   return (
     <main className="portal-page max-w-5xl space-y-6">
       <div className="flex items-center justify-between">
-        <Link className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1" href={backUrl}>
+        <Link
+          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
+          href={backUrl}
+        >
           ← Back to submissions
         </Link>
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b">
+      <div className="flex flex-col justify-between gap-3 border-b pb-2 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
-            {initialSubmission ? "Edit submission" : "Create submission draft"}
+            {initialSubmission ? 'Edit submission' : 'Create submission draft'}
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-muted-foreground mt-0.5 text-xs">
             Log marketing and client submissions with optional RTR authorization records.
           </p>
         </div>
@@ -309,7 +309,7 @@ export function SubmissionForm({
             size="sm"
             disabled={scanningRtr}
             onClick={() => rtrInputRef.current?.click()}
-            className="h-9 px-3 text-xs gap-1.5 cursor-pointer rounded-lg border-primary/40 bg-primary/5 text-primary hover:bg-primary/10 transition-all font-semibold"
+            className="border-primary/40 bg-primary/5 text-primary hover:bg-primary/10 h-9 cursor-pointer gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all"
           >
             {scanningRtr ? (
               <>
@@ -327,15 +327,16 @@ export function SubmissionForm({
       </div>
 
       {attachedRtr && (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 flex items-center justify-between gap-3 text-xs">
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
             <div>
               <span className="font-semibold text-emerald-900 dark:text-emerald-200">
                 Attached RTR Document: {attachedRtr.filename}
               </span>
               <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80">
-                Status: {attachedRtr.rtr_status} • Vendor: {attachedRtr.vendor_name || "Direct"} • Date: {attachedRtr.rtr_date}
+                Status: {attachedRtr.rtr_status} • Vendor: {attachedRtr.vendor_name || 'Direct'} •
+                Date: {attachedRtr.rtr_date}
               </p>
             </div>
           </div>
@@ -348,7 +349,7 @@ export function SubmissionForm({
               setRtrFile(null);
               setData({ ...data, rtr_document: null });
             }}
-            className="h-7 text-xs text-destructive hover:bg-destructive/10"
+            className="text-destructive hover:bg-destructive/10 h-7 text-xs"
           >
             Remove
           </Button>
@@ -367,8 +368,8 @@ export function SubmissionForm({
           <select
             required
             disabled={Boolean(initialSubmission)}
-            className="block w-full border rounded-lg p-2 mt-1 text-xs bg-background"
-            value={String(data.candidate_id || "")}
+            className="bg-background mt-1 block w-full rounded-lg border p-2 text-xs"
+            value={String(data.candidate_id || '')}
             onChange={(e) => {
               setData({ ...data, candidate_id: e.target.value });
               setDuplicate(false);
@@ -377,7 +378,7 @@ export function SubmissionForm({
             <option value="">Choose candidate</option>
             {candidates.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.full_name} {c.visa_status ? `(${c.visa_status})` : ""}
+                {c.full_name} {c.visa_status ? `(${c.visa_status})` : ''}
               </option>
             ))}
           </select>
@@ -385,65 +386,69 @@ export function SubmissionForm({
 
         {/* Different Companies Detected in RTR Document */}
         {detectedCompanies.length > 0 && (
-          <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 space-y-2 shadow-2xs">
+          <div className="border-primary/20 bg-primary/5 space-y-2 rounded-xl border p-3.5 shadow-2xs">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
+              <span className="text-primary flex items-center gap-1.5 text-xs font-semibold">
                 <Building2 className="size-3.5" />
                 Different Companies Found in RTR ({detectedCompanies.length}):
               </span>
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-muted-foreground text-[10px]">
                 Click to quickly assign as Company or Vendor
               </span>
             </div>
             <div className="flex flex-wrap gap-2">
               {detectedCompanies.map((cName) => {
-                const currentComp = String(data.company_name || "").toLowerCase().trim();
-                const currentVendor = String(data.vendor_company || "").toLowerCase().trim();
+                const currentComp = String(data.company_name || '')
+                  .toLowerCase()
+                  .trim();
+                const currentVendor = String(data.vendor_company || '')
+                  .toLowerCase()
+                  .trim();
                 const isCompany = currentComp === cName.toLowerCase().trim();
                 const isVendor = currentVendor === cName.toLowerCase().trim();
                 return (
                   <div
                     key={cName}
-                    className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs transition-all ${
+                    className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs transition-all ${
                       isCompany
-                        ? "bg-primary/10 border-primary/40 text-primary font-medium"
+                        ? 'bg-primary/10 border-primary/40 text-primary font-medium'
                         : isVendor
-                        ? "bg-amber-500/10 border-amber-500/40 text-amber-700 dark:text-amber-300 font-medium"
-                        : "bg-background border-border/80 text-foreground"
+                          ? 'border-amber-500/40 bg-amber-500/10 font-medium text-amber-700 dark:text-amber-300'
+                          : 'bg-background border-border/80 text-foreground'
                     }`}
                   >
-                    <span className="font-semibold truncate max-w-[180px]" title={cName}>
+                    <span className="max-w-[180px] truncate font-semibold" title={cName}>
                       {cName}
                     </span>
-                    <div className="flex items-center gap-1 border-l border-border/60 pl-1.5 text-[10px]">
+                    <div className="border-border/60 flex items-center gap-1 border-l pl-1.5 text-[10px]">
                       <button
                         type="button"
                         onClick={() => {
                           setData((prev) => ({ ...prev, company_name: cName }));
                           setDuplicate(false);
                         }}
-                        className={`px-1.5 py-0.5 rounded font-semibold transition-colors ${
+                        className={`rounded px-1.5 py-0.5 font-semibold transition-colors ${
                           isCompany
-                            ? "bg-primary text-primary-foreground shadow-2xs"
-                            : "hover:bg-primary/10 text-muted-foreground hover:text-primary"
+                            ? 'bg-primary text-primary-foreground shadow-2xs'
+                            : 'hover:bg-primary/10 text-muted-foreground hover:text-primary'
                         }`}
                         title={`Assign "${cName}" as Company Name`}
                       >
-                        {isCompany ? "✓ Company" : "Set Company"}
+                        {isCompany ? '✓ Company' : 'Set Company'}
                       </button>
                       <button
                         type="button"
                         onClick={() => {
                           setData((prev) => ({ ...prev, vendor_company: cName }));
                         }}
-                        className={`px-1.5 py-0.5 rounded font-semibold transition-colors ${
+                        className={`rounded px-1.5 py-0.5 font-semibold transition-colors ${
                           isVendor
-                            ? "bg-amber-500 text-white shadow-2xs"
-                            : "hover:bg-amber-500/10 text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400"
+                            ? 'bg-amber-500 text-white shadow-2xs'
+                            : 'text-muted-foreground hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400'
                         }`}
                         title={`Assign "${cName}" as Vendor Company`}
                       >
-                        {isVendor ? "✓ Vendor" : "Set Vendor"}
+                        {isVendor ? '✓ Vendor' : 'Set Vendor'}
                       </button>
                     </div>
                   </div>
@@ -453,17 +458,17 @@ export function SubmissionForm({
           </div>
         )}
 
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid gap-4 md:grid-cols-2">
           {fields.map((k) => (
             <label key={k} className="text-xs font-semibold capitalize">
-              {k.replaceAll("_", " ")}
-              {k === "company_name" || k === "job_title" ? (
+              {k.replaceAll('_', ' ')}
+              {k === 'company_name' || k === 'job_title' ? (
                 <span className="text-destructive"> *</span>
               ) : null}
               <Input
-                type={k === "interview_time" ? "datetime-local" : "text"}
-                required={k === "company_name" || k === "job_title"}
-                value={typeof data[k] === "string" ? String(data[k]) : ""}
+                type={k === 'interview_time' ? 'datetime-local' : 'text'}
+                required={k === 'company_name' || k === 'job_title'}
+                value={typeof data[k] === 'string' ? String(data[k]) : ''}
                 onChange={(e) => {
                   setData({ ...data, [k]: e.target.value || null });
                   setDuplicate(false);
@@ -475,7 +480,7 @@ export function SubmissionForm({
           <label className="text-xs font-semibold">
             Recruiting status
             <select
-              className="block w-full border rounded-lg p-2 mt-1 text-xs bg-background"
+              className="bg-background mt-1 block w-full rounded-lg border p-2 text-xs"
               value={String(data.status)}
               onChange={(e) => setData({ ...data, status: e.target.value })}
             >
@@ -497,19 +502,23 @@ export function SubmissionForm({
         </div>
 
         {duplicate && (
-          <p className="text-xs font-medium text-amber-700 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 p-2.5 rounded-lg">
-            Another submission to this company exists in the last 30 days. Review it before adding another.
+          <p className="rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs font-medium text-amber-700 dark:bg-amber-950/40">
+            Another submission to this company exists in the last 30 days. Review it before adding
+            another.
           </p>
         )}
         {error && (
-          <p role="alert" className="text-xs font-medium text-destructive bg-destructive/10 border border-destructive/20 p-2.5 rounded-lg">
+          <p
+            role="alert"
+            className="text-destructive bg-destructive/10 border-destructive/20 rounded-lg border p-2.5 text-xs font-medium"
+          >
             {error}
           </p>
         )}
 
         <div className="flex items-center gap-2 pt-2">
           <Button type="submit" disabled={busy || !data.candidate_id}>
-            {busy ? "Saving..." : "Save submission record"}
+            {busy ? 'Saving...' : 'Save submission record'}
           </Button>
           <Link href={backUrl}>
             <Button type="button" variant="outline">

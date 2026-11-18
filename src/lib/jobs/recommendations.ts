@@ -8,7 +8,7 @@ export async function recommendationContext(profile: UserProfile, params: URLSea
   const requested = params.get('candidateId');
   if (requested) {
     try {
-      candidate = await candidateAccess(profile, requested) as Candidate;
+      candidate = (await candidateAccess(profile, requested)) as Candidate;
     } catch {
       candidate = null;
     }
@@ -16,20 +16,31 @@ export async function recommendationContext(profile: UserProfile, params: URLSea
 
   if (!candidate && profile.role === 'candidate') {
     // 1. Try finding candidate linked by user_id
-    const { data: byUser, error: errUser } = await database().from('candidates').select('*').eq('user_id', profile.id)
-      .eq('provenance_status', 'confirmed').order('updated_at', { ascending: false }).order('id').limit(1).maybeSingle();
+    const { data: byUser, error: errUser } = await database()
+      .from('candidates')
+      .select('*')
+      .eq('user_id', profile.id)
+      .eq('provenance_status', 'confirmed')
+      .order('updated_at', { ascending: false })
+      .order('id')
+      .limit(1)
+      .maybeSingle();
     checkDb(errUser);
     candidate = byUser as Candidate | null;
 
     // 2. Fall back to matching by user email
     if (!candidate && profile.email) {
-      const { data: byEmail, error: errEmail } = await database().from('candidates').select('*')
+      const { data: byEmail, error: errEmail } = await database()
+        .from('candidates')
+        .select('*')
         .ilike('email', profile.email.replace(/[\\%_]/g, '\\$&'))
-        .order('updated_at', { ascending: false }).order('id').limit(1).maybeSingle();
+        .order('updated_at', { ascending: false })
+        .order('id')
+        .limit(1)
+        .maybeSingle();
       checkDb(errEmail);
       candidate = byEmail as Candidate | null;
     }
-
   }
 
   // Candidates browse the public feed ranked against their own reviewed resume.

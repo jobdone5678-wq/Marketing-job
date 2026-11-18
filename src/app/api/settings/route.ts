@@ -1,6 +1,53 @@
-import {protectedRoute} from '@/lib/http/protected-route';import {database,checkDb,CaptureError} from '@/lib/db/admin';import {aiConfiguration} from '@/lib/ai/config';import {z} from 'zod';
-export async function GET(request:Request){return protectedRoute(request,async p=>{let settings=null;return {profile:p,settings,ai:aiConfiguration(),databaseConfigured:!!process.env.SUPABASE_SERVICE_ROLE_KEY};});}
-export async function PATCH(request:Request){return protectedRoute(request,async p=>{const body=z.object({profile:z.object({full_name:z.string().max(200),phone:z.string().max(50).nullable(),company_name:z.string().max(200).nullable()}).partial().optional(),settings:z.object({company_name:z.string().max(200).nullable(),ai_daily_limit:z.number().int().min(1).max(10000),source_sync_minutes:z.union([z.literal(15),z.literal(30),z.literal(60)])}).partial().optional()}).parse(await request.json());
- if(body.settings)throw new CaptureError('Workspace settings cannot be changed from this account.',403);
- if(body.profile){const {error}=await database().from('profiles').update(body.profile).eq('id',p.id);checkDb(error);}
- if(body.settings){const {error}=await database().from('workspace_settings').update(body.settings).eq('id',true);checkDb(error);}return {saved:true};});}
+import { protectedRoute } from '@/lib/http/protected-route';
+import { database, checkDb, CaptureError } from '@/lib/db/admin';
+import { aiConfiguration } from '@/lib/ai/config';
+import { z } from 'zod';
+export async function GET(request: Request) {
+  return protectedRoute(request, async (p) => {
+    let settings = null;
+    return {
+      profile: p,
+      settings,
+      ai: aiConfiguration(),
+      databaseConfigured: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+    };
+  });
+}
+export async function PATCH(request: Request) {
+  return protectedRoute(request, async (p) => {
+    const body = z
+      .object({
+        profile: z
+          .object({
+            full_name: z.string().max(200),
+            phone: z.string().max(50).nullable(),
+            company_name: z.string().max(200).nullable(),
+          })
+          .partial()
+          .optional(),
+        settings: z
+          .object({
+            company_name: z.string().max(200).nullable(),
+            ai_daily_limit: z.number().int().min(1).max(10000),
+            source_sync_minutes: z.union([z.literal(15), z.literal(30), z.literal(60)]),
+          })
+          .partial()
+          .optional(),
+      })
+      .parse(await request.json());
+    if (body.settings)
+      throw new CaptureError('Workspace settings cannot be changed from this account.', 403);
+    if (body.profile) {
+      const { error } = await database().from('profiles').update(body.profile).eq('id', p.id);
+      checkDb(error);
+    }
+    if (body.settings) {
+      const { error } = await database()
+        .from('workspace_settings')
+        .update(body.settings)
+        .eq('id', true);
+      checkDb(error);
+    }
+    return { saved: true };
+  });
+}
