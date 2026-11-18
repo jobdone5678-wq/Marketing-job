@@ -2,6 +2,9 @@ import { loadEnvConfig } from '@next/env';
 import { randomUUID } from 'node:crypto';
 import { database, checkDb } from '../../src/lib/db/admin';
 import { fetchSnapshot } from '../../src/lib/jobs/adapters/native';
+import { persistLiveJobs } from '../../src/lib/jobs/live-persistence';
+import { isSoftwareJob } from '../../src/lib/jobs/normalize';
+import { PUBLIC_JOB_BOARDS } from '../../src/lib/public-directory';
 import { syncSource } from '../../src/lib/jobs/sync';
 import { canClaimPublicJobTask } from '../../src/lib/jobs/sync-policy';
 import type { BackgroundTask } from '../../src/lib/tasks/types';
@@ -19,8 +22,36 @@ const starterBoards = [
 
 async function main() {
   const db = database();
+  if (process.argv.includes('--bootstrap')) {
+    const { data: owner, error } = await db.from('profiles').select('id').eq('status', 'active')
+      .eq('role', 'candidate').order('created_at').limit(1).maybeSingle();
+    checkDb(error);
+    if (!owner) throw new Error('An active candidate account must own public job sources.');
+    const { data: saved, error: sourcesError } = await db.from('job_sources').select('id,provider,board_slug,enabled');
+    checkDb(sourcesError);
+    const configured = new Map((saved || []).map(source => [`${source.provider}/${source.board_slug}`, source]));
+    const imports = await Promise.allSettled(PUBLIC_JOB_BOARDS.map(async board => {
+      const source = configured.get(`${board.provider}/${board.board_slug}`);
+      if (source?.enabled === false) return 0;
+      const snapshot = await fetchSnapshot(board);
+      return persistLiveJobs({ ...board, id: source?.id }, owner.id, snapshot.jobs.filter(isSoftwareJob), true);
+    }));
+    let savedCount = 0;
+    imports.forEach((result, index) => {
+      const company = PUBLIC_JOB_BOARDS[index].company;
+      if (result.status === 'fulfilled') {
+        savedCount += result.value;
+        console.log(`${company}: ${result.value} jobs saved.`);
+      } else {
+        console.error(`${company}: ${result.reason instanceof Error ? result.reason.message : 'Import failed.'}`);
+      }
+    });
+    if (!savedCount) throw new Error('No public jobs were saved.');
+    console.log(`Public catalog: ${savedCount} jobs saved.`);
+    return;
+  }
   if (process.argv.includes('--starter')) {
-    const { data: owner, error } = await db.from('profiles').select('id').eq('status', 'active').eq('role', 'client').order('created_at').limit(1).maybeSingle();
+    const { data: owner, error } = await db.from('profiles').select('id').eq('status', 'active').eq('role', 'candidate').order('created_at').limit(1).maybeSingle();
     checkDb(error);
     if (!owner) throw new Error('An active candidate account must own public job sources.');
     for (const [board_slug, company] of starterBoards) {

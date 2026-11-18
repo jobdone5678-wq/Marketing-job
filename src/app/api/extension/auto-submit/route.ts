@@ -5,6 +5,7 @@ import { allowedCaptureUrl, validateObservation } from '@/lib/capture/validation
 import { appliedResumeSchema, saveAppliedResume } from '@/lib/capture/applied-resume';
 import { z } from 'zod';
 import {applicationUrlKey} from '@/lib/jobs/application-state';
+import { outsideJobsCache } from '@/lib/cache';
 
 export async function OPTIONS(request: Request) { return cors(request, new Response(null, { status: 204 })); }
 
@@ -341,6 +342,7 @@ export async function POST(request: Request) {
         } else {
           await table.insert(outsideJobPayload);
         }
+        outsideJobsCache.clear();
       }
     } catch (outsideErr) {
       if (body.confirmationUrl) throw outsideErr;

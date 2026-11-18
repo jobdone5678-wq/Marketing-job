@@ -9,6 +9,12 @@ import {withoutAppliedJobs} from '@/lib/jobs/application-state';
 
 export interface PublicJob {id:string;title:string;company:string;companySlug:string;portal:'Greenhouse'|'Ashby';location:string;department:string;type:string;url:string;updatedAt:string}
 
+async function catalogIsEmpty() {
+  const { data, error } = await database().from('jobs').select('id').limit(1);
+  checkDb(error);
+  return !data?.length;
+}
+
 export async function GET(request: Request) {
   return protectedRoute(request,async profile => {
     const params = new URL(request.url).searchParams;
@@ -49,7 +55,8 @@ export async function GET(request: Request) {
     if (!recommendation.candidateId && !candidate) {
       const { data, error, count } = await query(true).range(page * 50, page * 50 + 49);
       checkDb(error);
-      return { jobs: data || [], total: count || 0, hasMore: (page + 1) * 50 < (count || 0), recommendation };
+      return { jobs: data || [], total: count || 0, hasMore: (page + 1) * 50 < (count || 0), recommendation,
+        catalogEmpty: !count && await catalogIsEmpty() };
     }
     // Match the entire date-filtered feed before pagination, then show newest matches first.
     const [firstBatch, {appliedKeys}] = await Promise.all([
@@ -68,6 +75,7 @@ export async function GET(request: Request) {
     }
     const available=withoutAppliedJobs(jobs,appliedKeys);
     const ranked = (candidate?rankResumeJobs(available, candidate):available).sort(newestPostedFirst);
-    return { jobs: ranked.slice(page * 50, page * 50 + 50), total: ranked.length, hasMore: (page + 1) * 50 < ranked.length, recommendation };
+    return { jobs: ranked.slice(page * 50, page * 50 + 50), total: ranked.length, hasMore: (page + 1) * 50 < ranked.length, recommendation,
+      catalogEmpty: !ranked.length && await catalogIsEmpty() };
   });
 }

@@ -94,6 +94,8 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   const [liveLoading, setLiveLoading] = useState(false);
   const [saveToDbOnFetch, setSaveToDbOnFetch] = useState(false);
   const [syncingSoftwareJobs, setSyncingSoftwareJobs] = useState(false);
+  const attemptedCatalogBootstrap = useRef(false);
+  const catalogSyncInFlight = useRef(false);
   const [lastFetchedTime, setLastFetchedTime] = useState<string | null>(null);
   const [liveSources, setLiveSources] = useState<{ company: string; count: number; error?: string }[]>([]);
 
@@ -128,20 +130,18 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   }, []);
 
   // Sync all configured software jobs to database
-  const handleSyncSoftwareJobs = async () => {
+  const syncSoftwareJobs = useCallback(async (bootstrap = false) => {
+    if (catalogSyncInFlight.current) return;
+    catalogSyncInFlight.current = true;
     setSyncingSoftwareJobs(true);
     setError('');
     setNotice('');
     try {
-      const res = await api<{
-        jobs: LiveJob[];
-        total: number;
-        fetchedAt: string;
-        persistedInDb: boolean;
-        recommendation: Recommendation;
-        sources?: { error?: string }[];
-      }>(`/api/jobs/live?saveToDb=true&postedWithin=${postedWithin}${provider || portalFilter ? '&provider=' + encodeURIComponent(provider || portalFilter) : ''}`);
-      setNotice(res.persistedInDb ? 'Public jobs refreshed and saved. Updating your related roles...' : res.recommendation.requiresProfile ? 'Review and save your resume profile before finding related roles.' : 'No complete refresh was saved. Review source errors or try another public board.');
+      const filters = bootstrap ? '' : `&postedWithin=${postedWithin}${provider || portalFilter ? '&provider=' + encodeURIComponent(provider || portalFilter) : ''}`;
+      const res = await api<{persistedCount: number; sources?: { error?: string }[]}>(
+        `/api/jobs/live?saveToDb=true&summary=true${filters}`
+      );
+      setNotice(res.persistedCount > 0 ? 'Public jobs refreshed and saved.' : 'No jobs were saved. Review source errors or try another public board.');
       const failures = res.sources?.flatMap(source => source.error ? [source.error] : []);
       if (failures?.length) setError(failures.join(' '));
       // Refresh DB jobs
@@ -150,9 +150,10 @@ export function JobsBrowser({ provider }: { provider?: string }) {
     } catch (err) {
       setError((err as Error).message);
     } finally {
+      catalogSyncInFlight.current = false;
       setSyncingSoftwareJobs(false);
     }
-  };
+  }, [portalFilter, postedWithin, provider]);
 
   const handleApplyDirectly = async (job: LiveJob | StoredJob) => {
     if (!applicationCandidateId) {
@@ -283,7 +284,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
     if (mode !== 'db' || profileLoading || applicationView !== 'available') return;
     let active = true;
     queueMicrotask(() => { if (active) setDbLoading(true); });
-    api<{ jobs: StoredJob[]; total: number; hasMore: boolean; recommendation: Recommendation }>(
+    api<{ jobs: StoredJob[]; total: number; hasMore: boolean; recommendation: Recommendation; catalogEmpty: boolean }>(
       `/api/jobs?type=${employmentType}&search=${encodeURIComponent(search)}&page=${dbPage}${
         savedFilterParam + candidateParam
       }`
@@ -300,6 +301,10 @@ export function JobsBrowser({ provider }: { provider?: string }) {
             setSelectedDbJob(null);
           }
           setError('');
+          if (r.catalogEmpty && !attemptedCatalogBootstrap.current) {
+            attemptedCatalogBootstrap.current = true;
+            void syncSoftwareJobs(true);
+          }
         }
       })
       .catch((e) => active && setError(e.message))
@@ -308,7 +313,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
     return () => {
       active = false;
     };
-  }, [mode, employmentType, search, dbPage, savedFilterParam, candidateParam, profileLoading, reload, applicationView]);
+  }, [mode, employmentType, search, dbPage, savedFilterParam, candidateParam, profileLoading, reload, applicationView, syncSoftwareJobs]);
 
   // Live mode: fetch applied keys and filter live jobs on initial load and reload
   useEffect(() => {
@@ -448,7 +453,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
             </Button>
             <Button
               size="sm"
-              onClick={handleSyncSoftwareJobs}
+              onClick={() => void syncSoftwareJobs()}
               disabled={syncingSoftwareJobs}
               className="h-8 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs gap-1.5"
             >
@@ -617,8 +622,8 @@ export function JobsBrowser({ provider }: { provider?: string }) {
               ) : !dbJobs.length ? (
                 <div className="rounded-2xl border border-dashed border-border/80 bg-card p-10 text-center space-y-2">
                   <Briefcase className="size-8 text-muted-foreground/60 mx-auto" />
-                  <p className="text-sm font-semibold text-foreground">No saved jobs found</p>
-                  <p className="text-xs text-muted-foreground">Try clearing filters or click &quot;Sync Software Jobs&quot; to fetch new roles.</p>
+                  <p className="text-sm font-semibold text-foreground">{syncingSoftwareJobs ? 'Loading public jobs…' : 'No saved jobs found'}</p>
+                  {!syncingSoftwareJobs && <p className="text-xs text-muted-foreground">Try clearing filters or click &quot;Sync Software Jobs&quot; to fetch new roles.</p>}
                 </div>
               ) : (
                 <>

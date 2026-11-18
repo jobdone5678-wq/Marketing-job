@@ -19,6 +19,7 @@ export interface LiveJobItem extends NormalizedJob {
 }
 
 const SUPPORTED_PROVIDERS: string[] = ['all', 'greenhouse', 'ashby', 'lever', 'smartrecruiters', 'breezy', 'remoteok'];
+export const maxDuration = 60;
 
 export async function GET(request:Request) {
   return protectedRoute(request,async profile => {
@@ -27,11 +28,11 @@ export async function GET(request:Request) {
     if(postedWithin&&!['7','30','90','all'].includes(postedWithin))throw new CaptureError('Invalid posting date filter.');
     const window=publicationWindow(postedWithin);
     const {candidate,recommendation} = await recommendationContext(profile,params);
-    if (recommendation.requiresProfile && !recommendation.staffSeeAll) return {jobs:[],total:0,fetchedAt:new Date().toISOString(),persistedInDb:false,recommendation};
+    const saveToDb = params.get('saveToDb') === 'true';
+    if (!saveToDb && recommendation.requiresProfile && !recommendation.staffSeeAll) return {jobs:[],total:0,fetchedAt:new Date().toISOString(),persistedInDb:false,persistedCount:0,recommendation};
     const requestedProvider = (params.get('provider') || 'all').toLowerCase();
     if (!SUPPORTED_PROVIDERS.includes(requestedProvider)) throw new CaptureError('Unsupported public job provider.');
     const requestedBoard = params.get('board')?.trim();
-    const saveToDb = params.get('saveToDb') === 'true';
     type Source = {id?:string; provider:string; board_slug:string; company:string; enabled?:boolean};
     let activeSources:Source[];
     if (requestedBoard) {
@@ -70,6 +71,11 @@ export async function GET(request:Request) {
       }
     }));
     if (requestedBoard && results[0]?.error && !results[0].jobs.length) throw new CaptureError(`Failed to fetch from ${results[0].source.provider} board "${requestedBoard}": ${results[0].error}`,400);
+    const persistedCount = results.reduce((sum,result) => sum + result.persisted,0);
+    const sources = results.map(r => ({company:r.source.company,board:r.source.board_slug,provider:r.source.provider,count:r.jobs.length,...(r.error ? {error:r.error} : {})}));
+    const persistedInDb = saveToDb && persistedCount > 0 && results.every(r => !r.error);
+    if (saveToDb && params.get('summary') === 'true') return {sources,persistedInDb,persistedCount};
+
     const jobs:LiveJobItem[] = results.flatMap(r => r.jobs.map(job => ({...job,provider:r.source.provider as SupportedJobProvider,board_slug:r.source.board_slug})));
     const search = params.get('search')?.trim().toLowerCase();
     const employment = params.get('type') || 'all';
@@ -84,9 +90,7 @@ export async function GET(request:Request) {
     const {appliedKeys}=await candidateJobApplications(recommendation.candidateId||candidate?.id);
     const available=withoutAppliedJobs(filtered,appliedKeys);
     const displayed = (candidate ? rankResumeJobs(available,candidate) : available).sort(newestPostedFirst);
-    const persistedCount = results.reduce((sum,result) => sum + result.persisted,0);
     return {jobs:displayed,total:displayed.length,recommendation,unfilteredTotal:jobs.length,
-      sources:results.map(r => ({company:r.source.company,board:r.source.board_slug,provider:r.source.provider,count:r.jobs.length,...(r.error ? {error:r.error} : {})})),
-      fetchedAt:new Date().toISOString(),live:true,persistedInDb:saveToDb && persistedCount > 0 && results.every(r => !r.error),persistedCount};
+      sources,fetchedAt:new Date().toISOString(),live:true,persistedInDb,persistedCount};
   });
 }
