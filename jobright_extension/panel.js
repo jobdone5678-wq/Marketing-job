@@ -806,6 +806,7 @@ $('autofill').addEventListener('click', async () => {
           file = {
             filename: localResume.filename,
             base64: localResume.base64 || null,
+            mimeType: localResume.mimeType || 'application/pdf',
             raw_text: localResume.raw_text || localResume.source_text || '',
             source: 'upload'
           };

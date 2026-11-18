@@ -507,6 +507,7 @@
     const input = page.resumeInput;
     if (input?.isConnected && resume && !input.files?.length && location.href === expectedUrl) {
       try {
+        if (!resume.base64) throw new Error('No resume data');
         const bytes = Uint8Array.from(atob(resume.base64), char => char.charCodeAt(0));
         const transfer = new DataTransfer();
         transfer.items.add(new File([bytes], resume.filename, { type: resume.mimeType }));
