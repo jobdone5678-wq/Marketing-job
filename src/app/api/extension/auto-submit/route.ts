@@ -334,13 +334,16 @@ export async function POST(request: Request) {
       } else if (typeof table?.select === 'function' && typeof table?.insert === 'function') {
         const { data: existingOutside } = await table
           .select('id').eq('candidate_id', candidateId).eq('job_url', safeJobUrl)
+          .eq('capture_owner_id', actor.id)
           .order('capture_owner_id', { ascending: false, nullsFirst: false })
           .limit(1).maybeSingle();
 
         if (existingOutside) {
-          await table.update(outsideJobPayload).eq('id', existingOutside.id);
+          const { error: updateError } = await table.update(outsideJobPayload).eq('id', existingOutside.id);
+          checkDb(updateError);
         } else {
-          await table.insert(outsideJobPayload);
+          const { error: insertError } = await table.insert(outsideJobPayload);
+          checkDb(insertError);
         }
         outsideJobsCache.clear();
       }
