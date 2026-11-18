@@ -29,7 +29,13 @@ export function AppliedResumeBadge(props: Props) {
     />
   );
 }
-function AppliedResumeView({ candidateName, companyName, jobTitle, appliedResume }: Props) {
+function AppliedResumeView({
+  submissionId,
+  candidateName,
+  companyName,
+  jobTitle,
+  appliedResume,
+}: Props) {
   const resume = appliedResume || null;
   const [open, setOpen] = useState(false),
     [busy, setBusy] = useState(false),
@@ -54,6 +60,18 @@ function AppliedResumeView({ candidateName, companyName, jobTitle, appliedResume
     setBusy(true);
     setError('');
     try {
+      if (resume?.archiveHash) {
+        const response = await fetch(
+          `/api/submissions/${encodeURIComponent(submissionId)}/applied-resume?download=1`
+        );
+        if (!response.ok) throw new Error('The recorded resume could not be downloaded.');
+        downloadBytes(
+          new Uint8Array(await response.arrayBuffer()),
+          resume.mimeType,
+          resume.filename
+        );
+        return;
+      }
       if (resume?.base64) {
         const bytes = Uint8Array.from(atob(resume.base64), (character) => character.charCodeAt(0));
         downloadBytes(bytes, resume.mimeType, resume.filename);
@@ -92,7 +110,7 @@ function AppliedResumeView({ candidateName, companyName, jobTitle, appliedResume
               <Button
                 variant="ghost"
                 size="xs"
-                disabled={busy || !resume?.base64}
+                disabled={busy || !(resume?.base64 || resume?.archiveHash)}
                 onClick={() => void download()}
                 aria-label={`Download applied resume ${resume.filename}`}
               >

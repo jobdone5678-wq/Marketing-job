@@ -1,7 +1,7 @@
 import { applicationUrlKey } from '../jobs/application-state';
 
 const confirmationHeading =
-  /^(?:thank you for (?:applying|your application)|(?:your )?application (?:has been |was |is )?(?:successfully )?(?:submitted|received|sent|confirmed)|submission (?:received|confirmed|successful)|(?:we|we've) (?:have )?received your application|you(?: have|'ve) successfully applied)(?=$|[.!,:]|\s+(?:to|for|successfully)\b)/i;
+  /^(?:thank you for (?:applying|your application)|(?:your )?application (?:has been |was |is )?(?:successfully )?(?:submitted|received|sent|confirmed)|successfully submitted (?:your |the )?application|submission (?:received|confirmed|successful)|(?:we|we've) (?:have )?received your application|you(?: have|'ve) successfully applied|you (?:have )?applied successfully|you've applied successfully)(?=$|[.!,:]|\s+(?:to|for|successfully)\b)/i;
 const confirmationPath =
   /\/(?:confirmation|thank[-_]?you|thankyou|thanks|applied|application[-_](?:submitted|success)|submission[-_]success|success|submitted)\/?$/i;
 const pathEvidencePrefix = 'URL confirmation path: ';
@@ -17,7 +17,7 @@ export function allowedCaptureUrl(
       expected = new URL(application);
     if (
       current.protocol !== 'https:' ||
-      current.origin !== expected.origin ||
+      expected.protocol !== 'https:' ||
       current.username ||
       current.password
     )
@@ -35,6 +35,9 @@ export function allowedCaptureUrl(
     // Some ATSs show a shared receipt on the same site and omit the posting ID.
     // Require a success message there, and keep any board prefix tied to the launch URL.
     if (
+      current.origin !== expected.origin ||
+      new URL(expectedKey).hash ||
+      new URL(observedKey).hash ||
       !['confirmed', 'submitted'].includes(status || '') ||
       !confirmationHeading.test(evidence.trim()) ||
       !confirmationPath.test(current.pathname) ||

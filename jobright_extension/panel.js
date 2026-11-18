@@ -168,6 +168,7 @@ function renderAccount() {
   $('zip-code-input').value = candidate?.zip_code || '';
   $('autofill').disabled = busy || !currentForm || !candidate;
   $('ai-screening-option').hidden = !currentForm || !candidate;
+  $('auto-submit-option').hidden = !currentForm || !candidate || currentForm.frameId !== 0;
   $('review-answers').hidden = !currentForm || !candidate;
   $('review-answers').disabled = busy;
 }
@@ -304,6 +305,7 @@ async function refresh() {
   const pageKey = [tab?.id, tab?.url, session?.origin, session?.user.id].join('|');
   const pageChanged = pageKey !== resultsPage;
   if (pageChanged) {
+    $('auto-submit').checked = false;
     $('results').hidden = true;
     $('answer-review').hidden = true;
     answerReview = null;
@@ -439,10 +441,9 @@ async function refresh() {
     };
   });
 
-  const usable = documents.filter(doc => doc.status !== 'failed');
+  const usable = documents.filter(doc => doc.status !== 'failed' && (!doc.candidate_id || doc.candidate_id === candidate?.id));
   selected = usable.find(doc => doc.id === preferences[preferenceKey]) ||
-    usable.find(doc => candidate && doc.candidate_id === candidate.id) ||
-    usable[0] || null;
+    usable.find(doc => doc.candidate_id === candidate?.id) || usable[0] || null;
   if (documents.some(doc => doc.id === preferences?.[preferenceKey] && doc.status === 'failed')) {
     notice('upload-status', 'Resume processing failed. Choose another PDF or DOCX.', true);
   }
@@ -776,18 +777,10 @@ $('autofill').addEventListener('click', async () => {
   const tab = currentTab;
   const frame = currentForm;
   const session = connection;
-  const profile = candidate;
-  // Ensure we have the latest job details
-  const job = activeJob || (await scan(tab)).find(f => f.result?.job)?.result.job;
   const useAI = $('ai-screening').checked;
-  
-  if (!job) {
-    notice('notice', 'Could not detect job details. Please ensure the job page is open.', true);
-    busy = false;
-    $('autofill').disabled = false;
-    return;
-  }
-  
+  const autoSubmit = frame.frameId === 0 && $('auto-submit').checked;
+  $('auto-submit').checked = false;
+  const cachedProfile = candidate;
   busy = true;
   $('autofill').disabled = true;
   $('review-answers').disabled = true;
@@ -796,22 +789,33 @@ $('autofill').addEventListener('click', async () => {
   $('results').hidden = true;
   notice('notice', 'Filling the application…');
   try {
+    const [freshProfile, job] = await Promise.all([
+      api('candidates?' + new URLSearchParams({ candidateId: cachedProfile.id }), {}, session)
+        .then(data => data.candidates?.[0]).catch(() => null),
+      activeJob || scan(tab).then(frames => frames.find(frame => frame.result?.job)?.result.job),
+    ]);
+    const profile = freshProfile || cachedProfile;
     let file = null;
-    if (selected) {
+    if (selected || profile.id) {
       try {
         const localResume = (await chrome.storage.local.get('resumeData'))?.resumeData;
-        if (selected.id === 'dashboard-resume' && legacyResume?.file) {
+        if (selected?.id === 'dashboard-resume' && legacyResume?.file) {
           file = legacyResume.file;
-        } else if (localResume && (selected.id === localResume.id || selected.filename === localResume.filename || selected.id === 'synced-resume')) {
+        } else if (selected && localResume?.base64 && localResume.candidate_id === profile.id && selected.id === localResume.id) {
           file = {
             filename: localResume.filename,
-            base64: localResume.base64 || null,
+            base64: localResume.base64,
             mimeType: localResume.mimeType || 'application/pdf',
             raw_text: localResume.raw_text || localResume.source_text || '',
             source: 'upload'
           };
-        } else {
+        } else if (selected?.base64 && selected.candidate_id === profile.id) {
+          file = selected;
+        } else if (/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(selected?.id || '')) {
           file = await api('resume?documentId=' + encodeURIComponent(selected.id), {}, session);
+        } else if (profile.id) {
+          await syncLegacyResume(session, profile);
+          file = legacyResume?.file ?? null;
         }
       } catch (error) {
         if (error.status === 401 || error.status === 403) throw error;
@@ -827,25 +831,43 @@ $('autofill').addEventListener('click', async () => {
     const storage = await chrome.storage.local.get(scope);
     const reusable = storage[scope] || {};
     const result = await fillForm(tab, frame, profile, file ?? null, reusable, useAI ? {} : null);
+    let hasDraftAnswers = result.filled.some(field => field.ai);
     renderResults(result);
     if (file || !selected) notice('notice', '');
-    if (useAI && result.questions.length) {
+    if (useAI && job && result.questions.length) {
       notice('notice', 'Drafting screening answers…');
       const drafts = await draftScreening(session, profile, tab, job, result.questions);
       await checkFormContext(tab, session);
       const completed = await fillForm(tab, frame, profile, null, reusable, drafts);
+      hasDraftAnswers ||= completed.filled.some(field => field.ai);
       const fields = new Map(result.filled.map(field => [field.key, field]));
       for (const field of completed.filled) fields.set(field.key, field);
       renderResults({ filled: [...fields.values()], total: completed.total });
       notice('notice', completed.filled.some(field => field.ai) ? 'Review the AI drafts before submitting.' : 'AI found no supported answers for the remaining questions.');
     }
-    await api('save-external-job', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...job, applicationUrl: job.applicationUrl ?? undefined }),
-    }, session);
-    lastCapture = { ...job, ownerId: session.user.id };
-    if (tracking?.error) notice('notice', tracking.error, true);
+    if (job) {
+      await api('save-external-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...job, applicationUrl: job.applicationUrl ?? undefined }),
+      }, session);
+      lastCapture = { ...job, ownerId: session.user.id };
+    }
+    if (!tracking?.tracked) notice('notice', tracking?.error || 'Application tracking is unavailable. Check your NextKinHR connection.', true);
+    else if (autoSubmit) {
+      if (hasDraftAnswers) throw new Error('Review the draft answers and submit on the employer page.');
+      await checkFormContext(tab, session);
+      const [attempt] = await chrome.scripting.executeScript({
+        target: formTarget(tab, frame),
+        func: async url => {
+          try { await globalThis.NextkinApplication.submitApplication(url); return {}; }
+          catch (error) { return { error: error.message }; }
+        },
+        args: [frame.result.url],
+      });
+      if (!attempt?.result || attempt.result.error) throw new Error(attempt?.result?.error || 'Submit manually on the employer page.');
+      notice('notice', 'Submission requested. Waiting for employer confirmation.');
+    }
   } catch (error) {
     notice('notice', error.message, true);
   } finally {

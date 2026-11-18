@@ -5,7 +5,6 @@ import { allowedCaptureUrl, validateObservation } from '@/lib/capture/validation
 import { appliedResumeSchema, saveAppliedResume } from '@/lib/capture/applied-resume';
 import { z } from 'zod';
 import { applicationUrlKey } from '@/lib/jobs/application-state';
-import { outsideJobsCache } from '@/lib/cache';
 
 export async function OPTIONS(request: Request) {
   return cors(request, new Response(null, { status: 204 }));
@@ -387,10 +386,10 @@ export async function POST(request: Request) {
           }
         }
 
-        if (finalAppliedResume) {
-          await saveAppliedResume(result.submission.id, candidateId, finalAppliedResume);
-          result.submission.applied_resume = finalAppliedResume;
-        }
+        const archivedResume = finalAppliedResume ? await saveAppliedResume(result.submission.id, candidateId, {
+          ...finalAppliedResume, appliedAt: new Date().toISOString(),
+        }) : null;
+        if (archivedResume) result.submission.applied_resume = archivedResume;
 
         let snapshot = null;
         if (answers && Array.isArray(answers) && answers.length > 0) {
@@ -422,8 +421,10 @@ export async function POST(request: Request) {
                 p_observed_at: new Date().toISOString(),
               }
             );
-            if (!snapshotError) snapshot = saved;
+            checkDb(snapshotError);
+            snapshot = saved;
           } catch (snapshotErr) {
+            if (body.confirmationUrl) throw snapshotErr;
             console.warn('[Snapshot Warning]', snapshotErr);
           }
         }
@@ -446,13 +447,13 @@ export async function POST(request: Request) {
               employment_type: body.employmentType || 'Full-time',
               description: body.jobDescription || null,
               description_html: body.jobDescriptionHtml || null,
-              match_score: body.matchScore ?? null,
-              matched_skills: body.matchedSkills || [],
-              missing_skills: body.missingSkills || [],
-              extracted_skills: body.extractedSkills || [],
-              ats_analysis: body.atsAnalysis || null,
-              answers: answers || null,
-              applied_resume: finalAppliedResume || null,
+              match_score: body.matchScore,
+              matched_skills: body.matchedSkills,
+              missing_skills: body.missingSkills,
+              extracted_skills: body.extractedSkills,
+              ats_analysis: body.atsAnalysis,
+              answers: answers || undefined,
+              applied_resume: archivedResume || undefined,
               status: 'Applied',
               applied_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -487,7 +488,6 @@ export async function POST(request: Request) {
                 const { error: insertError } = await table.insert(outsideJobPayload);
                 checkDb(insertError);
               }
-              outsideJobsCache.clear();
             }
           } catch (outsideErr) {
             if (body.confirmationUrl) throw outsideErr;

@@ -4,7 +4,7 @@
 
   const confirmationPatterns = [
     /^(?:thank you for (?:applying|your application)|(?:your )?application (?:has been |was |is )?(?:successfully )?(?:submitted|received|sent)|(?:we|we've) (?:have )?received your application|you(?: have|'ve) successfully applied)(?=$|[.!,:]|\s+(?:to|for|successfully)\b)/i,
-    /^(?:application submitted|application received|submission received|application confirmed|submission confirmed|submission successful)(?=$|[.!,:]|\s+)/i,
+    /^(?:application submitted|application received|submission received|application confirmed|submission confirmed|submission successful|successfully submitted (?:your |the )?application|you (?:have )?applied successfully|you've applied successfully)(?=$|[.!,:]|\s+)/i,
     /\b(?:thank you for (?:applying|your application)|(?:we|we've) received your application)\b/i
   ];
 
@@ -29,7 +29,7 @@
   }
 
   function confirmationEvidence(value, patterns = confirmationPatterns) {
-    const text = value?.replace(/\s+/g, ' ').trim();
+    const text = value?.replace(/\s+/g, ' ').trim().replace(/^success[!.:]\s*/i, '');
     if (!text || text.length > 320) return null;
     if (/\b(?:if|once|after|when|before|until|unless)\b.{0,50}\b(?:application|submit(?:ted)?|receiv(?:e|ed))\b|\b(?:not (?:been )?(?:submitted|received|sent)|unable to submit|submission failed|not successful)\b/i.test(text)) return null;
     for (const pattern of patterns) {
@@ -42,8 +42,11 @@
   function detectConfirmation() {
     for (const element of document.querySelectorAll(statusSelectors)) {
       if (!isVisible(element) || element.closest(hiddenSelectors)) continue;
-      const evidence = confirmationEvidence(element.innerText, confirmationPatterns.slice(0, 2));
-      if (evidence) return evidence;
+      for (const child of [element, ...element.querySelectorAll?.('h1, h2, h3, p') || []]) {
+        if (!isVisible(child) || child.closest(hiddenSelectors)) continue;
+        const evidence = confirmationEvidence(child.innerText, confirmationPatterns.slice(0, 2));
+        if (evidence) return evidence;
+      }
     }
     if (hasActiveSubmitButton()) return null;
 
@@ -97,6 +100,9 @@
   }
 
   const observer = new MutationObserver(() => schedule());
-  observer.observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'aria-hidden', 'class'] });
+  observer.observe(document, {
+    childList: true, subtree: true, characterData: true, attributes: true,
+    attributeFilter: ['hidden', 'aria-hidden', 'class', 'open', 'style'],
+  });
   schedule();
 })();

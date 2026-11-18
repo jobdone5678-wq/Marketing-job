@@ -16,7 +16,7 @@
 
   // Facts an adapter hint may name outright. A hint is stronger evidence than the visible label.
   const CANONICAL_FACTS = new Set([
-    'first_name', 'last_name', 'full_name', 'email', 'phone', 'current_city', 'current_state',
+    'first_name', 'preferred_first_name', 'last_name', 'full_name', 'email', 'phone', 'current_city', 'current_state',
     'current_location', 'zip_code', 'country', 'full_address', 'linkedin_url', 'github_url', 'website',
     'current_employer', 'current_title', 'total_experience_years', 'primary_skills',
     'authorized_in_usa', 'needs_sponsorship', 'open_to_relocation', 'visa_status', 'work_authorization',
@@ -30,7 +30,8 @@
 
   // Field labels seen across job boards, ATS platforms and bespoke career sites.
   const aliases = {
-    first_name: ['first name', 'given name', 'forename', 'fname', 'first and middle name', 'first/given name', 'middle and first name', 'preferred name', 'preferred first name', 'preferred given name', 'nickname', 'chosen name', 'preferred'],
+    first_name: ['first name', 'given name', 'forename', 'fname', 'first and middle name', 'first/given name', 'middle and first name'],
+    preferred_first_name: ['preferred name', 'preferred first name', 'preferred given name', 'nickname', 'chosen name', 'preferred'],
     last_name: ['last name', 'family name', 'surname', 'lname', 'last/family name'],
     full_name: ['full name', 'applicant name', 'candidate name', 'your name', 'legal name', 'full legal name', 'applicant full name', 'name of applicant', 'your full name', 'preferred full name'],
     e_signature: ['e signature', 'signature', 'sign here', 'certify by entering your name', 'by entering your name into the field below', 'typed signature', 'electronic signature'],
@@ -291,7 +292,8 @@
     const phoneDigits = rawPhone.replace(/\D/g, '');
     const phone = phoneDigits.length >= 10 ? phoneDigits.slice(-10) : rawPhone;
 
-    const preferredFirst = candidate.preferred_name || candidate.preferred_first_name || candidate.first_name || names[0] || '';
+    const firstName = facts.first_name || candidate.first_name || names[0] || '';
+    const preferredFirst = facts.preferred_first_name || facts.preferred_name || candidate.preferred_first_name || candidate.preferred_name || firstName;
 
     const candFacts = candidate.confirmed_facts || {};
     const gender = facts.gender || candidate.gender || candFacts.gender || '';
@@ -307,10 +309,10 @@
 
     return {
       ...facts,
-      first_name: preferredFirst,
+      first_name: firstName,
       preferred_first_name: preferredFirst,
       preferred_name: preferredFirst,
-      last_name: names.slice(1).join(' ') || candidate.last_name || '',
+      last_name: facts.last_name || candidate.last_name || names.slice(1).join(' ') || '',
       full_name: fullName,
       email: facts.email || candidate.email || '',
       phone: phone,
@@ -445,16 +447,10 @@
       }
       // Legal acknowledgements and signatures:
       if (field.kind === 'checkbox' && /\b(agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare|confirm|read the above|understand)\b/i.test(nl)) {
-        if (!values.full_name && !values.email) {
-          return { field, factKey: 'consent', status: 'unknown', reason: 'No candidate details.' };
-        }
-        return { field, factKey: 'consent', value: true, status: 'supported', reason: 'Consent acknowledgment.' };
+        return { field, factKey: 'consent', status: 'manual', reason: 'Candidate consent is required.' };
       }
       if (/\b(signature|sign here|certify by entering your name)\b/i.test(nl)) {
-        if (!values.full_name) {
-          return { field, factKey: 'e_signature', status: 'unknown', reason: 'No candidate full name for signature.' };
-        }
-        return { field, factKey: 'e_signature', value: values.full_name, status: 'supported', reason: 'Electronic signature.' };
+        return { field, factKey: 'e_signature', status: 'manual', reason: 'Candidate signature is required.' };
       }
 
       const resolved = resolveFact(field.label, field.hint);
@@ -472,10 +468,10 @@
 
       const factKey = resolved.key;
       if (factKey === 'consent') {
-        return { field, factKey, value: true, status: 'supported', reason: 'Consent acknowledgment.' };
+        return { field, factKey, status: 'manual', reason: 'Candidate consent is required.' };
       }
       if (factKey === 'e_signature') {
-        return { field, factKey, value: values.full_name, status: 'supported', reason: 'Electronic signature.' };
+        return { field, factKey, status: 'manual', reason: 'Candidate signature is required.' };
       }
       // A known United States authorization must not answer a question about an unrelated foreign country.
       if (factKey === 'authorized_in_usa' && !isUSQuestion(nl + ' ' + nh) && !/country for which you applied|where the job is located|legally authorized|work authorization/i.test(nl + ' ' + nh)) {

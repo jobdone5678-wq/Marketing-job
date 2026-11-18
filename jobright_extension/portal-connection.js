@@ -1,5 +1,6 @@
 (function () {
   const onConnectionPage = () => location.pathname.replace(/\/$/, '') === '/auth/jobseeker/connected';
+  let pendingSync = Promise.resolve();
   async function save(token, user) {
     if (!onConnectionPage() || typeof token !== 'string' || !/^[A-Za-z0-9_-]{20,128}$/.test(token) ||
       typeof user?.id !== 'string' || user.role !== 'candidate') return;
@@ -8,7 +9,14 @@
       origin: location.origin,
       token,
       user: { id: user.id, name: user.name, email: user.email },
+      ...await clearPreviousAccount(user.id),
     });
+  }
+
+  async function clearPreviousAccount(userId) {
+    const current = await chrome.storage.local.get(['origin', 'user']);
+    if (current.origin === location.origin && current.user?.id === userId) return {};
+    return { activeCandidateId: null, candidateProfile: null, resumeData: null, savedProfiles: {}, savedResumes: {} };
   }
 
   async function syncResumeData(payload) {
@@ -21,17 +29,27 @@
       existing = await chrome.storage.local.get(['token', 'user', 'origin']);
     } catch {}
 
-    let token = payload.token || existing?.token;
-    let user = payload.user || existing?.user;
+    let token = existing.origin === location.origin ? existing.token : null;
+    let user = token ? existing.user : null;
+    if (token && user?.id && candidate?.id && /^[a-f0-9-]{36}$/i.test(candidate.id)) {
+      const params = new URLSearchParams({ candidateId: candidate.id });
+      const response = await fetch('/api/extension/candidates?' + params, {
+        headers: { Authorization: 'Bearer ' + token },
+        signal: AbortSignal.timeout(8000),
+      }).catch(() => null);
+      if ([401, 403, 404].includes(response?.status)) token = null;
+    }
 
-    // If no token exists yet, try quick-pair endpoint with same-origin cookies
-    if (!token) {
+    if (!token || !user?.id) {
+      token = null;
+      user = null;
       try {
         const pairRes = await fetch('/api/extension/quick-pair', {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
-          body: '{}'
+          body: '{}',
+          signal: AbortSignal.timeout(8000),
         });
         if (pairRes.ok) {
           const pairData = await pairRes.json();
@@ -43,27 +61,17 @@
       } catch {}
     }
 
-    // Fallback: if user is not set but candidate is, synthesize user object
-    if (!user && candidate) {
-      user = {
-        id: candidate.id || 'candidate',
-        name: candidate.full_name || candidate.name || 'Candidate',
-        email: candidate.email || '',
-        role: 'candidate'
-      };
-    }
-
-    // If still no token but candidate is active, generate a valid session token for local/dev use
-    if (!token && candidate) {
-      token = 'nextkin_local_' + (candidate.id || 'candidate').replace(/[^A-Za-z0-9_-]/g, '_').padEnd(20, '0');
-    }
+    if (!token || !user?.id) return;
 
     let savedProfiles = {};
     let savedResumes = {};
+    let active = {};
     try {
-      const existing = await chrome.storage.local.get(['savedProfiles', 'savedResumes']);
-      savedProfiles = existing?.savedProfiles || {};
-      savedResumes = existing?.savedResumes || {};
+      if (existing.origin === location.origin && existing.user?.id === user.id) {
+        active = await chrome.storage.local.get(['savedProfiles', 'savedResumes', 'resumeData', 'activeCandidateId']);
+        savedProfiles = active.savedProfiles || {};
+        savedResumes = active.savedResumes || {};
+      }
     } catch {}
 
     const candId = candidate?.id || (candidate?.email ? candidate.email.toLowerCase() : 'cand_' + Date.now());
@@ -103,7 +111,7 @@
       origin: location.origin,
       activeCandidateId: candId,
       candidateProfile: candidate, // active candidate profile
-      resumeData: resumeDoc || resume, // active resume
+      resumeData: resumeDoc || (active.activeCandidateId === candId ? active.resumeData ?? null : null),
       savedProfiles, // all candidates preserved individually without wiping
       savedResumes, // all resumes preserved individually without wiping
       ...(token ? { token } : {}),
@@ -132,9 +140,9 @@
     if (event.origin && event.origin !== location.origin && event.origin !== 'null') return;
 
     if (event.data?.type === 'NEXTKIN_EXTENSION_PAIRED') {
-      void save(event.data.token, event.data.user).catch(console.error);
+      pendingSync = pendingSync.then(() => save(event.data.token, event.data.user)).catch(console.error);
     } else if (event.data?.type === 'NEXTKIN_RESUME_UPLOADED' || event.data?.type === 'candidate_updated') {
-      void syncResumeData(event.data).catch(console.error);
+      pendingSync = pendingSync.then(() => syncResumeData(event.data)).catch(console.error);
     }
   });
 
@@ -146,7 +154,7 @@
     if (!token) return;
     let user;
     try { user = JSON.parse(root.getAttribute('data-nextkin-user')); } catch { return; }
-    void save(token, user).catch(console.error);
+    pendingSync = pendingSync.then(() => save(token, user)).catch(console.error);
   });
   observer.observe(document, { subtree: true, attributes: true, attributeFilter: ['data-nextkin-token', 'data-nextkin-user'] });
 })();

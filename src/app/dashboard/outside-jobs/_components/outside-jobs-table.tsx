@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import {
@@ -25,13 +25,13 @@ import {
 } from '@/components/ui/table';
 import { OutsideJob } from '../types';
 import { useOutsideJobsRealtime } from '../_hooks/use-outside-jobs-realtime';
+import { api } from '@/lib/api-client';
 
-export function OutsideJobsTable({ initialJobs }: { initialJobs: OutsideJob[] }) {
-  const [jobs, setJobs] = useState<OutsideJob[]>(initialJobs);
+export function OutsideJobsTable() {
+  const [jobs, setJobs] = useState<OutsideJob[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  useOutsideJobsRealtime(setJobs);
+  const [loading, setLoading] = useState(true);
+  const latestRequest = useRef(0);
 
   const filteredJobs = useMemo(() => {
     if (!searchQuery.trim()) return jobs;
@@ -46,20 +46,21 @@ export function OutsideJobsTable({ initialJobs }: { initialJobs: OutsideJob[] })
     );
   }, [jobs, searchQuery]);
 
-  const refreshJobs = async () => {
-    setLoading(true);
+  const refreshJobs = useCallback(async (manual = false) => {
+    const request = ++latestRequest.current;
+    if (manual) setLoading(true);
     try {
-      const res = await fetch('/api/outside-jobs');
-      const json = await res.json();
-      if (json.success) {
-        setJobs(json.outsideJobs || []);
-      }
-    } catch (err) {
-      toast.error('Failed to refresh jobs');
+      const { outsideJobs } = await api<{ outsideJobs: OutsideJob[] }>('/api/outside-jobs', {
+        cache: 'no-store',
+      });
+      if (request === latestRequest.current) setJobs(outsideJobs);
+    } catch {
+      if (request === latestRequest.current) toast.error('Failed to refresh outside jobs');
     } finally {
-      setLoading(false);
+      if (request === latestRequest.current) setLoading(false);
     }
-  };
+  }, []);
+  useOutsideJobsRealtime(refreshJobs);
 
   return (
     <div className="space-y-6">
@@ -84,7 +85,7 @@ export function OutsideJobsTable({ initialJobs }: { initialJobs: OutsideJob[] })
           <Button
             variant="outline"
             size="sm"
-            onClick={refreshJobs}
+            onClick={() => void refreshJobs(true)}
             disabled={loading}
             className="h-9 gap-1.5 rounded-xl text-xs"
           >
@@ -152,7 +153,7 @@ export function OutsideJobsTable({ initialJobs }: { initialJobs: OutsideJob[] })
               {filteredJobs.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-muted-foreground h-32 text-center text-xs">
-                    No outside jobs found.
+                    {loading ? 'Loading outside jobs…' : 'No outside jobs found.'}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -196,7 +197,7 @@ export function OutsideJobsTable({ initialJobs }: { initialJobs: OutsideJob[] })
                         variant="outline"
                         className="h-4 border-blue-500/20 bg-blue-500/10 px-1.5 py-0 text-[9px] text-blue-700"
                       >
-                        {job.status || 'Applied'}
+                        {job.status || 'Discovered'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground py-3.5 align-top text-xs">

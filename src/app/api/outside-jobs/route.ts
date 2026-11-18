@@ -1,6 +1,7 @@
 import { protectedRoute } from '@/lib/http/protected-route';
 import { database, checkDb } from '@/lib/db/admin';
-import { candidateProfileCache, outsideJobsCache } from '@/lib/cache';
+import { candidateProfileCache } from '@/lib/cache';
+import { applicationUrlKey } from '@/lib/jobs/application-state';
 
 export async function GET(request: Request) {
   return protectedRoute(request, async (profile) => {
@@ -30,43 +31,34 @@ export async function GET(request: Request) {
       candidateId = cand?.id || null;
     }
 
-    // Cache key for query results based on role, candidate, and search parameter
-    const cacheKey = `outside-jobs:${profile.id}:${candidateId || 'staff'}:${safeSearch || 'all'}`;
+    let query = database()
+      .from('outside_jobs')
+      .select('*,candidate:candidates(id, full_name, email, current_city)')
+      .order('created_at', { ascending: false });
 
-    // System Design: Cache-aside with SWR revalidation to achieve sub-5ms response times
-    const outsideJobs = await outsideJobsCache.fetchWithSWR(
-      cacheKey,
-      async () => {
-        let query = database()
-          .from('outside_jobs')
-          .select(
-            `
-            *,
-            candidate:candidates(id, full_name, email, current_city)
-          `
-          )
-          .order('created_at', { ascending: false });
+    query = candidateId
+      ? query.or(
+          `capture_owner_id.eq.${profile.id},and(capture_owner_id.is.null,candidate_id.eq.${candidateId})`
+        )
+      : query.eq('capture_owner_id', profile.id);
 
-        query = candidateId
-          ? query.or(
-              `capture_owner_id.eq.${profile.id},and(capture_owner_id.is.null,candidate_id.eq.${candidateId})`
-            )
-          : query.eq('capture_owner_id', profile.id);
+    if (safeSearch) {
+      const term = `%${safeSearch}%`;
+      query = query.or(
+        `company.ilike.${term},title.ilike.${term},portal_source.ilike.${term},location.ilike.${term}`
+      );
+    }
 
-        if (safeSearch) {
-          const term = `%${safeSearch}%`;
-          query = query.or(
-            `company.ilike.${term},title.ilike.${term},portal_source.ilike.${term},location.ilike.${term}`
-          );
-        }
-
-        const { data, error } = await query;
-        checkDb(error);
-        return data || [];
-      },
-      { ttlMs: 10000, staleTtlMs: 30000 }
-    );
-
-    return { success: true, outsideJobs };
+    const { data, error } = await query;
+    checkDb(error);
+    const postings = new Map<string, NonNullable<typeof data>[number]>();
+    for (const job of data || []) {
+      const key = applicationUrlKey(job.job_url) || job.id;
+      const previous = postings.get(key);
+      if (!previous || (job.status === 'Applied' && previous.status !== 'Applied')) {
+        postings.set(key, job);
+      }
+    }
+    return { success: true, outsideJobs: [...postings.values()] };
   });
 }

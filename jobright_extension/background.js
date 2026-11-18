@@ -24,25 +24,54 @@ function workspaceRequest(token) {
     headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' } };
 }
 
+function portalOrigin(url) {
+  return url.origin === 'https://job-boards.greenhouse.io' ? 'https://boards.greenhouse.io' : url.origin;
+}
+
 function cleanApplicationUrl(url) {
-  const fields = new Set(['id', 'jobid', 'job_id', 'gh_jid', 'postingid', 'posting_id', 'requisitionid', 'requisition_id', 'jk']);
+  const fields = new Set(['id', 'jobid', 'job_id', 'gh_jid', 'jr_id', 'jobreqid', 'postingid', 'posting_id', 'requisitionid', 'requisition_id', 'jk']);
   if (/(^|\.)greenhouse\.io$/.test(url.hostname)) {
     fields.add('for');
     fields.add('token');
   }
-  for (const name of [...url.searchParams.keys()]) {
-    if (!fields.has(name.toLowerCase())) url.searchParams.delete(name);
-  }
-  url.hash = '';
+  const clean = params => {
+    for (const name of [...params.keys()]) {
+      if (!fields.has(name.toLowerCase())) params.delete(name);
+    }
+  };
+  clean(url.searchParams);
+  const [route, query] = url.hash.slice(1).split(/\?(.*)/s, 2);
+  const routeParams = new URLSearchParams(query);
+  clean(routeParams);
+  url.hash = /^!?\//.test(route) ? route + (routeParams.size ? '?' + routeParams : '') : '';
   return url.href;
 }
 
-async function prepareApplication(tabId, expectedUrl, job, candidateId, submittedFromPage = false) {
+async function loadApplicationData(path) {
+  const { origin, token } = await chrome.storage.local.get(['origin', 'token']);
+  const workspace = workspaceOrigin(origin);
+  if (!workspace || !token) return null;
+  const response = await fetch(workspace + '/api/extension/' + path, workspaceRequest(token));
+  if (!response.ok) return null;
+  const data = await response.json();
+  const current = await chrome.storage.local.get(['origin', 'token']);
+  return current.origin === origin && current.token === token ? data : null;
+}
+
+async function loadApplicationResume(candidateId) {
+  if (!intentIdPattern.test(candidateId || '')) return null;
+  const params = new URLSearchParams({ candidateId, originalOnly: 'true' });
+  const file = await loadApplicationData('resume-file?' + params);
+  return file?.source === 'upload' && file.base64 && file.filename ? file : null;
+}
+
+async function prepareApplication(tabId, expectedUrl, job, candidateId, submittedFromPage = false, submissionEvidence) {
   const url = new URL(expectedUrl);
   if (url.protocol !== 'https:') return false;
+  const jobOrigin = portalOrigin(url);
   const stillOnApplication = async () => {
     const urlNow = (await chrome.tabs.get(tabId)).url;
-    return urlNow === expectedUrl || (submittedFromPage && urlNow && new URL(urlNow).origin === url.origin);
+    return urlNow === expectedUrl || (submittedFromPage && urlNow && portalOrigin(new URL(urlNow)) === jobOrigin);
   };
   if (!await stillOnApplication()) throw new Error('The application tab changed. Try autofill again.');
   const { origin, token } = await chrome.storage.local.get(['origin', 'token']);
@@ -51,15 +80,31 @@ async function prepareApplication(tabId, expectedUrl, job, candidateId, submitte
 
   let intentId = new URLSearchParams(url.hash.slice(1)).get('marketing-intent');
   const jobUrl = cleanApplicationUrl(url);
+  const key = trackedKey(tabId);
+  const context = (await chrome.storage.session.get(key))[key];
+  if (submittedFromPage && context?.applicationUrl === jobUrl && context.token === token && context.workspace === workspace) {
+    if (context.reported) return false;
+    if (submissionEvidence) await chrome.storage.session.set({ [key]: { ...context, submissionEvidence } });
+    return true;
+  }
   if (!intentIdPattern.test(intentId || '')) {
     const response = await fetch(workspace + '/api/extension/intents/resolve', {
       ...workspaceRequest(token), method: 'POST', body: JSON.stringify({ url: jobUrl }),
     });
-    if (!response.ok) throw new Error('Could not link this form to your NextKinHR application.');
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new Error(data?.error || 'Could not link this form to your NextKinHR application.');
+    }
     ({ intentId } = await response.json());
+  } else if (!submittedFromPage) {
+    const response = await fetch(workspace + '/api/extension/intents/' + intentId, workspaceRequest(token));
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new Error(data?.error || 'Could not verify this NextKinHR application.');
+    }
+    const { intent } = await response.json();
+    if (candidateId && intent?.candidate_id !== candidateId) throw new Error('Select the candidate who started this application.');
   }
-  const key = trackedKey(tabId);
-  const context = (await chrome.storage.session.get(key))[key];
   const text = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : '';
   let externalJob;
   if (!intentIdPattern.test(intentId || '')) {
@@ -80,9 +125,13 @@ async function prepareApplication(tabId, expectedUrl, job, candidateId, submitte
   }
   if (!await stillOnApplication()) throw new Error('The application tab changed. Try autofill again.');
 
-  if (context?.intentId !== intentId || context.jobOrigin !== url.origin || context.token !== token || context.workspace !== workspace
-    || context.externalJob?.jobUrl !== externalJob?.jobUrl || context.externalJob?.candidateId !== externalJob?.candidateId) {
-    await chrome.storage.session.set({ [key]: { intentId, externalJob, jobOrigin: url.origin, workspace, token, eventKey: crypto.randomUUID() } });
+  const changed = context?.intentId !== intentId || context?.jobOrigin !== jobOrigin || context.token !== token || context.workspace !== workspace
+    || (context.applicationUrl && context.applicationUrl !== jobUrl)
+    || context.externalJob?.jobUrl !== externalJob?.jobUrl || context.externalJob?.candidateId !== externalJob?.candidateId;
+  if (changed || submissionEvidence || !context.applicationUrl) {
+    const tracking = changed ? { intentId, externalJob, jobOrigin, workspace, token, eventKey: crypto.randomUUID() } : context;
+    await chrome.storage.session.set({ [key]: { ...tracking, applicationUrl: jobUrl,
+      ...(submissionEvidence ? { submissionEvidence } : {}) } });
   }
   await chrome.scripting.executeScript({ target: { tabId }, files: ['application-confirmation.js'] });
   return true;
@@ -91,21 +140,22 @@ async function prepareApplication(tabId, expectedUrl, job, candidateId, submitte
 async function trackApplication(tabId, tabUrl) {
   if (!tabUrl || !/^https:\/\//i.test(tabUrl)) return;
   const url = new URL(tabUrl);
+  const jobOrigin = portalOrigin(url);
   const intentId = new URLSearchParams(url.hash.slice(1)).get('marketing-intent');
   const key = trackedKey(tabId);
   let context = (await chrome.storage.session.get(key))[key];
-  if (context && context.jobOrigin !== url.origin && !intentIdPattern.test(intentId || '')) {
+  if (context && context.jobOrigin !== jobOrigin && !intentIdPattern.test(intentId || '')) {
     await chrome.storage.session.remove(key);
     return;
   }
-  if (intentIdPattern.test(intentId || '') && (intentId !== context?.intentId || url.origin !== context?.jobOrigin)) {
+  if (intentIdPattern.test(intentId || '') && (intentId !== context?.intentId || jobOrigin !== context?.jobOrigin)) {
     const { origin, token } = await chrome.storage.local.get(['origin', 'token']);
     const workspace = workspaceOrigin(origin);
     if (!workspace || !token) return;
-    context = { intentId, jobOrigin: url.origin, workspace, token, eventKey: crypto.randomUUID() };
+    context = { intentId, jobOrigin, workspace, token, eventKey: crypto.randomUUID() };
     await chrome.storage.session.set({ [key]: context });
   }
-  if (context?.jobOrigin !== url.origin || context.reported) return;
+  if (context?.jobOrigin !== jobOrigin || context.reported) return;
   await chrome.scripting.executeScript({ target: { tabId }, files: ['application-confirmation.js'] });
 }
 
@@ -124,7 +174,7 @@ async function recordConfirmation(message, sender) {
   const url = new URL(sender.url);
   const key = trackedKey(sender.tab.id);
   const context = (await chrome.storage.session.get(key))[key];
-  if (!context || url.origin !== context.jobOrigin) return false;
+  if (!context || portalOrigin(url) !== context.jobOrigin) return false;
   if (context.reported) return true;
   const current = await chrome.storage.local.get(['origin', 'token']);
   if (workspaceOrigin(current.origin) !== context.workspace || current.token !== context.token) return false;
@@ -143,13 +193,16 @@ async function recordConfirmation(message, sender) {
 
   const response = await fetch(context.workspace + '/api/extension/' + endpoint, {
     ...workspaceRequest(current.token), method: 'POST',
-    body: JSON.stringify({ ...payload, eventKey: context.eventKey, evidence: message.evidence }),
+    body: JSON.stringify({ ...payload, ...context.submissionEvidence, eventKey: context.eventKey, evidence: message.evidence }),
   });
   if (!response.ok) return false;
   const saved = await response.json();
   if (context.intentId ? !['submitted', 'confirmed'].includes(saved.status) : saved.success !== true) return false;
   const latest = (await chrome.storage.session.get(key))[key];
-  if (latest?.eventKey === context.eventKey) await chrome.storage.session.set({ [key]: { ...context, reported: true } });
+  if (latest?.eventKey === context.eventKey) {
+    const { submissionEvidence, ...completed } = latest;
+    await chrome.storage.session.set({ [key]: { ...completed, reported: true } });
+  }
   return true;
 }
 
@@ -179,6 +232,16 @@ chrome.runtime.onConnect.addListener(port => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  if (message?.action === 'load_application_resume' && sender.frameId === 0 && sender.tab?.id != null) {
+    void loadApplicationResume(message.candidateId).then(reply, () => reply(null));
+    return true;
+  }
+  if (message?.action === 'load_application_profile' && sender.frameId === 0 && sender.tab?.id != null) {
+    const query = intentIdPattern.test(message.candidateId || '')
+      ? '?' + new URLSearchParams({ candidateId: message.candidateId }) : '';
+    void loadApplicationData('candidates' + query).then(data => reply(data?.candidates?.[0] ?? null), () => reply(null));
+    return true;
+  }
   if (message?.type === 'application-intent-opened' && sender.frameId === 0
     && Number.isInteger(sender.tab?.id) && typeof message.url === 'string') {
     try {
@@ -195,8 +258,9 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     const applicationPage = sender.url === message.url && sender.frameId === 0;
     const tabId = panel ? message.tabId : applicationPage ? sender.tab?.id : undefined;
     if (!Number.isInteger(tabId)) return false;
+    const submitted = applicationPage && message.submitted === true;
     const tracking = prepareApplication(tabId, message.url, message.job, message.candidateId,
-      applicationPage && message.submitted === true);
+      submitted, submitted ? message.submissionEvidence : undefined);
     pendingTracking.set(tabId, tracking);
     void tracking.then(
       tracked => reply({ tracked }),

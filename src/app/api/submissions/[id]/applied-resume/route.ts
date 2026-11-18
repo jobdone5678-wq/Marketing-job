@@ -1,6 +1,7 @@
 import { protectedRoute } from '@/lib/http/protected-route';
 import { database, checkDb, CaptureError } from '@/lib/db/admin';
 import { candidateAccess } from '@/lib/resumes/repository';
+import { appliedResumeArchivePath } from '@/lib/capture/applied-resume';
 import type { AppliedResumeSnapshot } from '@/types/database';
 import { z } from 'zod';
 
@@ -29,22 +30,30 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     const wantsDownload = url.searchParams.get('download') === '1';
 
     if (wantsDownload) {
-      if (!applied.base64)
+      let bytes = applied.base64 ? new Uint8Array(Buffer.from(applied.base64, 'base64')) : null;
+      if (applied.archiveHash && /^[a-f0-9]{64}$/.test(applied.archiveHash)) {
+        const { data: file, error: downloadError } = await db.storage
+          .from('candidate-resumes')
+          .download(appliedResumeArchivePath(submission.candidate_id, id, applied.archiveHash));
+        checkDb(downloadError);
+        if (file) bytes = new Uint8Array(await file.arrayBuffer());
+      }
+      if (!bytes)
         throw new CaptureError(
           'Original applied resume bytes were not recorded. The saved text remains available in the preview.',
           404
         );
-      const fileBuffer = Buffer.from(applied.base64, 'base64');
       const mimeType = applied.mimeType || 'application/octet-stream';
       const filename = applied.filename || 'applied-resume.docx';
 
       const encodedFilename = encodeURIComponent(filename);
-      return new Response(new Uint8Array(fileBuffer), {
+      return new Response(bytes, {
         status: 200,
         headers: {
           'Content-Type': mimeType,
-          'Content-Disposition': `attachment; filename="${filename}"; filename*=UTF-8''${encodedFilename}`,
-          'Content-Length': String(fileBuffer.byteLength),
+          'Content-Disposition': `attachment; filename="applied-resume"; filename*=UTF-8''${encodedFilename}`,
+          'Content-Length': String(bytes.byteLength),
+          'X-Content-Type-Options': 'nosniff',
           'Cache-Control': 'private, no-cache',
         },
       });

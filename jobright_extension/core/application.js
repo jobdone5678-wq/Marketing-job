@@ -6,6 +6,11 @@
   const contactKeys = new Set(['first_name', 'last_name', 'full_name', 'email', 'phone']);
   const manualQuestion = /\b(?:password|secret|bank\s*routing|routing\s*number|bank\s*account|credit.?card|ssn|social.?security|tax.?id|pin|otp)\b/i;
   const jobSpecific = /\b(?:this|the) (?:job|role|position|company|organization|employer|opportunity)\b|\bwhy\b|cover letter|how did you hear|\breferred\b|application source/i;
+  const privateAnswer = /birth|dob|medical|health|disability|ethnicity|race|gender|veteran|religion|consent|privacy|captcha|signature/i;
+  const finalSubmit = /^(?:submit(?:\s+(?:my |your |the )?application)?|send application|apply(?: now)?|complete application|finish application)[.!]?$/i;
+  const reviewField = /\b(?:agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare|signature|captcha|password|otp)\b/i;
+  const fileEvidence = new WeakMap();
+  const submitting = new WeakSet();
   const answerKey = field => field.label.normalize('NFKC').toLowerCase().replace(/[?*:.!]+$/g, '').trim().replace(/\s+/g, ' ');
 
   function inspect() {
@@ -13,7 +18,7 @@
     const fields = discovery.discoverFields().filter(field => field.kind !== 'inaccessible' && !field.excluded);
     const contacts = new Set(fields.map(field => mapping.resolveFact(field.label, field.hint)?.key)
       .filter(key => contactKeys.has(key)));
-    const routeLooksLikeApplication = /(?:^|[/?=_-])(?:apply|applyjob|application|applytojob|jobapply)(?:$|[/?=_-])/i.test(location.pathname + location.search);
+    const routeLooksLikeApplication = /(?:^|[/?=_#-])(?:apply|applyjob|application|applytojob|jobapply)(?:$|[/?=_#-])/i.test(location.pathname + location.search + (location.hash || ''));
     const resumeInput = findResumeInput();
     const hasForm = (contacts.size >= 2 && !!(job || routeLooksLikeApplication || resumeInput)) ||
       (routeLooksLikeApplication && fields.length >= 1) || (!!job && fields.length >= 2 && !!resumeInput);
@@ -21,12 +26,104 @@
   }
 
   function findResumeInput(root = document) {
-    return [...root.querySelectorAll('input[type="file"]')].find(input => {
+    const matches = input => {
       if (input.disabled) return false;
       const label = discovery.label(input);
-      return /\b(?:resume|résumé|curriculum vitae|cv)\b/i.test([label, input.name, input.id].join(' ')) &&
-        !/cover\s*letter|additional|optional document/i.test(label);
+      const description = [label, input.name, input.id, input.getAttribute?.('data-testid'), input.getAttribute?.('data-automation-id')]
+        .join(' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').normalize('NFD').replace(/\p{M}/gu, '');
+      return /\b(?:resume|curriculum vitae|cv)\b/i.test(description) && !/cover\s*letter|additional|optional document/i.test(label);
+    };
+    const direct = [...root.querySelectorAll('input[type="file"]')].find(matches);
+    if (direct) return direct;
+    for (const host of root.querySelectorAll('*')) {
+      if (!host.shadowRoot) continue;
+      const nested = findResumeInput(host.shadowRoot);
+      if (nested) return nested;
+    }
+  }
+
+  function resumeMetadata(file) {
+    if (!file || !/\.(?:pdf|docx)$/i.test(file.name)) return null;
+    return { filename: file.name.slice(0, 255), mimeType: /\.docx$/i.test(file.name)
+      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf' };
+  }
+
+  async function readAttachedResume(file) {
+    const metadata = resumeMetadata(file);
+    if (!metadata || fileEvidence.has(file) || file.size > 2 * 1024 * 1024) return;
+    fileEvidence.set(file, metadata);
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const chunks = [];
+    for (let offset = 0; offset < bytes.length; offset += 8192) {
+      chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 8192)));
+    }
+    fileEvidence.set(file, { ...metadata, base64: btoa(chunks.join('')) });
+  }
+
+  function submissionEvidence(form) {
+    const answers = new Map();
+    for (const field of discovery.discoverFields(form)) {
+      if (!field.label || field.excluded || field.kind === 'inaccessible' || manualQuestion.test(field.label) || privateAnswer.test(field.label)) continue;
+      const key = answerKey(field).slice(0, 160);
+      const value = writer.read(field);
+      if (!key || value === undefined || value === null || value === '' || answers.has(key)) continue;
+      answers.set(key, { key, label: field.label.slice(0, 200), value: String(Array.isArray(value) ? value.join(', ') : value).slice(0, 1000) });
+      if (answers.size === 100) break;
+    }
+    const file = findResumeInput(form)?.files?.[0];
+    const appliedResume = file && (fileEvidence.get(file) || resumeMetadata(file));
+    return { answers: [...answers.values()], ...(appliedResume ? { appliedResume } : {}) };
+  }
+
+  function prepareSubmission(form, url, job, evidence = submissionEvidence(form)) {
+    return chrome.runtime.sendMessage({ action: 'prepare_application_tracking', url, job, submitted: true,
+      submissionEvidence: evidence });
+  }
+
+  async function submitApplication(expectedUrl) {
+    if (location.href !== expectedUrl) throw new Error('The application page changed.');
+    const { job, hasForm, fields } = inspect();
+    const forms = new Set(fields.map(field => field.element?.form || field.element?.closest?.('form')).filter(Boolean));
+    const [form] = forms;
+    if (!hasForm || forms.size !== 1 || submitting.has(form) || typeof form.requestSubmit !== 'function') {
+      throw new Error('Submit manually on the employer page. A single final application form is required.');
+    }
+    const buttons = [...form.elements].filter(button => button.type === 'submit' && !button.disabled &&
+      !button.formNoValidate && button.getClientRects().length && finalSubmit.test(submitLabel(button)));
+    const blocked = form.querySelector('[data-sitekey], iframe[src*="captcha" i], [name*="captcha" i], input[type="password"]');
+    const incomplete = fields.some(field => {
+      const element = field.element;
+      const value = writer.read(field);
+      const label = field.label + ' ' + (field.hint || '');
+      if (reviewField.test(label) && field.kind === 'checkbox') return value !== true;
+      const required = element?.required || element?.getAttribute?.('aria-required') === 'true' ||
+        field.options?.some(option => option.element?.required) || reviewField.test(label);
+      return required && (value === '' || value == null || value === false || Array.isArray(value) && !value.length);
     });
+    if (buttons.length !== 1 || blocked || incomplete || !form.checkValidity()) {
+      throw new Error('Review and complete the employer form, then submit it manually.');
+    }
+    submitting.add(form);
+    try {
+      const file = findResumeInput(form)?.files?.[0];
+      if (file) await readAttachedResume(file).catch(() => {});
+      const evidence = submissionEvidence(form);
+      const tracked = await prepareSubmission(form, expectedUrl, job, evidence);
+      if (!tracked?.tracked || location.href !== expectedUrl || !form.isConnected || !form.checkValidity()) {
+        throw new Error('Automatic submission could not start. Review the form and submit manually.');
+      }
+      if (file !== findResumeInput(form)?.files?.[0] || JSON.stringify(evidence.answers) !== JSON.stringify(submissionEvidence(form).answers)) {
+        throw new Error('Form values changed during autofill. Review the form and submit manually.');
+      }
+      form.requestSubmit(buttons[0]);
+    } catch (error) {
+      submitting.delete(form);
+      throw error;
+    }
+  }
+
+  function submitLabel(button) {
+    return String(button.innerText || button.value || button.getAttribute?.('aria-label') || '').trim();
   }
 
   function plansFor(expectedUrl, candidate, saved = {}) {
@@ -504,7 +601,7 @@
       ai: receipt.ai,
       learned: receipt.learned,
     }));
-    const input = page.resumeInput;
+    const input = findResumeInput();
     if (input?.isConnected && resume && !input.files?.length && location.href === expectedUrl) {
       try {
         if (!resume.base64) throw new Error('No resume data');
@@ -514,7 +611,12 @@
         input.files = transfer.files;
         input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
-        if (input.files?.[0]?.name === resume.filename) filled.push({ key: 'resume-file', label: 'Resume file', value: resume.filename });
+        const file = input.files?.[0];
+        if (file?.name === resume.filename) {
+          const metadata = resumeMetadata(file);
+          if (metadata && file.size <= 2 * 1024 * 1024) fileEvidence.set(file, { ...metadata, base64: resume.base64 });
+          filled.push({ key: 'resume-file', label: 'Resume file', value: resume.filename });
+        }
       } catch {
         // A portal can require a manual upload. Leave that field in the total.
       }
@@ -531,12 +633,12 @@
         });
       }
     }
-    if (input?.isConnected && resume && (!input.files || !input.files.length)) {
+    if (input?.isConnected && (!input.files || !input.files.length)) {
       unfilled.unshift({
         key: 'resume-file',
         label: 'Resume file',
         kind: 'file',
-        reason: 'Portal requires manual file attachment'
+        reason: resume?.base64 ? 'Portal requires manual file attachment' : 'Uploaded resume unavailable'
       });
     }
     return { filled, unfilled, questions, total: page.fields.length + Number(!!input) };
@@ -549,20 +651,32 @@
     },
     fill,
     savedAnswers,
+    submitApplication,
   };
 
   // A manually filled application can navigate away as soon as its form is submitted.
   if (typeof window !== 'undefined' && window.top === window && !globalThis.nextkinSubmitObserver
     && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
     globalThis.nextkinSubmitObserver = true;
-    document.addEventListener('submit', event => {
-      if (!event.isTrusted || event.target?.tagName !== 'FORM') return;
-      const submitter = event.submitter;
-      const label = submitter && (submitter.innerText || submitter.value || submitter.getAttribute('aria-label'));
-      if (label && !/\b(?:submit|apply|send|finish|complete)\b/i.test(label)) return;
+    const recordAttempt = (event, form, button) => {
+      if (!event.isTrusted || !form || submitting.has(form)) return;
+      if (button && !finalSubmit.test(submitLabel(button))) return;
       const { job, hasForm, url } = globalThis.NextkinApplication.scan();
-      if (!job || !hasForm) return;
-      void chrome.runtime.sendMessage({ action: 'prepare_application_tracking', url, job, submitted: true }).catch(() => {});
+      if (!hasForm || (!job && !new URLSearchParams((location.hash || '').slice(1)).has('marketing-intent'))) return;
+      void prepareSubmission(form, url, job).catch(() => {});
+    };
+    document.addEventListener('change', event => {
+      const input = event.composedPath?.()[0] || event.target;
+      if (input?.type !== 'file' || input !== findResumeInput()) return;
+      const file = input.files?.[0];
+      if (file) void readAttachedResume(file).catch(() => {});
+    }, true);
+    document.addEventListener('submit', event => {
+      if (event.target?.tagName === 'FORM') recordAttempt(event, event.target, event.submitter);
+    }, true);
+    document.addEventListener('click', event => {
+      const button = event.target?.closest?.('button[type="button"], [role="button"]');
+      if (button) recordAttempt(event, button.form || button.closest('form'), button);
     }, true);
   }
 })();

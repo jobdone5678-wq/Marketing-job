@@ -1,10 +1,125 @@
 import { protectedRoute } from '@/lib/http/protected-route';
-import { database, checkDb } from '@/lib/db/admin';
+import { database, checkDb, CaptureError } from '@/lib/db/admin';
 import { parseRtrMetadata } from '@/lib/rtr-metadata';
+import { appliedResumeSchema } from '@/lib/capture/applied-resume';
 import { z } from 'zod';
 
 const columns =
   '*,candidate:candidates(id,full_name,email,phone,visa_status,target_job_titles,primary_skills,current_city,current_state)';
+
+const optionalText = z.string().max(2000).nullish();
+const submissionFields = z.object({
+  submission_date: z.iso.date(),
+  company_name: z.string().trim().min(1).max(200),
+  job_title: z.string().trim().min(1).max(200),
+  job_url: z.union([z.literal(''), z.url({ protocol: /^https?$/ })]).nullish(),
+  portal_source: optionalText,
+  job_location: optionalText,
+  vendor_company: optionalText,
+  vendor_contact_name: optionalText,
+  vendor_contact_email: optionalText,
+  vendor_contact_phone: optionalText,
+  submitted_rate: optionalText,
+  client_pay_rate: optionalText,
+  status: z.enum([
+    'Draft',
+    'Applied',
+    'Vendor_Screening',
+    'Submitted_to_Client',
+    'Interview_Scheduled',
+    'Round_1',
+    'Round_2',
+    'Offer_Received',
+    'Rejected',
+    'No_Response',
+  ]),
+  interview_time: optionalText,
+  interview_mode: optionalText,
+  interview_meeting_link: optionalText,
+  notes: z.string().max(25000).nullish(),
+  applied_resume: appliedResumeSchema,
+  rtr_document: z.record(z.string(), z.unknown()).nullish(),
+});
+
+async function ownedCandidateIds(actor: string) {
+  const { data, error } = await database().from('candidates').select('id').eq('user_id', actor);
+  checkDb(error);
+  return (data || []).map(({ id }) => id);
+}
+
+export async function POST(request: Request) {
+  return protectedRoute(request, async (actor) => {
+    const fields = submissionFields
+      .extend({ candidate_id: z.uuid(), job_id: z.uuid().nullish() })
+      .parse(await request.json());
+    if (!(await ownedCandidateIds(actor.id)).includes(fields.candidate_id)) {
+      throw new CaptureError('Candidate profile not found.', 404);
+    }
+    const db = database();
+    const since = new Date();
+    since.setUTCDate(since.getUTCDate() - 30);
+    const { data: duplicate, error: duplicateError } = await db
+      .from('job_submissions')
+      .select('id')
+      .eq('candidate_id', fields.candidate_id)
+      .ilike('company_name', fields.company_name.replace(/[\\%_]/g, '\\$&'))
+      .gte('submission_date', since.toISOString().slice(0, 10))
+      .limit(1);
+    checkDb(duplicateError);
+    const isDuplicate = Boolean(duplicate?.length);
+    const { data, error } = await db
+      .from('job_submissions')
+      .insert({ ...fields, duplicate_flag: isDuplicate })
+      .select(columns)
+      .single();
+    checkDb(error);
+    return { data, isDuplicate, error: null };
+  });
+}
+
+export async function PATCH(request: Request) {
+  return protectedRoute(request, async (actor) => {
+    const { id, ...fields } = submissionFields
+      .partial()
+      .extend({ id: z.uuid() })
+      .parse(await request.json());
+    const ids = await ownedCandidateIds(actor.id);
+    if (!ids.length || !Object.keys(fields).length)
+      throw new CaptureError('No editable application changes found.', 400);
+    let update = database()
+      .from('job_submissions')
+      .update(fields)
+      .eq('id', id)
+      .in('candidate_id', ids);
+    if (fields.applied_resume !== undefined) update = update.is('capture_status', null);
+    const { data, error } = await update.select(columns).maybeSingle();
+    checkDb(error);
+    if (!data) throw new CaptureError('Application not found.', 404);
+    return { data, error: null };
+  });
+}
+
+export async function DELETE(request: Request) {
+  return protectedRoute(request, async (actor) => {
+    const id = z.uuid().parse(new URL(request.url).searchParams.get('id'));
+    const ids = await ownedCandidateIds(actor.id);
+    if (!ids.length) throw new CaptureError('Application not found.', 404);
+    const { data, error } = await database()
+      .from('job_submissions')
+      .delete()
+      .eq('id', id)
+      .in('candidate_id', ids)
+      .is('capture_status', null)
+      .is('email_confirmed_at', null)
+      .select('id')
+      .maybeSingle();
+    if (error?.code === '23503')
+      throw new CaptureError('This application has linked history and cannot be deleted.', 409);
+    checkDb(error);
+    if (!data) throw new CaptureError('Application not found or has tracking history.', 404);
+    return { success: true, error: null };
+  });
+}
 
 // Transform outside_jobs record to match JobSubmission format
 function transformOutsideJob(oj: any, candidate: any): any {

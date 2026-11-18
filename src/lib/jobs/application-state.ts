@@ -42,18 +42,25 @@ export function isAppliedApplication(
   return status === 'Applied';
 }
 
+export function applicationLaunchUrl(applicationUrl: string, intentId: string) {
+  const url = new URL(applicationUrl);
+  if (!url.hash) url.hash = new URLSearchParams({ 'marketing-intent': intentId }).toString();
+  return url.href;
+}
+
 // Match a posting, not a company or title. Tracking and application routes do not
 // identify a different vacancy, while host, board and posting path still do.
 export function applicationUrlKey(value: string | null | undefined) {
   try {
     const url = new URL(value || '');
     if (!['https:', 'http:'].includes(url.protocol)) return null;
-    const identity = new URLSearchParams();
     const fields = new Set([
       'id',
       'jobid',
       'job_id',
       'gh_jid',
+      'jr_id',
+      'jobreqid',
       'postingid',
       'posting_id',
       'requisitionid',
@@ -61,23 +68,38 @@ export function applicationUrlKey(value: string | null | undefined) {
       'jk',
     ]);
     const greenhouse = url.hostname === 'greenhouse.io' || url.hostname.endsWith('.greenhouse.io');
-    for (const [name, value] of url.searchParams) {
-      const key = name.toLowerCase();
-      if (fields.has(key) || (greenhouse && ['for', 'token'].includes(key)))
-        identity.append(key, value);
-    }
-    identity.sort();
-    const path = url.pathname
-      .replace(
-        /\/(?:confirmation|thank[-_]?you|thankyou|thanks|applied|application[-_](?:submitted|success)|submission[-_]success|success|submitted)\/?$/i,
-        ''
-      )
-      .replace(/\/(?:application|apply)\/?$/i, '')
-      .replace(/\/$/, '');
+    const identify = (params: URLSearchParams) => {
+      const identity = new URLSearchParams();
+      for (const [name, value] of params) {
+        const key = name.toLowerCase();
+        if (fields.has(key) || (greenhouse && ['for', 'token'].includes(key)))
+          identity.append(key, value);
+      }
+      identity.sort();
+      return identity.size ? '?' + identity.toString() : '';
+    };
+    const normalizePath = (path: string) =>
+      path
+        .replace(
+          /\/(?:confirmation|thank[-_]?you|thankyou|thanks|applied|application[-_](?:submitted|success)|submission[-_]success|success|submitted)\/?$/i,
+          ''
+        )
+        .replace(/\/(?:application|apply)\/?$/i, '')
+        .replace(/\/$/, '');
+    const path = normalizePath(url.pathname);
     const postingPath = /(^|\.)keka\.com$/i.test(url.hostname)
       ? path.replace(/^\/careers\/applyjob\/(\d+)$/i, '/careers/jobdetails/$1')
       : path;
-    return url.origin + postingPath + (identity.size ? '?' + identity.toString() : '');
+    const fragment = url.hash.slice(1);
+    const [route, query] = fragment.split(/\?([\s\S]*)/, 2);
+    const hashRoute = /^!?\//.test(route)
+      ? '#' + normalizePath(route) + identify(new URLSearchParams(query))
+      : '';
+    const origin =
+      url.origin === 'https://job-boards.greenhouse.io'
+        ? 'https://boards.greenhouse.io'
+        : url.origin;
+    return origin + postingPath + identify(url.searchParams) + hashRoute;
   } catch {
     return null;
   }

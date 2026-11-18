@@ -119,4 +119,3 @@ export class MemoryCache<T = any> {
 
 // Global shared caches for high-traffic entities
 export const candidateProfileCache = new MemoryCache<{ id: string; user_id: string }>(500);
-export const outsideJobsCache = new MemoryCache<any[]>(200);

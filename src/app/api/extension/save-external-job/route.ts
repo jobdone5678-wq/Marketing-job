@@ -4,7 +4,7 @@ import { cors, extensionProfile, extensionRoute } from '@/lib/capture/server';
 import { CaptureError, checkDb, database } from '@/lib/db/admin';
 import { sanitizeJobHtml } from '@/lib/html-sanitizer';
 import { analyzeCandidateFit } from '@/lib/jobs/skills-extractor';
-import { outsideJobsCache } from '@/lib/cache';
+import { applicationUrlKey } from '@/lib/jobs/application-state';
 import type { Candidate } from '@/types/database';
 
 export async function OPTIONS(request: Request) {
@@ -85,7 +85,7 @@ export async function POST(request: Request) {
       throw new CaptureError('The captured job exceeds the size limit.', 413);
     const body = captureSchema.parse(JSON.parse(raw));
     const url = new URL(body.jobUrl);
-    const jobUrl = cleanUrl(body.jobUrl);
+    const jobUrl = applicationUrlKey(body.jobUrl) || cleanUrl(body.jobUrl);
     const applicationUrl = body.applicationUrl ? cleanUrl(body.applicationUrl) : null;
     const capturedAt = new Date().toISOString();
     const details = {
@@ -216,7 +216,6 @@ export async function POST(request: Request) {
       job = existing;
     }
     if (!job) throw new CaptureError('Failed to save outside job.', 500);
-    outsideJobsCache.clear();
     return { success: true, jobId: job.id, table: 'outside_jobs', match };
   });
 }

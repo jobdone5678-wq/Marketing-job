@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { JobSubmission, JobSubmissionFormData, SubmissionStatus } from '@/types/database';
 import { parseRtrMetadata } from '@/lib/rtr-metadata';
+import { api } from '@/lib/api-client';
 
 const columns =
   '*,candidate:candidates(id,full_name,email,phone,visa_status,target_job_titles,primary_skills,current_city,current_state)';
@@ -110,64 +111,26 @@ export function submissionStore(client: SupabaseClient) {
   }
   async function createSubmission(submissionData: JobSubmissionFormData): Promise<WriteResult> {
     try {
-      const isDuplicate = await checkDuplicate(
-        submissionData.candidate_id,
-        submissionData.company_name
-      );
-      const fields = writeFields(submissionData, true);
-      let res = await client
-        .from('job_submissions')
-        .insert({ ...fields, duplicate_flag: isDuplicate })
-        .select(columns)
-        .single();
-      if (
-        res.error &&
-        (res.error.code === '42703' || res.error.message?.includes('does not exist'))
-      ) {
-        const { rtr_document, applied_resume, ...safeFields } = fields as any;
-        res = await client
-          .from('job_submissions')
-          .insert({ ...safeFields, duplicate_flag: isDuplicate })
-          .select(columns)
-          .single();
-      }
-      if (res.error || !res.data)
-        return { data: null, error: 'Submission could not be saved. Please retry.' };
-      const saved = res.data as any;
-      if (!saved.rtr_document) saved.rtr_document = parseRtrFromNotes(saved.notes);
-      return { data: saved as JobSubmission, error: null, isDuplicate };
-    } catch {
-      return { data: null, error: 'Submission could not be saved. Please retry.' };
+      return await api<WriteResult>('/api/submissions', {
+        method: 'POST',
+        body: JSON.stringify(writeFields(submissionData, true)),
+      });
+    } catch (error) {
+      return { data: null, error: (error as Error).message };
     }
   }
   async function updateSubmission(
     id: string,
     updates: Partial<JobSubmissionFormData>
   ): Promise<WriteResult> {
-    const fields = writeFields(updates);
-    let res = await client
-      .from('job_submissions')
-      .update(fields)
-      .eq('id', id)
-      .select(columns)
-      .maybeSingle();
-    if (
-      res.error &&
-      (res.error.code === '42703' || res.error.message?.includes('does not exist'))
-    ) {
-      const { rtr_document, applied_resume, ...safeFields } = fields as any;
-      res = await client
-        .from('job_submissions')
-        .update(safeFields)
-        .eq('id', id)
-        .select(columns)
-        .maybeSingle();
+    try {
+      return await api<WriteResult>('/api/submissions', {
+        method: 'PATCH',
+        body: JSON.stringify({ id, ...writeFields(updates) }),
+      });
+    } catch (error) {
+      return { data: null, error: (error as Error).message };
     }
-    if (res.error || !res.data)
-      return { data: null, error: 'Submission could not be updated. Please retry.' };
-    const saved = res.data as any;
-    if (!saved.rtr_document) saved.rtr_document = parseRtrFromNotes(saved.notes);
-    return { data: saved as JobSubmission, error: null };
   }
   async function updateSubmissionStatus(
     id: string,
@@ -182,20 +145,14 @@ export function submissionStore(client: SupabaseClient) {
     });
   }
   async function deleteSubmission(id: string): Promise<{ success: boolean; error: string | null }> {
-    const { data, error } = await client
-      .from('job_submissions')
-      .delete()
-      .eq('id', id)
-      .select('id')
-      .maybeSingle();
-    if (error?.code === '23503')
-      return {
-        success: false,
-        error: 'This application has confirmation history and cannot be deleted.',
-      };
-    if (error || !data)
-      return { success: false, error: 'Submission could not be deleted. Please retry.' };
-    return { success: true, error: null };
+    try {
+      return await api<{ success: boolean; error: null }>(
+        `/api/submissions?id=${encodeURIComponent(id)}`,
+        { method: 'DELETE' }
+      );
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
   }
   return {
     getSubmissions,

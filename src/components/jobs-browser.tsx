@@ -17,7 +17,11 @@ import { WorkspaceSkeleton } from '@/components/workspace-ui';
 import { JobDates } from '@/components/job-dates';
 import { PublicJobCatalog } from '@/components/public-job-catalog';
 import { AppliedJobsList } from '@/components/applied-jobs-list';
-import { withoutAppliedJobs, type AppliedJobsResponse } from '@/lib/jobs/application-state';
+import {
+  applicationLaunchUrl,
+  withoutAppliedJobs,
+  type AppliedJobsResponse,
+} from '@/lib/jobs/application-state';
 import { extractCompleteJobDetails, extractJobSkills } from '@/lib/jobs/skills-extractor';
 import { sanitizeJobHtml } from '@/lib/html-sanitizer';
 import { CompanyLogo } from '@/components/company-logo';
@@ -213,9 +217,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           body: JSON.stringify({ candidateId: applicationCandidateId, jobId: targetJobId }),
         }
       );
-      const appUrl = new URL(intent.job.application_url);
-      appUrl.hash = 'marketing-intent=' + intent.id;
-      tab.location.href = appUrl.toString();
+      tab.location.href = applicationLaunchUrl(intent.job.application_url, intent.id);
       setError('');
     } catch (error) {
       tab.close();

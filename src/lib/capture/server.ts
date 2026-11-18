@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { database, checkDb, CaptureError, errorResponse } from '@/lib/db/admin';
 import { allowedCaptureUrl, validateObservation } from './validation';
 import { validateApplicationAnswers } from './snapshot';
+import { applicationUrlKey } from '@/lib/jobs/application-state';
 import { z } from 'zod';
 export const tokenHash = (value: string) => createHash('sha256').update(value).digest('hex');
 export type ExtensionProfile = { id: string; status: string; role: 'candidate' };
@@ -109,10 +110,27 @@ export async function recordObservation(actor: string, body: unknown, manual = f
       .eq('submission_id', intent.submission_id)
       .neq('status', 'Applied');
     checkDb(outsideError);
+    const posting = applicationUrlKey(intent.job.application_url);
+    if (posting) {
+      const { error: unlinkedError } = await database()
+        .from('outside_jobs')
+        .update({
+          submission_id: intent.submission_id,
+          status: 'Applied',
+          applied_at: input.observedAt,
+        })
+        .eq('capture_owner_id', actor)
+        .eq('candidate_id', intent.candidate_id)
+        .eq('job_url', posting)
+        .is('submission_id', null);
+      checkDb(unlinkedError);
+    }
   }
 
   if (input.appliedResume && submitted && applied)
-    await saveAppliedResume(intent.submission_id, intent.candidate_id, input.appliedResume);
+    await saveAppliedResume(intent.submission_id, intent.candidate_id, {
+      ...input.appliedResume, appliedAt: input.observedAt,
+    });
   let snapshot = null;
   if (
     input.answers !== undefined &&

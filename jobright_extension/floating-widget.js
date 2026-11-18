@@ -112,8 +112,11 @@
       if (typeof chrome !== 'undefined' && chrome.storage?.local) {
         const data = await chrome.storage.local.get(['candidateProfile', 'resumeData', 'activeCandidateId', 'savedProfiles', 'savedResumes']);
         const activeId = data.activeCandidateId;
-        const candidate = data.candidateProfile || (activeId && data.savedProfiles ? data.savedProfiles[activeId] : null);
-        const resume = data.resumeData || (activeId && data.savedResumes ? data.savedResumes['doc_' + activeId] : null);
+        const stored = data.candidateProfile || data.savedProfiles?.[activeId];
+        const fresh = await Promise.resolve(chrome.runtime.sendMessage({ action: 'load_application_profile', candidateId: stored?.id }))
+          .catch(() => null);
+        const candidate = fresh || stored;
+        const resume = data.resumeData?.candidate_id === candidate?.id ? data.resumeData : data.savedResumes?.['doc_' + candidate?.id];
         return { candidate, resume };
       }
     } catch {}
@@ -623,15 +626,21 @@
 
         const url = window.location.href;
         const page = globalThis.NextkinApplication.scan?.();
-        if (page?.hasForm && page.job) {
-          await chrome.runtime.sendMessage({
-            action: 'prepare_application_tracking', url, job: page.job, candidateId: currentCandidate.id,
-          }).catch(() => {});
-        }
+        const candidate = await chrome.runtime.sendMessage({ action: 'load_application_profile', candidateId: currentCandidate.id })
+          .catch(() => null) || currentCandidate;
+        const resume = currentResume;
+        const [tracking, resumeFile] = await Promise.all([
+          page?.hasForm ? chrome.runtime.sendMessage({
+            action: 'prepare_application_tracking', url, job: page.job, candidateId: candidate.id,
+          }).catch(() => null) : null,
+          resume?.base64 ? resume : chrome.runtime.sendMessage({
+            action: 'load_application_resume', candidateId: candidate.id,
+          }).catch(() => null),
+        ]);
         const res = await globalThis.NextkinApplication.fill(
           url,
-          currentCandidate,
-          currentResume,
+          candidate,
+          resumeFile ? { ...resume, ...resumeFile } : resume,
           {},
           {}
         );
@@ -646,8 +655,9 @@
             ? res.unfilled
             : (res.questions || []).map(q => ({ label: q.label || q.id, reason: 'Needs manual answer' }));
 
-          statusMsg.className = 'nk-status-msg success show';
-          statusMsg.textContent = `Autofill complete: ${filledArr.length} filled, ${unfilledArr.length} unfilled.`;
+          const trackingWarning = tracking?.tracked ? '' : ` ${tracking?.error || 'Application tracking is unavailable. Check your NextKinHR connection.'}`;
+          statusMsg.className = `nk-status-msg ${trackingWarning ? 'error' : 'success'} show`;
+          statusMsg.textContent = `Autofill complete: ${filledArr.length} filled, ${unfilledArr.length} unfilled.${trackingWarning}`;
 
           if (sectionsBlock && (filledArr.length || unfilledArr.length)) {
             sectionsBlock.style.display = 'grid';

@@ -32,7 +32,6 @@ export function publicJobUrl(value: unknown) {
       u.hostname.includes(':')
     )
       return null;
-    u.hash = '';
     return u.toString();
   } catch {
     return null;

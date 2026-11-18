@@ -13,6 +13,7 @@ import { SkillBadge } from '@/components/skill-badge';
 import { getCandidates } from '@/lib/candidates';
 import type { Candidate } from '@/types/database';
 import type { StoredJob } from '@/lib/jobs/types';
+import { applicationLaunchUrl } from '@/lib/jobs/application-state';
 import { useUserProfile } from '@/hooks/use-user-profile';
 import {
   extractCompleteJobDetails,
@@ -129,9 +130,7 @@ export default function JobDetail({
           body: JSON.stringify({ candidateId: applicant.id, jobId: id }),
         }
       );
-      const u = new URL(r.intent.job.application_url);
-      u.hash = 'marketing-intent=' + r.intent.id;
-      if (tab) tab.location.href = u.toString();
+      if (tab) tab.location.href = applicationLaunchUrl(r.intent.job.application_url, r.intent.id);
       else setNotice('Application linked and started as a draft.');
       setNotice(
         'Application started as a Draft. The extension or email receipt will update its status.'

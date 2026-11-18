@@ -151,6 +151,7 @@ export interface AppliedResumeSnapshot {
   filename: string;
   mimeType: string;
   base64?: string | null;
+  archiveHash?: string;
   markdown?: string | null;
   isTailored?: boolean;
   matchScore?: number | null;
