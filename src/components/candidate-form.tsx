@@ -950,70 +950,28 @@ export function CandidateForm({
               </select>
             </div>
 
-            {/* Checkboxes for Work Auth */}
-            <label className="text-foreground border-border/60 bg-muted/20 hover:bg-muted/40 flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-xs font-medium transition-colors">
-              <input
-                type="checkbox"
-                aria-label="Authorized to work in the US"
-                className="accent-primary mt-0.5 size-4 cursor-pointer rounded"
-                checked={fields.authorized_in_usa === true}
-                onChange={(e) => setField('authorized_in_usa', e.target.checked)}
-              />
-              <div>
-                <span className="block font-semibold">Authorized to work in the US</span>
-                <span className="text-muted-foreground text-[11px] font-normal">
-                  Legally eligible to work in the United States without employer restriction.
-                </span>
-              </div>
-            </label>
-
-            <label className="text-foreground border-border/60 bg-muted/20 hover:bg-muted/40 flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-xs font-medium transition-colors">
-              <input
-                type="checkbox"
-                aria-label="Will require sponsorship now"
-                className="accent-primary mt-0.5 size-4 cursor-pointer rounded"
-                checked={fields.need_sponsorship_now === true}
-                onChange={(e) => setField('need_sponsorship_now', e.target.checked)}
-              />
-              <div>
-                <span className="block font-semibold">Needs sponsorship now</span>
-                <span className="text-muted-foreground text-[11px] font-normal">
-                  Requires current visa transfer or employment sponsorship.
-                </span>
-              </div>
-            </label>
-
-            <label className="text-foreground border-border/60 bg-muted/20 hover:bg-muted/40 flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-xs font-medium transition-colors">
-              <input
-                type="checkbox"
-                aria-label="Will require sponsorship in future"
-                className="accent-primary mt-0.5 size-4 cursor-pointer rounded"
-                checked={fields.need_sponsorship_future === true}
-                onChange={(e) => setField('need_sponsorship_future', e.target.checked)}
-              />
-              <div>
-                <span className="block font-semibold">Needs sponsorship in future</span>
-                <span className="text-muted-foreground text-[11px] font-normal">
-                  Will require future visa sponsorship (e.g. STEM OPT to H-1B transition).
-                </span>
-              </div>
-            </label>
-
-            <label className="text-foreground border-border/60 bg-muted/20 hover:bg-muted/40 flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-xs font-medium transition-colors">
-              <input
-                type="checkbox"
-                aria-label="Open to relocation"
-                className="accent-primary mt-0.5 size-4 cursor-pointer rounded"
-                checked={fields.open_to_relocation === true}
-                onChange={(e) => setField('open_to_relocation', e.target.checked)}
-              />
-              <div>
-                <span className="block font-semibold">Open to relocation</span>
-                <span className="text-muted-foreground text-[11px] font-normal">
-                  Willing to move for on-site or hybrid opportunities.
-                </span>
-              </div>
-            </label>
+            {([
+              ['authorized_in_usa', 'Authorized to work in the US'],
+              ['need_sponsorship_now', 'Needs sponsorship now'],
+              ['need_sponsorship_future', 'Needs sponsorship in the future'],
+              ['open_to_relocation', 'Open to relocation'],
+            ] as const).map(([field, label]) => (
+              <label key={field} className="text-foreground block text-xs font-medium">
+                {label}
+                <select
+                  className="border-border/60 bg-background mt-1 h-9 w-full rounded-lg border px-2"
+                  value={typeof fields[field] === 'boolean' ? String(fields[field]) : ''}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setField(field, value === '' ? null : value === 'true');
+                  }}
+                >
+                  <option value="">Not answered</option>
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
+              </label>
+            ))}
           </div>
         </div>
 

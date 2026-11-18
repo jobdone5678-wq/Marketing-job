@@ -22,7 +22,7 @@
     'authorized_in_usa', 'needs_sponsorship', 'open_to_relocation', 'visa_status', 'work_authorization',
     'end_client', 'point_of_contact', 'pay_rate', 'vendor_email', 'personal_email', 'contract_type',
     'summary', 'bio', 'gender', 'race', 'veteran', 'veteran_status', 'disability', 'disability_status', 'availability', 'salary_expectation',
-    'how_heard', 'highest_education', 'school', 'e_signature', 'consent'
+    'how_heard', 'highest_education', 'school', 'graduation_year', 'preferred_work_type', 'current_salary', 'e_signature', 'consent'
   ]);
 
   // Adapters spell a fact as "current_state" or "current state"; normalise before lookup.
@@ -41,7 +41,7 @@
     current_location: ['location', 'current location', 'present location', 'city and state', 'city state', 'city, state', 'city and country', 'city & state'],
     current_state: ['state', 'province', 'region', 'current state', 'address level1', 'state province', 'state/province', 'which state', 'current state province', 'state of residence'],
     zip_code: ['zip', 'zip code', 'postal code', 'postcode', 'zip postal code', 'zipcode', 'postal code number'],
-    country: ['country', 'country name', 'nationality', 'country of residence', 'current country', 'which country', 'country region'],
+    country: ['country', 'country name', 'country of residence', 'current country', 'which country', 'country region'],
     full_address: ['street address', 'address line1', 'address line 1', 'address', 'street', 'address1', 'home address', 'mailing address', 'current address', 'address line one', 'street address line 1'],
     linkedin_url: ['linkedin', 'linkedin profile', 'linkedin url', 'urls linkedin', 'linkedin profile url', 'linked in'],
     github_url: ['github', 'github url', 'github profile', 'urls github', 'github com'],
@@ -61,11 +61,7 @@
       'are you authorized to work',
       'authorized to work',
       'legally authorized',
-      'are you currently and permanently based in the united states or canada',
-      'permanently based in the united states or canada',
-      'based in the united states or canada',
-      'based in the united states',
-      'us or canada',
+      'authorized to work in the us',
       'are you authorized to work in the country where the job is located',
       'authorized to work in the country where the job is located',
       'do you have the legal right to work in the united states',
@@ -89,14 +85,14 @@
       'sponsorship required',
       'sponsorship for employment visa status',
       'need sponsorship now',
-      'need sponsorship future'
+      'need sponsorship future', 'sponsorship', 'needs sponsorship now', 'needs sponsorship in the future'
     ],
     visa_status: [
       'visa status', 'visa', 'current visa', 'work authorization status', 'current work authorization',
       'immigration status', 'work eligibility', 'work authorization type', 'visa type', 'employment authorization status',
       'us work authorization', 'visa sponsorship status', 'work authorization'
     ],
-    open_to_relocation: ['willing to relocate', 'are you willing to relocate', 'open to relocation', 'willing to move', 'are you open to relocation', 'open to moving'],
+    open_to_relocation: ['willing to relocate', 'are you willing to relocate', 'open to relocation', 'willing to move', 'are you open to relocation', 'open to moving', 'willingness to relocate', 'relocation willingness'],
     end_client: ['end client', 'client', 'client company', 'client name', 'customer', 'customer company', 'end client company', 'client organization'],
     point_of_contact: ['point of contact', 'poc', 'contact person', 'client contact', 'hiring manager', 'recruiter contact', 'vendor contact'],
     pay_rate: ['pay rate', 'rate', 'hourly rate', 'salary', 'compensation', 'wage', 'hourly', 'bill rate', 'pay'],
@@ -114,6 +110,9 @@
     how_heard: ['how did you hear about us', 'how did you hear about this role', 'how did you hear about this opportunity', 'how did you find this job', 'referral source', 'source', 'application source', 'where did you hear about us', 'how did you hear'],
     highest_education: ['highest education', 'highest degree', 'highest level of education', 'degree', 'degree level', 'education level', 'level of education'],
     school: ['school', 'university', 'college', 'institution', 'educational institution'],
+    graduation_year: ['graduation year', 'year of graduation', 'year graduated'],
+    preferred_work_type: ['preferred work type', 'work arrangement', 'preferred work arrangement'],
+    current_salary: ['current salary', 'current compensation'],
     consent: [
       'agree to terms',
       'agree to the terms',
@@ -171,7 +170,25 @@
       return match.test(text) || prefix.test(text) ||
         (!opposite.test(text) && (match.test(val) || match.test(elVal)));
     });
-    return matches.length === 1 ? matches[0] : (matches.length > 1 ? matches[0] : null);
+    return matches.length === 1 ? matches[0] : null;
+  }
+
+  function demographicBoolean(key, value, question) {
+    const saved = norm(value);
+    if (/decline|prefer not|do not wish/.test(saved)) return null;
+    if (key === 'veteran' && /\bveteran\b/.test(question)) {
+      if (/\bnot (?:a )?(?:protected )?veteran\b/.test(saved)) return false;
+      if (/identify as one or more classifications of protected veteran|^protected veteran$/.test(saved)) return true;
+    }
+    if (key === 'disability' && /\bdisability\b/.test(question)) {
+      if (/not have a disability|^no disability$/.test(saved)) return false;
+      if (/have a disability/.test(saved)) return true;
+    }
+    if (key === 'race' && /hispanic|latino/.test(question)) {
+      if (/\bnot hispanic or latino\b/.test(saved)) return false;
+      if (saved === 'hispanic or latino') return true;
+    }
+    return null;
   }
 
   function pickOption(field, desired) {
@@ -256,11 +273,9 @@
       if (d.includes('sponsorship') && /sponsor/i.test(t)) return true;
 
       // General substring inclusion fallback
-      if (dClean && tClean.length >= 3 && (dClean.includes(tClean) || tClean.includes(dClean))) return true;
-
       return false;
     });
-    if (fuzzyMatches.length >= 1) return fuzzyMatches[0];
+    if (fuzzyMatches.length === 1) return fuzzyMatches[0];
     return null;
   }
 
@@ -290,7 +305,9 @@
 
     const rawPhone = String(facts.phone || candidate.phone || '').trim();
     const phoneDigits = rawPhone.replace(/\D/g, '');
-    const phone = phoneDigits.length >= 10 ? phoneDigits.slice(-10) : rawPhone;
+    const phone = rawPhone.startsWith('+') && !rawPhone.startsWith('+1') ? rawPhone
+      : /^1\d{10}$/.test(phoneDigits) ? phoneDigits.slice(1)
+      : phoneDigits.length === 10 ? phoneDigits : rawPhone;
 
     const firstName = facts.first_name || candidate.first_name || names[0] || '';
     const preferredFirst = facts.preferred_first_name || facts.preferred_name || candidate.preferred_first_name || candidate.preferred_name || firstName;
@@ -322,7 +339,7 @@
       location: loc,
       zip_code: facts.zip_code || candidate.zip_code || candidate.zip || candidate.postal_code || '',
       country: facts.country ?? candidate.country ?? '',
-      full_address: facts.full_address || candidate.full_address || candidate.address || candidate.street_address || [city, state, candidate.country || facts.country].filter(Boolean).join(', '),
+      full_address: facts.full_address || candidate.full_address || candidate.address || candidate.street_address || '',
       current_employer: facts.current_employer || candidate.current_employer || facts.current_company || candidate.current_company || candidate.company || '',
       current_title: facts.current_job_title || candidate.current_job_title || candidate.headline || '',
       linkedin_url: linkedin,
@@ -342,7 +359,7 @@
       pay_rate: facts.pay_rate || candidate.pay_rate || '',
       vendor_email: facts.vendor_email || candidate.vendor_email || '',
       personal_email: facts.personal_email || candidate.personal_email || '',
-      contract_type: facts.contract_type || candidate.contract_type || '',
+      contract_type: facts.contract_type || candidate.contract_type || facts.employment_types || candidate.employment_types || '',
       summary: candidate.summary || candidate.bio || facts.summary || facts.bio || '',
       bio: candidate.bio || candidate.summary || facts.bio || facts.summary || '',
       gender: gender,
@@ -353,7 +370,7 @@
       disability: disability,
       disability_status: disability,
       availability: facts.availability || candidate.availability || candidate.available_to_join || candidate.notice_period || '',
-      salary_expectation: facts.pay_rate || candidate.expected_salary || candidate.current_salary || candidate.pay_rate || '',
+      salary_expectation: facts.expected_salary || candidate.expected_salary || '',
       how_heard: facts.how_heard || candidate.how_heard || '',
       highest_education: facts.highest_qualification || candidate.highest_qualification || candidate.degree || candidate.highest_education || '',
       school: facts.school || candidate.university_name || candidate.school || candidate.institution || '',
@@ -361,17 +378,15 @@
       languages: candidate.languages || [],
       employment_history: candidate.employment_history || [],
       education_history: candidate.education_history || [],
-      e_signature: fullName,
-      consent: true,
       known_authorization: rawAuth !== undefined,
       known_sponsorship: sponsorPrimary !== undefined || sponsorFuture !== undefined
     };
   }
 
   // United States work authorization only answers a question about the United States.
-  const US_QUESTION = /\b(united states|u\.s\.a|u\.s\.|usa|america)\b/i;
+  const US_QUESTION = /\b(?:united states|usa|(?:in (?:the )?)us|u s(?: a)?)\b/i;
   function isUSQuestion(text) {
-    return US_QUESTION.test(String(text || ''));
+    return US_QUESTION.test(norm(text));
   }
 
   // Which profile fact a control is asking for, and how sure we are.
@@ -474,18 +489,28 @@
         return { field, factKey, status: 'manual', reason: 'Candidate signature is required.' };
       }
       // A known United States authorization must not answer a question about an unrelated foreign country.
-      if (factKey === 'authorized_in_usa' && !isUSQuestion(nl + ' ' + nh) && !/country for which you applied|where the job is located|legally authorized|work authorization/i.test(nl + ' ' + nh)) {
+      if (factKey === 'authorized_in_usa' && !isUSQuestion(nl) && !/^(?:are you (?:legally )?authorized to work|legally authorized|work authorization|authorized to work|authorized in usa)$/.test(nl || nh)) {
         return { field, factKey, status: 'unknown', reason: 'Question is not about United States work authorization.' };
       }
 
       let val = values[factKey];
       if (factKey === 'needs_sponsorship') {
         const question = nl + ' ' + nh;
-        if (/\bnow\b/.test(question) && !/\bfuture\b/.test(question)) val = candidate.confirmed_facts?.need_sponsorship_now ?? candidate.need_sponsorship_now;
-        if (/\bfuture\b/.test(question) && !/\bnow\b/.test(question)) val = candidate.confirmed_facts?.need_sponsorship_future ?? candidate.need_sponsorship_future;
+        const now = /\b(?:now|currently|current)\b/.test(question);
+        const future = /\bfuture\b/.test(question);
+        if (now !== future) val = (candidate.confirmed_facts || candidate)[now ? 'need_sponsorship_now' : 'need_sponsorship_future'];
       }
       if (val === null || val === undefined || val === '') {
         return { field, status: 'unknown', factKey, reason: 'Candidate fact is missing.' };
+      }
+
+      if (typeof val === 'boolean' && (
+        factKey === 'authorized_in_usa' && /\b(?:not authorized|not eligible|unauthorized)\b/.test(nl) ||
+        factKey === 'needs_sponsorship' && /\b(?:not need|not require|without)\b/.test(nl) ||
+        factKey === 'open_to_relocation' && /\b(?:not willing|not open|unwilling)\b/.test(nl))) val = !val;
+
+      if (isChoiceKind(field.kind) && pickBooleanOption(field.options, true) && pickBooleanOption(field.options, false)) {
+        val = demographicBoolean(factKey, val, nl) ?? val;
       }
 
       // "City and State" asks for both parts in one box; the mapping already carries both.
@@ -502,6 +527,7 @@
         }
       }
       if (isMultiKind(field.kind)) {
+        if (typeof val === 'boolean') return { field, factKey, status: 'needs_review' };
         const entries = Array.isArray(val) ? val : String(val).split(/[,;|\n]+/);
         if (field.kind === 'multi-combobox') return { field, factKey, value: entries.map(String).map(value => value.trim()).filter(Boolean).slice(0, 20), status: 'supported' };
         const choices = entries.map(entry => pickOption(field, entry)).filter(Boolean).map(optionText);
@@ -528,9 +554,9 @@
         const hasNo = field.options?.some(o => /^(no|false)$/i.test(optionText(o)));
         if (hasYes && hasNo) {
           const ql = (field.label || '').toLowerCase();
-          const candidateHasBachelor = /bachelor|b\.?tech|b\.?s|b\.?a|undergraduate/i.test(String(val)) || /bachelor/i.test(candidate.source_text || '') || /bachelor/i.test(candidate.summary || '');
-          const candidateHasMaster = /master|m\.?s|m\.?tech|mba/i.test(String(val));
-          const candidateHasDoctorate = /phd|doctor/i.test(String(val));
+          const candidateHasBachelor = /\b(?:bachelor|b\.?tech|b\.?s|b\.?a|undergraduate)\b/i.test(String(val));
+          const candidateHasMaster = /\b(?:master|m\.?s|m\.?tech|mba)\b/i.test(String(val));
+          const candidateHasDoctorate = /\b(?:ph\.?d|doctor|doctorate)\b/i.test(String(val));
 
           let satisfies = false;
           if (/(master|graduate degree)/i.test(ql)) {

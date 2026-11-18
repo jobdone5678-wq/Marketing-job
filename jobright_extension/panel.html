@@ -54,14 +54,7 @@
     </section>
     <section class="actions">
       <button id="autofill" class="primary" type="button" disabled><span aria-hidden="true">⚡</span> Autofill Application Now</button>
-      <label id="ai-screening-option"><input type="checkbox" id="ai-screening" checked> Use NextKinHR AI to draft bio and screening answers from my profile</label>
       <label id="auto-submit-option" hidden><input type="checkbox" id="auto-submit"> Submit this application after autofill if the final form is ready</label>
-      <button id="review-answers" class="small-button" type="button" hidden>Save reusable answers</button>
-      <section id="answer-review" aria-label="Reusable answers" hidden>
-        <p>Select the answers you want to reuse on future applications.</p>
-        <div id="answer-options"></div>
-        <button id="save-answers" class="small-button" type="button">Save selected answers</button>
-      </section>
       <p id="notice" role="status" hidden></p>
       <section id="results" class="results" aria-labelledby="results-title" hidden>
         <div class="results-heading"><h2 id="results-title"></h2><span id="verified" class="badge">Verified</span></div>
@@ -89,12 +82,8 @@
       </details>
       <details id="profile-panel" hidden>
         <summary>Your Autofill Information</summary>
-        <div class="input-row">
-          <label for="zip-code-input">Postal Code</label>
-          <input type="text" id="zip-code-input" placeholder="Enter postal code">
-        </div>
         <dl id="profile-facts"></dl>
-        <button id="open-profile" class="link" type="button">Open My Profile &amp; Resume</button>
+        <button id="open-profile" class="link" type="button">Open My Applications and Resume</button>
       </details>
     </section>
   </main>

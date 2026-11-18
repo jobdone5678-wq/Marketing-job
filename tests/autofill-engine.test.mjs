@@ -278,6 +278,10 @@ test('Part 1: Hardened Checkboxes - ARIA / custom checkboxes and data-state', ()
   custom.setAttribute('role', 'checkbox');
   custom.setAttribute('aria-checked', 'false');
   custom.setAttribute('data-state', 'unchecked');
+  custom.addEventListener('click', () => {
+    custom.setAttribute('aria-checked', 'true');
+    custom.setAttribute('data-state', 'checked');
+  });
   mockDoc.body.appendChild(custom);
 
   assert.equal(writer.read({ kind: 'checkbox', element: custom }), false);
@@ -349,6 +353,10 @@ test('Part 2: Hardened Radios - Button-based choice groups (Ashby/Greenhouse/Lev
   const btnYes = new MockNode('BUTTON');
   btnYes.textContent = 'Yes';
   btnYes.setAttribute('data-option', 'true');
+  btnYes.addEventListener('click', () => {
+    btnYes.setAttribute('aria-checked', 'true');
+    btnYes.setAttribute('data-state', 'checked');
+  });
 
   const btnNo = new MockNode('BUTTON');
   btnNo.textContent = 'No';
@@ -371,6 +379,17 @@ test('Part 2: Hardened Radios - Button-based choice groups (Ashby/Greenhouse/Lev
   assert.equal(btnYes.getAttribute('aria-checked'), 'true');
   assert.equal(btnYes.getAttribute('data-state'), 'checked');
   assert.ok(btnYes.eventLog.includes('click'));
+});
+
+test('A portal that ignores a custom checkbox click is not reported as filled', async () => {
+  const control = new MockNode('DIV');
+  control.setAttribute('role', 'checkbox');
+  control.setAttribute('aria-checked', 'false');
+  mockDoc.body.appendChild(control);
+  const field = { label: 'Open to relocation', kind: 'checkbox', element: control };
+  const receipts = await writer.applyFill([{ field, status: 'supported', factKey: 'open_to_relocation', value: true }], { isCurrent: () => true });
+  assert.equal(receipts.length, 0);
+  assert.equal(control.getAttribute('aria-checked'), 'false');
 });
 
 test('Part 3: Dropdowns - Native <select> with prototype setter, selectedIndex & events', () => {

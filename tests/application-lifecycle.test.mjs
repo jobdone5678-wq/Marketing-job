@@ -366,6 +366,56 @@ test('Application Lifecycle: the worker retrieves the original resume for the ac
   assert.equal((await worker.loadApplicationResume(candidateId)).base64, 'AQID');
 });
 
+test('Autofill resumes a new wizard document once and rejects other postings', async () => {
+  const candidateId = '8b1d6779-6dc3-419c-855a-fa293123aba0';
+  const account = { origin: 'https://www.nextkinhr.com', token: 'paired-token' };
+  const state = {};
+  const noop = { addListener() {} };
+  const sandbox = {
+    URL, URLSearchParams, AbortSignal,
+    chrome: {
+      runtime: { onInstalled: noop, onStartup: noop, onConnect: noop, onMessage: noop },
+      tabs: { onUpdated: noop, onRemoved: noop },
+      storage: { local: { get: async () => ({ ...account }) }, session: {
+        get: async key => ({ [key]: state[key] }), set: async records => Object.assign(state, records),
+        remove: async key => { delete state[key]; },
+      } },
+    },
+    fetch: async url => url.includes('/candidates?') ? Response.json({ candidates: [{ id: candidateId,
+      provenance_status: 'confirmed', confirmed_facts: { full_name: 'Fixture Candidate' } }] }) : new Response(null, { status: 404 }),
+  };
+  runInNewContext(readFileSync(new URL('../jobright_extension/background.js', import.meta.url), 'utf8'), sandbox);
+  const first = { documentId: 'first', url: 'https://jobs.example.test/jobs/123/apply/contact' };
+  const next = { documentId: 'next', url: 'https://jobs.example.test/jobs/123/apply/preferences' };
+  await sandbox.queueApplicationStep(1, first, { candidateId });
+  assert.equal(await sandbox.claimApplicationStep(1, first), null);
+  assert.equal((await sandbox.claimApplicationStep(1, next)).profile.id, candidateId);
+  assert.equal(await sandbox.claimApplicationStep(1, next), null);
+  await sandbox.queueApplicationStep(1, first, { candidateId });
+  assert.equal(await sandbox.claimApplicationStep(1, { ...next, url: next.url.replace('/123/', '/456/') }), null);
+});
+
+test('The Autofill profile endpoint returns candidate-submitted values only', async () => {
+  const actor = { id: 'candidate-user', role: 'candidate' };
+  const candidate = { id: 'candidate-profile', version: 2, provenance_status: 'confirmed', email: 'account@example.test',
+    confirmed_facts: { full_name: 'Fixture Candidate', open_to_relocation: false, raw_text: 'Never use this resume text' } };
+  const automatic = { ...candidate, id: 'automatic', confirmed_facts: { full_name: 'Unreviewed',
+    notes: 'Profile created from an uploaded resume. Review the extracted facts and edit anything that is wrong.' } };
+  const query = { select() { return this; }, eq() { return this; }, or() { return this; }, order() { return this; },
+    async limit() { return { data: [automatic, candidate] }; } };
+  const { GET } = loadRoute('extension/candidates', {
+    '@/lib/capture/server': { extensionRoute: (_request, work) => work(), extensionProfile: async () => actor },
+    '@/lib/db/admin': { database: () => ({ from: () => query }), checkDb: assert.ifError },
+    '@/lib/ai/schemas': { textFields: ['full_name', 'email'], booleanFields: ['open_to_relocation'] }, zod: { z },
+  });
+  const response = await GET(new Request('https://www.nextkinhr.com/api/extension/candidates?savedOnly=true'));
+  assert.equal(response.candidates.length, 1);
+  assert.equal(response.candidates[0].id, candidate.id);
+  assert.equal(response.candidates[0].open_to_relocation, false);
+  assert.equal(response.candidates[0].email, undefined);
+  assert.equal(response.candidates[0].confirmed_facts.raw_text, undefined);
+});
+
 test('Application Lifecycle: Autofill fills ten saved candidate fields without a resume', async () => {
   const url = new URL('https://careers.example.test/jobs/123/apply');
   class Input extends EventTarget {

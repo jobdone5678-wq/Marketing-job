@@ -115,7 +115,7 @@
         const stored = data.candidateProfile || data.savedProfiles?.[activeId];
         const fresh = await Promise.resolve(chrome.runtime.sendMessage({ action: 'load_application_profile', candidateId: stored?.id }))
           .catch(() => null);
-        const candidate = fresh || stored;
+        const candidate = fresh;
         const resume = data.resumeData?.candidate_id === candidate?.id ? data.resumeData : data.savedResumes?.['doc_' + candidate?.id];
         return { candidate, resume };
       }
@@ -627,7 +627,8 @@
         const url = window.location.href;
         const page = globalThis.NextkinApplication.scan?.();
         const candidate = await chrome.runtime.sendMessage({ action: 'load_application_profile', candidateId: currentCandidate.id })
-          .catch(() => null) || currentCandidate;
+          .catch(() => null);
+        if (!candidate) throw new Error('Save your candidate details in My Applications and Resume, then reconnect the extension.');
         const resume = currentResume;
         const [tracking, resumeFile] = await Promise.all([
           page?.hasForm ? chrome.runtime.sendMessage({
@@ -637,12 +638,11 @@
             action: 'load_application_resume', candidateId: candidate.id,
           }).catch(() => null),
         ]);
-        const res = await globalThis.NextkinApplication.fill(
+        const res = await globalThis.NextkinApplication.startAutofill(
           url,
           candidate,
           resumeFile ? { ...resume, ...resumeFile } : resume,
-          {},
-          {}
+          resume?.id
         );
 
         if (res.error) {
@@ -651,9 +651,7 @@
           if (sectionsBlock) sectionsBlock.style.display = 'none';
         } else {
           const filledArr = res.filled || [];
-          const unfilledArr = (res.unfilled && res.unfilled.length)
-            ? res.unfilled
-            : (res.questions || []).map(q => ({ label: q.label || q.id, reason: 'Needs manual answer' }));
+          const unfilledArr = res.unfilled || [];
 
           const trackingWarning = tracking?.tracked ? '' : ` ${tracking?.error || 'Application tracking is unavailable. Check your NextKinHR connection.'}`;
           statusMsg.className = `nk-status-msg ${trackingWarning ? 'error' : 'success'} show`;

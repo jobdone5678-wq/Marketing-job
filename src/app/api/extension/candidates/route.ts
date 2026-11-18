@@ -2,6 +2,9 @@ import { extensionRoute, extensionProfile, cors } from '@/lib/capture/server';
 import { database, checkDb, CaptureError } from '@/lib/db/admin';
 import { z } from 'zod';
 import type { Candidate } from '@/types/database';
+import { textFields, booleanFields } from '@/lib/ai/schemas';
+
+const unsavedResumeNote = 'Profile created from an uploaded resume. Review the extracted facts and edit anything that is wrong.';
 
 export async function OPTIONS(request: Request) {
   return cors(request, new Response(null, { status: 204 }));
@@ -91,8 +94,7 @@ async function profileFromResumeUpload(profileId: string): Promise<string | null
   const payload = {
     ...fields,
     is_active_bench: true,
-    notes:
-      'Profile created from an uploaded resume. Review the extracted facts and edit anything that is wrong.',
+    notes: unsavedResumeNote,
     employment_history: extracted.employmentHistory || [],
     education_history: extracted.educationHistory || [],
     evidence: extracted.evidence || [],
@@ -137,7 +139,9 @@ async function profileFromResumeUpload(profileId: string): Promise<string | null
 export async function GET(request: Request) {
   return extensionRoute(request, async () => {
     const profile = await extensionProfile(request);
-    const requested = new URL(request.url).searchParams.get('candidateId');
+    const params = new URL(request.url).searchParams;
+    const requested = params.get('candidateId');
+    const savedOnly = params.get('savedOnly') === 'true';
     if (requested) z.uuid().parse(requested);
 
     // 1. The candidate profile this account owns.
@@ -155,12 +159,24 @@ export async function GET(request: Request) {
         throw new CaptureError('Candidate not found or not assigned to this account.', 404);
     } else {
       candidates = await ownCandidates(profile.id, 'confirmed');
-      if (!candidates.length) candidates = await ownCandidates(profile.id, 'legacy_unconfirmed');
+      if (!savedOnly && !candidates.length) candidates = await ownCandidates(profile.id, 'legacy_unconfirmed');
 
-      if (!candidates.length) {
+      if (!savedOnly && !candidates.length) {
         const created = await profileFromResumeUpload(profile.id);
         if (created) candidates = await ownCandidates(profile.id, 'confirmed');
       }
+    }
+
+    if (savedOnly) {
+      const keys = [...textFields, ...booleanFields, 'employment_types'];
+      const saved = candidates.flatMap(candidate => {
+        const facts = (candidate.confirmed_facts || {}) as Record<string, unknown>;
+        if (candidate.provenance_status !== 'confirmed' || facts.notes === unsavedResumeNote ||
+          typeof facts.full_name !== 'string' || !facts.full_name.trim()) return [];
+        const fields = Object.fromEntries(keys.filter(key => Object.hasOwn(facts, key)).map(key => [key, facts[key]]));
+        return [{ ...fields, id: candidate.id, version: candidate.version, provenance_status: 'confirmed', confirmed_facts: fields }];
+      });
+      return { candidates: saved, actorId: profile.id, role: profile.role, ownCandidateId: saved[0]?.id || null };
     }
 
     const resolvedCandidates = (candidates || []).map((c: any) => {

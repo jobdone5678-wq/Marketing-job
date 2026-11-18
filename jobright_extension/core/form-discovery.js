@@ -3,7 +3,8 @@
 
   // Every control shape a job application uses, across portals.
   const COMBO_SELECTOR = '[role="combobox"], [aria-haspopup="listbox"], input[list], .select2-selection, .ng-select, kendo-dropdownlist, kendo-multiselect, button[class*="select-trigger" i], button[class*="selectTrigger" i], button[data-testid*="select" i], button[data-testid*="combobox" i], [data-slot="select-trigger"], [data-automation-id*="prompt" i], [data-automation-id*="select" i], [id^="headlessui-listbox-button"]';
-  const CONTROL_SELECTOR = 'input, textarea, select, [role="checkbox"], [role="switch"], [data-slot="checkbox"], [data-slot="switch"], [contenteditable=""], [contenteditable="true"], iframe, ' + COMBO_SELECTOR;
+  const CHECK_SELECTOR = 'input[type="checkbox"], [role="checkbox"], [role="switch"], [data-slot="checkbox"], [data-slot="switch"]';
+  const CONTROL_SELECTOR = 'input, textarea, select, ' + CHECK_SELECTOR + ', [contenteditable=""], [contenteditable="true"], iframe, ' + COMBO_SELECTOR;
   const available = el => !el.disabled && !el.readOnly && el.getAttribute('aria-disabled') !== 'true' && el.getAttribute('aria-hidden') !== 'true';
   const visible = el => available(el) && !!el.getClientRects().length && el.ownerDocument.defaultView.getComputedStyle(el).visibility !== 'hidden';
   const visibleChoice = el => available(el) && (visible(el) || [...(el.labels || [])].some(visible));
@@ -47,6 +48,11 @@
     if (!found) {
       const parentLbl = el.closest('label');
       if (parentLbl) found = clean(labelText(parentLbl));
+    }
+
+    if (!found && (el.matches(`${CHECK_SELECTOR}, [role="radio"]`))) {
+      const ownLabel = clean(el.textContent);
+      if (ownLabel.length <= 200) found = ownLabel;
     }
 
     // Table based layouts (Taleo, PeopleSoft): the row header names the field.
@@ -115,10 +121,16 @@
   }
 
   function choiceQuestion(el) {
-    const group = el.closest('fieldset, [role="radiogroup"], [role="group"], ' + QUESTION_CONTAINER);
-    return group && (group.querySelector('legend') || !group.querySelector('input:not([type=radio]):not([type=checkbox]):not([type=hidden]), select, textarea'))
-      ? groupTitle(group) : '';
+    const selector = '[role="radiogroup"], [role="group"], fieldset, ' + QUESTION_CONTAINER;
+    for (let group = el.closest(selector); group; group = group.parentElement?.closest(selector)) {
+      const title = groupTitle(group);
+      if (title) return title;
+    }
+    return '';
   }
+
+  const controlName = el => clean((el.name || el.id || '').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' '));
+  const booleanFacts = new Set(['authorized_in_usa', 'needs_sponsorship', 'open_to_relocation', 'consent']);
 
   // The portal adapter for this page: a specific one always beats the generic fallback.
   function activeAdapter(){
@@ -140,11 +152,12 @@
       for (const group of scope.querySelectorAll('fieldset, [role="group"], [class*="checkbox-group" i], [class*="checkboxGroup" i], [class*="checkbox_group" i], [data-testid*="checkbox" i]')) {
         if (group.closest('#mp-copilot-root') || !group.getClientRects().length) continue;
         if (group.querySelector('button[data-option]')) continue; // yes/no groups are choices
-        const boxes = Array.from(group.querySelectorAll('input[type="checkbox"], [role="checkbox"]')).filter(visibleChoice);
+        const boxes = Array.from(group.querySelectorAll(CHECK_SELECTOR)).filter(visibleChoice);
         if (boxes.length < 2 || boxes.some(b => seen.has(b)) ||
           group.querySelector('input:not([type=checkbox]):not([type=hidden]), select, textarea, fieldset')) continue;
         const title = groupTitle(group);
         if (!title) continue;
+        if (boxes.some(box => booleanFacts.has(root.NextkinFieldMapping?.resolveFact(label(box), controlName(box))?.key))) continue;
         boxes.forEach(b => seen.add(b));
         const groupHint = adapter?.hint(group) || '';
         fields.push({
@@ -175,7 +188,8 @@
           continue;
         }
         const role = el.getAttribute('role');
-        if (['hidden', 'file', 'password', 'submit', 'reset', 'button'].includes(el.type) && role !== 'combobox' && role !== 'checkbox' && el.getAttribute('aria-haspopup') !== 'listbox') continue;
+        const isCheck = el.matches(CHECK_SELECTOR);
+        if (['hidden', 'file', 'password', 'submit', 'reset', 'button'].includes(el.type) && role !== 'combobox' && !isCheck && el.getAttribute('aria-haspopup') !== 'listbox') continue;
         // A yes/no group owns the hidden box behind its buttons.
         if (el.type === 'checkbox' && el.closest('.ashby-application-form-input-yesno, [class*="yesno" i], [class*="yes-no" i], [data-option]')) continue;
         const text = label(el), hint = adapter?.hint(el) || '';
@@ -184,7 +198,6 @@
         const isCombo = el.tagName !== 'SELECT' && el.matches(COMBO_SELECTOR);
         if (el.tagName !== 'INPUT' && el.tagName !== 'SELECT' && el.tagName !== 'TEXTAREA' && el.querySelector('input[role="combobox"], input.select__input, select, textarea')) continue;
         if (el.parentElement?.closest(COMBO_SELECTOR) && (isCombo || el.tagName === 'INPUT') && !el.matches('[role="combobox"]')) continue;
-        const isCheck = el.type === 'checkbox' || role === 'checkbox' || role === 'switch';
         const isEditable = el.getAttribute('contenteditable') === '' || el.getAttribute('contenteditable') === 'true';
         const controlledList = isCombo && el.getRootNode().getElementById?.(el.getAttribute('aria-controls'));
         const multiCombo = isCombo && (el.matches(multiComboSelector) || controlledList?.matches(multiComboSelector));
@@ -201,21 +214,24 @@
           ? Array.from(el.options).filter(o => !o.disabled && !o.parentElement.disabled && o.value).map(o => ({ label: o.textContent.trim(), value: o.value, element: o }))
           : kind === 'radio' ? elements.map(r => ({ label: label(r) || r.value, value: r.value, element: r }))
           : el.list ? [...el.list.options].filter(available).map(o => ({ label: o.label || o.value, value: o.value, element: o })) : [];
-        const question = kind === 'radio' ? choiceQuestion(el) || groupLabel || text : text;
-        fields.push({ element: el, elements, key: 'field:' + fields.length + ':' + (el.id || el.name || hint), label: question, hint, kind, options, scope: groupLabel, excluded: excluded.test([question, hint, el.id, el.name, groupLabel].join(' ').replace(/[_-]/g, ' ')), adapter: adapter?.id || 'generic', editable: isEditable });
+        const question = kind === 'radio' ? choiceQuestion(el) || controlName(el) || text : text;
+        const factHint = hint || (kind === 'radio' || isCheck ? controlName(el) : '');
+        fields.push({ element: el, elements, key: 'field:' + fields.length + ':' + (el.id || el.name || factHint), label: question, hint: factHint, kind, options, scope: groupLabel, excluded: excluded.test([question, factHint, el.id, el.name, groupLabel].join(' ').replace(/[_-]/g, ' ')), adapter: adapter?.id || 'generic', editable: isEditable });
       }
 
       // Button-based choice groups (Ashby/Greenhouse/Lever Yes/No and segmented radio groups)
       for (const group of scope.querySelectorAll('fieldset, [role="group"], [role="radiogroup"], .application-question, [class*="application-question"], [class*="question"], div[data-testid*="question"]')) {
         if (group.closest('#mp-copilot-root') || !group.getClientRects().length) continue;
         const buttons = Array.from(group.querySelectorAll('button, [role="radio"], [role="button"]')).filter(b => {
+          if (b.type === 'radio') return false;
           const t = label(b);
           return t && t.length <= 200 && visible(b) && !/^(submit|apply|continue|next|back|save|upload|attach|remove|delete|cancel|sign in|log in)\b/i.test(t);
         });
         const yesNo = buttons.filter(b => /^(yes|no)$/i.test((b.textContent || '').trim()));
         const isChoice = yesNo.length >= 2 || (group.getAttribute('role') === 'radiogroup' && buttons.length >= 2);
         if (!isChoice) continue;
-        const opts = yesNo.length >= 2 ? yesNo : buttons;
+        const radios = buttons.filter(button => button.getAttribute('role') === 'radio');
+        const opts = radios.length >= 2 ? radios : yesNo.length >= 2 ? yesNo : buttons;
         if (opts.some(b => seen.has(b))) continue;
         opts.forEach(b => seen.add(b));
         const qLabel = groupTitle(group) || questionTitle(group);
@@ -243,24 +259,26 @@
   // Wizard / Multi-Step transition support
   const NEXT_TEXT_REGEX = /^(next|continue|proceed|save and continue|save & continue|next step|review & submit|review|next page|step \d+)\b/i;
 
+  function isStepNavigation(button) {
+    if (!button || !visibleChoice(button)) return false;
+    const text = clean(button.textContent || button.value || button.getAttribute('aria-label'));
+    if (/\b(?:submit|complete|finish|send)\b/i.test(text)) return false;
+    const id = button.getAttribute('data-automation-id') || button.getAttribute('data-testid') || '';
+    return NEXT_TEXT_REGEX.test(text) || /(?:^|[_-])(?:next|continue|nextstep)(?:$|[_-])/i.test(id);
+  }
+
   function findStepNavigation(scope = document) {
     const root = scope?.nodeType === 9 ? scope : (scope?.ownerDocument || document);
     const container = scope?.nodeType === 9 ? (scope.body || scope) : scope;
     const buttons = Array.from(container.querySelectorAll('button, input[type=button], input[type=submit], a[role=button], [role="button"]'));
-    const nextButton = buttons.find(b => {
-      if (!visibleChoice(b)) return false;
-      const t = clean(b.textContent || b.value || b.getAttribute('aria-label'));
-      const autoId = b.getAttribute('data-automation-id') || b.getAttribute('data-testid') || '';
-      return NEXT_TEXT_REGEX.test(t) || /(?:^|[_-])(?:next|continue|nextstep)(?:$|[_-])/i.test(autoId);
-    }) || null;
+    const nextButton = buttons.find(isStepNavigation) || null;
     return { nextButton };
   }
 
   function detectNewFields(previousFields, currentFields) {
     if (!Array.isArray(previousFields) || !previousFields.length) return currentFields || [];
-    const prevElements = new Set(previousFields.map(f => f.element).filter(Boolean));
-    const prevKeys = new Set(previousFields.map(f => f.key).filter(Boolean));
-    return (currentFields || []).filter(f => !prevElements.has(f.element) && !prevKeys.has(f.key));
+    return (currentFields || []).filter(field => !previousFields.some(previous =>
+      previous.element === field.element && previous.label === field.label && previous.kind === field.kind));
   }
 
   function observeStepTransitions(scope = document, callback) {
@@ -311,14 +329,14 @@
               }
             }
           }
-          if (m.type === 'attributes' && ['style', 'class', 'hidden', 'aria-hidden'].includes(m.attributeName)) {
+            if (m.removedNodes.length || m.type === 'characterData' || m.type === 'attributes') {
             significant = true;
           }
           if (significant) break;
         }
         if (significant) check('mutation');
       });
-      observer.observe(targetNode, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class', 'hidden', 'aria-hidden'] });
+      observer.observe(targetNode, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['style', 'class', 'hidden', 'aria-hidden', 'aria-label', 'aria-labelledby'] });
     }
 
     return {
@@ -333,5 +351,5 @@
     };
   }
 
-  root.NextkinForms = { discoverFields, label, findStepNavigation, detectNewFields, observeStepTransitions };
+  root.NextkinForms = { discoverFields, label, findStepNavigation, isStepNavigation, detectNewFields, observeStepTransitions };
 })(globalThis);

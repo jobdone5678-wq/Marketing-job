@@ -6,6 +6,7 @@ chrome.runtime.onInstalled.addListener(configurePanel);
 chrome.runtime.onStartup.addListener(configurePanel);
 
 const trackedKey = tabId => 'application-intent:' + tabId;
+const stepKey = tabId => 'application-next-step:' + tabId;
 const intentIdPattern = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
 
 function workspaceOrigin(value) {
@@ -63,6 +64,70 @@ async function loadApplicationResume(candidateId) {
   const params = new URLSearchParams({ candidateId, originalOnly: 'true' });
   const file = await loadApplicationData('resume-file?' + params);
   return file?.source === 'upload' && file.base64 && file.filename ? file : null;
+}
+
+async function loadSavedProfile(candidateId) {
+  const query = new URLSearchParams({ savedOnly: 'true' });
+  if (intentIdPattern.test(candidateId || '')) query.set('candidateId', candidateId);
+  const data = await loadApplicationData('candidates?' + query);
+  const profile = data?.candidates?.[0];
+  const facts = profile?.confirmed_facts;
+  if (profile?.provenance_status !== 'confirmed' || !facts?.full_name ||
+    String(facts.notes || '').startsWith('Profile created from an uploaded resume.')) return null;
+  return profile;
+}
+
+async function queueApplicationStep(tabId, sender, message) {
+  const { origin, token } = await chrome.storage.local.get(['origin', 'token']);
+  if (!workspaceOrigin(origin) || !token || !intentIdPattern.test(message.candidateId || '')) return;
+  const step = {
+    origin, token, formUrl: sender.url, documentId: sender.documentId,
+    candidateId: message.candidateId, expiresAt: Date.now() + 30000,
+    resumeDocumentId: intentIdPattern.test(message.resumeDocumentId || '') ? message.resumeDocumentId : null,
+  };
+  await chrome.storage.session.set({ [stepKey(tabId)]: step });
+}
+
+function sameApplicationStepScope(previous, current) {
+  if (previous.origin !== current.origin) return false;
+  const base = path => path.replace(/\/(?:apply|application|applyjob)(?:\/.*)?$/i, '').replace(/\/$/, '');
+  const previousKey = new URL(cleanApplicationUrl(new URL(previous)));
+  const currentKey = new URL(cleanApplicationUrl(new URL(current)));
+  for (const [key, value] of currentKey.searchParams) {
+    if (previousKey.searchParams.has(key) && previousKey.searchParams.get(key) !== value) return false;
+  }
+  const previousRoute = previousKey.hash.split('?')[0];
+  const currentRoute = currentKey.hash.split('?')[0];
+  if ((previousRoute || currentRoute) && base(previousRoute) !== base(currentRoute)) return false;
+  return previous.pathname === current.pathname || base(previous.pathname) === base(current.pathname);
+}
+
+async function continueTracking(tabId, step, url) {
+  const key = trackedKey(tabId);
+  const context = (await chrome.storage.session.get(key))[key];
+  if (context?.applicationUrl === cleanApplicationUrl(new URL(step.formUrl)) && context.token === step.token) {
+    await chrome.storage.session.set({ [key]: { ...context, applicationUrl: cleanApplicationUrl(url) } });
+  }
+}
+
+async function claimApplicationStep(tabId, sender) {
+  await pendingSteps.get(tabId);
+  const key = stepKey(tabId);
+  const step = (await chrome.storage.session.get(key))[key];
+  if (!step || step.documentId === sender.documentId || step.expiresAt < Date.now()) return null;
+  await chrome.storage.session.remove(key);
+  const url = new URL(sender.url);
+  const current = await chrome.storage.local.get(['origin', 'token']);
+  if (!sameApplicationStepScope(new URL(step.formUrl), url) || step.origin !== current.origin || step.token !== current.token ||
+    /(?:login|sign[-_]?in|register|creat(?:e|ing)[-_]?account)(?:$|[/_-])/i.test(url.pathname)) return null;
+  const [profile, resume] = await Promise.all([
+    loadSavedProfile(step.candidateId),
+    (step.resumeDocumentId ? loadApplicationData('resume?documentId=' + step.resumeDocumentId)
+      : loadApplicationResume(step.candidateId)).catch(() => null),
+  ]);
+  if (!profile) return null;
+  await continueTracking(tabId, step, url);
+  return { profile, resume, resumeDocumentId: step.resumeDocumentId };
 }
 
 async function prepareApplication(tabId, expectedUrl, job, candidateId, submittedFromPage = false, submissionEvidence) {
@@ -166,7 +231,7 @@ chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
 });
 
 chrome.tabs.onRemoved.addListener(tabId => {
-  void chrome.storage.session.remove(trackedKey(tabId));
+  void chrome.storage.session.remove([trackedKey(tabId), stepKey(tabId)]);
 });
 
 async function recordConfirmation(message, sender) {
@@ -208,6 +273,7 @@ async function recordConfirmation(message, sender) {
 
 const connectedPanels = new Set();
 const pendingTracking = new Map();
+const pendingSteps = new Map();
 
 chrome.runtime.onConnect.addListener(port => {
   if (port.name === 'nextkin_side_panel') {
@@ -236,11 +302,37 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     void loadApplicationResume(message.candidateId).then(reply, () => reply(null));
     return true;
   }
-  if (message?.action === 'load_application_profile' && sender.frameId === 0 && sender.tab?.id != null) {
-    const query = intentIdPattern.test(message.candidateId || '')
-      ? '?' + new URLSearchParams({ candidateId: message.candidateId }) : '';
-    void loadApplicationData('candidates' + query).then(data => reply(data?.candidates?.[0] ?? null), () => reply(null));
+  if (message?.action === 'load_application_profile' && sender.tab?.id != null) {
+    void loadSavedProfile(message.candidateId).then(reply, () => reply(null));
     return true;
+  }
+  if (sender.frameId === 0 && sender.tab?.id != null && sender.documentId && /^https:\/\//.test(sender.url || '')) {
+    const tabId = sender.tab.id;
+    if (message?.action === 'queue_application_step') {
+      const pending = queueApplicationStep(tabId, sender, message);
+      pendingSteps.set(tabId, pending);
+      void pending.then(() => reply(true), () => reply(false)).finally(() => {
+        if (pendingSteps.get(tabId) === pending) pendingSteps.delete(tabId);
+      });
+      return true;
+    }
+    if (message?.action === 'claim_application_step') {
+      void claimApplicationStep(tabId, sender).then(reply, () => reply(null));
+      return true;
+    }
+    if (message?.action === 'clear_application_step') {
+      void (async () => {
+        await pendingSteps.get(tabId);
+        const key = stepKey(tabId);
+        const step = (await chrome.storage.session.get(key))[key];
+        if (step?.documentId === sender.documentId) {
+          await chrome.storage.session.remove(key);
+          const url = new URL(sender.url);
+          if (sameApplicationStepScope(new URL(step.formUrl), url)) await continueTracking(tabId, step, url);
+        }
+      })().then(() => reply(true), () => reply(false));
+      return true;
+    }
   }
   if (message?.type === 'application-intent-opened' && sender.frameId === 0
     && Number.isInteger(sender.tab?.id) && typeof message.url === 'string') {

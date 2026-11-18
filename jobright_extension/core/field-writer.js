@@ -171,8 +171,12 @@
     const view = el.ownerDocument?.defaultView || globalThis;
     const target = findClickableTarget(el) || el;
 
-    if (el.tagName === 'INPUT' && el.type === 'checkbox' && el.checked === boolVal) {
+    if (checked(el) === boolVal) {
       return true;
+    }
+    if (el.tagName !== 'INPUT') {
+      try { click(target); } catch {}
+      return checked(el) === boolVal;
     }
 
     const PointerEvt = view.PointerEvent || view.MouseEvent;
@@ -224,25 +228,7 @@
       } catch {}
     }
 
-    // Custom widget attributes if not native input
-    if (el.tagName !== 'INPUT') {
-      if (el.hasAttribute('aria-checked') || el.getAttribute('role') === 'checkbox' || el.getAttribute('role') === 'switch') {
-        el.setAttribute('aria-checked', boolVal ? 'true' : 'false');
-      }
-      if (el.hasAttribute('data-state')) {
-        el.setAttribute('data-state', boolVal ? 'checked' : 'unchecked');
-      }
-      if (target !== el) {
-        if (target.hasAttribute('aria-checked') || target.getAttribute('role') === 'checkbox' || target.getAttribute('role') === 'switch') {
-          target.setAttribute('aria-checked', boolVal ? 'true' : 'false');
-        }
-        if (target.hasAttribute('data-state')) {
-          target.setAttribute('data-state', boolVal ? 'checked' : 'unchecked');
-        }
-      }
-    }
-
-    return el.tagName === 'INPUT' && el.type === 'checkbox' ? el.checked === boolVal : true;
+    return checked(el) === boolVal;
   }
 
   function setRadio(option) {
@@ -250,6 +236,10 @@
     if (!el?.isConnected || el.disabled || el.getAttribute('aria-disabled') === 'true') return false;
     const view = el.ownerDocument?.defaultView || globalThis;
     const target = findClickableTarget(el) || el;
+    if (el.tagName !== 'INPUT') {
+      if (selected(el)) return true;
+      try { return click(target); } catch { return false; }
+    }
 
     // Dispatch PointerEvent and Click on target
     const PointerEvt = view.PointerEvent || view.MouseEvent;
@@ -298,43 +288,6 @@
         const Evt = view.Event;
         el.dispatchEvent(new Evt('input', { bubbles: true, composed: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
-      } catch {}
-    }
-
-    // Set ARIA and custom selection attributes for custom widgets only
-    if (el.tagName !== 'INPUT') {
-      el.setAttribute('aria-checked', 'true');
-      el.setAttribute('aria-selected', 'true');
-      if (el.hasAttribute('aria-pressed') || el.tagName === 'BUTTON') {
-        el.setAttribute('aria-pressed', 'true');
-      }
-      el.setAttribute('data-state', 'checked');
-      el.setAttribute('data-selected', 'true');
-
-      if (target !== el) {
-        target.setAttribute('aria-checked', 'true');
-        target.setAttribute('aria-selected', 'true');
-        if (target.hasAttribute('aria-pressed') || target.tagName === 'BUTTON') {
-          target.setAttribute('aria-pressed', 'true');
-        }
-        target.setAttribute('data-state', 'checked');
-        target.setAttribute('data-selected', 'true');
-      }
-
-      // Uncheck peer siblings for custom widgets
-      try {
-        const container = el.closest('[role="radiogroup"], fieldset, [class*="yesno" i], [class*="choice" i]') || el.parentElement;
-        if (container) {
-          const peers = container.querySelectorAll('button, [role="radio"]');
-          for (const peer of peers) {
-            if (peer === el || peer === target) continue;
-            if (peer.getAttribute('aria-checked') === 'true') peer.setAttribute('aria-checked', 'false');
-            if (peer.getAttribute('aria-selected') === 'true') peer.setAttribute('aria-selected', 'false');
-            if (peer.getAttribute('aria-pressed') === 'true') peer.setAttribute('aria-pressed', 'false');
-            if (peer.getAttribute('data-state') === 'checked') peer.setAttribute('data-state', 'unchecked');
-            if (peer.getAttribute('data-selected') === 'true') peer.setAttribute('data-selected', 'false');
-          }
-        }
       } catch {}
     }
 
@@ -590,7 +543,9 @@
       else if (!checked(option.element)) setCheckbox(option.element, true);
     }
     if (field.kind === 'multi-select') notify(field.element);
-    return { expected: options.map(optionLabel) };
+    const expected = options.map(optionLabel);
+    return { expected, matches: actual => Array.isArray(actual) && expected.every(value =>
+      actual.some(selected => normalize(selected) === normalize(value))) };
   }
 
   async function fillMultiCombo(field, values, isCurrent) {
@@ -682,8 +637,7 @@
       const el = field.element;
       if (plan.status !== 'supported' || !el?.isConnected || !session.isCurrent() || field.excluded) continue;
       const domVal = read(field);
-      const preserved = getPreservedValue(field);
-      const previous = (domVal !== '' && domVal !== null && domVal !== undefined) ? domVal : preserved;
+      const previous = domVal;
       const isCountryCodeOnly = field.kind === 'text' && (field.element?.type === 'tel' || /phone/i.test(field.hint || field.label)) && /^\+?\d{1,3}\s*$/.test(String(previous).trim());
       const hasAnswer = !isCountryCodeOnly && (Array.isArray(previous) ? previous.length > 0 : (typeof previous === 'boolean' ? previous : Boolean(previous && String(previous).trim().length > 0)));
       let write;
@@ -704,9 +658,8 @@
       } else if (field.kind === 'checkbox') {
         const boolVal = typeof value === 'boolean' ? value : normalizeBoolean(value);
         if (typeof boolVal === 'boolean') {
-          if (previous === boolVal || setCheckbox(el, boolVal)) {
-            write = { expected: boolVal };
-          }
+          if (previous !== boolVal) setCheckbox(el, boolVal);
+          write = { expected: boolVal };
         }
       } else {
         const expected = el.maxLength > 0 ? String(value).slice(0, el.maxLength) : String(value);
@@ -715,8 +668,8 @@
       }
       if (!write) continue;
       const verified = () => session.isCurrent() && el.isConnected &&
-        (equals(read(field), write.expected) ||
-         (write.expected && String(read(field) || '').toLowerCase().includes(String(write.expected).toLowerCase())) ||
+        (equals(read(field), write.expected) || write.matches?.(read(field)) ||
+         (field.kind === 'combobox' && write.expected && String(read(field) || '').toLowerCase().includes(String(write.expected).toLowerCase())) ||
          (write.option && !write.option.isConnected && write.expected) ||
          (write.option?.isConnected && selected(write.option)));
       if (!verified()) await wait(120);
