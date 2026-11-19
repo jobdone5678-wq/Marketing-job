@@ -1,7 +1,7 @@
 import { applicationUrlKey } from '../jobs/application-state';
 
 const confirmationHeading =
-  /^(?:thank you for (?:applying|your application)|(?:your )?application (?:has been |was |is )?(?:successfully )?(?:submitted|received|sent|confirmed)|successfully submitted (?:your |the )?application|submission (?:received|confirmed|successful)|(?:we|we've) (?:have )?received your application|you(?: have|'ve) successfully applied|you (?:have )?applied successfully|you've applied successfully)(?=$|[.!,:]|\s+(?:to|for|successfully)\b)/i;
+  /^(?:thank you for (?:applying|your application)|(?:your )?application (?:has been |was |is )?(?:(?:successfully )?(?:submitted|received|sent|confirmed)|successful)|successfully submitted (?:your |the )?application|submission (?:received|confirmed|successful)|(?:we|we've) (?:have )?received your application|(?:you(?: have|'ve) )?successfully applied|(?:you (?:have )?|you've )?applied successfully)(?=$|[.!,:]|\s+(?:to|for|successfully)\b)/i;
 const confirmationPath =
   /\/(?:confirmation|thank[-_]?you|thankyou|thanks|applied|application[-_](?:submitted|success)|submission[-_]success|success|submitted)\/?$/i;
 const pathEvidencePrefix = 'URL confirmation path: ';

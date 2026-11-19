@@ -3,18 +3,18 @@
   globalThis.nextkinConfirmationObserver = true;
 
   const confirmationPatterns = [
-    /^(?:thank you for (?:applying|your application)|(?:your )?application (?:has been |was |is )?(?:successfully )?(?:submitted|received|sent)|(?:we|we've) (?:have )?received your application|you(?: have|'ve) successfully applied)(?=$|[.!,:]|\s+(?:to|for|successfully)\b)/i,
-    /^(?:application submitted|application received|submission received|application confirmed|submission confirmed|submission successful|successfully submitted (?:your |the )?application|you (?:have )?applied successfully|you've applied successfully)(?=$|[.!,:]|\s+)/i,
+    /^(?:thank you for (?:applying|your application)|(?:your )?application (?:has been |was |is )?(?:(?:successfully )?(?:submitted|received|sent|confirmed)|successful)|successfully submitted (?:your |the )?application|submission (?:received|confirmed|successful)|(?:we|we've) (?:have )?received your application|(?:you(?: have|'ve) )?successfully applied|(?:you (?:have )?|you've )?applied successfully)(?=$|[.!,:]|\s+(?:to|for|successfully)\b)/i,
     /\b(?:thank you for (?:applying|your application)|(?:we|we've) received your application)\b/i
   ];
 
   const confirmationUrlPattern = /\/(?:confirmation|thank[-_]?you|thankyou|thanks|applied|application[-_]submitted|application[-_]success|submission[-_]success|success|submitted)\/?$/i;
 
-  const statusSelectors = '[role="status"], [role="alert"], [role="dialog"], dialog[open], [data-testid*="success" i], [data-testid*="confirmation" i], [class*="application-confirmation" i]';
+  const statusSelectors = '[role="status"], [role="alert"], [role="dialog"], dialog[open], [data-testid*="success" i], [data-testid*="confirmation" i], [class*="application-confirmation" i], [class*="toast" i]';
   const hiddenSelectors = 'footer, script, style, template, [hidden], [inert], [aria-hidden="true"]';
   let timer;
   let pending = false;
   let attempts = 0;
+  let evidence;
 
   function hasActiveSubmitButton() {
     return [...document.querySelectorAll('form button[type="submit"], form input[type="submit"]')].some(button =>
@@ -44,7 +44,7 @@
       if (!isVisible(element) || element.closest(hiddenSelectors)) continue;
       for (const child of [element, ...element.querySelectorAll?.('h1, h2, h3, p') || []]) {
         if (!isVisible(child) || child.closest(hiddenSelectors)) continue;
-        const evidence = confirmationEvidence(child.innerText, confirmationPatterns.slice(0, 2));
+        const evidence = confirmationEvidence(child.innerText, confirmationPatterns.slice(0, 1));
         if (evidence) return evidence;
       }
     }
@@ -66,7 +66,7 @@
     }
 
     const title = document.title.trim();
-    const titleEvidence = confirmationEvidence(title, confirmationPatterns.slice(0, 2));
+    const titleEvidence = confirmationEvidence(title, confirmationPatterns.slice(0, 1));
     if (titleEvidence) return titleEvidence;
 
     const pathname = window.location.pathname.toLowerCase();
@@ -75,7 +75,7 @@
 
   async function check() {
     if (pending || attempts >= 5) return;
-    const evidence = detectConfirmation();
+    evidence ??= detectConfirmation();
     if (!evidence) return;
 
     pending = true;
@@ -91,7 +91,7 @@
     schedule(2000 * attempts);
   }
 
-  function schedule(delay = 200) {
+  function schedule(delay = 0) {
     if (pending || attempts >= 5 || timer) return;
     timer = setTimeout(() => {
       timer = undefined;

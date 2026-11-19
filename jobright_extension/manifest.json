@@ -3,7 +3,7 @@
   "minimum_chrome_version": "116",
   "name": "NextKinHR Recruiting Copilot",
   "short_name": "NextKinHR",
-  "version": "3.3.10",
+  "version": "3.3.11",
   "description": "Sync your NextKinHR resume, capture job details, and fill application forms.",
   "icons": {
     "16": "icon16.plasmo.6c567d50.png",
