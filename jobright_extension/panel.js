@@ -463,6 +463,8 @@ async function refresh() {
   if (currentForm?.result.job && candidate?.id && outsideApplicationPage(tab.url) &&
     (embeddedFrame || currentForm.frameId === 0))
     armOutsideForm(tab, currentForm, embeddedFrame, candidate.id);
+  else if (candidate?.id && ashbyFrame && /\/application\/?$/.test(new URL(ashbyFrame.result.url).pathname))
+    armOutsideForm(tab, ashbyFrame, embeddedOutsideForm(tab, ashbyFrame), candidate.id, false);
   const jobOrigin = workspaceUrl(job.jobUrl);
   const portalJob = jobOrigin && /^\/(?:dashboard\/jobs|jobs\/info)\//.test(new URL(job.jobUrl).pathname);
   if (portalJob && apiOrigin(jobOrigin) !== apiOrigin(connection.origin)) {
@@ -668,13 +670,13 @@ function embeddedOutsideJob(frame) {
   return { ...frame.result.job, jobUrl, externalId: ashbyId || frame.result.job.externalId };
 }
 
-function armOutsideForm(tab, frame, embeddedFrame, candidateId) {
-  const scope = [tab.id, tab.url, frame.documentId, frame.result.url, candidateId, connection.token].join('|');
+function armOutsideForm(tab, frame, embeddedFrame, candidateId, discover = true) {
+  const scope = [tab.id, tab.url, frame.documentId, frame.result.url, candidateId, connection.token, discover].join('|');
   if (armedOutsideForm === scope) return;
   armedOutsideForm = scope;
   const job = embeddedFrame ? embeddedOutsideJob(frame) : frame.result.job;
   void chrome.runtime.sendMessage({ action: 'prepare_application_tracking', tabId: tab.id,
-    url: tab.url, embeddedFrame, job, candidateId, discover: true }).then(result => {
+    url: tab.url, embeddedFrame, job, candidateId, discover }).then(result => {
     if (!result?.tracked && armedOutsideForm === scope) armedOutsideForm = null;
   }, () => { if (armedOutsideForm === scope) armedOutsideForm = null; });
 }

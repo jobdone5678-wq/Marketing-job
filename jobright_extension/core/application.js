@@ -267,7 +267,8 @@
   if (typeof window !== 'undefined' && !globalThis.nextkinSubmitObserver
     && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
     globalThis.nextkinSubmitObserver = true;
-    if (window.top === window && typeof MutationObserver !== 'undefined' && discovery.observeStepTransitions) void resumeNextStep();
+    const embedded = window.top !== window;
+    if (!embedded && typeof MutationObserver !== 'undefined' && discovery.observeStepTransitions) void resumeNextStep();
     const recordAttempt = (event, form, button) => {
       if (!event.isTrusted || !form || submitting.has(form)) return;
       if (button && !finalSubmit.test(submitLabel(button))) return;
@@ -285,8 +286,14 @@
       if (event.target?.tagName === 'FORM') recordAttempt(event, event.target, event.submitter);
     }, true);
     document.addEventListener('click', event => {
-      const button = event.target?.closest?.('button[type="button"], [role="button"]');
-      if (button) recordAttempt(event, button.form || button.closest('form'), button);
+      const selector = embedded
+        ? 'button[type="button"], [role="button"], button[type="submit"], input[type="submit"]'
+        : 'button[type="button"], [role="button"]';
+      const button = event.target?.closest?.(selector);
+      if (!button) return;
+      const form = button.form || button.closest('form');
+      if (embedded && form && button.type === 'submit') return;
+      recordAttempt(event, form || (embedded ? document : null), button);
     }, true);
   }
 })();

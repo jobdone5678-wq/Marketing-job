@@ -434,6 +434,7 @@ test('Application Lifecycle: manual application tracking starts only for a real 
   const location = new URL('https://careers.example.test/jobs/123/apply');
   const messages = [];
   let onSubmit;
+  let onClick;
   let capturedJob = job;
   const window = {};
   window.top = window;
@@ -442,6 +443,7 @@ test('Application Lifecycle: manual application tracking starts only for a real 
     addEventListener(type, callback, capture) {
       assert.equal(capture, true);
       if (type === 'submit') onSubmit = callback;
+      if (type === 'click') onClick = callback;
     },
   };
   const applicationSource = readFileSync(new URL('../jobright_extension/core/application.js', import.meta.url), 'utf8');
@@ -473,6 +475,17 @@ test('Application Lifecycle: manual application tracking starts only for a real 
   assert.equal(messages.length, 2);
   assert.equal(messages[1].submitted, true);
   assert.equal(messages[1].job, job);
+
+  const button = { innerText: 'Submit Application', type: 'submit', closest: () => null };
+  const click = { isTrusted: true, target: { closest: selector => selector.includes('button[type="submit"]') ? button : null } };
+  onClick({ ...click, isTrusted: false });
+  onClick({ ...click, target: { closest: () => ({ ...button, innerText: 'Next' }) } });
+  onClick({ ...click, target: { closest: () => ({ ...button, form: event.target }) } });
+  assert.equal(messages.length, 2);
+  onClick(click);
+  assert.equal(messages.length, 3);
+  assert.equal(messages[2].submitted, true);
+  assert.equal(messages[2].job, job);
 });
 
 test('Application Lifecycle: automatic submission waits for a valid final form and stages evidence first', async () => {
