@@ -253,7 +253,7 @@ async function recordConfirmation(message, sender) {
     if (detail?.id !== context.intentId || !Number.isInteger(detail.attempt)) return false;
     endpoint = 'events';
     payload = { intentId: context.intentId, attempt: Math.max(1, detail.attempt), status: 'confirmed',
-      url: receiptUrl, observedAt: new Date().toISOString() };
+      url: receiptUrl, applicationUrl: context.applicationUrl, observedAt: new Date().toISOString() };
   } else if (!context.externalJob) return false;
 
   const response = await fetch(context.workspace + '/api/extension/' + endpoint, {

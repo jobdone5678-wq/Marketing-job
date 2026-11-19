@@ -46,6 +46,34 @@ export async function extensionActor(request: Request) {
   const profile = await extensionProfile(request);
   return profile.id;
 }
+
+export async function markOutsideJobsApplied(
+  actor: string,
+  candidateId: string,
+  submissionId: string,
+  appliedAt: string,
+  applicationUrls: Array<string | null | undefined>
+) {
+  const db = database();
+  const { error: linkedError } = await db
+    .from('outside_jobs')
+    .update({ status: 'Applied', applied_at: appliedAt })
+    .eq('submission_id', submissionId)
+    .neq('status', 'Applied');
+  checkDb(linkedError);
+
+  const postings = [...new Set(applicationUrls.map(applicationUrlKey).filter((url) => url !== null))];
+  if (!postings.length) return;
+  const { error: unlinkedError } = await db
+    .from('outside_jobs')
+    .update({ submission_id: submissionId, status: 'Applied', applied_at: appliedAt })
+    .eq('capture_owner_id', actor)
+    .eq('candidate_id', candidateId)
+    .in('job_url', postings)
+    .is('submission_id', null);
+  checkDb(unlinkedError);
+}
+
 export async function recordObservation(actor: string, body: unknown, manual = false) {
   const input = z
     .object({
@@ -55,6 +83,7 @@ export async function recordObservation(actor: string, body: unknown, manual = f
       attempt: z.number().int().min(1).max(1000),
       evidence: z.string().min(1).max(1000),
       url: z.string().url().max(2000),
+      applicationUrl: z.url({ protocol: /^https$/ }).max(2000).optional(),
       observedAt: z.string().datetime(),
       answers: z.unknown().optional(),
       appliedResume: appliedResumeSchema.optional().nullable(),
@@ -82,9 +111,11 @@ export async function recordObservation(actor: string, body: unknown, manual = f
       422
     );
 
-  const validatedAnswers =
-    input.answers !== undefined ? validateApplicationAnswers(input.answers) : undefined;
   const dbStatus = input.status === 'confirmed' ? 'submitted' : input.status;
+  const submitted = dbStatus === 'submitted';
+  const validatedAnswers = !submitted && input.answers !== undefined
+    ? validateApplicationAnswers(input.answers)
+    : undefined;
   const { data, error: save } = await database().rpc('record_browser_event', {
     p_actor: actor,
     p_intent: input.intentId,
@@ -98,33 +129,13 @@ export async function recordObservation(actor: string, body: unknown, manual = f
   });
   checkDb(save);
 
-  const submitted = ['submitted', 'confirmed'].includes(input.status);
   const applied = data === 'submitted' || data === 'confirmed';
   if (submitted && applied) {
-    const { error: outsideError } = await database()
-      .from('outside_jobs')
-      .update({
-        status: 'Applied',
-        applied_at: input.observedAt,
-      })
-      .eq('submission_id', intent.submission_id)
-      .neq('status', 'Applied');
-    checkDb(outsideError);
-    const posting = applicationUrlKey(intent.job.application_url);
-    if (posting) {
-      const { error: unlinkedError } = await database()
-        .from('outside_jobs')
-        .update({
-          submission_id: intent.submission_id,
-          status: 'Applied',
-          applied_at: input.observedAt,
-        })
-        .eq('capture_owner_id', actor)
-        .eq('candidate_id', intent.candidate_id)
-        .eq('job_url', posting)
-        .is('submission_id', null);
-      checkDb(unlinkedError);
-    }
+    const applicationUrl = input.applicationUrl && allowedCaptureUrl(input.applicationUrl, intent.job.application_url)
+      ? input.applicationUrl : undefined;
+    await markOutsideJobsApplied(actor, intent.candidate_id, intent.submission_id, input.observedAt, [
+      intent.job.application_url, applicationUrl,
+    ]);
   }
 
   if (input.appliedResume && submitted && applied)
@@ -136,7 +147,7 @@ export async function recordObservation(actor: string, body: unknown, manual = f
     input.answers !== undefined &&
     ['submit_attempted', 'submitted', 'confirmed'].includes(input.status)
   ) {
-    const answers = validatedAnswers;
+    const answers = submitted ? validateApplicationAnswers(input.answers) : validatedAnswers;
     const { data: stored, error: snapshotError } = await database().rpc(
       'save_application_answer_snapshot',
       {

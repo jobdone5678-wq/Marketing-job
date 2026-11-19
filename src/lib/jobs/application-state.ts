@@ -50,6 +50,9 @@ export function applicationLaunchUrl(applicationUrl: string, intentId: string) {
 
 // Match a posting, not a company or title. Tracking and application routes do not
 // identify a different vacancy, while host, board and posting path still do.
+export const applicationConfirmationPath =
+  /\/(?:application\/(?:confirmation|received|complete|thank[-_]?you)|confirmation|thank[-_]?you(?:[-_]for[-_]applying)?|thanks|applied|application[-_](?:submitted|success|received|complete)|submission[-_]success|success|submitted)\/?$/i;
+
 export function applicationUrlKey(value: string | null | undefined) {
   try {
     const url = new URL(value || '');
@@ -80,10 +83,7 @@ export function applicationUrlKey(value: string | null | undefined) {
     };
     const normalizePath = (path: string) =>
       path
-        .replace(
-          /\/(?:confirmation|thank[-_]?you|thankyou|thanks|applied|application[-_](?:submitted|success)|submission[-_]success|success|submitted)\/?$/i,
-          ''
-        )
+        .replace(applicationConfirmationPath, '')
         .replace(/\/(?:application|apply)\/?$/i, '')
         .replace(/\/$/, '');
     const path = normalizePath(url.pathname);

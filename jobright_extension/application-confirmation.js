@@ -3,14 +3,14 @@
   globalThis.nextkinConfirmationObserver = true;
 
   const confirmationPatterns = [
-    /^(?:thank you for (?:applying|your application)|(?:your )?application (?:has been |was |is )?(?:(?:successfully )?(?:submitted|received|sent|confirmed)|successful)|successfully submitted (?:your |the )?application|submission (?:received|confirmed|successful)|(?:we|we've) (?:have )?received your application|(?:you(?: have|'ve) )?successfully applied|(?:you (?:have )?|you've )?applied successfully)(?=$|[.!,:]|\s+(?:to|for|successfully)\b)/i,
+    /^(?:thank you for (?:applying|your application|submitting your application)|(?:your )?(?:job )?application (?:has been |was |is )?(?:(?:successfully )?(?:submitted|received|sent|confirmed)|successful)|(?:(?:you (?:have )?|you've )?successfully submitted|(?:you (?:have )?|you've )submitted) (?:your |the )?(?:job )?application|submission (?:received|confirmed|successful)|(?:we(?: have|'ve)?) (?:successfully )?received your application|(?:you(?: have|'ve) )?successfully applied|(?:you (?:have )?|you've )?applied successfully)(?=$|[.!,:]|\s+(?:to|for|successfully)\b)/i,
     /^(?:application submitted|application received|submission received|application confirmed|submission confirmed|submission successful|successfully submitted (?:your |the )?application|you (?:have )?applied successfully|you've applied successfully)(?=$|[.!,:]|\s+)/i,
     /\b(?:thank you for (?:applying|your application)|(?:we|we've) received your application)\b/i
   ];
 
-  const confirmationUrlPattern = /\/(?:confirmation|thank[-_]?you|thankyou|thanks|applied|application[-_]submitted|application[-_]success|submission[-_]success|success|submitted)\/?$/i;
+  const confirmationUrlPattern = /\/(?:application\/(?:confirmation|received|complete|thank[-_]?you)|confirmation|thank[-_]?you(?:[-_]for[-_]applying)?|thanks|applied|application[-_](?:submitted|success|received|complete)|submission[-_]success|success|submitted)\/?$/i;
 
-  const statusSelectors = '[role="status"], [role="alert"], [role="dialog"], dialog[open], [data-testid*="success" i], [data-testid*="confirmation" i], [class*="application-confirmation" i], [class*="toast" i]';
+  const statusSelectors = '[role="status"], [role="alert"], [role="dialog"], [aria-live="polite"], [aria-live="assertive"], dialog[open], [data-testid*="success" i], [data-testid*="confirmation" i], [class*="application-confirmation" i], [class*="toast" i], [class*="snackbar" i]';
   const hiddenSelectors = 'footer, script, style, template, [hidden], [inert], [aria-hidden="true"]';
   let timer;
   let pending = false;

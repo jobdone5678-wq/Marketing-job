@@ -1,4 +1,4 @@
-import { extensionRoute, extensionProfile, cors } from '@/lib/capture/server';
+import { extensionRoute, extensionProfile, cors, markOutsideJobsApplied } from '@/lib/capture/server';
 import { database, checkDb, CaptureError } from '@/lib/db/admin';
 import { validateApplicationAnswers } from '@/lib/capture/snapshot';
 import { allowedCaptureUrl, validateObservation } from '@/lib/capture/validation';
@@ -171,7 +171,8 @@ export async function POST(request: Request) {
         };
 
         if (matchingIntent) {
-          const { error: observationError } = await database().rpc('record_browser_event', {
+          const observedAt = new Date().toISOString();
+          const { data: captureStatus, error: observationError } = await database().rpc('record_browser_event', {
             p_actor: actor.id,
             p_intent: matchingIntent.id,
             p_key: eventKey,
@@ -180,7 +181,7 @@ export async function POST(request: Request) {
             p_source: body.manualAttestation ? 'recruiter_attestation' : 'extension_observation',
             p_evidence: body.evidence || 'Applicant manually attested submission',
             p_url: safeJobUrl,
-            p_observed: new Date().toISOString(),
+            p_observed: observedAt,
           });
           checkDb(observationError);
           const { data: existing, error: existingError } = await database()
@@ -196,6 +197,11 @@ export async function POST(request: Request) {
           const jobObj = Array.isArray(matchingIntent.job)
             ? matchingIntent.job[0]
             : matchingIntent.job;
+          if (body.confirmationUrl) {
+            if (!['submitted', 'confirmed'].includes(captureStatus))
+              throw new CaptureError('Application status changed. Retry saving the confirmation.', 409);
+            await markOutsideJobsApplied(actor.id, candidateId, existing.id, observedAt, [jobObj?.application_url, body.jobUrl]);
+          }
           if (jobObj?.id && body.jobDescription) {
             await database()
               .from('jobs')
@@ -261,7 +267,10 @@ export async function POST(request: Request) {
               : body.evidence || 'Application submission observed by browser extension');
           const finalNotes = [atsNote, userNotes].filter(Boolean).join(' • ');
 
-          if (existingSubmission && body.confirmationUrl && existingSubmission.status !== 'Draft') {
+          if (
+            existingSubmission && body.confirmationUrl && existingSubmission.status !== 'Draft' &&
+            ['submitted', 'confirmed'].includes(existingSubmission.capture_status)
+          ) {
             result = {
               submission: existingSubmission,
               duplicate: existingSubmission.duplicate_flag,
@@ -269,7 +278,7 @@ export async function POST(request: Request) {
             };
           } else if (existingSubmission) {
             const updatePayload: any = {
-              status: 'Applied',
+              ...(!body.confirmationUrl || existingSubmission.status === 'Draft' ? { status: 'Applied' } : {}),
               capture_status: 'submitted',
               notes: finalNotes || existingSubmission.notes,
               source_type: 'extension',
@@ -282,7 +291,7 @@ export async function POST(request: Request) {
               .update(updatePayload)
               .eq('id', existingSubmission.id);
             checkDb(updateError);
-            existingSubmission.status = 'Applied';
+            if (updatePayload.status) existingSubmission.status = updatePayload.status;
             existingSubmission.capture_status = 'submitted';
             existingSubmission.source_type = 'extension';
             if (resolvedJobId) existingSubmission.job_id = resolvedJobId;
@@ -386,49 +395,6 @@ export async function POST(request: Request) {
           }
         }
 
-        const archivedResume = finalAppliedResume ? await saveAppliedResume(result.submission.id, candidateId, {
-          ...finalAppliedResume, appliedAt: new Date().toISOString(),
-        }) : null;
-        if (archivedResume) result.submission.applied_resume = archivedResume;
-
-        let snapshot = null;
-        if (answers && Array.isArray(answers) && answers.length > 0) {
-          try {
-            let safeUrl = '';
-            try {
-              const parsed = new URL(
-                safeJobUrl || request.headers.get('origin') || 'https://unknown.invalid'
-              );
-              parsed.search = '';
-              parsed.hash = '';
-              safeUrl = parsed.toString();
-            } catch {
-              safeUrl = 'https://unknown.invalid';
-            }
-            const { data: saved, error: snapshotError } = await database().rpc(
-              'save_application_answer_snapshot',
-              {
-                p_actor: actor.id,
-                p_intent: matchingIntent?.id || null,
-                p_submission: result.submission.id,
-                p_candidate: candidateId,
-                p_attempt: attempt,
-                p_event_key: eventKey,
-                p_portal: body.portalSource || new URL(safeUrl).hostname,
-                p_url: safeUrl,
-                p_profile_version: candidateVersion,
-                p_answers: answers,
-                p_observed_at: new Date().toISOString(),
-              }
-            );
-            checkDb(snapshotError);
-            snapshot = saved;
-          } catch (snapshotErr) {
-            if (body.confirmationUrl) throw snapshotErr;
-            console.warn('[Snapshot Warning]', snapshotErr);
-          }
-        }
-
         const sourceHost = safeJobUrl ? new URL(safeJobUrl).hostname : '';
         const isPortal = /(^|\.)(nextkinhr\.com|jobright-internal\.com)$/.test(sourceHost);
         if (!matchingIntent && !isPortal && safeJobUrl)
@@ -453,7 +419,6 @@ export async function POST(request: Request) {
               extracted_skills: body.extractedSkills,
               ats_analysis: body.atsAnalysis,
               answers: answers || undefined,
-              applied_resume: archivedResume || undefined,
               status: 'Applied',
               applied_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -493,6 +458,62 @@ export async function POST(request: Request) {
             if (body.confirmationUrl) throw outsideErr;
             console.warn('[Outside Jobs Save Warn]', outsideErr);
           }
+
+        // Resume and answer capture can be retried after both status writes succeed.
+        const archivedResume = finalAppliedResume ? await saveAppliedResume(result.submission.id, candidateId, {
+          ...finalAppliedResume, appliedAt: new Date().toISOString(),
+        }) : null;
+        if (archivedResume) {
+          result.submission.applied_resume = archivedResume;
+          if (!matchingIntent && !isPortal && safeJobUrl) {
+            let outsideResume = database().from('outside_jobs').update({ applied_resume: archivedResume })
+              .eq('submission_id', result.submission.id).eq('candidate_id', candidateId).eq('job_url', safeJobUrl);
+            if (body.confirmationUrl) outsideResume = outsideResume.eq('capture_owner_id', actor.id);
+            const { error: outsideResumeError } = await outsideResume;
+            if (outsideResumeError) {
+              if (body.confirmationUrl) checkDb(outsideResumeError);
+              console.warn('[Outside Jobs Resume Save Warn]', outsideResumeError);
+            }
+          }
+        }
+
+        let snapshot = null;
+        if (answers && Array.isArray(answers) && answers.length > 0) {
+          try {
+            let safeUrl = '';
+            try {
+              const parsed = new URL(
+                safeJobUrl || request.headers.get('origin') || 'https://unknown.invalid'
+              );
+              parsed.search = '';
+              parsed.hash = '';
+              safeUrl = parsed.toString();
+            } catch {
+              safeUrl = 'https://unknown.invalid';
+            }
+            const { data: saved, error: snapshotError } = await database().rpc(
+              'save_application_answer_snapshot',
+              {
+                p_actor: actor.id,
+                p_intent: matchingIntent?.id || null,
+                p_submission: result.submission.id,
+                p_candidate: candidateId,
+                p_attempt: attempt,
+                p_event_key: eventKey,
+                p_portal: body.portalSource || new URL(safeUrl).hostname,
+                p_url: safeUrl,
+                p_profile_version: candidateVersion,
+                p_answers: answers,
+                p_observed_at: new Date().toISOString(),
+              }
+            );
+            checkDb(snapshotError);
+            snapshot = saved;
+          } catch (snapshotErr) {
+            if (body.confirmationUrl) throw snapshotErr;
+            console.warn('[Snapshot Warning]', snapshotErr);
+          }
+        }
         return {
           success: true,
           submission: result.submission,

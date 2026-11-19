@@ -153,6 +153,68 @@ test('Application Lifecycle: a shared receipt requires success text and the same
   assert.equal(allowedCaptureUrl('https://example.test/thanks', posting, 'confirmed', heading), false);
 });
 
+test('Application Lifecycle: confirmation matching works across employer sites and posting URL formats', () => {
+  const heading = "We've successfully received your application";
+  const origin = 'https://careers.example.test';
+  const posting = origin + '/engineering/jobs/REQ-123/apply?jobId=REQ-123';
+  const receipt = origin + '/engineering/jobs/REQ-123/application/received';
+  const shared = origin + '/engineering/thank-you-for-applying';
+  assert.equal(validateObservation('confirmed', heading), true);
+  assert.equal(validateObservation('confirmed', 'You have successfully submitted your job application'), true);
+  assert.equal(allowedCaptureUrl(receipt, posting, 'confirmed', heading), true);
+  assert.equal(allowedCaptureUrl(shared, posting, 'confirmed', heading), true);
+  assert.equal(allowedCaptureUrl(shared, posting, 'confirmed', 'URL confirmation path: /engineering/thank-you-for-applying'), false);
+  assert.equal(allowedCaptureUrl(receipt + '?jobId=REQ-456', posting, 'confirmed', heading), false);
+  assert.equal(allowedCaptureUrl(receipt, posting.replace('jobId=REQ-123', 'jobId=REQ-456'), 'confirmed', heading), false);
+  assert.equal(allowedCaptureUrl(shared.replace('/engineering/', '/sales/'), posting, 'confirmed', heading), false);
+  assert.equal(allowedCaptureUrl(receipt.replace('careers.', 'elsewhere.'), posting, 'confirmed', heading), false);
+});
+
+test('Application Lifecycle: a portal receipt updates the draft and links matching outside captures before saving answers', async () => {
+  const intentId = '8b1d6779-6dc3-419c-855a-fa293123aba0';
+  const applicationUrl = 'https://example.test/engineering/jobs/REQ-123';
+  const intent = { submission_id: 'submission', candidate_id: 'candidate', job: { application_url: applicationUrl + '?jobId=REQ-123' } };
+  const writes = [];
+  const db = {
+    from(table) {
+      const filters = {};
+      return {
+        select() { return this; },
+        eq(field, value) { filters[field] = value; return this; },
+        async maybeSingle() { return { data: intent }; },
+        update(data) { assert.equal(table, 'outside_jobs'); writes.push({ data, filters }); return this; },
+        in(field, value) { filters[field] = value; return this; },
+        is(field, value) { filters[field] = value; return this; },
+        neq(field, value) { filters[field] = { not: value }; return this; },
+      };
+    },
+    async rpc(name, args) {
+      writes.push({ name, args });
+      return { data: 'submitted' };
+    },
+  };
+  const { recordObservation } = loadSource('lib/capture/server', {
+    './applied-resume': { appliedResumeSchema: z.unknown() },
+    './snapshot': { validateApplicationAnswers: () => { throw new Error('Invalid answer snapshot'); } },
+    './validation': { allowedCaptureUrl, validateObservation },
+    '@/lib/jobs/application-state': { applicationUrlKey },
+    '@/lib/db/admin': { database: () => db, checkDb: assert.ifError, CaptureError: Error },
+    zod: { z },
+  });
+  await assert.rejects(recordObservation('account', {
+    intentId, eventKey: 'a71cb53e-586a-4aa6-a17e-507d6730eafc', status: 'confirmed', attempt: 1,
+    applicationUrl, url: applicationUrl + '/application/received', evidence: "We've successfully received your application",
+    observedAt: '2026-11-19T05:00:00Z', answers: 'invalid',
+  }), /Invalid answer snapshot/);
+  assert.equal(writes[0].name, 'record_browser_event');
+  assert.equal(writes[0].args.p_status, 'submitted');
+  assert.equal(writes[1].data.status, 'Applied');
+  assert.equal(writes[2].data.status, 'Applied');
+  assert.deepEqual(Array.from(writes[2].filters.job_url), [applicationUrl + '?jobid=REQ-123', applicationUrl]);
+  assert.equal(writes[2].filters.capture_owner_id, 'account');
+  assert.equal(writes[2].filters.submission_id, null);
+});
+
 test('Application Lifecycle: autofill restores tracking on an already-open posting and records its receipt', async () => {
   const intentId = '8b1d6779-6dc3-419c-855a-fa293123aba0';
   const posting = 'https://jobs.lever.co/fixture/123/apply';
@@ -205,6 +267,7 @@ test('Application Lifecycle: autofill restores tracking on an already-open posti
   assert.equal(await worker.recordConfirmation({ evidence: 'Thank you for applying' }, sender), true);
   assert.equal(requests[2].body.intentId, intentId);
   assert.equal(requests[2].body.status, 'confirmed');
+  assert.equal(requests[2].body.applicationUrl, posting);
   assert.deepEqual(requests[2].body.answers, answers);
   assert.deepEqual(requests[2].body.appliedResume, appliedResume);
   assert.equal(state['application-intent:17'].submissionEvidence, undefined);
@@ -576,6 +639,11 @@ test('Application Lifecycle: an external receipt promotes one posting in Outside
         then(resolve) {
           resolve({ data: table === 'job_submissions' && submission ? [submission] : [] });
         },
+        update(data) {
+          assert.equal(table, 'job_submissions');
+          Object.assign(submission, data);
+          return this;
+        },
         upsert(data, options) {
           if (table === 'job_submissions') {
             submission = row = data;
@@ -606,23 +674,36 @@ test('Application Lifecycle: an external receipt promotes one posting in Outside
     },
     '@/lib/capture/snapshot': {},
     '@/lib/capture/validation': { allowedCaptureUrl, validateObservation },
-    '@/lib/capture/applied-resume': { appliedResumeSchema: z.unknown() },
+    '@/lib/capture/applied-resume': {
+      appliedResumeSchema: z.unknown(),
+      saveAppliedResume: async () => { throw new Error('Archive unavailable'); },
+    },
     '@/lib/jobs/application-state': { applicationUrlKey }, zod: { z },
   });
-  const send = (confirmationUrl, evidence) => POST(new Request('https://www.nextkinhr.com/api/extension/auto-submit', {
+  const send = (confirmationUrl, evidence, appliedResume) => POST(new Request('https://www.nextkinhr.com/api/extension/auto-submit', {
     method: 'POST', body: JSON.stringify({
       candidateId, eventKey: 'a71cb53e-586a-4aa6-a17e-507d6730eafc', companyName: 'Fixture', jobTitle: 'Engineer',
-      jobUrl: jobUrl + '/apply', confirmationUrl, evidence,
+      jobUrl: jobUrl + '/apply', confirmationUrl, evidence, appliedResume,
     }),
   }));
   assert.equal((await send(jobUrl + '/apply', 'Application was not submitted')).status, 422);
   assert.equal(outside.status, 'Discovered');
   assert.equal(outsideWrites, 0);
+  const archiveError = await send(jobUrl + '/application/received', "We've successfully received your application", { filename: 'resume.pdf' });
+  assert.equal(archiveError.status, 500);
+  assert.equal(submission.status, 'Applied');
+  assert.equal(outside.status, 'Applied');
+  const submissionId = submission.id;
   const result = await send(jobUrl + '/confirmation', 'Successfully applied!');
   assert.equal(result.status, 200);
   assert.equal((await result.json()).submission.status, 'Applied');
   assert.equal(outside.status, 'Applied');
-  assert.equal(outside.submission_id, submission.id);
+  assert.equal(outside.submission_id, submissionId);
+  submission.status = 'Interview';
+  submission.capture_status = 'started';
+  const updated = await (await send(jobUrl + '/confirmation', 'Successfully applied!')).json();
+  assert.equal(updated.submission.status, 'Interview');
+  assert.equal(updated.submission.capture_status, 'submitted');
 });
 
 test('Application Lifecycle: profile saving repairs expired pairing and keeps the uploaded resume', async () => {
@@ -703,7 +784,7 @@ test('Application Lifecycle: the Ashby success message is captured from ordinary
   const source = readFileSync(new URL('../jobright_extension/application-confirmation.js', import.meta.url), 'utf8');
   const visible = { getClientRects: () => [{}], closest: () => null, innerText: original };
 
-  async function detect({ activeForm = false, dialog = false, toast = false, retry = false, navigate = false, text = original } = {}) {
+  async function detect({ activeForm = false, dialog = false, live = false, toast = false, retry = false, navigate = false, text = original } = {}) {
     const messages = [];
     let callback;
     let toastVisible = toast;
@@ -715,7 +796,7 @@ test('Application Lifecycle: the Ashby success message is captured from ordinary
         title: 'Docker',
         querySelectorAll: selector => selector.startsWith('form ')
           ? (activeForm ? [{ ...visible, innerText: 'Submit application' }] : [])
-          : dialog || (toastVisible && selector.includes('[class*="toast" i]'))
+          : dialog || (live && selector.includes('[aria-live="polite"]')) || (toastVisible && selector.includes('[class*="toast" i]'))
             ? [{ ...visible, innerText: text }] : [],
         createTreeWalker: () => ({ nextNode: () => nodes.shift() }),
       },
@@ -753,6 +834,9 @@ test('Application Lifecycle: the Ashby success message is captured from ordinary
   const toast = await detect({ activeForm: true, toast: true, retry: true, text: 'Successfully applied!' });
   assert.equal(toast, 'Successfully applied');
   assert.equal(validateObservation('confirmed', toast), true);
+  const liveNotice = await detect({ activeForm: true, live: true, text: "We've successfully received your application" });
+  assert.equal(liveNotice, "We've successfully received your application");
+  assert.equal(validateObservation('confirmed', liveNotice), true);
   assert.equal(validateObservation('confirmed', 'Application successful'), true);
   await detect({ activeForm: true, toast: true, retry: true, navigate: true, text: 'Successfully applied!' });
   assert.equal(await detect({ activeForm: true, toast: true, text: 'Application successful only after submitting your application' }), undefined);

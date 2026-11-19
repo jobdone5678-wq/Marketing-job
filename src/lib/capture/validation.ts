@@ -1,19 +1,20 @@
-import { applicationUrlKey } from '../jobs/application-state';
+import { applicationConfirmationPath, applicationUrlKey } from '../jobs/application-state';
 
 const confirmationHeading =
-  /^(?:thank you for (?:applying|your application)|(?:your )?application (?:has been |was |is )?(?:(?:successfully )?(?:submitted|received|sent|confirmed)|successful)|successfully submitted (?:your |the )?application|submission (?:received|confirmed|successful)|(?:we|we've) (?:have )?received your application|(?:you(?: have|'ve) )?successfully applied|(?:you (?:have )?|you've )?applied successfully)(?=$|[.!,:]|\s+(?:to|for|successfully)\b)/i;
-const confirmationPath =
-  /\/(?:confirmation|thank[-_]?you|thankyou|thanks|applied|application[-_](?:submitted|success)|submission[-_]success|success|submitted)\/?$/i;
+  /^(?:thank you for (?:applying|your application|submitting your application)|(?:your )?(?:job )?application (?:has been |was |is )?(?:(?:successfully )?(?:submitted|received|sent|confirmed)|successful)|(?:(?:you (?:have )?|you've )?successfully submitted|(?:you (?:have )?|you've )submitted) (?:your |the )?(?:job )?application|submission (?:received|confirmed|successful)|(?:we(?: have|'ve)?) (?:successfully )?received your application|(?:you(?: have|'ve) )?successfully applied|(?:you (?:have )?|you've )?applied successfully)(?=$|[.!,:]|\s+(?:to|for|successfully)\b)/i;
 const pathEvidencePrefix = 'URL confirmation path: ';
 
-function withoutRedundantGreenhouseId(key: string) {
+function withoutRedundantPostingIds(key: string) {
   const url = new URL(key);
-  if (url.hostname !== 'boards.greenhouse.io' || url.hash) return key;
-  const postingId = url.pathname.match(/^\/[^/]+\/jobs\/(\d+)$/)?.[1];
-  const queryIds = url.searchParams.getAll('gh_jid');
-  if (!postingId || !queryIds.length || queryIds.some((id) => id !== postingId)) return key;
-  url.searchParams.delete('gh_jid');
-  return url.href;
+  if (!url.search || url.hash) return key;
+  const postingId = url.pathname.split('/').at(-1);
+  if (!postingId || !/^[\w-]*\d[\w-]*$/.test(postingId)) return key;
+  const params = url.searchParams;
+  for (const name of new Set(params.keys())) {
+    if (name !== 'for' && name !== 'token' && params.getAll(name).every((id) => id === postingId))
+      params.delete(name);
+  }
+  return url.origin + url.pathname + url.search;
 }
 
 export function allowedCaptureUrl(
@@ -40,22 +41,22 @@ export function allowedCaptureUrl(
     const observedKey = applicationUrlKey(observed),
       expectedKey = applicationUrlKey(application);
     if (!observedKey || !expectedKey) return false;
-    if (withoutRedundantGreenhouseId(observedKey) === withoutRedundantGreenhouseId(expectedKey))
+    if (withoutRedundantPostingIds(observedKey) === withoutRedundantPostingIds(expectedKey))
       return true;
 
     // Some ATSs show a shared receipt on the same site and omit the posting ID.
     // Require a success message there, and keep any board prefix tied to the launch URL.
     if (
-      current.origin !== expected.origin ||
+      new URL(observedKey).origin !== new URL(expectedKey).origin ||
       new URL(expectedKey).hash ||
       new URL(observedKey).hash ||
       !['confirmed', 'submitted'].includes(status || '') ||
       !confirmationHeading.test(evidence.trim()) ||
-      !confirmationPath.test(current.pathname) ||
+      !applicationConfirmationPath.test(current.pathname) ||
       new URL(observedKey).search
     )
       return false;
-    const receiptPrefix = current.pathname.replace(confirmationPath, '');
+    const receiptPrefix = current.pathname.replace(applicationConfirmationPath, '');
     const postingPath = new URL(expectedKey).pathname;
     return !receiptPrefix || postingPath.startsWith(receiptPrefix + '/');
   } catch {
@@ -75,7 +76,7 @@ export function validateObservation(status: string, evidence: string) {
     if (confirmationHeading.test(text)) return true;
     if (
       text.startsWith(pathEvidencePrefix) &&
-      confirmationPath.test(text.slice(pathEvidencePrefix.length))
+      applicationConfirmationPath.test(text.slice(pathEvidencePrefix.length))
     )
       return true;
     return false;
