@@ -76,11 +76,15 @@ test('Application Lifecycle: the launch preserves employer fragments and distinc
 });
 
 test('Application Lifecycle: Greenhouse redirects still require the same board and posting', () => {
-  const original = 'https://boards.greenhouse.io/acme/jobs/123';
+  const original = 'https://boards.greenhouse.io/acme/jobs/123?gh_jid=123';
   const receipt = 'https://job-boards.greenhouse.io/acme/jobs/123/confirmation';
   assert.equal(allowedCaptureUrl(receipt, original, 'confirmed', 'Application submitted'), true);
+  assert.equal(allowedCaptureUrl(receipt.replace('/confirmation', ''), original), true);
   assert.equal(allowedCaptureUrl(receipt.replace('/123/', '/456/'), original, 'confirmed', 'Application submitted'), false);
   assert.equal(allowedCaptureUrl(receipt.replace('/acme/', '/other/'), original, 'confirmed', 'Application submitted'), false);
+  assert.equal(allowedCaptureUrl(receipt + '?gh_jid=456', original, 'confirmed', 'Application submitted'), false);
+  assert.equal(allowedCaptureUrl(receipt, original + '&gh_jid=456', 'confirmed', 'Application submitted'), false);
+  assert.equal(allowedCaptureUrl(receipt, original + '&token=456', 'confirmed', 'Application submitted'), false);
 });
 
 test('Application Lifecycle: withoutAppliedJobs filters out confirmed jobs and retains unapplied/started jobs', () => {

@@ -6,6 +6,16 @@ const confirmationPath =
   /\/(?:confirmation|thank[-_]?you|thankyou|thanks|applied|application[-_](?:submitted|success)|submission[-_]success|success|submitted)\/?$/i;
 const pathEvidencePrefix = 'URL confirmation path: ';
 
+function withoutRedundantGreenhouseId(key: string) {
+  const url = new URL(key);
+  if (url.hostname !== 'boards.greenhouse.io' || url.hash) return key;
+  const postingId = url.pathname.match(/^\/[^/]+\/jobs\/(\d+)$/)?.[1];
+  const queryIds = url.searchParams.getAll('gh_jid');
+  if (!postingId || !queryIds.length || queryIds.some((id) => id !== postingId)) return key;
+  url.searchParams.delete('gh_jid');
+  return url.href;
+}
+
 export function allowedCaptureUrl(
   observed: string,
   application: string,
@@ -30,7 +40,8 @@ export function allowedCaptureUrl(
     const observedKey = applicationUrlKey(observed),
       expectedKey = applicationUrlKey(application);
     if (!observedKey || !expectedKey) return false;
-    if (observedKey === expectedKey) return true;
+    if (withoutRedundantGreenhouseId(observedKey) === withoutRedundantGreenhouseId(expectedKey))
+      return true;
 
     // Some ATSs show a shared receipt on the same site and omit the posting ID.
     // Require a success message there, and keep any board prefix tied to the launch URL.
