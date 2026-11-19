@@ -614,7 +614,7 @@ test('Application Lifecycle: an external receipt promotes one posting in Outside
   assert.equal((await send(jobUrl + '/apply', 'Application was not submitted')).status, 422);
   assert.equal(outside.status, 'Discovered');
   assert.equal(outsideWrites, 0);
-  const result = await send(jobUrl + '/confirmation', 'Application submitted successfully');
+  const result = await send(jobUrl + '/confirmation', 'Successfully applied!');
   assert.equal(result.status, 200);
   assert.equal((await result.json()).submission.status, 'Applied');
   assert.equal(outside.status, 'Applied');
@@ -699,10 +699,11 @@ test('Application Lifecycle: the Ashby success message is captured from ordinary
   const source = readFileSync(new URL('../jobright_extension/application-confirmation.js', import.meta.url), 'utf8');
   const visible = { getClientRects: () => [{}], closest: () => null, innerText: original };
 
-  async function detect({ activeForm = false, dialog = false, toast = false, retry = false, text = original } = {}) {
+  async function detect({ activeForm = false, dialog = false, toast = false, retry = false, navigate = false, text = original } = {}) {
     const messages = [];
     let callback;
     let toastVisible = toast;
+    const location = new URL('https://jobs.ashbyhq.com/docker/posting-id/application');
     const nodes = [{ textContent: text, parentElement: visible }];
     runInNewContext(source, {
       document: {
@@ -714,7 +715,7 @@ test('Application Lifecycle: the Ashby success message is captured from ordinary
             ? [{ ...visible, innerText: text }] : [],
         createTreeWalker: () => ({ nextNode: () => nodes.shift() }),
       },
-      window: { location: { pathname: '/docker/posting-id/application' } },
+      window: { location },
       NodeFilter: { SHOW_TEXT: 4 },
       MutationObserver: class { observe() {} disconnect() {} },
       getComputedStyle: () => ({ display: 'block', visibility: 'visible', opacity: '1' }),
@@ -728,10 +729,11 @@ test('Application Lifecycle: the Ashby success message is captured from ordinary
     callback();
     if (retry) {
       toastVisible = false;
-      await Promise.resolve();
+      if (navigate) location.pathname = '/docker/another-posting/application';
+      await new Promise(resolve => setImmediate(resolve));
       callback();
-      assert.equal(messages.length, 2);
-      assert.equal(messages[1].evidence, messages[0].evidence);
+      assert.equal(messages.length, navigate ? 1 : 2);
+      if (!navigate) assert.equal(messages[1].evidence, messages[0].evidence);
     }
     return messages[0]?.evidence;
   }
@@ -748,6 +750,7 @@ test('Application Lifecycle: the Ashby success message is captured from ordinary
   assert.equal(toast, 'Successfully applied');
   assert.equal(validateObservation('confirmed', toast), true);
   assert.equal(validateObservation('confirmed', 'Application successful'), true);
+  await detect({ activeForm: true, toast: true, retry: true, navigate: true, text: 'Successfully applied!' });
   assert.equal(await detect({ activeForm: true, toast: true, text: 'Application successful only after submitting your application' }), undefined);
 });
 

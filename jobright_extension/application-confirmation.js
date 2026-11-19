@@ -4,6 +4,7 @@
 
   const confirmationPatterns = [
     /^(?:thank you for (?:applying|your application)|(?:your )?application (?:has been |was |is )?(?:(?:successfully )?(?:submitted|received|sent|confirmed)|successful)|successfully submitted (?:your |the )?application|submission (?:received|confirmed|successful)|(?:we|we've) (?:have )?received your application|(?:you(?: have|'ve) )?successfully applied|(?:you (?:have )?|you've )?applied successfully)(?=$|[.!,:]|\s+(?:to|for|successfully)\b)/i,
+    /^(?:application submitted|application received|submission received|application confirmed|submission confirmed|submission successful|successfully submitted (?:your |the )?application|you (?:have )?applied successfully|you've applied successfully)(?=$|[.!,:]|\s+)/i,
     /\b(?:thank you for (?:applying|your application)|(?:we|we've) received your application)\b/i
   ];
 
@@ -14,7 +15,7 @@
   let timer;
   let pending = false;
   let attempts = 0;
-  let evidence;
+  let receipt;
 
   function hasActiveSubmitButton() {
     return [...document.querySelectorAll('form button[type="submit"], form input[type="submit"]')].some(button =>
@@ -44,7 +45,7 @@
       if (!isVisible(element) || element.closest(hiddenSelectors)) continue;
       for (const child of [element, ...element.querySelectorAll?.('h1, h2, h3, p') || []]) {
         if (!isVisible(child) || child.closest(hiddenSelectors)) continue;
-        const evidence = confirmationEvidence(child.innerText, confirmationPatterns.slice(0, 1));
+        const evidence = confirmationEvidence(child.innerText, confirmationPatterns.slice(0, 2));
         if (evidence) return evidence;
       }
     }
@@ -66,7 +67,7 @@
     }
 
     const title = document.title.trim();
-    const titleEvidence = confirmationEvidence(title, confirmationPatterns.slice(0, 1));
+    const titleEvidence = confirmationEvidence(title, confirmationPatterns.slice(0, 2));
     if (titleEvidence) return titleEvidence;
 
     const pathname = window.location.pathname.toLowerCase();
@@ -75,13 +76,17 @@
 
   async function check() {
     if (pending || attempts >= 5) return;
-    evidence ??= detectConfirmation();
-    if (!evidence) return;
+    const url = window.location.href;
+    if (!receipt || receipt.url !== url) {
+      const evidence = detectConfirmation();
+      receipt = evidence ? { url, evidence } : undefined;
+    }
+    if (!receipt) return;
 
     pending = true;
     attempts++;
     try {
-      if (await chrome.runtime.sendMessage({ type: 'application-confirmation', evidence })) {
+      if (await chrome.runtime.sendMessage({ type: 'application-confirmation', evidence: receipt.evidence })) {
         observer.disconnect();
         clearTimeout(timer);
         return;
