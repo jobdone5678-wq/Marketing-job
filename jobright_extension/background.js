@@ -9,6 +9,7 @@ const trackedKey = tabId => 'application-intent:' + tabId;
 const embeddedKey = tabId => 'embedded-outside-application:' + tabId;
 const stepKey = tabId => 'application-next-step:' + tabId;
 const intentIdPattern = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
+const outsideDiscoveries = new Map();
 
 function workspaceOrigin(value) {
   try {
@@ -150,47 +151,102 @@ function ashbyFramePosting(url) {
   return intentIdPattern.test(id || '') ? id.toLowerCase() : null;
 }
 
-function ashbyParentMatches(parent, posting) {
-  return parent.protocol === 'https:' && Boolean(posting) &&
-    parent.searchParams.get('ashby_jid')?.toLowerCase() === posting &&
-    !new URLSearchParams(parent.hash.slice(1)).has('marketing-intent');
+function outsidePage(url) {
+  return url.protocol === 'https:' && !workspaceOrigin(url.href) &&
+    !new URLSearchParams(url.hash.slice(1)).has('marketing-intent');
 }
 
-async function prepareEmbeddedOutsideApplication(tabId, tabUrl, frame, job, candidateId) {
-  if (!frame.documentId || !Number.isInteger(frame.frameId) || frame.frameId <= 0 || !intentIdPattern.test(candidateId || '')) return false;
+function matchesEmbeddedPosting(parent, url) {
+  const ashbyId = parent.searchParams.get('ashby_jid');
+  return !ashbyId || ashbyFramePosting(url) === ashbyId.toLowerCase();
+}
+
+async function prepareEmbeddedOutsideApplication(tabId, tabUrl, frame, job, candidateId, submitted = false, submissionEvidence) {
+  if (!frame.documentId || !Number.isInteger(frame.frameId) || frame.frameId <= 0 || (!submitted && !intentIdPattern.test(candidateId || ''))) return false;
   const parent = new URL(tabUrl);
   const url = new URL(frame.url);
-  const posting = ashbyFramePosting(url);
-  if (!ashbyParentMatches(parent, posting)) return false;
-  const { origin, token } = await chrome.storage.local.get(['origin', 'token']);
+  if (!outsidePage(parent) || !outsidePage(url) || !matchesEmbeddedPosting(parent, url)) return false;
+  const { origin, token, activeCandidateId } = await chrome.storage.local.get(['origin', 'token', 'activeCandidateId']);
   const workspace = workspaceOrigin(origin);
   if (!workspace || !token || (await chrome.tabs.get(tabId)).url !== tabUrl) return false;
 
   const key = embeddedKey(tabId);
   const storage = await chrome.storage.session.get([key, trackedKey(tabId)]);
   const top = storage[trackedKey(tabId)];
-  if (top?.intentId && top.jobOrigin === portalOrigin(parent)) return true;
+  if (top?.intentId && top.jobOrigin === portalOrigin(parent)) {
+    if (storage[key]) await chrome.storage.session.remove(key);
+    return true;
+  }
   const previous = storage[key];
-  if (previous?.documentId === frame.documentId && previous.parentOrigin === parent.origin && previous.externalJob.externalId === posting &&
-    previous.externalJob.candidateId === candidateId && previous.token === token && previous.workspace === workspace) return true;
+  const jobUrl = cleanApplicationUrl(new URL(url));
+  const sameForm = previous?.documentId === frame.documentId && previous.parentUrl === parent.href && previous.externalJob.jobUrl === jobUrl &&
+    previous.token === token && previous.workspace === workspace;
+  const selectedCandidate = candidateId || (sameForm && previous.externalJob.candidateId) ||
+    (intentIdPattern.test(activeCandidateId || '') ? activeCandidateId : 'current');
+  if (sameForm && previous.externalJob.candidateId === selectedCandidate) {
+    if (submissionEvidence && !previous.reported) await chrome.storage.session.set({ [key]: { ...previous, submissionEvidence } });
+    return true;
+  }
   const target = { tabId, documentIds: [frame.documentId] };
-  const [verified] = await chrome.scripting.executeScript({ target, func: () => location.href });
-  if (verified?.frameId !== frame.frameId || verified.result !== frame.url) return false;
-  const externalJob = externalJobDetails(job, url, cleanApplicationUrl(url), candidateId);
+  if (!submitted) {
+    const [verified] = await chrome.scripting.executeScript({ target, func: () => location.href });
+    if (verified?.frameId !== frame.frameId || verified.result !== frame.url) return false;
+  }
+  const externalJob = externalJobDetails(job, url, jobUrl, selectedCandidate);
   if (!externalJob) return false;
   const context = {
-    frameId: frame.frameId, documentId: frame.documentId, parentOrigin: parent.origin, jobOrigin: url.origin, workspace, token,
-    externalJob: { ...externalJob, externalId: posting }, eventKey: crypto.randomUUID(),
+    frameId: frame.frameId, documentId: frame.documentId, parentUrl: parent.href, jobOrigin: portalOrigin(url), workspace, token,
+    externalJob: { ...externalJob, externalId: ashbyFramePosting(url) || externalJob.externalId }, eventKey: crypto.randomUUID(),
+    ...(submissionEvidence ? { submissionEvidence } : {}),
   };
   await chrome.storage.session.set({ [key]: context });
   try {
     await chrome.scripting.executeScript({ target, files: ['application-confirmation.js'] });
   } catch (error) {
+    if (submitted) return true; // The iframe may already have navigated to its receipt.
     if ((await chrome.storage.session.get(key))[key]?.eventKey === context.eventKey)
       await chrome.storage.session.remove(key);
     throw error;
   }
   return true;
+}
+
+async function resumeEmbeddedTracking(sender) {
+  if (!sender.frameId || !sender.documentId || sender.tab?.id == null || !sender.tab.url || !sender.url) return;
+  const tabId = sender.tab.id;
+  await pendingTracking.get(tabId)?.catch(() => {});
+  const key = embeddedKey(tabId);
+  const context = (await chrome.storage.session.get(key))[key];
+  if (!context || context.reported || context.frameId !== sender.frameId || context.documentId === sender.documentId ||
+    context.parentUrl !== sender.tab.url) return;
+  const url = new URL(sender.url);
+  if (portalOrigin(url) !== context.jobOrigin || !matchesEmbeddedPosting(new URL(sender.tab.url), url)) return;
+  await chrome.storage.session.set({ [key]: { ...context, documentId: sender.documentId } });
+  await chrome.scripting.executeScript({ target: { tabId, documentIds: [sender.documentId] }, files: ['application-confirmation.js'], injectImmediately: true });
+}
+
+async function saveOutsideDiscovery(key) {
+  const context = (await chrome.storage.session.get(key))[key];
+  if (!context?.externalJob || context.reported || outsideDiscoveries.get(key) === context.eventKey) return;
+  const current = await chrome.storage.local.get(['origin', 'token']);
+  if (workspaceOrigin(current.origin) !== context.workspace || current.token !== context.token) return;
+  if (outsideDiscoveries.get(key) === context.eventKey) return;
+  outsideDiscoveries.set(key, context.eventKey);
+  const job = context.externalJob;
+  let saved = false;
+  try {
+    const response = await fetch(context.workspace + '/api/extension/save-external-job', {
+      ...workspaceRequest(context.token), method: 'POST', body: JSON.stringify({
+        candidateId: intentIdPattern.test(job.candidateId) ? job.candidateId : undefined,
+        title: job.jobTitle, company: job.companyName, jobUrl: job.jobUrl, portalSource: job.portalSource,
+        location: job.jobLocation, department: job.department, employmentType: job.employmentType, externalId: job.externalId,
+        description: job.jobDescription.length >= 10 ? job.jobDescription : `Application for ${job.jobTitle} at ${job.companyName}.`,
+      }),
+    });
+    saved = response.ok;
+  } finally {
+    if (!saved && outsideDiscoveries.get(key) === context.eventKey) outsideDiscoveries.delete(key);
+  }
 }
 
 async function prepareApplication(tabId, expectedUrl, job, candidateId, submittedFromPage = false, submissionEvidence) {
@@ -202,7 +258,7 @@ async function prepareApplication(tabId, expectedUrl, job, candidateId, submitte
     return urlNow === expectedUrl || (submittedFromPage && urlNow && portalOrigin(new URL(urlNow)) === jobOrigin);
   };
   if (!await stillOnApplication()) throw new Error('The application tab changed. Try autofill again.');
-  const { origin, token } = await chrome.storage.local.get(['origin', 'token']);
+  const { origin, token, activeCandidateId } = await chrome.storage.local.get(['origin', 'token', 'activeCandidateId']);
   const workspace = workspaceOrigin(origin);
   if (!workspace || !token) return false;
 
@@ -239,7 +295,8 @@ async function prepareApplication(tabId, expectedUrl, job, candidateId, submitte
     if (url.origin === workspace || /(^|\.)(nextkinhr\.com|jobright-internal\.com)$/.test(url.hostname)) return false;
     const previousCandidate = context?.token === token && context.workspace === workspace && context.externalJob?.jobUrl === jobUrl
       ? context.externalJob.candidateId : null;
-    externalJob = externalJobDetails(job, url, jobUrl, intentIdPattern.test(candidateId || '') ? candidateId : previousCandidate || 'current');
+    const selectedCandidate = intentIdPattern.test(activeCandidateId || '') ? activeCandidateId : 'current';
+    externalJob = externalJobDetails(job, url, jobUrl, intentIdPattern.test(candidateId || '') ? candidateId : previousCandidate || selectedCandidate);
     if (!externalJob) return false;
   }
   if (!await stillOnApplication()) throw new Error('The application tab changed. Try autofill again.');
@@ -285,6 +342,8 @@ chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
 });
 
 chrome.tabs.onRemoved.addListener(tabId => {
+  outsideDiscoveries.delete(trackedKey(tabId));
+  outsideDiscoveries.delete(embeddedKey(tabId));
   void chrome.storage.session.remove([trackedKey(tabId), stepKey(tabId), embeddedKey(tabId)]);
 });
 
@@ -298,8 +357,7 @@ async function recordConfirmation(message, sender) {
   if (embedded) {
     if (sender.frameId !== context.frameId || sender.documentId !== context.documentId || !sender.tab.url) return false;
     const parent = new URL(sender.tab.url);
-    const posting = ashbyFramePosting(url);
-    if (parent.origin !== context.parentOrigin || posting !== context.externalJob.externalId || !ashbyParentMatches(parent, posting)) return false;
+    if (parent.href !== context.parentUrl || !matchesEmbeddedPosting(parent, url)) return false;
   }
   if (context.reported) return true;
   const current = await chrome.storage.local.get(['origin', 'token']);
@@ -359,6 +417,10 @@ chrome.runtime.onConnect.addListener(port => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  if (message?.type === 'embedded-application-document') {
+    void resumeEmbeddedTracking(sender).then(() => reply(true), () => reply(false));
+    return true;
+  }
   if (message?.action === 'load_application_resume' && sender.frameId === 0 && sender.tab?.id != null) {
     void loadApplicationResume(message.candidateId).then(reply, () => reply(null));
     return true;
@@ -408,20 +470,32 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   }
   if (message?.action === 'prepare_application_tracking' && typeof message.url === 'string') {
     const panel = sender.url === chrome.runtime.getURL('panel.html');
-    const applicationPage = sender.url === message.url && sender.frameId === 0;
+    const embeddedSubmit = sender.frameId > 0 && sender.documentId && sender.tab?.url && message.submitted === true;
+    const applicationPage = sender.url === message.url && (sender.frameId === 0 || embeddedSubmit);
     const tabId = panel ? message.tabId : applicationPage ? sender.tab?.id : undefined;
     if (!Number.isInteger(tabId)) return false;
     const submitted = applicationPage && message.submitted === true;
-    const tracking = panel && message.embeddedFrame
+    const embedded = panel ? message.embeddedFrame : applicationPage && embeddedSubmit && {
+      frameId: sender.frameId, documentId: sender.documentId, url: sender.url,
+    };
+    const tracking = embedded
       ? Promise.resolve(pendingTracking.get(tabId)).catch(() => {}).then(() =>
-        prepareEmbeddedOutsideApplication(tabId, message.url, message.embeddedFrame, message.job, message.candidateId))
+        prepareEmbeddedOutsideApplication(tabId, panel ? message.url : sender.tab.url, embedded, message.job,
+          panel ? message.candidateId : undefined, submitted, submitted ? message.submissionEvidence : undefined))
       : prepareApplication(tabId, message.url, message.job, message.candidateId,
         submitted, submitted ? message.submissionEvidence : undefined);
     pendingTracking.set(tabId, tracking);
     void tracking.then(
-      tracked => reply({ tracked }),
-      error => reply({ error: error.message }),
-    ).finally(() => {
+      async tracked => {
+        const key = embedded ? embeddedKey(tabId) : trackedKey(tabId);
+        let outsideJobUrl;
+        if (tracked) {
+          if (submitted || (panel && message.discover === true)) await saveOutsideDiscovery(key).catch(() => {});
+          if (panel) outsideJobUrl = (await chrome.storage.session.get(key))[key]?.externalJob?.jobUrl;
+        }
+        reply({ tracked, outsideJobUrl });
+      },
+    ).catch(error => reply({ error: error.message })).finally(() => {
       if (pendingTracking.get(tabId) === tracking) pendingTracking.delete(tabId);
     });
     return true;

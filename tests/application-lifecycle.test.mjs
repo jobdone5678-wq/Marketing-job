@@ -370,6 +370,65 @@ test('Application Lifecycle: an embedded Ashby receipt saves the outside posting
   assert.equal(allowedCaptureUrl(payload.confirmationUrl, payload.jobUrl, 'submitted', payload.evidence), true);
 });
 
+test('Application Lifecycle: a provider-independent outside form saves discovery and keeps tracking after an iframe navigation', async () => {
+  const workspace = 'https://www.nextkinhr.com';
+  const tab = { id: 27, url: 'https://employer.example.test/openings/123' };
+  const jobUrl = 'https://hiring.example.test/employer/jobs/123/apply';
+  const frame = { frameId: 4, documentId: 'form-document', url: jobUrl };
+  const receipt = { evidence: 'Your application has been received' };
+  const sender = { tab, frameId: 4, documentId: 'receipt-document', url: 'https://hiring.example.test/employer/thank-you' };
+  const candidateId = '8b1d6779-6dc3-419c-855a-fa293123aba0';
+  const state = {};
+  const requests = [];
+  const injected = [];
+  const noop = { addListener() {} };
+  const worker = {
+    URL, URLSearchParams, AbortSignal, crypto,
+    chrome: {
+      runtime: { onInstalled: noop, onStartup: noop, onConnect: noop, onMessage: noop },
+      tabs: { onUpdated: noop, onRemoved: noop, get: async () => tab },
+      storage: {
+        local: { get: async () => ({ origin: workspace, token: 'fixture' }) },
+        session: {
+          get: async (keys) => Object.fromEntries([keys].flat().map(key => [key, state[key]])),
+          set: async (records) => Object.assign(state, records),
+        },
+      },
+      scripting: {
+        executeScript: async ({ target, files }) => {
+          if (files) injected.push(target.documentIds[0]);
+          return [{ frameId: frame.frameId, result: frame.url }];
+        },
+      },
+    },
+    fetch: async (url, options) => {
+      requests.push({ url, body: JSON.parse(options.body) });
+      return Response.json({ success: true });
+    },
+  };
+  runInNewContext(readFileSync(new URL('../jobright_extension/background.js', import.meta.url), 'utf8'), worker);
+  assert.equal(await worker.prepareEmbeddedOutsideApplication(tab.id, tab.url, frame,
+    { title: 'Engineer', company: 'Employer' }, candidateId), true);
+  const key = 'embedded-outside-application:' + tab.id;
+  await worker.saveOutsideDiscovery(key);
+  await worker.saveOutsideDiscovery(key);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, workspace + '/api/extension/save-external-job');
+  assert.equal(requests[0].body.candidateId, candidateId);
+  assert.equal(requests[0].body.jobUrl, jobUrl);
+  assert.equal(await worker.recordConfirmation(receipt, sender), false);
+  await worker.resumeEmbeddedTracking({ ...sender, url: 'https://unrelated.example.test/thanks' });
+  assert.deepEqual(injected, ['form-document']);
+  await worker.resumeEmbeddedTracking(sender);
+  assert.deepEqual(injected, ['form-document', 'receipt-document']);
+  assert.equal(await worker.recordConfirmation(receipt, { ...sender, documentId: 'form-document' }), false);
+  assert.equal(await worker.recordConfirmation(receipt, sender), true);
+  assert.equal(requests[1].url, workspace + '/api/extension/auto-submit');
+  assert.equal(requests[1].body.candidateId, candidateId);
+  assert.equal(requests[1].body.jobUrl, requests[0].body.jobUrl);
+  assert.equal(allowedCaptureUrl(requests[1].body.confirmationUrl, jobUrl, 'submitted', receipt.evidence), true);
+});
+
 test('Application Lifecycle: manual application tracking starts only for a real job form submission', () => {
   const job = { title: 'Software Engineer', company: 'Company' };
   const location = new URL('https://careers.example.test/jobs/123/apply');
@@ -385,14 +444,16 @@ test('Application Lifecycle: manual application tracking starts only for a real 
       if (type === 'submit') onSubmit = callback;
     },
   };
-  runInNewContext(readFileSync(new URL('../jobright_extension/core/application.js', import.meta.url), 'utf8'), {
+  const applicationSource = readFileSync(new URL('../jobright_extension/core/application.js', import.meta.url), 'utf8');
+  const fixture = {
     window, document, location, URLSearchParams,
     NextkinJobCapture: { read: () => capturedJob },
     NextkinForms: { discoverFields: () => [{ label: 'Name' }] },
     NextkinFieldMapping: { resolveFact: () => ({ key: 'full_name' }) },
     NextkinFieldWriter: { read: () => 'Fixture Candidate' },
     chrome: { runtime: { sendMessage: async message => messages.push(message) } },
-  });
+  };
+  runInNewContext(applicationSource, { ...fixture });
   const event = { isTrusted: true, target: { tagName: 'FORM', querySelectorAll: () => [] }, submitter: { innerText: 'Submit application' } };
   onSubmit({ ...event, isTrusted: false });
   onSubmit({ ...event, submitter: { innerText: 'Next' } });
@@ -406,6 +467,12 @@ test('Application Lifecycle: manual application tracking starts only for a real 
   assert.equal(messages[0].submitted, true);
   assert.equal(messages[0].job, job);
   assert.equal(messages[0].submissionEvidence.answers[0].value, 'Fixture Candidate');
+
+  runInNewContext(applicationSource, { ...fixture, window: { top: {} } });
+  onSubmit(event);
+  assert.equal(messages.length, 2);
+  assert.equal(messages[1].submitted, true);
+  assert.equal(messages[1].job, job);
 });
 
 test('Application Lifecycle: automatic submission waits for a valid final form and stages evidence first', async () => {

@@ -264,10 +264,10 @@
   };
 
   // A manually filled application can navigate away as soon as its form is submitted.
-  if (typeof window !== 'undefined' && window.top === window && !globalThis.nextkinSubmitObserver
+  if (typeof window !== 'undefined' && !globalThis.nextkinSubmitObserver
     && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
     globalThis.nextkinSubmitObserver = true;
-    if (typeof MutationObserver !== 'undefined' && discovery.observeStepTransitions) void resumeNextStep();
+    if (window.top === window && typeof MutationObserver !== 'undefined' && discovery.observeStepTransitions) void resumeNextStep();
     const recordAttempt = (event, form, button) => {
       if (!event.isTrusted || !form || submitting.has(form)) return;
       if (button && !finalSubmit.test(submitLabel(button))) return;

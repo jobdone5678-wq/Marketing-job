@@ -40,6 +40,7 @@ let refreshing = false;
 let busy = false;
 let resultsPage;
 let lastCapture;
+let armedOutsideForm;
 let legacyResume;
 let resumeEndpointAvailable = false;
 let pairing = false;
@@ -433,12 +434,14 @@ async function refresh() {
   if (documents.some(doc => doc.id === preferences?.[preferenceKey] && doc.status === 'failed')) {
     notice('upload-status', 'Resume processing failed. Choose another PDF or DOCX.', true);
   }
-  const ashbyFrame = frames.find(frame => frame.result?.job && embeddedAshbyForm(tab, frame));
+  const ashbyFrame = tab?.url && new URL(tab.url).searchParams.has('ashby_jid')
+    ? frames.find(frame => frame.result?.job && embeddedOutsideForm(tab, frame)) : undefined;
   currentForm = (ashbyFrame?.result.hasForm && ashbyFrame) ||
     frames.find(frame => frame.frameId === 0 && frame.result?.hasForm) ||
+    frames.find(frame => frame.result?.hasForm && frame.result.job && embeddedOutsideForm(tab, frame)) ||
     frames.find(frame => frame.result?.hasForm) || null;
-  const embeddedFrame = embeddedAshbyForm(tab, currentForm);
-  let job = embeddedAshbyJob(ashbyFrame) ||
+  const embeddedFrame = embeddedOutsideForm(tab, currentForm);
+  let job = embeddedOutsideJob(embeddedFrame ? currentForm : ashbyFrame) ||
     frames.find(frame => frame.frameId === 0 && frame.result?.job)?.result.job ||
     frames.find(frame => frame.result?.job)?.result.job || null;
   if (!job && /^https?:/.test(tab?.url || '')) {
@@ -457,10 +460,9 @@ async function refresh() {
     notice('notice', '');
   }
   if (!connection || !job) return;
-  if (embeddedFrame && currentForm.result.job && candidate?.id) {
-    void chrome.runtime.sendMessage({ action: 'prepare_application_tracking', tabId: tab.id,
-      url: tab.url, embeddedFrame, job: embeddedAshbyJob(currentForm), candidateId: candidate.id }).catch(() => {});
-  }
+  if (currentForm?.result.job && candidate?.id && outsideApplicationPage(tab.url) &&
+    (embeddedFrame || currentForm.frameId === 0))
+    armOutsideForm(tab, currentForm, embeddedFrame, candidate.id);
   const jobOrigin = workspaceUrl(job.jobUrl);
   const portalJob = jobOrigin && /^\/(?:dashboard\/jobs|jobs\/info)\//.test(new URL(job.jobUrl).pathname);
   if (portalJob && apiOrigin(jobOrigin) !== apiOrigin(connection.origin)) {
@@ -644,20 +646,37 @@ function formTarget(tab, frame) {
     : { tabId: tab.id, frameIds: [frame.frameId] };
 }
 
-function embeddedAshbyForm(tab, frame) {
-  if (!frame?.frameId || !frame.documentId || !frame.result?.url) return undefined;
+function outsideApplicationPage(value) {
+  return /^https:\/\//.test(value || '') && !workspaceUrl(value) &&
+    !new URLSearchParams(new URL(value).hash.slice(1)).has('marketing-intent');
+}
+
+function embeddedOutsideForm(tab, frame) {
+  if (!frame?.frameId || !frame.documentId || !outsideApplicationPage(tab?.url) || !outsideApplicationPage(frame.result?.url)) return undefined;
   const parent = new URL(tab.url);
   const url = new URL(frame.result.url);
   const id = parent.searchParams.get('ashby_jid');
-  if (!id || new URLSearchParams(parent.hash.slice(1)).has('marketing-intent') ||
-    url.origin !== 'https://jobs.ashbyhq.com' || url.pathname.split('/')[2]?.toLowerCase() !== id.toLowerCase()) return undefined;
+  if (id && (url.origin !== 'https://jobs.ashbyhq.com' || url.pathname.split('/')[2]?.toLowerCase() !== id.toLowerCase())) return undefined;
   return { frameId: frame.frameId, documentId: frame.documentId, url: frame.result.url };
 }
 
-function embeddedAshbyJob(frame) {
+function embeddedOutsideJob(frame) {
   if (!frame?.result?.job) return null;
   const jobUrl = frame.result.url;
-  return { ...frame.result.job, jobUrl, externalId: new URL(jobUrl).pathname.split('/')[2] };
+  const url = new URL(jobUrl);
+  const ashbyId = url.origin === 'https://jobs.ashbyhq.com' ? url.pathname.split('/')[2] : null;
+  return { ...frame.result.job, jobUrl, externalId: ashbyId || frame.result.job.externalId };
+}
+
+function armOutsideForm(tab, frame, embeddedFrame, candidateId) {
+  const scope = [tab.id, tab.url, frame.documentId, frame.result.url, candidateId, connection.token].join('|');
+  if (armedOutsideForm === scope) return;
+  armedOutsideForm = scope;
+  const job = embeddedFrame ? embeddedOutsideJob(frame) : frame.result.job;
+  void chrome.runtime.sendMessage({ action: 'prepare_application_tracking', tabId: tab.id,
+    url: tab.url, embeddedFrame, job, candidateId, discover: true }).then(result => {
+    if (!result?.tracked && armedOutsideForm === scope) armedOutsideForm = null;
+  }, () => { if (armedOutsideForm === scope) armedOutsideForm = null; });
 }
 
 async function fillForm(tab, frame, profile, file, documentId) {
@@ -677,7 +696,7 @@ $('autofill').addEventListener('click', async () => {
   if (busy || !currentForm || !candidate || !connection) return;
   const tab = currentTab;
   const frame = currentForm;
-  const embeddedFrame = embeddedAshbyForm(tab, frame);
+  const embeddedFrame = embeddedOutsideForm(tab, frame);
   const session = connection;
   const autoSubmit = frame.frameId === 0 && $('auto-submit').checked;
   $('auto-submit').checked = false;
@@ -690,7 +709,7 @@ $('autofill').addEventListener('click', async () => {
     const [freshProfile, job] = await Promise.all([
       api('candidates?' + new URLSearchParams({ candidateId: cachedProfile.id, savedOnly: 'true' }), {}, session)
         .then(data => data.candidates?.[0]),
-      embeddedFrame ? embeddedAshbyJob(frame) : activeJob || scan(tab).then(frames => frames.find(frame => frame.result?.job)?.result.job),
+      embeddedFrame ? embeddedOutsideJob(frame) : activeJob || scan(tab).then(frames => frames.find(frame => frame.result?.job)?.result.job),
     ]);
     if (freshProfile?.provenance_status !== 'confirmed' || !freshProfile.confirmed_facts?.full_name ||
       String(freshProfile.confirmed_facts.notes || '').startsWith('Profile created from an uploaded resume.')) {
@@ -738,7 +757,8 @@ $('autofill').addEventListener('click', async () => {
       await api('save-external-job', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...job, applicationUrl: job.applicationUrl ?? undefined }),
+        body: JSON.stringify({ ...job, jobUrl: tracking?.outsideJobUrl || job.jobUrl,
+          candidateId: profile.id, applicationUrl: job.applicationUrl ?? undefined }),
       }, session);
       lastCapture = { ...job, ownerId: session.user.id };
     }
