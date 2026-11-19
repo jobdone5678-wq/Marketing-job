@@ -699,9 +699,10 @@ test('Application Lifecycle: the Ashby success message is captured from ordinary
   const source = readFileSync(new URL('../jobright_extension/application-confirmation.js', import.meta.url), 'utf8');
   const visible = { getClientRects: () => [{}], closest: () => null, innerText: original };
 
-  async function detect({ activeForm = false, dialog = false, text = original } = {}) {
+  async function detect({ activeForm = false, dialog = false, toast = false, retry = false, text = original } = {}) {
     const messages = [];
     let callback;
+    let toastVisible = toast;
     const nodes = [{ textContent: text, parentElement: visible }];
     runInNewContext(source, {
       document: {
@@ -709,7 +710,8 @@ test('Application Lifecycle: the Ashby success message is captured from ordinary
         title: 'Docker',
         querySelectorAll: selector => selector.startsWith('form ')
           ? (activeForm ? [{ ...visible, innerText: 'Submit application' }] : [])
-          : dialog ? [{ ...visible, innerText: text }] : [],
+          : dialog || (toastVisible && selector.includes('[class*="toast" i]'))
+            ? [{ ...visible, innerText: text }] : [],
         createTreeWalker: () => ({ nextNode: () => nodes.shift() }),
       },
       window: { location: { pathname: '/docker/posting-id/application' } },
@@ -718,9 +720,19 @@ test('Application Lifecycle: the Ashby success message is captured from ordinary
       getComputedStyle: () => ({ display: 'block', visibility: 'visible', opacity: '1' }),
       setTimeout: run => { callback = run; return 1; },
       clearTimeout() {},
-      chrome: { runtime: { sendMessage: async message => { messages.push(message); return true; } } },
+      chrome: { runtime: { sendMessage: async message => {
+        messages.push(message);
+        return !retry || messages.length > 1;
+      } } },
     });
     callback();
+    if (retry) {
+      toastVisible = false;
+      await Promise.resolve();
+      callback();
+      assert.equal(messages.length, 2);
+      assert.equal(messages[1].evidence, messages[0].evidence);
+    }
     return messages[0]?.evidence;
   }
 
@@ -732,6 +744,11 @@ test('Application Lifecycle: the Ashby success message is captured from ordinary
   const popup = await detect({ activeForm: true, dialog: true, text: 'Successfully submitted your application' });
   assert.ok(popup);
   assert.equal(validateObservation('confirmed', popup), true);
+  const toast = await detect({ activeForm: true, toast: true, retry: true, text: 'Successfully applied!' });
+  assert.equal(toast, 'Successfully applied');
+  assert.equal(validateObservation('confirmed', toast), true);
+  assert.equal(validateObservation('confirmed', 'Application successful'), true);
+  assert.equal(await detect({ activeForm: true, toast: true, text: 'Application successful only after submitting your application' }), undefined);
 });
 
 test('Application Lifecycle: external job payload retains all required fields for outside_jobs', () => {
