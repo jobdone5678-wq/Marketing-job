@@ -224,6 +224,7 @@ test('Application Lifecycle: autofill restores tracking on an already-open posti
   const workspace = 'https://www.nextkinhr.com';
   const requests = [];
   const scripts = [];
+  const notices = [];
   let resolvedIntentId = intentId;
   const worker = {
     URL,
@@ -232,7 +233,15 @@ test('Application Lifecycle: autofill restores tracking on an already-open posti
     crypto,
     chrome: {
       runtime: { onInstalled: noop, onStartup: noop, onConnect: noop, onMessage: noop },
-      tabs: { onUpdated: noop, onRemoved: noop, get: async () => tab },
+      tabs: {
+        onUpdated: noop, onRemoved: noop, get: async () => tab,
+        query: async () => [
+          { id: 1, url: workspace + '/dashboard/submissions' },
+          { id: 2, url: 'https://elsewhere.example.test/dashboard/submissions' },
+          { id: 3, url: workspace + '/auth/jobseeker' },
+        ],
+        sendMessage: async (tabId, message) => notices.push([tabId, message.type]),
+      },
       storage: {
         local: { get: async () => ({ origin: workspace, token: 'fixture' }) },
         session: {
@@ -273,6 +282,7 @@ test('Application Lifecycle: autofill restores tracking on an already-open posti
   assert.equal(state['application-intent:17'].submissionEvidence, undefined);
   assert.equal(await worker.recordConfirmation({ evidence: 'Thank you for applying' }, sender), true);
   assert.equal(requests.length, 3);
+  assert.deepEqual(notices, []);
 
   resolvedIntentId = null;
   tab.id++;
@@ -297,6 +307,8 @@ test('Application Lifecycle: autofill restores tracking on an already-open posti
   assert.deepEqual(outside.body.appliedResume, appliedResume);
   assert.equal(await worker.recordConfirmation({ evidence: 'Application submitted' }, outsideSender), true);
   assert.equal(requests.length, 5, 'A repeated receipt must not resubmit the record');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(notices, [[1, 'NEXTKIN_OUTSIDE_APPLICATION_SAVED']]);
 
   const postingWithRoute = 'https://careers.example.test/#/jobs/123/apply?email=private@example.test';
   tab.id++;
@@ -771,7 +783,7 @@ test('Application Lifecycle: an external receipt promotes one posting in Outside
   const actor = { id: 'account-id' };
   const candidateId = '8b1d6779-6dc3-419c-855a-fa293123aba0';
   const jobUrl = 'https://jobs.lever.co/fixture/posting-123';
-  const outside = { job_url: jobUrl, capture_owner_id: actor.id, status: 'Discovered' };
+  const outside = { id: 'existing-outside-job', job_url: jobUrl, capture_owner_id: actor.id, status: 'Discovered' };
   let submission;
   let outsideWrites = 0;
   const db = {
@@ -842,6 +854,7 @@ test('Application Lifecycle: an external receipt promotes one posting in Outside
   assert.equal(result.status, 200);
   assert.equal((await result.json()).submission.status, 'Applied');
   assert.equal(outside.status, 'Applied');
+  assert.equal(outside.id, 'existing-outside-job');
   assert.equal(outside.submission_id, submissionId);
   submission.status = 'Interview';
   submission.capture_status = 'started';
@@ -858,7 +871,12 @@ test('Application Lifecycle: profile saving repairs expired pairing and keeps th
   const writes = [];
   const requests = [];
   let receive;
-  const window = { addEventListener: (type, listener) => { receive = listener; } };
+  let receiveExtension;
+  const notifications = [];
+  const window = {
+    addEventListener: (type, listener) => { receive = listener; },
+    postMessage: (message, origin) => notifications.push([message.type, origin]),
+  };
   runInNewContext(readFileSync(new URL('../jobright_extension/portal-connection.js', import.meta.url), 'utf8'), {
     location, window, document: {}, console, URLSearchParams, AbortSignal,
     MutationObserver: class { observe() {} },
@@ -867,7 +885,7 @@ test('Application Lifecycle: profile saving repairs expired pairing and keeps th
         writes.push(patch);
         Object.assign(storage, patch);
       } } },
-      runtime: { sendMessage() {} },
+      runtime: { id: 'fixture-extension', sendMessage() {}, onMessage: { addListener: listener => { receiveExtension = listener; } } },
     },
     fetch: async (url, options) => {
       requests.push(url);
@@ -883,6 +901,11 @@ test('Application Lifecycle: profile saving repairs expired pairing and keeps th
   assert.equal(requests.filter(url => url.endsWith('/quick-pair')).length, 1);
   assert.equal(storage.token, 'renewed');
   assert.equal(storage.resumeData.filename, 'resume.pdf');
+  const message = { type: 'NEXTKIN_OUTSIDE_APPLICATION_SAVED' };
+  receiveExtension(message, { id: 'another-extension' });
+  assert.deepEqual(notifications, []);
+  receiveExtension(message, { id: 'fixture-extension' });
+  assert.deepEqual(notifications, [[message.type, location.origin]]);
 });
 
 test('Application Lifecycle: autofill attaches the resume to a replaced file input', async () => {

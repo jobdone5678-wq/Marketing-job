@@ -52,7 +52,7 @@ export function submissionStore(client: SupabaseClient) {
         const url = candidateId
           ? `/api/submissions?candidateId=${encodeURIComponent(candidateId)}`
           : '/api/submissions';
-        const res = await fetch(url);
+        const res = await fetch(url, { cache: 'no-store' });
         if (res.ok) {
           const json = await res.json();
           if (Array.isArray(json.submissions)) return json.submissions as JobSubmission[];

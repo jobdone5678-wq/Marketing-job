@@ -135,6 +135,11 @@
     } catch {}
   }
 
+  chrome.runtime.onMessage?.addListener((message, sender) => {
+    if (sender.id === chrome.runtime.id && message?.type === 'NEXTKIN_OUTSIDE_APPLICATION_SAVED')
+      window.postMessage({ type: message.type }, location.origin);
+  });
+
   window.addEventListener('message', event => {
     if (event.source !== window) return;
     if (event.origin && event.origin !== location.origin && event.origin !== 'null') return;

@@ -347,6 +347,14 @@ chrome.tabs.onRemoved.addListener(tabId => {
   void chrome.storage.session.remove([trackedKey(tabId), stepKey(tabId), embeddedKey(tabId)]);
 });
 
+async function notifyOutsideApplicationSaved(workspace) {
+  const tabs = await chrome.tabs.query({});
+  await Promise.allSettled(tabs.flatMap(tab => {
+    if (tab.id == null || workspaceOrigin(tab.url) !== workspace || !new URL(tab.url).pathname.startsWith('/dashboard/')) return [];
+    return [chrome.tabs.sendMessage(tab.id, { type: 'NEXTKIN_OUTSIDE_APPLICATION_SAVED' }, { frameId: 0 })];
+  }));
+}
+
 async function recordConfirmation(message, sender) {
   if (sender.tab?.id == null || !Number.isInteger(sender.frameId) || !sender.url) return false;
   const url = new URL(sender.url);
@@ -387,6 +395,7 @@ async function recordConfirmation(message, sender) {
     const { submissionEvidence, ...completed } = latest;
     await chrome.storage.session.set({ [key]: { ...completed, reported: true } });
   }
+  if (context.externalJob) void notifyOutsideApplicationSaved(context.workspace).catch(() => {});
   return true;
 }
 

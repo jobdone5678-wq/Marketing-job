@@ -23,6 +23,11 @@ export function useApplicationRealtime(
         refreshApplications();
       }, 50);
     };
+    const refreshAfterExtensionSave = (event: MessageEvent) => {
+      if (event.source === window && event.origin === window.location.origin &&
+        event.data?.type === 'NEXTKIN_OUTSIDE_APPLICATION_SAVED') scheduleRefresh();
+    };
+    window.addEventListener('message', refreshAfterExtensionSave);
 
     const channel = supabase
       .channel(`application-updates-${crypto.randomUUID()}`)
@@ -43,6 +48,7 @@ export function useApplicationRealtime(
     return () => {
       active = false;
       clearTimeout(timer);
+      window.removeEventListener('message', refreshAfterExtensionSave);
       void supabase.removeChannel(channel);
     };
   }, [candidateId, enabled]);
