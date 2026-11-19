@@ -22,10 +22,10 @@ export function PublicJobCatalog({
   const boards = PUBLIC_JOB_BOARDS.filter((b) => !provider || b.provider === provider);
   const board = boards.find((b) => `${b.provider}/${b.board_slug}` === selected);
   return (
-    <section className="bg-card space-y-3 rounded-xl border p-4">
+    <section className="bg-card space-y-3 rounded-[12px] border p-4">
       <div>
-        <h2 className="font-semibold">Explore public company boards</h2>
-        <p className="text-muted-foreground text-sm">
+        <h2 className="font-medium">Explore public company boards</h2>
+        <p className="text-muted-foreground text-[13px]">
           Company selection is optional. Live ATS Fetch searches all available company boards for a
           provider unless you choose one here.
         </p>
@@ -33,7 +33,7 @@ export function PublicJobCatalog({
       <div className="flex flex-wrap items-center gap-2">
         <select
           aria-label="Public company board"
-          className="bg-background max-w-full rounded-md border p-2 text-sm"
+          className="bg-background max-w-full rounded-[8px] border p-2 text-[13px]"
           value={selected}
           onChange={(e) => {
             setSelected(e.target.value);
@@ -52,7 +52,7 @@ export function PublicJobCatalog({
         </Button>
         {board && (
           <a
-            className="text-sm underline"
+            className="text-[13px] underline"
             href={board.source_url}
             target="_blank"
             rel="noopener noreferrer"
@@ -94,7 +94,7 @@ export function PublicJobCatalog({
         )}
       </div>
       {message && (
-        <p role="status" className="text-sm">
+        <p role="status" className="text-[13px]">
           {message}
         </p>
       )}

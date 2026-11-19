@@ -2,7 +2,7 @@ import Link from 'next/link';
 import {
   FileText,
   Building2,
-  Sparkles,
+  Wand2,
   Send,
   Mail,
   ShieldCheck,
@@ -41,7 +41,7 @@ const STEPS = [
       'Open any job posting to evaluate matched candidates with transparent scoring breakdown. Review required vs missing skills and preview tailored resume formats.',
     link: '/dashboard/jobs',
     linkLabel: 'Match engine',
-    icon: Sparkles,
+    icon: Wand2,
   },
   {
     step: '04',
@@ -74,7 +74,7 @@ export default function HelpPage() {
 
       {/* Workflow Steps Grid */}
       <section className="space-y-4">
-        <h2 className="text-muted-foreground text-sm font-bold tracking-wider uppercase">
+        <h2 className="text-muted-foreground text-[13px] font-medium">
           Platform Architecture & Workflow
         </h2>
 
@@ -84,21 +84,21 @@ export default function HelpPage() {
             return (
               <div
                 key={item.step}
-                className="border-border/80 bg-card hover:border-border flex flex-col justify-between space-y-4 rounded-2xl border p-5 shadow-xs transition-all"
+                className="border-border/80 bg-card hover:border-border flex flex-col justify-between space-y-4 rounded-[16px] border p-5 transition-colors"
               >
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-primary bg-primary/10 border-primary/20 rounded-full border px-2 py-0.5 font-mono text-xs font-bold">
+                    <span className="text-primary bg-primary/10 border-primary/20 rounded-[6px] border px-2 py-0.5 font-mono text-[13px] font-medium">
                       Step {item.step}
                     </span>
-                    <div className="bg-muted/60 text-muted-foreground flex size-8 items-center justify-center rounded-lg">
+                    <div className="bg-muted/60 text-muted-foreground flex size-8 items-center justify-center rounded-[10px]">
                       <Icon className="size-4" />
                     </div>
                   </div>
 
-                  <h3 className="text-foreground text-sm font-bold tracking-tight">{item.title}</h3>
+                  <h3 className="text-foreground text-[13px] font-medium tracking-tight">{item.title}</h3>
 
-                  <p className="text-muted-foreground text-xs leading-relaxed">
+                  <p className="text-muted-foreground text-[13px] leading-relaxed">
                     {item.description}
                   </p>
                 </div>
@@ -106,7 +106,7 @@ export default function HelpPage() {
                 <div className="border-border/60 border-t pt-2">
                   <Link
                     href={item.link}
-                    className="text-primary inline-flex items-center gap-1.5 text-xs font-semibold hover:underline"
+                    className="text-primary inline-flex items-center gap-1.5 text-[13px] font-medium hover:underline"
                   >
                     <span>{item.linkLabel}</span>
                     <ArrowRight className="size-3" />
@@ -119,14 +119,14 @@ export default function HelpPage() {
       </section>
 
       {/* Security & Isolation Callout */}
-      <section className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-6 shadow-xs sm:flex-row sm:items-center">
+      <section className="flex flex-col items-start justify-between gap-4 rounded-[16px] border border-primary/20 bg-primary/5 p-6 sm:flex-row sm:items-center">
         <div className="flex items-start gap-3.5">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-[12px] border border-border bg-surface-sunken text-muted-foreground">
             <ShieldCheck className="size-5" />
           </div>
           <div>
-            <h3 className="text-foreground text-sm font-bold">Candidate Vault & Data Isolation</h3>
-            <p className="text-muted-foreground mt-0.5 max-w-xl text-xs leading-relaxed">
+            <h3 className="text-foreground text-[13px] font-medium">Candidate Vault & Data Isolation</h3>
+            <p className="text-muted-foreground mt-0.5 max-w-xl text-[13px] leading-relaxed">
               Candidate resumes and credentials are encrypted with 256-bit TLS. Automated background
               processing requires dedicated worker processes with restricted scope.
             </p>
@@ -135,7 +135,7 @@ export default function HelpPage() {
 
         <Link
           href="/dashboard/settings"
-          className="border-border/80 bg-background text-foreground hover:bg-muted inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-semibold shadow-2xs transition-colors"
+          className="border-border/80 bg-background text-foreground hover:bg-muted inline-flex shrink-0 items-center gap-1.5 rounded-[12px] border px-3.5 py-2 text-[13px] font-medium transition-colors"
         >
           <span>Server AI Setup</span>
           <ArrowRight className="size-3" />
@@ -143,30 +143,30 @@ export default function HelpPage() {
       </section>
 
       {/* Keyboard Shortcuts Reference */}
-      <section className="border-border/80 bg-card space-y-4 rounded-2xl border p-6 shadow-xs">
+      <section className="border-border/80 bg-card space-y-4 rounded-[16px] border p-6">
         <div className="flex items-center gap-2">
           <Keyboard className="text-muted-foreground size-4" />
-          <h2 className="text-foreground text-sm font-bold">Keyboard Shortcuts</h2>
+          <h2 className="text-foreground text-[13px] font-medium">Keyboard Shortcuts</h2>
         </div>
 
-        <div className="grid gap-3 text-xs sm:grid-cols-2 md:grid-cols-3">
-          <div className="border-border/60 bg-muted/20 flex items-center justify-between rounded-xl border p-3">
+        <div className="grid gap-3 text-[13px] sm:grid-cols-2 md:grid-cols-3">
+          <div className="border-border/60 bg-muted/20 flex items-center justify-between rounded-[12px] border p-3">
             <span className="text-muted-foreground">Quick Search Jobs</span>
-            <kbd className="border-border bg-background text-foreground rounded border px-2 py-0.5 font-mono text-[11px] font-semibold">
+            <kbd className="border-border bg-background text-foreground rounded border px-2 py-0.5 font-mono text-[11px] font-medium">
               ⌘K
             </kbd>
           </div>
 
-          <div className="border-border/60 bg-muted/20 flex items-center justify-between rounded-xl border p-3">
+          <div className="border-border/60 bg-muted/20 flex items-center justify-between rounded-[12px] border p-3">
             <span className="text-muted-foreground">Jump to Candidates</span>
-            <kbd className="border-border bg-background text-foreground rounded border px-2 py-0.5 font-mono text-[11px] font-semibold">
+            <kbd className="border-border bg-background text-foreground rounded border px-2 py-0.5 font-mono text-[11px] font-medium">
               G then C
             </kbd>
           </div>
 
-          <div className="border-border/60 bg-muted/20 flex items-center justify-between rounded-xl border p-3">
+          <div className="border-border/60 bg-muted/20 flex items-center justify-between rounded-[12px] border p-3">
             <span className="text-muted-foreground">Jump to Submissions</span>
-            <kbd className="border-border bg-background text-foreground rounded border px-2 py-0.5 font-mono text-[11px] font-semibold">
+            <kbd className="border-border bg-background text-foreground rounded border px-2 py-0.5 font-mono text-[11px] font-medium">
               G then S
             </kbd>
           </div>

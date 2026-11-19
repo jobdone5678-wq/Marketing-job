@@ -2,6 +2,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { ArrowUpRight } from 'lucide-react';
 import {
   Sheet,
   SheetTrigger,
@@ -17,9 +18,9 @@ export function formatMoney(amount: number | string, currency: string) {
 
 export function StatusLabel({ value }: { value: string }) {
   const tone = ['active', 'paid', 'approved', 'submitted', 'offer_accepted'].includes(value)
-    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+    ? 'bg-primary/10 text-primary border-primary/20'
     : ['rejected', 'cancelled', 'failed', 'overdue', 'suspended', 'ended_early'].includes(value)
-      ? 'bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/20'
+      ? 'bg-destructive/10 text-destructive border-destructive/20'
       : [
             'pending',
             'needs_review',
@@ -27,12 +28,12 @@ export function StatusLabel({ value }: { value: string }) {
             'awaiting_approval',
             'joining_scheduled',
           ].includes(value)
-        ? 'bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/20'
-        : 'bg-muted/60 text-muted-foreground border-border/40';
+        ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20'
+        : 'bg-surface-sunken text-muted-foreground border-border';
 
   return (
     <span
-      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${tone}`}
+      className={`inline-flex h-6 items-center rounded-[6px] border px-2 text-[11px] font-medium whitespace-nowrap ${tone}`}
     >
       {value.replaceAll('_', ' ')}
     </span>
@@ -55,33 +56,31 @@ export function OperationsCard({
   children: ReactNode;
 }) {
   return (
-    <article className="border-border/60 bg-card hover:border-border min-w-0 rounded-xl border p-5 shadow-2xs transition-all duration-200">
-      <div className="border-border/40 mb-3 flex flex-wrap items-center justify-between gap-2 border-b pb-3">
-        <h3 className="text-foreground flex items-center gap-2 text-sm font-semibold tracking-tight">
+    <article className="panel hover:border-input min-w-0 p-5 transition-colors">
+      <div className="border-border mb-4 flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+        <h3 className="text-foreground flex items-baseline gap-2 text-[15px] font-medium tracking-tight">
           <span>{title}</span>
           {count !== undefined && (
-            <span className="bg-primary/10 border-primary/20 text-primary rounded-full border px-2 py-0.5 text-[11px] font-semibold tabular-nums">
-              {count}
-            </span>
+            <span className="figure text-muted-foreground text-[11px]">{count}</span>
           )}
         </h3>
         {action &&
           (href ? (
             <Link
-              className="text-primary hover:text-primary/80 inline-flex items-center gap-1 text-xs font-medium transition-colors"
+              className="text-primary inline-flex items-center gap-1.5 text-[13px] font-medium transition-colors hover:underline"
               href={href}
             >
               <span>{action}</span>
-              <span aria-hidden="true">↗</span>
+              <ArrowUpRight aria-hidden="true" className="size-3.5 stroke-[1.5]" />
             </Link>
           ) : (
             <button
               type="button"
-              className="text-primary hover:text-primary/80 inline-flex cursor-pointer items-center gap-1 text-xs font-medium transition-colors"
+              className="text-primary inline-flex cursor-pointer items-center gap-1.5 text-[13px] font-medium transition-colors hover:underline"
               onClick={onAction}
             >
               <span>{action}</span>
-              <span aria-hidden="true">↗</span>
+              <ArrowUpRight aria-hidden="true" className="size-3.5 stroke-[1.5]" />
             </button>
           ))}
       </div>

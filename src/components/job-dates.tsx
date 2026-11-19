@@ -22,7 +22,7 @@ export function JobDates({
       'Not provided by source'
     );
   return (
-    <div className="text-muted-foreground space-y-1 text-xs">
+    <div className="text-muted-foreground space-y-1 text-[13px]">
       <p>
         {provider === 'ashby'
           ? 'Last published / republished'

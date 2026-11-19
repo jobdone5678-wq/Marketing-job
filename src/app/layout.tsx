@@ -14,6 +14,13 @@ export const metadata: Metadata = {
   title: 'NextKinHR — AI Staffing & Recruiting Intelligence',
   description:
     'Connecting top software engineering talent, recruiters, and forward-thinking clients. Discover curated opportunities, track hiring pipelines, and build exceptional teams in NextKinHR.',
+  manifest: '/site.webmanifest',
+  openGraph: {
+    title: 'NextKinHR — AI Staffing & Recruiting Intelligence',
+    siteName: 'Nextkinlife',
+    type: 'website',
+  },
+  twitter: { card: 'summary_large_image' },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

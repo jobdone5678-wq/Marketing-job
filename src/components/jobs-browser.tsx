@@ -33,7 +33,7 @@ import {
   MapPin,
   Building2,
   ExternalLink,
-  Sparkles,
+  Wand2,
   Layers,
   Filter,
   CheckCircle2,
@@ -140,8 +140,14 @@ export function JobsBrowser({ provider }: { provider?: string }) {
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
-    const selected = new URLSearchParams(window.location.search).get('candidateId');
+    const params = new URLSearchParams(window.location.search);
+    const selected = params.get('candidateId');
     if (selected) queueMicrotask(() => setCandidateId(selected));
+    // Seed the existing filters from the URL so the workspace search bar lands here.
+    const term = params.get('q');
+    if (term) queueMicrotask(() => setSearch(term));
+    const company = params.get('company');
+    if (company) queueMicrotask(() => setCompanyFilter(company));
   }, []);
 
   // Sync all configured software jobs to database
@@ -480,27 +486,27 @@ export function JobsBrowser({ provider }: { provider?: string }) {
       <div className="border-border/70 flex flex-col items-start justify-between gap-4 border-b pb-4 sm:flex-row sm:items-center">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-foreground text-xl font-bold tracking-tight sm:text-2xl">
+            <h1 className="text-foreground text-[20px] font-medium tracking-tight sm:text-[24px]">
               {provider ? provider.toUpperCase() + ' Roles' : 'Discover Opportunities'}
             </h1>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-              <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
+            <span className="inline-flex items-center gap-1.5 rounded-[6px] border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-[13px] font-medium text-primary">
+              <span className="size-1.5 rounded-full bg-primary" />
               Verified Tech Roles
             </span>
             <Badge
               variant="outline"
-              className="border-border/70 rounded-full px-2 py-0.5 text-xs font-medium capitalize"
+              className="border-border/70 rounded-[6px] px-2 py-0.5 text-[13px] font-medium capitalize"
             >
               {isCandidate ? 'Candidate Mode' : 'All Openings'}
             </Badge>
           </div>
-          <p className="text-muted-foreground text-xs sm:text-sm">
+          <p className="text-muted-foreground text-[13px] sm:text-[13px]">
             Curated software & tech roles directly from verified company ATS boards.
           </p>
         </div>
 
         {/* View Mode Switcher */}
-        <div className="bg-muted/60 border-border/70 inline-flex items-center rounded-xl border p-1 shadow-2xs">
+        <div className="bg-muted/60 border-border/70 inline-flex items-center rounded-[12px] border p-1">
           <Button
             size="sm"
             variant={mode === 'db' ? 'default' : 'ghost'}
@@ -509,9 +515,9 @@ export function JobsBrowser({ provider }: { provider?: string }) {
               setApplicationView('available');
               setDbPage(0);
             }}
-            className={`h-8 rounded-lg px-3.5 text-xs font-medium transition-all ${
-              mode === 'db'
-                ? 'bg-background text-foreground font-semibold shadow-xs'
+            className={`h-8 rounded-[10px] px-3.5 text-[13px] font-medium transition-colors ${
+ mode ==='db'
+                ? 'bg-background text-foreground font-medium '
                 : 'text-muted-foreground hover:text-foreground hover:bg-background/40'
             }`}
           >
@@ -530,9 +536,9 @@ export function JobsBrowser({ provider }: { provider?: string }) {
               setApplicationView('available');
               setDbPage(0);
             }}
-            className={`h-8 rounded-lg px-3.5 text-xs font-medium transition-all ${
-              mode === 'live'
-                ? 'bg-background text-foreground font-semibold shadow-xs'
+            className={`h-8 rounded-[10px] px-3.5 text-[13px] font-medium transition-colors ${
+ mode ==='live'
+                ? 'bg-background text-foreground font-medium '
                 : 'text-muted-foreground hover:text-foreground hover:bg-background/40'
             }`}
           >
@@ -543,7 +549,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
 
       {/* Available / Applied Filter Tabs */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="bg-card border-border/70 inline-flex items-center rounded-xl border p-1 shadow-2xs">
+        <div className="bg-card border-border/70 inline-flex items-center rounded-[12px] border p-1">
           <button
             type="button"
             onClick={() => {
@@ -551,9 +557,9 @@ export function JobsBrowser({ provider }: { provider?: string }) {
               setDbPage(0);
               setAppliedData(null);
             }}
-            className={`flex cursor-pointer items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
-              applicationView === 'available'
-                ? 'bg-primary text-primary-foreground shadow-2xs'
+            className={`flex cursor-pointer items-center gap-2 rounded-[10px] px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
+ applicationView ==='available'
+                ? 'bg-primary text-primary-foreground '
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
@@ -566,9 +572,9 @@ export function JobsBrowser({ provider }: { provider?: string }) {
               setApplicationView('applied');
               setDbPage(0);
             }}
-            className={`flex cursor-pointer items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
-              applicationView === 'applied'
-                ? 'bg-primary text-primary-foreground shadow-2xs'
+            className={`flex cursor-pointer items-center gap-2 rounded-[10px] px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
+ applicationView ==='applied'
+                ? 'bg-primary text-primary-foreground '
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
@@ -587,7 +593,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 setDbPage(0);
                 setReload((v) => v + 1);
               }}
-              className="border-border/80 h-8 gap-1.5 rounded-lg text-xs font-medium shadow-2xs"
+              className="border-border/80 h-8 gap-1.5 rounded-[10px] text-[13px] font-medium"
             >
               <RefreshCw className="size-3" />
               <span>Refresh</span>
@@ -596,7 +602,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
               size="sm"
               onClick={() => void syncSoftwareJobs()}
               disabled={syncingSoftwareJobs}
-              className="h-8 gap-1.5 rounded-lg bg-emerald-600 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700"
+              className="h-8 gap-1.5 rounded-[10px] bg-primary text-[13px] font-medium text-white hover:bg-emerald-700"
             >
               <Download className="size-3" />
               <span>{syncingSoftwareJobs ? 'Pulling...' : 'Sync Software Jobs'}</span>
@@ -606,7 +612,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
       </div>
 
       {/* SEARCH & FILTERS BAR (Jobright Style Clean Filter Strip) */}
-      <section className="border-border/70 bg-card space-y-3 rounded-2xl border p-4 shadow-xs">
+      <section className="border-border/70 bg-card space-y-3 rounded-[16px] border p-4">
         <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-12">
           {/* Main Keyword Search */}
           <div className="relative sm:col-span-4">
@@ -619,7 +625,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 setDbPage(0);
               }}
               placeholder="Search by job title, role or keywords..."
-              className="bg-background border-border/80 h-10 rounded-xl pl-10 text-xs font-medium sm:text-sm"
+              className="bg-background border-border/80 h-10 rounded-[12px] pl-10 text-[13px] font-medium sm:text-[13px]"
             />
           </div>
 
@@ -634,7 +640,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 setDbPage(0);
               }}
               placeholder="City, state or remote..."
-              className="bg-background border-border/80 h-10 rounded-xl pl-10 text-xs font-medium sm:text-sm"
+              className="bg-background border-border/80 h-10 rounded-[12px] pl-10 text-[13px] font-medium sm:text-[13px]"
             />
           </div>
 
@@ -649,7 +655,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 setDbPage(0);
               }}
               placeholder="Company name..."
-              className="bg-background border-border/80 h-10 rounded-xl pl-10 text-xs font-medium sm:text-sm"
+              className="bg-background border-border/80 h-10 rounded-[12px] pl-10 text-[13px] font-medium sm:text-[13px]"
             />
           </div>
 
@@ -657,7 +663,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           <div className="flex items-center gap-2 sm:col-span-3">
             <select
               aria-label="Employment type"
-              className="border-border/80 bg-background focus:ring-primary/20 focus:border-primary h-10 w-full rounded-xl border px-3 text-xs font-medium focus:ring-2 focus:outline-none sm:text-sm"
+              className="border-border/80 bg-background focus:ring-primary/20 focus:border-primary h-10 w-full rounded-[12px] border px-3 text-[13px] font-medium focus:ring-2 focus:outline-none sm:text-[13px]"
               value={employmentType}
               onChange={(e) => {
                 setEmploymentType(e.target.value);
@@ -675,8 +681,8 @@ export function JobsBrowser({ provider }: { provider?: string }) {
         </div>
 
         {/* Secondary Filter Pills */}
-        <div className="border-border/50 flex flex-wrap items-center gap-2 border-t pt-2 text-xs">
-          <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+        <div className="border-border/50 flex flex-wrap items-center gap-2 border-t pt-2 text-[13px]">
+          <span className="text-muted-foreground text-[11px] font-medium">
             Filters:
           </span>
 
@@ -684,7 +690,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           <select
             aria-label="Posted within"
             disabled={applicationView === 'applied'}
-            className="border-border/80 bg-background focus:ring-primary h-8 rounded-lg border px-2.5 text-xs font-medium focus:ring-1 focus:outline-none"
+            className="border-border/80 bg-background focus:ring-primary h-8 rounded-[10px] border px-2.5 text-[13px] font-medium focus:ring-1 focus:outline-none"
             value={postedWithin}
             onChange={(e) => {
               setPostedWithin(e.target.value);
@@ -700,7 +706,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           {/* Portal Filter */}
           <select
             aria-label="Filter by portal"
-            className="border-border/80 bg-background focus:ring-primary h-8 rounded-lg border px-2.5 text-xs font-medium focus:ring-1 focus:outline-none"
+            className="border-border/80 bg-background focus:ring-primary h-8 rounded-[10px] border px-2.5 text-[13px] font-medium focus:ring-1 focus:outline-none"
             value={provider || portalFilter}
             disabled={Boolean(provider)}
             onChange={(e) => {
@@ -720,7 +726,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
 
           {mode === 'live' && applicationView === 'available' && (
             <div className="ml-auto flex items-center gap-2">
-              <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs select-none">
+              <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-[13px] select-none">
                 <input
                   type="checkbox"
                   checked={saveToDbOnFetch}
@@ -733,7 +739,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 size="sm"
                 onClick={() => void fetchLiveJobs()}
                 disabled={liveLoading}
-                className="h-8 rounded-lg px-3 text-xs font-semibold shadow-2xs"
+                className="h-8 rounded-[10px] px-3 text-[13px] font-medium"
               >
                 {liveLoading ? 'Fetching...' : 'Fetch Live'}
               </Button>
@@ -746,7 +752,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
       {error && (
         <div
           role="alert"
-          className="bg-destructive/10 border-destructive/20 text-destructive flex items-center gap-2 rounded-xl border p-3 text-xs"
+          className="bg-destructive/10 border-destructive/20 text-destructive flex items-center gap-2 rounded-[12px] border p-3 text-[13px]"
         >
           <AlertCircle className="size-4 shrink-0" />
           <span>{error}</span>
@@ -755,9 +761,9 @@ export function JobsBrowser({ provider }: { provider?: string }) {
       {notice && (
         <div
           role="status"
-          className="bg-primary/10 border-primary/20 text-primary flex items-center gap-2 rounded-xl border p-3 text-xs"
+          className="bg-primary/10 border-primary/20 text-primary flex items-center gap-2 rounded-[12px] border p-3 text-[13px]"
         >
-          <Sparkles className="size-4 shrink-0" />
+          <Wand2 className="size-4 shrink-0" />
           <span>{notice}</span>
         </div>
       )}
@@ -798,13 +804,13 @@ export function JobsBrowser({ provider }: { provider?: string }) {
               dbLoading ? (
                 <WorkspaceSkeleton rows={6} />
               ) : !dbJobs.length ? (
-                <div className="border-border/80 bg-card space-y-2 rounded-2xl border border-dashed p-10 text-center">
+                <div className="border-border/80 bg-card space-y-2 rounded-[16px] border border-dashed p-10 text-center">
                   <Briefcase className="text-muted-foreground/60 mx-auto size-8" />
-                  <p className="text-foreground text-sm font-semibold">
+                  <p className="text-foreground text-[13px] font-medium">
                     {syncingSoftwareJobs ? 'Loading public jobs…' : 'No saved jobs found'}
                   </p>
                   {!syncingSoftwareJobs && (
-                    <p className="text-muted-foreground text-xs">
+                    <p className="text-muted-foreground text-[13px]">
                       Try clearing filters or click &quot;Sync Software Jobs&quot; to fetch new
                       roles.
                     </p>
@@ -821,14 +827,14 @@ export function JobsBrowser({ provider }: { provider?: string }) {
 
                   {/* Pagination */}
                   <div className="flex items-center justify-between px-1 pt-2">
-                    <span className="text-muted-foreground text-xs">Page {dbPage + 1}</span>
+                    <span className="text-muted-foreground text-[13px]">Page {dbPage + 1}</span>
                     <div className="flex items-center gap-2">
                       <Button
                         disabled={!dbPage}
                         size="sm"
                         variant="outline"
                         onClick={() => setDbPage((p) => p - 1)}
-                        className="hover:bg-muted h-8 rounded-lg px-3 text-xs font-semibold shadow-2xs"
+                        className="hover:bg-muted h-8 rounded-[10px] px-3 text-[13px] font-medium"
                       >
                         Previous
                       </Button>
@@ -837,7 +843,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                         size="sm"
                         variant="outline"
                         onClick={() => setDbPage((p) => p + 1)}
-                        className="hover:bg-muted h-8 rounded-lg px-3 text-xs font-semibold shadow-2xs"
+                        className="hover:bg-muted h-8 rounded-[10px] px-3 text-[13px] font-medium"
                       >
                         Next
                       </Button>
@@ -847,13 +853,13 @@ export function JobsBrowser({ provider }: { provider?: string }) {
               )
             ) : /* LIVE JOBS LIST */
             liveLoading ? (
-              <div className="text-muted-foreground bg-card rounded-2xl border p-12 text-center">
+              <div className="text-muted-foreground bg-card rounded-[16px] border p-12 text-center">
                 <div className="border-primary mb-2 inline-block h-6 w-6 animate-spin rounded-full border-2 border-t-transparent"></div>
-                <p className="text-xs">Fetching live postings directly from ATS...</p>
+                <p className="text-[13px]">Fetching live postings directly from ATS...</p>
               </div>
             ) : !liveJobs.length ? (
-              <div className="bg-card space-y-3 rounded-2xl border p-10 text-center">
-                <p className="text-muted-foreground text-xs">
+              <div className="bg-card space-y-3 rounded-[16px] border p-10 text-center">
+                <p className="text-muted-foreground text-[13px]">
                   {liveBoard ? (
                     <>
                       No live jobs found for board &quot;<strong>{liveBoard}</strong>&quot;.
@@ -866,7 +872,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-7 text-xs"
+                    className="h-7 text-[13px]"
                     onClick={() => {
                       setLiveBoard('ramp');
                       setLiveProvider('ashby');
@@ -878,7 +884,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-7 text-xs"
+                    className="h-7 text-[13px]"
                     onClick={() => {
                       setLiveBoard('figma');
                       setLiveProvider('greenhouse');
@@ -890,7 +896,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-7 text-xs"
+                    className="h-7 text-[13px]"
                     onClick={() => {
                       setLiveBoard('openai');
                       setLiveProvider('ashby');
@@ -919,10 +925,10 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                           setSelectedLiveJob(job);
                         }
                       }}
-                      className={`group relative w-full cursor-pointer rounded-2xl p-4 text-left transition-all duration-200 ${
-                        isSelected
-                          ? 'bg-card border-primary ring-primary/20 border-2 shadow-sm ring-1'
-                          : 'bg-card border-border/70 hover:border-border border hover:shadow-xs'
+                      className={`group relative w-full cursor-pointer rounded-[16px] p-4 text-left transition-colors duration-150 ${
+ isSelected
+ ?'bg-card border-primary ring-primary/20 border-2 shadow-sm ring-1'
+                          : 'bg-card border-border hover:border-input hover:bg-accent/30 border'
                       }`}
                     >
                       <div className="flex items-start gap-3.5">
@@ -930,19 +936,19 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <h3 className="text-foreground group-hover:text-primary line-clamp-1 text-sm font-bold transition-colors">
+                              <h3 className="text-foreground group-hover:text-primary line-clamp-1 text-[13px] font-medium transition-colors">
                                 {job.title}
                               </h3>
-                              <p className="text-muted-foreground mt-0.5 text-xs font-semibold">
+                              <p className="text-muted-foreground mt-0.5 text-[13px] font-medium">
                                 {job.company}
                               </p>
                             </div>
-                            <span className="text-muted-foreground/80 bg-muted/60 border-border/50 shrink-0 rounded border px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase">
+                            <span className="text-muted-foreground/80 bg-muted/60 border-border/50 shrink-0 rounded border px-2 py-0.5 text-[11px] font-medium">
                               {job.provider}
                             </span>
                           </div>
 
-                          <div className="text-muted-foreground mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+                          <div className="text-muted-foreground mt-2 flex flex-wrap items-center gap-1.5 text-[13px]">
                             <span className="text-foreground/85 inline-flex items-center gap-1 text-[11px] font-medium">
                               <MapPin className="text-muted-foreground size-3 shrink-0" />
                               <span className="max-w-[170px] truncate">
@@ -952,7 +958,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                             <span>·</span>
                             <Badge
                               variant="outline"
-                              className="border-border/60 px-1.5 py-0 text-[10px] capitalize"
+                              className="border-border/60 px-1.5 py-0 text-[11px] capitalize"
                             >
                               {job.employment_type.replace('_', ' ')}
                             </Badge>
@@ -977,7 +983,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                               closes_at={job.closes_at}
                               provider={job.provider}
                             />
-                            <span className="text-primary inline-flex items-center gap-0.5 text-xs font-semibold">
+                            <span className="text-primary inline-flex items-center gap-0.5 text-[13px] font-medium">
                               View details <ChevronRight className="size-3" />
                             </span>
                           </div>
@@ -993,7 +999,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
           {/* RIGHT COLUMN: DETAIL PREVIEW PANEL (7 Cols on Large, Sticky) */}
           <div className="lg:sticky lg:top-4 lg:col-span-7">
             {activeJob ? (
-              <div className="border-border/80 bg-card max-h-[calc(100vh-6rem)] scrollbar-thin space-y-6 overflow-y-auto rounded-3xl border p-6 shadow-sm">
+              <div className="border-border/80 bg-card max-h-[calc(100vh-6rem)] scrollbar-thin space-y-6 overflow-y-auto rounded-[20px] border p-6 shadow-sm">
                 {/* Header: Company, Title, Actions */}
                 <div className="border-border/70 space-y-4 border-b pb-5">
                   <div className="flex items-start justify-between gap-4">
@@ -1001,18 +1007,18 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                       <CompanyLogo
                         company={activeJob.company}
                         size="lg"
-                        className="shrink-0 shadow-xs"
+                        className="shrink-0"
                       />
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-primary bg-primary/10 border-primary/20 rounded-md border px-2 py-0.5 text-xs font-bold tracking-wider uppercase">
+                          <span className="text-primary bg-primary/10 border-primary/20 rounded-[8px] border px-2 py-0.5 text-[13px] font-medium">
                             {activeJob.company}
                           </span>
-                          <span className="text-muted-foreground text-xs">
+                          <span className="text-muted-foreground text-[13px]">
                             {activeJob.location || 'Remote'}
                           </span>
                         </div>
-                        <h2 className="text-foreground mt-1 text-xl font-extrabold tracking-tight sm:text-2xl">
+                        <h2 className="text-foreground mt-1 text-[20px] font-medium tracking-tight sm:text-[24px]">
                           {activeJob.title}
                         </h2>
                       </div>
@@ -1023,29 +1029,29 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                       size="sm"
                       variant="outline"
                       onClick={() => setMatcherOpen(true)}
-                      className="h-9 shrink-0 gap-1.5 rounded-xl border-emerald-500/30 bg-emerald-500/10 text-xs font-semibold text-emerald-700 shadow-2xs hover:bg-emerald-500/20 dark:text-emerald-300"
+                      className="h-9 shrink-0 gap-1.5 rounded-[12px] border-primary/20 bg-primary/10 text-[13px] font-medium text-primary hover:bg-emerald-500/20"
                     >
-                      <Sparkles className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <Wand2 className="size-3.5 text-primary" />
                       <span>Match Fit</span>
                     </Button>
                   </div>
 
                   {/* Metadata Chips */}
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <div className="flex flex-wrap items-center gap-2 text-[13px]">
                     <Badge
                       variant="outline"
-                      className="border-border/70 bg-muted/20 text-xs font-medium capitalize"
+                      className="border-border/70 bg-muted/20 text-[13px] font-medium capitalize"
                     >
                       {activeJob.employment_type.replace('_', ' ')}
                     </Badge>
                     {'arrangements' in activeJob && activeJob.arrangements?.[0] && (
-                      <Badge variant="secondary" className="text-xs font-medium">
+                      <Badge variant="secondary" className="text-[13px] font-medium">
                         {activeJob.arrangements[0]}
                       </Badge>
                     )}
                     <Badge
                       variant="outline"
-                      className="text-muted-foreground font-mono text-xs uppercase"
+                      className="text-muted-foreground font-mono text-[13px]"
                     >
                       {'source' in activeJob && activeJob.source?.provider
                         ? activeJob.source.provider
@@ -1053,7 +1059,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                           ? (activeJob as LiveJob).provider
                           : 'ATS'}
                     </Badge>
-                    <div className="text-muted-foreground ml-auto text-xs">
+                    <div className="text-muted-foreground ml-auto text-[13px]">
                       <JobDates
                         posted_at={activeJob.posted_at}
                         closes_at={activeJob.closes_at}
@@ -1079,7 +1085,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                           : (activeJob as LiveJob).content_hash)
                       }
                       onClick={() => void handleApplyDirectly(activeJob)}
-                      className="bg-primary text-primary-foreground hover:bg-primary/90 h-10 flex-1 gap-1.5 rounded-xl text-xs font-bold shadow-xs transition-all sm:text-sm"
+                      className="bg-primary text-primary-foreground hover:bg-primary/90 h-10 flex-1 gap-1.5 rounded-[12px] text-[13px] font-medium transition-colors sm:text-[13px]"
                     >
                       <span>Apply Directly on Official Portal</span>
                       <ExternalLink className="size-3.5" />
@@ -1088,7 +1094,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                     {'id' in activeJob && (
                       <Link
                         href={`/dashboard/jobs/${activeJob.id}${candidateId ? '?candidateId=' + encodeURIComponent(candidateId) : ''}`}
-                        className="border-border/80 bg-background text-foreground hover:bg-muted inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border px-4 text-xs font-semibold shadow-2xs transition-colors"
+                        className="border-border/80 bg-background text-foreground hover:bg-muted inline-flex h-10 items-center justify-center gap-1.5 rounded-[12px] border px-4 text-[13px] font-medium transition-colors"
                       >
                         <span>Full Page View</span>
                         <ArrowUpRight className="size-3.5" />
@@ -1100,7 +1106,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 {/* Key Skills Ribbon */}
                 {activeExtracted && activeExtracted.topTechStack.length > 0 && (
                   <div className="space-y-2">
-                    <h3 className="text-muted-foreground flex items-center gap-1.5 text-xs font-bold tracking-wider uppercase">
+                    <h3 className="text-muted-foreground flex items-center gap-1.5 text-[13px] font-medium">
                       <Layers className="text-primary size-3.5" />
                       <span>Required Tech Stack</span>
                     </h3>
@@ -1115,15 +1121,15 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 {/* Core Responsibilities */}
                 {activeExtracted && activeExtracted.responsibilities.length > 0 && (
                   <div className="space-y-2.5">
-                    <h3 className="text-muted-foreground flex items-center gap-1.5 text-xs font-bold tracking-wider uppercase">
-                      <CheckCircle2 className="size-3.5 text-emerald-600" />
+                    <h3 className="text-muted-foreground flex items-center gap-1.5 text-[13px] font-medium">
+                      <CheckCircle2 className="size-3.5 text-primary" />
                       <span>Key Responsibilities</span>
                     </h3>
                     <ul className="space-y-2">
                       {activeExtracted.responsibilities.slice(0, 5).map((resp, i) => (
                         <li
                           key={i}
-                          className="text-foreground/90 flex items-start gap-2.5 text-xs leading-relaxed"
+                          className="text-foreground/90 flex items-start gap-2.5 text-[13px] leading-relaxed"
                         >
                           <span className="bg-primary mt-1.5 size-1.5 shrink-0 rounded-full" />
                           <span>{resp}</span>
@@ -1136,17 +1142,17 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 {/* Qualifications & Must-Haves */}
                 {activeExtracted && activeExtracted.mustHaves.length > 0 && (
                   <div className="space-y-2.5">
-                    <h3 className="text-muted-foreground flex items-center gap-1.5 text-xs font-bold tracking-wider uppercase">
-                      <Sparkles className="text-primary size-3.5" />
+                    <h3 className="text-muted-foreground flex items-center gap-1.5 text-[13px] font-medium">
+                      <Wand2 className="text-primary size-3.5" />
                       <span>Essential Qualifications</span>
                     </h3>
                     <div className="space-y-2">
                       {activeExtracted.mustHaves.slice(0, 4).map((req, i) => (
                         <div
                           key={i}
-                          className="border-border/60 bg-muted/15 flex items-start gap-2.5 rounded-xl border p-3 text-xs"
+                          className="border-border/60 bg-muted/15 flex items-start gap-2.5 rounded-[12px] border p-3 text-[13px]"
                         >
-                          <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                          <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-primary" />
                           <span className="text-foreground leading-snug font-medium">{req}</span>
                         </div>
                       ))}
@@ -1156,7 +1162,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
 
                 {/* Full Description Section */}
                 <div className="border-border/60 space-y-3 border-t pt-4">
-                  <h3 className="text-muted-foreground flex items-center justify-between text-xs font-bold tracking-wider uppercase">
+                  <h3 className="text-muted-foreground flex items-center justify-between text-[13px] font-medium">
                     <span>Complete Description</span>
                     <a
                       href={activeJob.source_url}
@@ -1169,7 +1175,7 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                     </a>
                   </h3>
                   <div
-                    className="jd-prose text-foreground/80 max-h-96 max-w-none scrollbar-thin overflow-y-auto pr-2 text-xs leading-relaxed"
+                    className="jd-prose text-foreground/80 max-h-96 max-w-none scrollbar-thin overflow-y-auto pr-2 text-[13px] leading-relaxed"
                     dangerouslySetInnerHTML={{
                       __html: sanitizeJobHtml(
                         'description_html' in activeJob && activeJob.description_html
@@ -1181,12 +1187,12 @@ export function JobsBrowser({ provider }: { provider?: string }) {
                 </div>
               </div>
             ) : (
-              <div className="border-border/80 bg-card space-y-2 rounded-3xl border border-dashed p-12 text-center">
+              <div className="border-border/80 bg-card space-y-2 rounded-[20px] border border-dashed p-12 text-center">
                 <Briefcase className="text-muted-foreground/60 mx-auto size-8" />
-                <p className="text-foreground text-sm font-semibold">
+                <p className="text-foreground text-[13px] font-medium">
                   Select a job to view details
                 </p>
-                <p className="text-muted-foreground text-xs">
+                <p className="text-muted-foreground text-[13px]">
                   Click any card from the list to preview responsibilities, requirements, and apply
                   directly.
                 </p>

@@ -52,7 +52,7 @@ import {
   EditIcon,
   Trash2Icon,
   TrendingUpIcon,
-  SparklesIcon,
+  Wand2Icon,
   Building2Icon,
   BriefcaseIcon,
   ClockIcon,
@@ -145,8 +145,8 @@ export default function SubmissionsPage() {
     switch (status) {
       case 'Offer_Received':
         return (
-          <Badge className="gap-1.5 rounded-full border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1 font-semibold text-emerald-700 shadow-2xs dark:text-emerald-300">
-            <SparklesIcon className="size-3 text-emerald-500" />
+          <Badge className="gap-1.5 rounded-[6px] border-primary/20 bg-primary/15 px-2.5 py-1 font-medium text-primary">
+            <Wand2Icon className="size-3 text-primary" />
             Offer Received
           </Badge>
         );
@@ -154,21 +154,21 @@ export default function SubmissionsPage() {
       case 'Round_2':
       case 'Interview_Scheduled':
         return (
-          <Badge className="bg-primary/10 text-primary border-primary/25 gap-1.5 rounded-full px-2.5 py-1 font-medium shadow-2xs">
+          <Badge className="bg-primary/10 text-primary border-primary/25 gap-1.5 rounded-[6px] px-2.5 py-1 font-medium">
             <CalendarIcon className="text-primary size-3" />
             {status.replace(/_/g, ' ')}
           </Badge>
         );
       case 'Submitted_to_Client':
         return (
-          <Badge className="gap-1.5 rounded-full border-blue-500/30 bg-blue-500/15 px-2.5 py-1 font-medium text-blue-700 shadow-2xs dark:text-blue-300">
-            <Building2Icon className="size-3 text-blue-500" />
+          <Badge className="gap-1.5 rounded-[6px] border-border bg-muted px-2.5 py-1 font-medium text-muted-foreground">
+            <Building2Icon className="size-3 text-muted-foreground" />
             Client Review
           </Badge>
         );
       case 'Vendor_Screening':
         return (
-          <Badge className="gap-1.5 rounded-full border-amber-500/30 bg-amber-500/15 px-2.5 py-1 font-medium text-amber-700 shadow-2xs dark:text-amber-300">
+          <Badge className="gap-1.5 rounded-[6px] border-amber-500/30 bg-amber-500/15 px-2.5 py-1 font-medium text-amber-700 dark:text-amber-400">
             <ClockIcon className="size-3 text-amber-500" />
             Vendor Screening
           </Badge>
@@ -177,7 +177,7 @@ export default function SubmissionsPage() {
         return (
           <Badge
             variant="outline"
-            className="border-border/80 text-foreground/80 bg-background gap-1.5 rounded-full px-2.5 py-1 font-medium shadow-2xs"
+            className="border-border/80 text-foreground/80 bg-background gap-1.5 rounded-[6px] px-2.5 py-1 font-medium"
           >
             <SendIcon className="text-primary size-3" />
             Applied
@@ -187,7 +187,7 @@ export default function SubmissionsPage() {
         return (
           <Badge
             variant="destructive"
-            className="gap-1 rounded-full px-2.5 py-1 font-medium opacity-85 shadow-2xs"
+            className="gap-1 rounded-[6px] px-2.5 py-1 font-medium opacity-85"
           >
             Rejected
           </Badge>
@@ -196,7 +196,7 @@ export default function SubmissionsPage() {
         return (
           <Badge
             variant="secondary"
-            className="gap-1 rounded-full px-2.5 py-1 font-medium shadow-2xs"
+            className="gap-1 rounded-[6px] px-2.5 py-1 font-medium"
           >
             {status.replace(/_/g, ' ')}
           </Badge>
@@ -449,18 +449,18 @@ export default function SubmissionsPage() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2.5">
-              <h1 className="text-foreground text-2xl font-bold tracking-tight sm:text-3xl">
+              <h1 className="text-foreground text-[24px] font-medium tracking-tight sm:text-[28px]">
                 {isCandidate ? 'My Applications' : 'Job submissions'}
               </h1>
               <Badge
                 variant="outline"
-                className="gap-1.5 rounded-full border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400"
+                className="gap-1.5 rounded-[6px] border-primary/20 bg-primary/10 px-2 py-0.5 text-[13px] font-medium text-primary"
               >
                 <TrendingUpIcon className="size-3" />
                 Application tracker
               </Badge>
             </div>
-            <p className="text-muted-foreground mt-1 text-sm">
+            <p className="text-muted-foreground mt-1 text-[13px]">
               {isCandidate
                 ? 'Track all your submitted applications, interview stages, and statuses.'
                 : 'Every application, its recorded resume, and the next step — in one place.'}
@@ -472,7 +472,7 @@ export default function SubmissionsPage() {
               variant="outline"
               size="sm"
               render={<Link href="/dashboard/email-confirmations" />}
-              className="border-border/70 hover:bg-muted/50 h-9 cursor-pointer gap-1.5 rounded-lg text-xs"
+              className="border-border/70 hover:bg-muted/50 h-9 cursor-pointer gap-1.5 rounded-[10px] text-[13px]"
             >
               <MailIcon className="size-3.5" /> Email confirmations
             </Button>
@@ -481,10 +481,10 @@ export default function SubmissionsPage() {
                 variant="outline"
                 size="sm"
                 onClick={handleCopyStandupReport}
-                className="border-border/70 hover:bg-muted/50 h-9 cursor-pointer gap-1.5 rounded-lg text-xs"
+                className="border-border/70 hover:bg-muted/50 h-9 cursor-pointer gap-1.5 rounded-[10px] text-[13px]"
               >
                 {copiedReport ? (
-                  <CheckIcon className="size-3.5 text-emerald-600" />
+                  <CheckIcon className="size-3.5 text-primary" />
                 ) : (
                   <CopyIcon className="size-3.5" />
                 )}
@@ -496,7 +496,7 @@ export default function SubmissionsPage() {
               variant="outline"
               size="sm"
               onClick={handleExportCSV}
-              className="border-border/70 hover:bg-muted/50 h-9 cursor-pointer gap-1.5 rounded-lg text-xs"
+              className="border-border/70 hover:bg-muted/50 h-9 cursor-pointer gap-1.5 rounded-[10px] text-[13px]"
             >
               <DownloadIcon className="size-3.5" />
               Export to Excel (CSV)
@@ -507,9 +507,9 @@ export default function SubmissionsPage() {
               size="sm"
               onClick={loadData}
               disabled={loading}
-              className="border-border/70 hover:bg-muted/50 h-9 cursor-pointer gap-1.5 rounded-lg text-xs"
+              className="border-border/70 hover:bg-muted/50 h-9 cursor-pointer gap-1.5 rounded-[10px] text-[13px]"
             >
-              <RefreshCwIcon className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCwIcon className={`size-3.5 ${loading ?'animate-spin' : ''}`} />
               Refresh
             </Button>
 
@@ -517,7 +517,7 @@ export default function SubmissionsPage() {
               <Link href="/dashboard/submissions/new">
                 <Button
                   size="sm"
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 h-9 cursor-pointer gap-1.5 rounded-lg px-3.5 text-xs font-semibold shadow-xs transition-all hover:shadow"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 h-9 cursor-pointer gap-1.5 rounded-[10px] px-3.5 text-[13px] font-medium transition-colors hover:shadow"
                 >
                   <PlusIcon className="size-3.5" />
                   New Submission
@@ -545,22 +545,22 @@ export default function SubmissionsPage() {
               value: stats.interviews,
               note: 'Scheduled · Round 1 · Round 2',
               icon: CalendarIcon,
-              color: 'text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/20',
+              color: 'text-muted-foreground bg-muted border-border',
             },
             {
               label: 'Client Review',
               value: stats.clientReview,
               note: 'With end-client managers',
               icon: Building2Icon,
-              color: 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 border-indigo-500/20',
+              color: 'text-muted-foreground bg-muted border-border',
             },
             {
               label: 'Offers',
               value: stats.offers,
               note: 'Received & in negotiation',
-              icon: SparklesIcon,
+              icon: Wand2Icon,
               color:
-                'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+                'text-primary bg-primary/10 border-primary/20',
             },
             {
               label: 'Duplicate Alerts',
@@ -568,29 +568,29 @@ export default function SubmissionsPage() {
               note: '30-day application safeguard',
               icon: AlertTriangleIcon,
               color: stats.duplicates
-                ? 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20'
+                ? 'text-amber-700 dark:text-amber-400 bg-amber-500/10 border-amber-500/20'
                 : 'text-muted-foreground bg-muted border-border/60',
             },
           ].map((metric) => (
             <div
               key={metric.label}
-              className="border-border/70 bg-card hover:border-border flex flex-col justify-between rounded-2xl border p-4 shadow-xs transition-all"
+              className="border-border/70 bg-card hover:border-border flex flex-col justify-between rounded-[16px] border p-4 transition-colors"
             >
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+                <span className="text-muted-foreground text-[11px] font-medium">
                   {metric.label}
                 </span>
                 <div
-                  className={`flex size-7 items-center justify-center rounded-lg border shadow-2xs ${metric.color}`}
+                  className={`flex size-7 items-center justify-center rounded-[10px] border ${metric.color}`}
                 >
                   <metric.icon className="size-3.5" />
                 </div>
               </div>
               <div className="mt-2.5">
-                <p className="text-foreground font-mono text-2xl leading-none font-bold tracking-tight tabular-nums sm:text-3xl">
+                <p className="text-foreground font-mono text-[24px] leading-none font-medium tracking-tight tabular-nums sm:text-[28px]">
                   {loading ? '—' : metric.value}
                 </p>
-                <p className="text-muted-foreground mt-1.5 line-clamp-1 text-[10px]">
+                <p className="text-muted-foreground mt-1.5 line-clamp-1 text-[11px]">
                   {metric.note}
                 </p>
               </div>
@@ -600,7 +600,7 @@ export default function SubmissionsPage() {
       </div>
       {loadError && (
         <WorkspaceError message={loadError}>
-          <Button variant="outline" className="mt-2 text-xs" onClick={() => void loadData()}>
+          <Button variant="outline" className="mt-2 text-[13px]" onClick={() => void loadData()}>
             Try again
           </Button>
         </WorkspaceError>
@@ -610,11 +610,11 @@ export default function SubmissionsPage() {
       <div className="flex flex-col gap-3">
         {/* Status Pipeline Pills */}
         <div className="flex flex-wrap items-center gap-1.5 pb-1">
-          <span className="text-muted-foreground mr-1 flex items-center gap-1.5 text-xs font-semibold">
+          <span className="text-muted-foreground mr-1 flex items-center gap-1.5 text-[13px] font-medium">
             <FilterIcon className="text-primary size-3.5" />
             Stage:
           </span>
-          <div className="bg-muted/40 border-border/60 inline-flex flex-wrap items-center gap-1 rounded-xl border p-1">
+          <div className="bg-muted/40 border-border/60 inline-flex flex-wrap items-center gap-1 rounded-[12px] border p-1">
             {[
               { id: 'all', label: 'All stages' },
               { id: 'interviews', label: 'Interviews' },
@@ -632,9 +632,9 @@ export default function SubmissionsPage() {
                   aria-pressed={isSelected}
                   type="button"
                   onClick={() => setSelectedStatusTab(tab.id)}
-                  className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
-                    isSelected
-                      ? 'bg-background text-foreground ring-border/60 font-semibold shadow-xs ring-1'
+                  className={`cursor-pointer rounded-[10px] px-3 py-1.5 text-[13px] font-medium transition-colors duration-150 ${
+ isSelected
+ ?'bg-background text-foreground ring-border/60 font-medium ring-1'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                   }`}
                 >
@@ -654,7 +654,7 @@ export default function SubmissionsPage() {
               placeholder="Search company, role, vendor or notes…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-background border-border/70 focus-visible:ring-primary/20 focus-visible:border-primary h-9.5 rounded-xl pl-9 text-xs shadow-2xs focus-visible:ring-2"
+              className="bg-background border-border/70 focus-visible:ring-primary/20 focus-visible:border-primary h-9.5 rounded-[12px] pl-9 text-[13px] focus-visible:ring-2"
             />
           </div>
 
@@ -674,7 +674,7 @@ export default function SubmissionsPage() {
             >
               <SelectTrigger
                 aria-label="Filter by portal"
-                className="bg-background border-border/70 h-9.5 w-[140px] rounded-xl text-xs shadow-2xs"
+                className="bg-background border-border/70 h-9.5 w-[140px] rounded-[12px] text-[13px]"
               >
                 <SelectValue>
                   {selectedPortalFilter === 'all'
@@ -684,11 +684,11 @@ export default function SubmissionsPage() {
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all" className="text-xs">
+                <SelectItem value="all" className="text-[13px]">
                   All Portals
                 </SelectItem>
                 {portalOptions.map(([value, label]) => (
-                  <SelectItem key={value} value={value} className="text-xs">
+                  <SelectItem key={value} value={value} className="text-[13px]">
                     {label}
                   </SelectItem>
                 ))}
@@ -702,7 +702,7 @@ export default function SubmissionsPage() {
             >
               <SelectTrigger
                 aria-label="Filter by source type"
-                className="bg-background border-border/70 h-9.5 w-[150px] rounded-xl text-xs shadow-2xs"
+                className="bg-background border-border/70 h-9.5 w-[150px] rounded-[12px] text-[13px]"
               >
                 <SelectValue>
                   {selectedSourceFilter === 'all'
@@ -713,15 +713,15 @@ export default function SubmissionsPage() {
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all" className="text-xs">
+                <SelectItem value="all" className="text-[13px]">
                   All Sources
                 </SelectItem>
-                <SelectItem value="portal" className="flex items-center gap-2 text-xs">
+                <SelectItem value="portal" className="flex items-center gap-2 text-[13px]">
                   <Building2Icon className="text-primary size-3.5" />
                   Portal (Inside Jobs)
                 </SelectItem>
-                <SelectItem value="extension" className="flex items-center gap-2 text-xs">
-                  <GlobeIcon className="size-3.5 text-blue-600" />
+                <SelectItem value="extension" className="flex items-center gap-2 text-[13px]">
+                  <GlobeIcon className="size-3.5 text-muted-foreground" />
                   Extension (Outside Jobs)
                 </SelectItem>
               </SelectContent>
@@ -733,16 +733,16 @@ export default function SubmissionsPage() {
       {/* Application date filters card */}
       <section
         aria-label="Application date filters"
-        className="border-border/70 bg-card space-y-3 rounded-2xl border p-4 shadow-xs"
+        className="border-border/70 bg-card space-y-3 rounded-[16px] border p-4"
       >
         <div className="flex items-center justify-between">
-          <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase">
+          <p className="text-muted-foreground flex items-center gap-1.5 text-[13px] font-medium">
             <CalendarIcon className="text-primary size-3.5" />
             Application date · Counts and exports follow your filters
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-2.5">
-          <label className="text-foreground space-y-1 text-xs font-medium">
+          <label className="text-foreground space-y-1 text-[13px] font-medium">
             <span className="block">From date</span>
             <Input
               aria-label="From application date"
@@ -750,10 +750,10 @@ export default function SubmissionsPage() {
               value={dateFrom}
               max={dateTo || undefined}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="bg-background border-border/70 h-9 rounded-lg text-xs shadow-2xs"
+              className="bg-background border-border/70 h-9 rounded-[10px] text-[13px]"
             />
           </label>
-          <label className="text-foreground space-y-1 text-xs font-medium">
+          <label className="text-foreground space-y-1 text-[13px] font-medium">
             <span className="block">To date</span>
             <Input
               aria-label="To application date"
@@ -761,7 +761,7 @@ export default function SubmissionsPage() {
               value={dateTo}
               min={dateFrom || undefined}
               onChange={(e) => setDateTo(e.target.value)}
-              className="bg-background border-border/70 h-9 rounded-lg text-xs shadow-2xs"
+              className="bg-background border-border/70 h-9 rounded-[10px] text-[13px]"
             />
           </label>
           <div className="flex flex-wrap items-center gap-1.5">
@@ -776,7 +776,7 @@ export default function SubmissionsPage() {
                 key={preset.id}
                 variant="outline"
                 size="sm"
-                className="border-border/70 hover:bg-muted/50 h-9 cursor-pointer rounded-lg text-xs font-medium"
+                className="border-border/70 hover:bg-muted/50 h-9 cursor-pointer rounded-[10px] text-[13px] font-medium"
                 onClick={() => {
                   const range = submissionDatePreset(preset.id);
                   setDateFrom(range.from);
@@ -789,7 +789,7 @@ export default function SubmissionsPage() {
             <Button
               variant="ghost"
               size="sm"
-              className="text-muted-foreground hover:text-foreground hover:bg-muted/50 h-9 cursor-pointer rounded-lg text-xs font-medium"
+              className="text-muted-foreground hover:text-foreground hover:bg-muted/50 h-9 cursor-pointer rounded-[10px] text-[13px] font-medium"
               onClick={() => {
                 setDateFrom('');
                 setDateTo('');
@@ -808,39 +808,39 @@ export default function SubmissionsPage() {
         {dateFrom && dateTo && dateFrom > dateTo && (
           <p
             role="alert"
-            className="text-destructive border-destructive/20 bg-destructive/10 rounded-lg border p-2.5 text-xs"
+            className="text-destructive border-destructive/20 bg-destructive/10 rounded-[10px] border p-2.5 text-[13px]"
           >
             From date must be on or before To date.
           </p>
         )}
 
         <div className="border-border/40 space-y-2 border-t pt-2">
-          <p role="status" className="text-muted-foreground text-xs">
-            <strong className="text-foreground font-semibold">{filteredSubmissions.length}</strong>{' '}
+          <p role="status" className="text-muted-foreground text-[13px]">
+            <strong className="text-foreground font-medium">{filteredSubmissions.length}</strong>{' '}
             matching applications across{' '}
-            <strong className="text-foreground font-semibold">{dailyCounts.length}</strong>{' '}
+            <strong className="text-foreground font-medium">{dailyCounts.length}</strong>{' '}
             application dates.
           </p>
           <details className="w-full">
-            <summary className="text-primary cursor-pointer text-xs font-medium select-none hover:underline">
+            <summary className="text-primary cursor-pointer text-[13px] font-medium select-none hover:underline">
               Applications by date · {dailyCounts.length} dates
             </summary>
-            <div className="border-border/60 bg-muted/20 mt-3 max-h-60 overflow-auto rounded-xl border p-2">
+            <div className="border-border/60 bg-muted/20 mt-3 max-h-60 overflow-auto rounded-[12px] border p-2">
               {dailyCounts.length ? (
-                <table className="w-full text-xs">
+                <table className="w-full text-[13px]">
                   <caption className="sr-only">
                     Daily application counts for the selected filters
                   </caption>
                   <thead>
                     <tr className="border-border/60 text-muted-foreground border-b">
-                      <th className="p-2 text-left font-semibold">Application date</th>
-                      <th className="p-2 text-right font-semibold">Application records</th>
+                      <th className="p-2 text-left font-medium">Application date</th>
+                      <th className="p-2 text-right font-medium">Application records</th>
                     </tr>
                   </thead>
                   <tbody className="divide-border/40 divide-y">
                     {dailyCounts.map((day) => (
                       <tr key={day.date} className="hover:bg-muted/30">
-                        <td className="p-2 font-mono text-xs">
+                        <td className="p-2 font-mono text-[13px]">
                           <button
                             type="button"
                             className="text-primary cursor-pointer font-medium hover:underline"
@@ -853,13 +853,13 @@ export default function SubmissionsPage() {
                             {day.date}
                           </button>
                         </td>
-                        <td className="p-2 text-right font-mono font-semibold">{day.count}</td>
+                        <td className="p-2 text-right font-mono font-medium">{day.count}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               ) : (
-                <p className="text-muted-foreground p-2 text-xs">
+                <p className="text-muted-foreground p-2 text-[13px]">
                   No dated applications match these filters.
                 </p>
               )}
@@ -875,14 +875,14 @@ export default function SubmissionsPage() {
       </section>
 
       {/* THE CENTRAL EXCEL-REPLACEMENT SUBMISSIONS TABLE */}
-      <div className="border-border/70 bg-card overflow-hidden rounded-2xl border shadow-xs">
-        <div className="border-border/60 bg-muted/20 text-muted-foreground flex items-center justify-between border-b p-3.5 text-xs">
+      <div className="border-border/70 bg-card overflow-hidden rounded-[16px] border">
+        <div className="border-border/60 bg-muted/20 text-muted-foreground flex items-center justify-between border-b p-3.5 text-[13px]">
           <div>
             Showing{' '}
-            <strong className="text-foreground font-semibold">{filteredSubmissions.length}</strong>{' '}
+            <strong className="text-foreground font-medium">{filteredSubmissions.length}</strong>{' '}
             of <strong>{submissions.length}</strong> submissions
           </div>
-          <label className="flex cursor-pointer items-center gap-2 text-xs select-none">
+          <label className="flex cursor-pointer items-center gap-2 text-[13px] select-none">
             <input
               type="checkbox"
               checked={showDetails}
@@ -895,69 +895,69 @@ export default function SubmissionsPage() {
 
         <div className="overflow-x-auto">
           <Table
-            className={`submissions-table min-w-[1250px] ${showDetails ? 'show-details' : ''}`}
+            className={`submissions-table min-w-[1250px] ${showDetails ?'show-details' : ''}`}
           >
             <TableHeader className="bg-muted/40 border-border/60 border-b">
               <TableRow>
                 {false && (
                   <TableHead
                     data-col="candidate"
-                    className="text-muted-foreground w-[180px] text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
+                    className="text-muted-foreground w-[180px] text-[11px] leading-tight font-medium whitespace-normal"
                   >
                     Candidate
                   </TableHead>
                 )}
                 <TableHead
                   data-col="client"
-                  className="text-muted-foreground w-[200px] text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
+                  className="text-muted-foreground w-[200px] text-[11px] leading-tight font-medium whitespace-normal"
                 >
                   End Client &amp; Role
                 </TableHead>
                 <TableHead
                   data-col="resume"
-                  className="text-muted-foreground w-[220px] text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
+                  className="text-muted-foreground w-[220px] text-[11px] leading-tight font-medium whitespace-normal"
                 >
                   Applied resume &amp; answers
                 </TableHead>
                 <TableHead
                   data-col="rtr"
-                  className="text-muted-foreground w-[160px] text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
+                  className="text-muted-foreground w-[160px] text-[11px] leading-tight font-medium whitespace-normal"
                 >
                   RTR Document
                 </TableHead>
                 <TableHead
                   data-col="vendor"
-                  className="text-muted-foreground w-[180px] text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
+                  className="text-muted-foreground w-[180px] text-[11px] leading-tight font-medium whitespace-normal"
                 >
                   Vendor &amp; Recruiter
                 </TableHead>
                 <TableHead
                   data-col="rate"
-                  className="text-muted-foreground w-[110px] text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
+                  className="text-muted-foreground w-[110px] text-[11px] leading-tight font-medium whitespace-normal"
                 >
                   Rate
                 </TableHead>
                 <TableHead
                   data-col="date"
-                  className="text-muted-foreground w-[110px] text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
+                  className="text-muted-foreground w-[110px] text-[11px] leading-tight font-medium whitespace-normal"
                 >
                   Date
                 </TableHead>
                 <TableHead
                   data-col="stage"
-                  className="text-muted-foreground w-[220px] text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
+                  className="text-muted-foreground w-[220px] text-[11px] leading-tight font-medium whitespace-normal"
                 >
                   Recruiting stage &amp; capture
                 </TableHead>
                 <TableHead
                   data-col="interview"
-                  className="text-muted-foreground w-[220px] text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
+                  className="text-muted-foreground w-[220px] text-[11px] leading-tight font-medium whitespace-normal"
                 >
                   Interview / Schedule / Notes
                 </TableHead>
                 <TableHead
                   data-col="actions"
-                  className="text-muted-foreground w-[90px] text-right text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
+                  className="text-muted-foreground w-[90px] text-right text-[11px] leading-tight font-medium whitespace-normal"
                 >
                   Actions
                 </TableHead>
@@ -972,7 +972,7 @@ export default function SubmissionsPage() {
                 </TableRow>
               ) : filteredSubmissions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-muted-foreground h-32 text-center text-xs">
+                  <TableCell colSpan={9} className="text-muted-foreground h-32 text-center text-[13px]">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <BriefcaseIcon className="text-muted-foreground/60 size-6" />
                       <span>No job submissions match your filter criteria.</span>
@@ -984,7 +984,7 @@ export default function SubmissionsPage() {
                           setSearchQuery('');
                           setSelectedCandidateFilter('all');
                         }}
-                        className="mt-1 cursor-pointer text-xs"
+                        className="mt-1 cursor-pointer text-[13px]"
                       >
                         Reset Filters
                       </Button>
@@ -1002,21 +1002,21 @@ export default function SubmissionsPage() {
                       {false && (
                         <TableCell data-col="candidate" className="py-3.5 align-top">
                           <div className="flex items-start gap-2.5">
-                            <div className="from-primary/15 via-primary/5 text-primary border-primary/20 mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border bg-gradient-to-br to-transparent text-xs font-bold shadow-2xs">
+                            <div className="bg-surface-sunken text-muted-foreground border-border mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-[8px] border text-[11px] font-medium">
                               {candidateName.charAt(0).toUpperCase()}
                             </div>
                             <div className="min-w-0">
-                              <div className="text-foreground text-xs leading-snug font-semibold">
+                              <div className="text-foreground text-[13px] leading-snug font-medium">
                                 {candidateName}
                               </div>
                               <div className="mt-1 flex flex-wrap items-center gap-1.5">
                                 <Badge
                                   variant="outline"
-                                  className="border-blue-500/20 bg-blue-500/10 px-1.5 py-0 text-[10px] font-medium text-blue-600 dark:text-blue-400"
+                                  className="border-border bg-muted px-1.5 py-0 text-[11px] font-medium text-muted-foreground"
                                 >
                                   {visaStatus}
                                 </Badge>
-                                <span className="text-muted-foreground max-w-[110px] truncate text-[10px]">
+                                <span className="text-muted-foreground max-w-[110px] truncate text-[11px]">
                                   {sub.candidate?.target_job_titles || 'Not recorded'}
                                 </span>
                               </div>
@@ -1027,15 +1027,15 @@ export default function SubmissionsPage() {
 
                       {/* Company & Role */}
                       <TableCell data-col="client" className="py-3.5 align-top">
-                        <div className="text-foreground flex items-center gap-1.5 text-xs font-medium">
-                          <div className="bg-primary/10 text-primary flex size-5 shrink-0 items-center justify-center rounded">
+                        <div className="text-foreground flex items-center gap-1.5 text-[13px] font-medium">
+                          <div className="bg-surface-sunken text-muted-foreground flex size-5 shrink-0 items-center justify-center rounded">
                             <Building2Icon className="size-3" />
                           </div>
-                          <span className="font-semibold">{sub.company_name}</span>
+                          <span className="font-medium">{sub.company_name}</span>
                           {sub.duplicate_flag && (
                             <Badge
                               variant="destructive"
-                              className="h-4 px-1 py-0 text-[9px]"
+                              className="h-4 px-1 py-0 text-[11px]"
                               title="Flagged: Candidate submitted to this company within last 30 days"
                             >
                               Duplicate
@@ -1048,22 +1048,22 @@ export default function SubmissionsPage() {
                         {sub.capture_status === 'confirmed' && (
                           <Badge
                             variant="outline"
-                            className="mt-1 border-emerald-500/20 bg-emerald-500/10 text-[9px] text-emerald-600 dark:text-emerald-400"
+                            className="mt-1 border-primary/20 bg-primary/10 text-[11px] text-primary"
                           >
                             Email confirmed
                           </Badge>
                         )}
-                        <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-2 text-[10px]">
+                        <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-2 text-[11px]">
                           <Badge
                             variant="secondary"
-                            className="h-4 px-1.5 py-0 text-[9px] font-medium"
+                            className="h-4 px-1.5 py-0 text-[11px] font-medium"
                           >
                             {sub.portal_source || 'Not recorded'}
                           </Badge>
                           {sub.source_type && (
                             <Badge
                               variant="outline"
-                              className="flex h-4 items-center gap-1 px-1.5 py-0 text-[9px] font-semibold"
+                              className="flex h-4 items-center gap-1 px-1.5 py-0 text-[11px] font-medium"
                               style={
                                 sub.source_type === 'extension'
                                   ? {
@@ -1094,7 +1094,7 @@ export default function SubmissionsPage() {
                           {Boolean(sub.portal_source?.toLowerCase().includes('outside')) && (
                             <Badge
                               variant="outline"
-                              className="h-4 border-blue-500/30 bg-blue-500/10 px-1.5 py-0 text-[9px] font-semibold text-blue-700 dark:text-blue-400"
+                              className="h-4 border-border bg-muted px-1.5 py-0 text-[11px] font-medium text-muted-foreground"
                             >
                               Outside Portal
                             </Badge>
@@ -1135,7 +1135,7 @@ export default function SubmissionsPage() {
                       </TableCell>
 
                       {/* Vendor & Recruiter */}
-                      <TableCell data-col="vendor" className="py-3.5 align-top text-xs">
+                      <TableCell data-col="vendor" className="py-3.5 align-top text-[13px]">
                         <div className="text-foreground font-medium">
                           {sub.vendor_company || 'Not recorded'}
                         </div>
@@ -1144,7 +1144,7 @@ export default function SubmissionsPage() {
                             {sub.vendor_contact_name}
                           </div>
                         )}
-                        <div className="text-muted-foreground mt-1 flex flex-col gap-0.5 text-[10px]">
+                        <div className="text-muted-foreground mt-1 flex flex-col gap-0.5 text-[11px]">
                           {sub.vendor_contact_email && (
                             <span className="flex max-w-[150px] items-center gap-1 truncate">
                               <MailIcon className="size-2.5 shrink-0" />
@@ -1161,12 +1161,12 @@ export default function SubmissionsPage() {
                       </TableCell>
 
                       {/* Rate */}
-                      <TableCell data-col="rate" className="py-3.5 align-top text-xs">
-                        <div className="text-foreground font-mono font-semibold">
+                      <TableCell data-col="rate" className="py-3.5 align-top text-[13px]">
+                        <div className="text-foreground font-mono font-medium">
                           {sub.submitted_rate || 'Not recorded'}
                         </div>
                         {sub.client_pay_rate && (
-                          <div className="text-muted-foreground font-mono text-[10px]">
+                          <div className="text-muted-foreground font-mono text-[11px]">
                             Client: {sub.client_pay_rate}
                           </div>
                         )}
@@ -1175,7 +1175,7 @@ export default function SubmissionsPage() {
                       {/* Date */}
                       <TableCell
                         data-col="date"
-                        className="text-muted-foreground py-3.5 align-top font-mono text-xs whitespace-nowrap"
+                        className="text-muted-foreground py-3.5 align-top font-mono text-[13px] whitespace-nowrap"
                       >
                         {sub.submission_date}
                       </TableCell>
@@ -1202,10 +1202,10 @@ export default function SubmissionsPage() {
                       </TableCell>
 
                       {/* Interview & Notes */}
-                      <TableCell data-col="interview" className="py-3.5 align-top text-xs">
+                      <TableCell data-col="interview" className="py-3.5 align-top text-[13px]">
                         {sub.interview_time ? (
-                          <div className="border-border/80 bg-muted/40 mb-1.5 rounded-xl border p-2.5 text-xs shadow-2xs">
-                            <div className="text-foreground flex items-center gap-1.5 font-semibold">
+                          <div className="border-border/80 bg-muted/40 mb-1.5 rounded-[12px] border p-2.5 text-[13px]">
+                            <div className="text-foreground flex items-center gap-1.5 font-medium">
                               <CalendarIcon className="text-primary size-3.5" />
                               {new Date(sub.interview_time).toLocaleDateString(undefined, {
                                 month: 'short',
@@ -1217,7 +1217,7 @@ export default function SubmissionsPage() {
                                 minute: '2-digit',
                               })}
                             </div>
-                            <div className="text-muted-foreground mt-1 flex items-center justify-between gap-1 text-[10px]">
+                            <div className="text-muted-foreground mt-1 flex items-center justify-between gap-1 text-[11px]">
                               <span>Mode: {sub.interview_mode || 'Not recorded'}</span>
                               {sub.interview_meeting_link && (
                                 <a
@@ -1243,11 +1243,11 @@ export default function SubmissionsPage() {
                                 .trim()
                             : '';
                           return cleanNotes ? (
-                            <p className="text-muted-foreground line-clamp-2 text-[11px] italic">
+                            <p className="text-muted-foreground line-clamp-2 text-[11px]">
                               &quot;{cleanNotes}&quot;
                             </p>
                           ) : (
-                            <span className="text-muted-foreground/60 text-[10px]">No notes</span>
+                            <span className="text-muted-foreground/60 text-[11px]">No notes</span>
                           );
                         })()}
                       </TableCell>
@@ -1262,7 +1262,7 @@ export default function SubmissionsPage() {
                               setActiveSubmissionForStatus(sub);
                               setStatusDialogOpen(true);
                             }}
-                            className="border-border/70 hover:border-primary/40 hover:bg-primary/5 hover:text-primary h-7 cursor-pointer rounded-lg px-2.5 text-[11px] font-medium transition-all"
+                            className="border-border/70 hover:border-primary/40 hover:bg-primary/5 hover:text-primary h-7 cursor-pointer rounded-[10px] px-2.5 text-[11px] font-medium transition-colors"
                             title="Update Status"
                           >
                             Stage
@@ -1271,7 +1271,7 @@ export default function SubmissionsPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="text-muted-foreground hover:text-foreground size-7 cursor-pointer rounded-lg p-0"
+                              className="text-muted-foreground hover:text-foreground size-7 cursor-pointer rounded-[10px] p-0"
                               aria-label={`Edit ${sub.company_name} submission`}
                               title="Edit Submission"
                             >
@@ -1282,7 +1282,7 @@ export default function SubmissionsPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDelete(sub.id, sub.company_name)}
-                            className="text-destructive/70 hover:text-destructive hover:bg-destructive/10 size-7 cursor-pointer rounded-lg p-0"
+                            className="text-destructive/70 hover:text-destructive hover:bg-destructive/10 size-7 cursor-pointer rounded-[10px] p-0"
                             aria-label={`Delete ${sub.company_name} submission`}
                             title="Delete"
                           >

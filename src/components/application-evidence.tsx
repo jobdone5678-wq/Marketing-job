@@ -39,11 +39,11 @@ export function CaptureState({
       <span className={`status-chip ${entry ? `status-${key}` : 'status-neutral'}`}>
         {entry?.label || 'Capture not recorded'}
       </span>
-      <p className="text-muted-foreground max-w-sm text-xs leading-relaxed">
+      <p className="text-muted-foreground max-w-sm text-[13px] leading-relaxed">
         {entry?.description || 'No external form or submission observation is available.'}
       </p>
       {key === 'confirmed' && confirmedAt && (
-        <p className="text-muted-foreground text-xs">
+        <p className="text-muted-foreground text-[13px]">
           Receipt recorded {new Date(confirmedAt).toLocaleString()}
         </p>
       )}
@@ -90,7 +90,7 @@ export function ApplicationEvidence({
       <CaptureState state={state} confirmedAt={confirmedAt} />
       {intentId && (
         <details
-          className="text-xs"
+          className="text-[13px]"
           onToggle={(event) => {
             if (event.currentTarget.open && events === null && !loading) void load();
           }}
@@ -145,7 +145,7 @@ export function ApplicationEvidence({
       {state === 'confirmed' && (
         <Link
           href="/dashboard/email-confirmations"
-          className="text-primary inline-block text-xs underline underline-offset-4"
+          className="text-primary inline-block text-[13px] underline underline-offset-4"
         >
           Review confirmation receipts
         </Link>

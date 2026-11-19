@@ -1,59 +1,37 @@
 'use client';
 
-import { CheckCircle2, Sparkles, Users } from 'lucide-react';
-
 const VIDEO_SRC =
   'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260314_131748_f2ca2a28-fed7-44c8-b9a9-bd9acdd5ec31.mp4';
 
 export function MotionHero() {
   return (
-    <div className="relative hidden h-full items-center justify-center overflow-hidden bg-black select-none lg:flex">
-      {/* Fullscreen Video Background */}
+    <div className="relative hidden h-full items-end overflow-hidden bg-black select-none lg:flex">
       <video
         autoPlay
         loop
         muted
         playsInline
-        className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover opacity-85"
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover"
       >
         <source src={VIDEO_SRC} type="video/mp4" />
       </video>
 
-      {/* Cinematic Vignette Overlay */}
-      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-t from-black/90 via-black/40 to-black/30" />
+      {/* Scrim so the text stays legible over the footage */}
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-t from-black/85 via-black/35 to-black/15" />
 
-      {/* Centered Cinematic Headline & Subtext */}
-      <div className="relative z-10 mx-auto flex max-w-2xl flex-col items-center justify-center px-8 text-center xl:px-12">
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-white/90 shadow-lg backdrop-blur-md">
-          <Sparkles className="size-3.5 text-amber-300" />
-          Next-Generation Recruiting Infrastructure
-        </div>
-
+      <div className="relative z-10 w-full px-10 pb-14 xl:px-14 xl:pb-16">
         <h1
-          className="animate-fade-rise text-5xl leading-[0.98] font-normal tracking-[-1.8px] text-white drop-shadow-sm xl:text-6xl 2xl:text-7xl"
+          className="animate-fade-rise max-w-xl text-[44px] leading-[1.05] font-normal tracking-[-0.02em] text-white xl:text-[56px]"
           style={{ fontFamily: "'Instrument Serif', serif" }}
         >
-          Where <em className="text-zinc-300 not-italic">dreams</em> rise{' '}
-          <em className="text-zinc-300 not-italic">through the silence.</em>
+          Every placement starts with a record someone can trust
         </h1>
 
-        <p className="animate-fade-rise-delay mt-6 max-w-lg text-sm leading-relaxed text-zinc-300/95 xl:text-base">
-          Connecting top marketing talent, recruiters, and forward-thinking clients. Discover
-          curated opportunities, track hiring pipelines, and build exceptional teams in one unified
-          portal.
+        <p className="animate-fade-rise-delay mt-5 max-w-md text-[15px] leading-6 text-white/75">
+          Nextkinlife keeps candidates, submissions and employer confirmations in one portal, so
+          recruiters and clients work from the same verified history.
         </p>
-
-        {/* Feature Pills */}
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3.5 py-1.5 text-xs text-white/80 backdrop-blur-md">
-            <CheckCircle2 className="size-3.5 text-emerald-400" />
-            <span>Curated Bench Network</span>
-          </div>
-          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3.5 py-1.5 text-xs text-white/80 backdrop-blur-md">
-            <Users className="text-primary size-3.5" />
-            <span>Verified Candidate Matching</span>
-          </div>
-        </div>
       </div>
     </div>
   );

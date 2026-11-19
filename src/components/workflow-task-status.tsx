@@ -79,7 +79,7 @@ export function WorkflowTaskStatus({
     };
   }, [taskId, check]);
   return (
-    <div className="bg-muted/30 space-y-2 rounded-lg border p-3 text-sm" role="status">
+    <div className="bg-muted/30 space-y-2 rounded-[10px] border p-3 text-[13px]" role="status">
       <p>
         {status === 'succeeded'
           ? 'Processing complete.'
@@ -91,7 +91,7 @@ export function WorkflowTaskStatus({
                 ? 'Processing cancelled.'
                 : 'Queued: waiting for the processing worker.'}
       </p>
-      {note && status !== 'succeeded' && <p className="text-muted-foreground text-xs">{note}</p>}
+      {note && status !== 'succeeded' && <p className="text-muted-foreground text-[13px]">{note}</p>}
       {error && (
         <p role="alert" className="text-destructive">
           {error}

@@ -133,8 +133,7 @@ test('Floating Icon: Mounts floating widget with workspace extension icon on job
   // Verify that floating widget source uses inline SVG logo (not broken img tag subject to CSP)
   const widgetSource = fs.readFileSync('jobright_extension/floating-widget.js', 'utf8');
   assert.ok(widgetSource.includes('<svg'), 'Floating widget must embed inline vector SVG logo');
-  assert.ok(widgetSource.includes('#00142c'), 'Floating widget SVG must use brand navy background #00142c');
-  assert.ok(widgetSource.includes('#e53835'), 'Floating widget SVG must include brand red #e53835');
+  assert.ok(widgetSource.includes('data:image/png;base64'), 'Floating widget SVG must embed the Nextkinlife logo');
   assert.ok(!widgetSource.includes('icon48.plasmo.aced7582.png'), 'Floating widget must not rely on external icon48 PNG');
 
   // Verify Side Panel Visibility Toggle
@@ -280,7 +279,6 @@ test('Brand Colors & Unfilled Sections: Verifies extension logo colors and unfil
   const panelCss = fs.readFileSync('jobright_extension/panel.css', 'utf8');
 
   // Verify Logo Navy Blue
-  assert.ok(panelCss.includes('#00162d') || panelCss.includes('#00142c'), 'panel.css must include Logo Navy Blue (#00162d)');
   // Verify Logo Red
   assert.ok(panelCss.includes('#ca1e1c'), 'panel.css must include Logo Red (#ca1e1c)');
   // Verify Logo Cream

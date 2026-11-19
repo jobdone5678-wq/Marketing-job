@@ -4,26 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api-client';
 import { WorkspaceSkeleton } from '@/components/workspace-ui';
-import { Button } from '@/components/ui/button';
 import { ChartAreaInteractive } from './chart-area-interactive';
 import { CompanyLogo } from '@/components/company-logo';
-import {
-  Users,
-  SendHorizontal,
-  Inbox,
-  RefreshCw,
-  ArrowUpRight,
-  Briefcase,
-  TrendingUp,
-  MailCheck,
-  Sparkles,
-  Compass,
-  FileCheck2,
-  CheckCircle2,
-  ChevronRight,
-  ShieldCheck,
-  Zap,
-} from 'lucide-react';
+import { VerifiedStamp } from '@/components/brand-mark';
+import { ArrowRight, RefreshCw } from 'lucide-react';
 
 type Metrics = {
   candidates: number;
@@ -32,6 +16,38 @@ type Metrics = {
   contractJobs: number;
   activity: { date: string; submissions: number }[];
 };
+
+const STEPS = [
+  {
+    key: 'profile',
+    title: 'Resume reviewed',
+    note: 'Skills, work history and visa status anchored to your profile',
+  },
+  {
+    key: 'discovery',
+    title: 'Roles indexed',
+    note: 'Direct feeds from Greenhouse, Ashby, Lever and SmartRecruiters',
+  },
+  {
+    key: 'autofill',
+    title: 'Application drafted',
+    note: 'The extension fills employer forms from your reviewed facts',
+  },
+  {
+    key: 'confirm',
+    title: 'Receipt confirmed',
+    note: 'Gmail sync captures the submission email the employer sends',
+  },
+] as const;
+
+const COMPANIES = [
+  { name: 'Stripe', domain: 'stripe.com' },
+  { name: 'Figma', domain: 'figma.com' },
+  { name: 'OpenAI', domain: 'openai.com' },
+  { name: 'Ramp', domain: 'ramp.com' },
+  { name: 'Datadog', domain: 'datadoghq.com' },
+  { name: 'Snowflake', domain: 'snowflake.com' },
+];
 
 export function DashboardOverview({ initialMetrics }: { initialMetrics?: Metrics | null }) {
   const [metrics, setMetrics] = useState<Metrics | null>(initialMetrics || null);
@@ -85,369 +101,299 @@ export function DashboardOverview({ initialMetrics }: { initialMetrics?: Metrics
     }
   }, [load, initialMetrics]);
 
-  const cards = metrics
+  const loggedInPeriod = metrics?.activity.reduce((sum, row) => sum + row.submissions, 0) ?? 0;
+  const confirmedShare =
+    metrics && metrics.submissions > 0
+      ? Math.round((metrics.confirmed / metrics.submissions) * 100)
+      : null;
+
+  const stats = metrics
     ? [
         {
           key: 'candidates',
-          label: 'Candidate Profiles',
-          subtext: 'Reviewed factual profiles',
+          label: 'Candidate profiles',
           value: metrics.candidates,
+          note: metrics.candidates ? 'Reviewed and verified' : 'None reviewed yet',
           url: '/dashboard/candidates',
-          icon: Users,
-          color: 'text-blue-600 dark:text-blue-400',
-          bg: 'bg-blue-500/10 border-blue-500/20',
-          gradient: 'from-blue-500/10 to-transparent',
+          stamped: metrics.candidates > 0,
         },
         {
           key: 'submissions',
-          label: 'Application Records',
-          subtext: 'Tracked & drafted applications',
+          label: 'Applications tracked',
           value: metrics.submissions,
+          note: metrics.submissions
+            ? loggedInPeriod + ' logged in the last 30 days'
+            : 'None logged yet',
           url: '/dashboard/submissions',
-          icon: SendHorizontal,
-          color: 'text-violet-600 dark:text-violet-400',
-          bg: 'bg-violet-500/10 border-violet-500/20',
-          gradient: 'from-violet-500/10 to-transparent',
+          stamped: false,
         },
         {
           key: 'confirmed',
-          label: 'Confirmed Receipts',
-          subtext: 'Verified Gmail confirmations',
+          label: 'Confirmed receipts',
           value: metrics.confirmed,
+          note:
+            confirmedShare === null
+              ? 'Waiting on your first application'
+              : confirmedShare + '% of tracked applications',
           url: '/dashboard/email-confirmations',
-          icon: Inbox,
-          color: 'text-emerald-600 dark:text-emerald-400',
-          bg: 'bg-emerald-500/10 border-emerald-500/20',
-          gradient: 'from-emerald-500/10 to-transparent',
+          stamped: metrics.confirmed > 0,
         },
         {
           key: 'contractJobs',
-          label: 'Tech & Contract Jobs',
-          subtext: 'Verified live portal roles',
+          label: 'Open roles indexed',
           value: metrics.contractJobs,
+          note: 'Live on connected ATS feeds',
           url: '/dashboard/jobs',
-          icon: Briefcase,
-          color: 'text-amber-600 dark:text-amber-400',
-          bg: 'bg-amber-500/10 border-amber-500/20',
-          gradient: 'from-amber-500/10 to-transparent',
+          stamped: false,
         },
       ]
     : [];
 
+  const stepDone = metrics
+    ? [
+        metrics.candidates > 0,
+        metrics.contractJobs > 0,
+        metrics.submissions > 0,
+        metrics.confirmed > 0,
+      ]
+    : [false, false, false, false];
+
+  const pipeline = metrics
+    ? [
+        { label: 'Profiles reviewed', value: metrics.candidates, lead: false },
+        { label: 'Applications tracked', value: metrics.submissions, lead: false },
+        { label: 'Receipts confirmed', value: metrics.confirmed, lead: true },
+      ]
+    : [];
+  const pipelineMax = Math.max(1, ...pipeline.map((row) => row.value));
+
   return (
-    <main className="portal-page space-y-6">
-      {/* Top Hero Banner */}
-      <div className="border-border/80 from-card via-card to-primary/5 relative overflow-hidden rounded-3xl border bg-gradient-to-br p-6 shadow-xs sm:p-7">
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="bg-primary/10 text-primary border-primary/20 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-bold tracking-wide shadow-2xs">
-                <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
-                CANDIDATE INTELLIGENCE HUB
-              </span>
-              <span className="text-muted-foreground text-xs font-medium">
-                · Direct ATS Integration Active
-              </span>
-            </div>
+    <main className="portal-page animate-fade-rise space-y-8">
+      {/* Page heading */}
+      <div className="flex flex-wrap items-end justify-between gap-6">
+        <div className="max-w-xl">
+          <h1 className="text-foreground text-[22px] leading-7 font-medium tracking-tight">
+            Candidate workspace
+          </h1>
+          <p className="text-muted-foreground mt-2 text-[13px] leading-5">
+            Your reviewed resume, the roles you applied to, and the employer receipts that confirm
+            them
+          </p>
+        </div>
 
-            <h1 className="text-foreground text-2xl font-extrabold tracking-tight sm:text-3xl">
-              Candidate Workspace
-            </h1>
-
-            <p className="text-muted-foreground max-w-2xl text-xs leading-relaxed sm:text-sm">
-              Find software and tech roles matching your confirmed resume, track application
-              intents, and sync real-time email confirmation receipts.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2.5 self-start sm:self-center">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={loading}
-              onClick={() => void load()}
-              className="border-border/70 hover:bg-accent hover:border-border h-9 cursor-pointer gap-2 rounded-xl text-xs font-semibold shadow-2xs transition-all active:scale-95"
-            >
-              <RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />
-              <span>{loading ? 'Refreshing...' : 'Refresh Totals'}</span>
-            </Button>
-
-            <Link
-              href="/dashboard/jobs"
-              className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-xl px-4 text-xs font-bold shadow-xs transition-all hover:shadow"
-            >
-              <Compass className="size-3.5" />
-              <span>Explore Tech Jobs</span>
-            </Link>
-          </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => void load()}
+            className="border-border text-foreground hover:bg-accent disabled:text-muted-foreground flex h-9 items-center gap-2 rounded-[10px] border px-3 text-[13px] transition-colors disabled:cursor-not-allowed"
+          >
+            <RefreshCw
+              aria-hidden="true"
+              className={loading ? 'size-4 animate-spin stroke-[1.5]' : 'size-4 stroke-[1.5]'}
+            />
+            <span>{loading ? 'Refreshing' : 'Refresh'}</span>
+          </button>
+          <Link
+            href="/dashboard/jobs"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 flex h-9 items-center gap-2 rounded-[10px] px-4 text-[13px] font-medium transition-colors"
+          >
+            <span>Browse jobs</span>
+            <ArrowRight aria-hidden="true" className="size-4 stroke-[1.5]" />
+          </Link>
         </div>
       </div>
 
       {error && (
         <div
           role="alert"
-          className="border-destructive/30 bg-destructive/10 text-destructive space-y-2.5 rounded-2xl border p-5 text-xs"
+          className="border-destructive/30 bg-destructive/5 rounded-[14px] border p-4"
         >
-          <div className="flex items-center gap-2 text-sm font-bold">
-            <span>Unable to refresh some metrics</span>
-          </div>
-          <p className="font-medium">{error}</p>
+          <p className="text-destructive text-[13px] font-medium">Could not refresh totals</p>
+          <p className="text-muted-foreground mt-1 text-[13px] leading-5">{error}</p>
           {metrics && (
-            <p className="text-muted-foreground text-[11px]">
-              Showing previously loaded data. Refresh to get the latest totals.
+            <p className="text-muted-foreground mt-1 text-[13px] leading-5">
+              The figures below are the last ones loaded
             </p>
           )}
-          <Button
-            variant="outline"
-            size="sm"
+          <button
+            type="button"
             disabled={loading}
             onClick={() => void load()}
-            className="h-8 text-xs font-semibold"
+            className="border-border text-foreground hover:bg-accent mt-3 flex h-8 items-center rounded-[8px] border px-3 text-[13px] transition-colors"
           >
             Try again
-          </Button>
+          </button>
         </div>
       )}
 
-      {loading && !metrics && !error && <WorkspaceSkeleton rows={5} />}
+      {loading && !metrics && !error && <WorkspaceSkeleton rows={4} />}
 
       {metrics && (
         <>
-          {/* Status bar */}
-          <div className="text-muted-foreground flex items-center justify-between px-1 text-xs">
-            <span className="flex items-center gap-1.5 font-medium">
-              <ShieldCheck className="size-3.5 text-emerald-600" />
-              <span>Records authenticated</span>
-              <span className="text-muted-foreground/60">•</span>
+          {/* Record provenance */}
+          <div className="border-border text-muted-foreground flex flex-wrap items-center justify-between gap-2 border-y py-3 text-[13px]">
+            <span className="flex items-center gap-2">
+              <VerifiedStamp className="size-4" />
+              <span className="text-foreground">Records verified</span>
+              <span aria-hidden="true">·</span>
               <span>
-                {updated ? `Updated at ${updated.toLocaleTimeString()}` : 'Previously loaded data'}
+                {updated
+                  ? 'Updated ' +
+                    updated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  : 'Previously loaded'}
               </span>
             </span>
-            <span className="font-mono text-[11px]">
-              Software Jobs: {metrics.contractJobs} indexed
-            </span>
+            <span className="figure text-[11px]">{metrics.contractJobs} roles indexed</span>
           </div>
 
-          {/* Metric KPI Cards (4-column grid) */}
+          {/* Totals */}
           <section
-            aria-label="Key metrics"
-            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+            aria-label="Totals"
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
           >
-            {cards.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.key}
-                  href={item.url}
-                  className="group border-border/70 from-card to-card/75 hover:border-primary/45 relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border bg-gradient-to-b p-5 shadow-xs transition-all duration-300 hover:-translate-y-1 hover:shadow-md active:scale-[0.99]"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <span className="text-muted-foreground text-xs font-bold tracking-wider uppercase">
-                        {item.label}
-                      </span>
-                      <p className="text-muted-foreground/80 mt-0.5 line-clamp-1 text-[11px]">
-                        {item.subtext}
-                      </p>
-                    </div>
-                    <div
-                      className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${item.bg} ${item.color} border shadow-2xs transition-transform duration-200 group-hover:scale-110`}
-                    >
-                      <Icon className="size-5 stroke-[2]" />
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex items-baseline justify-between">
-                    <p className="text-foreground text-3xl font-extrabold tracking-tight tabular-nums">
-                      {item.value}
-                    </p>
-                    <div className="text-muted-foreground group-hover:text-primary flex items-center gap-1 text-xs font-semibold transition-colors">
-                      <span>View</span>
-                      <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </section>
-
-          {/* Application Pipeline Stepper */}
-          <section className="border-border/70 bg-card space-y-4 rounded-2xl border p-5 shadow-xs sm:p-6">
-            <div className="border-border/60 flex items-center justify-between border-b pb-3">
-              <div className="flex items-center gap-2">
-                <div className="bg-primary/10 text-primary flex size-7 items-center justify-center rounded-lg font-bold">
-                  <Zap className="size-3.5" />
-                </div>
-                <div>
-                  <h2 className="text-foreground text-sm font-bold">
-                    Candidate Application Lifecycle
-                  </h2>
-                  <p className="text-muted-foreground text-[11px]">
-                    End-to-end flow from resume verification to receipt confirmation
-                  </p>
-                </div>
-              </div>
-              <span className="text-primary text-xs font-semibold">Stage 1 to 4</span>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="space-y-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold tracking-wider text-emerald-700 uppercase dark:text-emerald-300">
-                    Step 1 · Profile
-                  </span>
-                  <CheckCircle2 className="size-3.5 text-emerald-600" />
-                </div>
-                <h3 className="text-foreground text-xs font-bold">Resume Fact Review</h3>
-                <p className="text-muted-foreground text-[11px] leading-relaxed">
-                  Verified skills, work history, and visa status anchored to your profile.
-                </p>
-              </div>
-
-              <div className="border-primary/25 bg-primary/5 space-y-1.5 rounded-xl border p-3.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-primary text-[10px] font-bold tracking-wider uppercase">
-                    Step 2 · Discovery
-                  </span>
-                  <Sparkles className="text-primary size-3.5" />
-                </div>
-                <h3 className="text-foreground text-xs font-bold">Public ATS Search</h3>
-                <p className="text-muted-foreground text-[11px] leading-relaxed">
-                  Direct feeds from Greenhouse, Ashby, Lever, and SmartRecruiters.
-                </p>
-              </div>
-
-              <div className="border-border/70 bg-muted/20 space-y-1.5 rounded-xl border p-3.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
-                    Step 3 · Autofill
-                  </span>
-                  <FileCheck2 className="text-muted-foreground size-3.5" />
-                </div>
-                <h3 className="text-foreground text-xs font-bold">Autofill & Draft</h3>
-                <p className="text-muted-foreground text-[11px] leading-relaxed">
-                  Candidate extension fills employer ATS forms without hallucinations.
-                </p>
-              </div>
-
-              <div className="border-border/70 bg-muted/20 space-y-1.5 rounded-xl border p-3.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
-                    Step 4 · Confirm
-                  </span>
-                  <Inbox className="text-muted-foreground size-3.5" />
-                </div>
-                <h3 className="text-foreground text-xs font-bold">Receipt Ingestion</h3>
-                <p className="text-muted-foreground text-[11px] leading-relaxed">
-                  Gmail sync captures official employer submission confirmations.
-                </p>
-              </div>
-            </div>
-          </section>
-
-          {/* Interactive Activity Chart */}
-          <ChartAreaInteractive data={metrics.activity} />
-
-          {/* Top Companies Hiring Spotlight Ribbon */}
-          <section className="border-border/70 bg-card space-y-4 rounded-2xl border p-5 shadow-xs sm:p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-foreground text-sm font-bold">Companies In Your Network</h2>
-                <p className="text-muted-foreground mt-0.5 text-xs">
-                  Direct job openings indexed from top tech employers
-                </p>
-              </div>
+            {stats.map((item) => (
               <Link
-                href="/dashboard/jobs"
-                className="text-primary flex items-center gap-1 text-xs font-semibold hover:underline"
+                key={item.key}
+                href={item.url}
+                className="panel hover:border-input flex flex-col gap-4 p-5 transition-colors"
               >
-                <span>Browse all</span>
-                <ChevronRight className="size-3.5" />
+                <span className="text-muted-foreground text-[13px] leading-5">{item.label}</span>
+                <span className="flex items-start gap-2">
+                  <span className="figure text-foreground text-[32px] leading-8">{item.value}</span>
+                  {item.stamped && <VerifiedStamp className="mt-1 size-4" />}
+                </span>
+                <span className="text-muted-foreground text-[13px] leading-5">{item.note}</span>
               </Link>
+            ))}
+          </section>
+
+          {/* Lifecycle rail */}
+          <section aria-labelledby="lifecycle-heading" className="panel p-6">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 id="lifecycle-heading" className="text-foreground text-[15px] font-medium">
+                How an application gets confirmed
+              </h2>
+              <span className="figure text-muted-foreground text-[11px]">
+                {stepDone.filter(Boolean).length} of 4 reached
+              </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-6">
-              {[
-                { name: 'Stripe', domain: 'stripe.com' },
-                { name: 'Figma', domain: 'figma.com' },
-                { name: 'OpenAI', domain: 'openai.com' },
-                { name: 'Ramp', domain: 'ramp.com' },
-                { name: 'Datadog', domain: 'datadoghq.com' },
-                { name: 'Snowflake', domain: 'snowflake.com' },
-              ].map((co) => (
-                <Link
-                  key={co.name}
-                  href={`/dashboard/jobs?company=${encodeURIComponent(co.name)}`}
-                  className="border-border/60 bg-muted/15 hover:bg-muted/40 hover:border-primary/40 group flex cursor-pointer items-center gap-2.5 rounded-xl border p-2.5 transition-all"
-                >
-                  <CompanyLogo company={co.name} size="sm" />
-                  <span className="text-foreground group-hover:text-primary truncate text-xs font-bold transition-colors">
-                    {co.name}
-                  </span>
-                </Link>
+            <ol className="mt-5 grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
+              {STEPS.map((step, index) => (
+                <li key={step.key} className="border-border relative pt-4 lg:border-t">
+                  <span
+                    aria-hidden="true"
+                    className={
+                      stepDone[index]
+                        ? 'bg-primary absolute top-0 left-0 hidden h-px w-full lg:block'
+                        : 'hidden'
+                    }
+                  />
+                  <div className="flex items-center gap-2">
+                    <span className="figure text-muted-foreground text-[11px]">
+                      {String(index + 1).padStart(2, '0')}
+                    </span>
+                    <span className="text-foreground text-[13px] font-medium">{step.title}</span>
+                    {stepDone[index] && <VerifiedStamp className="size-4" />}
+                  </div>
+                  <p className="text-muted-foreground mt-2 text-[13px] leading-5">{step.note}</p>
+                </li>
               ))}
-            </div>
+            </ol>
           </section>
 
-          {/* Zero state prompt */}
-          {metrics.candidates === 0 && (
-            <div className="border-border/80 bg-card text-muted-foreground space-y-2 rounded-2xl border border-dashed p-8 text-center text-xs">
-              <p className="text-foreground text-sm font-semibold">
-                No candidate profiles reviewed yet
+          {/* Activity ledger and pipeline */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <ChartAreaInteractive data={metrics.activity} />
+            </div>
+
+            <section aria-labelledby="pipeline-heading" className="panel flex flex-col p-6">
+              <h2 id="pipeline-heading" className="text-foreground text-[15px] font-medium">
+                Where your records stand
+              </h2>
+              <p className="text-muted-foreground mt-1 text-[13px] leading-5">
+                Everything saved to your workspace so far
               </p>
-              <p>Upload a resume to automatically match software engineering & tech roles.</p>
-              <div className="pt-2">
-                <Link
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold shadow-xs"
-                  href="/dashboard/candidates/new"
-                >
-                  <span>Upload & Review Resume</span>
-                  <ArrowUpRight className="size-3.5" />
-                </Link>
-              </div>
-            </div>
-          )}
 
-          {/* Quick Actions Footer Hub */}
-          <section className="border-border/70 bg-card space-y-3 rounded-2xl border p-5 shadow-xs sm:p-6">
-            <h2 className="text-foreground text-sm font-bold tracking-tight">
-              Direct Workspace Hub
-            </h2>
-            <div className="flex flex-wrap gap-2.5 text-xs">
+              <ul className="mt-6 flex flex-col gap-5">
+                {pipeline.map((row) => (
+                  <li key={row.label}>
+                    <div className="flex items-baseline justify-between gap-4">
+                      <span className="text-foreground text-[13px]">{row.label}</span>
+                      <span className="figure text-foreground text-[13px]">{row.value}</span>
+                    </div>
+                    <div className="well mt-2 h-1.5 w-full overflow-hidden rounded-full">
+                      <div
+                        className={
+                          row.lead
+                            ? 'bg-primary h-full rounded-full'
+                            : 'bg-muted-foreground/35 h-full rounded-full'
+                        }
+                        style={{ width: Math.round((row.value / pipelineMax) * 100) + '%' }}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              <p className="text-muted-foreground border-border mt-auto border-t pt-4 text-[13px] leading-5">
+                {metrics.confirmed > 0
+                  ? 'Confirmed receipts are the only records backed by an employer email'
+                  : 'A receipt is confirmed once the employer sends its own email to your inbox'}
+              </p>
+            </section>
+          </div>
+
+          {/* Employers */}
+          <section aria-labelledby="employers-heading" className="panel p-6">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 id="employers-heading" className="text-foreground text-[15px] font-medium">
+                Employers on your feeds
+              </h2>
               <Link
-                className="border-border/70 bg-muted/20 text-foreground hover:bg-accent/80 hover:border-primary/40 inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 font-semibold shadow-2xs transition-all"
                 href="/dashboard/jobs"
+                className="text-primary text-[13px] font-medium hover:underline"
               >
-                <Briefcase className="text-primary size-3.5" />
-                <span>Search Public Jobs</span>
-                <ArrowUpRight className="text-muted-foreground size-3" />
-              </Link>
-              <Link
-                className="border-border/70 bg-muted/20 text-foreground hover:bg-accent/80 hover:border-primary/40 inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 font-semibold shadow-2xs transition-all"
-                href="/dashboard/candidates"
-              >
-                <Users className="text-primary size-3.5" />
-                <span>My Resume Profile</span>
-                <ArrowUpRight className="text-muted-foreground size-3" />
-              </Link>
-              <Link
-                className="border-border/70 bg-muted/20 text-foreground hover:bg-accent/80 hover:border-primary/40 inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 font-semibold shadow-2xs transition-all"
-                href="/dashboard/email-confirmations"
-              >
-                <MailCheck className="text-primary size-3.5" />
-                <span>Connect Gmail Receipts</span>
-                <ArrowUpRight className="text-muted-foreground size-3" />
-              </Link>
-              <Link
-                className="border-border/70 bg-muted/20 text-foreground hover:bg-accent/80 hover:border-primary/40 inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 font-semibold shadow-2xs transition-all"
-                href="/dashboard/submissions"
-              >
-                <SendHorizontal className="text-primary size-3.5" />
-                <span>Tracked Applications</span>
-                <ArrowUpRight className="text-muted-foreground size-3" />
+                Browse all
               </Link>
             </div>
+
+            <ul className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              {COMPANIES.map((company) => (
+                <li key={company.name}>
+                  <Link
+                    href={'/dashboard/jobs?company=' + encodeURIComponent(company.name)}
+                    className="border-border hover:border-input hover:bg-accent/50 flex h-11 items-center gap-2.5 rounded-[12px] border px-3 transition-colors"
+                  >
+                    <CompanyLogo company={company.name} size="sm" />
+                    <span className="text-foreground truncate text-[13px]">{company.name}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </section>
+
+          {/* First-run prompt */}
+          {metrics.candidates === 0 && (
+            <section className="border-border flex flex-wrap items-center justify-between gap-4 rounded-[16px] border border-dashed p-6">
+              <div>
+                <p className="text-foreground text-[13px] font-medium">No resume reviewed yet</p>
+                <p className="text-muted-foreground mt-1 text-[13px] leading-5">
+                  Upload one and the workspace starts matching software roles against its verified
+                  facts
+                </p>
+              </div>
+              <Link
+                href="/dashboard/candidates/new"
+                className="bg-primary text-primary-foreground hover:bg-primary/90 flex h-9 shrink-0 items-center gap-2 rounded-[10px] px-4 text-[13px] font-medium transition-colors"
+              >
+                <span>Upload resume</span>
+                <ArrowRight aria-hidden="true" className="size-4 stroke-[1.5]" />
+              </Link>
+            </section>
+          )}
         </>
       )}
     </main>

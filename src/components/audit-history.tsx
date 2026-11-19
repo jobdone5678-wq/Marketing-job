@@ -25,7 +25,7 @@ function AuditValue({ value, depth = 0 }: { value: unknown; depth?: number }) {
       <dl className="border-border space-y-1 border-l pl-3">
         {Object.entries(value).map(([key, item]) => (
           <div key={key}>
-            <dt className="text-xs capitalize">{key.replaceAll('_', ' ')}</dt>
+            <dt className="text-[13px] capitalize">{key.replaceAll('_', ' ')}</dt>
             <dd>
               <AuditValue value={item} depth={depth + 1} />
             </dd>
@@ -59,13 +59,13 @@ export function AuditHistory({ subjectId }: { subjectId: string }) {
         if (e.currentTarget.open) void load();
       }}
     >
-      <summary className="cursor-pointer text-sm">Audit history</summary>
+      <summary className="cursor-pointer text-[13px]">Audit history</summary>
       {error && <p role="alert">{error}</p>}
       {events?.length === 0 && (
-        <p className="text-muted-foreground text-sm">No audit events recorded.</p>
+        <p className="text-muted-foreground text-[13px]">No audit events recorded.</p>
       )}
       {events?.map((event) => (
-        <article key={event.id} className="mt-2 rounded border p-3 text-sm">
+        <article key={event.id} className="mt-2 rounded border p-3 text-[13px]">
           <strong>{event.action.replaceAll('_', ' ')}</strong>
           <p>
             {event.actor?.full_name || event.actor?.email || 'Administrator'} ·{' '}

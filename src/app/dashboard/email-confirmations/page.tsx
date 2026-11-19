@@ -190,17 +190,17 @@ export default function EmailConfirmationsPage() {
       {/* Header section */}
       <div className="flex flex-col justify-between gap-4 pb-1 sm:flex-row sm:items-center">
         <div>
-          <div className="text-primary mb-1 flex items-center gap-2 text-xs font-semibold tracking-wider uppercase">
-            <span className="bg-primary inline-block h-1.5 w-1.5 animate-pulse rounded-full" />
+          <div className="text-primary mb-1 flex items-center gap-2 text-[13px] font-medium">
+            <span className="bg-primary inline-block h-1.5 w-1.5 rounded-full" />
             Communications & Inbound Tracking
           </div>
-          <h1 className="text-foreground flex items-center gap-2.5 text-2xl font-bold tracking-tight">
-            <span className="bg-primary/10 text-primary flex h-9 w-9 items-center justify-center rounded-xl shadow-2xs">
+          <h1 className="text-foreground flex items-center gap-2.5 text-[24px] font-medium tracking-tight">
+            <span className="bg-primary/10 text-primary flex h-9 w-9 items-center justify-center rounded-[12px]">
               <MailIcon className="h-5 w-5" />
             </span>
             Email confirmations
           </h1>
-          <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
+          <p className="text-muted-foreground mt-1 max-w-2xl text-[13px]">
             Connect the Gmail mailbox that receives job application confirmations. Recruiters track
             assigned candidates; candidates track their own applications.
           </p>
@@ -209,16 +209,16 @@ export default function EmailConfirmationsPage() {
         <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
-            className="border-border/80 hover:border-primary/50 h-9 cursor-pointer rounded-xl px-3 text-xs font-medium shadow-xs transition-all"
+            className="border-border/80 hover:border-primary/50 h-9 cursor-pointer rounded-[12px] px-3 text-[13px] font-medium transition-colors"
             disabled={loading || !!busy}
             onClick={() => void load()}
           >
-            <RefreshCwIcon className={`mr-1.5 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCwIcon className={`mr-1.5 h-3.5 w-3.5 ${loading ?'animate-spin' : ''}`} />
             Refresh
           </Button>
           <Button
             variant="outline"
-            className="border-border/80 hover:border-primary/50 h-9 cursor-pointer rounded-xl px-3 text-xs font-medium shadow-xs transition-all"
+            className="border-border/80 hover:border-primary/50 h-9 cursor-pointer rounded-[12px] px-3 text-[13px] font-medium transition-colors"
             disabled={!!busy}
             onClick={() => uploadRef.current?.click()}
           >
@@ -227,7 +227,7 @@ export default function EmailConfirmationsPage() {
           </Button>
           <Button
             variant="outline"
-            className="border-border/80 hover:border-primary/50 h-9 cursor-pointer rounded-xl px-3 text-xs font-medium shadow-xs transition-all"
+            className="border-border/80 hover:border-primary/50 h-9 cursor-pointer rounded-[12px] px-3 text-[13px] font-medium transition-colors"
             render={<Link href="/dashboard/submissions" />}
           >
             Applications
@@ -266,15 +266,15 @@ export default function EmailConfirmationsPage() {
       </div>
 
       {/* Connected mailboxes section */}
-      <section className="border-border/70 bg-card space-y-5 rounded-2xl border p-6 shadow-xs">
+      <section className="border-border/70 bg-card space-y-5 rounded-[16px] border p-6">
         <div className="border-border/60 flex flex-col justify-between gap-4 border-b pb-4 sm:flex-row sm:items-center">
           <div className="flex items-center gap-3">
-            <div className="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-xl">
+            <div className="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-[12px]">
               <MailIcon className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-foreground text-base font-semibold">Connected mailboxes</h2>
-              <p className="text-muted-foreground mt-0.5 max-w-xl text-xs">
+              <h2 className="text-foreground text-[15px] font-medium">Connected mailboxes</h2>
+              <p className="text-muted-foreground mt-0.5 max-w-xl text-[13px]">
                 Connect Gmail separately even if you signed in with Google. Read-only scanning finds
                 application receipts; confirmed applications appear in My Applications. A receipt
                 confirms submission, not a job offer.
@@ -283,7 +283,7 @@ export default function EmailConfirmationsPage() {
           </div>
           <Button
             disabled={!configured || !!busy}
-            className="bg-primary text-primary-foreground hover:bg-primary/90 flex h-9 shrink-0 cursor-pointer items-center gap-2 self-start rounded-xl px-4 text-xs font-semibold shadow-xs transition-all sm:self-auto"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 flex h-9 shrink-0 cursor-pointer items-center gap-2 self-start rounded-[12px] px-4 text-[13px] font-medium transition-colors sm:self-auto"
             onClick={() =>
               void run('connect', async () => {
                 const result = await api<{ url: string }>('/api/email-connections/gmail/connect', {
@@ -299,7 +299,7 @@ export default function EmailConfirmationsPage() {
         </div>
 
         {!loading && configured === false && (
-          <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs font-medium text-amber-700 dark:text-amber-300">
+          <div className="flex items-start gap-3 rounded-[12px] border border-amber-500/30 bg-amber-500/10 p-4 text-[13px] font-medium text-amber-700 dark:text-amber-400">
             <AlertCircleIcon className="mt-0.5 h-4 w-4 shrink-0" />
             <p className="leading-relaxed">
               Gmail is not configured on this deployment. Your administrator must complete the email
@@ -310,10 +310,10 @@ export default function EmailConfirmationsPage() {
 
         {gmailSetup && (
           <details
-            className="group border-border/70 bg-muted/20 overflow-hidden rounded-xl border text-xs"
+            className="group border-border/70 bg-muted/20 overflow-hidden rounded-[12px] border text-[13px]"
             open={!configured}
           >
-            <summary className="text-foreground hover:bg-muted/40 flex cursor-pointer items-center justify-between p-3.5 font-semibold transition-colors select-none">
+            <summary className="text-foreground hover:bg-muted/40 flex cursor-pointer items-center justify-between p-3.5 font-medium transition-colors select-none">
               <div className="flex items-center gap-2">
                 <Settings2Icon className="text-muted-foreground h-4 w-4" />
                 <span>Administrator Gmail setup</span>
@@ -344,7 +344,7 @@ export default function EmailConfirmationsPage() {
                   <span className="text-muted-foreground">
                     Register this exact authorized redirect URI in the Google OAuth web client:
                   </span>
-                  <div className="bg-muted border-border/80 text-foreground rounded-lg border p-2 font-mono text-[11px] break-all select-all">
+                  <div className="bg-muted border-border/80 text-foreground rounded-[10px] border p-2 font-mono text-[11px] break-all select-all">
                     <code>{gmailSetup.redirectUri}</code>
                   </div>
                 </div>
@@ -366,7 +366,7 @@ export default function EmailConfirmationsPage() {
         )}
 
         {connections.length === 0 && !loading && !error && (
-          <div className="border-border/80 bg-muted/10 text-muted-foreground rounded-xl border border-dashed p-6 text-center text-xs">
+          <div className="border-border/80 bg-muted/10 text-muted-foreground rounded-[12px] border border-dashed p-6 text-center text-[13px]">
             No connected mailboxes. Click &quot;Connect Gmail&quot; above to link a mailbox or
             import an .eml receipt file.
           </div>
@@ -432,7 +432,7 @@ export default function EmailConfirmationsPage() {
       {error && (
         <div
           role="alert"
-          className="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2.5 rounded-xl border p-4 text-sm"
+          className="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2.5 rounded-[12px] border p-4 text-[13px]"
         >
           <AlertCircleIcon className="mt-0.5 h-5 w-5 shrink-0" />
           <span className="font-medium">{error}</span>
@@ -443,8 +443,8 @@ export default function EmailConfirmationsPage() {
       <section className="space-y-4">
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
           <div className="flex items-center gap-2">
-            <h2 className="text-foreground text-lg font-bold">Recent receipts</h2>
-            <span className="bg-primary/10 text-primary inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold">
+            <h2 className="text-foreground text-[17px] font-medium">Recent receipts</h2>
+            <span className="bg-primary/10 text-primary inline-flex items-center rounded-[6px] px-2.5 py-0.5 text-[13px] font-medium">
               {total}
             </span>
           </div>
@@ -452,14 +452,14 @@ export default function EmailConfirmationsPage() {
           <div className="flex items-center gap-2">
             <label
               htmlFor="receipt-status-filter"
-              className="text-muted-foreground sr-only text-xs font-medium"
+              className="text-muted-foreground sr-only text-[13px] font-medium"
             >
               Filter receipt status
             </label>
             <select
               id="receipt-status-filter"
               aria-label="Filter receipt status"
-              className="border-input bg-background focus-visible:ring-ring h-9 cursor-pointer rounded-xl border px-3 text-xs font-medium shadow-xs focus-visible:ring-1 focus-visible:outline-none"
+              className="border-input bg-background focus-visible:ring-ring h-9 cursor-pointer rounded-[12px] border px-3 text-[13px] font-medium focus-visible:ring-1 focus-visible:outline-none"
               value={filter}
               onChange={(event) => {
                 setFilter(event.target.value);
@@ -474,9 +474,9 @@ export default function EmailConfirmationsPage() {
           </div>
         </div>
 
-        <div className="border-border/70 bg-card text-muted-foreground flex flex-col justify-between gap-3 rounded-xl border p-3.5 text-xs shadow-2xs sm:flex-row sm:items-center">
+        <div className="border-border/70 bg-card text-muted-foreground flex flex-col justify-between gap-3 rounded-[12px] border p-3.5 text-[13px] sm:flex-row sm:items-center">
           <p>
-            <strong className="text-foreground font-semibold">{total} receipts</strong> in this view
+            <strong className="text-foreground font-medium">{total} receipts</strong> in this view
             · Page {page + 1}. Automatic confirmation requires an authenticated approved sender and
             an unambiguous candidate and job match.
           </p>
@@ -484,7 +484,7 @@ export default function EmailConfirmationsPage() {
             <Button
               variant="outline"
               size="sm"
-              className="h-8 cursor-pointer rounded-lg px-3 text-xs font-medium"
+              className="h-8 cursor-pointer rounded-[10px] px-3 text-[13px] font-medium"
               disabled={loading || !!busy || page === 0}
               onClick={() => setPage((value) => value - 1)}
             >
@@ -493,7 +493,7 @@ export default function EmailConfirmationsPage() {
             <Button
               variant="outline"
               size="sm"
-              className="h-8 cursor-pointer rounded-lg px-3 text-xs font-medium"
+              className="h-8 cursor-pointer rounded-[10px] px-3 text-[13px] font-medium"
               disabled={loading || !!busy || !hasMore}
               onClick={() => setPage((value) => value + 1)}
             >
@@ -505,12 +505,12 @@ export default function EmailConfirmationsPage() {
         {loading ? (
           <WorkspaceSkeleton rows={4} />
         ) : !error && visible.length === 0 ? (
-          <div className="border-border/80 bg-muted/10 space-y-2 rounded-2xl border border-dashed p-10 text-center">
-            <div className="bg-muted text-muted-foreground mx-auto flex h-10 w-10 items-center justify-center rounded-xl">
+          <div className="border-border/80 bg-muted/10 space-y-2 rounded-[16px] border border-dashed p-10 text-center">
+            <div className="bg-muted text-muted-foreground mx-auto flex h-10 w-10 items-center justify-center rounded-[12px]">
               <MailIcon className="h-5 w-5" />
             </div>
-            <p className="text-foreground text-sm font-semibold">No receipts in this view</p>
-            <p className="text-muted-foreground mx-auto max-w-sm text-xs">
+            <p className="text-foreground text-[13px] font-medium">No receipts in this view</p>
+            <p className="text-muted-foreground mx-auto max-w-sm text-[13px]">
               Connect a mailbox or import an application receipt to start tracking inbound
               submission confirmations.
             </p>
@@ -522,20 +522,20 @@ export default function EmailConfirmationsPage() {
             {visible.map((receipt) => (
               <article
                 key={receipt.id}
-                className="border-border/70 bg-card hover:border-primary/40 flex flex-col justify-between gap-4 rounded-2xl border p-5 shadow-xs transition-all hover:shadow-sm md:flex-row md:items-center"
+                className="border-border/70 bg-card hover:border-primary/40 flex flex-col justify-between gap-4 rounded-[16px] border p-5 transition-colors hover:shadow-sm md:flex-row md:items-center"
               >
                 <div className="min-w-0 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-foreground text-sm font-semibold break-words">
+                    <h3 className="text-foreground text-[13px] font-medium break-words">
                       {receipt.subject}
                     </h3>
                     <Badge
                       variant="outline"
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                        receipt.disposition === 'confirmed'
-                          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+ receipt.disposition ==='confirmed'
+                          ? 'border-primary/20 bg-primary/10 text-primary '
                           : receipt.disposition === 'needs_review'
-                            ? 'border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                            ? 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400'
                             : 'bg-muted text-muted-foreground border-border'
                       }`}
                     >
@@ -543,7 +543,7 @@ export default function EmailConfirmationsPage() {
                     </Badge>
                   </div>
 
-                  <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                  <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
                     <span className="font-mono text-[11px] break-words">{receipt.sender}</span>
                     <span>·</span>
                     <span className="flex items-center gap-1">
@@ -553,18 +553,18 @@ export default function EmailConfirmationsPage() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                    <span className="bg-muted/60 text-foreground border-border/60 inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold">
+                    <span className="bg-muted/60 text-foreground border-border/60 inline-flex items-center gap-1 rounded-[8px] border px-2.5 py-1 text-[13px] font-medium">
                       <BriefcaseIcon className="text-primary h-3 w-3" />
                       {receipt.extracted_job_title || 'Role needs review'}
                     </span>
-                    <span className="bg-muted/60 text-foreground border-border/60 inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold">
+                    <span className="bg-muted/60 text-foreground border-border/60 inline-flex items-center gap-1 rounded-[8px] border px-2.5 py-1 text-[13px] font-medium">
                       <BuildingIcon className="text-primary h-3 w-3" />
                       {receipt.extracted_company || 'Company needs review'}
                     </span>
                   </div>
 
                   {receipt.review_reason && (
-                    <p className="text-muted-foreground bg-muted/20 border-border/40 rounded-md border p-1.5 font-sans text-xs italic">
+                    <p className="text-muted-foreground bg-muted/20 border-border/40 rounded-[8px] border p-1.5 font-sans text-[13px]">
                       {receipt.review_reason}
                     </p>
                   )}
@@ -574,9 +574,9 @@ export default function EmailConfirmationsPage() {
                   <Button
                     variant={receipt.disposition === 'needs_review' ? 'default' : 'outline'}
                     size="sm"
-                    className={`h-8 cursor-pointer rounded-lg px-3.5 text-xs font-semibold ${
-                      receipt.disposition === 'needs_review'
-                        ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xs'
+                    className={`h-8 cursor-pointer rounded-[10px] px-3.5 text-[13px] font-medium ${
+ receipt.disposition ==='needs_review'
+                        ? 'bg-primary text-primary-foreground hover:bg-primary/90 '
                         : 'border-border/80'
                     }`}
                     onClick={() => openReview(receipt)}
@@ -593,21 +593,21 @@ export default function EmailConfirmationsPage() {
       {/* Receipt review section */}
       {selected && (
         <section
-          className="border-primary/30 bg-card animate-in fade-in-50 space-y-5 rounded-2xl border p-6 shadow-md"
+          className="border-primary/30 bg-card animate-in fade-in-50 space-y-5 rounded-[16px] border p-6 shadow-md"
           aria-label="Receipt review"
         >
           <div className="border-border/60 flex items-center justify-between gap-2 border-b pb-3">
             <div className="flex items-center gap-2.5">
-              <div className="bg-primary/10 text-primary flex h-8 w-8 items-center justify-center rounded-lg">
+              <div className="bg-primary/10 text-primary flex h-8 w-8 items-center justify-center rounded-[10px]">
                 <ShieldCheckIcon className="h-4 w-4" />
               </div>
               <div>
-                <h2 className="text-foreground text-base font-bold">
+                <h2 className="text-foreground text-[15px] font-medium">
                   {selected.disposition === 'needs_review'
                     ? 'Review application receipt'
                     : 'Receipt evidence'}
                 </h2>
-                <p className="text-muted-foreground text-xs">
+                <p className="text-muted-foreground text-[13px]">
                   {selected.source === 'manual_import'
                     ? 'User-imported evidence: confirm its authenticity and details before recording the application.'
                     : 'Mailbox receipt: check candidate and application details.'}
@@ -626,8 +626,8 @@ export default function EmailConfirmationsPage() {
           </div>
 
           <div className="space-y-1.5">
-            <span className="text-muted-foreground text-xs font-medium">Raw message excerpt:</span>
-            <pre className="bg-muted/30 border-border/70 text-foreground/90 max-h-64 overflow-y-auto rounded-xl border p-4 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap">
+            <span className="text-muted-foreground text-[13px] font-medium">Raw message excerpt:</span>
+            <pre className="bg-muted/30 border-border/70 text-foreground/90 max-h-64 overflow-y-auto rounded-[12px] border p-4 font-mono text-[13px] leading-relaxed break-words whitespace-pre-wrap">
               {selected.body_text}
             </pre>
           </div>
@@ -638,13 +638,13 @@ export default function EmailConfirmationsPage() {
                 <div className="space-y-1.5">
                   <Label
                     htmlFor="receipt-candidate"
-                    className="text-foreground text-xs font-medium"
+                    className="text-foreground text-[13px] font-medium"
                   >
                     Candidate <span className="text-destructive">*</span>
                   </Label>
                   <select
                     id="receipt-candidate"
-                    className="border-input bg-background focus-visible:ring-ring h-10 w-full cursor-pointer rounded-xl border px-3 text-xs font-medium shadow-xs focus-visible:ring-1 focus-visible:outline-none"
+                    className="border-input bg-background focus-visible:ring-ring h-10 w-full cursor-pointer rounded-[12px] border px-3 text-[13px] font-medium focus-visible:ring-1 focus-visible:outline-none"
                     value={candidateId}
                     onChange={(event) => {
                       setCandidateId(event.target.value);
@@ -664,13 +664,13 @@ export default function EmailConfirmationsPage() {
                 <div className="space-y-1.5">
                   <Label
                     htmlFor="receipt-application"
-                    className="text-foreground text-xs font-medium"
+                    className="text-foreground text-[13px] font-medium"
                   >
                     Existing application
                   </Label>
                   <select
                     id="receipt-application"
-                    className="border-input bg-background focus-visible:ring-ring h-10 w-full cursor-pointer rounded-xl border px-3 text-xs font-medium shadow-xs focus-visible:ring-1 focus-visible:outline-none"
+                    className="border-input bg-background focus-visible:ring-ring h-10 w-full cursor-pointer rounded-[12px] border px-3 text-[13px] font-medium focus-visible:ring-1 focus-visible:outline-none"
                     value={submissionId}
                     onChange={(event) => {
                       setSubmissionId(event.target.value);
@@ -693,26 +693,26 @@ export default function EmailConfirmationsPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="receipt-company" className="text-foreground text-xs font-medium">
+                  <Label htmlFor="receipt-company" className="text-foreground text-[13px] font-medium">
                     Company <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="receipt-company"
                     maxLength={160}
-                    className="border-input bg-background h-10 rounded-xl text-xs shadow-xs"
+                    className="border-input bg-background h-10 rounded-[12px] text-[13px]"
                     value={company}
                     onChange={(event) => setCompany(event.target.value)}
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="receipt-role" className="text-foreground text-xs font-medium">
+                  <Label htmlFor="receipt-role" className="text-foreground text-[13px] font-medium">
                     Job title <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="receipt-role"
                     maxLength={160}
-                    className="border-input bg-background h-10 rounded-xl text-xs shadow-xs"
+                    className="border-input bg-background h-10 rounded-[12px] text-[13px]"
                     value={jobTitle}
                     onChange={(event) => setJobTitle(event.target.value)}
                   />
@@ -722,7 +722,7 @@ export default function EmailConfirmationsPage() {
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <Button
                   disabled={!!busy || !candidateId || !company.trim() || !jobTitle.trim()}
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 flex h-10 cursor-pointer items-center gap-2 rounded-xl px-5 text-xs font-semibold shadow-xs transition-all"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 flex h-10 cursor-pointer items-center gap-2 rounded-[12px] px-5 text-[13px] font-medium transition-colors"
                   onClick={() =>
                     void run('review', async () => {
                       await api(`/api/email-confirmations/${selected.id}/review`, {
@@ -749,7 +749,7 @@ export default function EmailConfirmationsPage() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="border-border/80 hover:border-destructive/50 hover:text-destructive h-10 cursor-pointer rounded-xl px-4 text-xs font-medium shadow-xs"
+                  className="border-border/80 hover:border-destructive/50 hover:text-destructive h-10 cursor-pointer rounded-[12px] px-4 text-[13px] font-medium"
                   disabled={!!busy}
                   onClick={() =>
                     void run('dismiss', async () => {
@@ -773,7 +773,7 @@ export default function EmailConfirmationsPage() {
             <div className="pt-2">
               <Button
                 variant="outline"
-                className="border-border/80 hover:border-primary/50 h-9 cursor-pointer rounded-xl text-xs font-medium shadow-xs"
+                className="border-border/80 hover:border-primary/50 h-9 cursor-pointer rounded-[12px] text-[13px] font-medium"
                 render={<Link href="/dashboard/submissions" />}
               >
                 Open application tracker
@@ -804,27 +804,27 @@ function MailboxCard({
   const isConnected = connection.status === 'connected';
 
   return (
-    <div className="border-border/70 bg-card hover:border-primary/40 space-y-4 rounded-xl border p-5 shadow-2xs transition-all">
+    <div className="border-border/70 bg-card hover:border-primary/40 space-y-4 rounded-[12px] border p-5 transition-colors">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div className="space-y-1">
           <div className="flex items-center gap-2.5">
-            <span className="text-foreground text-sm font-semibold">
+            <span className="text-foreground text-[13px] font-medium">
               {connection.mailbox_email}
             </span>
             <span
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
-                isConnected
-                  ? 'border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+ isConnected
+ ?'border border-primary/20 bg-primary/10 text-primary '
                   : 'bg-muted text-muted-foreground border-border border'
               }`}
             >
               <span
-                className={`inline-block h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-muted-foreground'}`}
+                className={`inline-block h-1.5 w-1.5 rounded-full ${isConnected ?'bg-primary' : 'bg-muted-foreground'}`}
               />
               {connection.status.replaceAll('_', ' ')}
             </span>
           </div>
-          <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+          <p className="text-muted-foreground flex items-center gap-1.5 text-[13px]">
             <ClockIcon className="h-3 w-3" />
             Last checked:{' '}
             {connection.last_synced_at
@@ -837,17 +837,17 @@ function MailboxCard({
           <Button
             variant="outline"
             size="sm"
-            className="border-border/80 hover:border-primary/50 h-8 cursor-pointer rounded-lg px-3 text-xs font-semibold"
+            className="border-border/80 hover:border-primary/50 h-8 cursor-pointer rounded-[10px] px-3 text-[13px] font-medium"
             disabled={busy || connection.status !== 'connected'}
             onClick={onSync}
           >
-            <RefreshCwIcon className={`mr-1.5 h-3 w-3 ${busy ? 'animate-spin' : ''}`} />
+            <RefreshCwIcon className={`mr-1.5 h-3 w-3 ${busy ?'animate-spin' : ''}`} />
             Sync now
           </Button>
           <Button
             variant="ghost"
             size="sm"
-            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-8 cursor-pointer rounded-lg px-2.5 text-xs"
+            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-8 cursor-pointer rounded-[10px] px-2.5 text-[13px]"
             disabled={busy || connection.status === 'disconnected'}
             onClick={onDisconnect}
           >
@@ -857,20 +857,20 @@ function MailboxCard({
       </div>
 
       {connection.last_error && (
-        <div className="border-destructive/30 bg-destructive/10 text-destructive flex items-center gap-2 rounded-lg border p-3 text-xs">
+        <div className="border-destructive/30 bg-destructive/10 text-destructive flex items-center gap-2 rounded-[10px] border p-3 text-[13px]">
           <AlertCircleIcon className="h-4 w-4 shrink-0" />
           <span>{connection.last_error}</span>
         </div>
       )}
 
       <div className="border-border/50 space-y-2 border-t pt-2">
-        <Label htmlFor={`senders-${connection.id}`} className="text-foreground text-xs font-medium">
+        <Label htmlFor={`senders-${connection.id}`} className="text-foreground text-[13px] font-medium">
           Approved receipt sender domains
         </Label>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Input
             id={`senders-${connection.id}`}
-            className="border-input bg-background h-9 flex-1 rounded-lg text-xs shadow-2xs"
+            className="border-input bg-background h-9 flex-1 rounded-[10px] text-[13px]"
             placeholder="Enter exact domains from verified receipts (e.g. greenhouse.io, lever.co)"
             value={domains}
             onChange={(event) => setDomains(event.target.value)}
@@ -878,7 +878,7 @@ function MailboxCard({
           <Button
             variant="outline"
             size="sm"
-            className="border-border/80 hover:border-primary/50 h-9 shrink-0 cursor-pointer rounded-lg px-4 text-xs font-semibold shadow-2xs"
+            className="border-border/80 hover:border-primary/50 h-9 shrink-0 cursor-pointer rounded-[10px] px-4 text-[13px] font-medium"
             disabled={busy}
             onClick={() =>
               onSave(

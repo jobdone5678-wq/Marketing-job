@@ -48,7 +48,7 @@ export default function NewSubmissionPage() {
       fallback={
         <div className="flex h-96 flex-col items-center justify-center gap-3">
           <RefreshCwIcon className="text-primary size-6 animate-spin" />
-          <span className="text-muted-foreground text-xs">Loading submission form...</span>
+          <span className="text-muted-foreground text-[13px]">Loading submission form...</span>
         </div>
       }
     >

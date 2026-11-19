@@ -42,7 +42,7 @@ export function SendToExtensionButton({ submission }: { submission: JobSubmissio
 
   if (sent) {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400">
+      <span className="inline-flex items-center gap-1 text-[11px] text-primary">
         <CheckCircle2Icon className="size-3" /> Sent to extension
       </span>
     );

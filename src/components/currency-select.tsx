@@ -93,7 +93,7 @@ export function CurrencySelect({
     >
       <SelectTrigger
         aria-label={label || name}
-        className={`bg-background h-9 w-full min-w-0 ${className || ''}`}
+        className={`bg-background h-9 w-full min-w-0 ${className ||''}`}
       >
         <SelectValue placeholder="Select currency" />
       </SelectTrigger>
@@ -102,7 +102,7 @@ export function CurrencySelect({
           <SelectLabel>Currencies</SelectLabel>
           {currencyOptions.map((curr) => (
             <SelectItem key={curr.code} value={curr.code}>
-              <span className="font-semibold">{curr.code}</span>
+              <span className="font-medium">{curr.code}</span>
               <span className="text-muted-foreground ml-1">
                 ({curr.symbol}) · {curr.name}
               </span>
@@ -115,7 +115,7 @@ export function CurrencySelect({
 
   if (label) {
     return (
-      <label className="grid gap-1 text-sm">
+      <label className="grid gap-1 text-[13px]">
         <span>{label}</span>
         {selectElement}
       </label>

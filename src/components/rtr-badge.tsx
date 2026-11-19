@@ -42,8 +42,8 @@ function RTRBadgeView({ candidateName, companyName, jobTitle, rtrDocument }: Pro
     switch (status) {
       case 'signed':
         return (
-          <Badge className="gap-1 rounded-full border-emerald-500/30 bg-emerald-500/15 px-2 py-1 font-medium text-emerald-700 shadow-2xs dark:text-emerald-300">
-            <Check className="size-2.5 text-emerald-500" />
+          <Badge className="gap-1 rounded-[6px] border-primary/20 bg-primary/15 px-2 py-1 font-medium text-primary">
+            <Check className="size-2.5 text-primary" />
             Signed
           </Badge>
         );
@@ -51,7 +51,7 @@ function RTRBadgeView({ candidateName, companyName, jobTitle, rtrDocument }: Pro
         return (
           <Badge
             variant="destructive"
-            className="gap-1 rounded-full px-2 py-1 font-medium shadow-2xs"
+            className="gap-1 rounded-[6px] px-2 py-1 font-medium"
           >
             <AlertCircle className="size-2.5" />
             Expired
@@ -61,7 +61,7 @@ function RTRBadgeView({ candidateName, companyName, jobTitle, rtrDocument }: Pro
         return (
           <Badge
             variant="secondary"
-            className="text-destructive border-destructive/30 gap-1 rounded-full px-2 py-1 font-medium shadow-2xs"
+            className="text-destructive border-destructive/30 gap-1 rounded-[6px] px-2 py-1 font-medium"
           >
             <AlertCircle className="size-2.5" />
             Rejected
@@ -70,7 +70,7 @@ function RTRBadgeView({ candidateName, companyName, jobTitle, rtrDocument }: Pro
       case 'received':
       default:
         return (
-          <Badge className="gap-1 rounded-full border-amber-500/30 bg-amber-500/15 px-2 py-1 font-medium text-amber-700 shadow-2xs dark:text-amber-300">
+          <Badge className="gap-1 rounded-[6px] border-amber-500/30 bg-amber-500/15 px-2 py-1 font-medium text-amber-700 dark:text-amber-400">
             <AlertCircle className="size-2.5 text-amber-500" />
             Received
           </Badge>
@@ -127,7 +127,7 @@ function RTRBadgeView({ candidateName, companyName, jobTitle, rtrDocument }: Pro
               <button
                 type="button"
                 onClick={() => void preview()}
-                className={`inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1.5 text-[10px] font-medium transition-shadow hover:shadow-sm ${rtr.rtr_status === 'signed' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-border bg-background text-foreground'}`}
+                className={`inline-flex max-w-full items-center gap-1.5 rounded-[8px] border px-2 py-1.5 text-[11px] font-medium transition-shadow hover:shadow-sm ${rtr.rtr_status ==='signed' ? 'border-primary/20 bg-primary/10 text-primary ' : 'border-border bg-background text-foreground'}`}
               >
                 <FileText className="size-3 shrink-0" />
                 <span>{getTypeLabel(rtr.rtr_type)}</span>
@@ -135,33 +135,33 @@ function RTRBadgeView({ candidateName, companyName, jobTitle, rtrDocument }: Pro
               {getStatusBadge(rtr.rtr_status)}
             </div>
             <p
-              className="text-muted-foreground max-w-full truncate text-[10px]"
+              className="text-muted-foreground max-w-full truncate text-[11px]"
               title={rtr.filename}
             >
               {rtr.filename}
             </p>
             <div className="flex flex-wrap gap-1">
-              <Badge variant="outline" className="h-4 px-1.5 py-0 text-[9px] font-medium">
+              <Badge variant="outline" className="h-4 px-1.5 py-0 text-[11px] font-medium">
                 {rtr.vendor_name || 'No vendor'}
               </Badge>
               {rtr.expiration_date && (
-                <Badge variant="outline" className="h-4 px-1.5 py-0 text-[9px] font-medium">
+                <Badge variant="outline" className="h-4 px-1.5 py-0 text-[11px] font-medium">
                   <Calendar className="size-2.5" />
                   Expires {rtr.expiration_date}
                 </Badge>
               )}
               {rtr.hourly_rate && (
-                <Badge className="h-4 gap-0.5 border-blue-500/30 bg-blue-500/10 px-1.5 py-0 text-[9px] font-medium text-blue-700 dark:text-blue-300">
+                <Badge className="h-4 gap-0.5 border-border bg-muted px-1.5 py-0 text-[11px] font-medium text-muted-foreground">
                   ${rtr.hourly_rate}/hr
                 </Badge>
               )}
               {rtr.daily_rate && (
-                <Badge className="h-4 gap-0.5 border-blue-500/30 bg-blue-500/10 px-1.5 py-0 text-[9px] font-medium text-blue-700 dark:text-blue-300">
+                <Badge className="h-4 gap-0.5 border-border bg-muted px-1.5 py-0 text-[11px] font-medium text-muted-foreground">
                   ${rtr.daily_rate}/day
                 </Badge>
               )}
               {rtr.monthly_rate && (
-                <Badge className="h-4 gap-0.5 border-blue-500/30 bg-blue-500/10 px-1.5 py-0 text-[9px] font-medium text-blue-700 dark:text-blue-300">
+                <Badge className="h-4 gap-0.5 border-border bg-muted px-1.5 py-0 text-[11px] font-medium text-muted-foreground">
                   ${rtr.monthly_rate}/mo
                 </Badge>
               )}
@@ -207,7 +207,7 @@ function RTRBadgeView({ candidateName, companyName, jobTitle, rtrDocument }: Pro
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="flex max-h-[90dvh] flex-col sm:max-w-2xl">
           <DialogHeader>
-            <p className="text-muted-foreground mb-1 text-[10px] font-semibold tracking-widest uppercase">
+            <p className="text-muted-foreground mb-1 text-[11px] font-medium">
               Right to Represent
             </p>
             <DialogTitle>RTR Document</DialogTitle>
@@ -222,15 +222,15 @@ function RTRBadgeView({ candidateName, companyName, jobTitle, rtrDocument }: Pro
 
           {rtr && (
             <>
-              <div className="border-border/60 bg-muted/30 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-xs">
+              <div className="border-border/60 bg-muted/30 flex flex-wrap items-center justify-between gap-2 rounded-[10px] border p-3 text-[13px]">
                 <span className="min-w-0 font-medium break-all">{rtr.filename}</span>
                 <span className="text-muted-foreground">
                   {getTypeLabel(rtr.rtr_type)} · {rtr.vendor_name || 'Direct'}
                 </span>
               </div>
 
-              <div className="border-border/60 bg-card min-h-0 flex-1 space-y-3 overflow-y-auto rounded-lg border p-4">
-                <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="border-border/60 bg-card min-h-0 flex-1 space-y-3 overflow-y-auto rounded-[10px] border p-4">
+                <div className="grid grid-cols-2 gap-3 text-[13px]">
                   <div>
                     <p className="text-muted-foreground">Status</p>
                     <p className="font-medium">{getStatusBadge(rtr.rtr_status)}</p>
@@ -250,7 +250,7 @@ function RTRBadgeView({ candidateName, companyName, jobTitle, rtrDocument }: Pro
                   {rtr.expiration_date && (
                     <div>
                       <p className="text-muted-foreground">Expiration Date</p>
-                      <p className="font-medium text-amber-600 dark:text-amber-400">
+                      <p className="font-medium text-amber-700 dark:text-amber-400">
                         {rtr.expiration_date}
                       </p>
                     </div>

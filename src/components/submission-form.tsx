@@ -14,7 +14,7 @@ import type {
 } from '@/types/database';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Sparkles, CheckCircle2, Loader2, Building2 } from 'lucide-react';
+import { Wand2, CheckCircle2, Loader2, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { findCandidateMatch } from '@/components/rtr-submission-dialog';
 import { buildRtrMetadataTag, stripRtrMetadata } from '@/lib/rtr-metadata';
@@ -274,7 +274,7 @@ export function SubmissionForm({
     <main className="portal-page max-w-5xl space-y-6">
       <div className="flex items-center justify-between">
         <Link
-          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
+          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-[13px]"
           href={backUrl}
         >
           ← Back to submissions
@@ -283,10 +283,10 @@ export function SubmissionForm({
 
       <div className="flex flex-col justify-between gap-3 border-b pb-2 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
+          <h1 className="text-[24px] font-medium tracking-tight">
             {initialSubmission ? 'Edit submission' : 'Create submission draft'}
           </h1>
-          <p className="text-muted-foreground mt-0.5 text-xs">
+          <p className="text-muted-foreground mt-0.5 text-[13px]">
             Log marketing and client submissions with optional RTR authorization records.
           </p>
         </div>
@@ -309,7 +309,7 @@ export function SubmissionForm({
             size="sm"
             disabled={scanningRtr}
             onClick={() => rtrInputRef.current?.click()}
-            className="border-primary/40 bg-primary/5 text-primary hover:bg-primary/10 h-9 cursor-pointer gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all"
+            className="border-primary/40 bg-primary/5 text-primary hover:bg-primary/10 h-9 cursor-pointer gap-1.5 rounded-[10px] px-3 text-[13px] font-medium transition-colors"
           >
             {scanningRtr ? (
               <>
@@ -318,7 +318,7 @@ export function SubmissionForm({
               </>
             ) : (
               <>
-                <Sparkles className="size-3.5" />
+                <Wand2 className="size-3.5" />
                 Auto-Fill from RTR Image
               </>
             )}
@@ -327,14 +327,14 @@ export function SubmissionForm({
       </div>
 
       {attachedRtr && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs">
+        <div className="flex items-center justify-between gap-3 rounded-[12px] border border-primary/20 bg-primary/10 p-3 text-[13px]">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <CheckCircle2 className="size-4 shrink-0 text-primary" />
             <div>
-              <span className="font-semibold text-emerald-900 dark:text-emerald-200">
+              <span className="text-foreground font-medium">
                 Attached RTR Document: {attachedRtr.filename}
               </span>
-              <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80">
+              <p className="text-muted-foreground text-[11px]">
                 Status: {attachedRtr.rtr_status} • Vendor: {attachedRtr.vendor_name || 'Direct'} •
                 Date: {attachedRtr.rtr_date}
               </p>
@@ -349,7 +349,7 @@ export function SubmissionForm({
               setRtrFile(null);
               setData({ ...data, rtr_document: null });
             }}
-            className="text-destructive hover:bg-destructive/10 h-7 text-xs"
+            className="text-destructive hover:bg-destructive/10 h-7 text-[13px]"
           >
             Remove
           </Button>
@@ -363,12 +363,12 @@ export function SubmissionForm({
         }}
         className="workspace-form space-y-5"
       >
-        <label className="block text-xs font-semibold">
+        <label className="block text-[13px] font-medium">
           Candidate <span className="text-destructive">*</span>
           <select
             required
             disabled={Boolean(initialSubmission)}
-            className="bg-background mt-1 block w-full rounded-lg border p-2 text-xs"
+            className="bg-background mt-1 block w-full rounded-[10px] border p-2 text-[13px]"
             value={String(data.candidate_id || '')}
             onChange={(e) => {
               setData({ ...data, candidate_id: e.target.value });
@@ -386,13 +386,13 @@ export function SubmissionForm({
 
         {/* Different Companies Detected in RTR Document */}
         {detectedCompanies.length > 0 && (
-          <div className="border-primary/20 bg-primary/5 space-y-2 rounded-xl border p-3.5 shadow-2xs">
+          <div className="border-primary/20 bg-primary/5 space-y-2 rounded-[12px] border p-3.5">
             <div className="flex items-center justify-between">
-              <span className="text-primary flex items-center gap-1.5 text-xs font-semibold">
+              <span className="text-primary flex items-center gap-1.5 text-[13px] font-medium">
                 <Building2 className="size-3.5" />
                 Different Companies Found in RTR ({detectedCompanies.length}):
               </span>
-              <span className="text-muted-foreground text-[10px]">
+              <span className="text-muted-foreground text-[11px]">
                 Click to quickly assign as Company or Vendor
               </span>
             </div>
@@ -409,27 +409,27 @@ export function SubmissionForm({
                 return (
                   <div
                     key={cName}
-                    className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs transition-all ${
-                      isCompany
-                        ? 'bg-primary/10 border-primary/40 text-primary font-medium'
+                    className={`inline-flex items-center gap-2 rounded-[10px] border px-2.5 py-1.5 text-[13px] transition-colors ${
+ isCompany
+ ?'bg-primary/10 border-primary/40 text-primary font-medium'
                         : isVendor
-                          ? 'border-amber-500/40 bg-amber-500/10 font-medium text-amber-700 dark:text-amber-300'
+                          ? 'border-amber-500/40 bg-amber-500/10 font-medium text-amber-700 dark:text-amber-400'
                           : 'bg-background border-border/80 text-foreground'
                     }`}
                   >
-                    <span className="max-w-[180px] truncate font-semibold" title={cName}>
+                    <span className="max-w-[180px] truncate font-medium" title={cName}>
                       {cName}
                     </span>
-                    <div className="border-border/60 flex items-center gap-1 border-l pl-1.5 text-[10px]">
+                    <div className="border-border/60 flex items-center gap-1 border-l pl-1.5 text-[11px]">
                       <button
                         type="button"
                         onClick={() => {
                           setData((prev) => ({ ...prev, company_name: cName }));
                           setDuplicate(false);
                         }}
-                        className={`rounded px-1.5 py-0.5 font-semibold transition-colors ${
-                          isCompany
-                            ? 'bg-primary text-primary-foreground shadow-2xs'
+                        className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
+ isCompany
+ ?'bg-primary text-primary-foreground '
                             : 'hover:bg-primary/10 text-muted-foreground hover:text-primary'
                         }`}
                         title={`Assign "${cName}" as Company Name`}
@@ -441,9 +441,9 @@ export function SubmissionForm({
                         onClick={() => {
                           setData((prev) => ({ ...prev, vendor_company: cName }));
                         }}
-                        className={`rounded px-1.5 py-0.5 font-semibold transition-colors ${
-                          isVendor
-                            ? 'bg-amber-500 text-white shadow-2xs'
+                        className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
+ isVendor
+ ?'bg-amber-500 text-white '
                             : 'text-muted-foreground hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400'
                         }`}
                         title={`Assign "${cName}" as Vendor Company`}
@@ -460,7 +460,7 @@ export function SubmissionForm({
 
         <div className="grid gap-4 md:grid-cols-2">
           {fields.map((k) => (
-            <label key={k} className="text-xs font-semibold capitalize">
+            <label key={k} className="text-[13px] font-medium capitalize">
               {k.replaceAll('_', ' ')}
               {k === 'company_name' || k === 'job_title' ? (
                 <span className="text-destructive"> *</span>
@@ -473,14 +473,14 @@ export function SubmissionForm({
                   setData({ ...data, [k]: e.target.value || null });
                   setDuplicate(false);
                 }}
-                className="mt-1 h-9 text-xs"
+                className="mt-1 h-9 text-[13px]"
               />
             </label>
           ))}
-          <label className="text-xs font-semibold">
+          <label className="text-[13px] font-medium">
             Recruiting status
             <select
-              className="bg-background mt-1 block w-full rounded-lg border p-2 text-xs"
+              className="bg-background mt-1 block w-full rounded-[10px] border p-2 text-[13px]"
               value={String(data.status)}
               onChange={(e) => setData({ ...data, status: e.target.value })}
             >
@@ -489,20 +489,20 @@ export function SubmissionForm({
               ))}
             </select>
           </label>
-          <label className="text-xs font-semibold">
+          <label className="text-[13px] font-medium">
             Record date <span className="text-destructive">*</span>
             <Input
               required
               type="date"
               value={String(data.submission_date)}
               onChange={(e) => setData({ ...data, submission_date: e.target.value })}
-              className="mt-1 h-9 text-xs"
+              className="mt-1 h-9 text-[13px]"
             />
           </label>
         </div>
 
         {duplicate && (
-          <p className="rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs font-medium text-amber-700 dark:bg-amber-950/40">
+          <p className="rounded-[10px] border border-amber-300 bg-amber-50 p-2.5 text-[13px] font-medium text-amber-700 dark:bg-amber-950/40">
             Another submission to this company exists in the last 30 days. Review it before adding
             another.
           </p>
@@ -510,7 +510,7 @@ export function SubmissionForm({
         {error && (
           <p
             role="alert"
-            className="text-destructive bg-destructive/10 border-destructive/20 rounded-lg border p-2.5 text-xs font-medium"
+            className="text-destructive bg-destructive/10 border-destructive/20 rounded-[10px] border p-2.5 text-[13px] font-medium"
           >
             {error}
           </p>

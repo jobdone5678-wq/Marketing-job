@@ -1,96 +1,120 @@
 'use client';
 
+import * as React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { SidebarTrigger } from '@/components/ui/sidebar';
-import { ChevronRight, CircleHelp, Search, Sparkles } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
+import { ChevronRight, CircleHelp, Search } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 const titles: Record<string, string> = {
-  '/dashboard/integrations': 'Integrations & APIs',
-  '/dashboard/billing': 'SaaS Billing',
-  '/dashboard': 'Executive Dashboard',
-  '/dashboard/job-matching': 'JD Candidate Matching',
-  '/dashboard/candidates': 'Candidate Bench',
-  '/dashboard/candidates/new': 'New Candidate',
-  '/dashboard/submissions': 'Job Submissions',
-  '/dashboard/submissions/new': 'Log Application',
-  '/dashboard/vendors': 'Prime Vendors',
-  '/dashboard/vendors/new': 'New Vendor',
-  '/dashboard/jobs': 'Job Discovery',
-  '/dashboard/outside-jobs': 'Captured Jobs',
-  '/dashboard/greenhouse': 'Greenhouse ATS',
-  '/dashboard/ashby': 'Ashby ATS',
-  '/dashboard/settings': 'Workspace Settings',
-  '/dashboard/help': 'Documentation & Guides',
-  '/dashboard/rtr': 'Right to Represent (RTR)',
-  '/dashboard/email-confirmations': 'Email Confirmations',
+  '/dashboard/integrations': 'Integrations',
+  '/dashboard/billing': 'Billing',
+  '/dashboard': 'Overview',
+  '/dashboard/job-matching': 'Candidate matching',
+  '/dashboard/candidates': 'Resume profile',
+  '/dashboard/candidates/new': 'New candidate',
+  '/dashboard/submissions': 'Applications',
+  '/dashboard/submissions/new': 'Log application',
+  '/dashboard/vendors': 'Prime vendors',
+  '/dashboard/vendors/new': 'New vendor',
+  '/dashboard/jobs': 'Public jobs',
+  '/dashboard/outside-jobs': 'Captured jobs',
+  '/dashboard/greenhouse': 'Greenhouse',
+  '/dashboard/ashby': 'Ashby',
+  '/dashboard/placements': 'Placements',
+  '/dashboard/settings': 'Settings',
+  '/dashboard/help': 'Help',
+  '/dashboard/rtr': 'RTR agreements',
+  '/dashboard/email-confirmations': 'Email confirmations',
 };
 
 export function SiteHeader({ title, subtitle }: { title?: string; subtitle?: string }) {
   const path = usePathname();
+  const router = useRouter();
+  const { open, isMobile } = useSidebar();
+  const [term, setTerm] = React.useState('');
+
   const section = Object.keys(titles)
     .sort((a, b) => b.length - a.length)
     .find((key) => path === key || path.startsWith(key + '/'));
-  const resolvedTitle = title || titles[section || ''] || 'Workspace details';
+  const resolvedTitle = title || titles[section || ''] || 'Workspace';
+
+  // The trigger lives inside the sidebar while it is open, and moves here once it is away.
+  const showTrigger = isMobile || !open;
+
+  function submit(event: React.FormEvent) {
+    event.preventDefault();
+    const value = term.trim();
+    router.push(value ? '/dashboard/jobs?q=' + encodeURIComponent(value) : '/dashboard/jobs');
+  }
 
   return (
-    <header className="border-border/80 bg-card/85 sticky top-0 z-30 flex h-13 shrink-0 items-center justify-between gap-3 border-b px-4 backdrop-blur-md transition-colors sm:px-6">
+    <header className="panel flex h-14 shrink-0 items-center gap-3 px-3 sm:gap-4 sm:px-4">
       <a href="#workspace-content" className="skip-link">
         Skip to workspace
       </a>
 
-      {/* Left side: Sidebar trigger & Breadcrumbs */}
-      <div className="flex min-w-0 items-center gap-2.5">
-        <SidebarTrigger className="text-muted-foreground hover:bg-muted/70 hover:text-foreground size-8 rounded-md transition-colors" />
-        <div className="bg-border/70 hidden h-4 w-px sm:block" />
+      {/* Left */}
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        {showTrigger && (
+          <SidebarTrigger className="text-muted-foreground hover:bg-accent hover:text-foreground size-8 shrink-0 rounded-[8px] transition-colors" />
+        )}
 
         <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5">
           <Link
             href="/dashboard"
-            className="text-muted-foreground hover:text-foreground hidden items-center gap-1 text-xs font-medium transition-colors sm:inline-flex"
+            className="text-muted-foreground hover:text-foreground hidden shrink-0 text-[13px] transition-colors xl:inline"
           >
-            <span>NextKinHR</span>
+            Nextkinlife
           </Link>
-          <ChevronRight className="text-muted-foreground/40 hidden size-3 sm:block" />
-          <span className="text-foreground truncate text-xs font-semibold tracking-tight">
-            {resolvedTitle}
-          </span>
+          <ChevronRight
+            aria-hidden="true"
+            className="text-muted-foreground hidden size-3.5 shrink-0 stroke-[1.5] xl:block"
+          />
+          <span className="text-foreground truncate text-[13px] font-medium">{resolvedTitle}</span>
           {subtitle && (
-            <span className="text-muted-foreground hidden truncate text-xs md:inline">
+            <span className="text-muted-foreground hidden truncate text-[13px] 2xl:inline">
               · {subtitle}
             </span>
           )}
         </nav>
       </div>
 
-      {/* Right side: Search, Live Status, Theme, Help */}
-      <div className="flex items-center gap-1.5 sm:gap-2">
-        <Link
-          href="/dashboard/jobs"
-          aria-label="Search jobs"
-          className="border-border/70 bg-muted/40 text-muted-foreground hover:border-border hover:bg-muted/80 hover:text-foreground flex h-8 items-center gap-2 rounded-lg border px-2.5 text-xs transition-all duration-150"
-        >
-          <Search className="size-3.5" />
-          <span className="hidden font-normal md:inline">Search jobs…</span>
-          <kbd className="border-border bg-background text-muted-foreground hidden items-center rounded border px-1.5 font-mono text-[10px] lg:inline-flex">
-            ⌘K
-          </kbd>
-        </Link>
-
-        <div className="hidden items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 sm:flex dark:text-emerald-400">
-          <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
-          <span>Live Sync</span>
+      {/* Centre */}
+      <form
+        role="search"
+        onSubmit={submit}
+        className="w-full max-w-[18rem] shrink-0 sm:max-w-sm md:max-w-md"
+      >
+        <label htmlFor="workspace-search" className="sr-only">
+          Search jobs
+        </label>
+        <div className="border-border bg-surface-sunken focus-within:border-primary/40 focus-within:bg-card focus-within:ring-primary/10 flex h-9 items-center gap-2 rounded-[10px] border px-3 transition-colors focus-within:ring-2">
+          <Search
+            aria-hidden="true"
+            className="text-muted-foreground size-4 shrink-0 stroke-[1.5]"
+          />
+          <input
+            id="workspace-search"
+            type="search"
+            value={term}
+            onChange={(event) => setTerm(event.target.value)}
+            placeholder="Search jobs"
+            className="text-foreground placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent text-[13px] outline-none focus:outline-none focus-visible:outline-none [&::-webkit-search-cancel-button]:appearance-none"
+          />
         </div>
+      </form>
 
+      {/* Right */}
+      <div className="flex flex-1 items-center justify-end gap-1">
         <ThemeToggle />
-
         <Link
           href="/dashboard/help"
-          aria-label="Help and guidance"
-          className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-8 items-center justify-center rounded-lg transition-colors"
+          aria-label="Help"
+          className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-8 items-center justify-center rounded-[8px] transition-colors"
         >
-          <CircleHelp className="size-4" />
+          <CircleHelp className="size-4 stroke-[1.5]" />
         </Link>
       </div>
     </header>

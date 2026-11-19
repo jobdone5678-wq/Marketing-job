@@ -23,8 +23,8 @@ export function CandidateCompatibility({ candidate }: { candidate?: Candidate })
   ];
   return (
     <section className="space-y-3" aria-label="Candidate compatibility context">
-      <h3 className="text-sm font-semibold">Candidate compatibility context</h3>
-      <p className="text-muted-foreground text-xs leading-relaxed">
+      <h3 className="text-[13px] font-medium">Candidate compatibility context</h3>
+      <p className="text-muted-foreground text-[13px] leading-relaxed">
         These are recorded candidate facts. The evidence results below assess quoted requirements
         and explicit constraints. Dimensions without a structured comparison remain not evaluated.
       </p>
@@ -43,7 +43,7 @@ export function CandidateCompatibility({ candidate }: { candidate?: Candidate })
                 {label}
               </td>
               <td data-label="Candidate fact">{value || 'Unknown'}</td>
-              <td data-label="Comparison" className="text-muted-foreground text-xs">
+              <td data-label="Comparison" className="text-muted-foreground text-[13px]">
                 Not evaluated
               </td>
             </tr>

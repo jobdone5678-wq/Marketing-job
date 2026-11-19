@@ -19,7 +19,7 @@ import {
   User,
   Briefcase,
   Check,
-  Sparkles,
+  Wand2,
   MapPin,
   Globe,
   HelpCircle,
@@ -517,7 +517,7 @@ export function CandidateForm({
       {/* Back button */}
       <div>
         <Link
-          className="text-muted-foreground hover:text-foreground group inline-flex items-center gap-1.5 text-xs font-medium transition-colors"
+          className="text-muted-foreground hover:text-foreground group inline-flex items-center gap-1.5 text-[13px] font-medium transition-colors"
           href={backUrl}
         >
           <ArrowLeft className="size-3.5 transition-transform group-hover:-translate-x-0.5" />
@@ -528,16 +528,16 @@ export function CandidateForm({
       {/* Header */}
       <div className="border-border/70 flex flex-col justify-between gap-3 border-b pb-2 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-foreground text-2xl font-bold tracking-tight">
+          <h1 className="text-foreground text-[24px] font-medium tracking-tight">
             {id ? 'Edit Profile & Resume Details' : 'Upload Resume & Complete Profile'}
           </h1>
-          <p className="text-muted-foreground mt-0.5 text-xs sm:text-sm">
+          <p className="text-muted-foreground mt-0.5 text-[13px] sm:text-[13px]">
             Fill in your manual details (LinkedIn, Location, Gender, Work Authorization, Veteran
             Status). Autofill uses these saved details for all job applications.
           </p>
         </div>
         {id && (
-          <span className="text-muted-foreground self-start font-mono text-xs sm:self-center">
+          <span className="text-muted-foreground self-start font-mono text-[13px] sm:self-center">
             ID: {id.slice(0, 8)}…
           </span>
         )}
@@ -545,7 +545,7 @@ export function CandidateForm({
 
       {/* Legacy unconfirmed warning if applicable */}
       {initialCandidate?.provenance_status === 'legacy_unconfirmed' && (
-        <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 text-xs text-amber-800 dark:text-amber-300">
+        <div className="flex items-start gap-2.5 rounded-[12px] border border-amber-500/20 bg-amber-500/10 p-4 text-[13px] text-amber-700 dark:text-amber-400">
           <AlertCircle className="mt-0.5 size-4 shrink-0" />
           <span>
             Imported details need verification. Confirm mandatory fields (LinkedIn, Location) and
@@ -555,9 +555,9 @@ export function CandidateForm({
       )}
 
       {/* Resume Upload & Review Component */}
-      <div className="border-border/80 bg-card rounded-2xl border p-5 shadow-xs">
+      <div className="border-border/80 bg-card rounded-[16px] border p-5">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+          <h2 className="text-muted-foreground text-[13px] font-medium">
             Upload Source Resume
           </h2>
           <span className="text-muted-foreground text-[11px]">PDF or DOCX supported</span>
@@ -566,8 +566,8 @@ export function CandidateForm({
       </div>
 
       {changes.length > 0 && (
-        <div className="border-primary/25 bg-primary/5 text-primary flex items-start gap-2 rounded-xl border p-4 text-xs">
-          <Sparkles className="mt-0.5 size-4 shrink-0" />
+        <div className="border-primary/25 bg-primary/5 text-primary flex items-start gap-2 rounded-[12px] border p-4 text-[13px]">
+          <Wand2 className="mt-0.5 size-4 shrink-0" />
           <span>
             Resume parsed! Extracted fields: {changes.map((k) => k.replaceAll('_', ' ')).join(', ')}
             . Review and complete missing manual fields below.
@@ -580,10 +580,10 @@ export function CandidateForm({
         <section
           role="status"
           aria-label="Duplicate contact warning"
-          className="space-y-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-900 dark:text-amber-200"
+          className="space-y-1.5 rounded-[12px] border border-amber-500/30 bg-amber-500/10 p-4 text-[13px] text-amber-900 dark:text-amber-200"
         >
-          <h3 className="flex items-center gap-1.5 text-sm font-semibold">
-            <AlertCircle className="size-4 text-amber-600 dark:text-amber-400" />
+          <h3 className="flex items-center gap-1.5 text-[13px] font-medium">
+            <AlertCircle className="size-4 text-amber-700 dark:text-amber-400" />
             <span>Possible duplicate candidate contact</span>
           </h3>
           <p className="text-muted-foreground">
@@ -594,7 +594,7 @@ export function CandidateForm({
             {possibleDuplicates.map(({ candidate, contacts }) => (
               <li key={candidate.id}>
                 <Link
-                  className="hover:text-foreground font-semibold underline"
+                  className="hover:text-foreground font-medium underline"
                   href={`/dashboard/candidates/${candidate.id}/edit`}
                 >
                   {candidate.full_name}
@@ -607,7 +607,7 @@ export function CandidateForm({
       )}
 
       {contactCheckError && (email || phone) && (
-        <p role="status" className="text-muted-foreground text-xs">
+        <p role="status" className="text-muted-foreground text-[13px]">
           {contactCheckError}
         </p>
       )}
@@ -621,10 +621,10 @@ export function CandidateForm({
         className="space-y-6"
       >
         {/* Section 1: Contact & Mandatory Information */}
-        <div className="border-border/80 bg-card space-y-4 rounded-2xl border p-5 shadow-xs sm:p-6">
+        <div className="border-border/80 bg-card space-y-4 rounded-[16px] border p-5 sm:p-6">
           <div className="border-border/60 flex flex-wrap items-center justify-between gap-2 border-b pb-2">
             <div>
-              <h2 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+              <h2 className="text-muted-foreground text-[13px] font-medium">
                 Contact & Mandatory Location / LinkedIn
               </h2>
               <p className="text-muted-foreground mt-0.5 text-[11px]">
@@ -636,12 +636,12 @@ export function CandidateForm({
 
           <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
             {/* Full Name */}
-            <label className="text-foreground space-y-1 text-xs font-medium">
+            <label className="text-foreground space-y-1 text-[13px] font-medium">
               <span className="flex items-center gap-1.5">
                 Full Name <span className="text-destructive">*</span>
                 {extracted.includes('full_name') && (
-                  <span className="border-primary/25 bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium">
-                    <Sparkles className="size-2.5" /> From resume
+                  <span className="border-primary/25 bg-primary/10 text-primary inline-flex items-center gap-1 rounded-[6px] border px-1.5 py-0.5 text-[11px] font-medium">
+                    <Wand2 className="size-2.5" /> From resume
                   </span>
                 )}
               </span>
@@ -651,17 +651,17 @@ export function CandidateForm({
                 value={typeof fields.full_name === 'string' ? fields.full_name : ''}
                 onChange={(e) => setField('full_name', e.target.value || null)}
                 placeholder="e.g. Jane Doe"
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </label>
 
             {/* Email */}
-            <label className="text-foreground space-y-1 text-xs font-medium">
+            <label className="text-foreground space-y-1 text-[13px] font-medium">
               <span className="flex items-center gap-1.5">
                 Email Address
                 {extracted.includes('email') && (
-                  <span className="border-primary/25 bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium">
-                    <Sparkles className="size-2.5" /> From resume
+                  <span className="border-primary/25 bg-primary/10 text-primary inline-flex items-center gap-1 rounded-[6px] border px-1.5 py-0.5 text-[11px] font-medium">
+                    <Wand2 className="size-2.5" /> From resume
                   </span>
                 )}
               </span>
@@ -671,17 +671,17 @@ export function CandidateForm({
                 value={typeof fields.email === 'string' ? fields.email : ''}
                 onChange={(e) => setField('email', e.target.value || null)}
                 placeholder="candidate@example.com"
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </label>
 
             {/* Phone */}
-            <label className="text-foreground space-y-1 text-xs font-medium">
+            <label className="text-foreground space-y-1 text-[13px] font-medium">
               <span className="flex items-center gap-1.5">
                 Phone Number
                 {extracted.includes('phone') && (
-                  <span className="border-primary/25 bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium">
-                    <Sparkles className="size-2.5" /> From resume
+                  <span className="border-primary/25 bg-primary/10 text-primary inline-flex items-center gap-1 rounded-[6px] border px-1.5 py-0.5 text-[11px] font-medium">
+                    <Wand2 className="size-2.5" /> From resume
                   </span>
                 )}
               </span>
@@ -691,20 +691,20 @@ export function CandidateForm({
                 value={typeof fields.phone === 'string' ? fields.phone : ''}
                 onChange={(e) => setField('phone', e.target.value || null)}
                 placeholder="e.g. 555-123-4567"
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </label>
 
             {/* LinkedIn URL - MANDATORY */}
-            <label className="text-foreground space-y-1 text-xs font-semibold sm:col-span-2 lg:col-span-3">
+            <label className="text-foreground space-y-1 text-[13px] font-medium sm:col-span-2 lg:col-span-3">
               <span className="flex items-center justify-between">
                 <span className="text-primary flex items-center gap-1.5">
                   <Globe className="size-3.5" />
                   LinkedIn Profile URL <span className="text-destructive">* (Mandatory)</span>
                 </span>
                 {extracted.includes('linkedin_url') && (
-                  <span className="border-primary/25 bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium">
-                    <Sparkles className="size-2.5" /> From resume
+                  <span className="border-primary/25 bg-primary/10 text-primary inline-flex items-center gap-1 rounded-[6px] border px-1.5 py-0.5 text-[11px] font-medium">
+                    <Wand2 className="size-2.5" /> From resume
                   </span>
                 )}
               </span>
@@ -715,7 +715,7 @@ export function CandidateForm({
                 value={typeof fields.linkedin_url === 'string' ? fields.linkedin_url : ''}
                 onChange={(e) => setField('linkedin_url', e.target.value || null)}
                 placeholder="https://www.linkedin.com/in/username"
-                className="border-primary/40 focus-visible:border-primary focus-visible:ring-primary/20 h-9 text-xs"
+                className="border-primary/40 focus-visible:border-primary focus-visible:ring-primary/20 h-9 text-[13px]"
               />
               <p className="text-muted-foreground text-[11px] font-normal">
                 Job portals (Greenhouse, Lever, Workday) require LinkedIn. Autofill automatically
@@ -724,13 +724,13 @@ export function CandidateForm({
             </label>
 
             {/* City - MANDATORY */}
-            <label className="text-foreground space-y-1 text-xs font-semibold">
+            <label className="text-foreground space-y-1 text-[13px] font-medium">
               <span className="text-primary flex items-center gap-1.5">
                 <MapPin className="size-3.5" />
                 Current City <span className="text-destructive">* (Mandatory)</span>
                 {extracted.includes('current_city') && (
-                  <span className="border-primary/25 bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium">
-                    <Sparkles className="size-2.5" /> From resume
+                  <span className="border-primary/25 bg-primary/10 text-primary inline-flex items-center gap-1 rounded-[6px] border px-1.5 py-0.5 text-[11px] font-medium">
+                    <Wand2 className="size-2.5" /> From resume
                   </span>
                 )}
               </span>
@@ -740,17 +740,17 @@ export function CandidateForm({
                 value={typeof fields.current_city === 'string' ? fields.current_city : ''}
                 onChange={(e) => setField('current_city', e.target.value || null)}
                 placeholder="e.g. Austin, New York, Seattle"
-                className="border-primary/40 h-9 text-xs"
+                className="border-primary/40 h-9 text-[13px]"
               />
             </label>
 
             {/* State */}
-            <label className="text-foreground space-y-1 text-xs font-medium">
+            <label className="text-foreground space-y-1 text-[13px] font-medium">
               <span className="flex items-center gap-1.5">
                 Current State / Province
                 {extracted.includes('current_state') && (
-                  <span className="border-primary/25 bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium">
-                    <Sparkles className="size-2.5" /> From resume
+                  <span className="border-primary/25 bg-primary/10 text-primary inline-flex items-center gap-1 rounded-[6px] border px-1.5 py-0.5 text-[11px] font-medium">
+                    <Wand2 className="size-2.5" /> From resume
                   </span>
                 )}
               </span>
@@ -759,17 +759,17 @@ export function CandidateForm({
                 value={typeof fields.current_state === 'string' ? fields.current_state : ''}
                 onChange={(e) => setField('current_state', e.target.value || null)}
                 placeholder="e.g. TX, CA, WA"
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </label>
 
             {/* Street Address */}
-            <label className="text-muted-foreground space-y-1 text-xs font-medium">
+            <label className="text-muted-foreground space-y-1 text-[13px] font-medium">
               <span className="flex items-center gap-1.5">
                 Full Street Address
                 {extracted.includes('full_address') && (
-                  <span className="border-primary/25 bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium">
-                    <Sparkles className="size-2.5" /> From resume
+                  <span className="border-primary/25 bg-primary/10 text-primary inline-flex items-center gap-1 rounded-[6px] border px-1.5 py-0.5 text-[11px] font-medium">
+                    <Wand2 className="size-2.5" /> From resume
                   </span>
                 )}
               </span>
@@ -778,16 +778,16 @@ export function CandidateForm({
                 value={typeof fields.full_address === 'string' ? fields.full_address : ''}
                 onChange={(e) => setField('full_address', e.target.value || null)}
                 placeholder="e.g. 123 Main St, Apt 4B"
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </label>
           </div>
         </div>
 
         {/* Section 2: Demographics & Common Job Portal Questions (Autofill) */}
-        <div className="border-border/80 bg-card space-y-4 rounded-2xl border p-5 shadow-xs sm:p-6">
+        <div className="border-border/80 bg-card space-y-4 rounded-[16px] border p-5 sm:p-6">
           <div className="border-border/60 border-b pb-2">
-            <h2 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+            <h2 className="text-muted-foreground text-[13px] font-medium">
               Demographics & Common Job Portal Questions
             </h2>
             <p className="text-muted-foreground mt-0.5 text-[11px]">
@@ -800,12 +800,12 @@ export function CandidateForm({
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
             {/* Gender */}
             <div className="space-y-1.5">
-              <label className="text-foreground block text-xs font-medium">Gender Identity</label>
+              <label className="text-foreground block text-[13px] font-medium">Gender Identity</label>
               <select
                 aria-label="Gender"
                 value={typeof fields.gender === 'string' ? fields.gender : ''}
                 onChange={(e) => setField('gender', e.target.value || null)}
-                className="border-border/70 bg-background text-foreground focus-visible:ring-primary/20 focus-visible:border-primary h-9.5 w-full cursor-pointer rounded-xl border px-3 py-1.5 text-xs shadow-2xs focus-visible:ring-2 focus-visible:outline-none"
+                className="border-border/70 bg-background text-foreground focus-visible:ring-primary/20 focus-visible:border-primary h-9.5 w-full cursor-pointer rounded-[12px] border px-3 py-1.5 text-[13px] focus-visible:ring-2 focus-visible:outline-none"
               >
                 {GENDER_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -817,7 +817,7 @@ export function CandidateForm({
 
             {/* Race / Ethnicity */}
             <div className="space-y-1.5">
-              <label className="text-foreground block text-xs font-medium">Race / Ethnicity</label>
+              <label className="text-foreground block text-[13px] font-medium">Race / Ethnicity</label>
               <select
                 aria-label="Race / Ethnicity"
                 value={
@@ -831,7 +831,7 @@ export function CandidateForm({
                   setField('race', e.target.value || null);
                   setField('race_ethnicity', e.target.value || null);
                 }}
-                className="border-border/70 bg-background text-foreground focus-visible:ring-primary/20 focus-visible:border-primary h-9.5 w-full cursor-pointer rounded-xl border px-3 py-1.5 text-xs shadow-2xs focus-visible:ring-2 focus-visible:outline-none"
+                className="border-border/70 bg-background text-foreground focus-visible:ring-primary/20 focus-visible:border-primary h-9.5 w-full cursor-pointer rounded-[12px] border px-3 py-1.5 text-[13px] focus-visible:ring-2 focus-visible:outline-none"
               >
                 {RACE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -843,7 +843,7 @@ export function CandidateForm({
 
             {/* Veteran Details */}
             <div className="space-y-1.5">
-              <label className="text-foreground block text-xs font-medium">
+              <label className="text-foreground block text-[13px] font-medium">
                 Veteran Status (Military)
               </label>
               <select
@@ -859,7 +859,7 @@ export function CandidateForm({
                   setField('veteran_status', e.target.value || null);
                   setField('veteran', e.target.value || null);
                 }}
-                className="border-border/70 bg-background text-foreground focus-visible:ring-primary/20 focus-visible:border-primary h-9.5 w-full cursor-pointer rounded-xl border px-3 py-1.5 text-xs shadow-2xs focus-visible:ring-2 focus-visible:outline-none"
+                className="border-border/70 bg-background text-foreground focus-visible:ring-primary/20 focus-visible:border-primary h-9.5 w-full cursor-pointer rounded-[12px] border px-3 py-1.5 text-[13px] focus-visible:ring-2 focus-visible:outline-none"
               >
                 {VETERAN_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -871,7 +871,7 @@ export function CandidateForm({
 
             {/* Disability Details */}
             <div className="space-y-1.5">
-              <label className="text-foreground block text-xs font-medium">Disability Status</label>
+              <label className="text-foreground block text-[13px] font-medium">Disability Status</label>
               <select
                 aria-label="Disability Status"
                 value={
@@ -885,7 +885,7 @@ export function CandidateForm({
                   setField('disability_status', e.target.value || null);
                   setField('disability', e.target.value || null);
                 }}
-                className="border-border/70 bg-background text-foreground focus-visible:ring-primary/20 focus-visible:border-primary h-9.5 w-full cursor-pointer rounded-xl border px-3 py-1.5 text-xs shadow-2xs focus-visible:ring-2 focus-visible:outline-none"
+                className="border-border/70 bg-background text-foreground focus-visible:ring-primary/20 focus-visible:border-primary h-9.5 w-full cursor-pointer rounded-[12px] border px-3 py-1.5 text-[13px] focus-visible:ring-2 focus-visible:outline-none"
               >
                 {DISABILITY_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -898,9 +898,9 @@ export function CandidateForm({
         </div>
 
         {/* Section 3: Work Authorization & Visa Details */}
-        <div className="border-border/80 bg-card space-y-4 rounded-2xl border p-5 shadow-xs sm:p-6">
+        <div className="border-border/80 bg-card space-y-4 rounded-[16px] border p-5 sm:p-6">
           <div className="border-border/60 border-b pb-2">
-            <h2 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+            <h2 className="text-muted-foreground text-[13px] font-medium">
               Work Authorization & Visa Details
             </h2>
             <p className="text-muted-foreground mt-0.5 text-[11px]">
@@ -912,7 +912,7 @@ export function CandidateForm({
           <div className="grid gap-4 sm:grid-cols-2">
             {/* Visa / Work Auth dropdown */}
             <div className="space-y-1.5 sm:col-span-2">
-              <label className="text-foreground block text-xs font-medium">
+              <label className="text-foreground block text-[13px] font-medium">
                 Work Authorization / Visa Status
               </label>
               <select
@@ -940,7 +940,7 @@ export function CandidateForm({
                     setField('authorized_in_usa', true);
                   }
                 }}
-                className="border-border/70 bg-background text-foreground focus-visible:ring-primary/20 focus-visible:border-primary h-9.5 w-full cursor-pointer rounded-xl border px-3 py-1.5 text-xs shadow-2xs focus-visible:ring-2 focus-visible:outline-none"
+                className="border-border/70 bg-background text-foreground focus-visible:ring-primary/20 focus-visible:border-primary h-9.5 w-full cursor-pointer rounded-[12px] border px-3 py-1.5 text-[13px] focus-visible:ring-2 focus-visible:outline-none"
               >
                 {VISA_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -956,10 +956,10 @@ export function CandidateForm({
               ['need_sponsorship_future', 'Needs sponsorship in the future'],
               ['open_to_relocation', 'Open to relocation'],
             ] as const).map(([field, label]) => (
-              <label key={field} className="text-foreground block text-xs font-medium">
+              <label key={field} className="text-foreground block text-[13px] font-medium">
                 {label}
                 <select
-                  className="border-border/60 bg-background mt-1 h-9 w-full rounded-lg border px-2"
+                  className="border-border/60 bg-background mt-1 h-9 w-full rounded-[10px] border px-2"
                   value={typeof fields[field] === 'boolean' ? String(fields[field]) : ''}
                   onChange={(event) => {
                     const value = event.target.value;
@@ -976,48 +976,48 @@ export function CandidateForm({
         </div>
 
         {/* Section 4: Professional & Career Details */}
-        <div className="border-border/80 bg-card space-y-4 rounded-2xl border p-5 shadow-xs sm:p-6">
+        <div className="border-border/80 bg-card space-y-4 rounded-[16px] border p-5 sm:p-6">
           <div className="border-border/60 border-b pb-2">
-            <h2 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+            <h2 className="text-muted-foreground text-[13px] font-medium">
               Professional & Skills Information
             </h2>
           </div>
 
           <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
-            <label className="text-foreground space-y-1 text-xs font-medium">
+            <label className="text-foreground space-y-1 text-[13px] font-medium">
               <span>Current Role / Job Title</span>
               <Input
                 aria-label="Current Role"
                 value={typeof fields.current_job_title === 'string' ? fields.current_job_title : ''}
                 onChange={(e) => setField('current_job_title', e.target.value || null)}
                 placeholder="e.g. Senior Software Engineer"
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </label>
 
-            <label className="text-foreground space-y-1 text-xs font-medium">
+            <label className="text-foreground space-y-1 text-[13px] font-medium">
               <span>Current Employer</span>
               <Input
                 aria-label="Current Employer"
                 value={typeof fields.current_employer === 'string' ? fields.current_employer : ''}
                 onChange={(e) => setField('current_employer', e.target.value || null)}
                 placeholder="e.g. Acme Corporation"
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </label>
 
-            <label className="text-foreground space-y-1 text-xs font-medium">
+            <label className="text-foreground space-y-1 text-[13px] font-medium">
               <span>Target Role Titles</span>
               <Input
                 aria-label="Target Roles"
                 value={typeof fields.target_job_titles === 'string' ? fields.target_job_titles : ''}
                 onChange={(e) => setField('target_job_titles', e.target.value || null)}
                 placeholder="e.g. Full Stack Developer, Tech Lead"
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </label>
 
-            <label className="text-foreground space-y-1 text-xs font-medium">
+            <label className="text-foreground space-y-1 text-[13px] font-medium">
               <span>Total Experience (years)</span>
               <Input
                 aria-label="Total Experience"
@@ -1029,39 +1029,39 @@ export function CandidateForm({
                 }
                 onChange={(e) => setField('total_experience_years', e.target.value || null)}
                 placeholder="e.g. 5"
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </label>
 
-            <label className="text-foreground space-y-1 text-xs font-medium">
+            <label className="text-foreground space-y-1 text-[13px] font-medium">
               <span>Available to Join</span>
               <Input
                 aria-label="Available to Join"
                 value={typeof fields.available_to_join === 'string' ? fields.available_to_join : ''}
                 onChange={(e) => setField('available_to_join', e.target.value || null)}
                 placeholder="e.g. Immediately / 2 weeks"
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </label>
 
-            <label className="text-foreground space-y-1 text-xs font-medium">
+            <label className="text-foreground space-y-1 text-[13px] font-medium">
               <span>Expected Salary / Compensation</span>
               <Input
                 aria-label="Expected Salary"
                 value={typeof fields.expected_salary === 'string' ? fields.expected_salary : ''}
                 onChange={(e) => setField('expected_salary', e.target.value || null)}
                 placeholder="e.g. $120,000 / $65/hr"
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </label>
 
             {/* Primary Skills */}
-            <label className="text-foreground space-y-1 text-xs font-medium sm:col-span-2 lg:col-span-3">
+            <label className="text-foreground space-y-1 text-[13px] font-medium sm:col-span-2 lg:col-span-3">
               <span className="flex items-center gap-1.5">
                 Primary Skills (comma-separated)
                 {extracted.includes('primary_skills') && (
-                  <span className="border-primary/25 bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium">
-                    <Sparkles className="size-2.5" /> From resume
+                  <span className="border-primary/25 bg-primary/10 text-primary inline-flex items-center gap-1 rounded-[6px] border px-1.5 py-0.5 text-[11px] font-medium">
+                    <Wand2 className="size-2.5" /> From resume
                   </span>
                 )}
               </span>
@@ -1070,12 +1070,12 @@ export function CandidateForm({
                 value={typeof fields.primary_skills === 'string' ? fields.primary_skills : ''}
                 onChange={(e) => setField('primary_skills', e.target.value || null)}
                 placeholder="React, TypeScript, Next.js, Node.js, Python, PostgreSQL"
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </label>
 
             {/* Education Summary */}
-            <label className="text-foreground space-y-1 text-xs font-medium">
+            <label className="text-foreground space-y-1 text-[13px] font-medium">
               <span>Highest Qualification</span>
               <Input
                 aria-label="Highest Qualification"
@@ -1086,37 +1086,37 @@ export function CandidateForm({
                 }
                 onChange={(e) => setField('highest_qualification', e.target.value || null)}
                 placeholder="e.g. Bachelor's / Master's Degree"
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </label>
 
-            <label className="text-foreground space-y-1 text-xs font-medium">
+            <label className="text-foreground space-y-1 text-[13px] font-medium">
               <span>University / College</span>
               <Input
                 aria-label="University"
                 value={typeof fields.university_name === 'string' ? fields.university_name : ''}
                 onChange={(e) => setField('university_name', e.target.value || null)}
                 placeholder="e.g. University of Texas"
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </label>
 
-            <label className="text-foreground space-y-1 text-xs font-medium">
+            <label className="text-foreground space-y-1 text-[13px] font-medium">
               <span>Graduation Year</span>
               <Input
                 aria-label="Graduation Year"
                 value={typeof fields.graduation_year === 'string' ? fields.graduation_year : ''}
                 onChange={(e) => setField('graduation_year', e.target.value || null)}
                 placeholder="e.g. 2021"
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </label>
           </div>
         </div>
 
         {/* Work History Card */}
-        <div className="border-border/80 bg-card space-y-4 rounded-2xl border p-5 shadow-xs sm:p-6">
-          <h2 className="text-muted-foreground border-border/60 border-b pb-2 text-xs font-semibold tracking-wider uppercase">
+        <div className="border-border/80 bg-card space-y-4 rounded-[16px] border p-5 sm:p-6">
+          <h2 className="text-muted-foreground border-border/60 border-b pb-2 text-[13px] font-medium">
             Work Experience Timeline
           </h2>
           <CandidateHistoryEditor
@@ -1129,8 +1129,8 @@ export function CandidateForm({
         </div>
 
         {/* Education Card */}
-        <div className="border-border/80 bg-card space-y-4 rounded-2xl border p-5 shadow-xs sm:p-6">
-          <h2 className="text-muted-foreground border-border/60 border-b pb-2 text-xs font-semibold tracking-wider uppercase">
+        <div className="border-border/80 bg-card space-y-4 rounded-[16px] border p-5 sm:p-6">
+          <h2 className="text-muted-foreground border-border/60 border-b pb-2 text-[13px] font-medium">
             Education Credentials
           </h2>
           <CandidateHistoryEditor
@@ -1144,7 +1144,7 @@ export function CandidateForm({
 
         {/* Error message */}
         {error && (
-          <div className="border-destructive/30 bg-destructive/10 text-destructive flex items-center gap-2 rounded-xl border p-4 text-xs font-medium">
+          <div className="border-destructive/30 bg-destructive/10 text-destructive flex items-center gap-2 rounded-[12px] border p-4 text-[13px] font-medium">
             <AlertCircle className="size-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -1152,7 +1152,7 @@ export function CandidateForm({
 
         {/* Footer save bar */}
         <div className="flex flex-col items-center justify-between gap-3 pt-2 sm:flex-row">
-          <p className="text-muted-foreground text-xs">
+          <p className="text-muted-foreground text-[13px]">
             Saved facts are directly synchronized to the browser extension for instant job portal
             autofill.
           </p>
@@ -1170,7 +1170,7 @@ export function CandidateForm({
               type="submit"
               size="sm"
               disabled={busy}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer gap-1.5 font-semibold shadow-xs"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer gap-1.5 font-medium"
             >
               {busy ? 'Saving & Syncing Details…' : 'Confirm & Save Profile'}
             </Button>

@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   CheckCircle2,
   AlertCircle,
-  Sparkles,
+  Wand2,
   ArrowUpRight,
   Save,
   Phone,
@@ -126,9 +126,9 @@ export default function SettingsPage() {
       {message && (
         <div
           role="status"
-          className="animate-fade-in flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-xs font-semibold text-emerald-800 dark:text-emerald-300"
+          className="animate-fade-in flex items-center gap-2 rounded-[12px] border border-primary/20 bg-primary/10 p-3.5 text-[13px] font-medium text-primary"
         >
-          <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+          <CheckCircle2 className="size-4 text-primary" />
           <span>{message}</span>
         </div>
       )}
@@ -152,7 +152,7 @@ export default function SettingsPage() {
 
             {/* Account Settings Tab */}
             <TabsContent value="account" className="space-y-6 pt-2">
-              <div className="border-border/80 bg-card rounded-2xl border p-6 shadow-xs">
+              <div className="border-border/80 bg-card rounded-[16px] border p-6">
                 <form
                   className="space-y-5"
                   onSubmit={(event) => {
@@ -162,8 +162,8 @@ export default function SettingsPage() {
                 >
                   <div className="border-border/60 flex flex-col justify-between gap-2 border-b pb-3 sm:flex-row sm:items-center">
                     <div>
-                      <h2 className="text-foreground text-sm font-bold">Profile & Identity</h2>
-                      <p className="text-muted-foreground mt-0.5 text-xs">
+                      <h2 className="text-foreground text-[13px] font-medium">Profile & Identity</h2>
+                      <p className="text-muted-foreground mt-0.5 text-[13px]">
                         Your identity displayed across candidate matches and application receipts
                       </p>
                     </div>
@@ -179,7 +179,7 @@ export default function SettingsPage() {
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-1.5">
-                      <label className="text-foreground flex items-center gap-1.5 text-xs font-semibold">
+                      <label className="text-foreground flex items-center gap-1.5 text-[13px] font-medium">
                         <User className="text-muted-foreground size-3.5" />
                         <span>Full Name</span>
                       </label>
@@ -189,12 +189,12 @@ export default function SettingsPage() {
                         onChange={(event) =>
                           setProfile({ ...profile, full_name: event.target.value })
                         }
-                        className="h-9 text-xs"
+                        className="h-9 text-[13px]"
                       />
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-foreground flex items-center gap-1.5 text-xs font-semibold">
+                      <label className="text-foreground flex items-center gap-1.5 text-[13px] font-medium">
                         <Phone className="text-muted-foreground size-3.5" />
                         <span>Contact Phone</span>
                       </label>
@@ -203,7 +203,7 @@ export default function SettingsPage() {
                         autoComplete="tel"
                         value={profile.phone || ''}
                         onChange={(event) => setProfile({ ...profile, phone: event.target.value })}
-                        className="h-9 text-xs"
+                        className="h-9 text-[13px]"
                       />
                     </div>
                   </div>
@@ -211,7 +211,7 @@ export default function SettingsPage() {
                   <div className="border-border/60 flex items-center justify-between border-t pt-2">
                     <Link
                       href="/dashboard/integrations"
-                      className="text-primary flex items-center gap-1 text-xs font-semibold hover:underline"
+                      className="text-primary flex items-center gap-1 text-[13px] font-medium hover:underline"
                     >
                       <span>View authorized integrations</span>
                       <ArrowUpRight className="size-3.5" />
@@ -233,34 +233,34 @@ export default function SettingsPage() {
 
             {/* AI Engine Tab */}
             <TabsContent value="ai" className="space-y-6 pt-2">
-              <div className="border-border/80 bg-card space-y-5 rounded-2xl border p-6 shadow-xs">
+              <div className="border-border/80 bg-card space-y-5 rounded-[16px] border p-6">
                 <div className="border-border/60 flex items-center justify-between border-b pb-3">
                   <div>
-                    <h2 className="text-foreground text-sm font-bold">
+                    <h2 className="text-foreground text-[13px] font-medium">
                       AI Application & Skills Extraction Engine
                     </h2>
-                    <p className="text-muted-foreground mt-0.5 text-xs">
+                    <p className="text-muted-foreground mt-0.5 text-[13px]">
                       Model weights powering resume parsing and ATS question autofill
                     </p>
                   </div>
-                  <span className={`status-chip ${ai ? 'status-positive' : 'status-warning'}`}>
+                  <span className={`status-chip ${ai ?'status-positive' : 'status-warning'}`}>
                     {ai ? 'Configured & Active' : 'Unconfigured'}
                   </span>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="border-border/60 bg-muted/20 space-y-1 rounded-xl border p-4">
-                    <span className="text-muted-foreground text-xs font-medium">Engine Status</span>
-                    <p className="text-foreground text-sm font-bold">
+                  <div className="border-border/60 bg-muted/20 space-y-1 rounded-[12px] border p-4">
+                    <span className="text-muted-foreground text-[13px] font-medium">Engine Status</span>
+                    <p className="text-foreground text-[13px] font-medium">
                       {ai ? 'Online (API Key Authenticated)' : 'Missing Configuration'}
                     </p>
                   </div>
 
-                  <div className="border-border/60 bg-muted/20 space-y-1 rounded-xl border p-4">
-                    <span className="text-muted-foreground text-xs font-medium">
+                  <div className="border-border/60 bg-muted/20 space-y-1 rounded-[12px] border p-4">
+                    <span className="text-muted-foreground text-[13px] font-medium">
                       Configured Model
                     </span>
-                    <p className="text-primary font-mono text-xs font-bold">
+                    <p className="text-primary font-mono text-[13px] font-medium">
                       {model || 'gpt-4o / gpt-4o-mini (Default)'}
                     </p>
                   </div>
@@ -270,7 +270,7 @@ export default function SettingsPage() {
                   <WorkspaceError key={index} message={issue} />
                 ))}
 
-                <p className="text-muted-foreground pt-1 text-xs leading-relaxed">
+                <p className="text-muted-foreground pt-1 text-[13px] leading-relaxed">
                   Worker health is monitored continuously. Separate processing workers require
                   independent API tokens for background OCR and email parsing.
                 </p>
@@ -278,7 +278,7 @@ export default function SettingsPage() {
                 <div className="border-border/60 border-t pt-2">
                   <Link
                     href="/dashboard/jobs"
-                    className="text-primary inline-flex items-center gap-1.5 text-xs font-semibold hover:underline"
+                    className="text-primary inline-flex items-center gap-1.5 text-[13px] font-medium hover:underline"
                   >
                     <span>Manage Public Job Sources & Crawler</span>
                     <ArrowUpRight className="size-3.5" />

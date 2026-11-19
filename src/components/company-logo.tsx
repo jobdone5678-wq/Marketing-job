@@ -114,14 +114,11 @@ const BRAND_LOGOS: Record<string, (className: string) => React.ReactNode> = {
   ),
 };
 
-// Subtle, professional neutral avatars for fallbacks (Jobright inspired)
+// Monograms sit in the neutral ramp. A logo should read as a label, not as a colour code.
 const MONOGRAM_PALETTES = [
-  'bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200 border-neutral-200 dark:border-neutral-700',
-  'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700',
-  'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700',
-  'bg-blue-50 text-blue-900 dark:bg-blue-950/60 dark:text-blue-200 border-blue-200 dark:border-blue-800',
-  'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800',
-  'bg-violet-50 text-violet-900 dark:bg-violet-950/60 dark:text-violet-200 border-violet-200 dark:border-violet-800',
+  'bg-surface-sunken text-foreground border-border',
+  'bg-secondary text-secondary-foreground border-border',
+  'bg-accent text-accent-foreground border-border',
 ];
 
 function getCompanyHash(str: string): number {
@@ -155,11 +152,11 @@ interface CompanyLogoProps {
 }
 
 const SIZE_MAP = {
-  xs: { box: 'size-6 rounded-md text-[10px]', icon: 'size-3.5' },
-  sm: { box: 'size-8 rounded-lg text-xs', icon: 'size-4.5' },
-  md: { box: 'size-10 rounded-xl text-xs font-bold', icon: 'size-5.5' },
-  lg: { box: 'size-12 rounded-xl text-sm font-bold', icon: 'size-6.5' },
-  xl: { box: 'size-16 rounded-2xl text-base font-bold', icon: 'size-9' },
+  xs: { box: 'size-6 rounded-[6px] text-[11px]', icon: 'size-3.5' },
+  sm: { box: 'size-8 rounded-[8px] text-[11px]', icon: 'size-4' },
+  md: { box: 'size-10 rounded-[10px] text-[11px] font-medium', icon: 'size-5' },
+  lg: { box: 'size-12 rounded-[12px] text-[13px] font-medium', icon: 'size-6.5' },
+  xl: { box: 'size-16 rounded-[16px] text-[15px] font-medium', icon: 'size-9' },
 };
 
 export function CompanyLogo({
@@ -180,7 +177,7 @@ export function CompanyLogo({
   if (brandSvg) {
     return (
       <div
-        className={`relative flex shrink-0 items-center justify-center overflow-hidden border border-neutral-200/80 bg-white shadow-2xs dark:border-neutral-800 dark:bg-neutral-900 ${sizeConfig.box} ${className}`}
+        className={`relative flex shrink-0 items-center justify-center overflow-hidden border-border border bg-white dark:bg-neutral-900 ${sizeConfig.box} ${className}`}
         title={company}
       >
         {brandSvg(sizeConfig.icon)}
@@ -201,7 +198,7 @@ export function CompanyLogo({
   if (imgError) {
     return (
       <div
-        className={`relative flex shrink-0 items-center justify-center border font-bold tracking-tight select-none ${palette} ${sizeConfig.box} ${className}`}
+        className={`relative flex shrink-0 items-center justify-center border font-medium tracking-tight select-none ${palette} ${sizeConfig.box} ${className}`}
         title={company}
       >
         <span>{initials}</span>
@@ -211,12 +208,12 @@ export function CompanyLogo({
 
   return (
     <div
-      className={`relative flex shrink-0 items-center justify-center overflow-hidden border border-neutral-200/80 bg-white shadow-2xs dark:border-neutral-800 dark:bg-neutral-900 ${sizeConfig.box} ${className}`}
+      className={`relative flex shrink-0 items-center justify-center overflow-hidden border-border border bg-white dark:bg-neutral-900 ${sizeConfig.box} ${className}`}
       title={company}
     >
       {!loaded && (
         <div
-          className={`absolute inset-0 flex items-center justify-center border font-bold ${palette} select-none`}
+          className={`absolute inset-0 flex items-center justify-center border font-medium ${palette} select-none`}
         >
           <span>{initials}</span>
         </div>
@@ -226,8 +223,8 @@ export function CompanyLogo({
       <img
         src={remoteLogoUrl}
         alt={`${company} logo`}
-        className={`object-contain transition-opacity duration-200 ${sizeConfig.icon} ${
-          loaded ? 'opacity-100' : 'opacity-0'
+        className={`object-contain transition-opacity duration-150 ${sizeConfig.icon} ${
+ loaded ?'opacity-100' : 'opacity-0'
         }`}
         loading="lazy"
         onLoad={() => setLoaded(true)}

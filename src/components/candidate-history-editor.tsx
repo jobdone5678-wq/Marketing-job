@@ -18,14 +18,14 @@ export function CandidateHistoryEditor({
   const rows = Array.isArray(value) ? (value as Record<string, unknown>[]) : [];
   return (
     <fieldset className="space-y-3 rounded border p-4">
-      <legend className="font-semibold">{label}</legend>
+      <legend className="font-medium">{label}</legend>
       {!rows.length && (
-        <p className="text-muted-foreground text-sm">No reviewed history recorded.</p>
+        <p className="text-muted-foreground text-[13px]">No reviewed history recorded.</p>
       )}
       {rows.map((row, index) => (
         <div key={index} className="grid gap-3 border-b pb-4 md:grid-cols-3">
           {columns.map((column) => (
-            <label key={column} className="text-sm capitalize">
+            <label key={column} className="text-[13px] capitalize">
               {column}
               <Input
                 aria-label={`${label} ${index + 1} ${column}`}
@@ -41,7 +41,7 @@ export function CandidateHistoryEditor({
             </label>
           ))}
           {typeof row.evidence === 'string' && row.evidence && (
-            <p className="text-sm md:col-span-3">Resume evidence: {row.evidence}</p>
+            <p className="text-[13px] md:col-span-3">Resume evidence: {row.evidence}</p>
           )}
           <Button
             type="button"

@@ -131,29 +131,29 @@ export function SubmissionStatusDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="text-[13px]">
               Quick Pipeline Transition
             </Badge>
           </div>
-          <DialogTitle className="text-lg font-bold">Update Submission Stage</DialogTitle>
-          <DialogDescription className="text-muted-foreground text-xs">
+          <DialogTitle className="text-[17px] font-medium">Update Submission Stage</DialogTitle>
+          <DialogDescription className="text-muted-foreground text-[13px]">
             {submission.company_name} — {submission.job_title}
             {submission.candidate?.full_name ? ` (${submission.candidate.full_name})` : ''}
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSave} className="space-y-4 py-2 text-xs">
+        <form onSubmit={handleSave} className="space-y-4 py-2 text-[13px]">
           <div className="space-y-1.5">
-            <Label htmlFor="quick-status" className="text-xs font-medium">
+            <Label htmlFor="quick-status" className="text-[13px] font-medium">
               New Status Stage
             </Label>
             <Select value={status} onValueChange={(v) => setStatus(v as SubmissionStatus)}>
-              <SelectTrigger id="quick-status" className="bg-background h-8 text-xs">
+              <SelectTrigger id="quick-status" className="bg-background h-8 text-[13px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {STATUS_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                  <SelectItem key={opt.value} value={opt.value} className="text-[13px]">
                     {opt.label}
                   </SelectItem>
                 ))}
@@ -162,7 +162,7 @@ export function SubmissionStatusDialog({
           </div>
 
           {isInterview && (
-            <div className="border-border/80 bg-muted/40 space-y-3 rounded-lg border p-3">
+            <div className="border-border/80 bg-muted/40 space-y-3 rounded-[10px] border p-3">
               <div className="text-foreground flex items-center gap-1.5 font-medium">
                 <CalendarIcon className="size-3.5" />
                 Interview Details
@@ -177,7 +177,7 @@ export function SubmissionStatusDialog({
                   type="datetime-local"
                   value={interviewTime}
                   onChange={(e) => setInterviewTime(e.target.value)}
-                  className="bg-background h-8 text-xs"
+                  className="bg-background h-8 text-[13px]"
                 />
               </div>
 
@@ -190,12 +190,12 @@ export function SubmissionStatusDialog({
                     value={interviewMode}
                     onValueChange={(val) => setInterviewMode(val ?? 'Zoom')}
                   >
-                    <SelectTrigger id="quick-mode" className="bg-background h-8 text-xs">
+                    <SelectTrigger id="quick-mode" className="bg-background h-8 text-[13px]">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {INTERVIEW_MODES.map((m) => (
-                        <SelectItem key={m} value={m} className="text-xs">
+                        <SelectItem key={m} value={m} className="text-[13px]">
                           {m}
                         </SelectItem>
                       ))}
@@ -212,7 +212,7 @@ export function SubmissionStatusDialog({
                     placeholder="https://zoom.us/..."
                     value={interviewMeetingLink}
                     onChange={(e) => setInterviewMeetingLink(e.target.value)}
-                    className="bg-background h-8 text-xs"
+                    className="bg-background h-8 text-[13px]"
                   />
                 </div>
               </div>
@@ -220,7 +220,7 @@ export function SubmissionStatusDialog({
           )}
 
           <div className="space-y-1.5">
-            <Label htmlFor="quick-notes" className="text-xs font-medium">
+            <Label htmlFor="quick-notes" className="text-[13px] font-medium">
               Update Notes / Recruiter Log
             </Label>
             <Textarea
@@ -229,7 +229,7 @@ export function SubmissionStatusDialog({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              className="bg-background text-xs"
+              className="bg-background text-[13px]"
             />
           </div>
 
@@ -239,7 +239,7 @@ export function SubmissionStatusDialog({
               variant="outline"
               size="sm"
               onClick={() => onOpenChange(false)}
-              className="cursor-pointer text-xs"
+              className="cursor-pointer text-[13px]"
             >
               Cancel
             </Button>
@@ -247,7 +247,7 @@ export function SubmissionStatusDialog({
               type="submit"
               size="sm"
               disabled={loading}
-              className="bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer text-xs shadow-xs"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer text-[13px]"
             >
               {loading ? 'Saving...' : 'Save Status'}
             </Button>

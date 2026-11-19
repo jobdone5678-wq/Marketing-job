@@ -14,7 +14,7 @@ import {
   AlertCircle,
   Briefcase,
   GraduationCap,
-  Sparkles,
+  Wand2,
   ShieldCheck,
   Send,
   FileCode,
@@ -60,12 +60,12 @@ function FactCard({
         : 'Not specified';
 
   return (
-    <div className="border-border/70 bg-card hover:border-border rounded-xl border p-3.5 shadow-xs transition-all">
-      <div className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
+    <div className="border-border/70 bg-card hover:border-border rounded-[12px] border p-3.5 transition-colors">
+      <div className="text-muted-foreground flex items-center gap-1.5 text-[13px] font-medium">
         {Icon && <Icon className="text-muted-foreground/70 size-3.5" />}
         <span>{label}</span>
       </div>
-      <p className="text-foreground mt-1.5 text-sm font-semibold tracking-tight break-words">
+      <p className="text-foreground mt-1.5 text-[13px] font-medium tracking-tight break-words">
         {displayVal}
       </p>
     </div>
@@ -145,7 +145,7 @@ export function CandidateProfileWorkspace({ candidateId }: { candidateId: string
       <div className="flex items-center justify-between">
         <Link
           href="/dashboard/candidates"
-          className="text-muted-foreground hover:text-foreground group inline-flex items-center gap-1.5 text-xs font-medium transition-colors"
+          className="text-muted-foreground hover:text-foreground group inline-flex items-center gap-1.5 text-[13px] font-medium transition-colors"
         >
           <ArrowLeft className="size-3.5 transition-transform group-hover:-translate-x-0.5" />
           <span>Back to candidates bench</span>
@@ -153,7 +153,7 @@ export function CandidateProfileWorkspace({ candidateId }: { candidateId: string
 
         {candidate && (
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground font-mono text-xs">
+            <span className="text-muted-foreground font-mono text-[13px]">
               v{candidate.version || 1}
             </span>
           </div>
@@ -181,39 +181,39 @@ export function CandidateProfileWorkspace({ candidateId }: { candidateId: string
         candidate && (
           <>
             {/* Candidate 360 Profile Hero Card */}
-            <div className="border-border/80 bg-card rounded-2xl border p-6 shadow-xs">
+            <div className="border-border/80 bg-card rounded-[16px] border p-6">
               <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
                 <div className="flex items-start gap-4">
-                  <div className="from-primary/20 via-primary/10 text-primary border-primary/25 flex size-14 shrink-0 items-center justify-center rounded-2xl border bg-gradient-to-br to-transparent text-xl font-bold shadow-2xs">
+                  <div className="bg-surface-sunken text-foreground border-border flex size-14 shrink-0 items-center justify-center rounded-[14px] border text-[17px] font-medium">
                     {initials}
                   </div>
                   <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-2.5">
-                      <h1 className="text-foreground text-2xl font-bold tracking-tight">
+                      <h1 className="text-foreground text-[24px] font-medium tracking-tight">
                         {candidate.full_name}
                       </h1>
                       <span
                         className={`status-chip ${
-                          candidate.provenance_status === 'confirmed'
+ candidate.provenance_status ==='confirmed'
                             ? 'status-positive'
                             : 'status-warning'
                         }`}
                       >
                         {candidate.provenance_status === 'confirmed' ? (
                           <>
-                            <ShieldCheck className="size-3 text-emerald-600 dark:text-emerald-400" />
+                            <ShieldCheck className="size-3 text-primary" />
                             <span>Confirmed Profile</span>
                           </>
                         ) : (
                           <>
-                            <AlertCircle className="size-3 text-amber-600 dark:text-amber-400" />
+                            <AlertCircle className="size-3 text-amber-700 dark:text-amber-400" />
                             <span>Unconfirmed Import</span>
                           </>
                         )}
                       </span>
                     </div>
 
-                    <p className="text-muted-foreground flex items-center gap-1.5 text-sm font-medium">
+                    <p className="text-muted-foreground flex items-center gap-1.5 text-[13px] font-medium">
                       <Briefcase className="size-3.5" />
                       <span>
                         {candidate.target_job_titles ||
@@ -222,22 +222,22 @@ export function CandidateProfileWorkspace({ candidateId }: { candidateId: string
                       </span>
                     </p>
 
-                    <div className="text-muted-foreground flex flex-wrap items-center gap-2 pt-1 text-xs">
-                      <span className="bg-muted/50 border-border/60 inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5">
+                    <div className="text-muted-foreground flex flex-wrap items-center gap-2 pt-1 text-[13px]">
+                      <span className="bg-muted/50 border-border/60 inline-flex items-center gap-1 rounded-[6px] border px-2.5 py-0.5">
                         <span
                           className={`size-1.5 rounded-full ${
-                            candidate.is_active_bench
-                              ? 'animate-pulse bg-emerald-500'
+ candidate.is_active_bench
+ ?' bg-primary'
                               : 'bg-muted-foreground/60'
                           }`}
                         />
                         {candidate.is_active_bench ? 'Active on bench' : 'Inactive'}
                       </span>
-                      <span className="bg-muted/50 border-border/60 inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5">
+                      <span className="bg-muted/50 border-border/60 inline-flex items-center gap-1 rounded-[6px] border px-2.5 py-0.5">
                         {candidate.visa_status || 'Visa unknown'}
                       </span>
                       {candidate.preferred_locations && (
-                        <span className="bg-muted/50 border-border/60 inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5">
+                        <span className="bg-muted/50 border-border/60 inline-flex items-center gap-1 rounded-[6px] border px-2.5 py-0.5">
                           <MapPin className="size-3" />
                           {candidate.preferred_locations}
                         </span>
@@ -262,7 +262,7 @@ export function CandidateProfileWorkspace({ candidateId }: { candidateId: string
                     render={<Link href={`/dashboard/jobs?candidateId=${candidate.id}`} />}
                     className="cursor-pointer gap-1.5"
                   >
-                    <Sparkles className="size-3.5" />
+                    <Wand2 className="size-3.5" />
                     <span>Find Matching Jobs</span>
                   </Button>
                 </div>
@@ -375,8 +375,8 @@ export function CandidateProfileWorkspace({ candidateId }: { candidateId: string
                 </div>
 
                 {/* Primary Skills Cloud */}
-                <div className="border-border/80 bg-card space-y-3 rounded-2xl border p-5">
-                  <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                <div className="border-border/80 bg-card space-y-3 rounded-[16px] border p-5">
+                  <h3 className="text-muted-foreground text-[13px] font-medium">
                     Technical & Domain Competencies
                   </h3>
                   <div className="flex flex-wrap gap-1.5">
@@ -388,18 +388,18 @@ export function CandidateProfileWorkspace({ candidateId }: { candidateId: string
                         .map((skill) => (
                           <span
                             key={skill}
-                            className="bg-primary/10 text-primary border-primary/20 inline-flex items-center rounded-lg border px-3 py-1 text-xs font-medium"
+                            className="bg-primary/10 text-primary border-primary/20 inline-flex items-center rounded-[10px] border px-3 py-1 text-[13px] font-medium"
                           >
                             {skill}
                           </span>
                         ))
                     ) : (
-                      <p className="text-muted-foreground text-xs">No primary skills recorded.</p>
+                      <p className="text-muted-foreground text-[13px]">No primary skills recorded.</p>
                     )}
                   </div>
                   {candidate.secondary_skills && (
-                    <p className="text-muted-foreground pt-1 text-xs">
-                      <span className="text-foreground font-semibold">Additional: </span>
+                    <p className="text-muted-foreground pt-1 text-[13px]">
+                      <span className="text-foreground font-medium">Additional: </span>
                       {candidate.secondary_skills}
                     </p>
                   )}
@@ -430,8 +430,8 @@ export function CandidateProfileWorkspace({ candidateId }: { candidateId: string
 
               {/* Work History Tab Content */}
               <TabsContent value="history" className="space-y-6 pt-2">
-                <section className="border-border/80 bg-card space-y-4 rounded-2xl border p-6">
-                  <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                <section className="border-border/80 bg-card space-y-4 rounded-[16px] border p-6">
+                  <h3 className="text-muted-foreground text-[13px] font-medium">
                     Employment History
                   </h3>
                   {candidate.employment_history?.length ? (
@@ -441,19 +441,19 @@ export function CandidateProfileWorkspace({ candidateId }: { candidateId: string
                           key={index}
                           className="grid gap-3 py-4 first:pt-0 last:pb-0 sm:grid-cols-[180px_1fr]"
                         >
-                          <div className="text-muted-foreground font-mono text-xs">
+                          <div className="text-muted-foreground font-mono text-[13px]">
                             {[row.start, row.end].filter(Boolean).map(String).join(' – ') ||
                               'Dates unrecorded'}
                           </div>
                           <div className="space-y-1">
-                            <h4 className="text-foreground text-sm font-bold">
+                            <h4 className="text-foreground text-[13px] font-medium">
                               {String(row.title || 'Position Title')}
                             </h4>
-                            <p className="text-primary text-xs font-semibold">
+                            <p className="text-primary text-[13px] font-medium">
                               {String(row.employer || 'Employer')}
                             </p>
                             {typeof row.description === 'string' && (
-                              <p className="text-muted-foreground mt-2 text-xs leading-relaxed whitespace-pre-wrap">
+                              <p className="text-muted-foreground mt-2 text-[13px] leading-relaxed whitespace-pre-wrap">
                                 {row.description}
                               </p>
                             )}
@@ -462,12 +462,12 @@ export function CandidateProfileWorkspace({ candidateId }: { candidateId: string
                       ))}
                     </div>
                   ) : (
-                    <p className="text-muted-foreground text-xs">No employment history recorded.</p>
+                    <p className="text-muted-foreground text-[13px]">No employment history recorded.</p>
                   )}
                 </section>
 
-                <section className="border-border/80 bg-card space-y-4 rounded-2xl border p-6">
-                  <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                <section className="border-border/80 bg-card space-y-4 rounded-[16px] border p-6">
+                  <h3 className="text-muted-foreground text-[13px] font-medium">
                     Education & Credentials
                   </h3>
                   {candidate.education_history?.length ? (
@@ -479,10 +479,10 @@ export function CandidateProfileWorkspace({ candidateId }: { candidateId: string
                         >
                           <GraduationCap className="text-primary mt-0.5 size-4 shrink-0" />
                           <div>
-                            <p className="text-foreground text-xs font-bold">
+                            <p className="text-foreground text-[13px] font-medium">
                               {String(row.degree || 'Degree')}
                             </p>
-                            <p className="text-muted-foreground mt-0.5 text-xs">
+                            <p className="text-muted-foreground mt-0.5 text-[13px]">
                               {String(row.institution || row.school || 'Institution')}
                             </p>
                           </div>
@@ -490,7 +490,7 @@ export function CandidateProfileWorkspace({ candidateId }: { candidateId: string
                       ))}
                     </div>
                   ) : (
-                    <p className="text-muted-foreground text-xs">No education history recorded.</p>
+                    <p className="text-muted-foreground text-[13px]">No education history recorded.</p>
                   )}
                 </section>
               </TabsContent>
@@ -500,9 +500,9 @@ export function CandidateProfileWorkspace({ candidateId }: { candidateId: string
                 {docError && <WorkspaceError message={docError} />}
 
                 {/* Original Document Files */}
-                <section className="border-border/80 bg-card space-y-4 rounded-2xl border p-6">
+                <section className="border-border/80 bg-card space-y-4 rounded-[16px] border p-6">
                   <div className="border-border/60 flex items-center justify-between border-b pb-2">
-                    <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                    <h3 className="text-muted-foreground text-[13px] font-medium">
                       Original Uploaded Documents
                     </h3>
                   </div>
@@ -517,11 +517,11 @@ export function CandidateProfileWorkspace({ candidateId }: { candidateId: string
                           className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
                         >
                           <div className="flex min-w-0 items-center gap-3">
-                            <div className="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-lg">
+                            <div className="bg-surface-sunken text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-[10px]">
                               <FileText className="size-4" />
                             </div>
                             <div className="min-w-0">
-                              <p className="text-foreground truncate text-xs font-semibold">
+                              <p className="text-foreground truncate text-[13px] font-medium">
                                 {doc.filename}
                               </p>
                               <p className="text-muted-foreground text-[11px]">
@@ -561,13 +561,13 @@ export function CandidateProfileWorkspace({ candidateId }: { candidateId: string
                 </section>
 
                 {/* Confirmed Profile Resume Preview & Export */}
-                <section className="border-border/80 bg-card space-y-4 rounded-2xl border p-6">
+                <section className="border-border/80 bg-card space-y-4 rounded-[16px] border p-6">
                   <div className="border-border/60 flex flex-col justify-between gap-3 border-b pb-3 sm:flex-row sm:items-center">
                     <div>
-                      <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                      <h3 className="text-muted-foreground text-[13px] font-medium">
                         Confirmed Profile Resume
                       </h3>
-                      <p className="text-muted-foreground mt-0.5 text-xs">
+                      <p className="text-muted-foreground mt-0.5 text-[13px]">
                         Generated exclusively from verified career facts
                       </p>
                     </div>
@@ -577,11 +577,11 @@ export function CandidateProfileWorkspace({ candidateId }: { candidateId: string
                         size="sm"
                         variant="outline"
                         onClick={copyResumeMarkdown}
-                        className="cursor-pointer gap-1.5 text-xs"
+                        className="cursor-pointer gap-1.5 text-[13px]"
                       >
                         {copied ? (
                           <>
-                            <Check className="size-3.5 text-emerald-600" />
+                            <Check className="size-3.5 text-primary" />
                             <span>Copied</span>
                           </>
                         ) : (
@@ -599,7 +599,7 @@ export function CandidateProfileWorkspace({ candidateId }: { candidateId: string
                           variant="outline"
                           disabled={candidate.provenance_status !== 'confirmed' || !!busy}
                           onClick={() => void exportFile(fmt)}
-                          className="cursor-pointer text-xs"
+                          className="cursor-pointer text-[13px]"
                         >
                           {busy === fmt ? 'Exporting…' : `Export ${fmt.toUpperCase()}`}
                         </Button>
@@ -608,11 +608,11 @@ export function CandidateProfileWorkspace({ candidateId }: { candidateId: string
                   </div>
 
                   {candidate.provenance_status === 'confirmed' ? (
-                    <pre className="border-border/70 bg-muted/20 max-h-96 overflow-y-auto rounded-xl border p-5 font-mono text-xs leading-relaxed whitespace-pre-wrap">
+                    <pre className="border-border/70 bg-muted/20 max-h-96 overflow-y-auto rounded-[12px] border p-5 font-mono text-[13px] leading-relaxed whitespace-pre-wrap">
                       {candidateResumeMarkdown(candidate)}
                     </pre>
                   ) : (
-                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-amber-800 dark:text-amber-300">
+                    <div className="rounded-[12px] border border-amber-500/20 bg-amber-500/5 p-4 text-[13px] text-amber-700 dark:text-amber-400">
                       Review and confirm this imported profile before generating an official profile
                       resume export.
                     </div>
@@ -622,21 +622,21 @@ export function CandidateProfileWorkspace({ candidateId }: { candidateId: string
 
               {/* Source Evidence Citations Tab Content */}
               <TabsContent value="evidence" className="pt-2">
-                <section className="border-border/80 bg-card space-y-4 rounded-2xl border p-6">
-                  <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                <section className="border-border/80 bg-card space-y-4 rounded-[16px] border p-6">
+                  <h3 className="text-muted-foreground text-[13px] font-medium">
                     Source Evidence & Facts Provenance
                   </h3>
                   {candidate.evidence?.length ? (
                     <dl className="divide-border/60 divide-y">
                       {candidate.evidence.map((item, index) => (
                         <div key={index} className="py-3 first:pt-0 last:pb-0">
-                          <dt className="text-foreground text-xs font-bold tracking-wide uppercase">
+                          <dt className="text-foreground text-[13px] font-medium">
                             {item.field.replaceAll('_', ' ')}
                           </dt>
-                          <dd className="text-muted-foreground mt-1 text-xs leading-relaxed">
+                          <dd className="text-muted-foreground mt-1 text-[13px] leading-relaxed">
                             &ldquo;{item.snippet}&rdquo;
                             {item.page !== null && (
-                              <span className="text-primary ml-1.5 font-mono font-semibold">
+                              <span className="text-primary ml-1.5 font-mono font-medium">
                                 [Page {item.page}]
                               </span>
                             )}
@@ -645,7 +645,7 @@ export function CandidateProfileWorkspace({ candidateId }: { candidateId: string
                       ))}
                     </dl>
                   ) : (
-                    <p className="text-muted-foreground text-xs leading-relaxed">
+                    <p className="text-muted-foreground text-[13px] leading-relaxed">
                       No source citations recorded. Confirmed facts indicate candidate or recruiter
                       review; they do not imply automated third-party verification.
                     </p>

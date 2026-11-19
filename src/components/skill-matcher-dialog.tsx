@@ -185,7 +185,7 @@ export function SkillMatcherDialog({
             probability or a legal eligibility decision.
           </DialogDescription>
         </DialogHeader>
-        <label className="grid gap-1 text-sm">
+        <label className="grid gap-1 text-[13px]">
           Reviewed candidate
           <select
             className="bg-background rounded border p-2"
@@ -264,7 +264,7 @@ export function SkillMatcherDialog({
                 : 'Comparison queued. Waiting for processing to start.'}
             </p>
             {processingNote && (
-              <p className="text-muted-foreground mt-1 text-sm">{processingNote}</p>
+              <p className="text-muted-foreground mt-1 text-[13px]">{processingNote}</p>
             )}
           </div>
         )}
@@ -275,7 +275,7 @@ export function SkillMatcherDialog({
         )}
         {statusUnavailable && tasks.length > 0 && !failedTask && (
           <div className="space-y-2">
-            <p className="text-muted-foreground text-sm">
+            <p className="text-muted-foreground text-[13px]">
               The saved comparison may still be processing. Check its status instead of queueing
               another request.
             </p>
@@ -294,27 +294,27 @@ export function SkillMatcherDialog({
         {analysis && (
           <section className="space-y-5" aria-label="Comparison results">
             {visibleResult?.stale && (
-              <p role="alert" className="rounded border border-amber-400 p-3 text-sm">
+              <p role="alert" className="rounded border border-amber-400 p-3 text-[13px]">
                 The candidate profile or job has changed since this comparison. Queue a fresh
                 comparison before relying on these results.
               </p>
             )}
-            <div className="bg-muted/30 rounded-lg border p-4">
-              <p className="text-xl font-semibold">
+            <div className="bg-muted/30 rounded-[10px] border p-4">
+              <p className="text-[20px] font-medium">
                 {analysis.coverage === null
                   ? 'Insufficient evidence'
                   : `${analysis.coverage}% evidence coverage`}
               </p>
-              <p className="mt-1 text-sm font-medium">
+              <p className="mt-1 text-[13px] font-medium">
                 {analysis.requirements.filter((row) => row.status === 'met').length} supported ·{' '}
                 {analysis.requirements.filter((row) => row.status === 'unknown').length} unknown
               </p>
-              <p className="text-muted-foreground mt-1 text-sm">
+              <p className="text-muted-foreground mt-1 text-[13px]">
                 {analysis.requirements.filter((row) => row.status === 'met').length} of{' '}
                 {analysis.requirements.length} requirements supported by reviewed candidate facts.
                 Unknown answers need review.
               </p>
-              <p className="text-muted-foreground mt-2 text-xs">
+              <p className="text-muted-foreground mt-2 text-[13px]">
                 Unknown means the reviewed resume does not prove this requirement; it does not mean
                 the candidate is unqualified.
               </p>
@@ -323,17 +323,17 @@ export function SkillMatcherDialog({
               candidate={candidates.find((candidate) => candidate.id === selected)}
             />
             <section className="space-y-3">
-              <h3 className="font-semibold">Requirement evidence</h3>
+              <h3 className="font-medium">Requirement evidence</h3>
               {analysis.requirements.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
+                <p className="text-muted-foreground text-[13px]">
                   No supported job requirements were available to compare.
                 </p>
               ) : (
                 analysis.requirements.map((requirement, index) => (
-                  <article key={index} className="border-border/60 space-y-2 border-b py-3 text-sm">
+                  <article key={index} className="border-border/60 space-y-2 border-b py-3 text-[13px]">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <strong>{requirement.requirement}</strong>
-                      <span className="bg-muted rounded px-2 py-1 text-xs font-medium">
+                      <span className="bg-muted rounded px-2 py-1 text-[13px] font-medium">
                         {statusLabel[requirement.status]}
                       </span>
                     </div>
@@ -348,7 +348,7 @@ export function SkillMatcherDialog({
                     {requirement.candidateCitations?.length ? (
                       <ul
                         aria-label="Reviewed resume citations"
-                        className="text-muted-foreground space-y-1 text-xs"
+                        className="text-muted-foreground space-y-1 text-[13px]"
                       >
                         {requirement.candidateCitations.map((citation, i) => (
                           <li key={i}>
@@ -358,7 +358,7 @@ export function SkillMatcherDialog({
                       </ul>
                     ) : (
                       requirement.candidateField && (
-                        <p className="text-muted-foreground text-xs">
+                        <p className="text-muted-foreground text-[13px]">
                           Profile field: {requirement.candidateField.replaceAll('_', ' ')}
                         </p>
                       )
@@ -368,14 +368,14 @@ export function SkillMatcherDialog({
               )}
             </section>
             <section className="space-y-3">
-              <h3 className="font-semibold">Explicit job constraints</h3>
+              <h3 className="font-medium">Explicit job constraints</h3>
               {analysis.constraints.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
+                <p className="text-muted-foreground text-[13px]">
                   No explicit constraints were available. This does not establish eligibility.
                 </p>
               ) : (
                 analysis.constraints.map((constraint, index) => (
-                  <article key={index} className="border-border/60 space-y-1 border-b py-3 text-sm">
+                  <article key={index} className="border-border/60 space-y-1 border-b py-3 text-[13px]">
                     <div className="flex flex-wrap justify-between gap-2">
                       <strong>
                         {constraintLabels[constraint.field] ||
@@ -384,7 +384,7 @@ export function SkillMatcherDialog({
                       <span
                         className={
                           constraint.status === 'conflict'
-                            ? 'text-destructive font-semibold'
+                            ? 'text-destructive font-medium'
                             : 'text-muted-foreground'
                         }
                       >
@@ -394,7 +394,7 @@ export function SkillMatcherDialog({
                     <p>Required answer: {constraint.requiredValue ? 'Yes' : 'No'}</p>
                     <p>{constraint.jobEvidence}</p>
                     {constraint.status === 'conflict' && (
-                      <p className="text-destructive text-xs">
+                      <p className="text-destructive text-[13px]">
                         The reviewed candidate answer conflicts with this explicit requirement.
                       </p>
                     )}

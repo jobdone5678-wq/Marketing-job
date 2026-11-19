@@ -23,57 +23,57 @@ const CATEGORY_STYLES: Record<
   }
 > = {
   'Languages & Core': {
-    bg: 'bg-blue-500/10 dark:bg-blue-500/15',
-    text: 'text-blue-700 dark:text-blue-300 font-semibold',
-    border: 'border-blue-500/25 dark:border-blue-500/35',
+    bg: 'bg-muted ',
+    text: 'text-muted-foreground font-medium',
+    border: 'border-border dark:border-blue-500/35',
     hover: 'hover:bg-blue-500/20 hover:border-blue-500/40',
-    dot: 'bg-blue-500',
+    dot: 'bg-muted',
   },
   'Frontend & Mobile': {
-    bg: 'bg-violet-500/10 dark:bg-violet-500/15',
-    text: 'text-violet-700 dark:text-violet-300 font-semibold',
-    border: 'border-violet-500/25 dark:border-violet-500/35',
+    bg: 'bg-muted ',
+    text: 'text-muted-foreground font-medium',
+    border: 'border-border dark:border-violet-500/35',
     hover: 'hover:bg-violet-500/20 hover:border-violet-500/40',
-    dot: 'bg-violet-500',
+    dot: 'bg-muted',
   },
   'Backend & APIs': {
-    bg: 'bg-emerald-500/10 dark:bg-emerald-500/15',
-    text: 'text-emerald-700 dark:text-emerald-300 font-semibold',
-    border: 'border-emerald-500/25 dark:border-emerald-500/35',
+    bg: 'bg-primary/10 ',
+    text: 'text-primary font-medium',
+    border: 'border-primary/20 dark:border-emerald-500/35',
     hover: 'hover:bg-emerald-500/20 hover:border-emerald-500/40',
-    dot: 'bg-emerald-500',
+    dot: 'bg-primary',
   },
   'Cloud & DevOps': {
     bg: 'bg-amber-500/10 dark:bg-amber-500/15',
-    text: 'text-amber-800 dark:text-amber-300 font-semibold',
-    border: 'border-amber-500/25 dark:border-amber-500/35',
+    text: 'text-amber-700 dark:text-amber-400 font-medium',
+    border: 'border-amber-500/20 dark:border-amber-500/35',
     hover: 'hover:bg-amber-500/20 hover:border-amber-500/40',
     dot: 'bg-amber-500',
   },
   'Data, AI & Storage': {
-    bg: 'bg-cyan-500/10 dark:bg-cyan-500/15',
-    text: 'text-cyan-800 dark:text-cyan-300 font-semibold',
-    border: 'border-cyan-500/25 dark:border-cyan-500/35',
+    bg: 'bg-muted ',
+    text: 'text-muted-foreground font-medium',
+    border: 'border-border dark:border-cyan-500/35',
     hover: 'hover:bg-cyan-500/20 hover:border-cyan-500/40',
-    dot: 'bg-cyan-500',
+    dot: 'bg-muted',
   },
   'Security & Compliance': {
-    bg: 'bg-rose-500/10 dark:bg-rose-500/15',
-    text: 'text-rose-700 dark:text-rose-300 font-semibold',
-    border: 'border-rose-500/25 dark:border-rose-500/35',
+    bg: 'bg-destructive/10 dark:bg-rose-500/15',
+    text: 'text-destructive dark:text-rose-300 font-medium',
+    border: 'border-destructive/20 dark:border-rose-500/35',
     hover: 'hover:bg-rose-500/20 hover:border-rose-500/40',
     dot: 'bg-rose-500',
   },
   'Practices & Architecture': {
     bg: 'bg-slate-500/10 dark:bg-slate-500/15',
-    text: 'text-slate-700 dark:text-slate-300 font-semibold',
+    text: 'text-slate-700 dark:text-slate-300 font-medium',
     border: 'border-slate-500/25 dark:border-slate-500/35',
     hover: 'hover:bg-slate-500/20 hover:border-slate-500/40',
     dot: 'bg-slate-500',
   },
   default: {
     bg: 'bg-primary/10',
-    text: 'text-primary font-semibold',
+    text: 'text-primary font-medium',
     border: 'border-primary/20',
     hover: 'hover:bg-primary/15 hover:border-primary/30',
     dot: 'bg-primary',
@@ -180,28 +180,28 @@ export function SkillBadge({
   const styles = CATEGORY_STYLES[resolvedCategory] || CATEGORY_STYLES.default;
 
   const sizeClasses = {
-    xs: 'text-[10px] px-2 py-0.5 rounded-md gap-1',
-    sm: 'text-xs px-2.5 py-1 rounded-lg gap-1.5',
-    md: 'text-sm px-3 py-1.5 rounded-xl gap-2',
+    xs: 'text-[11px] px-2 py-0.5 rounded-[8px] gap-1',
+    sm: 'text-[13px] px-2.5 py-1 rounded-[10px] gap-1.5',
+    md: 'text-[13px] px-3 py-1.5 rounded-[12px] gap-2',
   }[size];
 
   return (
     <span
-      className={`inline-flex items-center border transition-all duration-200 select-none ${sizeClasses} ${
-        isMatched
-          ? 'border-emerald-500/35 bg-emerald-500/15 font-bold text-emerald-800 shadow-2xs hover:bg-emerald-500/25 dark:text-emerald-300'
+      className={`inline-flex items-center border transition-colors duration-150 select-none ${sizeClasses} ${
+ isMatched
+ ?'border-emerald-500/35 bg-primary/15 font-medium text-primary hover:bg-emerald-500/25 '
           : `${styles.bg} ${styles.text} ${styles.border} ${styles.hover}`
-      } cursor-default hover:scale-[1.03] active:scale-95 ${className}`}
+      } cursor-default ${className}`}
       title={`${name} · ${resolvedCategory}${isMatched ? ' (Matched with your profile)' : ''}`}
     >
       {isMatched ? (
-        <span className="flex size-1.5 animate-pulse rounded-full bg-emerald-500" />
+        <span className="flex size-1.5 rounded-full bg-primary" />
       ) : showDot ? (
         <span className={`size-1.5 shrink-0 rounded-full ${styles.dot}`} />
       ) : null}
       <span className="max-w-[160px] truncate">{name}</span>
       {count !== undefined && count > 1 && (
-        <span className="font-mono text-[10px] opacity-75">×{count}</span>
+        <span className="font-mono text-[11px] opacity-75">×{count}</span>
       )}
     </span>
   );

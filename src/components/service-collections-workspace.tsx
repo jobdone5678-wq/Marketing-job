@@ -102,8 +102,8 @@ export function ServiceCollectionsWorkspace() {
     <section className="animate-fade-rise space-y-5" aria-label="Service collections">
       <div className="border-border/70 flex flex-col justify-between gap-3 border-b pb-3 sm:flex-row sm:items-center">
         <div>
-          <h2 className="text-foreground text-base font-bold">Service Fees & Billing</h2>
-          <p className="text-muted-foreground mt-0.5 text-xs">
+          <h2 className="text-foreground text-[15px] font-medium">Service Fees & Billing</h2>
+          <p className="text-muted-foreground mt-0.5 text-[13px]">
             Track service joining dates, recurring monthly agreements, and reconciled invoices.
           </p>
         </div>
@@ -121,7 +121,7 @@ export function ServiceCollectionsWorkspace() {
       </div>
 
       {error && (
-        <p role="alert" className="text-destructive text-xs">
+        <p role="alert" className="text-destructive text-[13px]">
           {error}
         </p>
       )}
@@ -130,7 +130,7 @@ export function ServiceCollectionsWorkspace() {
       <div className="relative max-w-sm">
         <Search className="text-muted-foreground absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
         <input
-          className="border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-ring h-9 w-full rounded-xl border pr-3 pl-9 text-xs focus-visible:ring-2 focus-visible:outline-none"
+          className="border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-ring h-9 w-full rounded-[12px] border pr-3 pl-9 text-[13px] focus-visible:ring-2 focus-visible:outline-none"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Filter by candidate, date, or status…"
@@ -138,13 +138,13 @@ export function ServiceCollectionsWorkspace() {
       </div>
 
       {limited && (
-        <p className="text-muted-foreground text-xs">
+        <p className="text-muted-foreground text-[13px]">
           Showing latest 500 service records. Comprehensive totals available in Dashboard.
         </p>
       )}
 
       {/* Bills Table */}
-      <div className="border-border/80 bg-card overflow-x-auto rounded-2xl border shadow-xs">
+      <div className="border-border/80 bg-card overflow-x-auto rounded-[16px] border">
         <table className="ops-table">
           <thead>
             <tr>
@@ -160,14 +160,14 @@ export function ServiceCollectionsWorkspace() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="text-muted-foreground h-28 text-center text-xs">
+                <td colSpan={7} className="text-muted-foreground h-28 text-center text-[13px]">
                   <RefreshCw className="text-primary mx-auto mb-2 size-4 animate-spin" />
                   Loading service billing records…
                 </td>
               </tr>
             ) : bills.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-muted-foreground h-28 text-center text-xs">
+                <td colSpan={7} className="text-muted-foreground h-28 text-center text-[13px]">
                   No service billing records match your search filter.
                 </td>
               </tr>
@@ -175,22 +175,22 @@ export function ServiceCollectionsWorkspace() {
               bills.map((b) => (
                 <tr key={b.id} className="hover:bg-muted/30 transition-colors">
                   <td>
-                    <span className="text-foreground block text-xs font-semibold">
+                    <span className="text-foreground block text-[13px] font-medium">
                       {b.enrollment.candidate.full_name}
                     </span>
                     <span className="text-muted-foreground text-[11px]">
                       Joined {b.enrollment.joining_date}
                     </span>
                   </td>
-                  <td className="font-mono text-xs">
+                  <td className="font-mono text-[13px]">
                     {b.start_date} – {lastDay(b.end_date_exclusive)}
                   </td>
-                  <td className="font-mono text-xs">{b.due_date}</td>
-                  <td className="font-mono text-xs font-semibold">
+                  <td className="font-mono text-[13px]">{b.due_date}</td>
+                  <td className="font-mono text-[13px] font-medium">
                     {formatMoney(b.amount, b.currency)}
                   </td>
-                  <td className="text-xs">
-                    <p className="font-medium text-emerald-600 dark:text-emerald-400">
+                  <td className="text-[13px]">
+                    <p className="font-medium text-primary">
                       Rec: {formatMoney(b.received_amount, b.currency)}
                     </p>
                     <p className="text-muted-foreground text-[11px]">
@@ -205,7 +205,7 @@ export function ServiceCollectionsWorkspace() {
                       variant="ghost"
                       size="xs"
                       onClick={() => setSelected(b.id)}
-                      className="text-primary cursor-pointer text-xs hover:underline"
+                      className="text-primary cursor-pointer text-[13px] hover:underline"
                     >
                       View Invoice
                     </Button>
@@ -219,20 +219,20 @@ export function ServiceCollectionsWorkspace() {
 
       {/* Details Accordion */}
       <details className="group border-border/60 border-t pt-3">
-        <summary className="text-muted-foreground hover:text-foreground cursor-pointer text-xs font-semibold select-none">
+        <summary className="text-muted-foreground hover:text-foreground cursor-pointer text-[13px] font-medium select-none">
           Active Agreements ({rows.length})
         </summary>
         <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
           {rows.map((e) => (
             <article
               key={e.id}
-              className="border-border/70 bg-card space-y-1 rounded-xl border p-3.5 text-xs shadow-2xs"
+              className="border-border/70 bg-card space-y-1 rounded-[12px] border p-3.5 text-[13px]"
             >
-              <p className="text-foreground font-bold">{e.candidate.full_name}</p>
+              <p className="text-foreground font-medium">{e.candidate.full_name}</p>
               <p className="text-muted-foreground text-[11px]">
                 Joined: {e.joining_date} · Ends: {e.end_date || 'Ongoing'}
               </p>
-              <p className="text-primary font-mono font-semibold">
+              <p className="text-primary font-mono font-medium">
                 {formatMoney(e.monthly_fee, e.currency)} / month
               </p>
             </article>
@@ -248,9 +248,9 @@ export function ServiceCollectionsWorkspace() {
         }}
       >
         {chosen && (
-          <div className="space-y-4 text-xs">
-            <div className="border-border/80 bg-muted/20 space-y-1.5 rounded-xl border p-4">
-              <h4 className="text-foreground text-sm font-bold">
+          <div className="space-y-4 text-[13px]">
+            <div className="border-border/80 bg-muted/20 space-y-1.5 rounded-[12px] border p-4">
+              <h4 className="text-foreground text-[13px] font-medium">
                 {chosen.enrollment.candidate.full_name}
               </h4>
               <p className="text-muted-foreground">
@@ -258,7 +258,7 @@ export function ServiceCollectionsWorkspace() {
                 {chosen.due_date}
               </p>
               <div className="flex gap-4 pt-1 font-mono">
-                <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                <span className="font-medium text-primary">
                   Paid: {formatMoney(chosen.received_amount, chosen.currency)}
                 </span>
                 <span className="text-muted-foreground">
@@ -267,7 +267,7 @@ export function ServiceCollectionsWorkspace() {
               </div>
             </div>
 
-            <h3 className="text-muted-foreground pt-2 text-xs font-bold tracking-wider uppercase">
+            <h3 className="text-muted-foreground pt-2 text-[13px] font-medium">
               Payment & Correction Receipts
             </h3>
             {chosen.receipts.length > 0 ? (
@@ -275,10 +275,10 @@ export function ServiceCollectionsWorkspace() {
                 {chosen.receipts.map((r) => (
                   <article
                     key={r.id}
-                    className="border-border/70 bg-card space-y-1 rounded-xl border p-3 shadow-2xs"
+                    className="border-border/70 bg-card space-y-1 rounded-[12px] border p-3"
                   >
                     <div className="flex items-center justify-between font-mono">
-                      <span className="text-foreground font-bold">
+                      <span className="text-foreground font-medium">
                         {formatMoney(r.amount, r.currency)}
                       </span>
                       <span className="text-muted-foreground text-[11px]">{r.received_on}</span>

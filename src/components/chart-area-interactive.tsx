@@ -1,5 +1,6 @@
 'use client';
 
+import * as React from 'react';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -8,104 +9,159 @@ import {
   XAxis,
   YAxis,
   Tooltip,
+  ReferenceLine,
 } from 'recharts';
-import { TrendingUp, Calendar, Activity } from 'lucide-react';
 
-export function ChartAreaInteractive({
-  data = [],
+type Row = { date: string; submissions: number };
+
+function formatDay(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function LedgerTooltip({
+  active,
+  payload,
+  label,
 }: {
-  data?: { date: string; submissions: number }[];
+  active?: boolean;
+  payload?: { value?: number }[];
+  label?: string;
 }) {
-  const totalSubmissions = data.reduce((acc, curr) => acc + curr.submissions, 0);
+  if (!active || !payload?.length) return null;
+  const value = payload[0]?.value ?? 0;
+  return (
+    <div className="border-border bg-popover text-popover-foreground rounded-[10px] border px-3 py-2 shadow-sm">
+      <div className="text-muted-foreground text-[11px] leading-4">{formatDay(label || '')}</div>
+      <div className="figure text-foreground text-[13px] leading-5">
+        {value} {value === 1 ? 'application' : 'applications'}
+      </div>
+    </div>
+  );
+}
+
+export function ChartAreaInteractive({ data = [] }: { data?: Row[] }) {
+  const total = data.reduce((sum, row) => sum + row.submissions, 0);
+  const busiest = data.reduce<Row | null>(
+    (best, row) => (!best || row.submissions > best.submissions ? row : best),
+    null
+  );
+  const average = data.length ? total / data.length : 0;
 
   return (
-    <section
-      aria-label="Submission activity chart"
-      className="border-border/80 bg-card animate-fade-rise rounded-2xl border p-5 shadow-xs sm:p-6"
-    >
-      <div className="border-border/60 mb-6 flex flex-col justify-between gap-3 border-b pb-4 sm:flex-row sm:items-center">
+    <section aria-labelledby="activity-heading" className="panel flex flex-col p-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <div className="bg-primary/10 text-primary flex size-7 items-center justify-center rounded-lg">
-              <Activity className="size-4" />
-            </div>
-            <h2 className="text-foreground text-base font-bold tracking-tight">
-              Application & Submission Velocity
-            </h2>
-          </div>
-          <p className="text-muted-foreground mt-1 text-xs">
-            Daily application volume recorded over the last 30 days
+          <h2 id="activity-heading" className="text-foreground text-[15px] font-medium">
+            Application activity
+          </h2>
+          <p className="text-muted-foreground mt-1 text-[13px]">
+            Applications you logged, day by day, over the last 30 days
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="bg-primary/10 border-primary/20 text-primary flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-xs font-semibold tabular-nums">
-            <span>{totalSubmissions} Total Applications</span>
+        <dl className="flex items-start gap-8">
+          <div>
+            <dt className="text-muted-foreground text-[11px] leading-4">Logged in period</dt>
+            <dd className="figure text-foreground mt-1 text-[20px] leading-6">{total}</dd>
           </div>
-        </div>
+          <div>
+            <dt className="text-muted-foreground text-[11px] leading-4">Busiest day</dt>
+            <dd className="figure text-foreground mt-1 text-[20px] leading-6">
+              {busiest && busiest.submissions > 0 ? formatDay(busiest.date) : '—'}
+            </dd>
+          </div>
+        </dl>
       </div>
 
-      {!data.length ? (
-        <div className="border-border/70 text-muted-foreground flex h-56 flex-col items-center justify-center rounded-xl border border-dashed p-6 text-center text-xs">
-          <Calendar className="text-muted-foreground/40 mb-2 size-8" />
-          <p className="text-foreground font-semibold">No saved activity in this period</p>
-          <p className="text-muted-foreground mt-0.5">
-            Applications logged through the portal or extension will appear here.
+      {total === 0 ? (
+        <div className="well mt-6 flex h-64 flex-col items-center justify-center gap-2 px-6 text-center">
+          <svg
+            viewBox="0 0 240 2"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+            className="text-border h-px w-40"
+          >
+            <path d="M0 1h240" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" />
+          </svg>
+          <p className="text-foreground mt-2 text-[13px] font-medium">
+            No applications logged in this period
+          </p>
+          <p className="text-muted-foreground max-w-xs text-[13px]">
+            Applications you log in the portal, or that the browser extension submits, are plotted
+            here
           </p>
         </div>
       ) : (
-        <div className="h-64 w-full pt-2 sm:h-72">
+        <div className="mt-6 h-64 w-full sm:h-72">
           <ResponsiveContainer
             width="100%"
             height="100%"
             initialDimension={{ width: 320, height: 280 }}
           >
-            <AreaChart data={data} margin={{ top: 12, right: 12, left: -20, bottom: 0 }}>
+            <AreaChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
               <defs>
-                <linearGradient id="submissionGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.0} />
+                <linearGradient id="ledgerFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.16} />
+                  <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                vertical={false}
-                stroke="hsl(var(--border) / 0.6)"
-              />
+              <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeDasharray="0" />
               <XAxis
                 dataKey="date"
+                tickFormatter={formatDay}
                 tickLine={false}
                 axisLine={false}
-                tickMargin={10}
-                tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                tickMargin={12}
+                minTickGap={44}
+                tick={{
+                  fontSize: 11,
+                  fill: 'hsl(var(--muted-foreground))',
+                  fontFamily: 'var(--font-mono)',
+                }}
               />
               <YAxis
                 allowDecimals={false}
+                width={48}
                 tickLine={false}
                 axisLine={false}
-                tickMargin={10}
-                tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                tickMargin={8}
+                tick={{
+                  fontSize: 11,
+                  fill: 'hsl(var(--muted-foreground))',
+                  fontFamily: 'var(--font-mono)',
+                }}
               />
               <Tooltip
-                contentStyle={{
-                  backgroundColor: 'hsl(var(--card))',
-                  borderColor: 'hsl(var(--border))',
-                  borderRadius: '10px',
-                  fontSize: '12px',
-                  boxShadow: '0 4px 14px rgba(0,0,0,0.08)',
-                  padding: '8px 12px',
-                }}
-                labelStyle={{ fontWeight: 600, color: 'hsl(var(--foreground))' }}
+                content={<LedgerTooltip />}
+                cursor={{ stroke: 'hsl(var(--border))', strokeWidth: 1 }}
               />
+              {average > 0 && (
+                <ReferenceLine
+                  y={average}
+                  stroke="hsl(var(--muted-foreground))"
+                  strokeDasharray="4 4"
+                  strokeOpacity={0.5}
+                  label={{
+                    value: `avg ${average.toFixed(1)}`,
+                    position: 'insideTopRight',
+                    fill: 'hsl(var(--muted-foreground))',
+                    fontSize: 11,
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                />
+              )}
               <Area
                 type="monotone"
                 dataKey="submissions"
                 name="Applications"
                 stroke="hsl(var(--primary))"
-                strokeWidth={2}
-                fill="url(#submissionGradient)"
+                strokeWidth={1.75}
+                fill="url(#ledgerFill)"
+                isAnimationActive={false}
                 activeDot={{
-                  r: 5,
+                  r: 4,
                   fill: 'hsl(var(--primary))',
                   stroke: 'hsl(var(--card))',
                   strokeWidth: 2,
@@ -116,33 +172,24 @@ export function ChartAreaInteractive({
         </div>
       )}
 
-      {!!data.length && (
-        <details className="border-border/60 group mt-4 border-t pt-3">
-          <summary className="text-muted-foreground hover:text-foreground cursor-pointer text-xs font-semibold transition-colors select-none">
-            View raw daily records table
-          </summary>
-          <div className="border-border/60 mt-3 overflow-x-auto rounded-xl border">
-            <table className="ops-table">
-              <caption className="sr-only">Saved submission activity by date</caption>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Application records</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((row) => (
-                  <tr key={row.date}>
-                    <td className="text-xs">{row.date}</td>
-                    <td className="text-foreground font-mono text-xs font-bold">
-                      {row.submissions}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
+      {total > 0 && (
+        <table className="sr-only">
+          <caption>Applications logged by date</caption>
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Applications</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((row) => (
+              <tr key={row.date}>
+                <td>{formatDay(row.date)}</td>
+                <td>{row.submissions}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </section>
   );

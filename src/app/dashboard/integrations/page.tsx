@@ -115,24 +115,24 @@ export default function IntegrationsPage() {
       ) : (
         <div className="grid gap-5">
           {/* Email Integration Card */}
-          <section className="border-border/80 bg-card space-y-4 rounded-2xl border p-6 shadow-xs">
+          <section className="border-border/80 bg-card space-y-4 rounded-[16px] border p-6">
             <div className="border-border/60 flex flex-col justify-between gap-4 border-b pb-4 sm:flex-row sm:items-start">
               <div className="flex items-start gap-3.5">
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-[12px] border border-border bg-muted text-muted-foreground">
                   <Mail className="size-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-foreground text-base font-bold">
+                    <h2 className="text-foreground text-[15px] font-medium">
                       Gmail Application Receipt Sync
                     </h2>
                     <span
-                      className={`status-chip ${configured ? 'status-positive' : 'status-warning'}`}
+                      className={`status-chip ${configured ?'status-positive' : 'status-warning'}`}
                     >
                       {configured ? 'Configured' : 'Setup Required'}
                     </span>
                   </div>
-                  <p className="text-muted-foreground mt-0.5 text-xs">
+                  <p className="text-muted-foreground mt-0.5 text-[13px]">
                     Automatically ingests official ATS submission receipts from Greenhouse, Ashby,
                     and Lever.
                   </p>
@@ -141,7 +141,7 @@ export default function IntegrationsPage() {
 
               <Link
                 href="/dashboard/email-confirmations"
-                className="text-primary inline-flex items-center gap-1.5 self-start text-xs font-semibold hover:underline"
+                className="text-primary inline-flex items-center gap-1.5 self-start text-[13px] font-medium hover:underline"
               >
                 <span>Manage mailboxes</span>
                 <ArrowUpRight className="size-3.5" />
@@ -149,7 +149,7 @@ export default function IntegrationsPage() {
             </div>
 
             <div className="space-y-3">
-              <div className="text-muted-foreground flex items-center justify-between text-xs">
+              <div className="text-muted-foreground flex items-center justify-between text-[13px]">
                 <span className="font-medium">
                   {mail.length} connected mailbox account{mail.length === 1 ? '' : 's'}
                 </span>
@@ -157,14 +157,14 @@ export default function IntegrationsPage() {
               </div>
 
               {mail.length > 0 ? (
-                <div className="divide-border/60 border-border/60 bg-muted/20 divide-y rounded-xl border">
+                <div className="divide-border/60 border-border/60 bg-muted/20 divide-y rounded-[12px] border">
                   {mail.map((connection) => (
                     <div
                       key={connection.id}
-                      className="flex flex-col justify-between gap-2 p-3.5 text-xs sm:flex-row sm:items-center"
+                      className="flex flex-col justify-between gap-2 p-3.5 text-[13px] sm:flex-row sm:items-center"
                     >
                       <div className="space-y-0.5">
-                        <span className="text-foreground font-semibold">
+                        <span className="text-foreground font-medium">
                           {connection.mailbox_email || 'Connected mailbox'}
                         </span>
                         <div className="text-muted-foreground flex items-center gap-2 text-[11px]">
@@ -181,7 +181,7 @@ export default function IntegrationsPage() {
                       </div>
 
                       {connection.last_error && (
-                        <span className="text-destructive bg-destructive/10 border-destructive/20 self-start rounded-full border px-2.5 py-0.5 text-[11px] sm:self-auto">
+                        <span className="text-destructive bg-destructive/10 border-destructive/20 self-start rounded-[6px] border px-2.5 py-0.5 text-[11px] sm:self-auto">
                           {connection.last_error}
                         </span>
                       )}
@@ -189,7 +189,7 @@ export default function IntegrationsPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-muted-foreground bg-muted/30 border-border/60 rounded-xl border p-3 text-xs">
+                <p className="text-muted-foreground bg-muted/30 border-border/60 rounded-[12px] border p-3 text-[13px]">
                   No dedicated mailbox connected yet. Connect your email to track real-time
                   confirmations.
                 </p>
@@ -198,20 +198,20 @@ export default function IntegrationsPage() {
           </section>
 
           {/* Browser Extension Card */}
-          <section className="border-border/80 bg-card space-y-4 rounded-2xl border p-6 shadow-xs">
+          <section className="border-border/80 bg-card space-y-4 rounded-[16px] border p-6">
             <div className="border-border/60 flex flex-col justify-between gap-4 border-b pb-4 sm:flex-row sm:items-start">
               <div className="flex items-start gap-3.5">
-                <div className="bg-primary/10 text-primary border-primary/20 flex size-10 shrink-0 items-center justify-center rounded-xl border">
+                <div className="bg-surface-sunken text-muted-foreground border-border flex size-10 shrink-0 items-center justify-center rounded-[12px] border">
                   <Monitor className="size-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-foreground text-base font-bold">
+                    <h2 className="text-foreground text-[15px] font-medium">
                       NextKin Chrome Extension Copilot
                     </h2>
                     <span className="status-chip status-positive">v3.2 Active</span>
                   </div>
-                  <p className="text-muted-foreground mt-0.5 text-xs">
+                  <p className="text-muted-foreground mt-0.5 text-[13px]">
                     Assists candidate autofill on external company job boards and tracks
                     applications.
                   </p>
@@ -220,19 +220,19 @@ export default function IntegrationsPage() {
 
               <Link
                 href="/dashboard/help"
-                className="text-primary inline-flex items-center gap-1.5 self-start text-xs font-semibold hover:underline"
+                className="text-primary inline-flex items-center gap-1.5 self-start text-[13px] font-medium hover:underline"
               >
                 <span>Pairing instructions</span>
                 <ArrowUpRight className="size-3.5" />
               </Link>
             </div>
 
-            <div className="grid gap-4 text-xs sm:grid-cols-2">
-              <div className="border-border/60 bg-muted/20 space-y-1 rounded-xl border p-4">
+            <div className="grid gap-4 text-[13px] sm:grid-cols-2">
+              <div className="border-border/60 bg-muted/20 space-y-1 rounded-[12px] border p-4">
                 <span className="text-muted-foreground font-medium">
                   Active Authorized Sessions
                 </span>
-                <p className="text-foreground font-mono text-xl font-bold tabular-nums">
+                <p className="text-foreground font-mono text-[20px] font-medium tabular-nums">
                   {activeCredentials.length}
                 </p>
                 <p className="text-muted-foreground text-[11px]">
@@ -240,9 +240,9 @@ export default function IntegrationsPage() {
                 </p>
               </div>
 
-              <div className="border-border/60 bg-muted/20 space-y-1 rounded-xl border p-4">
+              <div className="border-border/60 bg-muted/20 space-y-1 rounded-[12px] border p-4">
                 <span className="text-muted-foreground font-medium">Supported Platforms</span>
-                <p className="text-foreground text-sm font-bold">
+                <p className="text-foreground text-[13px] font-medium">
                   Greenhouse, Ashby, Lever, Workday
                 </p>
                 <p className="text-muted-foreground text-[11px]">
@@ -253,20 +253,20 @@ export default function IntegrationsPage() {
           </section>
 
           {/* ATS Portals & Direct Ingestion */}
-          <section className="border-border/80 bg-card space-y-4 rounded-2xl border p-6 shadow-xs">
+          <section className="border-border/80 bg-card space-y-4 rounded-[16px] border p-6">
             <div className="border-border/60 flex flex-col justify-between gap-4 border-b pb-4 sm:flex-row sm:items-start">
               <div className="flex items-start gap-3.5">
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-[12px] border border-border bg-surface-sunken text-muted-foreground">
                   <Building2 className="size-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-foreground text-base font-bold">
+                    <h2 className="text-foreground text-[15px] font-medium">
                       Public ATS Portals & Feeds
                     </h2>
                     <span className="status-chip status-positive">Live Crawler Active</span>
                   </div>
-                  <p className="text-muted-foreground mt-0.5 text-xs">
+                  <p className="text-muted-foreground mt-0.5 text-[13px]">
                     Direct board crawlers for Greenhouse and Ashby job boards.
                   </p>
                 </div>
@@ -275,23 +275,23 @@ export default function IntegrationsPage() {
               <div className="flex items-center gap-3">
                 <Link
                   href="/dashboard/greenhouse"
-                  className="text-primary text-xs font-semibold hover:underline"
+                  className="text-primary text-[13px] font-medium hover:underline"
                 >
                   Greenhouse Portal
                 </Link>
                 <span className="text-border">·</span>
                 <Link
                   href="/dashboard/ashby"
-                  className="text-primary text-xs font-semibold hover:underline"
+                  className="text-primary text-[13px] font-medium hover:underline"
                 >
                   Ashby Portal
                 </Link>
               </div>
             </div>
 
-            <div className="border-border/60 bg-muted/20 flex flex-col items-start justify-between gap-3 rounded-xl border p-4 text-xs sm:flex-row sm:items-center">
+            <div className="border-border/60 bg-muted/20 flex flex-col items-start justify-between gap-3 rounded-[12px] border p-4 text-[13px] sm:flex-row sm:items-center">
               <div>
-                <p className="text-foreground font-semibold">AI Matching & Extraction Engine</p>
+                <p className="text-foreground font-medium">AI Matching & Extraction Engine</p>
                 <p className="text-muted-foreground text-[11px]">
                   {setup?.ai?.configured
                     ? 'Model configured and ready'
@@ -303,7 +303,7 @@ export default function IntegrationsPage() {
                 variant="outline"
                 size="sm"
                 render={<Link href="/dashboard/settings" />}
-                className="cursor-pointer text-xs"
+                className="cursor-pointer text-[13px]"
               >
                 Configure Settings
               </Button>

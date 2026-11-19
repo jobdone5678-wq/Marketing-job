@@ -27,7 +27,7 @@ export function CandidateCombobox({
         <Combobox.Input
           aria-label="Filter by candidate"
           placeholder="Find a candidate…"
-          className="border-input bg-card focus-visible:ring-ring/30 h-8 w-full rounded-lg border pr-8 pl-3 text-xs outline-none focus-visible:ring-2"
+          className="border-input bg-card focus-visible:ring-ring/30 h-8 w-full rounded-[10px] border pr-8 pl-3 text-[13px] outline-none focus-visible:ring-2"
         />
         <Combobox.Trigger
           aria-label="Choose candidate"
@@ -38,8 +38,8 @@ export function CandidateCombobox({
       </div>
       <Combobox.Portal>
         <Combobox.Positioner sideOffset={6} className="z-50">
-          <Combobox.Popup className="border-border bg-popover text-popover-foreground max-h-72 w-[var(--anchor-width)] min-w-48 overflow-y-auto rounded-lg border p-1 shadow-lg">
-            <Combobox.Empty className="text-muted-foreground p-3 text-xs">
+          <Combobox.Popup className="border-border bg-popover text-popover-foreground max-h-72 w-[var(--anchor-width)] min-w-48 overflow-y-auto rounded-[10px] border p-1 shadow-md">
+            <Combobox.Empty className="text-muted-foreground p-3 text-[13px]">
               No candidates found
             </Combobox.Empty>
             <Combobox.List>
@@ -47,7 +47,7 @@ export function CandidateCombobox({
                 <Combobox.Item
                   key={item.value}
                   value={item}
-                  className="data-highlighted:bg-muted flex cursor-default items-center justify-between gap-3 rounded-md px-3 py-2 text-xs outline-none"
+                  className="data-highlighted:bg-muted flex cursor-default items-center justify-between gap-3 rounded-[8px] px-3 py-2 text-[13px] outline-none"
                 >
                   <span>{item.label}</span>
                   <Combobox.ItemIndicator>

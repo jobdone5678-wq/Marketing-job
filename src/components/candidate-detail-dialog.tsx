@@ -97,15 +97,15 @@ export function CandidateDetailDialog({
       <DialogContent className="flex max-h-[92dvh] w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
         <DialogHeader className="border-border/60 border-b p-5 pr-12">
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <span className={`status-chip ${verified ? 'status-positive' : 'status-warning'}`}>
+            <span className={`status-chip ${verified ?'status-positive' : 'status-warning'}`}>
               <ShieldCheck className="size-3" />
               {verified ? 'Reviewed profile' : 'Unconfirmed import'}
             </span>
-            <span className="text-muted-foreground text-[10px]">
+            <span className="text-muted-foreground text-[11px]">
               Profile version {candidate.version || 1}
             </span>
           </div>
-          <DialogTitle className="text-xl tracking-tight">{candidate.full_name}</DialogTitle>
+          <DialogTitle className="text-[20px] tracking-tight">{candidate.full_name}</DialogTitle>
           <DialogDescription>
             {candidate.target_job_titles ||
               candidate.current_job_title ||
@@ -125,7 +125,7 @@ export function CandidateDetailDialog({
               type="button"
               aria-pressed={tab === item.id}
               onClick={() => setTab(item.id)}
-              className={`rounded-md px-3 py-2 text-xs font-medium ${tab === item.id ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:bg-muted'}`}
+              className={`rounded-[8px] px-3 py-2 text-[13px] font-medium ${tab === item.id ?'bg-card text-foreground ' : 'text-muted-foreground hover:bg-muted'}`}
             >
               {item.label}
             </button>
@@ -135,7 +135,7 @@ export function CandidateDetailDialog({
           {error && <WorkspaceError message={error} />}
           {tab === 'profile' ? (
             <>
-              <div className="border-border/60 bg-muted/20 grid gap-3 rounded-lg border p-4 text-xs sm:grid-cols-2">
+              <div className="border-border/60 bg-muted/20 grid gap-3 rounded-[10px] border p-4 text-[13px] sm:grid-cols-2">
                 <div className="flex min-w-0 items-center gap-2">
                   <Mail className="text-muted-foreground size-3.5 shrink-0" />
                   <span className="break-words">{candidate.email || 'Email not recorded'}</span>
@@ -222,17 +222,17 @@ export function CandidateDetailDialog({
                     .split(/[,;\n]/)
                     .filter(Boolean)
                     .map((skill) => (
-                      <span key={skill} className="bg-muted/40 rounded-md border px-2 py-1 text-xs">
+                      <span key={skill} className="bg-muted/40 rounded-[8px] border px-2 py-1 text-[13px]">
                         {skill.trim()}
                       </span>
                     ))}
                 </div>
                 {candidate.secondary_skills && (
-                  <p className="text-muted-foreground mt-2 text-xs">
+                  <p className="text-muted-foreground mt-2 text-[13px]">
                     Additional · {candidate.secondary_skills}
                   </p>
                 )}
-                <p className="mt-3 text-xs">
+                <p className="mt-3 text-[13px]">
                   {candidate.visa_status || candidate.work_authorization || 'Visa not recorded'} ·{' '}
                   {candidate.is_active_bench ? 'Active on bench' : 'Not on active bench'}
                 </p>
@@ -244,10 +244,10 @@ export function CandidateDetailDialog({
                     {candidate.employment_history.map((job, index) => (
                       <li key={index} className="relative">
                         <span className="border-card bg-primary ring-border absolute top-1 -left-[25px] size-2 rounded-full border-2 ring-2" />
-                        <p className="text-sm font-medium">
+                        <p className="text-[13px] font-medium">
                           {String(job.title || 'Title not recorded')}
                         </p>
-                        <p className="text-muted-foreground mt-0.5 text-xs">
+                        <p className="text-muted-foreground mt-0.5 text-[13px]">
                           {String(job.employer || 'Employer not recorded')}
                         </p>
                         <p className="text-muted-foreground mt-1 text-[11px]">
@@ -255,7 +255,7 @@ export function CandidateDetailDialog({
                             'Dates not recorded'}
                         </p>
                         {typeof job.description === 'string' && (
-                          <p className="text-muted-foreground mt-2 text-xs leading-relaxed whitespace-pre-wrap">
+                          <p className="text-muted-foreground mt-2 text-[13px] leading-relaxed whitespace-pre-wrap">
                             {job.description}
                           </p>
                         )}
@@ -263,7 +263,7 @@ export function CandidateDetailDialog({
                     ))}
                   </ol>
                 ) : (
-                  <p className="text-muted-foreground mt-3 text-sm">
+                  <p className="text-muted-foreground mt-3 text-[13px]">
                     Work history has not been recorded. Review / edit to add employment facts.
                   </p>
                 )}
@@ -274,10 +274,10 @@ export function CandidateDetailDialog({
                   <div className="mt-3 space-y-3">
                     {candidate.education_history.map((education, index) => (
                       <div key={index}>
-                        <p className="text-sm font-medium">
+                        <p className="text-[13px] font-medium">
                           {String(education.degree || 'Qualification not recorded')}
                         </p>
-                        <p className="text-muted-foreground text-xs">
+                        <p className="text-muted-foreground text-[13px]">
                           {String(
                             education.institution || education.school || 'Institution not recorded'
                           )}
@@ -288,7 +288,7 @@ export function CandidateDetailDialog({
                 </section>
               )}
               {!!candidate.evidence?.length && (
-                <details className="rounded-lg border p-3 text-xs">
+                <details className="rounded-[10px] border p-3 text-[13px]">
                   <summary className="font-medium">
                     Source evidence ({candidate.evidence.length})
                   </summary>
@@ -310,16 +310,16 @@ export function CandidateDetailDialog({
             <section aria-label="Resume preview">
               {verified ? (
                 <>
-                  <p className="text-muted-foreground mb-3 text-xs">
+                  <p className="text-muted-foreground mb-3 text-[13px]">
                     Profile resume generated from confirmed facts. Original uploaded documents are
                     listed below.
                   </p>
-                  <pre className="resume-preview max-h-none font-sans text-sm leading-relaxed whitespace-pre-wrap">
+                  <pre className="resume-preview max-h-none font-sans text-[13px] leading-relaxed whitespace-pre-wrap">
                     {candidateResumeMarkdown(candidate)}
                   </pre>
                 </>
               ) : (
-                <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+                <p className="rounded-[10px] border border-amber-500/30 bg-amber-500/5 p-4 text-[13px]">
                   Review and confirm this profile before generating a resume. Original uploaded
                   documents remain available below.
                 </p>
@@ -335,10 +335,10 @@ export function CandidateDetailDialog({
                 {documents.map((document) => (
                   <div
                     key={document.id}
-                    className="border-border/60 flex flex-wrap items-center gap-2 rounded-lg border p-3"
+                    className="border-border/60 flex flex-wrap items-center gap-2 rounded-[10px] border p-3"
                   >
                     <FileText className="text-muted-foreground size-4 shrink-0" />
-                    <span className="min-w-0 flex-1 text-xs break-all">
+                    <span className="min-w-0 flex-1 text-[13px] break-all">
                       {document.filename}
                       <span className="text-muted-foreground ml-2">{document.status}</span>
                     </span>
@@ -375,7 +375,7 @@ export function CandidateDetailDialog({
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground mt-2 text-xs">
+              <p className="text-muted-foreground mt-2 text-[13px]">
                 No original resume document is saved.
               </p>
             )}

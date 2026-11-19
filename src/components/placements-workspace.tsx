@@ -86,7 +86,7 @@ export function PlacementsWorkspace({ initialPanel = 'placements' }: { initialPa
       />
 
       {error && (
-        <p role="alert" className="text-destructive text-xs">
+        <p role="alert" className="text-destructive text-[13px]">
           {error}
         </p>
       )}
@@ -94,16 +94,16 @@ export function PlacementsWorkspace({ initialPanel = 'placements' }: { initialPa
       {/* Navigation tabs */}
       <nav
         aria-label="Compensation sections"
-        className="bg-muted/50 border-border/70 inline-flex gap-1 rounded-xl border p-1 text-xs"
+        className="bg-muted/50 border-border/70 inline-flex gap-1 rounded-[12px] border p-1 text-[13px]"
       >
         {(['placements', 'collections'] as Panel[]).map((value) => (
           <button
             type="button"
             key={value}
             aria-pressed={panel === value}
-            className={`cursor-pointer rounded-lg px-3.5 py-1.5 font-medium transition-all ${
-              panel === value
-                ? 'bg-background text-foreground ring-border/60 font-semibold shadow-xs ring-1'
+            className={`cursor-pointer rounded-[10px] px-3.5 py-1.5 font-medium transition-colors ${
+ panel === value
+ ?'bg-background text-foreground ring-border/60 font-medium ring-1'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
             onClick={() => {
@@ -127,7 +127,7 @@ export function PlacementsWorkspace({ initialPanel = 'placements' }: { initialPa
               <Search className="text-muted-foreground absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
               <input
                 aria-label="Search records"
-                className="border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-ring h-9 w-full rounded-xl border pr-3 pl-9 text-xs focus-visible:ring-2 focus-visible:outline-none"
+                className="border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-ring h-9 w-full rounded-[12px] border pr-3 pl-9 text-[13px] focus-visible:ring-2 focus-visible:outline-none"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search candidate, company, role…"
@@ -136,7 +136,7 @@ export function PlacementsWorkspace({ initialPanel = 'placements' }: { initialPa
 
             <select
               aria-label="Filter by placement status"
-              className="border-input bg-background text-foreground focus-visible:ring-ring h-9 rounded-xl border px-3 text-xs focus-visible:ring-2 focus-visible:outline-none"
+              className="border-input bg-background text-foreground focus-visible:ring-ring h-9 rounded-[12px] border px-3 text-[13px] focus-visible:ring-2 focus-visible:outline-none"
               value={status}
               onChange={(e) => setStatus(e.target.value)}
             >
@@ -152,7 +152,7 @@ export function PlacementsWorkspace({ initialPanel = 'placements' }: { initialPa
           {!data && <WorkspaceSkeleton rows={4} />}
 
           {data && (
-            <div className="border-border/80 bg-card overflow-x-auto rounded-2xl border shadow-xs">
+            <div className="border-border/80 bg-card overflow-x-auto rounded-[16px] border">
               <table className="ops-table">
                 <thead>
                   <tr>
@@ -167,23 +167,23 @@ export function PlacementsWorkspace({ initialPanel = 'placements' }: { initialPa
                 <tbody>
                   {!placements.length ? (
                     <tr>
-                      <td colSpan={6} className="text-muted-foreground h-28 text-center text-xs">
+                      <td colSpan={6} className="text-muted-foreground h-28 text-center text-[13px]">
                         No placements match your criteria.
                       </td>
                     </tr>
                   ) : (
                     placements.map((row) => (
                       <tr key={row.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="text-foreground text-xs font-semibold">
+                        <td className="text-foreground text-[13px] font-medium">
                           {row.candidate?.full_name || 'Confidential Candidate'}
                         </td>
                         <td>
-                          <span className="text-foreground block text-xs font-medium">
+                          <span className="text-foreground block text-[13px] font-medium">
                             {row.role_title}
                           </span>
                           <span className="text-muted-foreground text-[11px]">{row.company}</span>
                         </td>
-                        <td className="font-mono text-xs">
+                        <td className="font-mono text-[13px]">
                           <p>
                             {row.actual_join_date ? 'Joined: ' : 'Planned: '}
                             {row.actual_join_date || row.planned_start_date || 'Not set'}
@@ -193,7 +193,7 @@ export function PlacementsWorkspace({ initialPanel = 'placements' }: { initialPa
                             {row.actual_end_date || row.expected_end_date || 'Ongoing'}
                           </p>
                         </td>
-                        <td className="font-mono text-xs font-medium">
+                        <td className="font-mono text-[13px] font-medium">
                           {row.candidate_monthly_amount != null
                             ? formatMoney(
                                 row.candidate_monthly_amount,
@@ -209,7 +209,7 @@ export function PlacementsWorkspace({ initialPanel = 'placements' }: { initialPa
                             variant="ghost"
                             size="xs"
                             onClick={() => setSelected(row.id)}
-                            className="text-primary cursor-pointer text-xs hover:underline"
+                            className="text-primary cursor-pointer text-[13px] hover:underline"
                           >
                             View Details
                           </Button>
@@ -232,9 +232,9 @@ export function PlacementsWorkspace({ initialPanel = 'placements' }: { initialPa
             {placements
               .filter((row) => row.id === selected)
               .map((row) => (
-                <article key={row.id} className="space-y-4 text-xs">
-                  <div className="border-border/80 bg-muted/20 space-y-1 rounded-xl border p-4">
-                    <h4 className="text-foreground text-sm font-bold">
+                <article key={row.id} className="space-y-4 text-[13px]">
+                  <div className="border-border/80 bg-muted/20 space-y-1 rounded-[12px] border p-4">
+                    <h4 className="text-foreground text-[13px] font-medium">
                       {row.candidate?.full_name || 'Candidate'} · {row.company}
                     </h4>
                     <p className="text-muted-foreground">
@@ -246,16 +246,16 @@ export function PlacementsWorkspace({ initialPanel = 'placements' }: { initialPa
                     </p>
                   </div>
 
-                  <h3 className="text-muted-foreground pt-1 text-xs font-bold tracking-wider uppercase">
+                  <h3 className="text-muted-foreground pt-1 text-[13px] font-medium">
                     Monthly Employment Records ({row.months?.length || 0})
                   </h3>
                   <div className="space-y-2">
                     {row.months?.map((month) => (
                       <div
                         key={month.id}
-                        className="border-border/70 bg-card space-y-1 rounded-xl border p-3 shadow-2xs"
+                        className="border-border/70 bg-card space-y-1 rounded-[12px] border p-3"
                       >
-                        <p className="text-foreground font-mono font-bold">
+                        <p className="text-foreground font-mono font-medium">
                           {month.covered_start} to {month.covered_end} · {month.status}
                         </p>
                         <p className="text-muted-foreground text-[11px]">
