@@ -306,6 +306,70 @@ test('Application Lifecycle: autofill restores tracking on an already-open posti
   assert.deepEqual(requests.at(-1).body, { url: 'https://careers.example.test/#/jobs/123/apply' });
 });
 
+test('Application Lifecycle: an embedded Ashby receipt saves the outside posting from its own frame', async () => {
+  const posting = '206c6a86-74e3-4fcf-9175-fdfe07858676';
+  const workspace = 'https://www.nextkinhr.com';
+  const parent = 'https://www.ashbyhq.com/careers?ashby_jid=' + posting;
+  const hosted = 'https://jobs.ashbyhq.com/Ashby/' + posting;
+  const frame = { frameId: 3, documentId: 'embedded-document', url: hosted + '/application?embed=js' };
+  const tab = { id: 17, url: parent };
+  const profile = '8b1d6779-6dc3-419c-855a-fa293123aba0';
+  const state = {};
+  const scripts = [];
+  const requests = [];
+  const noop = { addListener() {} };
+  const worker = {
+    URL, URLSearchParams, AbortSignal, crypto,
+    chrome: {
+      runtime: { onInstalled: noop, onStartup: noop, onConnect: noop, onMessage: noop },
+      tabs: { onUpdated: noop, onRemoved: noop, get: async () => tab },
+      storage: {
+        local: { get: async () => ({ origin: workspace, token: 'fixture' }) },
+        session: {
+          get: async (keys) => Object.fromEntries([keys].flat().map(key => [key, state[key]])),
+          set: async (records) => Object.assign(state, records),
+        },
+      },
+      scripting: {
+        executeScript: async ({ target, files }) => {
+          assert.equal(target.documentIds[0], frame.documentId);
+          if (files) scripts.push(files[0]);
+          return [{ frameId: frame.frameId, result: frame.url }];
+        },
+      },
+    },
+    fetch: async (url, options) => {
+      requests.push({ url, payload: JSON.parse(options.body) });
+      return Response.json({ success: true });
+    },
+  };
+  runInNewContext(readFileSync(new URL('../jobright_extension/background.js', import.meta.url), 'utf8'), worker);
+  const job = { title: 'Manager of Renewals, SMB', company: 'Ashby' };
+  assert.equal(await worker.prepareEmbeddedOutsideApplication(tab.id, parent.replace(posting, profile), frame, job, profile), false);
+  assert.equal(await worker.prepareEmbeddedOutsideApplication(tab.id, parent + '#marketing-intent=' + profile, frame, job, profile), false);
+  assert.equal(await worker.prepareEmbeddedOutsideApplication(tab.id, parent, frame, job, profile), true);
+  assert.equal(await worker.prepareEmbeddedOutsideApplication(tab.id, parent, frame, job, profile), true);
+  assert.deepEqual(scripts, ['application-confirmation.js']);
+
+  const receipt = { evidence: 'Your application was successfully submitted' };
+  const sender = { tab, frameId: frame.frameId, documentId: frame.documentId, url: hosted + '?embed=js' };
+  assert.equal(await worker.recordConfirmation(receipt, { ...sender, documentId: 'different-document' }), false);
+  assert.equal(await worker.recordConfirmation(receipt, { ...sender, url: hosted.replace(posting, profile) }), false);
+  assert.equal(await worker.recordConfirmation(receipt, { ...sender, tab: { ...tab, url: parent.replace(posting, profile) } }), false);
+  assert.equal(requests.length, 0);
+  assert.equal(await worker.recordConfirmation(receipt, sender), true);
+  assert.equal(await worker.recordConfirmation(receipt, sender), true);
+  assert.equal(requests.length, 1);
+  const [{ url, payload }] = requests;
+  assert.equal(url, workspace + '/api/extension/auto-submit');
+  assert.equal(payload.jobUrl, hosted + '/application');
+  assert.equal(payload.confirmationUrl, hosted);
+  assert.equal(payload.jobTitle, job.title);
+  assert.equal(payload.externalId, posting);
+  assert.equal(payload.candidateId, profile);
+  assert.equal(allowedCaptureUrl(payload.confirmationUrl, payload.jobUrl, 'submitted', payload.evidence), true);
+});
+
 test('Application Lifecycle: manual application tracking starts only for a real job form submission', () => {
   const job = { title: 'Software Engineer', company: 'Company' };
   const location = new URL('https://careers.example.test/jobs/123/apply');

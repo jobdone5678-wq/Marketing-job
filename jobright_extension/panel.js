@@ -433,9 +433,13 @@ async function refresh() {
   if (documents.some(doc => doc.id === preferences?.[preferenceKey] && doc.status === 'failed')) {
     notice('upload-status', 'Resume processing failed. Choose another PDF or DOCX.', true);
   }
-  currentForm = frames.find(frame => frame.frameId === 0 && frame.result?.hasForm) ||
+  const ashbyFrame = frames.find(frame => frame.result?.job && embeddedAshbyForm(tab, frame));
+  currentForm = (ashbyFrame?.result.hasForm && ashbyFrame) ||
+    frames.find(frame => frame.frameId === 0 && frame.result?.hasForm) ||
     frames.find(frame => frame.result?.hasForm) || null;
-  let job = frames.find(frame => frame.frameId === 0 && frame.result?.job)?.result.job ||
+  const embeddedFrame = embeddedAshbyForm(tab, currentForm);
+  let job = embeddedAshbyJob(ashbyFrame) ||
+    frames.find(frame => frame.frameId === 0 && frame.result?.job)?.result.job ||
     frames.find(frame => frame.result?.job)?.result.job || null;
   if (!job && /^https?:/.test(tab?.url || '')) {
     job = await loadKekaPosting(tab.url).catch(() => null);
@@ -453,6 +457,10 @@ async function refresh() {
     notice('notice', '');
   }
   if (!connection || !job) return;
+  if (embeddedFrame && currentForm.result.job && candidate?.id) {
+    void chrome.runtime.sendMessage({ action: 'prepare_application_tracking', tabId: tab.id,
+      url: tab.url, embeddedFrame, job: embeddedAshbyJob(currentForm), candidateId: candidate.id }).catch(() => {});
+  }
   const jobOrigin = workspaceUrl(job.jobUrl);
   const portalJob = jobOrigin && /^\/(?:dashboard\/jobs|jobs\/info)\//.test(new URL(job.jobUrl).pathname);
   if (portalJob && apiOrigin(jobOrigin) !== apiOrigin(connection.origin)) {
@@ -636,6 +644,22 @@ function formTarget(tab, frame) {
     : { tabId: tab.id, frameIds: [frame.frameId] };
 }
 
+function embeddedAshbyForm(tab, frame) {
+  if (!frame?.frameId || !frame.documentId || !frame.result?.url) return undefined;
+  const parent = new URL(tab.url);
+  const url = new URL(frame.result.url);
+  const id = parent.searchParams.get('ashby_jid');
+  if (!id || new URLSearchParams(parent.hash.slice(1)).has('marketing-intent') ||
+    url.origin !== 'https://jobs.ashbyhq.com' || url.pathname.split('/')[2]?.toLowerCase() !== id.toLowerCase()) return undefined;
+  return { frameId: frame.frameId, documentId: frame.documentId, url: frame.result.url };
+}
+
+function embeddedAshbyJob(frame) {
+  if (!frame?.result?.job) return null;
+  const jobUrl = frame.result.url;
+  return { ...frame.result.job, jobUrl, externalId: new URL(jobUrl).pathname.split('/')[2] };
+}
+
 async function fillForm(tab, frame, profile, file, documentId) {
   const [filled] = await chrome.scripting.executeScript({
     target: formTarget(tab, frame),
@@ -653,6 +677,7 @@ $('autofill').addEventListener('click', async () => {
   if (busy || !currentForm || !candidate || !connection) return;
   const tab = currentTab;
   const frame = currentForm;
+  const embeddedFrame = embeddedAshbyForm(tab, frame);
   const session = connection;
   const autoSubmit = frame.frameId === 0 && $('auto-submit').checked;
   $('auto-submit').checked = false;
@@ -665,7 +690,7 @@ $('autofill').addEventListener('click', async () => {
     const [freshProfile, job] = await Promise.all([
       api('candidates?' + new URLSearchParams({ candidateId: cachedProfile.id, savedOnly: 'true' }), {}, session)
         .then(data => data.candidates?.[0]),
-      activeJob || scan(tab).then(frames => frames.find(frame => frame.result?.job)?.result.job),
+      embeddedFrame ? embeddedAshbyJob(frame) : activeJob || scan(tab).then(frames => frames.find(frame => frame.result?.job)?.result.job),
     ]);
     if (freshProfile?.provenance_status !== 'confirmed' || !freshProfile.confirmed_facts?.full_name ||
       String(freshProfile.confirmed_facts.notes || '').startsWith('Profile created from an uploaded resume.')) {
@@ -701,7 +726,7 @@ $('autofill').addEventListener('click', async () => {
     }
     await checkFormContext(tab, session);
     const tracking = await chrome.runtime.sendMessage({
-      action: 'prepare_application_tracking', tabId: tab.id, url: tab.url, job, candidateId: profile.id,
+      action: 'prepare_application_tracking', tabId: tab.id, url: tab.url, embeddedFrame, job, candidateId: profile.id,
     }).catch(() => ({ error: 'Application tracking could not start.' }));
     await checkFormContext(tab, session);
     const documentId = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(selected?.id || '') ? selected.id : null;

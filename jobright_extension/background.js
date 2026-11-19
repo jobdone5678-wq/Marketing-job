@@ -6,6 +6,7 @@ chrome.runtime.onInstalled.addListener(configurePanel);
 chrome.runtime.onStartup.addListener(configurePanel);
 
 const trackedKey = tabId => 'application-intent:' + tabId;
+const embeddedKey = tabId => 'embedded-outside-application:' + tabId;
 const stepKey = tabId => 'application-next-step:' + tabId;
 const intentIdPattern = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
 
@@ -130,6 +131,68 @@ async function claimApplicationStep(tabId, sender) {
   return { profile, resume, resumeDocumentId: step.resumeDocumentId };
 }
 
+function externalJobDetails(job, url, jobUrl, candidateId) {
+  const text = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : '';
+  const jobTitle = text(job?.title, 200);
+  const companyName = text(job?.company, 200);
+  if (!jobTitle || !companyName) return null;
+  return {
+    candidateId, jobUrl, jobTitle, companyName, portalSource: text(job.portalSource, 100) || url.hostname,
+    jobLocation: text(job.location, 200), department: text(job.department, 100),
+    employmentType: text(job.employmentType, 50), jobDescription: text(job.description, 60000),
+    externalId: text(job.externalId, 200) || null,
+  };
+}
+
+function ashbyFramePosting(url) {
+  if (url.origin !== 'https://jobs.ashbyhq.com') return null;
+  const id = url.pathname.split('/')[2];
+  return intentIdPattern.test(id || '') ? id.toLowerCase() : null;
+}
+
+function ashbyParentMatches(parent, posting) {
+  return parent.protocol === 'https:' && Boolean(posting) &&
+    parent.searchParams.get('ashby_jid')?.toLowerCase() === posting &&
+    !new URLSearchParams(parent.hash.slice(1)).has('marketing-intent');
+}
+
+async function prepareEmbeddedOutsideApplication(tabId, tabUrl, frame, job, candidateId) {
+  if (!frame.documentId || !Number.isInteger(frame.frameId) || frame.frameId <= 0 || !intentIdPattern.test(candidateId || '')) return false;
+  const parent = new URL(tabUrl);
+  const url = new URL(frame.url);
+  const posting = ashbyFramePosting(url);
+  if (!ashbyParentMatches(parent, posting)) return false;
+  const { origin, token } = await chrome.storage.local.get(['origin', 'token']);
+  const workspace = workspaceOrigin(origin);
+  if (!workspace || !token || (await chrome.tabs.get(tabId)).url !== tabUrl) return false;
+
+  const key = embeddedKey(tabId);
+  const storage = await chrome.storage.session.get([key, trackedKey(tabId)]);
+  const top = storage[trackedKey(tabId)];
+  if (top?.intentId && top.jobOrigin === portalOrigin(parent)) return true;
+  const previous = storage[key];
+  if (previous?.documentId === frame.documentId && previous.parentOrigin === parent.origin && previous.externalJob.externalId === posting &&
+    previous.externalJob.candidateId === candidateId && previous.token === token && previous.workspace === workspace) return true;
+  const target = { tabId, documentIds: [frame.documentId] };
+  const [verified] = await chrome.scripting.executeScript({ target, func: () => location.href });
+  if (verified?.frameId !== frame.frameId || verified.result !== frame.url) return false;
+  const externalJob = externalJobDetails(job, url, cleanApplicationUrl(url), candidateId);
+  if (!externalJob) return false;
+  const context = {
+    frameId: frame.frameId, documentId: frame.documentId, parentOrigin: parent.origin, jobOrigin: url.origin, workspace, token,
+    externalJob: { ...externalJob, externalId: posting }, eventKey: crypto.randomUUID(),
+  };
+  await chrome.storage.session.set({ [key]: context });
+  try {
+    await chrome.scripting.executeScript({ target, files: ['application-confirmation.js'] });
+  } catch (error) {
+    if ((await chrome.storage.session.get(key))[key]?.eventKey === context.eventKey)
+      await chrome.storage.session.remove(key);
+    throw error;
+  }
+  return true;
+}
+
 async function prepareApplication(tabId, expectedUrl, job, candidateId, submittedFromPage = false, submissionEvidence) {
   const url = new URL(expectedUrl);
   if (url.protocol !== 'https:') return false;
@@ -170,23 +233,14 @@ async function prepareApplication(tabId, expectedUrl, job, candidateId, submitte
     const { intent } = await response.json();
     if (candidateId && intent?.candidate_id !== candidateId) throw new Error('Select the candidate who started this application.');
   }
-  const text = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : '';
   let externalJob;
   if (!intentIdPattern.test(intentId || '')) {
     intentId = null;
     if (url.origin === workspace || /(^|\.)(nextkinhr\.com|jobright-internal\.com)$/.test(url.hostname)) return false;
-    const jobTitle = text(job?.title, 200);
-    const companyName = text(job?.company, 200);
-    if (!jobTitle || !companyName) return false;
     const previousCandidate = context?.token === token && context.workspace === workspace && context.externalJob?.jobUrl === jobUrl
       ? context.externalJob.candidateId : null;
-    externalJob = {
-      candidateId: intentIdPattern.test(candidateId || '') ? candidateId : previousCandidate || 'current',
-      jobUrl, jobTitle, companyName, portalSource: text(job.portalSource, 100) || url.hostname,
-      jobLocation: text(job.location, 200), department: text(job.department, 100),
-      employmentType: text(job.employmentType, 50), jobDescription: text(job.description, 60000),
-      externalId: text(job.externalId, 200) || null,
-    };
+    externalJob = externalJobDetails(job, url, jobUrl, intentIdPattern.test(candidateId || '') ? candidateId : previousCandidate || 'current');
+    if (!externalJob) return false;
   }
   if (!await stillOnApplication()) throw new Error('The application tab changed. Try autofill again.');
 
@@ -231,15 +285,22 @@ chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
 });
 
 chrome.tabs.onRemoved.addListener(tabId => {
-  void chrome.storage.session.remove([trackedKey(tabId), stepKey(tabId)]);
+  void chrome.storage.session.remove([trackedKey(tabId), stepKey(tabId), embeddedKey(tabId)]);
 });
 
 async function recordConfirmation(message, sender) {
-  if (sender.tab?.id == null || sender.frameId !== 0 || !sender.url) return false;
+  if (sender.tab?.id == null || !Number.isInteger(sender.frameId) || !sender.url) return false;
   const url = new URL(sender.url);
-  const key = trackedKey(sender.tab.id);
+  const embedded = sender.frameId !== 0;
+  const key = embedded ? embeddedKey(sender.tab.id) : trackedKey(sender.tab.id);
   const context = (await chrome.storage.session.get(key))[key];
   if (!context || portalOrigin(url) !== context.jobOrigin) return false;
+  if (embedded) {
+    if (sender.frameId !== context.frameId || sender.documentId !== context.documentId || !sender.tab.url) return false;
+    const parent = new URL(sender.tab.url);
+    const posting = ashbyFramePosting(url);
+    if (parent.origin !== context.parentOrigin || posting !== context.externalJob.externalId || !ashbyParentMatches(parent, posting)) return false;
+  }
   if (context.reported) return true;
   const current = await chrome.storage.local.get(['origin', 'token']);
   if (workspaceOrigin(current.origin) !== context.workspace || current.token !== context.token) return false;
@@ -351,8 +412,11 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     const tabId = panel ? message.tabId : applicationPage ? sender.tab?.id : undefined;
     if (!Number.isInteger(tabId)) return false;
     const submitted = applicationPage && message.submitted === true;
-    const tracking = prepareApplication(tabId, message.url, message.job, message.candidateId,
-      submitted, submitted ? message.submissionEvidence : undefined);
+    const tracking = panel && message.embeddedFrame
+      ? Promise.resolve(pendingTracking.get(tabId)).catch(() => {}).then(() =>
+        prepareEmbeddedOutsideApplication(tabId, message.url, message.embeddedFrame, message.job, message.candidateId))
+      : prepareApplication(tabId, message.url, message.job, message.candidateId,
+        submitted, submitted ? message.submissionEvidence : undefined);
     pendingTracking.set(tabId, tracking);
     void tracking.then(
       tracked => reply({ tracked }),
