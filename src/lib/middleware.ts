@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { profileAccess } from '@/lib/auth/profile-access';
 
 const middlewareProfileCache = new Map<
   string,
@@ -74,18 +75,18 @@ export async function updateSession(request: NextRequest) {
         middlewareProfileCache.set(user.id, { ...profile, expiresAt: Date.now() + 2500 });
       }
     }
-    if (pathname.startsWith('/dashboard') && profile?.status !== 'active') {
+    if (pathname.startsWith('/dashboard') && !profileAccess(profile)) {
       const url = request.nextUrl.clone();
       url.pathname = '/';
       url.search = '';
       return NextResponse.redirect(url);
     }
   }
-  // Signed-in candidates stay on the sign-in/status page rather than redirecting in a loop.
+  // Active candidates can go straight to the portal.
   if (
     user &&
     pathname === '/' &&
-    profile?.status === 'active' &&
+    profileAccess(profile) &&
     !request.nextUrl.searchParams.has('error')
   ) {
     const url = request.nextUrl.clone();

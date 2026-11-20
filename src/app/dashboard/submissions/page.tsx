@@ -4,13 +4,13 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useApplicationRealtime } from '@/hooks/use-application-realtime';
 import { getSubmissions, deleteSubmission } from '@/lib/submissions';
-import { getCandidates } from '@/lib/candidates';
 import {
   dailySubmissionCounts,
   inSubmissionDateRange,
   submissionDatePreset,
 } from '@/lib/submission-dates';
-import type { Candidate, JobSubmission, SubmissionStatus } from '@/types/database';
+import type { JobSubmission, SubmissionStatus } from '@/types/database';
+
 import { SubmissionStatusDialog } from '@/components/submission-status-dialog';
 import { ApplicationAnswerSnapshot } from '@/components/application-answer-snapshot';
 import { CaptureState } from '@/components/application-evidence';
@@ -35,17 +35,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { CandidateCombobox } from '@/components/candidate-combobox';
 import { WorkspaceError, WorkspaceSkeleton } from '@/components/workspace-ui';
-import { useUserProfile } from '@/hooks/use-user-profile';
 import {
   SendIcon,
-  PlusIcon,
   SearchIcon,
   RefreshCwIcon,
   DownloadIcon,
-  CopyIcon,
-  CheckIcon,
   AlertTriangleIcon,
   CalendarIcon,
   ExternalLinkIcon,
@@ -63,11 +58,8 @@ import {
 } from 'lucide-react';
 
 export default function SubmissionsPage() {
-  const { isCandidate } = useUserProfile();
-  const canPushProfile = false;
   const [submissions, setSubmissions] = React.useState<JobSubmission[]>([]);
   const submissionRequest = React.useRef(0);
-  const [candidates, setCandidates] = React.useState<Candidate[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [loadError, setLoadError] = React.useState('');
   const [showDetails, setShowDetails] = React.useState(false);
@@ -86,16 +78,13 @@ export default function SubmissionsPage() {
   const [activeSubmissionForStatus, setActiveSubmissionForStatus] =
     React.useState<JobSubmission | null>(null);
 
-  const [copiedReport, setCopiedReport] = React.useState(false);
-
   // Load data
   const loadData = React.useCallback(async () => {
     const request = ++submissionRequest.current;
     setLoading(true);
     try {
-      const [subsData, candsData] = await Promise.all([getSubmissions(), getCandidates()]);
+      const subsData = await getSubmissions();
       if (request === submissionRequest.current) setSubmissions(subsData);
-      setCandidates(candsData);
       setLoadError('');
     } catch {
       setLoadError(
@@ -125,7 +114,7 @@ export default function SubmissionsPage() {
 
   useApplicationRealtime(() => {
     void refreshSubmissions();
-  }, isCandidate);
+  }, true);
 
   React.useEffect(() => {
     const refreshOnReturn = () => {
@@ -387,48 +376,6 @@ export default function SubmissionsPage() {
     });
   };
 
-  // Copy Daily Standup Report
-  const handleCopyStandupReport = () => {
-    const today = new Date().toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-
-    let report = `DAILY RECRUITING & BENCH MARKETING REPORT (${today})\n`;
-    report += `========================================================\n\n`;
-    report += `📊 SUMMARY METRICS:\n`;
-    report += `• Matching Submissions: ${stats.total}\n`;
-    report += `• Application dates: ${dateFrom || 'Any date'} through ${dateTo || 'Any date'}\n`;
-    report += dailyCounts.map((day) => `  ${day.date}: ${day.count} applications\n`).join('');
-    report += `• Active Interviews / Rounds: ${stats.interviews}\n`;
-    report += `• Submitted to Client: ${stats.clientReview}\n`;
-    report += `• Offers Received: ${stats.offers}\n\n`;
-
-    report += `📋 ACTIVE PIPELINE DETAILS:\n`;
-    filteredSubmissions.forEach((s, idx) => {
-      report += `${idx + 1}. [${s.status.replace(/_/g, ' ')}] ${s.candidate?.full_name || 'Not recorded'} → ${s.company_name} (${s.job_title})\n`;
-      report += `   Vendor: ${s.vendor_company || 'Direct'} | Rate: ${s.submitted_rate || 'Not recorded'}\n`;
-      if (s.rtr_document) {
-        report += `   RTR: ${s.rtr_document.rtr_type} - ${s.rtr_document.rtr_status} (${s.rtr_document.vendor_name || 'Direct'}) | Date: ${s.rtr_document.rtr_date}\n`;
-      }
-      if (s.interview_time) {
-        report += `   Interview: ${new Date(s.interview_time).toLocaleString()} (${s.interview_mode || 'Not recorded'})\n`;
-      }
-      if (s.notes) {
-        report += `   Notes: ${s.notes}\n`;
-      }
-      report += `\n`;
-    });
-
-    navigator.clipboard.writeText(report);
-    setCopiedReport(true);
-    toast.success('Standup Report Copied!', {
-      description: 'Ready to paste into Slack, Teams, or daily manager email.',
-    });
-    setTimeout(() => setCopiedReport(false), 2500);
-  };
-
   // Delete handler
   const handleDelete = async (id: string, company: string) => {
     if (confirm(`Are you sure you want to delete submission for ${company}?`)) {
@@ -450,7 +397,7 @@ export default function SubmissionsPage() {
           <div>
             <div className="flex items-center gap-2.5">
               <h1 className="text-foreground text-2xl font-bold tracking-tight sm:text-3xl">
-                {isCandidate ? 'My Applications' : 'Job submissions'}
+                My Applications
               </h1>
               <Badge
                 variant="outline"
@@ -461,9 +408,7 @@ export default function SubmissionsPage() {
               </Badge>
             </div>
             <p className="text-muted-foreground mt-1 text-sm">
-              {isCandidate
-                ? 'Track all your submitted applications, interview stages, and statuses.'
-                : 'Every application, its recorded resume, and the next step — in one place.'}
+              Track your submitted applications, interviews, and statuses.
             </p>
           </div>
 
@@ -474,23 +419,8 @@ export default function SubmissionsPage() {
               render={<Link href="/dashboard/email-confirmations" />}
               className="border-border/70 hover:bg-muted/50 h-9 cursor-pointer gap-1.5 rounded-lg text-xs"
             >
-              <MailIcon className="size-3.5" /> Email confirmations
+              <MailIcon className="size-3.5" /> Email Sync
             </Button>
-            {false && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCopyStandupReport}
-                className="border-border/70 hover:bg-muted/50 h-9 cursor-pointer gap-1.5 rounded-lg text-xs"
-              >
-                {copiedReport ? (
-                  <CheckIcon className="size-3.5 text-emerald-600" />
-                ) : (
-                  <CopyIcon className="size-3.5" />
-                )}
-                {copiedReport ? 'Report Copied' : 'Daily Report'}
-              </Button>
-            )}
 
             <Button
               variant="outline"
@@ -513,21 +443,12 @@ export default function SubmissionsPage() {
               Refresh
             </Button>
 
-            {false && (
-              <Link href="/dashboard/submissions/new">
-                <Button
-                  size="sm"
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 h-9 cursor-pointer gap-1.5 rounded-lg px-3.5 text-xs font-semibold shadow-xs transition-all hover:shadow"
-                >
-                  <PlusIcon className="size-3.5" />
-                  New Submission
-                </Button>
-              </Link>
-            )}
           </div>
         </div>
 
-        {/* 5 Elevated Metric Cards */}
+
+
+        {/* Application metrics */}
         <section
           aria-label="Application metrics"
           className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
@@ -632,11 +553,10 @@ export default function SubmissionsPage() {
                   aria-pressed={isSelected}
                   type="button"
                   onClick={() => setSelectedStatusTab(tab.id)}
-                  className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
-                    isSelected
+                  className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-150 ${isSelected
                       ? 'bg-background text-foreground ring-border/60 font-semibold shadow-xs ring-1'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -659,13 +579,6 @@ export default function SubmissionsPage() {
           </div>
 
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-            {false && (
-              <CandidateCombobox
-                candidates={candidates}
-                value={selectedCandidateFilter}
-                onChange={setSelectedCandidateFilter}
-              />
-            )}
 
             {/* Portal Source Filter */}
             <Select
@@ -680,7 +593,7 @@ export default function SubmissionsPage() {
                   {selectedPortalFilter === 'all'
                     ? 'All portals'
                     : portalOptions.find(([value]) => value === selectedPortalFilter)?.[1] ||
-                      selectedPortalFilter}
+                    selectedPortalFilter}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -899,14 +812,6 @@ export default function SubmissionsPage() {
           >
             <TableHeader className="bg-muted/40 border-border/60 border-b">
               <TableRow>
-                {false && (
-                  <TableHead
-                    data-col="candidate"
-                    className="text-muted-foreground w-[180px] text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
-                  >
-                    Candidate
-                  </TableHead>
-                )}
                 <TableHead
                   data-col="client"
                   className="text-muted-foreground w-[200px] text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
@@ -999,31 +904,6 @@ export default function SubmissionsPage() {
                   return (
                     <TableRow key={sub.id} className="hover:bg-muted/30 transition-colors">
                       {/* Candidate Column */}
-                      {false && (
-                        <TableCell data-col="candidate" className="py-3.5 align-top">
-                          <div className="flex items-start gap-2.5">
-                            <div className="from-primary/15 via-primary/5 text-primary border-primary/20 mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border bg-gradient-to-br to-transparent text-xs font-bold shadow-2xs">
-                              {candidateName.charAt(0).toUpperCase()}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-foreground text-xs leading-snug font-semibold">
-                                {candidateName}
-                              </div>
-                              <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                                <Badge
-                                  variant="outline"
-                                  className="border-blue-500/20 bg-blue-500/10 px-1.5 py-0 text-[10px] font-medium text-blue-600 dark:text-blue-400"
-                                >
-                                  {visaStatus}
-                                </Badge>
-                                <span className="text-muted-foreground max-w-[110px] truncate text-[10px]">
-                                  {sub.candidate?.target_job_titles || 'Not recorded'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </TableCell>
-                      )}
 
                       {/* Company & Role */}
                       <TableCell data-col="client" className="py-3.5 align-top">
@@ -1067,15 +947,15 @@ export default function SubmissionsPage() {
                               style={
                                 sub.source_type === 'extension'
                                   ? {
-                                      backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                      borderColor: 'rgba(59, 130, 246, 0.3)',
-                                      color: '#3b82f6',
-                                    }
+                                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                    borderColor: 'rgba(59, 130, 246, 0.3)',
+                                    color: '#3b82f6',
+                                  }
                                   : {
-                                      backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                                      borderColor: 'rgba(139, 92, 246, 0.3)',
-                                      color: '#8b5cf6',
-                                    }
+                                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                                    borderColor: 'rgba(139, 92, 246, 0.3)',
+                                    color: '#8b5cf6',
+                                  }
                               }
                             >
                               {sub.source_type === 'extension' ? (
@@ -1236,11 +1116,11 @@ export default function SubmissionsPage() {
                         {(() => {
                           const cleanNotes = sub.notes
                             ? sub.notes
-                                .replace(/\[ATS Match:[^\]]*\]/gi, '')
-                                .replace(/Matched:[^•|\n]*/gi, '')
-                                .replace(/Missing:[^•|\n]*/gi, '')
-                                .replace(/[•|]/g, '')
-                                .trim()
+                              .replace(/\[ATS Match:[^\]]*\]/gi, '')
+                              .replace(/Matched:[^•|\n]*/gi, '')
+                              .replace(/Missing:[^•|\n]*/gi, '')
+                              .replace(/[•|]/g, '')
+                              .trim()
                             : '';
                           return cleanNotes ? (
                             <p className="text-muted-foreground line-clamp-2 text-[11px] italic">

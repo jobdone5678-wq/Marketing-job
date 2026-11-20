@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: var(--panel-background);
+  --color-foreground: var(--panel-foreground);
+  --color-muted-foreground: var(--panel-muted);
+  --color-border: var(--panel-border);
+}
+
+@layer base {
+  :root {
+    color-scheme: light dark;
+    --panel-background: light-dark(#ffffff, #18181b);
+    --panel-foreground: light-dark(#18181b, #fafafa);
+    --panel-muted: light-dark(#52525b, #a1a1aa);
+    --panel-border: light-dark(#e4e4e7, #3f3f46);
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}

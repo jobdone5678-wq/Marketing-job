@@ -1,0 +1,236 @@
+/**
+ * The four primitives that drive a custom-widget combobox the way a person does:
+ * open it, read what it actually offers, choose one, confirm what got committed.
+ * Writing text into such a widget commits whatever its listbox happens to
+ * highlight — the spike's "Norfolk Island" for a question wanting "No" — so
+ * `fill_simple` refuses them and these primitives replace it.
+ *
+ * Pure over the Document, like `form.ts`, but asynchronous: a widget re-renders
+ * when its framework decides to, not when the event is dispatched, so opening and
+ * selecting must be *awaited* rather than dispatched-and-read.
+ */
+
+import type { ComboboxReply, ComboboxStep, LabelFill } from './protocol';
+import { collectQuestions, setNativeValue } from './form';
+import { comboListbox, comboOptionNodes, displayedValues, isComboWidget, isOnScreen, shownText } from './comboWidget';
+import { normalizeLabel } from './fieldKeys';
+import { assertNever } from './utils';
+
+/**
+ * `ambiguous` is shared by all four: a label that addresses several widgets
+ * cannot say which one is meant. Greenhouse asks School / Degree / Discipline
+ * once per education row, so answering for the first would report row 1's value
+ * as row 2's — a success claimed for a field still empty.
+ */
+export type OpenStatus = 'opened' | 'did_not_open' | 'not_found' | 'ambiguous';
+export type OptionsStatus = 'open' | 'not_open' | 'not_found' | 'ambiguous';
+export type SelectStatus = 'selected' | 'did_not_commit' | 'no_option' | 'not_open' | 'not_found' | 'ambiguous';
+export type VerifyStatus = 'verified' | 'mismatch' | 'empty' | 'not_found' | 'ambiguous';
+
+/** How long a widget gets to re-render before it counts as unresponsive. */
+const SETTLE_MS = 1000;
+const POLL_MS = 25;
+
+/**
+ * Reveals the widget's listbox. Reports `did_not_open` rather than assuming, so
+ * the agent stops instead of acting blind on a widget it cannot drive.
+ */
+export async function open(doc: Document, label: string): Promise<{ status: OpenStatus }> {
+  const found = findWidget(doc, label);
+  if (!found.widget) return { status: found.status };
+  const widget = found.widget;
+  if (isOpen(widget)) return { status: 'opened' };
+
+  press(widget);
+  return { status: (await settle(() => isOpen(widget))) ? 'opened' : 'did_not_open' };
+}
+
+/**
+ * What the open widget currently offers — the evidence the agent chooses from.
+ * A closed widget and an open one offering nothing are reported apart, because
+ * their remedies differ: the first needs opening, while the second is a typeahead
+ * that fetches its options over the network and is out of scope.
+ */
+export function options(doc: Document, label: string): { status: OptionsStatus; options: string[] } {
+  const { widget, status } = findWidget(doc, label);
+  if (!widget) return { status, options: [] };
+  if (!isOpen(widget)) return { status: 'not_open', options: [] };
+  return { status: 'open', options: comboOptionNodes(widget).map(shownText).filter(Boolean) };
+}
+
+/**
+ * Commits an offered option by acting on the option itself. A value the widget
+ * does not offer commits nothing: approximating it is how a question wanting
+ * "No" ends up holding "Norfolk Island".
+ */
+export async function select(doc: Document, label: string, value: string): Promise<{ status: SelectStatus }> {
+  const found = findWidget(doc, label);
+  if (!found.widget) return { status: found.status };
+  const widget = found.widget;
+  if (!isOpen(widget)) return { status: 'not_open' };
+
+  const option = comboOptionNodes(widget).find((o) => normalizeLabel(shownText(o)) === normalizeLabel(value));
+  if (!option) return { status: 'no_option' };
+
+  press(option);
+  // Waiting for the widget to settle is what makes a following `verify` read the
+  // committed value rather than the state before the commit landed.
+  const closed = await settle(() => !isOpen(widget));
+  // A widget still open and displaying nothing did not take the click — most
+  // likely it wants trusted input. Saying `selected` would hand the caller a
+  // commit that never happened; *which* value arrived is still `verify`'s call.
+  if (!closed && !displayedValues(widget).length) return { status: 'did_not_commit' };
+  return { status: 'selected' };
+}
+
+/**
+ * Reads back what the widget now holds, as the widget itself displays it, and
+ * says whether that is what was asked for.
+ *
+ * The comparison is containment in one direction — the committed text must sit
+ * inside the chosen option — because a widget may legitimately display a
+ * shortened form: the live phone-code widget commits "+358" for the option
+ * "Åland Islands +358". The other direction looks equally reasonable and is
+ * quietly wrong, since "No" sits inside "Norfolk Island" and would reinstate the
+ * exact failure these primitives exist to prevent.
+ */
+export function verify(doc: Document, label: string, expected: string): { status: VerifyStatus; committed: string } {
+  const { widget, status } = findWidget(doc, label);
+  if (!widget) return { status, committed: '' };
+
+  const committed = displayedValues(widget);
+  if (!committed.length) return { status: 'empty', committed: '' };
+  // A multi-select widget renders one chip per choice, so the pick is confirmed
+  // when any of them accounts for it; reading only the first would report a
+  // correct second pick as a failure.
+  const wanted = normalizeLabel(expected);
+  const matches = committed.some((shown) => wanted.includes(normalizeLabel(shown)));
+  return { status: matches ? 'verified' : 'mismatch', committed: committed.join(', ') };
+}
+
+/**
+ * Runs one step against this document. The content script is a relay, so the
+ * mapping from a wire step to a primitive lives here where it is tested; a frame
+ * that does not hold the widget answers `not_found` and the background relay
+ * keeps whichever frame does.
+ */
+export function runStep(doc: Document, step: ComboboxStep): Promise<ComboboxReply> {
+  switch (step.action) {
+    case 'open':
+      return open(doc, step.label);
+    case 'options':
+      return Promise.resolve(options(doc, step.label));
+    case 'select':
+      return select(doc, step.label, step.value);
+    case 'verify':
+      return Promise.resolve(verify(doc, step.label, step.value));
+    default:
+      return assertNever(step.action);
+  }
+}
+
+/** Searches a scoped, empty typeahead and commits a single exact saved location. */
+export async function fillLocation(doc: Document, target: LabelFill): Promise<boolean> {
+  const forms = Array.from(doc.querySelectorAll('form'));
+  const widgets = collectQuestions(doc)
+    .filter(({ label, controls }) =>
+      normalizeLabel(label) === normalizeLabel(target.label) &&
+      (controls[0].form ? forms.indexOf(controls[0].form) : -1) === target.form)
+    .map(({ controls }) => controls[0])
+    .filter((control): control is HTMLInputElement =>
+      control instanceof HTMLInputElement && isComboWidget(control));
+  const [widget] = widgets;
+  if (widgets.length !== 1 || !widget || widget.readOnly || widget.value.trim() || displayedValues(widget).length) return false;
+
+  const normalLocation = (value: string) => normalizeLabel(value).replace(/\s*,\s*/g, ',');
+  const query = target.value.split(',')[0]?.trim();
+  if (!query) return false;
+  widget.focus();
+  press(widget);
+  setNativeValue(widget, query);
+  const matching = () => comboOptionNodes(widget).filter((node) =>
+    node.getAttribute('aria-disabled') !== 'true' && normalLocation(shownText(node)) === normalLocation(target.value));
+  const available = await settle(() => widget.value !== query || matching().length === 1);
+  if (widget.value !== query || !widget.isConnected) return false;
+  const [option, ...duplicates] = matching();
+  if (!available || !option || duplicates.length) {
+    // Restore the empty search without touching a value the user has entered.
+    setNativeValue(widget, '');
+    widget.blur();
+    return false;
+  }
+  press(option);
+  const committed = await settle(() => displayedValues(widget).some((value) => normalLocation(value) === normalLocation(target.value)) ||
+    (!isOpen(widget) && widget.value !== query && normalLocation(widget.value) === normalLocation(target.value)));
+  if (!committed && widget.isConnected && widget.value === query && !displayedValues(widget).length) {
+    setNativeValue(widget, '');
+    widget.blur();
+  }
+  return committed;
+}
+
+/** The custom-widget combobox carrying `label`, or null when none does. */
+function findWidget(doc: Document, label: string): { widget: Element | null; status: 'not_found' | 'ambiguous' } {
+  const widgets = collectQuestions(doc)
+    .filter((q) => normalizeLabel(q.label) === normalizeLabel(label))
+    .map((q) => q.controls[0])
+    .filter(isComboWidget);
+
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- guarded by the length check above: index 0 exists
+  if (widgets.length === 1) return { widget: widgets[0]!, status: 'not_found' };
+  return { widget: null, status: widgets.length > 1 ? 'ambiguous' : 'not_found' };
+}
+
+/**
+ * Whether the widget is showing its listbox.
+ *
+ * A widget that states `aria-expanded` is taken at its word: several libraries
+ * keep the listbox in the DOM and hide it, so its mere presence means nothing —
+ * treating that as open would report a full option list for a widget nobody
+ * opened. Only where the widget makes no such claim does the listbox's own
+ * visibility decide.
+ */
+function isOpen(widget: Element): boolean {
+  const expanded = expandedState(widget);
+  if (expanded !== null) return expanded === 'true';
+  const listbox = comboListbox(widget);
+  return listbox !== null && isOnScreen(listbox);
+}
+
+/**
+ * The widget's own `aria-expanded`, wherever it puts it. ARIA 1.1's combobox
+ * pattern places the role and the state on a wrapper around the input, so
+ * reading the input alone misses it. Only a combobox ancestor is consulted — a
+ * collapsible form section also carries `aria-expanded` and says nothing about
+ * this widget.
+ */
+function expandedState(widget: Element): string | null {
+  if (widget.hasAttribute('aria-expanded')) return widget.getAttribute('aria-expanded');
+  const owner = widget.closest(
+    '[role="combobox"][aria-expanded], [aria-haspopup="listbox"][aria-expanded], [aria-autocomplete][aria-expanded]',
+  );
+  return owner?.getAttribute('aria-expanded') ?? null;
+}
+
+/**
+ * The pointer sequence a real click produces, dispatched on the element itself:
+ * a widget's handler sits on an ancestor and events bubble, so this reaches it
+ * without having to guess which ancestor is the widget's "control" by class name.
+ */
+function press(el: Element): void {
+  if (typeof PointerEvent === 'function') {
+    el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, composed: true }));
+  }
+  for (const type of ['mousedown', 'mouseup', 'click']) {
+    el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, composed: true, button: 0 }));
+  }
+}
+
+/** Waits for a condition the widget's framework may only satisfy on a later tick. */
+async function settle(holds: () => boolean): Promise<boolean> {
+  for (let waited = 0; waited < SETTLE_MS; waited += POLL_MS) {
+    if (holds()) return true;
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+  }
+  return holds();
+}

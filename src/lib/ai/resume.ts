@@ -44,7 +44,7 @@ export async function extractResume(task: BackgroundTask) {
   }
 
   // LOCAL EXTRACTION: No AI required
-  const extracted = extractResumeLocal(parsed.text, document.filename);
+  const extracted = extractResumeLocal(parsed.text);
 
   // Validate and save
   const draft = validateResumeExtraction(extracted, parsed.text);

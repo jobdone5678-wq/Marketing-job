@@ -192,17 +192,16 @@ export default function EmailConfirmationsPage() {
         <div>
           <div className="text-primary mb-1 flex items-center gap-2 text-xs font-semibold tracking-wider uppercase">
             <span className="bg-primary inline-block h-1.5 w-1.5 animate-pulse rounded-full" />
-            Communications & Inbound Tracking
+            Application confirmations
           </div>
           <h1 className="text-foreground flex items-center gap-2.5 text-2xl font-bold tracking-tight">
             <span className="bg-primary/10 text-primary flex h-9 w-9 items-center justify-center rounded-xl shadow-2xs">
               <MailIcon className="h-5 w-5" />
             </span>
-            Email confirmations
+            Email Sync
           </h1>
           <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
-            Connect the Gmail mailbox that receives job application confirmations. Recruiters track
-            assigned candidates; candidates track their own applications.
+            Connect the Gmail mailbox that receives your job application confirmations.
           </p>
         </div>
 

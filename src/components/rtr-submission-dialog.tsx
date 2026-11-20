@@ -6,7 +6,6 @@ import {
   UploadCloud,
   Sparkles,
   CheckCircle2,
-  AlertCircle,
   Building2,
   Briefcase,
   User,

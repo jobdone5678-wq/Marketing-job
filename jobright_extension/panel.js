@@ -43,11 +43,13 @@ let lastCapture;
 let armedOutsideForm;
 let legacyResume;
 let resumeEndpointAvailable = false;
-let pairing = false;
 let portalCaptureSupport;
 let activeJob;
 let lastResumeMatch;
 let matchRequest = 0;
+let answerReview;
+let startedApplication;
+let pendingAppliedPrompt;
 
 function apiOrigin(origin) {
   return origin === 'https://nextkinhr.com' ? portalOrigin : origin;
@@ -145,7 +147,7 @@ function renderAccount() {
   $('connect').textContent = connected ? 'Change' : 'Connect';
   $('resume-title').textContent = name || 'Resume';
   $('resume-filename').textContent = selected?.filename || (connected
-    ? (resumeEndpointAvailable ? 'Upload a resume here or in My Profile & Resume.' : 'Upload a resume in My Profile & Resume.')
+    ? (resumeEndpointAvailable ? 'Upload a PDF or DOCX here to attach it to applications.' : 'Resume files are unavailable.')
     : 'Connect your NextKinHR account to sync your resume.');
   $('resume-email').textContent = candidate?.email || connection?.user?.email || '';
   $('resume-email').hidden = !$('resume-email').textContent;
@@ -167,6 +169,9 @@ function renderAccount() {
   showFacts('profile-facts', Object.entries(profileLabels).map(([key, label]) => [label, candidate?.[key]]));
   $('autofill').disabled = busy || !currentForm || !candidate;
   $('auto-submit-option').hidden = !currentForm || !candidate || currentForm.frameId !== 0;
+  $('ai-screening-option').hidden = !currentForm || !candidate;
+  $('review-answers').hidden = !currentForm || !candidate;
+  $('review-answers').disabled = busy;
 }
 
 function renderJob(job, form, saved) {
@@ -174,7 +179,7 @@ function renderJob(job, form, saved) {
   const host = /^https?:/.test(currentTab?.url || '') ? new URL(currentTab.url).hostname : '';
   $('site-label').textContent = workspace ? 'NextKinHR Workspace' : host || 'Current tab';
   $('active-site').hidden = !host;
-  $('site-title').textContent = job?.title || (workspace ? 'Recruiter & Candidate Hub' : host ? 'Career Portal' : 'Recruiting Copilot');
+  $('site-title').textContent = job?.title || (workspace ? 'My Profile and Applications' : host ? 'Career Portal' : 'Recruiting Copilot');
   $('site-summary').textContent = job ? [job.company, job.location].filter(Boolean).join(' · ')
     : workspace ? 'Ready to assist on an outside career portal' : 'Open a job posting or application form';
   setLine('job-status', job ? (saved ? 'Job details saved' : 'Job details detected') : 'Open a job page to evaluate ATS match', !!job);
@@ -268,7 +273,14 @@ async function scan(tab) {
   const target = { tabId: tab.id, allFrames: true };
   const inspect = async (scope) => {
     await chrome.scripting.executeScript({ target: scope, files: captureScripts });
-    return chrome.scripting.executeScript({ target: scope, func: () => globalThis.NextkinApplication?.scan() });
+    return chrome.scripting.executeScript({
+      target: scope,
+      func: () => {
+        const application = globalThis.NextkinApplication;
+        if (!application) return null;
+        return { ...application.scan(), answered: application.hasAnswers() };
+      },
+    });
   };
   try {
     return await inspect(target);
@@ -281,28 +293,61 @@ async function scan(tab) {
   }
 }
 
+async function getStoredCredentials() {
+  const session = await chrome.storage.session.get(['token', 'origin']).catch(() => ({}));
+  const local = await chrome.storage.local.get(['origin', 'token', 'user', 'resumePreferences', 'activeCandidateId']);
+  return {
+    origin: session.origin || local.origin,
+    token: session.token || local.token,
+    user: local.user,
+    resumePreferences: local.resumePreferences,
+    activeCandidateId: local.activeCandidateId,
+  };
+}
+
+function buildScopedProfile(candidate) {
+  if (!candidate) return null;
+  const facts = candidate.confirmed_facts || candidate;
+  const allowedKeys = [
+    'full_name', 'first_name', 'last_name', 'preferred_first_name',
+    'email', 'phone', 'current_city', 'current_state', 'current_location',
+    'zip_code', 'country', 'full_address', 'linkedin_url', 'github_url',
+    'website', 'current_employer', 'current_title', 'total_experience_years',
+    'primary_skills', 'authorized_in_usa', 'needs_sponsorship', 'open_to_relocation',
+    'visa_status', 'work_authorization', 'summary', 'bio', 'gender', 'race',
+    'veteran', 'veteran_status', 'disability', 'disability_status', 'availability',
+    'salary_expectation', 'highest_education', 'school', 'graduation_year',
+    'preferred_work_type', 'saved_answers', 'highest_qualification'
+  ];
+  const scopedFacts = {};
+  for (const key of allowedKeys) {
+    if (facts[key] !== undefined) scopedFacts[key] = facts[key];
+    else if (candidate[key] !== undefined) scopedFacts[key] = candidate[key];
+  }
+  return {
+    id: candidate.id,
+    version: candidate.version,
+    ...scopedFacts,
+    confirmed_facts: scopedFacts,
+  };
+}
+
 async function refresh() {
   if (busy) return;
   const number = ++refreshNumber;
   const [[tab], storage] = await Promise.all([
     chrome.tabs.query({ active: true, currentWindow: true }),
-    chrome.storage.local.get(['origin', 'token', 'user', 'resumePreferences', 'candidateProfile', 'resumeData', 'savedResumes', 'activeCandidateId']),
+    getStoredCredentials(),
   ]);
   if (number !== refreshNumber || busy) return;
-  const session = (workspaceUrl(storage.origin) && storage.token && storage.user?.id)
-    ? storage
-    : (storage.candidateProfile && workspaceUrl(storage.origin)
-      ? {
-          origin: storage.origin,
-          token: storage.token || 'local_session_token',
-          user: storage.user || { id: storage.candidateProfile.id || 'candidate', name: storage.candidateProfile.full_name || 'Candidate', role: 'candidate' }
-        }
-      : null);
+  const session = workspaceUrl(storage.origin) && storage.token && storage.user?.id ? storage : null;
   const pageKey = [tab?.id, tab?.url, session?.origin, session?.user.id].join('|');
   const pageChanged = pageKey !== resultsPage;
   if (pageChanged) {
     $('auto-submit').checked = false;
     $('results').hidden = true;
+    $('answer-review').hidden = true;
+    answerReview = null;
     notice('notice', '');
     resultsPage = pageKey;
   }
@@ -332,51 +377,33 @@ async function refresh() {
     const resumeError = resumeResult.status === 'rejected' ? resumeResult.reason : null;
     account = profileResult.status === 'fulfilled' ? profileResult.value : null;
     if (authFailed(profileError) || authFailed(resumeError) || (account && account.actorId !== session.user.id)) {
-      if (!storage.candidateProfile) {
-        issue = 'Your NextKinHR connection could not be verified. Click Connect to pair again.';
-        account = null;
-        legacyResume = null;
-      } else {
-        authenticated = true;
-      }
+      issue = 'Your NextKinHR connection could not be verified. Click Connect to pair again.';
+      account = null;
+      legacyResume = null;
     } else {
-      authenticated = !!account || resumeResult.status === 'fulfilled' || !!storage.candidateProfile;
-      if (resumeResult.status === 'fulfilled') {
-        canUpload = true;
-        resumeList = resumeResult.value.documents || [];
-        const profile = account?.candidates?.[0] || storage.candidateProfile;
-        if (!resumeList.some(doc => doc.status !== 'failed' && (!doc.candidate_id || doc.candidate_id === profile?.id)) &&
-          /^data:application\/(?:pdf|vnd\.openxmlformats-officedocument\.wordprocessingml\.document);base64,/i.test(profile?.resume_url || '')) {
-          try {
-            resumeList = [...resumeList, ...await syncLegacyResume(session, profile)];
-          } catch (error) {
-            issue = 'Resume sync: ' + error.message;
-          }
-        } else {
-          legacyResume = null;
-        }
-      } else if (recoverableResumeError(resumeError) && (account || storage.candidateProfile)) {
+      authenticated = !!account || resumeResult.status === 'fulfilled';
+      canUpload = resumeResult.status === 'fulfilled';
+      resumeList = resumeResult.status === 'fulfilled' ? resumeResult.value.documents || [] : [];
+      const profile = account?.candidates?.[0];
+      const hasDocument = resumeList.some(doc => doc.status !== 'failed' && (!doc.candidate_id || doc.candidate_id === profile?.id));
+      if (profile && !hasDocument && (profile.has_original_resume || recoverableResumeError(resumeError))) {
         try {
-          resumeList = await syncLegacyResume(session, account?.candidates?.[0] || storage.candidateProfile);
+          resumeList = [...resumeList, ...await syncLegacyResume(session, profile)];
         } catch (error) {
-          if (authFailed(error) && !storage.candidateProfile) {
-            authenticated = false;
-            account = null;
-            legacyResume = null;
-          }
           issue = 'Resume sync: ' + error.message;
         }
-      } else if (!storage.candidateProfile) {
-        issue = 'Resume sync: ' + resumeError.message;
+      } else {
+        legacyResume = null;
       }
-      if (profileError && !issue && !storage.candidateProfile) issue = 'Candidate profile: ' + profileError.message;
+      if (profileError && !issue) issue = 'Candidate profile: ' + profileError.message;
+      if (resumeError && !recoverableResumeError(resumeError) && !issue) issue = 'Resume sync: ' + resumeError.message;
     }
   } else {
     legacyResume = null;
   }
   const frames = await scans;
   if (number !== refreshNumber || busy) return;
-  connection = authenticated ? session : (storage.candidateProfile && session ? session : null);
+  connection = authenticated ? session : null;
   resumeEndpointAvailable = canUpload;
   allProfilesMap.clear();
   for (const c of account?.candidates || []) {
@@ -390,36 +417,14 @@ async function refresh() {
   const preferenceKey = connection && connection.origin + '|' + connection.user.id;
 
   // Determine active candidate ID
-  let activeCandId = storage.activeCandidateId || preferences?.[preferenceKey + '|candidate'] || storage.candidateProfile?.id || null;
+  let activeCandId = storage.activeCandidateId || preferences?.[preferenceKey + '|candidate'] || null;
   if (!activeCandId && allProfilesMap.size > 0) {
     activeCandId = allProfilesMap.keys().next().value;
   }
 
   candidate = allProfilesMap.get(activeCandId) || allProfilesMap.values().next().value || null;
 
-  // Preserve and build all documents from API and local savedResumes
-  const docMap = new Map();
-  for (const doc of resumeList || []) {
-    if (doc?.id) docMap.set(doc.id, doc);
-  }
-  for (const [docId, doc] of Object.entries(storage.savedResumes || {})) {
-    if (doc?.id || docId) docMap.set(doc?.id || docId, doc);
-  }
-  if (storage.resumeData) {
-    const rId = storage.resumeData.id || 'dashboard-resume';
-    docMap.set(rId, {
-      ...storage.resumeData,
-      base64: storage.resumeData.base64,
-      mimeType: storage.resumeData.mimeType,
-      id: rId,
-      filename: storage.resumeData.filename || `${candidate?.full_name || 'Candidate'}_Resume.pdf`,
-      candidate_id: candidate?.id,
-      status: 'confirmed',
-      raw_text: storage.resumeData.raw_text || storage.resumeData.source_text || ''
-    });
-  }
-
-  documents = [...docMap.values()].map(doc => {
+  documents = resumeList.filter(doc => doc?.id).map(doc => {
     const docCand = doc.candidate_id ? allProfilesMap.get(doc.candidate_id) : null;
     const candName = doc.candidate_name || docCand?.full_name || (candidate && doc.candidate_id === candidate.id ? candidate.full_name : '');
     return {
@@ -451,6 +456,27 @@ async function refresh() {
   activeJob = job;
   renderAccount();
   renderJob(job, !!currentForm, false);
+
+  // Ported from freehire: an answered form that disappears is the signal to ask,
+  // not to assume. Receipt pages are unreliable (SPA modals, iframes, odd wording),
+  // so the candidate confirms and we record the application ourselves.
+  if (startedApplication && startedApplication.tabId !== tab?.id) {
+    startedApplication = null;
+    pendingAppliedPrompt = null;
+  }
+  if (job && candidate?.id && outsideApplicationPage(tab?.url || '')) {
+    const answered = frames.some(frame => frame.result?.answered && frame.result?.job);
+    if (currentForm && answered) {
+      startedApplication = { job, tabId: tab.id, url: tab.url, candidateId: candidate.id };
+      pendingAppliedPrompt = null;
+    } else if (!currentForm && startedApplication) {
+      pendingAppliedPrompt = startedApplication;
+      startedApplication = null;
+    } else if (currentForm && pendingAppliedPrompt) {
+      pendingAppliedPrompt = null;
+    }
+  }
+  renderAppliedPrompt();
   const resumeForMatch = selected;
   const matching = refreshResumeMatch(job, resumeForMatch, connection);
   if (issue) {
@@ -476,6 +502,15 @@ async function refresh() {
   if (number !== refreshNumber || busy || selected?.id !== resumeForMatch?.id) return;
   // REMOVED automatic saving of external jobs
   renderJob(job, !!currentForm, !!job && lastCapture?.jobUrl === job.jobUrl && lastCapture.ownerId === connection?.user.id);
+}
+
+function renderAppliedPrompt() {
+  const section = $('applied-prompt');
+  if (!section) return;
+  section.hidden = !pendingAppliedPrompt || busy;
+  if (!pendingAppliedPrompt) return;
+  const job = pendingAppliedPrompt.job;
+  $('applied-prompt-job').textContent = [job.title, job.company].filter(Boolean).join(' · ');
 }
 
 function scheduleRefresh(delay = 250) {
@@ -534,50 +569,13 @@ function renderResults(result) {
 }
 
 $('connect').addEventListener('click', async () => {
-  if (pairing) return;
-  const origin = apiOrigin(workspaceUrl(currentTab?.url) || connection?.origin || portalOrigin);
-  if (apiOrigin(connection?.origin) === origin) {
-    await chrome.tabs.create({ url: new URL('/auth/jobseeker', origin).href });
-    return;
-  }
-  pairing = true;
-  $('connect').disabled = true;
-  notice('notice', 'Checking your NextKinHR sign-in…');
   try {
-    const tabs = await chrome.tabs.query({ currentWindow: true });
-    const workspaceTabs = tabs.filter(tab => workspaceUrl(tab.url) === origin && tab.id != null && tab.status === 'complete');
-    const portalTab = workspaceTabs.find(tab => new URL(tab.url).pathname.startsWith('/dashboard')) || workspaceTabs[0];
-    if (portalTab) {
-      const [{ result }] = await chrome.scripting.executeScript({
-        target: { tabId: portalTab.id },
-        func: async expectedOrigin => {
-          if (location.origin !== expectedOrigin) return null;
-          const response = await fetch('/api/extension/quick-pair', {
-            method: 'POST', credentials: 'same-origin', redirect: 'error',
-            headers: { 'Content-Type': 'application/json' }, body: '{}',
-            signal: AbortSignal.timeout(8000),
-          });
-          if (response.status === 401) return null;
-          const data = await response.json();
-          return response.ok ? data : { error: data.error || 'NextKinHR could not connect this account.' };
-        },
-        args: [origin],
-      });
-      if (result?.error) throw new Error(result.error);
-      if (result?.user?.role === 'candidate' && result.user.id && /^[A-Za-z0-9_-]{20,128}$/.test(result.token || '')) {
-        await chrome.storage.local.set({ origin, token: result.token, user: result.user });
-        notice('notice', '');
-        scheduleRefresh(0);
-        return;
-      }
-    }
-    await chrome.tabs.create({ url: new URL('/auth/jobseeker', origin).href });
-    notice('notice', 'Sign in on the NextKinHR tab to connect.');
+    const stored = await chrome.storage.local.get('origin');
+    const origin = apiOrigin(workspaceUrl(currentTab?.url) || workspaceUrl(stored.origin) || portalOrigin);
+    const path = apiOrigin(connection?.origin) === origin ? '/auth/jobseeker' : '/auth/jobseeker/connected';
+    await chrome.tabs.create({ url: new URL(path, origin).href });
   } catch (error) {
-    notice('notice', 'Connection failed: ' + error.message, true);
-  } finally {
-    pairing = false;
-    $('connect').disabled = false;
+    notice('notice', 'Could not open NextKinHR: ' + error.message, true);
   }
 });
 $('open-profile').addEventListener('click', async () => {
@@ -595,9 +593,7 @@ $('resume-select').addEventListener('change', async event => {
   if (selected?.candidate_id && allProfilesMap.has(selected.candidate_id)) {
     candidate = allProfilesMap.get(selected.candidate_id);
     await chrome.storage.local.set({
-      activeCandidateId: selected.candidate_id,
-      candidateProfile: candidate,
-      resumeData: selected
+      activeCandidateId: selected.candidate_id
     });
   }
   renderAccount();
@@ -636,7 +632,7 @@ $('upload-form').addEventListener('submit', async event => {
 async function checkFormContext(tab, session) {
   const [[activeTab], auth] = await Promise.all([
     chrome.tabs.query({ active: true, currentWindow: true }),
-    chrome.storage.local.get(['origin', 'token']),
+    getStoredCredentials(),
   ]);
   if (activeTab?.id !== tab.id || activeTab.url !== tab.url || auth.origin !== session.origin || auth.token !== session.token) {
     throw new Error('The active tab or account changed. Open the application and try again.');
@@ -646,6 +642,55 @@ async function checkFormContext(tab, session) {
 function formTarget(tab, frame) {
   return frame.documentId ? { tabId: tab.id, documentIds: [frame.documentId] }
     : { tabId: tab.id, frameIds: [frame.frameId] };
+}
+
+function answerScope(session, profile) {
+  return 'reusableAnswers:' + JSON.stringify([apiOrigin(session.origin), session.user.id, profile.id]);
+}
+
+async function reusableAnswers(session, profile) {
+  const scope = answerScope(session, profile);
+  const storage = await chrome.storage.local.get(scope);
+  // Server-saved answers come from the profile; locally saved answers are newer.
+  const server = profile?.confirmed_facts?.saved_answers || {};
+  const merged = {};
+  for (const [key, entry] of Object.entries(server)) {
+    const value = entry && typeof entry === 'object' ? (entry.answer ?? entry.value) : entry;
+    if (value === undefined || value === null || value === '') continue;
+    merged[key] = { type: entry?.type || 'text', value };
+  }
+  return { ...merged, ...(storage[scope] || {}) };
+}
+
+function answerText(value) {
+  if (Array.isArray(value)) return value.join(', ');
+  return typeof value === 'boolean' ? (value ? 'Checked' : 'Unchecked') : value;
+}
+
+async function draftScreening(session, profile, tab, job, questions) {
+  if (!job || !job.description || job.description.trim().length < 40) {
+    throw new Error('Open the complete job posting to draft screening answers.');
+  }
+  const sessionId = crypto.randomUUID();
+  const requestId = crypto.randomUUID();
+  let result = await api('answer-drafts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId, requestId, consent: true, candidateId: profile.id,
+      jobTitle: job.title, companyName: job.company, jobDescription: job.description, jobUrl: job.jobUrl, questions,
+    }),
+  }, session);
+  for (let attempt = 0; attempt < 25 && result.status !== 'succeeded'; attempt++) {
+    if (result.sessionId !== sessionId || !result.taskId) throw new Error('NextKinHR returned an invalid screening task.');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    await checkFormContext(tab, session);
+    result = await api('answer-drafts?taskId=' + encodeURIComponent(result.taskId), {}, session);
+  }
+  if (result.sessionId !== sessionId || result.status !== 'succeeded') {
+    throw new Error('AI drafts are still processing. Try again shortly.');
+  }
+  return result.answers || {};
 }
 
 function outsideApplicationPage(value) {
@@ -681,14 +726,16 @@ function armOutsideForm(tab, frame, embeddedFrame, candidateId, discover = true)
   }, () => { if (armedOutsideForm === scope) armedOutsideForm = null; });
 }
 
-async function fillForm(tab, frame, profile, file, documentId) {
+async function fillForm(tab, frame, profile, file, documentId, saved = null, aiAnswers = null) {
+  const scopedProfile = buildScopedProfile(profile);
   const [filled] = await chrome.scripting.executeScript({
     target: formTarget(tab, frame),
-    func: async (url, profile, resume, documentId) => {
-      try { return await globalThis.NextkinApplication.startAutofill(url, profile, resume, documentId); }
-      catch (error) { return { error: error.message }; }
+    func: async (url, profile, resume, documentId, reusable, drafts, continuation) => {
+      try {
+        return await globalThis.NextkinApplication.startAutofill(url, profile, resume, documentId, continuation, reusable, drafts);
+      } catch (error) { return { error: error.message }; }
     },
-    args: [frame.result.url, profile, file, documentId],
+    args: [frame.result.url, scopedProfile, file, documentId, saved, aiAnswers, false],
   });
   if (!filled?.result || filled.result.error) throw new Error(filled?.result?.error || 'Could not fill this form.');
   return filled.result;
@@ -701,10 +748,14 @@ $('autofill').addEventListener('click', async () => {
   const embeddedFrame = embeddedOutsideForm(tab, frame);
   const session = connection;
   const autoSubmit = frame.frameId === 0 && $('auto-submit').checked;
+  const useAI = $('ai-screening').checked;
   $('auto-submit').checked = false;
   const cachedProfile = candidate;
   busy = true;
   $('autofill').disabled = true;
+  $('review-answers').disabled = true;
+  $('answer-review').hidden = true;
+  answerReview = null;
   $('results').hidden = true;
   notice('notice', 'Filling the application…');
   try {
@@ -715,25 +766,15 @@ $('autofill').addEventListener('click', async () => {
     ]);
     if (freshProfile?.provenance_status !== 'confirmed' || !freshProfile.confirmed_facts?.full_name ||
       String(freshProfile.confirmed_facts.notes || '').startsWith('Profile created from an uploaded resume.')) {
-      throw new Error('Save your candidate details in My Applications and Resume first.');
+      throw new Error('Save your candidate details in My Profile first.');
     }
     const profile = freshProfile;
+    const reusable = await reusableAnswers(session, profile);
     let file = null;
     if (selected || profile.id) {
       try {
-        const localResume = (await chrome.storage.local.get('resumeData'))?.resumeData;
         if (selected?.id === 'dashboard-resume' && legacyResume?.file) {
           file = legacyResume.file;
-        } else if (selected && localResume?.base64 && localResume.candidate_id === profile.id && selected.id === localResume.id) {
-          file = {
-            filename: localResume.filename,
-            base64: localResume.base64,
-            mimeType: localResume.mimeType || 'application/pdf',
-            raw_text: localResume.raw_text || localResume.source_text || '',
-            source: 'upload'
-          };
-        } else if (selected?.base64 && selected.candidate_id === profile.id) {
-          file = selected;
         } else if (/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(selected?.id || '')) {
           file = await api('resume?documentId=' + encodeURIComponent(selected.id), {}, session);
         } else if (profile.id) {
@@ -751,10 +792,22 @@ $('autofill').addEventListener('click', async () => {
     }).catch(() => ({ error: 'Application tracking could not start.' }));
     await checkFormContext(tab, session);
     const documentId = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(selected?.id || '') ? selected.id : null;
-    const result = await fillForm(tab, frame, profile, file ?? null, documentId);
+    const result = await fillForm(tab, frame, profile, file ?? null, documentId, reusable, useAI ? {} : null);
     renderResults(result);
     if (file || !selected) notice('notice', '');
-    if (frame.frameId === 0 && !autoSubmit) notice('notice', 'Use Next on the employer form to fill the following step.');
+    if (useAI && result.questions?.length) {
+      notice('notice', 'Drafting screening answers…');
+      const drafts = await draftScreening(session, profile, tab, job, result.questions);
+      await checkFormContext(tab, session);
+      const completed = await fillForm(tab, frame, profile, null, documentId, reusable, drafts);
+      const fields = new Map(result.filled.map(field => [field.key, field]));
+      for (const field of completed.filled) fields.set(field.key, field);
+      renderResults({ filled: [...fields.values()], unfilled: completed.unfilled, total: completed.total });
+      notice('notice', completed.filled.some(field => field.ai)
+        ? 'Review the AI drafts before submitting.'
+        : 'AI found no supported answers for the remaining questions.');
+    }
+    if (frame.frameId === 0 && !autoSubmit && !useAI) notice('notice', 'Use Next on the employer form to fill the following step.');
     if (job) {
       await api('save-external-job', {
         method: 'POST',
@@ -782,7 +835,124 @@ $('autofill').addEventListener('click', async () => {
     notice('notice', error.message, true);
   } finally {
     busy = false;
+    renderAccount();
     scheduleRefresh(0);
+  }
+});
+
+$('review-answers').addEventListener('click', async () => {
+  if (busy || !currentForm || !candidate || !connection) return;
+  const tab = currentTab;
+  const frame = currentForm;
+  const profile = candidate;
+  const session = connection;
+  busy = true;
+  $('autofill').disabled = true;
+  $('review-answers').disabled = true;
+  $('answer-review').hidden = true;
+  answerReview = null;
+  try {
+    await checkFormContext(tab, session);
+    const [response] = await chrome.scripting.executeScript({
+      target: formTarget(tab, frame),
+      func: (url, current) => {
+        try { return globalThis.NextkinApplication.savedAnswers(url, current); }
+        catch (error) { return { error: error.message }; }
+      },
+      args: [frame.result.url, profile],
+    });
+    if (!Array.isArray(response?.result)) throw new Error(response?.result?.error || 'Could not read the form answers.');
+    await checkFormContext(tab, session);
+    answerReview = { tab, session, profile, answers: response.result };
+    $('answer-options').replaceChildren(...response.result.map(answer => {
+      const label = document.createElement('label');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = answer.key;
+      checkbox.checked = true;
+      label.append(checkbox, document.createTextNode(answer.label + ' — ' + answerText(answer.value)));
+      return label;
+    }));
+    $('answer-review').hidden = !response.result.length;
+    if (!response.result.length) notice('notice', 'Answer a reusable question on this form first.');
+  } catch (error) {
+    notice('notice', error.message, true);
+  } finally {
+    busy = false;
+    renderAccount();
+  }
+});
+
+$('save-answers').addEventListener('click', async () => {
+  if (busy || !answerReview) return;
+  const { tab, session, profile, answers } = answerReview;
+  const keys = new Set([...$('answer-options').querySelectorAll('input:checked')].map(input => input.value));
+  if (!keys.size) return notice('notice', 'Select at least one answer to save.');
+  busy = true;
+  $('save-answers').disabled = true;
+  try {
+    await checkFormContext(tab, session);
+    const scope = answerScope(session, profile);
+    const storage = await chrome.storage.local.get(scope);
+    const entries = new Map(Object.entries(storage[scope] || {}));
+    for (const answer of answers.filter(item => keys.has(item.key))) {
+      entries.delete(answer.key);
+      entries.set(answer.key, { type: answer.type, value: answer.value });
+    }
+    await chrome.storage.local.set({ [scope]: Object.fromEntries([...entries].slice(-200)) });
+    $('answer-review').hidden = true;
+    answerReview = null;
+    notice('notice', `${keys.size} reusable answer${keys.size === 1 ? '' : 's'} saved for future applications.`);
+  } catch (error) {
+    notice('notice', error.message, true);
+  } finally {
+    busy = false;
+    $('save-answers').disabled = false;
+    renderAccount();
+  }
+});
+
+$('not-applied').addEventListener('click', () => {
+  pendingAppliedPrompt = null;
+  renderAppliedPrompt();
+  notice('notice', '');
+});
+
+$('mark-applied').addEventListener('click', async () => {
+  const pending = pendingAppliedPrompt;
+  if (!pending || !connection || busy) return;
+  const job = pending.job;
+  busy = true;
+  $('mark-applied').disabled = true;
+  notice('notice', 'Saving your application…');
+  try {
+    await api('auto-submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        candidateId: pending.candidateId,
+        eventKey: crypto.randomUUID(),
+        companyName: job.company,
+        jobTitle: job.title,
+        jobUrl: job.jobUrl || pending.url,
+        confirmationUrl: pending.url,
+        portalSource: job.portalSource,
+        jobLocation: job.location,
+        evidence: 'Candidate confirmed submission in the NextKinHR side panel.',
+        manualAttestation: true,
+      }),
+    }, connection);
+    pendingAppliedPrompt = null;
+    startedApplication = null;
+    renderAppliedPrompt();
+    notice('notice', `✓ Marked as applied — ${job.title} is in your applications.`);
+    chrome.runtime.sendMessage({ type: 'NEXTKIN_OUTSIDE_APPLICATION_SAVED' }).catch(() => {});
+  } catch (error) {
+    notice('notice', error.message, true);
+  } finally {
+    busy = false;
+    $('mark-applied').disabled = false;
+    renderAppliedPrompt();
   }
 });
 
@@ -793,7 +963,7 @@ function clearResumeMatch() {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type === 'RESUME_SYNCED') {
+  if (message?.type === 'NEXTKIN_PROFILE_SAVED') {
     clearResumeMatch();
     scheduleRefresh(0);
     sendResponse?.({ success: true });
@@ -811,8 +981,8 @@ chrome.tabs.onUpdated.addListener((id, change) => {
   }
 });
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && ['token', 'origin', 'resumePreferences', 'candidateProfile', 'resumeData', 'user'].some(key => key in changes)) {
-    if ('token' in changes || 'origin' in changes || 'candidateProfile' in changes || 'resumeData' in changes) clearResumeMatch();
+  if (area === 'local' && ['token', 'origin', 'resumePreferences', 'activeCandidateId', 'user'].some(key => key in changes)) {
+    if ('token' in changes || 'origin' in changes || 'user' in changes) clearResumeMatch();
     scheduleRefresh(0);
   }
 });

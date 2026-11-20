@@ -1,5 +1,5 @@
 import { protectedRoute } from '@/lib/http/protected-route';
-import { database, checkDb, CaptureError } from '@/lib/db/admin';
+import { database, CaptureError } from '@/lib/db/admin';
 import { candidateAccess } from '@/lib/resumes/repository';
 import { buildRtrMetadataTag, parseRtrMetadata, stripRtrMetadata } from '@/lib/rtr-metadata';
 import { z } from 'zod';

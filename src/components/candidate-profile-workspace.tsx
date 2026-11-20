@@ -6,18 +6,15 @@ import {
   ArrowLeft,
   Download,
   FileText,
-  Building2,
   Calendar,
   MapPin,
   Coins,
-  CheckCircle2,
   AlertCircle,
   Briefcase,
   GraduationCap,
   Sparkles,
   ShieldCheck,
   Send,
-  FileCode,
   Copy,
   Check,
 } from 'lucide-react';
@@ -28,7 +25,6 @@ import type { Candidate } from '@/types/database';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
-  WorkspaceHeading,
   WorkspaceSkeleton,
   WorkspaceError,
   WorkspaceEmpty,

@@ -15,15 +15,9 @@ import type { Candidate } from '@/types/database';
 import {
   ArrowLeft,
   AlertCircle,
-  ShieldCheck,
-  User,
-  Briefcase,
-  Check,
   Sparkles,
   MapPin,
   Globe,
-  HelpCircle,
-  FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
 

@@ -161,6 +161,9 @@
       const desc = Object.getOwnPropertyDescriptor(proto, 'value') || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(proto), 'value');
       if (desc?.set) desc.set.call(el, value);
       else el.value = value;
+      if (el._valueTracker) {
+        el._valueTracker.setValue?.('');
+      }
     }
     notify(el);
   }
@@ -337,7 +340,14 @@
       case 'checkbox': return checked(el);
       case 'checkbox-group': return field.options.filter(option => checked(option.element)).map(optionLabel);
       case 'multi-select': return field.options.filter(option => option.element.selected).map(optionLabel);
-      case 'select': return field.options.find(option => option.element.selected && !placeholder.test(option.label))?.label || '';
+      case 'select': {
+        if (el?.tagName === 'SELECT' && typeof el.selectedIndex === 'number' && el.selectedIndex >= 0 && el.options?.[el.selectedIndex]) {
+          const opt = el.options[el.selectedIndex];
+          const lbl = (opt.text || opt.textContent || opt.label || opt.value || '').trim();
+          if (!placeholder.test(lbl)) return lbl;
+        }
+        return (field.options || []).find(option => option?.element?.selected && !placeholder.test(option.label))?.label || (el?.value?.trim() || '');
+      }
       case 'radio': return field.options.find(option => checked(option.element) || selected(option.element))?.label || '';
       case 'choice': return field.options.find(option => selected(option.element) || checked(option.element))?.label || '';
       case 'combobox': return comboValue(el);
@@ -514,6 +524,9 @@
         } else {
           el.value = option.value;
         }
+        if (el._valueTracker) {
+          el._valueTracker.setValue?.('');
+        }
       } catch {
         el.value = option.value;
       }
@@ -630,19 +643,288 @@
     return false;
   }
 
+  // Resolve or re-resolve live element from DOM in case of React rerender
+  function ensureConnectedElement(field) {
+    if (!field || !field.element) return null;
+    if (field.element.isConnected) return field.element;
+
+    const doc = field.element.ownerDocument || globalThis.document;
+    if (!doc || typeof doc.querySelector !== 'function') return field.element;
+
+    // 1. Try to find connected element by id using attribute selector
+    if (field.element.id) {
+      if (typeof doc.querySelectorAll === 'function') {
+        try {
+          const candidates = doc.querySelectorAll(`[id="${safeCssEscape(field.element.id)}"]`);
+          const byId = Array.from(candidates).find(el => el.isConnected);
+          if (byId) {
+            field.element = byId;
+            return byId;
+          }
+        } catch {}
+      }
+      if (typeof doc.getElementById === 'function') {
+        try {
+          const byId = doc.getElementById(field.element.id);
+          if (byId && byId.isConnected) {
+            field.element = byId;
+            return byId;
+          }
+        } catch {}
+      }
+    }
+
+    // 2. Try to find connected element by name
+    const name = field.element.name || (typeof field.element.getAttribute === 'function' ? field.element.getAttribute('name') : null);
+    if (name) {
+      if (typeof doc.querySelectorAll === 'function') {
+        try {
+          const candidates = doc.querySelectorAll(`[name="${safeCssEscape(name)}"]`);
+          const byName = Array.from(candidates).find(el => el.isConnected);
+          if (byName) {
+            field.element = byName;
+            return byName;
+          }
+        } catch {}
+      }
+      try {
+        const byName = doc.querySelector(`[name="${safeCssEscape(name)}"]`);
+        if (byName && byName.isConnected) {
+          field.element = byName;
+          return byName;
+        }
+      } catch {}
+    }
+
+    if (typeof field.element.getAttribute === 'function') {
+      const autoId = field.element.getAttribute('data-automation-id');
+      if (autoId) {
+        if (typeof doc.querySelectorAll === 'function') {
+          try {
+            const candidates = doc.querySelectorAll(`[data-automation-id="${safeCssEscape(autoId)}"]`);
+            const byAuto = Array.from(candidates).find(el => el.isConnected);
+            if (byAuto) {
+              field.element = byAuto;
+              return byAuto;
+            }
+          } catch {}
+        }
+        try {
+          const byAuto = doc.querySelector(`[data-automation-id="${safeCssEscape(autoId)}"]`);
+          if (byAuto && byAuto.isConnected) {
+            field.element = byAuto;
+            return byAuto;
+          }
+        } catch {}
+      }
+
+      const testId = field.element.getAttribute('data-testid') || field.element.getAttribute('data-test');
+      if (testId) {
+        if (typeof doc.querySelectorAll === 'function') {
+          try {
+            const candidates = doc.querySelectorAll(`[data-testid="${safeCssEscape(testId)}"], [data-test="${safeCssEscape(testId)}"]`);
+            const byTest = Array.from(candidates).find(el => el.isConnected);
+            if (byTest) {
+              field.element = byTest;
+              return byTest;
+            }
+          } catch {}
+        }
+        try {
+          const byTest = doc.querySelector(`[data-testid="${safeCssEscape(testId)}"], [data-test="${safeCssEscape(testId)}"]`);
+          if (byTest && byTest.isConnected) {
+            field.element = byTest;
+            return byTest;
+          }
+        } catch {}
+      }
+    }
+
+    if (root.NextkinForms?.discoverFields) {
+      try {
+        const freshFields = root.NextkinForms.discoverFields(doc);
+        const match = freshFields.find(f =>
+          (field.key && f.key === field.key) ||
+          (field.label && normalize(f.label) === normalize(field.label))
+        );
+        if (match?.element?.isConnected) {
+          field.element = match.element;
+          if (match.options?.length) field.options = match.options;
+          return match.element;
+        }
+      } catch {}
+    }
+
+    return field.element;
+  }
+
+  // Bounded async polling with MutationObserver for dependent field readiness (Country -> State -> City)
+  async function waitForFieldReady(field, session, maxWaitMs = 1200) {
+    if (session && !session.isCurrent()) return false;
+    ensureConnectedElement(field);
+    const el = field.element;
+    if (!el) return false;
+
+    const isSelect = el.tagName === 'SELECT';
+
+    const isReady = () => {
+      ensureConnectedElement(field);
+      const cur = field.element;
+      if (!cur || !cur.isConnected) return false;
+      const isDisabled = cur.disabled || (typeof cur.getAttribute === 'function' && (cur.getAttribute('aria-disabled') === 'true' || (typeof cur.hasAttribute === 'function' && cur.hasAttribute('disabled'))));
+      if (isDisabled) return false;
+      const isBusy = typeof cur.getAttribute === 'function' && (cur.getAttribute('aria-busy') === 'true' || cur.closest?.('[aria-busy="true"]'));
+      if (isBusy) return false;
+
+      if (isSelect) {
+        const validOpts = Array.from(cur.options || []).filter(o => o.value && !placeholder.test(o.label || o.text || o.textContent || ''));
+        if (field.options?.length && !validOpts.length) return false;
+      }
+      return true;
+    };
+
+    if (isReady()) return true;
+
+    const start = Date.now();
+    return new Promise(resolve => {
+      let observer;
+      let timer;
+      let settled = false;
+      const cleanup = () => {
+        if (settled) return;
+        settled = true;
+        if (observer) {
+          try { observer.disconnect(); } catch {}
+          observer = null;
+        }
+        if (timer) {
+          clearInterval(timer);
+          timer = null;
+        }
+      };
+
+      const check = () => {
+        if (settled) return;
+        if (session && !session.isCurrent()) {
+          cleanup();
+          resolve(false);
+          return;
+        }
+        if (isReady()) {
+          if (isSelect && field.element.options) {
+            field.options = Array.from(field.element.options).map(opt => ({
+              element: opt,
+              label: (opt.text || opt.textContent || opt.label || opt.value || '').trim(),
+              value: opt.value?.trim()
+            }));
+          }
+          cleanup();
+          resolve(true);
+        } else if (Date.now() - start >= maxWaitMs) {
+          cleanup();
+          resolve(false);
+        }
+      };
+
+      const doc = el.ownerDocument || globalThis.document;
+      const container = el.closest?.('form, [role="form"], [data-automation-id*="form" i]') || doc?.body || doc?.documentElement;
+      if (container && typeof globalThis.MutationObserver !== 'undefined') {
+        try {
+          observer = new globalThis.MutationObserver(check);
+          observer.observe(container, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['disabled', 'aria-disabled', 'aria-busy', 'class']
+          });
+        } catch {}
+      }
+      timer = setInterval(check, 35);
+      check();
+    });
+  }
+
+  // Bounded async polling with MutationObserver for DOM readback verification instead of rigid 120ms wait
+  async function waitForVerification(verifiedFn, session, maxWaitMs = 250, intervalMs = 25) {
+    if (verifiedFn()) return true;
+    const start = Date.now();
+    return new Promise(resolve => {
+      let observer;
+      let timer;
+      let settled = false;
+      const cleanup = () => {
+        if (settled) return;
+        settled = true;
+        if (observer) {
+          try { observer.disconnect(); } catch {}
+          observer = null;
+        }
+        if (timer) {
+          clearInterval(timer);
+          timer = null;
+        }
+      };
+
+      const check = () => {
+        if (settled) return;
+        if (session && !session.isCurrent()) {
+          cleanup();
+          resolve(false);
+          return;
+        }
+        if (verifiedFn()) {
+          cleanup();
+          resolve(true);
+        } else if (Date.now() - start >= maxWaitMs) {
+          cleanup();
+          resolve(false);
+        }
+      };
+
+      const doc = globalThis.document;
+      const root = doc?.body || doc?.documentElement;
+      if (root && typeof globalThis.MutationObserver !== 'undefined') {
+        try {
+          observer = new globalThis.MutationObserver(check);
+          observer.observe(root, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            characterData: true
+          });
+        } catch {}
+      }
+      timer = setInterval(check, intervalMs);
+      check();
+    });
+  }
+
   async function applyFill(plans, session) {
     const receipts = [];
     for (const plan of plans) {
       const { field, value } = plan;
+      if (plan.status !== 'supported' || !session.isCurrent() || field.excluded) continue;
+
+      // Handle React rerendering: re-resolve element if it was disconnected
+      ensureConnectedElement(field);
       const el = field.element;
-      if (plan.status !== 'supported' || !el?.isConnected || !session.isCurrent() || field.excluded) continue;
+      if (!el?.isConnected) continue;
+
+      // Bounded async wait for dependent controls (Country -> State -> City)
+      // to become enabled / populated with options after previous field changes
+      await waitForFieldReady(field, session, 1200);
+      if (!session.isCurrent() || !field.element?.isConnected) continue;
+
+      const currentEl = field.element;
       const domVal = read(field);
       const previous = domVal;
-      const isCountryCodeOnly = field.kind === 'text' && (field.element?.type === 'tel' || /phone/i.test(field.hint || field.label)) && /^\+?\d{1,3}\s*$/.test(String(previous).trim());
+      const isCountryCodeOnly = field.kind === 'text' && (currentEl.type === 'tel' || /phone/i.test(field.hint || field.label)) && /^\+?\d{1,3}\s*$/.test(String(previous).trim());
       const hasAnswer = !isCountryCodeOnly && (Array.isArray(previous) ? previous.length > 0 : (typeof previous === 'boolean' ? previous : Boolean(previous && String(previous).trim().length > 0)));
       let write;
       const isProfileFact = Boolean(plan.factKey && !plan.ai);
-      if (hasAnswer && !isProfileFact) {
+      if (hasAnswer && !plan.overwriteExisting) {
+        write = { expected: previous, preserved: true };
+      } else if (hasAnswer && !isProfileFact) {
         const option = field.options?.length ? choose(field, value) : null;
         if (equals(previous, option?.label ?? value)) write = { expected: previous };
       } else if (hasAnswer && isProfileFact && equals(previous, value)) {
@@ -658,22 +940,25 @@
       } else if (field.kind === 'checkbox') {
         const boolVal = typeof value === 'boolean' ? value : normalizeBoolean(value);
         if (typeof boolVal === 'boolean') {
-          if (previous !== boolVal) setCheckbox(el, boolVal);
+          if (previous !== boolVal) setCheckbox(currentEl, boolVal);
           write = { expected: boolVal };
         }
       } else {
-        const expected = el.maxLength > 0 ? String(value).slice(0, el.maxLength) : String(value);
-        writeValue(el, expected);
+        const expected = currentEl.maxLength > 0 ? String(value).slice(0, currentEl.maxLength) : String(value);
+        writeValue(currentEl, expected);
         write = { expected };
       }
       if (!write) continue;
-      const verified = () => session.isCurrent() && el.isConnected &&
+
+      const verified = () => session.isCurrent() && field.element?.isConnected &&
         (equals(read(field), write.expected) || write.matches?.(read(field)) ||
          (field.kind === 'combobox' && write.expected && String(read(field) || '').toLowerCase().includes(String(write.expected).toLowerCase())) ||
          (write.option && !write.option.isConnected && write.expected) ||
          (write.option?.isConnected && selected(write.option)));
-      if (!verified()) await wait(120);
-      if (!verified()) continue;
+
+      const isVerified = await waitForVerification(verified, session, 250, 25);
+      if (!isVerified) continue;
+
       recordPreservedValues([field]);
       receipts.push({ field, writtenValue: write.expected, ai: !!plan.ai, learned: !!plan.learned });
     }
@@ -691,6 +976,9 @@
     recordPreservedValues,
     getPreservedValue,
     clearPreservedValues,
-    advanceStep
+    advanceStep,
+    ensureConnectedElement,
+    waitForFieldReady,
+    waitForVerification
   };
 })(globalThis);

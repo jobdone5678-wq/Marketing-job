@@ -1,6 +1,5 @@
 import { protectedRoute } from '@/lib/http/protected-route';
 import { database, checkDb } from '@/lib/db/admin';
-import { candidateProfileCache } from '@/lib/cache';
 import { applicationUrlKey } from '@/lib/jobs/application-state';
 
 export async function GET(request: Request) {
@@ -9,29 +8,17 @@ export async function GET(request: Request) {
     const rawSearch = searchParams.get('q')?.trim() || '';
     const safeSearch = rawSearch.replace(/[%_,()'"\\:]/g, ' ').trim();
 
-    let candidateId: string | null = null;
+    // Resolve current ownership before including legacy captures without an owner.
+    const db = database();
+    const { data: candidate, error: candidateError } = await db
+      .from('candidates')
+      .select('id')
+      .eq('user_id', profile.id)
+      .maybeSingle();
+    checkDb(candidateError);
+    const candidateId = candidate?.id;
 
-    // Enforce data isolation: candidates can only view their own outside job applications
-    {
-      // System Design: L1 In-Memory Cache with SWR for candidate ID resolution
-      const cand = await candidateProfileCache.fetchWithSWR(
-        `candidate:user:${profile.id}`,
-        async () => {
-          const { data, error } = await database()
-            .from('candidates')
-            .select('id, user_id')
-            .eq('user_id', profile.id)
-            .maybeSingle();
-          checkDb(error);
-          return data || { id: '', user_id: profile.id };
-        },
-        { ttlMs: 30000, staleTtlMs: 120000 }
-      );
-
-      candidateId = cand?.id || null;
-    }
-
-    let query = database()
+    let query = db
       .from('outside_jobs')
       .select('*,candidate:candidates(id, full_name, email, current_city)')
       .order('created_at', { ascending: false });

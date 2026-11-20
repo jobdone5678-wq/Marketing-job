@@ -7,12 +7,8 @@ import {
   Sparkles,
   ShieldCheck,
   CheckCircle2,
-  ExternalLink,
-  Cpu,
   Zap,
   ArrowRight,
-  Layers,
-  Lock,
 } from 'lucide-react';
 
 type DemoPlatform = 'greenhouse' | 'ashby' | 'lever' | 'workday';

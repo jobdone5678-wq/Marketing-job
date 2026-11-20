@@ -9,19 +9,23 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  const expectedSecret = [
+  const validSecrets = [
     process.env.WEBHOOK_SECRET,
     process.env.SUPABASE_WEBHOOK_SECRET,
     process.env.EMAIL_SYNC_SECRET,
   ]
     .map((value) => value?.trim())
-    .find(Boolean);
-  if (!expectedSecret)
+    .filter((v): v is string => Boolean(v && v.length >= 16));
+  if (validSecrets.length === 0)
     return NextResponse.json({ error: 'Task webhook is not configured.' }, { status: 503 });
   const header = request.headers.get('authorization') || request.headers.get('x-webhook-secret');
   const supplied = header?.replace(/^Bearer\s+/i, '') || '';
   const digest = (value: string) => createHash('sha256').update(value).digest();
-  if (!supplied || !timingSafeEqual(digest(supplied), digest(expectedSecret))) {
+  const suppliedDigest = digest(supplied);
+  const isAuthorized = supplied.length > 0 && validSecrets.some((secret) =>
+    timingSafeEqual(suppliedDigest, digest(secret))
+  );
+  if (!isAuthorized) {
     return NextResponse.json({ error: 'Unauthorized webhook.' }, { status: 401 });
   }
 

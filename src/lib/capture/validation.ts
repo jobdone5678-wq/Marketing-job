@@ -4,6 +4,16 @@ const confirmationHeading =
   /^(?:thank you for (?:applying|your application|submitting your application)|(?:your )?(?:job )?application (?:has been |was |is )?(?:(?:successfully )?(?:submitted|received|sent|confirmed)|successful)|(?:(?:you (?:have )?|you've )?successfully submitted|(?:you (?:have )?|you've )submitted) (?:your |the )?(?:job )?application|submission (?:received|confirmed|successful)|(?:we(?: have|'ve)?) (?:successfully )?received your application|(?:you(?: have|'ve) )?successfully applied|(?:you (?:have )?|you've )?applied successfully)(?=$|[.!,:]|\s+(?:to|for|successfully)\b)/i;
 const pathEvidencePrefix = 'URL confirmation path: ';
 
+function receiptPostingMatches(receipt: URL, posting: URL) {
+  const pathId = posting.pathname.split('/').at(-1);
+  return [...receipt.searchParams].every(([name, value]) => {
+    const expected = posting.searchParams.getAll(name);
+    return expected.length
+      ? expected.every((id) => id === value)
+      : !['for', 'token'].includes(name) && pathId === value && /\d/.test(value);
+  });
+}
+
 function withoutRedundantPostingIds(key: string) {
   const url = new URL(key);
   if (!url.search || url.hash) return key;
@@ -53,7 +63,7 @@ export function allowedCaptureUrl(
       !['confirmed', 'submitted'].includes(status || '') ||
       !confirmationHeading.test(evidence.trim()) ||
       !applicationConfirmationPath.test(current.pathname) ||
-      new URL(observedKey).search
+      !receiptPostingMatches(new URL(observedKey), new URL(expectedKey))
     )
       return false;
     const receiptPrefix = current.pathname.replace(applicationConfirmationPath, '');

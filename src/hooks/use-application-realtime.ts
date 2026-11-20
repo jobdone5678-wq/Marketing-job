@@ -29,6 +29,13 @@ export function useApplicationRealtime(
     };
     window.addEventListener('message', refreshAfterExtensionSave);
 
+    // Re-sync on focus and visibilitychange to recover from background tab socket sleep
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') scheduleRefresh();
+    };
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+
     const channel = supabase
       .channel(`application-updates-${crypto.randomUUID()}`)
       .on(
@@ -43,12 +50,17 @@ export function useApplicationRealtime(
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') scheduleRefresh();
+        if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
+          setTimeout(scheduleRefresh, 1000);
+        }
       });
 
     return () => {
       active = false;
       clearTimeout(timer);
       window.removeEventListener('message', refreshAfterExtensionSave);
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
       void supabase.removeChannel(channel);
     };
   }, [candidateId, enabled]);

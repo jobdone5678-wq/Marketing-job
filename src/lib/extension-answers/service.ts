@@ -11,17 +11,13 @@ import { withAIExecutionWindow } from '@/lib/ai/execution-window';
 import {
   extensionJobSchema,
   canonicalExtensionJob,
-} from '@/lib/tailored-resumes/extension-service';
-import {
   currentExtensionCandidate,
   type ExtensionResumeInput,
-} from '@/lib/tailored-resumes/extension-task';
-import { extensionFactCatalog } from '@/lib/tailored-resumes/extension-content';
-import {
+  extensionFactCatalog,
   fingerprint,
   normalizeCandidate,
   candidateFromText,
-} from '@/lib/tailored-resumes/resume-engine.js';
+} from './candidate-context';
 import {
   questionSchema,
   screeningSelectionSchema,
@@ -43,9 +39,9 @@ export const answerRequestSchema = extensionJobSchema
       .optional(),
     questions: z.array(questionSchema).min(1).max(30),
   })
-  .refine((v) => !!v.candidateId !== !!v.candidate, 'Supply exactly one candidate source.')
+  .refine((v: any) => !!v.candidateId !== !!v.candidate, 'Supply exactly one candidate source.')
   .refine(
-    (v) => new Set(v.questions.map((q) => q.id)).size === v.questions.length,
+    (v: any) => new Set(v.questions.map((q: any) => q.id)).size === v.questions.length,
     'Question IDs must be unique.'
   );
 type AnswerInput = ExtensionResumeInput & { sessionId: string; questions: Question[] };

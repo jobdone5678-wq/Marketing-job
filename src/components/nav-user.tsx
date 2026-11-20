@@ -107,11 +107,11 @@ export function NavUser({
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem
-                render={<Link href="/dashboard/settings" />}
+                render={<Link href="/dashboard/candidates" />}
                 className="cursor-pointer gap-2 py-1.5 text-xs"
               >
                 <CircleUserRoundIcon className="size-4 opacity-75" />
-                <span>Account settings</span>
+                <span>My Profile</span>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

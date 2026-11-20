@@ -25,7 +25,11 @@ const nextConfig: NextConfig = {
     ],
   },
   async redirects() {
-    return [{ source: '/dashboard/resumes', destination: '/dashboard', permanent: false }];
+    return [
+      { source: '/dashboard/resumes', destination: '/dashboard/candidates', permanent: false },
+      { source: '/jobs', destination: '/dashboard/jobs', permanent: false },
+      { source: '/jobs/:id', destination: '/dashboard/jobs/:id', permanent: false },
+    ];
   },
   typescript: {
     ignoreBuildErrors: true,

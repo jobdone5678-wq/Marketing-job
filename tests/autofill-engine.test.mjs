@@ -574,3 +574,92 @@ test('Part 4: Multi-Step / Wizard Navigation - applyFill preserves previous valu
   assert.equal(writer.getPreservedValue(plan2.field), 'Bell');
 });
 
+test('Part 5: React rerender handling - re-resolves disconnected DOM elements by ID/name', async () => {
+  const oldInput = new MockInputElement();
+  oldInput.id = 'applicant-phone';
+  oldInput.name = 'phone';
+  mockDoc.body.appendChild(oldInput);
+
+  const plan = {
+    field: { key: 'field:phone', label: 'Phone Number', kind: 'text', element: oldInput },
+    value: '555-0199',
+    status: 'supported'
+  };
+
+  // Simulate React unmounting oldInput and mounting a fresh input before filling
+  oldInput.isConnected = false;
+  const freshInput = new MockInputElement();
+  freshInput.id = 'applicant-phone';
+  freshInput.name = 'phone';
+  mockDoc.body.appendChild(freshInput);
+
+  const session = { isCurrent: () => true };
+  const receipts = await writer.applyFill([plan], session);
+
+  assert.equal(receipts.length, 1);
+  assert.equal(freshInput.value, '555-0199');
+  assert.equal(plan.field.element, freshInput);
+});
+
+test('Part 6: Dependent controls (Country -> State) - handles async enablement and option population', async () => {
+  // Country select
+  const countrySelect = new MockSelectElement();
+  countrySelect.id = 'country-select';
+  const optUS = new MockNode('OPTION');
+  optUS.value = 'US';
+  optUS.textContent = 'United States';
+  optUS.index = 0;
+  countrySelect.options = [optUS];
+  mockDoc.body.appendChild(countrySelect);
+
+  // State select starts disabled with no options (dependent on Country)
+  const stateSelect = new MockSelectElement();
+  stateSelect.id = 'state-select';
+  stateSelect.disabled = true;
+  stateSelect.options = [];
+  mockDoc.body.appendChild(stateSelect);
+
+  // When Country receives change event, asynchronously enable State and populate options after 40ms
+  countrySelect.addEventListener('change', () => {
+    setTimeout(() => {
+      const optCA = new MockNode('OPTION');
+      optCA.value = 'CA';
+      optCA.textContent = 'California';
+      optCA.index = 0;
+      stateSelect.options = [optCA];
+      stateSelect.disabled = false;
+    }, 40);
+  });
+
+  const countryPlan = {
+    field: {
+      key: 'field:country',
+      label: 'Country',
+      kind: 'select',
+      element: countrySelect,
+      options: [{ label: 'United States', value: 'US', element: optUS }]
+    },
+    value: 'United States',
+    status: 'supported'
+  };
+
+  const statePlan = {
+    field: {
+      key: 'field:state',
+      label: 'State',
+      kind: 'select',
+      element: stateSelect,
+      options: [{ label: 'California', value: 'CA', element: null }]
+    },
+    value: 'California',
+    status: 'supported'
+  };
+
+  const session = { isCurrent: () => true };
+  const receipts = await writer.applyFill([countryPlan, statePlan], session);
+
+  assert.equal(receipts.length, 2);
+  assert.equal(countrySelect.value, 'US');
+  assert.equal(stateSelect.value, 'CA');
+});
+

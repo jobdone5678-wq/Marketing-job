@@ -25,6 +25,12 @@
     'how_heard', 'highest_education', 'school', 'graduation_year', 'preferred_work_type', 'current_salary', 'e_signature', 'consent'
   ]);
 
+  // Consequential or voluntary disclosure fields that should be flagged for candidate review
+  const CONSEQUENTIAL_FACTS = new Set([
+    'authorized_in_usa', 'needs_sponsorship', 'visa_status', 'work_authorization',
+    'gender', 'race', 'race_ethnicity', 'veteran', 'veteran_status', 'disability', 'disability_status'
+  ]);
+
   // Adapters spell a fact as "current_state" or "current state"; normalise before lookup.
   const CANONICAL_BY_NORM = new Map([...CANONICAL_FACTS].map(k => [norm(k), k]));
 
@@ -427,7 +433,7 @@
     return { key: uniqueKeys[0], exact: !!best?.exact, length: best?.length || 0 };
   }
 
-  function planFill(fields, candidate) {
+  function planFill(fields, candidate, options = {}) {
     const values = buildValues(candidate);
     const aiPlan = (field, reason) => ({ field, status: 'ai', reason, options: (field.options || []).map(o => optionText(o)), aiPrompt: field.label });
 
@@ -573,12 +579,35 @@
           }
         }
       }
+      const isConsequential = Boolean(factKey && CONSEQUENTIAL_FACTS.has(factKey));
+      const reviewRequired = isConsequential && (options?.requireCandidateReview || candidate?.requireCandidateReview);
+
       if (isChoiceKind(field.kind)) {
         const opt = pickOption(field, val);
-        if (opt) return { field, factKey, value: optionText(opt), status: 'supported', exactMatch: resolved.exact, matchLength: resolved.length, reason: 'Profile fact matched an option.' };
+        if (opt) {
+          return {
+            field,
+            factKey,
+            value: optionText(opt),
+            status: reviewRequired ? 'needs_review' : 'supported',
+            consequential: isConsequential,
+            exactMatch: resolved.exact,
+            matchLength: resolved.length,
+            reason: reviewRequired ? 'Consequential disclosure left for candidate review.' : 'Profile fact matched an option.',
+          };
+        }
         return aiPlan(field, 'Choose the best option for this profile fact.');
       }
-      return { field, factKey, value: String(val), status: 'supported', exactMatch: resolved.exact, matchLength: resolved.length, reason: 'Exact profile field mapping.' };
+      return {
+        field,
+        factKey,
+        value: String(val),
+        status: reviewRequired ? 'needs_review' : 'supported',
+        consequential: isConsequential,
+        exactMatch: resolved.exact,
+        matchLength: resolved.length,
+        reason: reviewRequired ? 'Consequential disclosure left for candidate review.' : 'Exact profile field mapping.',
+      };
     });
 
     // Two controls that ask the same question in the same words are ambiguous, so neither is
@@ -603,5 +632,5 @@
     return plans;
   }
 
-  root.NextkinFieldMapping = { planFill, resolveFact, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS };
+  root.NextkinFieldMapping = { planFill, resolveFact, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS, CONSEQUENTIAL_FACTS };
 })(globalThis);

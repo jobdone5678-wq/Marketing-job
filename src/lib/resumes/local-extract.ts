@@ -813,7 +813,7 @@ function buildCandidate(parsed: ReturnType<typeof parseResumeText>, raw: string)
   };
 }
 
-export function extractResumeLocal(text: string, filename: string): ResumeExtraction {
+export function extractResumeLocal(text: string): ResumeExtraction {
   const raw = text.replace(/\r\n/g, '\n').trim();
   const parsed = parseResumeText(raw);
   const candidate = buildCandidate(parsed, raw);

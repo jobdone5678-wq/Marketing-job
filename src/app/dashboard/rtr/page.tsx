@@ -11,16 +11,9 @@ import {
   AlertCircle,
   XCircle,
   FileText,
-  DollarSign,
-  Calendar,
   Building,
-  User,
-  Mail,
-  Phone,
   Sparkles,
   ExternalLink,
-  ChevronRight,
-  Plus,
   Eye,
   Trash2,
 } from 'lucide-react';
@@ -80,7 +73,6 @@ export default function RTRManagementPage() {
   const [documents, setDocuments] = React.useState<RTRItem[]>([]);
   const [candidates, setCandidates] = React.useState<Candidate[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState('');
   const [search, setSearch] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<string>('all');
 
@@ -99,7 +91,6 @@ export default function RTRManagementPage() {
 
   const fetchRtrDocuments = React.useCallback(async () => {
     setLoading(true);
-    setError('');
     try {
       const res = await fetch(
         `/api/rtr?status=${statusFilter}&search=${encodeURIComponent(search)}`,
@@ -110,8 +101,8 @@ export default function RTRManagementPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load RTR documents.');
       setDocuments(data.documents || []);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error fetching records');
+    } catch {
+      // Keep the current records if the refresh fails.
     } finally {
       setLoading(false);
     }
@@ -307,11 +298,10 @@ export default function RTRManagementPage() {
             <span className="bg-primary/10 text-primary flex h-9 w-9 items-center justify-center rounded-xl shadow-2xs">
               <FileSignature className="h-5 w-5 stroke-[1.8]" />
             </span>
-            Right to Represent (RTR)
+            My RTR
           </h1>
           <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
-            Upload and extract representation agreements, track candidate exclusivity, and manage
-            prime vendor bill rates with automated OCR.
+            Upload your Right to Represent agreements and track their terms, rates, and expiration dates.
           </p>
         </div>
 

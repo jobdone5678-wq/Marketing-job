@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React,{ useState } from 'react';
 
 // Curated high-fidelity SVG brand marks for prominent ATS companies
 const BRAND_LOGOS: Record<string, (className: string) => React.ReactNode> = {
@@ -112,6 +112,17 @@ const BRAND_LOGOS: Record<string, (className: string) => React.ReactNode> = {
       />
     </svg>
   ),
+  redcarepharmacy: (cn) => (
+    <svg className={cn} viewBox="0 0 32 32" fill="none">
+      <circle cx="8" cy="23" r="3.5" fill="#DE0039" />
+      <path
+        d="M7.5 13.5C7.5 8.25 11.75 4 17 4C22.25 4 25.5 7.8 25.5 13C25.5 19 22 25 18 25C15.5 25 14 22.8 14.5 19C15.2 14.5 18 13.5 20.5 13.5"
+        stroke="#DE0039"
+        strokeWidth="4.2"
+        strokeLinecap="round"
+      />
+    </svg>
+  ),
 };
 
 // Subtle, professional neutral avatars for fallbacks (Jobright inspired)
@@ -155,11 +166,11 @@ interface CompanyLogoProps {
 }
 
 const SIZE_MAP = {
-  xs: { box: 'size-6 rounded-md text-[10px]', icon: 'size-3.5' },
-  sm: { box: 'size-8 rounded-lg text-xs', icon: 'size-4.5' },
-  md: { box: 'size-10 rounded-xl text-xs font-bold', icon: 'size-5.5' },
-  lg: { box: 'size-12 rounded-xl text-sm font-bold', icon: 'size-6.5' },
-  xl: { box: 'size-16 rounded-2xl text-base font-bold', icon: 'size-9' },
+  xs: { box: 'size-6 rounded-md text-[10px]', icon: 'size-4' },
+  sm: { box: 'size-8 rounded-lg text-xs', icon: 'size-5' },
+  md: { box: 'size-10 rounded-xl text-xs font-bold', icon: 'size-6' },
+  lg: { box: 'size-12 rounded-xl text-sm font-bold', icon: 'size-7' },
+  xl: { box: 'size-16 rounded-2xl text-base font-bold', icon: 'size-10' },
 };
 
 export function CompanyLogo({
@@ -168,14 +179,14 @@ export function CompanyLogo({
   size = 'md',
   className = '',
 }: CompanyLogoProps) {
-  const [imgError, setImgError] = useState(false);
+  const [attempt, setAttempt] = useState<number>(0);
   const [loaded, setLoaded] = useState(false);
 
-  const cleanName = company.trim();
+  const cleanName = company?.trim() || '';
   const slug = normalizeSlug(cleanName);
   const sizeConfig = SIZE_MAP[size] || SIZE_MAP.md;
 
-  // 1. Direct verified brand SVGs
+  // 1. Direct curated SVG brand logos (figma, stripe, openai, github, google, redcare, etc.)
   const brandSvg = BRAND_LOGOS[slug];
   if (brandSvg) {
     return (
@@ -188,17 +199,24 @@ export function CompanyLogo({
     );
   }
 
-  // 2. High-res favicon resolver
+  // Determine URL attempts:
+  // Attempt 0: https://logo.freehire.me/<Company>
+  // Attempt 1: https://www.google.com/s2/favicons?domain=<targetDomain>&sz=128
+  // Attempt 2+: Monogram
   const targetDomain = domain || (cleanName.includes('.') ? cleanName : `${slug}.com`);
 
-  const remoteLogoUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(targetDomain)}&sz=128`;
+  const currentUrl =
+    attempt === 0 && cleanName
+      ? `https://logo.freehire.me/${encodeURIComponent(cleanName)}`
+      : attempt === 1 && targetDomain
+        ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(targetDomain)}&sz=128`
+        : null;
 
-  // 3. Restrained, minimalist fallback
   const hash = getCompanyHash(cleanName);
   const palette = MONOGRAM_PALETTES[hash % MONOGRAM_PALETTES.length];
   const initials = getInitials(cleanName);
 
-  if (imgError) {
+  if (!currentUrl || attempt >= 2) {
     return (
       <div
         className={`relative flex shrink-0 items-center justify-center border font-bold tracking-tight select-none ${palette} ${sizeConfig.box} ${className}`}
@@ -224,14 +242,18 @@ export function CompanyLogo({
 
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={remoteLogoUrl}
+        key={`${cleanName}-${attempt}`}
+        src={currentUrl}
         alt={`${company} logo`}
         className={`object-contain transition-opacity duration-200 ${sizeConfig.icon} ${
           loaded ? 'opacity-100' : 'opacity-0'
         }`}
         loading="lazy"
         onLoad={() => setLoaded(true)}
-        onError={() => setImgError(true)}
+        onError={() => {
+          setLoaded(false);
+          setAttempt((prev) => prev + 1);
+        }}
       />
     </div>
   );

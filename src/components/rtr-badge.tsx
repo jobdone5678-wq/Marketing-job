@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FileText, Download, Eye, Copy, Check, AlertCircle, Calendar, Loader2 } from 'lucide-react';
+import { FileText, Download, Eye, Check, AlertCircle, Calendar, Loader2 } from 'lucide-react';
 import type { RTRDocumentReference } from '@/types/database';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,10 +33,8 @@ export function RTRBadge(props: Props) {
 function RTRBadgeView({ candidateName, companyName, jobTitle, rtrDocument }: Props) {
   const rtr = rtrDocument || null;
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState('');
-  const [copied, setCopied] = useState(false);
 
   const getStatusBadge = (status: string) => {
     switch (status) {

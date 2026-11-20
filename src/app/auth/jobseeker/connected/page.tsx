@@ -9,8 +9,6 @@ import {
   Sparkles,
   ArrowRight,
   LayoutDashboard,
-  ExternalLink,
-  ShieldCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 

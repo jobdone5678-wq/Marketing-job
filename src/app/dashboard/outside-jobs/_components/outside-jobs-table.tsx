@@ -7,7 +7,6 @@ import {
   Building2Icon,
   ExternalLinkIcon,
   SearchIcon,
-  UserIcon,
   CalendarIcon,
   RefreshCwIcon,
   SparklesIcon,
@@ -207,7 +206,12 @@ export function OutsideJobsTable() {
                       </div>
                     </TableCell>
                     <TableCell className="py-3.5 text-right align-top">
-                      <a href={job.job_url} target="_blank" rel="noopener noreferrer">
+                      <a
+                        href={`/dashboard/outside-jobs/${encodeURIComponent(job.id)}/apply`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Open application for ${job.title}`}
+                      >
                         <Button
                           variant="ghost"
                           size="sm"

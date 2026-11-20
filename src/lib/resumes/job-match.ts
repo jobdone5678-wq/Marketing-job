@@ -1,5 +1,3 @@
-import { analyze } from '@/lib/tailored-resumes/resume-engine.js';
-
 const sectionStart =
   /^(?:(?:job |minimum |basic |required |preferred |desired )?(?:requirements|qualifications|skills)|(?:key )?responsibilities|what (?:you(?:'|’)ll (?:do|bring)|we(?:'|’)re looking for)|nice to have|must haves?)\s*:?$/i;
 const sectionEnd =
@@ -17,7 +15,7 @@ const stop = new Set(
     ' '
   )
 );
-const tokens = (value: string) => [
+const tokens = (value: string): string[] => [
   ...new Set(
     (value.toLowerCase().match(/[a-z][a-z0-9+#.-]{2,}/g) || [])
       .map((word) => word.replace(/[.]+$/, ''))
@@ -25,13 +23,79 @@ const tokens = (value: string) => [
   ),
 ];
 
+const SKILL_TERMS = [
+  'JavaScript', 'TypeScript', 'Java', 'Python', 'C++', 'C#', 'Go', 'Rust', 'Ruby', 'PHP',
+  'React', 'React Native', 'Flutter', 'Angular', 'Vue', 'Next.js', 'Node.js', 'Spring Boot', 'Django', 'Flask', 'FastAPI', '.NET',
+  'SQL', 'PostgreSQL', 'MySQL', 'MongoDB', 'Redis', 'DynamoDB', 'Snowflake', 'Spark', 'Kafka',
+  'AWS', 'Azure', 'GCP', 'Docker', 'Kubernetes', 'Terraform', 'Linux', 'Git', 'Jenkins', 'CI/CD',
+  'GraphQL', 'REST APIs', 'Microservices', 'HTML', 'CSS', 'Jest', 'JUnit', 'Selenium', 'Machine Learning', 'Full Stack', 'Tailwind CSS',
+  'Project Management', 'Agile', 'Scrum', 'Jira', 'UX Design', 'Product Management', 'Data Analysis',
+];
+
+const ALIASES: Record<string, string[]> = {
+  AWS: ['Amazon Web Services'],
+  GCP: ['Google Cloud', 'Google Cloud Platform'],
+  React: ['React.js', 'ReactJS'],
+  'Node.js': ['NodeJS'],
+  PostgreSQL: ['Postgres'],
+  Kubernetes: ['K8s'],
+  'REST APIs': ['RESTful APIs', 'REST API'],
+};
+
+function containsTerm(source: string, term: string): boolean {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const suffix = term === 'React' ? '(?![ -]+Native\\b)' : '';
+  return new RegExp('(^|[^a-z0-9])' + escaped + suffix + '(?=$|[^a-z0-9+#])', 'i').test(source);
+}
+
+function hasTerm(source: string, term: string): boolean {
+  if (term === 'Go') {
+    return (
+      /\b(?:Golang|Go (?:programming|language|developer|engineer))\b/i.test(source) ||
+      /(?:^|[,|:])\s*Go\s*(?=$|[,|])/m.test(source)
+    );
+  }
+  return [term, ...(ALIASES[term] || [])].some((val) => containsTerm(source, val));
+}
+
+function positiveTerm(source: string, term: string): boolean {
+  return source
+    .split(/\n|;|(?<=[.!?])\s+|\bbut\b/i)
+    .some(
+      (line) =>
+        hasTerm(line, term) &&
+        !negative.test(line) &&
+        !/^(?:I\s+(?:am\s+)?|currently\s+)?(?:learning|studying|aspiring|interested\s+in)\b/i.test(
+          line.trim()
+        )
+    );
+}
+
 type Point = { requirement: string; evidence: string | null; weight: number };
+interface SkillRow {
+  label: string;
+  source: string;
+  weight: number;
+  matched: boolean;
+  type: 'skill';
+}
+
 const aspiration =
   /^(?:(?:i am |currently )?(?:learning|studying|aspiring|interested in learning)\b|target role:)/i;
 
 export function compareResumeToJob(resumeText: string, jobDescription: string) {
-  const report = analyze({ source_text: resumeText }, { jobDescription }, resumeText);
-  const skillRows = report.requirements.filter((row) => row.type === 'skill');
+  const clauses = jobDescription.split(split).map((s) => s.trim()).filter(Boolean);
+  const skillRows: SkillRow[] = [];
+
+  for (const term of SKILL_TERMS) {
+    if (!hasTerm(jobDescription, term)) continue;
+    const clause = clauses.find((line) => hasTerm(line, term)) || term;
+    if (optional.test(clause)) continue;
+    const matched = positiveTerm(resumeText, term);
+    const weight = preferred.test(clause) ? 1 : 2;
+    skillRows.push({ label: term, source: clause, weight, matched, type: 'skill' });
+  }
+
   const resumeLines = resumeText
     .split(split)
     .map((line) => ({
@@ -40,6 +104,7 @@ export function compareResumeToJob(resumeText: string, jobDescription: string) {
       years: Number(line.match(yearsPattern)?.[1] || 0),
     }))
     .filter((line) => line.text && !negative.test(line.text) && !aspiration.test(line.text));
+
   const points: Point[] = [];
   const seen = new Set<string>();
   let section = '';
@@ -63,8 +128,11 @@ export function compareResumeToJob(resumeText: string, jobDescription: string) {
       (!section && !qualification.test(requirement) && !yearsPattern.test(requirement))
     )
       continue;
+
     const skillTokens = new Set(
-      skillRows.filter((row) => row.source === requirement).flatMap((row) => tokens(row.label))
+      skillRows
+        .filter((row: SkillRow) => row.source === requirement)
+        .flatMap((row: SkillRow) => tokens(row.label))
     );
     const terms = tokens(requirement);
     const years = Number(requirement.match(yearsPattern)?.[1] || 0);
@@ -83,22 +151,23 @@ export function compareResumeToJob(resumeText: string, jobDescription: string) {
   }
 
   const total =
-    skillRows.reduce((sum, row) => sum + row.weight, 0) +
-    points.reduce((sum, point) => sum + point.weight, 0);
+    skillRows.reduce((sum: number, row: SkillRow) => sum + row.weight, 0) +
+    points.reduce((sum: number, point: Point) => sum + point.weight, 0);
   const matchedWeight =
-    skillRows.reduce((sum, row) => sum + (row.matched ? row.weight : 0), 0) +
-    points.reduce((sum, point) => sum + (point.evidence ? point.weight : 0), 0);
+    skillRows.reduce((sum: number, row: SkillRow) => sum + (row.matched ? row.weight : 0), 0) +
+    points.reduce((sum: number, point: Point) => sum + (point.evidence ? point.weight : 0), 0);
+
   return {
     score: total ? Math.round((100 * matchedWeight) / total) : null,
-    matched: skillRows.filter((row) => row.matched).map((row) => row.label),
-    missing: skillRows.filter((row) => !row.matched).map((row) => row.label),
+    matched: skillRows.filter((row: SkillRow) => row.matched).map((row: SkillRow) => row.label),
+    missing: skillRows.filter((row: SkillRow) => !row.matched).map((row: SkillRow) => row.label),
     matchedPoints: points
-      .filter((point) => point.evidence)
+      .filter((point: Point) => point.evidence)
       .slice(0, 8)
       .map(({ requirement, evidence }) => ({ requirement, evidence })),
     unmatchedPoints: points
-      .filter((point) => !point.evidence)
+      .filter((point: Point) => !point.evidence)
       .slice(0, 8)
-      .map((point) => point.requirement),
+      .map((point: Point) => point.requirement),
   };
 }

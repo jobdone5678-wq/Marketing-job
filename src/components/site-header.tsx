@@ -3,28 +3,16 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { ChevronRight, CircleHelp, Search, Sparkles } from 'lucide-react';
+import { ChevronRight, Search } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 const titles: Record<string, string> = {
-  '/dashboard/integrations': 'Integrations & APIs',
-  '/dashboard/billing': 'SaaS Billing',
-  '/dashboard': 'Executive Dashboard',
-  '/dashboard/job-matching': 'JD Candidate Matching',
-  '/dashboard/candidates': 'Candidate Bench',
-  '/dashboard/candidates/new': 'New Candidate',
-  '/dashboard/submissions': 'Job Submissions',
-  '/dashboard/submissions/new': 'Log Application',
-  '/dashboard/vendors': 'Prime Vendors',
-  '/dashboard/vendors/new': 'New Vendor',
-  '/dashboard/jobs': 'Job Discovery',
+  '/dashboard/candidates': 'My Profile',
+  '/dashboard/submissions': 'My Applications',
+  '/dashboard/jobs': 'Current Jobs',
   '/dashboard/outside-jobs': 'Captured Jobs',
-  '/dashboard/greenhouse': 'Greenhouse ATS',
-  '/dashboard/ashby': 'Ashby ATS',
-  '/dashboard/settings': 'Workspace Settings',
-  '/dashboard/help': 'Documentation & Guides',
-  '/dashboard/rtr': 'Right to Represent (RTR)',
-  '/dashboard/email-confirmations': 'Email Confirmations',
+  '/dashboard/rtr': 'My RTR',
+  '/dashboard/email-confirmations': 'Email Sync',
 };
 
 export function SiteHeader({ title, subtitle }: { title?: string; subtitle?: string }) {
@@ -73,25 +61,9 @@ export function SiteHeader({ title, subtitle }: { title?: string; subtitle?: str
         >
           <Search className="size-3.5" />
           <span className="hidden font-normal md:inline">Search jobs…</span>
-          <kbd className="border-border bg-background text-muted-foreground hidden items-center rounded border px-1.5 font-mono text-[10px] lg:inline-flex">
-            ⌘K
-          </kbd>
         </Link>
-
-        <div className="hidden items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 sm:flex dark:text-emerald-400">
-          <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
-          <span>Live Sync</span>
-        </div>
 
         <ThemeToggle />
-
-        <Link
-          href="/dashboard/help"
-          aria-label="Help and guidance"
-          className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-8 items-center justify-center rounded-lg transition-colors"
-        >
-          <CircleHelp className="size-4" />
-        </Link>
       </div>
     </header>
   );

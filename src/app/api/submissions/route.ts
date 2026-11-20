@@ -148,7 +148,7 @@ function transformOutsideJob(oj: any, candidate: any): any {
     applied_resume: oj.applied_resume || null,
     rtr_document: null,
     duplicate_flag: false,
-    job_id: oj.submission_id || null,
+    job_id: null,
     interview_time: null,
     interview_mode: null,
     interview_meeting_link: null,
@@ -238,7 +238,7 @@ export async function GET(request: Request) {
     const allSubmissions = [...enrichedPortal, ...enrichedOutside].sort((a, b) => {
       const dateA = new Date(a.submission_date || a.created_at).getTime();
       const dateB = new Date(b.submission_date || b.created_at).getTime();
-      return dateB - dateA;
+      return dateB - dateA || new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
 
     // 5. Limit to 500 total

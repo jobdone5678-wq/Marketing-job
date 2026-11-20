@@ -5,6 +5,13 @@ import type { Candidate } from '@/types/database';
 import { textFields, booleanFields } from '@/lib/ai/schemas';
 
 const unsavedResumeNote = 'Profile created from an uploaded resume. Review the extracted facts and edit anything that is wrong.';
+const autofillKeys = [
+  ...textFields, ...booleanFields, 'employment_types',
+  'first_name', 'last_name', 'preferred_first_name', 'preferred_name',
+  'zip_code', 'postal_code', 'country', 'github_url', 'website',
+  'current_company', 'summary', 'bio', 'availability', 'how_heard',
+  'school', 'languages', 'employment_history', 'education_history', 'saved_answers',
+];
 
 export async function OPTIONS(request: Request) {
   return cors(request, new Response(null, { status: 204 }));
@@ -168,13 +175,25 @@ export async function GET(request: Request) {
     }
 
     if (savedOnly) {
-      const keys = [...textFields, ...booleanFields, 'employment_types'];
       const saved = candidates.flatMap(candidate => {
         const facts = (candidate.confirmed_facts || {}) as Record<string, unknown>;
         if (candidate.provenance_status !== 'confirmed' || facts.notes === unsavedResumeNote ||
-          typeof facts.full_name !== 'string' || !facts.full_name.trim()) return [];
-        const fields = Object.fromEntries(keys.filter(key => Object.hasOwn(facts, key)).map(key => [key, facts[key]]));
-        return [{ ...fields, id: candidate.id, version: candidate.version, provenance_status: 'confirmed', confirmed_facts: fields }];
+            typeof facts.full_name !== 'string' || !facts.full_name.trim()) return [];
+
+        const fields = Object.fromEntries(autofillKeys.filter(key => Object.hasOwn(facts, key))
+          .map(key => [key, facts[key]]));
+        if (!fields.saved_answers || typeof fields.saved_answers !== 'object' || Array.isArray(fields.saved_answers)) {
+          delete fields.saved_answers;
+        }
+        return [{
+          ...fields,
+          id: candidate.id,
+          version: candidate.version,
+          provenance_status: 'confirmed',
+          has_original_resume: /^data:application\/(?:pdf|vnd\.openxmlformats-officedocument\.wordprocessingml\.document);base64,/i
+            .test(candidate.resume_url || ''),
+          confirmed_facts: fields,
+        }];
       });
       return { candidates: saved, actorId: profile.id, role: profile.role, ownCandidateId: saved[0]?.id || null };
     }
@@ -205,5 +224,8 @@ export async function GET(request: Request) {
       role: profile.role,
       ownCandidateId: resolvedCandidates?.[0]?.id || null,
     };
+  }).then(response => {
+    if (response instanceof Response) response.headers.set('Cache-Control', 'private, no-store');
+    return response;
   });
 }

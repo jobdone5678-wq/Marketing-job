@@ -159,33 +159,6 @@ export interface AppliedResumeSnapshot {
   resumeId?: string | null;
 }
 
-export interface Placement {
-  id: string;
-  candidate_id: string;
-  submission_id: string | null;
-  company: string;
-  role_title: string;
-  status:
-    'offer_accepted' | 'joining_scheduled' | 'active' | 'completed' | 'ended_early' | 'cancelled';
-  planned_start_date: string | null;
-  actual_join_date: string | null;
-  expected_end_date: string | null;
-  actual_end_date: string | null;
-  candidate_monthly_amount: string | null;
-  candidate_currency: string | null;
-  candidate_compensation_visible: boolean;
-}
-export interface PlacementMonth {
-  id: string;
-  placement_id: string;
-  month_start: string;
-  covered_start: string;
-  covered_end: string;
-  agreed_amount: string | null;
-  currency: string | null;
-  status: 'scheduled' | 'active' | 'completed' | 'cancelled';
-}
-
 export type CandidateFormData = Omit<Candidate, 'id' | 'created_at' | 'updated_at'>;
 export interface RTRDocument {
   id: string;

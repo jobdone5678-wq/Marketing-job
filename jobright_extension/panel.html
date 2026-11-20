@@ -17,7 +17,7 @@
     <section class="context">
       <div class="site">
         <div class="site-heading"><span id="site-label" class="badge">NextKinHR Workspace</span><span id="active-site">Active Site</span></div>
-        <h2 id="site-title">Recruiter &amp; Candidate Hub</h2>
+        <h2 id="site-title">My Profile and Applications</h2>
         <p id="site-summary">Ready to assist on an outside career portal</p>
       </div>
       <div class="checklist">
@@ -54,7 +54,22 @@
     </section>
     <section class="actions">
       <button id="autofill" class="primary" type="button" disabled><span aria-hidden="true">⚡</span> Autofill Application Now</button>
+      <label id="ai-screening-option" hidden><input type="checkbox" id="ai-screening"> Use NextKinHR AI to draft bio and screening answers from my profile</label>
       <label id="auto-submit-option" hidden><input type="checkbox" id="auto-submit"> Submit this application after autofill if the final form is ready</label>
+      <button id="review-answers" class="small-button" type="button" hidden>Save reusable answers</button>
+      <section id="answer-review" aria-label="Reusable answers" hidden>
+        <p>Select the answers you want to reuse on future applications.</p>
+        <div id="answer-options"></div>
+        <button id="save-answers" class="small-button" type="button">Save selected answers</button>
+      </section>
+      <section id="applied-prompt" aria-label="Confirm your application" hidden>
+        <p class="applied-prompt-question">Did you submit your application?</p>
+        <p id="applied-prompt-job" class="applied-prompt-job"></p>
+        <div class="applied-prompt-actions">
+          <button id="not-applied" class="small-button" type="button">Not yet</button>
+          <button id="mark-applied" class="small-button primary" type="button">Mark as applied</button>
+        </div>
+      </section>
       <p id="notice" role="status" hidden></p>
       <section id="results" class="results" aria-labelledby="results-title" hidden>
         <div class="results-heading"><h2 id="results-title"></h2><span id="verified" class="badge">Verified</span></div>
@@ -83,7 +98,7 @@
       <details id="profile-panel" hidden>
         <summary>Your Autofill Information</summary>
         <dl id="profile-facts"></dl>
-        <button id="open-profile" class="link" type="button">Open My Applications and Resume</button>
+        <button id="open-profile" class="link" type="button">Open My Profile</button>
       </details>
     </section>
   </main>

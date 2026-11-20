@@ -73,7 +73,7 @@
     const keka = kekaPosting(current);
     const isWorkspace = /(^|\.)(nextkinhr\.com|jobright-internal\.com)$/.test(current.hostname)
       || ['localhost', '127.0.0.1'].includes(current.hostname) && !!first(root, '#nextkin-job-details');
-    const isAts = /(^|\.)(lever\.co|ashbyhq\.com|greenhouse\.io|myworkdayjobs\.com|myworkdaysite\.com|smartrecruiters\.com|smartr\.me|workable\.com|taleo\.net|icims\.com|jobvite\.com|bamboohr\.com|clearcompany\.com|hrmdirect\.com|oraclecloud\.com|oraclegovcloud\.com|successfactors\.(?:com|eu)|sapsf\.com|brassring\.com|dayforce(hcm)?\.com|phenompeople\.com|avature\.net|paycom(online)?\.(?:com|net)|paylocity\.com|paycor\.com|newtonsoftware\.com|gusto\.com|gem\.com|hiringthing\.com|oasisrecruit\.com|careerplug\.com|catsone\.com|recruiterflow\.com|trakstar\.com|polymer\.co|gohire\.io|trinethire\.com|kula\.ai|dover\.com|eightfold\.ai|ultipro\.(?:com|ca)|rec\.pro\.ukg\.net|zohorecruit\.(?:com|ca|eu|in)|personio\.(?:de|com)|breezy\.hr|teamtailor\.com|recruitee\.com|pinpointhq\.com|freshteam\.com|comeet\.(?:com|co)|jobscore\.com|isolvedhire\.com|jobdiva\.com|applytojob\.com|toasttab\.com|withwaymo\.com|governmentjobs\.com|usajobs\.gov|ycombinator\.com|workatastartup\.com)$/i.test(current.hostname);
+    const isAts = /(^|\.)(linkedin\.com|lever\.co|ashbyhq\.com|greenhouse\.io|myworkdayjobs\.com|myworkdaysite\.com|smartrecruiters\.com|smartr\.me|workable\.com|taleo\.net|icims\.com|jobvite\.com|bamboohr\.com|clearcompany\.com|hrmdirect\.com|oraclecloud\.com|oraclegovcloud\.com|successfactors\.(?:com|eu)|sapsf\.com|brassring\.com|dayforce(hcm)?\.com|phenompeople\.com|avature\.net|paycom(online)?\.(?:com|net)|paylocity\.com|paycor\.com|newtonsoftware\.com|gusto\.com|gem\.com|hiringthing\.com|oasisrecruit\.com|careerplug\.com|catsone\.com|recruiterflow\.com|trakstar\.com|polymer\.co|gohire\.io|trinethire\.com|kula\.ai|dover\.com|eightfold\.ai|ultipro\.(?:com|ca)|rec\.pro\.ukg\.net|zohorecruit\.(?:com|ca|eu|in)|personio\.(?:de|com)|breezy\.hr|teamtailor\.com|recruitee\.com|pinpointhq\.com|freshteam\.com|comeet\.(?:com|co)|jobscore\.com|isolvedhire\.com|jobdiva\.com|applytojob\.com|toasttab\.com|withwaymo\.com|governmentjobs\.com|usajobs\.gov|ycombinator\.com|workatastartup\.com)$/i.test(current.hostname);
     const portal = isWorkspace && /^\/(?:dashboard\/jobs|jobs\/info)\/[^/]+\/?$/.test(current.pathname);
     if (isWorkspace && !portal) return null;
     const workspace = portal ? parse(first(root, '#nextkin-job-details')?.textContent) : null;
@@ -83,6 +83,8 @@
       '[data-testid="job-description"]', '[data-qa="job-description"]', '.job__description',
       '#job-description', '#jobDescriptionText', '#jobDescription', '#content.job-description',
       '.job-description', '.job-description-content', '.jobs-description__content', '#job-details',
+      '.show-more-less-html__markup', '.jobs-description-content__text',
+      '[class*="jobs-description-content" i]', '[class*="show-more-less-html" i]',
       '[class*="job-description" i]', '.posting-page .section-wrapper', 'main article',
     ].map(selector => first(root, selector)).find(Boolean);
     const knownJobPath = isAts || /\/(?:jobs?|careers?|openings?|positions?|requisitions?|jobdetails|viewjob|job-detail|job-posting)(?:\/[^/]+)|[?&](?:gh_jid|jobId|job_id|jk)=/i.test(jobUrl);
@@ -157,7 +159,7 @@
       jobUrl: keka?.details || (workspace || postingParam || !onSameSite || /^(?:\/|\/(?:careers?|jobs?|openings?)\/?)$/i.test(new URL(canonical).pathname) ? jobUrl : canonical),
       applicationUrl: keka?.application || url(workspace?.applicationUrl || posting?.applicationUrl || apply?.getAttribute('href'), jobUrl),
       location: text(workspace?.location || formatLocations(posting?.jobLocation) || read(root,
-        '[itemprop="jobLocation"], [data-automation-id="locations"], [data-automation-id="jobPostingLocation"], [data-testid="job-location"], .job-location, .posting-categories .location, .ki-location + span', 200), 200),
+        '[itemprop="jobLocation"], [data-automation-id="locations"], [data-automation-id="jobPostingLocation"], [data-testid="job-location"], .job-location, .posting-categories .location, .ki-location + span, .jobs-unified-top-card__subtitle-primary-grouping', 200), 200),
       department: text(workspace?.department || posting?.occupationalCategory || read(root, '[data-testid="job-department"], .job-department, .posting-categories .department', 100), 100),
       employmentType: text(workspace?.employmentType || [posting?.employmentType].flat().filter(Boolean).join(', ') || read(root,
         '[itemprop="employmentType"], [data-automation-id="time"], [data-testid="employment-type"], .employment-type, .posting-categories .commitment, .ki-briefcase + span', 100), 100),

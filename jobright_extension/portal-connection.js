@@ -1,165 +1,155 @@
 (function () {
+  const TRUSTED_ORIGIN_PATTERNS = [
+    /^https:\/\/(?:[a-zA-Z0-9-]+\.)*nextkinhr\.com(?::\d+)?$/,
+    /^https:\/\/(?:[a-zA-Z0-9-]+\.)*jobright-internal\.com(?::\d+)?$/,
+    /^http:\/\/(?:localhost|127\.0\.0\.1):3000$/,
+  ];
+
+  function isTrustedOrigin(originString) {
+    if (!originString || typeof originString !== 'string') return false;
+    return TRUSTED_ORIGIN_PATTERNS.some(regex => regex.test(originString));
+  }
+
+  // Reject execution on untrusted origins
+  if (typeof location === 'undefined' || !isTrustedOrigin(location.origin)) {
+    return;
+  }
+
+  // Proactively clean up any legacy token stored in chrome.storage.local
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local?.remove) {
+      chrome.storage.local.remove('token').catch(() => {});
+    }
+  } catch {}
+
   const onConnectionPage = () => location.pathname.replace(/\/$/, '') === '/auth/jobseeker/connected';
-  let pendingSync = Promise.resolve();
-  async function save(token, user) {
-    if (!onConnectionPage() || typeof token !== 'string' || !/^[A-Za-z0-9_-]{20,128}$/.test(token) ||
-      typeof user?.id !== 'string' || user.role !== 'candidate') return;
 
-    await chrome.storage.local.set({
-      origin: location.origin,
-      token,
-      user: { id: user.id, name: user.name, email: user.email },
-      ...await clearPreviousAccount(user.id),
-    });
-  }
-
-  async function clearPreviousAccount(userId) {
-    const current = await chrome.storage.local.get(['origin', 'user']);
-    if (current.origin === location.origin && current.user?.id === userId) return {};
-    return { activeCandidateId: null, candidateProfile: null, resumeData: null, savedProfiles: {}, savedResumes: {} };
-  }
-
-  async function syncResumeData(payload) {
-    if (!payload || typeof payload !== 'object') return;
-    const candidate = payload.candidate || payload.candidateProfile || (payload.type === 'candidate_updated' ? payload.data : null);
-    const resume = payload.resume || payload.resumeData;
-
-    let existing = {};
+  async function handleAuthRequired(reason) {
     try {
-      existing = await chrome.storage.local.get(['token', 'user', 'origin']);
-    } catch {}
-
-    let token = existing.origin === location.origin ? existing.token : null;
-    let user = token ? existing.user : null;
-    if (token && user?.id && candidate?.id && /^[a-f0-9-]{36}$/i.test(candidate.id)) {
-      const params = new URLSearchParams({ candidateId: candidate.id });
-      const response = await fetch('/api/extension/candidates?' + params, {
-        headers: { Authorization: 'Bearer ' + token },
-        signal: AbortSignal.timeout(8000),
-      }).catch(() => null);
-      if ([401, 403, 404].includes(response?.status)) token = null;
-    }
-
-    if (!token || !user?.id) {
-      token = null;
-      user = null;
-      try {
-        const pairRes = await fetch('/api/extension/quick-pair', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
-          body: '{}',
-          signal: AbortSignal.timeout(8000),
+      if (typeof chrome !== 'undefined' && chrome.storage?.session?.remove) {
+        await chrome.storage.session.remove('token').catch(() => {});
+      }
+      if (typeof chrome !== 'undefined' && chrome.storage?.local?.remove) {
+        await chrome.storage.local.remove('token').catch(() => {});
+      }
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: 'NEXTKIN_AUTH_REQUIRED',
+          origin: location.origin,
+          reason: reason || 'Authentication required',
         });
-        if (pairRes.ok) {
-          const pairData = await pairRes.json();
-          if (pairData.token) {
-            token = pairData.token;
-            if (pairData.user) user = pairData.user;
-          }
-        }
-      } catch {}
-    }
-
-    if (!token || !user?.id) return;
-
-    let savedProfiles = {};
-    let savedResumes = {};
-    let active = {};
-    try {
-      if (existing.origin === location.origin && existing.user?.id === user.id) {
-        active = await chrome.storage.local.get(['savedProfiles', 'savedResumes', 'resumeData', 'activeCandidateId']);
-        savedProfiles = active.savedProfiles || {};
-        savedResumes = active.savedResumes || {};
       }
     } catch {}
 
-    const candId = candidate?.id || (candidate?.email ? candidate.email.toLowerCase() : 'cand_' + Date.now());
-    if (candidate) {
-      if (!candidate.id) candidate.id = candId;
-      const facts = candidate.confirmed_facts || {};
-      candidate.gender = candidate.gender || facts.gender || '';
-      candidate.race = candidate.race || facts.race || candidate.race_ethnicity || facts.race_ethnicity || '';
-      candidate.race_ethnicity = candidate.race_ethnicity || facts.race_ethnicity || candidate.race || facts.race || '';
-      candidate.veteran = candidate.veteran || facts.veteran || candidate.veteran_status || facts.veteran_status || '';
-      candidate.veteran_status = candidate.veteran_status || facts.veteran_status || candidate.veteran || facts.veteran || '';
-      candidate.disability = candidate.disability || facts.disability || candidate.disability_status || facts.disability_status || '';
-      candidate.disability_status = candidate.disability_status || facts.disability_status || candidate.disability || facts.disability || '';
-      candidate.work_authorization = candidate.work_authorization || facts.work_authorization || candidate.visa_status || facts.visa_status || '';
-      candidate.visa_status = candidate.visa_status || facts.visa_status || candidate.work_authorization || facts.work_authorization || '';
-      candidate.linkedin_url = candidate.linkedin_url || facts.linkedin_url || '';
-      candidate.location = candidate.location || [candidate.current_city || facts.current_city, candidate.current_state || facts.current_state].filter(Boolean).join(', ') || candidate.full_address || facts.full_address || '';
-      savedProfiles[candId] = candidate;
-    }
-
-    let resumeDoc = null;
-    if (resume) {
-      const docId = resume.id || ('doc_' + candId);
-      resumeDoc = {
-        ...resume,
-        id: docId,
-        candidate_id: candId,
-        candidate_name: candidate?.full_name || '',
-        filename: resume.filename || `${candidate?.full_name || 'Candidate'}_Resume.pdf`,
-        status: 'confirmed',
-        raw_text: resume.raw_text || resume.source_text || ''
-      };
-      savedResumes[docId] = resumeDoc;
-    }
-
-    const toStore = {
-      origin: location.origin,
-      activeCandidateId: candId,
-      candidateProfile: candidate, // active candidate profile
-      resumeData: resumeDoc || (active.activeCandidateId === candId ? active.resumeData ?? null : null),
-      savedProfiles, // all candidates preserved individually without wiping
-      savedResumes, // all resumes preserved individually without wiping
-      ...(token ? { token } : {}),
-      ...(user ? { user } : {})
-    };
-
-    await chrome.storage.local.set(toStore);
-
-    const messageData = {
-      candidateProfile: candidate,
-      resumeData: resume,
-      token,
-      user,
-      origin: location.origin
-    };
-
     try {
-      chrome.runtime.sendMessage({ type: 'RESUME_SYNCED', data: messageData }, () => {
-        void chrome.runtime.lastError;
-      });
+      if (isTrustedOrigin(location.origin)) {
+        window.postMessage({
+          type: 'NEXTKIN_AUTH_REQUIRED',
+          reason: reason || 'Authentication required',
+        }, location.origin);
+      }
     } catch {}
   }
 
-  chrome.runtime.onMessage?.addListener((message, sender) => {
-    if (sender.id === chrome.runtime.id && message?.type === 'NEXTKIN_OUTSIDE_APPLICATION_SAVED')
-      window.postMessage({ type: message.type }, location.origin);
-  });
+  async function saveConnection(token, user) {
+    if (!onConnectionPage() || !isTrustedOrigin(location.origin)) return;
 
-  window.addEventListener('message', event => {
-    if (event.source !== window) return;
-    if (event.origin && event.origin !== location.origin && event.origin !== 'null') return;
+    if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{20,128}$/.test(token) ||
+      typeof user?.id !== 'string' || user.role !== 'candidate') {
+      await handleAuthRequired('Invalid pairing token or role');
+      return;
+    }
 
-    if (event.data?.type === 'NEXTKIN_EXTENSION_PAIRED') {
-      pendingSync = pendingSync.then(() => save(event.data.token, event.data.user)).catch(console.error);
-    } else if (event.data?.type === 'NEXTKIN_RESUME_UPLOADED' || event.data?.type === 'candidate_updated') {
-      pendingSync = pendingSync.then(() => syncResumeData(event.data)).catch(console.error);
+    let current = {};
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage?.local?.get) {
+        current = (await chrome.storage.local.get(['origin', 'user'])) || {};
+      }
+    } catch {}
+
+    const accountChanged = current.origin !== location.origin || current.user?.id !== user.id;
+
+    // 1. Sensitive tokens are NEVER written to chrome.storage.local!
+    // 2. Store token strictly in chrome.storage.session
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage?.session?.set) {
+        await chrome.storage.session.set({
+          origin: location.origin,
+          token,
+        });
+      }
+    } catch {}
+
+    // 3. Store non-sensitive metadata in chrome.storage.local, removing any legacy token
+    // Pending submission queues are strictly preserved!
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage?.local?.set) {
+        await chrome.storage.local.set({
+          origin: location.origin,
+          user: { id: user.id, name: user.name, email: user.email },
+          ...(accountChanged ? { activeCandidateId: null } : {}),
+        });
+      }
+      if (typeof chrome !== 'undefined' && chrome.storage?.local?.remove) {
+        await chrome.storage.local.remove('token').catch(() => {});
+      }
+    } catch {}
+
+    // 4. Handoff to background service worker for session token storage and queue resumption
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: 'NEXTKIN_SAVE_CONNECTION',
+          origin: location.origin,
+          token,
+          user: { id: user.id, name: user.name, email: user.email },
+        });
+      }
+    } catch {}
+  }
+
+  chrome.runtime.onMessage.addListener((message, sender) => {
+    if (sender.id === chrome.runtime.id) {
+      if (message?.type === 'NEXTKIN_OUTSIDE_APPLICATION_SAVED') {
+        if (isTrustedOrigin(location.origin)) {
+          window.postMessage({ type: message.type }, location.origin);
+        }
+      } else if (message?.type === 'NEXTKIN_AUTH_REQUIRED') {
+        if (isTrustedOrigin(location.origin)) {
+          window.postMessage({
+            type: 'NEXTKIN_AUTH_REQUIRED',
+            reason: message.reason || 'Authentication required',
+          }, location.origin);
+        }
+      }
     }
   });
 
-  // The deployed sign-in page also publishes the pairing result in DOM attributes.
-  const observer = new MutationObserver(() => {
-    if (!onConnectionPage()) return;
-    const root = document.documentElement;
-    const token = root?.getAttribute('data-nextkin-token');
-    if (!token) return;
-    let user;
-    try { user = JSON.parse(root.getAttribute('data-nextkin-user')); } catch { return; }
-    pendingSync = pendingSync.then(() => save(token, user)).catch(console.error);
+  window.addEventListener('message', event => {
+    // Validate message source strictly: must be the current window
+    if (event.source !== window) return;
+    // Validate origin strictly: must match location.origin and be trusted
+    if (!isTrustedOrigin(event.origin) || !isTrustedOrigin(location.origin) || event.origin !== location.origin) return;
+
+    const { data } = event;
+    if (!data || typeof data !== 'object') return;
+
+    if (data.type === 'NEXTKIN_APPLICATION_WATCH' &&
+      /^\/(?:jobs|dashboard\/outside-jobs)\/[^/]+\/apply\/?$/.test(location.pathname)) {
+      chrome.runtime.sendMessage({ type: data.type, job: data.job, actorId: data.actorId }, result => {
+        if (!chrome.runtime.lastError && result?.watching) {
+          if (isTrustedOrigin(location.origin)) {
+            window.postMessage({ type: 'NEXTKIN_APPLICATION_WATCHING' }, location.origin);
+          }
+        }
+      });
+    } else if (data.type === 'NEXTKIN_EXTENSION_PAIRED') {
+      void saveConnection(data.token, data.user).catch(() => {});
+    } else if (data.type === 'NEXTKIN_AUTH_REQUIRED' || data.type === 'NEXTKIN_TOKEN_EXPIRED' || data.type === 'NEXTKIN_LOGOUT') {
+      void handleAuthRequired(data.reason).catch(() => {});
+    } else if (/^\/dashboard\/candidates(?:\/|$)/.test(location.pathname) &&
+      ['NEXTKIN_PROFILE_SAVED', 'NEXTKIN_RESUME_UPLOADED', 'candidate_updated'].includes(data.type)) {
+      void chrome.runtime.sendMessage({ type: 'NEXTKIN_PROFILE_SAVED' }).catch(() => {});
+    }
   });
-  observer.observe(document, { subtree: true, attributes: true, attributeFilter: ['data-nextkin-token', 'data-nextkin-user'] });
 })();

@@ -66,4 +66,8 @@ prompt-master/
 /history-regression.log
 
 browser-extension/
+/extension/.output/
+/extension/.wxt/
+/extension/node_modules/
+/tests/extension-test-summary.json
 

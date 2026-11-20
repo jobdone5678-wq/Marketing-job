@@ -6,7 +6,7 @@ import {
 } from '@/lib/email-confirmations/server';
 export async function GET() {
   try {
-    const { client, profile } = await requireCaptureStaff();
+    const { client } = await requireCaptureStaff();
     const { data, error } = await client
       .from('email_connections')
       .select('id,provider,mailbox_email,status,sender_domains,last_synced_at,last_error')

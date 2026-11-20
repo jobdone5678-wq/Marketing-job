@@ -1486,7 +1486,7 @@
     const keka = kekaPosting(current);
     const isWorkspace = /(^|\.)(nextkinhr\.com|jobright-internal\.com)$/.test(current.hostname)
       || ['localhost', '127.0.0.1'].includes(current.hostname) && !!first(root, '#nextkin-job-details');
-    const isAts = /(^|\.)(lever\.co|ashbyhq\.com|greenhouse\.io|myworkdayjobs\.com|myworkdaysite\.com|smartrecruiters\.com|smartr\.me|workable\.com|taleo\.net|icims\.com|jobvite\.com|bamboohr\.com|clearcompany\.com|hrmdirect\.com|oraclecloud\.com|oraclegovcloud\.com|successfactors\.(?:com|eu)|sapsf\.com|brassring\.com|dayforce(hcm)?\.com|phenompeople\.com|avature\.net|paycom(online)?\.(?:com|net)|paylocity\.com|paycor\.com|newtonsoftware\.com|gusto\.com|gem\.com|hiringthing\.com|oasisrecruit\.com|careerplug\.com|catsone\.com|recruiterflow\.com|trakstar\.com|polymer\.co|gohire\.io|trinethire\.com|kula\.ai|dover\.com|eightfold\.ai|ultipro\.(?:com|ca)|rec\.pro\.ukg\.net|zohorecruit\.(?:com|ca|eu|in)|personio\.(?:de|com)|breezy\.hr|teamtailor\.com|recruitee\.com|pinpointhq\.com|freshteam\.com|comeet\.(?:com|co)|jobscore\.com|isolvedhire\.com|jobdiva\.com|applytojob\.com|toasttab\.com|withwaymo\.com|governmentjobs\.com|usajobs\.gov|ycombinator\.com|workatastartup\.com)$/i.test(current.hostname);
+    const isAts = /(^|\.)(linkedin\.com|lever\.co|ashbyhq\.com|greenhouse\.io|myworkdayjobs\.com|myworkdaysite\.com|smartrecruiters\.com|smartr\.me|workable\.com|taleo\.net|icims\.com|jobvite\.com|bamboohr\.com|clearcompany\.com|hrmdirect\.com|oraclecloud\.com|oraclegovcloud\.com|successfactors\.(?:com|eu)|sapsf\.com|brassring\.com|dayforce(hcm)?\.com|phenompeople\.com|avature\.net|paycom(online)?\.(?:com|net)|paylocity\.com|paycor\.com|newtonsoftware\.com|gusto\.com|gem\.com|hiringthing\.com|oasisrecruit\.com|careerplug\.com|catsone\.com|recruiterflow\.com|trakstar\.com|polymer\.co|gohire\.io|trinethire\.com|kula\.ai|dover\.com|eightfold\.ai|ultipro\.(?:com|ca)|rec\.pro\.ukg\.net|zohorecruit\.(?:com|ca|eu|in)|personio\.(?:de|com)|breezy\.hr|teamtailor\.com|recruitee\.com|pinpointhq\.com|freshteam\.com|comeet\.(?:com|co)|jobscore\.com|isolvedhire\.com|jobdiva\.com|applytojob\.com|toasttab\.com|withwaymo\.com|governmentjobs\.com|usajobs\.gov|ycombinator\.com|workatastartup\.com)$/i.test(current.hostname);
     const portal = isWorkspace && /^\/(?:dashboard\/jobs|jobs\/info)\/[^/]+\/?$/.test(current.pathname);
     if (isWorkspace && !portal) return null;
     const workspace = portal ? parse(first(root, '#nextkin-job-details')?.textContent) : null;
@@ -1496,6 +1496,8 @@
       '[data-testid="job-description"]', '[data-qa="job-description"]', '.job__description',
       '#job-description', '#jobDescriptionText', '#jobDescription', '#content.job-description',
       '.job-description', '.job-description-content', '.jobs-description__content', '#job-details',
+      '.show-more-less-html__markup', '.jobs-description-content__text',
+      '[class*="jobs-description-content" i]', '[class*="show-more-less-html" i]',
       '[class*="job-description" i]', '.posting-page .section-wrapper', 'main article',
     ].map(selector => first(root, selector)).find(Boolean);
     const knownJobPath = isAts || /\/(?:jobs?|careers?|openings?|positions?|requisitions?|jobdetails|viewjob|job-detail|job-posting)(?:\/[^/]+)|[?&](?:gh_jid|jobId|job_id|jk)=/i.test(jobUrl);
@@ -1570,7 +1572,7 @@
       jobUrl: keka?.details || (workspace || postingParam || !onSameSite || /^(?:\/|\/(?:careers?|jobs?|openings?)\/?)$/i.test(new URL(canonical).pathname) ? jobUrl : canonical),
       applicationUrl: keka?.application || url(workspace?.applicationUrl || posting?.applicationUrl || apply?.getAttribute('href'), jobUrl),
       location: text(workspace?.location || formatLocations(posting?.jobLocation) || read(root,
-        '[itemprop="jobLocation"], [data-automation-id="locations"], [data-automation-id="jobPostingLocation"], [data-testid="job-location"], .job-location, .posting-categories .location, .ki-location + span', 200), 200),
+        '[itemprop="jobLocation"], [data-automation-id="locations"], [data-automation-id="jobPostingLocation"], [data-testid="job-location"], .job-location, .posting-categories .location, .ki-location + span, .jobs-unified-top-card__subtitle-primary-grouping', 200), 200),
       department: text(workspace?.department || posting?.occupationalCategory || read(root, '[data-testid="job-department"], .job-department, .posting-categories .department', 100), 100),
       employmentType: text(workspace?.employmentType || [posting?.employmentType].flat().filter(Boolean).join(', ') || read(root,
         '[itemprop="employmentType"], [data-automation-id="time"], [data-testid="employment-type"], .employment-type, .posting-categories .commitment, .ki-briefcase + span', 100), 100),
@@ -1606,13 +1608,19 @@
 
   // Facts an adapter hint may name outright. A hint is stronger evidence than the visible label.
   const CANONICAL_FACTS = new Set([
-    'first_name', 'last_name', 'full_name', 'email', 'phone', 'current_city', 'current_state',
+    'first_name', 'preferred_first_name', 'last_name', 'full_name', 'email', 'phone', 'current_city', 'current_state',
     'current_location', 'zip_code', 'country', 'full_address', 'linkedin_url', 'github_url', 'website',
     'current_employer', 'current_title', 'total_experience_years', 'primary_skills',
     'authorized_in_usa', 'needs_sponsorship', 'open_to_relocation', 'visa_status', 'work_authorization',
     'end_client', 'point_of_contact', 'pay_rate', 'vendor_email', 'personal_email', 'contract_type',
     'summary', 'bio', 'gender', 'race', 'veteran', 'veteran_status', 'disability', 'disability_status', 'availability', 'salary_expectation',
-    'how_heard', 'highest_education', 'school', 'e_signature', 'consent'
+    'how_heard', 'highest_education', 'school', 'graduation_year', 'preferred_work_type', 'current_salary', 'e_signature', 'consent'
+  ]);
+
+  // Consequential or voluntary disclosure fields that should be flagged for candidate review
+  const CONSEQUENTIAL_FACTS = new Set([
+    'authorized_in_usa', 'needs_sponsorship', 'visa_status', 'work_authorization',
+    'gender', 'race', 'race_ethnicity', 'veteran', 'veteran_status', 'disability', 'disability_status'
   ]);
 
   // Adapters spell a fact as "current_state" or "current state"; normalise before lookup.
@@ -1620,7 +1628,8 @@
 
   // Field labels seen across job boards, ATS platforms and bespoke career sites.
   const aliases = {
-    first_name: ['first name', 'given name', 'forename', 'fname', 'first and middle name', 'first/given name', 'middle and first name', 'preferred name', 'preferred first name', 'preferred given name', 'nickname', 'chosen name', 'preferred'],
+    first_name: ['first name', 'given name', 'forename', 'fname', 'first and middle name', 'first/given name', 'middle and first name'],
+    preferred_first_name: ['preferred name', 'preferred first name', 'preferred given name', 'nickname', 'chosen name', 'preferred'],
     last_name: ['last name', 'family name', 'surname', 'lname', 'last/family name'],
     full_name: ['full name', 'applicant name', 'candidate name', 'your name', 'legal name', 'full legal name', 'applicant full name', 'name of applicant', 'your full name', 'preferred full name'],
     e_signature: ['e signature', 'signature', 'sign here', 'certify by entering your name', 'by entering your name into the field below', 'typed signature', 'electronic signature'],
@@ -1630,7 +1639,7 @@
     current_location: ['location', 'current location', 'present location', 'city and state', 'city state', 'city, state', 'city and country', 'city & state'],
     current_state: ['state', 'province', 'region', 'current state', 'address level1', 'state province', 'state/province', 'which state', 'current state province', 'state of residence'],
     zip_code: ['zip', 'zip code', 'postal code', 'postcode', 'zip postal code', 'zipcode', 'postal code number'],
-    country: ['country', 'country name', 'nationality', 'country of residence', 'current country', 'which country', 'country region'],
+    country: ['country', 'country name', 'country of residence', 'current country', 'which country', 'country region'],
     full_address: ['street address', 'address line1', 'address line 1', 'address', 'street', 'address1', 'home address', 'mailing address', 'current address', 'address line one', 'street address line 1'],
     linkedin_url: ['linkedin', 'linkedin profile', 'linkedin url', 'urls linkedin', 'linkedin profile url', 'linked in'],
     github_url: ['github', 'github url', 'github profile', 'urls github', 'github com'],
@@ -1650,11 +1659,7 @@
       'are you authorized to work',
       'authorized to work',
       'legally authorized',
-      'are you currently and permanently based in the united states or canada',
-      'permanently based in the united states or canada',
-      'based in the united states or canada',
-      'based in the united states',
-      'us or canada',
+      'authorized to work in the us',
       'are you authorized to work in the country where the job is located',
       'authorized to work in the country where the job is located',
       'do you have the legal right to work in the united states',
@@ -1678,14 +1683,14 @@
       'sponsorship required',
       'sponsorship for employment visa status',
       'need sponsorship now',
-      'need sponsorship future'
+      'need sponsorship future', 'sponsorship', 'needs sponsorship now', 'needs sponsorship in the future'
     ],
     visa_status: [
       'visa status', 'visa', 'current visa', 'work authorization status', 'current work authorization',
       'immigration status', 'work eligibility', 'work authorization type', 'visa type', 'employment authorization status',
       'us work authorization', 'visa sponsorship status', 'work authorization'
     ],
-    open_to_relocation: ['willing to relocate', 'are you willing to relocate', 'open to relocation', 'willing to move', 'are you open to relocation', 'open to moving'],
+    open_to_relocation: ['willing to relocate', 'are you willing to relocate', 'open to relocation', 'willing to move', 'are you open to relocation', 'open to moving', 'willingness to relocate', 'relocation willingness'],
     end_client: ['end client', 'client', 'client company', 'client name', 'customer', 'customer company', 'end client company', 'client organization'],
     point_of_contact: ['point of contact', 'poc', 'contact person', 'client contact', 'hiring manager', 'recruiter contact', 'vendor contact'],
     pay_rate: ['pay rate', 'rate', 'hourly rate', 'salary', 'compensation', 'wage', 'hourly', 'bill rate', 'pay'],
@@ -1703,6 +1708,9 @@
     how_heard: ['how did you hear about us', 'how did you hear about this role', 'how did you hear about this opportunity', 'how did you find this job', 'referral source', 'source', 'application source', 'where did you hear about us', 'how did you hear'],
     highest_education: ['highest education', 'highest degree', 'highest level of education', 'degree', 'degree level', 'education level', 'level of education'],
     school: ['school', 'university', 'college', 'institution', 'educational institution'],
+    graduation_year: ['graduation year', 'year of graduation', 'year graduated'],
+    preferred_work_type: ['preferred work type', 'work arrangement', 'preferred work arrangement'],
+    current_salary: ['current salary', 'current compensation'],
     consent: [
       'agree to terms',
       'agree to the terms',
@@ -1760,7 +1768,25 @@
       return match.test(text) || prefix.test(text) ||
         (!opposite.test(text) && (match.test(val) || match.test(elVal)));
     });
-    return matches.length === 1 ? matches[0] : (matches.length > 1 ? matches[0] : null);
+    return matches.length === 1 ? matches[0] : null;
+  }
+
+  function demographicBoolean(key, value, question) {
+    const saved = norm(value);
+    if (/decline|prefer not|do not wish/.test(saved)) return null;
+    if (key === 'veteran' && /\bveteran\b/.test(question)) {
+      if (/\bnot (?:a )?(?:protected )?veteran\b/.test(saved)) return false;
+      if (/identify as one or more classifications of protected veteran|^protected veteran$/.test(saved)) return true;
+    }
+    if (key === 'disability' && /\bdisability\b/.test(question)) {
+      if (/not have a disability|^no disability$/.test(saved)) return false;
+      if (/have a disability/.test(saved)) return true;
+    }
+    if (key === 'race' && /hispanic|latino/.test(question)) {
+      if (/\bnot hispanic or latino\b/.test(saved)) return false;
+      if (saved === 'hispanic or latino') return true;
+    }
+    return null;
   }
 
   function pickOption(field, desired) {
@@ -1845,11 +1871,9 @@
       if (d.includes('sponsorship') && /sponsor/i.test(t)) return true;
 
       // General substring inclusion fallback
-      if (dClean && tClean.length >= 3 && (dClean.includes(tClean) || tClean.includes(dClean))) return true;
-
       return false;
     });
-    if (fuzzyMatches.length >= 1) return fuzzyMatches[0];
+    if (fuzzyMatches.length === 1) return fuzzyMatches[0];
     return null;
   }
 
@@ -1879,9 +1903,12 @@
 
     const rawPhone = String(facts.phone || candidate.phone || '').trim();
     const phoneDigits = rawPhone.replace(/\D/g, '');
-    const phone = phoneDigits.length >= 10 ? phoneDigits.slice(-10) : rawPhone;
+    const phone = rawPhone.startsWith('+') && !rawPhone.startsWith('+1') ? rawPhone
+      : /^1\d{10}$/.test(phoneDigits) ? phoneDigits.slice(1)
+      : phoneDigits.length === 10 ? phoneDigits : rawPhone;
 
-    const preferredFirst = candidate.preferred_name || candidate.preferred_first_name || candidate.first_name || names[0] || '';
+    const firstName = facts.first_name || candidate.first_name || names[0] || '';
+    const preferredFirst = facts.preferred_first_name || facts.preferred_name || candidate.preferred_first_name || candidate.preferred_name || firstName;
 
     const candFacts = candidate.confirmed_facts || {};
     const gender = facts.gender || candidate.gender || candFacts.gender || '';
@@ -1897,10 +1924,10 @@
 
     return {
       ...facts,
-      first_name: preferredFirst,
+      first_name: firstName,
       preferred_first_name: preferredFirst,
       preferred_name: preferredFirst,
-      last_name: names.slice(1).join(' ') || candidate.last_name || '',
+      last_name: facts.last_name || candidate.last_name || names.slice(1).join(' ') || '',
       full_name: fullName,
       email: facts.email || candidate.email || '',
       phone: phone,
@@ -1910,7 +1937,7 @@
       location: loc,
       zip_code: facts.zip_code || candidate.zip_code || candidate.zip || candidate.postal_code || '',
       country: facts.country ?? candidate.country ?? '',
-      full_address: facts.full_address || candidate.full_address || candidate.address || candidate.street_address || [city, state, candidate.country || facts.country].filter(Boolean).join(', '),
+      full_address: facts.full_address || candidate.full_address || candidate.address || candidate.street_address || '',
       current_employer: facts.current_employer || candidate.current_employer || facts.current_company || candidate.current_company || candidate.company || '',
       current_title: facts.current_job_title || candidate.current_job_title || candidate.headline || '',
       linkedin_url: linkedin,
@@ -1930,7 +1957,7 @@
       pay_rate: facts.pay_rate || candidate.pay_rate || '',
       vendor_email: facts.vendor_email || candidate.vendor_email || '',
       personal_email: facts.personal_email || candidate.personal_email || '',
-      contract_type: facts.contract_type || candidate.contract_type || '',
+      contract_type: facts.contract_type || candidate.contract_type || facts.employment_types || candidate.employment_types || '',
       summary: candidate.summary || candidate.bio || facts.summary || facts.bio || '',
       bio: candidate.bio || candidate.summary || facts.bio || facts.summary || '',
       gender: gender,
@@ -1941,7 +1968,7 @@
       disability: disability,
       disability_status: disability,
       availability: facts.availability || candidate.availability || candidate.available_to_join || candidate.notice_period || '',
-      salary_expectation: facts.pay_rate || candidate.expected_salary || candidate.current_salary || candidate.pay_rate || '',
+      salary_expectation: facts.expected_salary || candidate.expected_salary || '',
       how_heard: facts.how_heard || candidate.how_heard || '',
       highest_education: facts.highest_qualification || candidate.highest_qualification || candidate.degree || candidate.highest_education || '',
       school: facts.school || candidate.university_name || candidate.school || candidate.institution || '',
@@ -1949,17 +1976,15 @@
       languages: candidate.languages || [],
       employment_history: candidate.employment_history || [],
       education_history: candidate.education_history || [],
-      e_signature: fullName,
-      consent: true,
       known_authorization: rawAuth !== undefined,
       known_sponsorship: sponsorPrimary !== undefined || sponsorFuture !== undefined
     };
   }
 
   // United States work authorization only answers a question about the United States.
-  const US_QUESTION = /\b(united states|u\.s\.a|u\.s\.|usa|america)\b/i;
+  const US_QUESTION = /\b(?:united states|usa|(?:in (?:the )?)us|u s(?: a)?)\b/i;
   function isUSQuestion(text) {
-    return US_QUESTION.test(String(text || ''));
+    return US_QUESTION.test(norm(text));
   }
 
   // Which profile fact a control is asking for, and how sure we are.
@@ -2000,7 +2025,7 @@
     return { key: uniqueKeys[0], exact: !!best?.exact, length: best?.length || 0 };
   }
 
-  function planFill(fields, candidate) {
+  function planFill(fields, candidate, options = {}) {
     const values = buildValues(candidate);
     const aiPlan = (field, reason) => ({ field, status: 'ai', reason, options: (field.options || []).map(o => optionText(o)), aiPrompt: field.label });
 
@@ -2035,16 +2060,10 @@
       }
       // Legal acknowledgements and signatures:
       if (field.kind === 'checkbox' && /\b(agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare|confirm|read the above|understand)\b/i.test(nl)) {
-        if (!values.full_name && !values.email) {
-          return { field, factKey: 'consent', status: 'unknown', reason: 'No candidate details.' };
-        }
-        return { field, factKey: 'consent', value: true, status: 'supported', reason: 'Consent acknowledgment.' };
+        return { field, factKey: 'consent', status: 'manual', reason: 'Candidate consent is required.' };
       }
       if (/\b(signature|sign here|certify by entering your name)\b/i.test(nl)) {
-        if (!values.full_name) {
-          return { field, factKey: 'e_signature', status: 'unknown', reason: 'No candidate full name for signature.' };
-        }
-        return { field, factKey: 'e_signature', value: values.full_name, status: 'supported', reason: 'Electronic signature.' };
+        return { field, factKey: 'e_signature', status: 'manual', reason: 'Candidate signature is required.' };
       }
 
       const resolved = resolveFact(field.label, field.hint);
@@ -2062,24 +2081,34 @@
 
       const factKey = resolved.key;
       if (factKey === 'consent') {
-        return { field, factKey, value: true, status: 'supported', reason: 'Consent acknowledgment.' };
+        return { field, factKey, status: 'manual', reason: 'Candidate consent is required.' };
       }
       if (factKey === 'e_signature') {
-        return { field, factKey, value: values.full_name, status: 'supported', reason: 'Electronic signature.' };
+        return { field, factKey, status: 'manual', reason: 'Candidate signature is required.' };
       }
       // A known United States authorization must not answer a question about an unrelated foreign country.
-      if (factKey === 'authorized_in_usa' && !isUSQuestion(nl + ' ' + nh) && !/country for which you applied|where the job is located|legally authorized|work authorization/i.test(nl + ' ' + nh)) {
+      if (factKey === 'authorized_in_usa' && !isUSQuestion(nl) && !/^(?:are you (?:legally )?authorized to work|legally authorized|work authorization|authorized to work|authorized in usa)$/.test(nl || nh)) {
         return { field, factKey, status: 'unknown', reason: 'Question is not about United States work authorization.' };
       }
 
       let val = values[factKey];
       if (factKey === 'needs_sponsorship') {
         const question = nl + ' ' + nh;
-        if (/\bnow\b/.test(question) && !/\bfuture\b/.test(question)) val = candidate.confirmed_facts?.need_sponsorship_now ?? candidate.need_sponsorship_now;
-        if (/\bfuture\b/.test(question) && !/\bnow\b/.test(question)) val = candidate.confirmed_facts?.need_sponsorship_future ?? candidate.need_sponsorship_future;
+        const now = /\b(?:now|currently|current)\b/.test(question);
+        const future = /\bfuture\b/.test(question);
+        if (now !== future) val = (candidate.confirmed_facts || candidate)[now ? 'need_sponsorship_now' : 'need_sponsorship_future'];
       }
       if (val === null || val === undefined || val === '') {
         return { field, status: 'unknown', factKey, reason: 'Candidate fact is missing.' };
+      }
+
+      if (typeof val === 'boolean' && (
+        factKey === 'authorized_in_usa' && /\b(?:not authorized|not eligible|unauthorized)\b/.test(nl) ||
+        factKey === 'needs_sponsorship' && /\b(?:not need|not require|without)\b/.test(nl) ||
+        factKey === 'open_to_relocation' && /\b(?:not willing|not open|unwilling)\b/.test(nl))) val = !val;
+
+      if (isChoiceKind(field.kind) && pickBooleanOption(field.options, true) && pickBooleanOption(field.options, false)) {
+        val = demographicBoolean(factKey, val, nl) ?? val;
       }
 
       // "City and State" asks for both parts in one box; the mapping already carries both.
@@ -2096,6 +2125,7 @@
         }
       }
       if (isMultiKind(field.kind)) {
+        if (typeof val === 'boolean') return { field, factKey, status: 'needs_review' };
         const entries = Array.isArray(val) ? val : String(val).split(/[,;|\n]+/);
         if (field.kind === 'multi-combobox') return { field, factKey, value: entries.map(String).map(value => value.trim()).filter(Boolean).slice(0, 20), status: 'supported' };
         const choices = entries.map(entry => pickOption(field, entry)).filter(Boolean).map(optionText);
@@ -2122,9 +2152,9 @@
         const hasNo = field.options?.some(o => /^(no|false)$/i.test(optionText(o)));
         if (hasYes && hasNo) {
           const ql = (field.label || '').toLowerCase();
-          const candidateHasBachelor = /bachelor|b\.?tech|b\.?s|b\.?a|undergraduate/i.test(String(val)) || /bachelor/i.test(candidate.source_text || '') || /bachelor/i.test(candidate.summary || '');
-          const candidateHasMaster = /master|m\.?s|m\.?tech|mba/i.test(String(val));
-          const candidateHasDoctorate = /phd|doctor/i.test(String(val));
+          const candidateHasBachelor = /\b(?:bachelor|b\.?tech|b\.?s|b\.?a|undergraduate)\b/i.test(String(val));
+          const candidateHasMaster = /\b(?:master|m\.?s|m\.?tech|mba)\b/i.test(String(val));
+          const candidateHasDoctorate = /\b(?:ph\.?d|doctor|doctorate)\b/i.test(String(val));
 
           let satisfies = false;
           if (/(master|graduate degree)/i.test(ql)) {
@@ -2141,12 +2171,35 @@
           }
         }
       }
+      const isConsequential = Boolean(factKey && CONSEQUENTIAL_FACTS.has(factKey));
+      const reviewRequired = isConsequential && (options?.requireCandidateReview || candidate?.requireCandidateReview);
+
       if (isChoiceKind(field.kind)) {
         const opt = pickOption(field, val);
-        if (opt) return { field, factKey, value: optionText(opt), status: 'supported', exactMatch: resolved.exact, matchLength: resolved.length, reason: 'Profile fact matched an option.' };
+        if (opt) {
+          return {
+            field,
+            factKey,
+            value: optionText(opt),
+            status: reviewRequired ? 'needs_review' : 'supported',
+            consequential: isConsequential,
+            exactMatch: resolved.exact,
+            matchLength: resolved.length,
+            reason: reviewRequired ? 'Consequential disclosure left for candidate review.' : 'Profile fact matched an option.',
+          };
+        }
         return aiPlan(field, 'Choose the best option for this profile fact.');
       }
-      return { field, factKey, value: String(val), status: 'supported', exactMatch: resolved.exact, matchLength: resolved.length, reason: 'Exact profile field mapping.' };
+      return {
+        field,
+        factKey,
+        value: String(val),
+        status: reviewRequired ? 'needs_review' : 'supported',
+        consequential: isConsequential,
+        exactMatch: resolved.exact,
+        matchLength: resolved.length,
+        reason: reviewRequired ? 'Consequential disclosure left for candidate review.' : 'Exact profile field mapping.',
+      };
     });
 
     // Two controls that ask the same question in the same words are ambiguous, so neither is
@@ -2171,7 +2224,7 @@
     return plans;
   }
 
-  root.NextkinFieldMapping = { planFill, resolveFact, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS };
+  root.NextkinFieldMapping = { planFill, resolveFact, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS, CONSEQUENTIAL_FACTS };
 })(globalThis);
 
 
@@ -2339,6 +2392,9 @@
       const desc = Object.getOwnPropertyDescriptor(proto, 'value') || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(proto), 'value');
       if (desc?.set) desc.set.call(el, value);
       else el.value = value;
+      if (el._valueTracker) {
+        el._valueTracker.setValue?.('');
+      }
     }
     notify(el);
   }
@@ -2349,8 +2405,12 @@
     const view = el.ownerDocument?.defaultView || globalThis;
     const target = findClickableTarget(el) || el;
 
-    if (el.tagName === 'INPUT' && el.type === 'checkbox' && el.checked === boolVal) {
+    if (checked(el) === boolVal) {
       return true;
+    }
+    if (el.tagName !== 'INPUT') {
+      try { click(target); } catch {}
+      return checked(el) === boolVal;
     }
 
     const PointerEvt = view.PointerEvent || view.MouseEvent;
@@ -2402,25 +2462,7 @@
       } catch {}
     }
 
-    // Custom widget attributes if not native input
-    if (el.tagName !== 'INPUT') {
-      if (el.hasAttribute('aria-checked') || el.getAttribute('role') === 'checkbox' || el.getAttribute('role') === 'switch') {
-        el.setAttribute('aria-checked', boolVal ? 'true' : 'false');
-      }
-      if (el.hasAttribute('data-state')) {
-        el.setAttribute('data-state', boolVal ? 'checked' : 'unchecked');
-      }
-      if (target !== el) {
-        if (target.hasAttribute('aria-checked') || target.getAttribute('role') === 'checkbox' || target.getAttribute('role') === 'switch') {
-          target.setAttribute('aria-checked', boolVal ? 'true' : 'false');
-        }
-        if (target.hasAttribute('data-state')) {
-          target.setAttribute('data-state', boolVal ? 'checked' : 'unchecked');
-        }
-      }
-    }
-
-    return el.tagName === 'INPUT' && el.type === 'checkbox' ? el.checked === boolVal : true;
+    return checked(el) === boolVal;
   }
 
   function setRadio(option) {
@@ -2428,6 +2470,10 @@
     if (!el?.isConnected || el.disabled || el.getAttribute('aria-disabled') === 'true') return false;
     const view = el.ownerDocument?.defaultView || globalThis;
     const target = findClickableTarget(el) || el;
+    if (el.tagName !== 'INPUT') {
+      if (selected(el)) return true;
+      try { return click(target); } catch { return false; }
+    }
 
     // Dispatch PointerEvent and Click on target
     const PointerEvt = view.PointerEvent || view.MouseEvent;
@@ -2479,43 +2525,6 @@
       } catch {}
     }
 
-    // Set ARIA and custom selection attributes for custom widgets only
-    if (el.tagName !== 'INPUT') {
-      el.setAttribute('aria-checked', 'true');
-      el.setAttribute('aria-selected', 'true');
-      if (el.hasAttribute('aria-pressed') || el.tagName === 'BUTTON') {
-        el.setAttribute('aria-pressed', 'true');
-      }
-      el.setAttribute('data-state', 'checked');
-      el.setAttribute('data-selected', 'true');
-
-      if (target !== el) {
-        target.setAttribute('aria-checked', 'true');
-        target.setAttribute('aria-selected', 'true');
-        if (target.hasAttribute('aria-pressed') || target.tagName === 'BUTTON') {
-          target.setAttribute('aria-pressed', 'true');
-        }
-        target.setAttribute('data-state', 'checked');
-        target.setAttribute('data-selected', 'true');
-      }
-
-      // Uncheck peer siblings for custom widgets
-      try {
-        const container = el.closest('[role="radiogroup"], fieldset, [class*="yesno" i], [class*="choice" i]') || el.parentElement;
-        if (container) {
-          const peers = container.querySelectorAll('button, [role="radio"]');
-          for (const peer of peers) {
-            if (peer === el || peer === target) continue;
-            if (peer.getAttribute('aria-checked') === 'true') peer.setAttribute('aria-checked', 'false');
-            if (peer.getAttribute('aria-selected') === 'true') peer.setAttribute('aria-selected', 'false');
-            if (peer.getAttribute('aria-pressed') === 'true') peer.setAttribute('aria-pressed', 'false');
-            if (peer.getAttribute('data-state') === 'checked') peer.setAttribute('data-state', 'unchecked');
-            if (peer.getAttribute('data-selected') === 'true') peer.setAttribute('data-selected', 'false');
-          }
-        }
-      } catch {}
-    }
-
     return el.tagName === 'INPUT' && el.type === 'radio' ? el.checked : true;
   }
 
@@ -2562,7 +2571,14 @@
       case 'checkbox': return checked(el);
       case 'checkbox-group': return field.options.filter(option => checked(option.element)).map(optionLabel);
       case 'multi-select': return field.options.filter(option => option.element.selected).map(optionLabel);
-      case 'select': return field.options.find(option => option.element.selected && !placeholder.test(option.label))?.label || '';
+      case 'select': {
+        if (el?.tagName === 'SELECT' && typeof el.selectedIndex === 'number' && el.selectedIndex >= 0 && el.options?.[el.selectedIndex]) {
+          const opt = el.options[el.selectedIndex];
+          const lbl = opt.text?.trim() || opt.label?.trim() || opt.value?.trim() || '';
+          if (!placeholder.test(lbl)) return lbl;
+        }
+        return (field.options || []).find(option => option?.element?.selected && !placeholder.test(option.label))?.label || (el?.value?.trim() || '');
+      }
       case 'radio': return field.options.find(option => checked(option.element) || selected(option.element))?.label || '';
       case 'choice': return field.options.find(option => selected(option.element) || checked(option.element))?.label || '';
       case 'combobox': return comboValue(el);
@@ -2739,6 +2755,9 @@
         } else {
           el.value = option.value;
         }
+        if (el._valueTracker) {
+          el._valueTracker.setValue?.('');
+        }
       } catch {
         el.value = option.value;
       }
@@ -2768,7 +2787,9 @@
       else if (!checked(option.element)) setCheckbox(option.element, true);
     }
     if (field.kind === 'multi-select') notify(field.element);
-    return { expected: options.map(optionLabel) };
+    const expected = options.map(optionLabel);
+    return { expected, matches: actual => Array.isArray(actual) && expected.every(value =>
+      actual.some(selected => normalize(selected) === normalize(value))) };
   }
 
   async function fillMultiCombo(field, values, isCurrent) {
@@ -2853,20 +2874,288 @@
     return false;
   }
 
+  // Resolve or re-resolve live element from DOM in case of React rerender
+  function ensureConnectedElement(field) {
+    if (!field || !field.element) return null;
+    if (field.element.isConnected) return field.element;
+
+    const doc = field.element.ownerDocument || globalThis.document;
+    if (!doc || typeof doc.querySelector !== 'function') return field.element;
+
+    // 1. Try to find connected element by id
+    if (field.element.id) {
+      if (typeof doc.querySelectorAll === 'function') {
+        try {
+          const candidates = doc.querySelectorAll('#' + safeCssEscape(field.element.id) + ', [id="' + safeCssEscape(field.element.id) + '"]');
+          const byId = Array.from(candidates).find(el => el.isConnected);
+          if (byId) {
+            field.element = byId;
+            return byId;
+          }
+        } catch {}
+      }
+      if (typeof doc.getElementById === 'function') {
+        try {
+          const byId = doc.getElementById(field.element.id);
+          if (byId && byId.isConnected) {
+            field.element = byId;
+            return byId;
+          }
+        } catch {}
+      }
+    }
+
+    // 2. Try to find connected element by name
+    const name = field.element.name || (typeof field.element.getAttribute === 'function' ? field.element.getAttribute('name') : null);
+    if (name) {
+      if (typeof doc.querySelectorAll === 'function') {
+        try {
+          const candidates = doc.querySelectorAll(`[name="${safeCssEscape(name)}"]`);
+          const byName = Array.from(candidates).find(el => el.isConnected);
+          if (byName) {
+            field.element = byName;
+            return byName;
+          }
+        } catch {}
+      }
+      try {
+        const byName = doc.querySelector(`[name="${safeCssEscape(name)}"]`);
+        if (byName && byName.isConnected) {
+          field.element = byName;
+          return byName;
+        }
+      } catch {}
+    }
+
+    if (typeof field.element.getAttribute === 'function') {
+      const autoId = field.element.getAttribute('data-automation-id');
+      if (autoId) {
+        if (typeof doc.querySelectorAll === 'function') {
+          try {
+            const candidates = doc.querySelectorAll(`[data-automation-id="${safeCssEscape(autoId)}"]`);
+            const byAuto = Array.from(candidates).find(el => el.isConnected);
+            if (byAuto) {
+              field.element = byAuto;
+              return byAuto;
+            }
+          } catch {}
+        }
+        try {
+          const byAuto = doc.querySelector(`[data-automation-id="${safeCssEscape(autoId)}"]`);
+          if (byAuto && byAuto.isConnected) {
+            field.element = byAuto;
+            return byAuto;
+          }
+        } catch {}
+      }
+
+      const testId = field.element.getAttribute('data-testid') || field.element.getAttribute('data-test');
+      if (testId) {
+        if (typeof doc.querySelectorAll === 'function') {
+          try {
+            const candidates = doc.querySelectorAll(`[data-testid="${safeCssEscape(testId)}"], [data-test="${safeCssEscape(testId)}"]`);
+            const byTest = Array.from(candidates).find(el => el.isConnected);
+            if (byTest) {
+              field.element = byTest;
+              return byTest;
+            }
+          } catch {}
+        }
+        try {
+          const byTest = doc.querySelector(`[data-testid="${safeCssEscape(testId)}"], [data-test="${safeCssEscape(testId)}"]`);
+          if (byTest && byTest.isConnected) {
+            field.element = byTest;
+            return byTest;
+          }
+        } catch {}
+      }
+    }
+
+    if (root.NextkinForms?.discoverFields) {
+      try {
+        const freshFields = root.NextkinForms.discoverFields(doc);
+        const match = freshFields.find(f =>
+          (field.key && f.key === field.key) ||
+          (field.label && normalize(f.label) === normalize(field.label))
+        );
+        if (match?.element?.isConnected) {
+          field.element = match.element;
+          if (match.options?.length) field.options = match.options;
+          return match.element;
+        }
+      } catch {}
+    }
+
+    return field.element;
+  }
+
+  // Bounded async polling with MutationObserver for dependent field readiness (Country -> State -> City)
+  async function waitForFieldReady(field, session, maxWaitMs = 1200) {
+    if (session && !session.isCurrent()) return false;
+    ensureConnectedElement(field);
+    const el = field.element;
+    if (!el) return false;
+
+    const isSelect = el.tagName === 'SELECT';
+
+    const isReady = () => {
+      ensureConnectedElement(field);
+      const cur = field.element;
+      if (!cur || !cur.isConnected) return false;
+      const isDisabled = cur.disabled || (typeof cur.getAttribute === 'function' && (cur.getAttribute('aria-disabled') === 'true' || cur.hasAttribute('disabled')));
+      if (isDisabled) return false;
+      const isBusy = typeof cur.getAttribute === 'function' && (cur.getAttribute('aria-busy') === 'true' || cur.closest?.('[aria-busy="true"]'));
+      if (isBusy) return false;
+
+      if (isSelect) {
+        const validOpts = Array.from(cur.options || []).filter(o => o.value && !placeholder.test(o.label || o.text || ''));
+        if (field.options?.length && !validOpts.length) return false;
+      }
+      return true;
+    };
+
+    if (isReady()) return true;
+
+    const start = Date.now();
+    return new Promise(resolve => {
+      let observer;
+      let timer;
+      let settled = false;
+      const cleanup = () => {
+        if (settled) return;
+        settled = true;
+        if (observer) {
+          try { observer.disconnect(); } catch {}
+          observer = null;
+        }
+        if (timer) {
+          clearInterval(timer);
+          timer = null;
+        }
+      };
+
+      const check = () => {
+        if (settled) return;
+        if (session && !session.isCurrent()) {
+          cleanup();
+          resolve(false);
+          return;
+        }
+        if (isReady()) {
+          if (isSelect && field.element.options) {
+            field.options = Array.from(field.element.options).map(opt => ({
+              element: opt,
+              label: opt.text?.trim() || opt.label?.trim() || opt.value?.trim(),
+              value: opt.value?.trim()
+            }));
+          }
+          cleanup();
+          resolve(true);
+        } else if (Date.now() - start >= maxWaitMs) {
+          cleanup();
+          resolve(false);
+        }
+      };
+
+      const doc = el.ownerDocument || globalThis.document;
+      const container = el.closest?.('form, [role="form"], [data-automation-id*="form" i]') || doc?.body || doc?.documentElement;
+      if (container && typeof globalThis.MutationObserver !== 'undefined') {
+        try {
+          observer = new globalThis.MutationObserver(check);
+          observer.observe(container, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['disabled', 'aria-disabled', 'aria-busy', 'class']
+          });
+        } catch {}
+      }
+      timer = setInterval(check, 35);
+      check();
+    });
+  }
+
+  // Bounded async polling with MutationObserver for DOM readback verification instead of rigid 120ms wait
+  async function waitForVerification(verifiedFn, session, maxWaitMs = 250, intervalMs = 25) {
+    if (verifiedFn()) return true;
+    const start = Date.now();
+    return new Promise(resolve => {
+      let observer;
+      let timer;
+      let settled = false;
+      const cleanup = () => {
+        if (settled) return;
+        settled = true;
+        if (observer) {
+          try { observer.disconnect(); } catch {}
+          observer = null;
+        }
+        if (timer) {
+          clearInterval(timer);
+          timer = null;
+        }
+      };
+
+      const check = () => {
+        if (settled) return;
+        if (session && !session.isCurrent()) {
+          cleanup();
+          resolve(false);
+          return;
+        }
+        if (verifiedFn()) {
+          cleanup();
+          resolve(true);
+        } else if (Date.now() - start >= maxWaitMs) {
+          cleanup();
+          resolve(false);
+        }
+      };
+
+      const doc = globalThis.document;
+      const root = doc?.body || doc?.documentElement;
+      if (root && typeof globalThis.MutationObserver !== 'undefined') {
+        try {
+          observer = new globalThis.MutationObserver(check);
+          observer.observe(root, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            characterData: true
+          });
+        } catch {}
+      }
+      timer = setInterval(check, intervalMs);
+      check();
+    });
+  }
+
   async function applyFill(plans, session) {
     const receipts = [];
     for (const plan of plans) {
       const { field, value } = plan;
+      if (plan.status !== 'supported' || !session.isCurrent() || field.excluded) continue;
+
+      // Handle React rerendering: re-resolve element if it was disconnected
+      ensureConnectedElement(field);
       const el = field.element;
-      if (plan.status !== 'supported' || !el?.isConnected || !session.isCurrent() || field.excluded) continue;
+      if (!el?.isConnected) continue;
+
+      // Bounded async wait for dependent controls (Country -> State -> City)
+      // to become enabled / populated with options after previous field changes
+      await waitForFieldReady(field, session, 1200);
+      if (!session.isCurrent() || !field.element?.isConnected) continue;
+
+      const currentEl = field.element;
       const domVal = read(field);
-      const preserved = getPreservedValue(field);
-      const previous = (domVal !== '' && domVal !== null && domVal !== undefined) ? domVal : preserved;
-      const isCountryCodeOnly = field.kind === 'text' && (field.element?.type === 'tel' || /phone/i.test(field.hint || field.label)) && /^\+?\d{1,3}\s*$/.test(String(previous).trim());
+      const previous = domVal;
+      const isCountryCodeOnly = field.kind === 'text' && (currentEl.type === 'tel' || /phone/i.test(field.hint || field.label)) && /^\+?\d{1,3}\s*$/.test(String(previous).trim());
       const hasAnswer = !isCountryCodeOnly && (Array.isArray(previous) ? previous.length > 0 : (typeof previous === 'boolean' ? previous : Boolean(previous && String(previous).trim().length > 0)));
       let write;
       const isProfileFact = Boolean(plan.factKey && !plan.ai);
-      if (hasAnswer && !isProfileFact) {
+      if (hasAnswer && !plan.overwriteExisting) {
+        write = { expected: previous, preserved: true };
+      } else if (hasAnswer && !isProfileFact) {
         const option = field.options?.length ? choose(field, value) : null;
         if (equals(previous, option?.label ?? value)) write = { expected: previous };
       } else if (hasAnswer && isProfileFact && equals(previous, value)) {
@@ -2882,23 +3171,25 @@
       } else if (field.kind === 'checkbox') {
         const boolVal = typeof value === 'boolean' ? value : normalizeBoolean(value);
         if (typeof boolVal === 'boolean') {
-          if (previous === boolVal || setCheckbox(el, boolVal)) {
-            write = { expected: boolVal };
-          }
+          if (previous !== boolVal) setCheckbox(currentEl, boolVal);
+          write = { expected: boolVal };
         }
       } else {
-        const expected = el.maxLength > 0 ? String(value).slice(0, el.maxLength) : String(value);
-        writeValue(el, expected);
+        const expected = currentEl.maxLength > 0 ? String(value).slice(0, currentEl.maxLength) : String(value);
+        writeValue(currentEl, expected);
         write = { expected };
       }
       if (!write) continue;
-      const verified = () => session.isCurrent() && el.isConnected &&
-        (equals(read(field), write.expected) ||
-         (write.expected && String(read(field) || '').toLowerCase().includes(String(write.expected).toLowerCase())) ||
+
+      const verified = () => session.isCurrent() && field.element?.isConnected &&
+        (equals(read(field), write.expected) || write.matches?.(read(field)) ||
+         (field.kind === 'combobox' && write.expected && String(read(field) || '').toLowerCase().includes(String(write.expected).toLowerCase())) ||
          (write.option && !write.option.isConnected && write.expected) ||
          (write.option?.isConnected && selected(write.option)));
-      if (!verified()) await wait(120);
-      if (!verified()) continue;
+
+      const isVerified = await waitForVerification(verified, session, 250, 25);
+      if (!isVerified) continue;
+
       recordPreservedValues([field]);
       receipts.push({ field, writtenValue: write.expected, ai: !!plan.ai, learned: !!plan.learned });
     }
@@ -2916,7 +3207,10 @@
     recordPreservedValues,
     getPreservedValue,
     clearPreservedValues,
-    advanceStep
+    advanceStep,
+    ensureConnectedElement,
+    waitForFieldReady,
+    waitForVerification
   };
 })(globalThis);
 
@@ -2927,7 +3221,8 @@
 
   // Every control shape a job application uses, across portals.
   const COMBO_SELECTOR = '[role="combobox"], [aria-haspopup="listbox"], input[list], .select2-selection, .ng-select, kendo-dropdownlist, kendo-multiselect, button[class*="select-trigger" i], button[class*="selectTrigger" i], button[data-testid*="select" i], button[data-testid*="combobox" i], [data-slot="select-trigger"], [data-automation-id*="prompt" i], [data-automation-id*="select" i], [id^="headlessui-listbox-button"]';
-  const CONTROL_SELECTOR = 'input, textarea, select, [role="checkbox"], [role="switch"], [data-slot="checkbox"], [data-slot="switch"], [contenteditable=""], [contenteditable="true"], iframe, ' + COMBO_SELECTOR;
+  const CHECK_SELECTOR = 'input[type="checkbox"], [role="checkbox"], [role="switch"], [data-slot="checkbox"], [data-slot="switch"]';
+  const CONTROL_SELECTOR = 'input, textarea, select, ' + CHECK_SELECTOR + ', [contenteditable=""], [contenteditable="true"], iframe, ' + COMBO_SELECTOR;
   const available = el => !el.disabled && !el.readOnly && el.getAttribute('aria-disabled') !== 'true' && el.getAttribute('aria-hidden') !== 'true';
   const visible = el => available(el) && !!el.getClientRects().length && el.ownerDocument.defaultView.getComputedStyle(el).visibility !== 'hidden';
   const visibleChoice = el => available(el) && (visible(el) || [...(el.labels || [])].some(visible));
@@ -2971,6 +3266,11 @@
     if (!found) {
       const parentLbl = el.closest('label');
       if (parentLbl) found = clean(labelText(parentLbl));
+    }
+
+    if (!found && (el.matches(`${CHECK_SELECTOR}, [role="radio"]`))) {
+      const ownLabel = clean(el.textContent);
+      if (ownLabel.length <= 200) found = ownLabel;
     }
 
     // Table based layouts (Taleo, PeopleSoft): the row header names the field.
@@ -3039,10 +3339,16 @@
   }
 
   function choiceQuestion(el) {
-    const group = el.closest('fieldset, [role="radiogroup"], [role="group"], ' + QUESTION_CONTAINER);
-    return group && (group.querySelector('legend') || !group.querySelector('input:not([type=radio]):not([type=checkbox]):not([type=hidden]), select, textarea'))
-      ? groupTitle(group) : '';
+    const selector = '[role="radiogroup"], [role="group"], fieldset, ' + QUESTION_CONTAINER;
+    for (let group = el.closest(selector); group; group = group.parentElement?.closest(selector)) {
+      const title = groupTitle(group);
+      if (title) return title;
+    }
+    return '';
   }
+
+  const controlName = el => clean((el.name || el.id || '').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' '));
+  const booleanFacts = new Set(['authorized_in_usa', 'needs_sponsorship', 'open_to_relocation', 'consent']);
 
   // The portal adapter for this page: a specific one always beats the generic fallback.
   function activeAdapter(){
@@ -3064,11 +3370,12 @@
       for (const group of scope.querySelectorAll('fieldset, [role="group"], [class*="checkbox-group" i], [class*="checkboxGroup" i], [class*="checkbox_group" i], [data-testid*="checkbox" i]')) {
         if (group.closest('#mp-copilot-root') || !group.getClientRects().length) continue;
         if (group.querySelector('button[data-option]')) continue; // yes/no groups are choices
-        const boxes = Array.from(group.querySelectorAll('input[type="checkbox"], [role="checkbox"]')).filter(visibleChoice);
+        const boxes = Array.from(group.querySelectorAll(CHECK_SELECTOR)).filter(visibleChoice);
         if (boxes.length < 2 || boxes.some(b => seen.has(b)) ||
           group.querySelector('input:not([type=checkbox]):not([type=hidden]), select, textarea, fieldset')) continue;
         const title = groupTitle(group);
         if (!title) continue;
+        if (boxes.some(box => booleanFacts.has(root.NextkinFieldMapping?.resolveFact(label(box), controlName(box))?.key))) continue;
         boxes.forEach(b => seen.add(b));
         const groupHint = adapter?.hint(group) || '';
         fields.push({
@@ -3099,7 +3406,8 @@
           continue;
         }
         const role = el.getAttribute('role');
-        if (['hidden', 'file', 'password', 'submit', 'reset', 'button'].includes(el.type) && role !== 'combobox' && role !== 'checkbox' && el.getAttribute('aria-haspopup') !== 'listbox') continue;
+        const isCheck = el.matches(CHECK_SELECTOR);
+        if (['hidden', 'file', 'password', 'submit', 'reset', 'button'].includes(el.type) && role !== 'combobox' && !isCheck && el.getAttribute('aria-haspopup') !== 'listbox') continue;
         // A yes/no group owns the hidden box behind its buttons.
         if (el.type === 'checkbox' && el.closest('.ashby-application-form-input-yesno, [class*="yesno" i], [class*="yes-no" i], [data-option]')) continue;
         const text = label(el), hint = adapter?.hint(el) || '';
@@ -3108,7 +3416,6 @@
         const isCombo = el.tagName !== 'SELECT' && el.matches(COMBO_SELECTOR);
         if (el.tagName !== 'INPUT' && el.tagName !== 'SELECT' && el.tagName !== 'TEXTAREA' && el.querySelector('input[role="combobox"], input.select__input, select, textarea')) continue;
         if (el.parentElement?.closest(COMBO_SELECTOR) && (isCombo || el.tagName === 'INPUT') && !el.matches('[role="combobox"]')) continue;
-        const isCheck = el.type === 'checkbox' || role === 'checkbox' || role === 'switch';
         const isEditable = el.getAttribute('contenteditable') === '' || el.getAttribute('contenteditable') === 'true';
         const controlledList = isCombo && el.getRootNode().getElementById?.(el.getAttribute('aria-controls'));
         const multiCombo = isCombo && (el.matches(multiComboSelector) || controlledList?.matches(multiComboSelector));
@@ -3125,21 +3432,24 @@
           ? Array.from(el.options).filter(o => !o.disabled && !o.parentElement.disabled && o.value).map(o => ({ label: o.textContent.trim(), value: o.value, element: o }))
           : kind === 'radio' ? elements.map(r => ({ label: label(r) || r.value, value: r.value, element: r }))
           : el.list ? [...el.list.options].filter(available).map(o => ({ label: o.label || o.value, value: o.value, element: o })) : [];
-        const question = kind === 'radio' ? choiceQuestion(el) || groupLabel || text : text;
-        fields.push({ element: el, elements, key: 'field:' + fields.length + ':' + (el.id || el.name || hint), label: question, hint, kind, options, scope: groupLabel, excluded: excluded.test([question, hint, el.id, el.name, groupLabel].join(' ').replace(/[_-]/g, ' ')), adapter: adapter?.id || 'generic', editable: isEditable });
+        const question = kind === 'radio' ? choiceQuestion(el) || controlName(el) || text : text;
+        const factHint = hint || (kind === 'radio' || isCheck ? controlName(el) : '');
+        fields.push({ element: el, elements, key: 'field:' + fields.length + ':' + (el.id || el.name || factHint), label: question, hint: factHint, kind, options, scope: groupLabel, excluded: excluded.test([question, factHint, el.id, el.name, groupLabel].join(' ').replace(/[_-]/g, ' ')), adapter: adapter?.id || 'generic', editable: isEditable });
       }
 
       // Button-based choice groups (Ashby/Greenhouse/Lever Yes/No and segmented radio groups)
       for (const group of scope.querySelectorAll('fieldset, [role="group"], [role="radiogroup"], .application-question, [class*="application-question"], [class*="question"], div[data-testid*="question"]')) {
         if (group.closest('#mp-copilot-root') || !group.getClientRects().length) continue;
         const buttons = Array.from(group.querySelectorAll('button, [role="radio"], [role="button"]')).filter(b => {
+          if (b.type === 'radio') return false;
           const t = label(b);
           return t && t.length <= 200 && visible(b) && !/^(submit|apply|continue|next|back|save|upload|attach|remove|delete|cancel|sign in|log in)\b/i.test(t);
         });
         const yesNo = buttons.filter(b => /^(yes|no)$/i.test((b.textContent || '').trim()));
         const isChoice = yesNo.length >= 2 || (group.getAttribute('role') === 'radiogroup' && buttons.length >= 2);
         if (!isChoice) continue;
-        const opts = yesNo.length >= 2 ? yesNo : buttons;
+        const radios = buttons.filter(button => button.getAttribute('role') === 'radio');
+        const opts = radios.length >= 2 ? radios : yesNo.length >= 2 ? yesNo : buttons;
         if (opts.some(b => seen.has(b))) continue;
         opts.forEach(b => seen.add(b));
         const qLabel = groupTitle(group) || questionTitle(group);
@@ -3167,24 +3477,26 @@
   // Wizard / Multi-Step transition support
   const NEXT_TEXT_REGEX = /^(next|continue|proceed|save and continue|save & continue|next step|review & submit|review|next page|step \d+)\b/i;
 
+  function isStepNavigation(button) {
+    if (!button || !visibleChoice(button)) return false;
+    const text = clean(button.textContent || button.value || button.getAttribute('aria-label'));
+    if (/\b(?:submit|complete|finish|send)\b/i.test(text)) return false;
+    const id = button.getAttribute('data-automation-id') || button.getAttribute('data-testid') || '';
+    return NEXT_TEXT_REGEX.test(text) || /(?:^|[_-])(?:next|continue|nextstep)(?:$|[_-])/i.test(id);
+  }
+
   function findStepNavigation(scope = document) {
     const root = scope?.nodeType === 9 ? scope : (scope?.ownerDocument || document);
     const container = scope?.nodeType === 9 ? (scope.body || scope) : scope;
     const buttons = Array.from(container.querySelectorAll('button, input[type=button], input[type=submit], a[role=button], [role="button"]'));
-    const nextButton = buttons.find(b => {
-      if (!visibleChoice(b)) return false;
-      const t = clean(b.textContent || b.value || b.getAttribute('aria-label'));
-      const autoId = b.getAttribute('data-automation-id') || b.getAttribute('data-testid') || '';
-      return NEXT_TEXT_REGEX.test(t) || /(?:^|[_-])(?:next|continue|nextstep)(?:$|[_-])/i.test(autoId);
-    }) || null;
+    const nextButton = buttons.find(isStepNavigation) || null;
     return { nextButton };
   }
 
   function detectNewFields(previousFields, currentFields) {
     if (!Array.isArray(previousFields) || !previousFields.length) return currentFields || [];
-    const prevElements = new Set(previousFields.map(f => f.element).filter(Boolean));
-    const prevKeys = new Set(previousFields.map(f => f.key).filter(Boolean));
-    return (currentFields || []).filter(f => !prevElements.has(f.element) && !prevKeys.has(f.key));
+    return (currentFields || []).filter(field => !previousFields.some(previous =>
+      previous.element === field.element && previous.label === field.label && previous.kind === field.kind));
   }
 
   function observeStepTransitions(scope = document, callback) {
@@ -3235,14 +3547,14 @@
               }
             }
           }
-          if (m.type === 'attributes' && ['style', 'class', 'hidden', 'aria-hidden'].includes(m.attributeName)) {
+            if (m.removedNodes.length || m.type === 'characterData' || m.type === 'attributes') {
             significant = true;
           }
           if (significant) break;
         }
         if (significant) check('mutation');
       });
-      observer.observe(targetNode, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class', 'hidden', 'aria-hidden'] });
+      observer.observe(targetNode, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['style', 'class', 'hidden', 'aria-hidden', 'aria-label', 'aria-labelledby'] });
     }
 
     return {
@@ -3257,12 +3569,13 @@
     };
   }
 
-  root.NextkinForms = { discoverFields, label, findStepNavigation, detectNewFields, observeStepTransitions };
+  root.NextkinForms = { discoverFields, label, findStepNavigation, isStepNavigation, detectNewFields, observeStepTransitions };
 })(globalThis);
 
 
 // === File: jobright_extension/core/application.js ===
 (function () {
+  if (globalThis.NextkinApplication) return;
   const capture = globalThis.NextkinJobCapture;
   const discovery = globalThis.NextkinForms;
   const mapping = globalThis.NextkinFieldMapping;
@@ -3270,47 +3583,447 @@
   const contactKeys = new Set(['first_name', 'last_name', 'full_name', 'email', 'phone']);
   const manualQuestion = /\b(?:password|secret|bank\s*routing|routing\s*number|bank\s*account|credit.?card|ssn|social.?security|tax.?id|pin|otp)\b/i;
   const jobSpecific = /\b(?:this|the) (?:job|role|position|company|organization|employer|opportunity)\b|\bwhy\b|cover letter|how did you hear|\breferred\b|application source/i;
+  const privateAnswer = /birth|dob|medical|health|disability|ethnicity|race|gender|veteran|religion|consent|privacy|captcha|signature/i;
+  const finalSubmit = /^(?:submit(?:\s+(?:my |your |the )?application)?|send application|apply(?: now)?|complete application|finish application)[.!]?$/i;
+  const reviewField = /\b(?:agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare|signature|captcha|password|otp)\b/i;
+  const fileEvidence = new WeakMap();
+  const submitting = new WeakSet();
+  let wizard;
   const answerKey = field => field.label.normalize('NFKC').toLowerCase().replace(/[?*:.!]+$/g, '').trim().replace(/\s+/g, ' ');
 
-  function inspect() {
-    const job = capture.read();
-    const fields = discovery.discoverFields().filter(field => field.kind !== 'inaccessible' && !field.excluded);
-    const contacts = new Set(fields.map(field => mapping.resolveFact(field.label, field.hint)?.key)
-      .filter(key => contactKeys.has(key)));
-    const routeLooksLikeApplication = /(?:^|[/?=_-])(?:apply|applyjob|application|applytojob|jobapply)(?:$|[/?=_-])/i.test(location.pathname + location.search);
-    const resumeInput = findResumeInput();
-    const hasForm = (contacts.size >= 2 && !!(job || routeLooksLikeApplication || resumeInput)) ||
-      (routeLooksLikeApplication && fields.length >= 1) || (!!job && fields.length >= 2 && !!resumeInput);
-    return { job, fields, hasForm, resumeInput };
+  // ============================================================================
+  // Application Lifecycle State & Attempt Management
+  // ============================================================================
+
+  // 8 explicit application lifecycle states representing what happened on the ATS
+  const ApplicationState = Object.freeze({
+    DRAFT: 'DRAFT',
+    FILLING: 'FILLING',
+    REVIEW_REQUIRED: 'REVIEW_REQUIRED',
+    READY_TO_SUBMIT: 'READY_TO_SUBMIT',
+    SUBMITTING: 'SUBMITTING',
+    SUBMITTED: 'SUBMITTED',
+    PENDING_VERIFICATION: 'PENDING_VERIFICATION',
+    FAILED: 'FAILED',
+  });
+
+  // NextKinHR platform synchronization states representing backend API delivery status
+  const SyncStatus = Object.freeze({
+    LOCAL_ONLY: 'LOCAL_ONLY',
+    SYNC_PENDING: 'SYNC_PENDING',
+    SYNCED: 'SYNCED',
+    AUTH_REQUIRED: 'AUTH_REQUIRED',
+    FORBIDDEN: 'FORBIDDEN',
+    CONFLICT_NEEDS_RESOLVE: 'CONFLICT_NEEDS_RESOLVE',
+    VALIDATION_FAILED: 'VALIDATION_FAILED',
+    SYNC_FAILED: 'SYNC_FAILED',
+  });
+
+  const VALID_TRANSITIONS = Object.freeze({
+    [ApplicationState.DRAFT]: [
+      ApplicationState.FILLING,
+      ApplicationState.REVIEW_REQUIRED,
+      ApplicationState.READY_TO_SUBMIT,
+      ApplicationState.SUBMITTING,
+      ApplicationState.FAILED,
+    ],
+    [ApplicationState.FILLING]: [
+      ApplicationState.REVIEW_REQUIRED,
+      ApplicationState.READY_TO_SUBMIT,
+      ApplicationState.FAILED,
+    ],
+    [ApplicationState.REVIEW_REQUIRED]: [
+      ApplicationState.FILLING,
+      ApplicationState.READY_TO_SUBMIT,
+      ApplicationState.FAILED,
+    ],
+    [ApplicationState.READY_TO_SUBMIT]: [
+      ApplicationState.SUBMITTING,
+      ApplicationState.REVIEW_REQUIRED,
+      ApplicationState.FILLING,
+      ApplicationState.FAILED,
+    ],
+    [ApplicationState.SUBMITTING]: [
+      ApplicationState.SUBMITTED,
+      ApplicationState.PENDING_VERIFICATION,
+      ApplicationState.REVIEW_REQUIRED,
+      ApplicationState.FAILED,
+    ],
+    [ApplicationState.PENDING_VERIFICATION]: [
+      ApplicationState.SUBMITTED,
+      ApplicationState.SUBMITTING,
+      ApplicationState.FAILED,
+      ApplicationState.REVIEW_REQUIRED,
+    ],
+    [ApplicationState.SUBMITTED]: [
+      ApplicationState.SUBMITTED,
+    ],
+    [ApplicationState.FAILED]: [
+      ApplicationState.DRAFT,
+      ApplicationState.FILLING,
+      ApplicationState.REVIEW_REQUIRED,
+    ],
+  });
+
+  class ApplicationStateError extends Error {
+    constructor(state, message, details = {}) {
+      super(message);
+      this.name = 'ApplicationStateError';
+      this.state = state;
+      this.details = details;
+    }
   }
 
-  function findResumeInput(root = document) {
-    return [...root.querySelectorAll('input[type="file"]')].find(input => {
-      if (input.disabled) return false;
-      const label = discovery.label(input);
-      return /\b(?:resume|résumé|curriculum vitae|cv)\b/i.test([label, input.name, input.id].join(' ')) &&
-        !/cover\s*letter|additional|optional document/i.test(label);
+  function generateUUID() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
     });
   }
 
-  function plansFor(expectedUrl, candidate, saved = {}) {
-    if (location.href !== expectedUrl) throw new Error('The page changed. Open the application form and try again.');
-    const page = inspect();
-    if (!page.hasForm) throw new Error('Open the job application form before using autofill.');
-    const plans = mapping.planFill(page.fields, candidate);
-    const keys = plans.map(plan => answerKey(plan.field));
-    for (const plan of plans) {
-      const key = answerKey(plan.field);
-      if (plan.factKey || !reusable(plan, keys) || !Object.hasOwn(saved, key)) continue;
-      const stored = saved[key];
-      if (stored.type !== answerType(plan.field)) continue;
-      plan.status = 'supported';
-      plan.value = stored.value;
-      plan.learned = true;
-    }
-    return { ...page, plans, keys };
+  function detectAtsProvider(url) {
+    if (!url) return 'generic';
+    try {
+      const hostname = new URL(url).hostname.toLowerCase();
+      if (/(^|\.)(myworkdayjobs|myworkdaysite)\.com$/i.test(hostname)) return 'workday';
+      if (/(^|\.)greenhouse\.io$/i.test(hostname)) return 'greenhouse';
+      if (/(^|\.)lever\.co$/i.test(hostname)) return 'lever';
+      if (/(^|\.)ashbyhq\.com$/i.test(hostname)) return 'ashby';
+      if (/(^|\.)(smartrecruiters\.com|smartr\.me)$/i.test(hostname)) return 'smartrecruiters';
+      if (/(^|\.)linkedin\.com$/i.test(hostname)) return 'linkedin';
+      if (/(^|\.)workable\.com$/i.test(hostname)) return 'workable';
+      if (/(^|\.)taleo\.net$/i.test(hostname)) return 'taleo';
+      if (/(^|\.)icims\.com$/i.test(hostname)) return 'icims';
+      if (/(^|\.)jobvite\.com$/i.test(hostname)) return 'jobvite';
+      if (/(^|\.)bamboohr\.com$/i.test(hostname)) return 'bamboohr';
+      if (/(^|\.)teamtailor\.com$/i.test(hostname)) return 'teamtailor';
+      if (/(^|\.)personio\.(?:com|de)$/i.test(hostname)) return 'personio';
+      if (/(^|\.)recruitee\.com$/i.test(hostname)) return 'recruitee';
+      if (/(^|\.)pinpointhq\.com$/i.test(hostname)) return 'pinpoint';
+      if (/(^|\.)breezy\.hr$/i.test(hostname)) return 'breezy';
+      if (/(^|\.)catsone\.com$/i.test(hostname)) return 'catsone';
+      if (/(^|\.)jazzhr\.com$/i.test(hostname)) return 'jazzhr';
+      if (/(^|\.)clearcompany\.com$/i.test(hostname)) return 'clearcompany';
+      if (/(^|\.)dayforce(hcm)?\.com$/i.test(hostname)) return 'dayforce';
+    } catch {}
+    return 'generic';
   }
 
+  /**
+   * Immutable attempt context binding an application attempt to candidate and job.
+   * Candidate identity cannot be mutated mid-attempt if the user switches candidates.
+   */
+  class ApplicationAttemptContext {
+    constructor(params = {}) {
+      const now = new Date().toISOString();
+      this.applicationId = params.applicationId || null;
+      this.attemptId = params.attemptId || generateUUID();
+      this.userId = params.userId || null;
+      this.candidateId = params.candidateId || null;
+      this.profileVersion = params.profileVersion ?? 1;
+      this.atsProvider = params.atsProvider || detectAtsProvider(params.jobUrl || (typeof location !== 'undefined' ? location.href : ''));
+      this.jobUrl = params.jobUrl || (typeof location !== 'undefined' ? location.href : '');
+      this.companyName = params.companyName || '';
+      this.jobTitle = params.jobTitle || '';
+      this.tabId = params.tabId ?? null;
+      this.createdAt = params.createdAt || now;
+      this.updatedAt = params.updatedAt || now;
+
+      // Deeply freeze attempt context to guarantee immutability
+      Object.freeze(this);
+    }
+
+    withUpdate(updates = {}) {
+      if (updates.candidateId && updates.candidateId !== this.candidateId) {
+        throw new ApplicationStateError(
+          ApplicationState.FAILED,
+          `Candidate identity cannot be mutated mid-attempt (bound to ${this.candidateId}, received ${updates.candidateId})`
+        );
+      }
+      return new ApplicationAttemptContext({
+        ...this.toJSON(),
+        ...updates,
+        candidateId: this.candidateId,
+        attemptId: this.attemptId,
+        createdAt: this.createdAt,
+        updatedAt: updates.updatedAt || new Date().toISOString(),
+      });
+    }
+
+    toJSON() {
+      return {
+        applicationId: this.applicationId,
+        attemptId: this.attemptId,
+        userId: this.userId,
+        candidateId: this.candidateId,
+        profileVersion: this.profileVersion,
+        atsProvider: this.atsProvider,
+        jobUrl: this.jobUrl,
+        companyName: this.companyName,
+        jobTitle: this.jobTitle,
+        tabId: this.tabId,
+        createdAt: this.createdAt,
+        updatedAt: this.updatedAt,
+      };
+    }
+
+    static fromJSON(data) {
+      if (!data) return null;
+      return new ApplicationAttemptContext(data);
+    }
+  }
+
+  /**
+   * ApplicationStateManager manages explicit lifecycle states and NextKinHR sync status.
+   * Persists minimal durable state in chrome.storage.session and window.sessionStorage
+   * without storing raw DOM nodes.
+   */
+  class ApplicationStateManager {
+    constructor(attemptContext, options = {}) {
+      if (!attemptContext) {
+        throw new Error('ApplicationStateManager requires an ApplicationAttemptContext');
+      }
+      this.context = attemptContext instanceof ApplicationAttemptContext
+        ? attemptContext
+        : new ApplicationAttemptContext(attemptContext);
+      this.application_status = options.initialState || ApplicationState.DRAFT;
+      this.sync_status = options.initialSyncStatus || SyncStatus.LOCAL_ONLY;
+      this.history = options.history ? [...options.history] : [
+        {
+          type: 'application',
+          from: null,
+          to: this.application_status,
+          timestamp: new Date().toISOString(),
+          details: { initial: true },
+        }
+      ];
+      this.listeners = new Set();
+      this.storageKey = options.storageKey || `nextkin_application_state_${this.context.attemptId}`;
+      this.persist();
+    }
+
+    getContext() {
+      return this.context;
+    }
+
+    getState() {
+      return this.application_status;
+    }
+
+    getSyncStatus() {
+      return this.sync_status;
+    }
+
+    getStatus() {
+      return {
+        application_status: this.application_status,
+        sync_status: this.sync_status,
+        attemptId: this.context.attemptId,
+        candidateId: this.context.candidateId,
+        profileVersion: this.context.profileVersion,
+        atsProvider: this.context.atsProvider,
+        jobUrl: this.context.jobUrl,
+        companyName: this.context.companyName,
+        jobTitle: this.context.jobTitle,
+        tabId: this.context.tabId,
+        updatedAt: this.context.updatedAt,
+      };
+    }
+
+    addListener(listener) {
+      if (typeof listener === 'function') {
+        this.listeners.add(listener);
+        return () => this.listeners.delete(listener);
+      }
+      return () => {};
+    }
+
+    _notify(event) {
+      for (const listener of this.listeners) {
+        try { listener(event, this); } catch {}
+      }
+    }
+
+    transition(targetState, details = {}) {
+      if (!ApplicationState[targetState]) {
+        throw new Error(`Invalid target application state: ${targetState}`);
+      }
+      const current = this.application_status;
+      if (current === targetState) {
+        this.context = this.context.withUpdate({ updatedAt: new Date().toISOString() });
+        this.persist();
+        return current;
+      }
+
+      const allowed = VALID_TRANSITIONS[current] || [];
+      if (!allowed.includes(targetState)) {
+        throw new ApplicationStateError(
+          current,
+          `Illegal application state transition from ${current} to ${targetState}`,
+          { current, target: targetState, details }
+        );
+      }
+
+      this.application_status = targetState;
+      this.context = this.context.withUpdate({ updatedAt: new Date().toISOString() });
+      this.history.push({
+        type: 'application',
+        from: current,
+        to: targetState,
+        timestamp: new Date().toISOString(),
+        details,
+      });
+      this.persist();
+      this._notify({ type: 'application_state_change', from: current, to: targetState, details });
+      return this.application_status;
+    }
+
+    setSyncStatus(targetSyncStatus, details = {}) {
+      if (!SyncStatus[targetSyncStatus]) {
+        throw new Error(`Invalid sync status: ${targetSyncStatus}`);
+      }
+      const prev = this.sync_status;
+      if (prev === targetSyncStatus) return prev;
+
+      this.sync_status = targetSyncStatus;
+      this.context = this.context.withUpdate({ updatedAt: new Date().toISOString() });
+      this.history.push({
+        type: 'sync',
+        from: prev,
+        to: targetSyncStatus,
+        timestamp: new Date().toISOString(),
+        details,
+      });
+      this.persist();
+      this._notify({ type: 'sync_status_change', from: prev, to: targetSyncStatus, details });
+      return this.sync_status;
+    }
+
+    /**
+     * Persist minimal durable state without saving raw DOM nodes.
+     */
+    persist() {
+      const payload = {
+        attemptId: this.context.attemptId,
+        context: this.context.toJSON(),
+        application_status: this.application_status,
+        sync_status: this.sync_status,
+        history: this.history.slice(-25),
+        updatedAt: new Date().toISOString(),
+      };
+
+      try {
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+          window.sessionStorage.setItem('nextkin_application_attempt_state', JSON.stringify(payload));
+          if (this.context.attemptId) {
+            window.sessionStorage.setItem(`nextkin_attempt_${this.context.attemptId}`, JSON.stringify(payload));
+          }
+          if (this.context.tabId != null) {
+            window.sessionStorage.setItem(`nextkin_attempt_tab_${this.context.tabId}`, JSON.stringify(payload));
+          }
+        }
+      } catch {}
+
+      try {
+        if (typeof chrome !== 'undefined' && chrome.storage?.session?.set) {
+          const key = this.storageKey || `application_attempt_${this.context.attemptId}`;
+          const toSet = { [key]: payload, 'application-state-active': payload };
+          if (this.context.tabId != null) {
+            toSet[`application-state:${this.context.tabId}`] = payload;
+          }
+          chrome.storage.session.set(toSet).catch(() => {});
+        }
+      } catch {}
+    }
+
+    static restore(options = {}) {
+      const { attemptId, tabId } = options;
+      let raw = null;
+      try {
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+          if (attemptId) raw = window.sessionStorage.getItem(`nextkin_attempt_${attemptId}`);
+          if (!raw && tabId != null) raw = window.sessionStorage.getItem(`nextkin_attempt_tab_${tabId}`);
+          if (!raw) raw = window.sessionStorage.getItem('nextkin_application_attempt_state');
+        }
+      } catch {}
+
+      if (raw) {
+        try {
+          const data = JSON.parse(raw);
+          if (data?.context) {
+            const context = ApplicationAttemptContext.fromJSON(data.context);
+            return new ApplicationStateManager(context, {
+              initialState: data.application_status,
+              initialSyncStatus: data.sync_status,
+              history: data.history,
+            });
+          }
+        } catch {}
+      }
+      return null;
+    }
+  }
+
+  let currentManager = null;
+
+  function getOrCreateManager(candidate, expectedUrl, job = null) {
+    if (!currentManager) {
+      currentManager = ApplicationStateManager.restore();
+    }
+
+    const targetUrl = expectedUrl || (typeof location !== 'undefined' ? location.href : '');
+    const activeJob = job || (capture?.read ? capture.read() : null);
+
+    if (currentManager) {
+      const activeCandidateId = currentManager.getContext().candidateId;
+      const activeState = currentManager.getState();
+      const isActive = [
+        ApplicationState.FILLING,
+        ApplicationState.REVIEW_REQUIRED,
+        ApplicationState.READY_TO_SUBMIT,
+        ApplicationState.SUBMITTING,
+        ApplicationState.PENDING_VERIFICATION,
+      ].includes(activeState);
+
+      // Multi-tab candidate isolation: cannot mutate candidate identity mid-attempt
+      if (isActive && activeCandidateId && candidate?.id && candidate.id !== activeCandidateId) {
+        throw new ApplicationStateError(
+          ApplicationState.FAILED,
+          `Candidate identity cannot be mutated mid-attempt (bound to ${activeCandidateId}, received ${candidate.id})`
+        );
+      }
+
+      if (isActive && (!candidate?.id || candidate.id === activeCandidateId)) {
+        return currentManager;
+      }
+    }
+
+    const context = new ApplicationAttemptContext({
+      applicationId: candidate?.applicationId || activeJob?.externalId || null,
+      userId: candidate?.userId || candidate?.user_id || null,
+      candidateId: candidate?.id || null,
+      profileVersion: candidate?.version || candidate?.profileVersion || 1,
+      atsProvider: detectAtsProvider(targetUrl),
+      jobUrl: targetUrl,
+      companyName: activeJob?.company || '',
+      jobTitle: activeJob?.title || '',
+    });
+
+    currentManager = new ApplicationStateManager(context, {
+      initialState: ApplicationState.DRAFT,
+      initialSyncStatus: SyncStatus.LOCAL_ONLY,
+    });
+
+    return currentManager;
+  }
+
+  // Reusable answers are keyed by the question they ask, never by its wording on a
+  // particular portal. Profile-owned facts and one-off/job-specific questions are
+  // deliberately excluded: a saved answer must never overwrite a profile value.
   function answerType(field) {
     if (mapping.isMultiKind(field.kind)) return 'multiple';
     if (field.kind === 'checkbox') return 'boolean';
@@ -3326,8 +4039,34 @@
       !manualQuestion.test(key) && !jobSpecific.test(key);
   }
 
+  function answerFits(field, value) {
+    const options = (field.options || []).map(option => option.label).filter(Boolean);
+    if (!options.length) return true;
+    const bool = mapping.normalizeBoolean(value);
+    if (bool !== null && options.some(option => mapping.normalizeBoolean(option) === bool)) return true;
+    const text = String(value).toLowerCase();
+    return options.some(option => option.toLowerCase() === text);
+  }
+
+  // Read the answers the candidate has already given on this form so they can be
+  // saved once and replayed on later applications (the freehire answer-bank rule).
+  // Evidence that the candidate actually engaged with the form, not merely saw it.
+  // Mirrors freehire's leftAnApplication(): an untouched form is not an application.
+  function hasAnswers() {
+    const fields = discovery.discoverFields().filter(field => field.kind !== 'inaccessible' && !field.excluded);
+    return fields.some(field => {
+      const value = writer.read(field);
+      return Array.isArray(value) ? value.length > 0
+        : typeof value === 'boolean' ? value
+          : String(value ?? '').trim().length > 0;
+    });
+  }
+
   function savedAnswers(expectedUrl, candidate) {
-    const { plans, keys } = plansFor(expectedUrl, candidate);
+    if (location.href !== expectedUrl) return [];
+    const page = inspect();
+    const plans = mapping.planFill(page.fields, candidate);
+    const keys = plans.map(plan => answerKey(plan.field));
     return plans.filter(plan => reusable(plan, keys)).flatMap(plan => {
       const { field } = plan;
       const value = writer.read(field);
@@ -3337,44 +4076,318 @@
     }).slice(0, 100);
   }
 
-  async function fill(expectedUrl, candidate, resume, saved, aiAnswers = null) {
-    const page = plansFor(expectedUrl, candidate, saved);
-    const plans = page.plans;
-    const questions = [];
-    const duplicateLabels = page.keys.filter((key, i, keys) => keys.indexOf(key) !== i);
-    const values = mapping.buildValues(candidate);
-    let genericTextareaIndex = 0;
+  function inspect() {
+    const job = capture.read();
+    const fields = discovery.discoverFields().filter(field => field.kind !== 'inaccessible' && !field.excluded);
+    const contacts = new Set(fields.map(field => mapping.resolveFact(field.label, field.hint)?.key)
+      .filter(key => contactKeys.has(key)));
+    const routeLooksLikeApplication = /(?:^|[/?=_#-])(?:apply|applyjob|application|applytojob|jobapply)(?:$|[/?=_#-])/i.test(location.pathname + location.search + (location.hash || ''));
+    const resumeInput = findResumeInput();
+    const hasForm = (contacts.size >= 2 && !!(job || routeLooksLikeApplication || resumeInput)) ||
+      (routeLooksLikeApplication && fields.length >= 1) || (!!job && fields.length >= 2 && !!resumeInput);
+    return { job, fields, hasForm, resumeInput };
+  }
 
-    const hasCandidateDetails = Boolean(
-      candidate && (
-        (values.full_name && values.full_name.trim().length > 0) ||
-        (values.email && values.email.trim().length > 0) ||
-        (values.phone && values.phone.trim().length > 0) ||
-        (values.current_employer && values.current_employer.trim().length > 0) ||
-        (values.current_title && values.current_title.trim().length > 0) ||
-        (values.primary_skills && String(values.primary_skills).trim().length > 0) ||
-        (resume && (resume.raw_text || resume.source_text || resume.base64)) ||
-        (candidate.confirmed_facts && Object.keys(candidate.confirmed_facts).length > 0)
-      )
-    );
+  function findResumeInput(root = document) {
+    const matches = input => {
+      if (input.disabled) return false;
+      const label = discovery.label(input);
+      const description = [label, input.name, input.id, input.getAttribute?.('data-testid'), input.getAttribute?.('data-automation-id')]
+        .join(' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').normalize('NFD').replace(/\p{M}/gu, '');
+      return /\b(?:resume|curriculum vitae|cv)\b/i.test(description) && !/cover\s*letter|additional|optional document/i.test(label);
+    };
+    const direct = [...root.querySelectorAll('input[type="file"]')].find(matches);
+    if (direct) return direct;
+    for (const host of root.querySelectorAll('*')) {
+      if (!host.shadowRoot) continue;
+      const nested = findResumeInput(host.shadowRoot);
+      if (nested) return nested;
+    }
+  }
 
-    if (!hasCandidateDetails) {
-      const unfilled = plans.map(p => ({
-        key: p.field.key,
-        label: p.field.label || p.field.hint || 'Application question',
-        kind: p.field.kind,
-        reason: 'No candidate details submitted'
-      }));
+  function resumeMetadata(file) {
+    if (!file || !/\.(?:pdf|docx)$/i.test(file.name)) return null;
+    return { filename: file.name.slice(0, 255), mimeType: /\.docx$/i.test(file.name)
+      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf' };
+  }
+
+  async function readAttachedResume(file) {
+    const metadata = resumeMetadata(file);
+    if (!metadata || fileEvidence.has(file) || file.size > 2 * 1024 * 1024) return;
+    fileEvidence.set(file, metadata);
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const chunks = [];
+    for (let offset = 0; offset < bytes.length; offset += 8192) {
+      chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 8192)));
+    }
+    fileEvidence.set(file, { ...metadata, base64: btoa(chunks.join('')) });
+  }
+
+  function submissionEvidence(form) {
+    const answers = new Map();
+    for (const field of discovery.discoverFields(form)) {
+      if (!field.label || field.excluded || field.kind === 'inaccessible' || manualQuestion.test(field.label) || privateAnswer.test(field.label)) continue;
+      const key = answerKey(field).slice(0, 160);
+      const value = writer.read(field);
+      if (!key || value === undefined || value === null || value === '' || answers.has(key)) continue;
+      answers.set(key, { key, label: field.label.slice(0, 200), value: String(Array.isArray(value) ? value.join(', ') : value).slice(0, 1000) });
+      if (answers.size === 100) break;
+    }
+    const file = findResumeInput(form)?.files?.[0];
+    const appliedResume = file && (fileEvidence.get(file) || resumeMetadata(file));
+    return { answers: [...answers.values()], ...(appliedResume ? { appliedResume } : {}) };
+  }
+
+  function prepareSubmission(form, url, job, evidence = submissionEvidence(form)) {
+    return chrome.runtime.sendMessage({ action: 'prepare_application_tracking', url, job, submitted: true,
+      submissionEvidence: evidence });
+  }
+
+  /**
+   * Submit application to employer portal ATS while keeping user in control of final submission.
+   * Runtime errors are paired with explicit state transitions to REVIEW_REQUIRED, READY_TO_SUBMIT,
+   * SUBMITTING, and PENDING_VERIFICATION.
+   */
+  async function submitApplication(expectedUrl) {
+    const manager = currentManager || getOrCreateManager(null, expectedUrl);
+
+    if (location.href !== expectedUrl) {
+      manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'The application page changed.' });
+      throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'The application page changed.');
+    }
+
+    const { job, hasForm, fields } = inspect();
+    const forms = new Set(fields.map(field => field.element?.form || field.element?.closest?.('form')).filter(Boolean));
+    const [form] = forms;
+
+    if (!hasForm || forms.size !== 1 || submitting.has(form) || typeof form.requestSubmit !== 'function') {
+      manager.transition(ApplicationState.REVIEW_REQUIRED, {
+        reason: 'Submit manually on the employer page. A single final application form is required.',
+        hasForm,
+        formsCount: forms.size,
+      });
+      throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'Submit manually on the employer page. A single final application form is required.');
+    }
+
+    const buttons = [...form.elements].filter(button => button.type === 'submit' && !button.disabled &&
+      !button.formNoValidate && button.getClientRects().length && finalSubmit.test(submitLabel(button)));
+    const blocked = form.querySelector('[data-sitekey], iframe[src*="captcha" i], [name*="captcha" i], input[type="password"]');
+    const incomplete = fields.some(field => {
+      const element = field.element;
+      const value = writer.read(field);
+      const label = field.label + ' ' + (field.hint || '');
+      if (reviewField.test(label) && field.kind === 'checkbox') return value !== true;
+      const required = element?.required || element?.getAttribute?.('aria-required') === 'true' ||
+        field.options?.some(option => option.element?.required) || reviewField.test(label);
+      return required && (value === '' || value == null || value === false || Array.isArray(value) && !value.length);
+    });
+
+    if (buttons.length !== 1 || blocked || incomplete || !form.checkValidity()) {
+      manager.transition(ApplicationState.REVIEW_REQUIRED, {
+        reason: 'Review and complete the employer form, then submit it manually.',
+        buttonsCount: buttons.length,
+        blocked: !!blocked,
+        incomplete,
+        valid: form.checkValidity(),
+      });
+      throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'Review and complete the employer form, then submit it manually.', {
+        buttonsCount: buttons.length,
+        blocked: !!blocked,
+        incomplete,
+      });
+    }
+
+    // Validated -> Transition to READY_TO_SUBMIT
+    manager.transition(ApplicationState.READY_TO_SUBMIT, {
+      validated: true,
+      button: submitLabel(buttons[0]),
+    });
+
+    // Submit action begins -> Transition to SUBMITTING
+    manager.transition(ApplicationState.SUBMITTING, {
+      submittedAt: new Date().toISOString(),
+      formUrl: expectedUrl,
+    });
+
+    submitting.add(form);
+    try {
+      const file = findResumeInput(form)?.files?.[0];
+      if (file) await readAttachedResume(file).catch(() => {});
+      const evidence = submissionEvidence(form);
+
+      manager.setSyncStatus(SyncStatus.SYNC_PENDING, { url: expectedUrl });
+      const tracked = await prepareSubmission(form, expectedUrl, job, evidence);
+
+      if (!tracked?.tracked || location.href !== expectedUrl || !form.isConnected || !form.checkValidity()) {
+        manager.transition(ApplicationState.REVIEW_REQUIRED, {
+          reason: 'Automatic submission could not start. Review the form and submit manually.',
+          tracked: !!tracked?.tracked,
+        });
+        manager.setSyncStatus(SyncStatus.SYNC_FAILED, { error: tracked?.error || 'Tracking failed' });
+        throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'Automatic submission could not start. Review the form and submit manually.');
+      }
+
+      if (file !== findResumeInput(form)?.files?.[0] || JSON.stringify(evidence.answers) !== JSON.stringify(submissionEvidence(form).answers)) {
+        manager.transition(ApplicationState.REVIEW_REQUIRED, {
+          reason: 'Form values changed during autofill. Review the form and submit manually.',
+        });
+        throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'Form values changed during autofill. Review the form and submit manually.');
+      }
+
+      manager.setSyncStatus(SyncStatus.SYNCED, { outsideJobUrl: tracked.outsideJobUrl });
+      form.requestSubmit(buttons[0]);
+
+      // Form submission dispatched -> Transition to PENDING_VERIFICATION (awaiting ATS confirmation)
+      manager.transition(ApplicationState.PENDING_VERIFICATION, {
+        reason: 'Form submission dispatched, awaiting ATS receipt confirmation',
+      });
+    } catch (error) {
+      submitting.delete(form);
+      if (manager.getState() === ApplicationState.SUBMITTING) {
+        manager.transition(ApplicationState.FAILED, { error: error.message });
+      }
+      throw error;
+    }
+  }
+
+  function submitLabel(button) {
+    return String(button.innerText || button.value || button.getAttribute?.('aria-label') || '').trim();
+  }
+
+  /**
+   * Non-throwing pre-submission validation query.
+   * Keeps user in control of final submission by surfacing missing fields and terms.
+   */
+  function validateForSubmission(expectedUrl) {
+    const targetUrl = expectedUrl || (typeof location !== 'undefined' ? location.href : '');
+    const manager = currentManager || getOrCreateManager(null, targetUrl);
+
+    if (location.href !== targetUrl) {
+      manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'The application page changed.' });
+      return { ready: false, state: ApplicationState.REVIEW_REQUIRED, reason: 'The application page changed.' };
+    }
+
+    const { hasForm, fields } = inspect();
+    const forms = new Set(fields.map(field => field.element?.form || field.element?.closest?.('form')).filter(Boolean));
+    const [form] = forms;
+
+    if (!hasForm || forms.size !== 1 || submitting.has(form) || typeof form.requestSubmit !== 'function') {
+      manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'A single final application form is required.' });
+      return { ready: false, state: ApplicationState.REVIEW_REQUIRED, reason: 'Submit manually on the employer page. A single final application form is required.' };
+    }
+
+    const buttons = [...form.elements].filter(button => button.type === 'submit' && !button.disabled &&
+      !button.formNoValidate && button.getClientRects().length && finalSubmit.test(submitLabel(button)));
+    const blocked = form.querySelector('[data-sitekey], iframe[src*="captcha" i], [name*="captcha" i], input[type="password"]');
+    const incomplete = fields.some(field => {
+      const element = field.element;
+      const value = writer.read(field);
+      const label = field.label + ' ' + (field.hint || '');
+      if (reviewField.test(label) && field.kind === 'checkbox') return value !== true;
+      const required = element?.required || element?.getAttribute?.('aria-required') === 'true' ||
+        field.options?.some(option => option.element?.required) || reviewField.test(label);
+      return required && (value === '' || value == null || value === false || Array.isArray(value) && !value.length);
+    });
+
+    if (buttons.length !== 1 || blocked || incomplete || !form.checkValidity()) {
+      manager.transition(ApplicationState.REVIEW_REQUIRED, {
+        reason: 'Review and complete the employer form, then submit it manually.',
+        blocked: !!blocked,
+        incomplete,
+        buttonsCount: buttons.length,
+      });
       return {
-        filled: [],
-        unfilled,
-        skipped: plans.map(p => p.field),
-        total: plans.length,
-        questions: [],
-        error: 'No candidate details available. Upload a resume and submit candidate details first.'
+        ready: false,
+        state: ApplicationState.REVIEW_REQUIRED,
+        reason: 'Review and complete the employer form, then submit it manually.',
+        blocked: !!blocked,
+        incomplete,
+        buttonsCount: buttons.length,
       };
     }
 
+    manager.transition(ApplicationState.READY_TO_SUBMIT, { validated: true, button: submitLabel(buttons[0]) });
+    return {
+      ready: true,
+      state: ApplicationState.READY_TO_SUBMIT,
+      button: submitLabel(buttons[0]),
+    };
+  }
+
+  function confirmSubmission(evidence = {}) {
+    if (currentManager) {
+      if (currentManager.getState() !== ApplicationState.SUBMITTED) {
+        currentManager.transition(ApplicationState.SUBMITTED, { evidence, confirmedAt: new Date().toISOString() });
+      }
+      return currentManager.getStatus();
+    }
+    return null;
+  }
+
+  function failSubmission(reason = '') {
+    if (currentManager) {
+      currentManager.transition(ApplicationState.FAILED, { reason, failedAt: new Date().toISOString() });
+      return currentManager.getStatus();
+    }
+    return null;
+  }
+
+  async function fill(expectedUrl, candidate, resume, continuation = false, newFields, saved = null, aiAnswers = null) {
+    // Older callers pass `saved` and `aiAnswers` as the fourth and fifth arguments.
+    // Accept both shapes so an extension or a test bundle built at either version works.
+    if (typeof continuation !== 'boolean') {
+      const legacySaved = continuation;
+      const legacyAi = newFields;
+      continuation = false;
+      newFields = null;
+      saved = legacySaved;
+      aiAnswers = legacyAi;
+    }
+
+    const manager = getOrCreateManager(candidate, expectedUrl);
+    manager.transition(ApplicationState.FILLING, { url: expectedUrl, continuation });
+
+    if (location.href !== expectedUrl) {
+      manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'The page changed. Open the application form and try again.' });
+      throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'The page changed. Open the application form and try again.');
+    }
+    const page = inspect();
+    if (!page.hasForm && (!continuation || !page.fields.length)) {
+      manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'Open the job application form before using autofill.' });
+      throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'Open the job application form before using autofill.');
+    }
+    const facts = candidate?.provenance_status === 'confirmed' ? candidate.confirmed_facts : candidate;
+    if (!facts || !Object.values(facts).some(value =>
+      typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string' && value.trim()
+    )) {
+      manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'Save your candidate details in My Applications and Resume first.' });
+      return { filled: [], unfilled: [], questions: [], total: page.fields.length, error: 'Save your candidate details in My Applications and Resume first.' };
+    }
+    const sourceFields = newFields ? page.fields.filter(field => newFields.some(next =>
+      next.element === field.element && next.label === field.label)) : page.fields;
+    const plans = mapping.planFill(sourceFields, facts);
+    const keys = plans.map(plan => answerKey(plan.field));
+    const values = mapping.buildValues(facts);
+
+    // Replay reusable answers from the answer bank. Profile-owned facts always win,
+    // and a saved answer is never applied to a job-specific or protected question.
+    if (saved && typeof saved === 'object') {
+      for (const plan of plans) {
+        const key = answerKey(plan.field);
+        if (plan.factKey || !reusable(plan, keys)) continue;
+        const entry = saved[key];
+        if (!entry) continue;
+        const value = entry && typeof entry === 'object' ? entry.value : entry;
+        if (value === undefined || value === null || value === '') continue;
+        if (entry && typeof entry === 'object' && entry.type && entry.type !== answerType(plan.field)) continue;
+        if (!answerFits(plan.field, value)) continue;
+        plan.status = 'supported';
+        plan.value = value;
+        plan.learned = true;
+      }
+    }
+
+    const questions = [];
     for (const plan of plans) {
       const { field } = plan;
       const label = (field.label || field.hint || '').trim();
@@ -3399,20 +4412,13 @@
         let fromFact = false;
         const ql = label.toLowerCase();
 
-        const candName = values.full_name || '';
-        const candFirst = values.first_name || '';
-        const candTitle = values.current_title || candidate.current_job_title || candidate.headline || '';
         const candEmployer = values.current_employer || candidate.current_company || candidate.company || '';
         const candSkills = values.primary_skills || candidate.secondary_skills || '';
         const skillsList = Array.isArray(candSkills) ? candSkills : String(candSkills).split(/[,;|\n]+/).map(s => s.trim()).filter(Boolean);
         const skillsStr = skillsList.join(', ');
-        const topSkills = skillsList.slice(0, 5).join(', ');
-        const candExp = values.total_experience_years ? `${values.total_experience_years}+ years` : '';
         const candCity = values.current_city || candidate.city || '';
         const candState = values.current_state || candidate.state || '';
-        const candLocation = values.current_location || [candCity, candState].filter(Boolean).join(', ');
         const candDegree = values.highest_education || candidate.highest_qualification || candidate.degree || '';
-        const candSchool = values.school || candidate.university_name || candidate.school || '';
         const candGradYear = values.graduation_year || candidate.graduation_year || '';
         const candSummary = values.summary || values.bio || '';
         const candResumeText = (resume?.raw_text || resume?.source_text || candidate.source_text || '').toLowerCase();
@@ -3691,7 +4697,6 @@
               autoValue = values.work_authorization || values.visa_status || candidate.work_authorization || candidate.visa_status;
             }
           }
-          // NO synthetic fallback essays or made-up narratives. If not in candidate profile, leave as null.
         } else if (field.kind === 'checkbox') {
           const groupQuestion = (field.element?.closest('.application-question, fieldset, [role="group"], .form-group, .question')
             ?.querySelector('.application-label, legend, .question-title, [class*="label" i]')?.innerText || '').toLowerCase();
@@ -3740,7 +4745,7 @@
           else if (/choose not to disclose|decline to state|prefer not to/i.test(checkLabel)) {
             autoValue = false;
           }
-          // 7. General unknown checkbox: Default to FALSE based on resume (never blindly check)
+          // 7. General unknown checkbox: Default to FALSE based on resume
           else {
             autoValue = false;
           }
@@ -3755,6 +4760,7 @@
         }
       }
     }
+
     const receipts = await writer.applyFill(plans, {
       sessionId: crypto.randomUUID(),
       isCurrent: () => location.href === expectedUrl,
@@ -3765,19 +4771,25 @@
       value: Array.isArray(receipt.writtenValue)
         ? receipt.writtenValue.join(', ')
         : typeof receipt.writtenValue === 'boolean' ? (receipt.writtenValue ? 'Yes' : 'No') : String(receipt.writtenValue ?? ''),
-      ai: receipt.ai,
-      learned: receipt.learned,
+      ai: !!receipt.ai,
+      learned: !!receipt.learned,
     }));
-    const input = page.resumeInput;
+    const input = findResumeInput();
     if (input?.isConnected && resume && !input.files?.length && location.href === expectedUrl) {
       try {
+        if (!resume.base64) throw new Error('No resume data');
         const bytes = Uint8Array.from(atob(resume.base64), char => char.charCodeAt(0));
         const transfer = new DataTransfer();
         transfer.items.add(new File([bytes], resume.filename, { type: resume.mimeType }));
         input.files = transfer.files;
         input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
-        if (input.files?.[0]?.name === resume.filename) filled.push({ key: 'resume-file', label: 'Resume file', value: resume.filename });
+        const file = input.files?.[0];
+        if (file?.name === resume.filename) {
+          const metadata = resumeMetadata(file);
+          if (metadata && file.size <= 2 * 1024 * 1024) fileEvidence.set(file, { ...metadata, base64: resume.base64 });
+          filled.push({ key: 'resume-file', label: 'Resume file', value: resume.filename });
+        }
       } catch {
         // A portal can require a manual upload. Leave that field in the total.
       }
@@ -3790,19 +4802,111 @@
           key: plan.field.key,
           label: plan.field.label || plan.field.hint || 'Application question',
           kind: plan.field.kind,
-          reason: 'Missing from uploaded details'
+          reason: plan.reason || 'No matching saved candidate detail'
         });
       }
     }
-    if (input?.isConnected && resume && (!input.files || !input.files.length)) {
+    if (input?.isConnected && (!input.files || !input.files.length)) {
       unfilled.unshift({
         key: 'resume-file',
         label: 'Resume file',
         kind: 'file',
-        reason: 'Portal requires manual file attachment'
+        reason: resume?.base64 ? 'Portal requires manual file attachment' : 'Uploaded resume unavailable'
       });
     }
-    return { filled, unfilled, questions, total: page.fields.length + Number(!!input) };
+
+    // Evaluate form readiness after autofill
+    const { fields: pageFields } = inspect();
+    const forms = new Set(pageFields.map(field => field.element?.form || field.element?.closest?.('form')).filter(Boolean));
+    const [form] = forms;
+    const buttons = form ? [...form.elements].filter(b => b.type === 'submit' && !b.disabled && !b.formNoValidate && b.getClientRects?.().length && finalSubmit.test(submitLabel(b))) : [];
+    const blocked = form?.querySelector?.('[data-sitekey], iframe[src*="captcha" i], [name*="captcha" i], input[type="password"]');
+
+    const incomplete = pageFields.some(field => {
+      const element = field.element;
+      const value = typeof writer?.read === 'function' ? writer.read(field) : element?.value;
+      const label = field.label + ' ' + (field.hint || '');
+      if (reviewField.test(label) && field.kind === 'checkbox') return value !== true;
+      const required = element?.required || (typeof element?.getAttribute === 'function' && element.getAttribute('aria-required') === 'true') ||
+        field.options?.some(option => option.element?.required) || reviewField.test(label);
+      return required && (value === '' || value == null || value === false || Array.isArray(value) && !value.length);
+    });
+
+    if (form && buttons.length === 1 && !blocked && !incomplete && form.checkValidity()) {
+      manager.transition(ApplicationState.READY_TO_SUBMIT, { filledCount: filled.length, total: sourceFields.length });
+    } else {
+      manager.transition(ApplicationState.REVIEW_REQUIRED, {
+        filledCount: filled.length,
+        unfilledCount: unfilled.length,
+        unfilled,
+        questions,
+        incomplete,
+        blocked: !!blocked,
+        buttonsCount: buttons.length,
+      });
+    }
+
+    return { filled, unfilled, questions, total: sourceFields.length + Number(!!input) };
+  }
+
+  async function startAutofill(expectedUrl, candidate, resume, resumeDocumentId, continuation = false, saved = null, aiAnswers = null) {
+    const result = await fill(expectedUrl, candidate, resume, continuation, null, saved, aiAnswers);
+    // Keep the answer bank for later wizard steps and for a reload between steps.
+    globalThis.__nextkinSavedAnswers = saved || globalThis.__nextkinSavedAnswers || null;
+    if (result.error || !candidate.id || !discovery.observeStepTransitions || typeof chrome === 'undefined') return result;
+    wizard?.disconnect();
+
+    let pending;
+    const origin = location.origin;
+    const isTop = window === window.top;
+    const send = (action, data) => chrome.runtime.sendMessage({ action, ...data }).catch(() => null);
+    const onNext = event => {
+      if (!event.isTrusted || location.origin !== origin || !location.href.startsWith('https://')) return;
+      const control = event.target?.closest?.('button, input[type="submit"], input[type="button"], [role="button"]');
+      if (!discovery.isStepNavigation(control)) return;
+      const { fields, job } = inspect();
+      const form = control.form || control.closest('form');
+      if (!fields.length || form && !fields.some(field => field.element?.form === form || form.contains(field.element))) return;
+      pending = { fields, deadline: Date.now() + 30000, jobId: job?.externalId };
+      if (isTop) void send('queue_application_step', { candidateId: candidate.id, resumeDocumentId });
+    };
+    document.addEventListener('click', onNext, true);
+    const observer = discovery.observeStepTransitions(document, async ({ allFields }) => {
+      if (!pending || Date.now() > pending.deadline || location.origin !== origin) return;
+      const jobId = inspect().job?.externalId;
+      if (pending.jobId && jobId && pending.jobId !== jobId) return;
+      const fields = discovery.detectNewFields(pending.fields, allFields).filter(field => !field.excluded && field.kind !== 'inaccessible');
+      if (!fields.length) return;
+      pending = null;
+      if (isTop) void send('clear_application_step');
+      const url = location.href;
+      const fresh = await send('load_application_profile', { candidateId: candidate.id });
+      if (fresh?.id === candidate.id && wizard === currentWizard && location.href === url) {
+        await fill(url, fresh, resume, true, fields, globalThis.__nextkinSavedAnswers).catch(() => {});
+      }
+    });
+    const currentWizard = { disconnect() {
+      observer.disconnect();
+      document.removeEventListener('click', onNext, true);
+    } };
+    wizard = currentWizard;
+    return result;
+  }
+
+  async function resumeNextStep() {
+    const step = await chrome.runtime.sendMessage({ action: 'claim_application_step' }).catch(() => null);
+    if (!step?.profile || !discovery.observeStepTransitions) return;
+    const url = location.href;
+    const apply = () => startAutofill(url, step.profile, step.resume, step.resumeDocumentId, true,
+      globalThis.__nextkinSavedAnswers).catch(() => {});
+    if (inspect().fields.length) return apply();
+    const observer = discovery.observeStepTransitions(document, ({ allFields }) => {
+      if (location.href !== url || !allFields.some(field => !field.excluded && field.kind !== 'inaccessible')) return;
+      observer.disconnect();
+      clearTimeout(timer);
+      void apply();
+    });
+    const timer = setTimeout(() => observer.disconnect(), 15000);
   }
 
   globalThis.NextkinApplication = {
@@ -3812,5 +4916,89 @@
     },
     fill,
     savedAnswers,
+    hasAnswers,
+    startAutofill,
+    submitApplication,
+    validateForSubmission,
+    confirmSubmission,
+    failSubmission,
+    ApplicationState,
+    SyncStatus,
+    ApplicationAttemptContext,
+    ApplicationStateManager,
+    ApplicationStateError,
+    getStateManager() { return currentManager; },
+    getAttemptContext() { return currentManager?.getContext() || null; },
+    getState() { return currentManager?.getState() || ApplicationState.DRAFT; },
+    getSyncStatus() { return currentManager?.getSyncStatus() || SyncStatus.LOCAL_ONLY; },
+    resetAttempt() { currentManager = null; },
   };
+
+  globalThis.ApplicationAttemptContext = ApplicationAttemptContext;
+  globalThis.ApplicationStateManager = ApplicationStateManager;
+  globalThis.ApplicationState = ApplicationState;
+  globalThis.SyncStatus = SyncStatus;
+  globalThis.ApplicationStateError = ApplicationStateError;
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      ...globalThis.NextkinApplication,
+      NextkinApplication: globalThis.NextkinApplication,
+      ApplicationAttemptContext,
+      ApplicationStateManager,
+      ApplicationState,
+      SyncStatus,
+      ApplicationStateError,
+    };
+  }
+
+  // A manually filled application can navigate away as soon as its form is submitted.
+  if (typeof window !== 'undefined' && !globalThis.nextkinSubmitObserver
+    && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+    globalThis.nextkinSubmitObserver = true;
+    const embedded = window.top !== window;
+    if (!embedded && typeof MutationObserver !== 'undefined' && discovery.observeStepTransitions) void resumeNextStep();
+    const recordAttempt = (event, form, button) => {
+      if (!event.isTrusted || !form || submitting.has(form)) return;
+      if (button && !finalSubmit.test(submitLabel(button))) return;
+      const { job, hasForm, url } = globalThis.NextkinApplication.scan();
+      if ((!hasForm && !wizard) || (!job && !wizard && !new URLSearchParams((location.hash || '').slice(1)).has('marketing-intent'))) return;
+
+      const manager = currentManager || getOrCreateManager(null, url, job);
+      if (manager.getState() !== ApplicationState.SUBMITTED) {
+        if (manager.getState() !== ApplicationState.SUBMITTING) {
+          manager.transition(ApplicationState.SUBMITTING, { manual: true, button: submitLabel(button) });
+        }
+        manager.transition(ApplicationState.PENDING_VERIFICATION, { manual: true });
+        manager.setSyncStatus(SyncStatus.SYNC_PENDING, { manual: true });
+      }
+
+      void prepareSubmission(form, url, job).then(
+        tracked => {
+          if (tracked?.tracked) manager.setSyncStatus(SyncStatus.SYNCED, { outsideJobUrl: tracked.outsideJobUrl });
+          else manager.setSyncStatus(SyncStatus.SYNC_FAILED, { error: tracked?.error });
+        },
+        error => manager.setSyncStatus(SyncStatus.SYNC_FAILED, { error: error?.message })
+      ).catch(() => {});
+    };
+    document.addEventListener('change', event => {
+      const input = event.composedPath?.()[0] || event.target;
+      if (input?.type !== 'file' || input !== findResumeInput()) return;
+      const file = input.files?.[0];
+      if (file) void readAttachedResume(file).catch(() => {});
+    }, true);
+    document.addEventListener('submit', event => {
+      if (event.target?.tagName === 'FORM') recordAttempt(event, event.target, event.submitter);
+    }, true);
+    document.addEventListener('click', event => {
+      const selector = embedded
+        ? 'button[type="button"], [role="button"], button[type="submit"], input[type="submit"]'
+        : 'button[type="button"], [role="button"]';
+      const button = event.target?.closest?.(selector);
+      if (!button) return;
+      const form = button.form || button.closest('form');
+      if (embedded && form && button.type === 'submit') return;
+      recordAttempt(event, form || (embedded ? document : null), button);
+    }, true);
+  }
 })();

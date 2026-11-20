@@ -3,10 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/client';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { ArrowLeft, Loader2, RotateCcw, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { ensureSessionProfile } from '@/lib/auth/session-profile';
 
 export function JobseekerAuthCard() {
