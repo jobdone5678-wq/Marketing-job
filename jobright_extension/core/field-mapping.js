@@ -17,9 +17,10 @@
   // Facts an adapter hint may name outright. A hint is stronger evidence than the visible label.
   const CANONICAL_FACTS = new Set([
     'first_name', 'preferred_first_name', 'last_name', 'full_name', 'email', 'phone', 'current_city', 'current_state',
-    'current_location', 'zip_code', 'country', 'full_address', 'linkedin_url', 'github_url', 'website',
+    'current_location', 'zip_code', 'country', 'full_address', 'date_of_birth', 'citizenship_status', 'linkedin_url', 'github_url', 'website',
     'current_employer', 'current_title', 'total_experience_years', 'primary_skills',
     'authorized_in_usa', 'needs_sponsorship', 'open_to_relocation', 'visa_status', 'work_authorization',
+    'intended_work_country',
     'end_client', 'point_of_contact', 'pay_rate', 'vendor_email', 'personal_email', 'contract_type',
     'summary', 'bio', 'gender', 'race', 'veteran', 'veteran_status', 'disability', 'disability_status', 'availability', 'salary_expectation',
     'how_heard', 'highest_education', 'school', 'graduation_year', 'preferred_work_type', 'current_salary', 'e_signature', 'consent'
@@ -27,7 +28,7 @@
 
   // Consequential or voluntary disclosure fields that should be flagged for candidate review
   const CONSEQUENTIAL_FACTS = new Set([
-    'authorized_in_usa', 'needs_sponsorship', 'visa_status', 'work_authorization',
+    'authorized_in_usa', 'needs_sponsorship', 'visa_status', 'work_authorization', 'date_of_birth', 'citizenship_status',
     'gender', 'race', 'race_ethnicity', 'veteran', 'veteran_status', 'disability', 'disability_status'
   ]);
 
@@ -43,12 +44,25 @@
     e_signature: ['e signature', 'signature', 'sign here', 'certify by entering your name', 'by entering your name into the field below', 'typed signature', 'electronic signature'],
     email: ['email', 'email address', 'e mail', 'email id', 'work email', 'personal email', 'contact email', 'business email', 'primary email'],
     phone: ['phone', 'phone number', 'mobile', 'mobile phone', 'tel', 'cell phone', 'contact number', 'contact phone', 'telephone', 'telephone number', 'best phone number', 'primary phone', 'work phone', 'mobile number', 'phone or cell'],
-    current_city: ['city', 'current city', 'town', 'municipality', 'present city', 'where do you live', 'city of residence', 'address level2', 'where are you currently located'],
-    current_location: ['location', 'current location', 'present location', 'city and state', 'city state', 'city, state', 'city and country', 'city & state'],
+    current_city: ['city', 'current city', 'town', 'municipality', 'present city', 'where do you live', 'city of residence', 'address level2', 'which city do you live in', 'city you currently reside in'],
+    current_location: ['location', 'current location', 'present location', 'city and state', 'city state', 'city, state', 'city and country', 'city & state', 'where are you currently located', 'where are you based', 'where do you currently reside', 'current residence location', 'location of residence', 'your current location', 'based in', 'location city state'],
     current_state: ['state', 'province', 'region', 'current state', 'address level1', 'state province', 'state/province', 'which state', 'current state province', 'state of residence'],
     zip_code: ['zip', 'zip code', 'postal code', 'postcode', 'zip postal code', 'zipcode', 'postal code number'],
-    country: ['country', 'country name', 'country of residence', 'current country', 'which country', 'country region'],
+    country: ['country of residence', 'residence country', 'current country', 'country you live in', 'country', 'country name', 'country region', 'which country'],
+    intended_work_country: [
+      'which country do you intend to work from',
+      'country of employment',
+      'work location country',
+      'country where you will work',
+      'intended work location',
+      'employment country',
+      'country you intend to work from',
+      'intended employment country',
+      'intended work country'
+    ],
     full_address: ['street address', 'address line1', 'address line 1', 'address', 'street', 'address1', 'home address', 'mailing address', 'current address', 'address line one', 'street address line 1'],
+    date_of_birth: ['date of birth', 'birth date', 'birthdate', 'date of birth dob', 'dob', 'date of birth mm dd yyyy'],
+    citizenship_status: ['citizenship status', 'country of citizenship', 'nationality', 'are you a us citizen', 'are you a u s citizen', 'are you a united states citizen'],
     linkedin_url: ['linkedin', 'linkedin profile', 'linkedin url', 'urls linkedin', 'linkedin profile url', 'linked in'],
     github_url: ['github', 'github url', 'github profile', 'urls github', 'github com'],
     website: ['website', 'portfolio', 'personal website', 'portfolio url', 'urls portfolio', 'urls other', 'personal url', 'homepage', 'home page', 'personal site', 'other url', 'blog url'],
@@ -91,14 +105,30 @@
       'sponsorship required',
       'sponsorship for employment visa status',
       'need sponsorship now',
-      'need sponsorship future', 'sponsorship', 'needs sponsorship now', 'needs sponsorship in the future'
+      'need sponsorship future', 'sponsorship', 'needs sponsorship now', 'needs sponsorship in the future',
+      'will you need employer sponsorship', 'do you need employer sponsorship', 'require immigration sponsorship',
+      'require immigration support for employment', 'sponsorship to work', 'sponsorship to maintain employment authorization',
+      'will you require employment authorization sponsorship', 'need visa sponsorship in the future'
     ],
     visa_status: [
       'visa status', 'visa', 'current visa', 'work authorization status', 'current work authorization',
       'immigration status', 'work eligibility', 'work authorization type', 'visa type', 'employment authorization status',
-      'us work authorization', 'visa sponsorship status', 'work authorization'
+      'us work authorization', 'work authorization', 'immigration classification', 'current immigration category', 'current visa type', 'type of work permit'
     ],
-    open_to_relocation: ['willing to relocate', 'are you willing to relocate', 'open to relocation', 'willing to move', 'are you open to relocation', 'open to moving', 'willingness to relocate', 'relocation willingness'],
+    open_to_relocation: [
+      'are you open to relocation',
+      'are you willing to relocate',
+      'willing to relocate',
+      'relocation preference',
+      'open to relocate',
+      'would you consider relocating',
+      'open to relocation',
+      'willing to move',
+      'open to moving',
+      'willingness to relocate',
+      'relocation willingness',
+      'relocation'
+    ],
     end_client: ['end client', 'client', 'client company', 'client name', 'customer', 'customer company', 'end client company', 'client organization'],
     point_of_contact: ['point of contact', 'poc', 'contact person', 'client contact', 'hiring manager', 'recruiter contact', 'vendor contact'],
     pay_rate: ['pay rate', 'rate', 'hourly rate', 'salary', 'compensation', 'wage', 'hourly', 'bill rate', 'pay'],
@@ -149,6 +179,79 @@
     Boolean(el.closest('.react-datepicker-wrapper, [class*="datepicker" i], [class*="date-picker" i]'))
   );
 
+  const DOB_QUESTION = /\b(?:date\s*of\s*birth|birth\s*date|birthdate|d\.?\s*o\.?\s*b\.?|dob|birth\s*(?:day|month|year)|(?:day|month|year)\s*of\s*birth)\b/i;
+  const NON_DOB_QUESTION = /\b(?:place|city|country|state|certificate|name)\s*of\s*birth\b/i;
+  const isDOBQuestion = (label, hint = '', el = null) => {
+    const question = norm(`${label || ''} ${hint || ''}`);
+    const autocomplete = String(el?.getAttribute?.('autocomplete') || '').toLowerCase();
+    return (DOB_QUESTION.test(question) || /\bbday(?:-(?:day|month|year))?\b/.test(autocomplete)) &&
+      !NON_DOB_QUESTION.test(question);
+  };
+
+  const DOB_MONTHS = ['january', 'february', 'march', 'april', 'may', 'june',
+    'july', 'august', 'september', 'october', 'november', 'december'];
+
+  function dobPart(field) {
+    const autocomplete = String(field.element?.getAttribute?.('autocomplete') || '').toLowerCase();
+    const token = /\bbday-(day|month|year)\b/.exec(autocomplete);
+    if (token) return token[1];
+    const label = norm(`${field.label || ''} ${field.hint || ''}`);
+    // A full DOB label is not enough to decide which of three dropdowns this is.
+    const segment = /\b(day|month|year)\b/.exec(label);
+    if (!segment || !/\bbirth|\bdob\b/.test(label)) return null;
+    if (/\bdate of birth\b/.test(label) && !/\b(?:birth|dob) (?:day|month|year)\b|\b(?:day|month|year) of birth\b/.test(label)) return null;
+    return segment[1];
+  }
+
+  function dobSegmentValue(iso, part, field) {
+    const [year, month, day] = iso.split('-');
+    const value = part === 'day' ? day : part === 'month' ? month : year;
+    if (!isChoiceKind(field.kind)) return value;
+    const monthNumber = Number(month);
+    const acceptable = part === 'month' ? new Set([
+      String(monthNumber), month, DOB_MONTHS[monthNumber - 1], DOB_MONTHS[monthNumber - 1].slice(0, 3)
+    ]) : new Set([value, String(Number(value))]);
+    const matches = (field.options || []).filter(option => {
+      const label = norm(optionText(option));
+      const rawValue = norm(option?.value);
+      return acceptable.has(label) || acceptable.has(rawValue);
+    });
+    if (matches.length === 1) return optionText(matches[0]);
+    return field.kind === 'combobox' ? (part === 'month' ? DOB_MONTHS[monthNumber - 1] : value) : null;
+  }
+
+  // Avoid Date.parse(): it silently swaps day/month for ambiguous dates and can shift a
+  // birthday across time zones. The portal should persist the canonical YYYY-MM-DD form.
+  function normalizeDateOfBirth(value) {
+    const raw = String(value ?? '').trim();
+    let year, month, day;
+    let match = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(raw);
+    if (match) [, year, month, day] = match;
+    else {
+      match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(raw);
+      if (!match) return '';
+      [, month, day, year] = match; // Legacy US profile format only.
+    }
+    const y = Number(year), m = Number(month), d = Number(day);
+    const date = new Date(Date.UTC(y, m - 1, d));
+    const today = new Date();
+    if (y < 1900 || !Number.isFinite(date.getTime()) ||
+      date.getUTCFullYear() !== y || date.getUTCMonth() + 1 !== m || date.getUTCDate() !== d ||
+      date.getTime() > today.getTime()) return '';
+    return `${year.padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+
+  function formatDateOfBirth(iso, field) {
+    const el = field.element;
+    if (el?.type === 'date') return iso;
+    const [year, month, day] = iso.split('-');
+    const format = [field.placeholder, el?.getAttribute?.('placeholder'), el?.getAttribute?.('data-date-format'),
+      el?.getAttribute?.('aria-label')].filter(Boolean).join(' ').toLowerCase();
+    if (/dd[\s./-]*mm[\s./-]*yyyy|day[\s./-]*month[\s./-]*year/.test(format)) return `${day}/${month}/${year}`;
+    if (/mm[\s./-]*dd[\s./-]*yyyy|month[\s./-]*day[\s./-]*year/.test(format)) return `${month}/${day}/${year}`;
+    return iso; // Unspecified text format: use unambiguous ISO instead of guessing.
+  }
+
   const YES_OPTION = /^(yes|y|true|1|eligible|authorized|absolutely|of course|correct|affirmative)$/i;
   const NO_OPTION = /^(no|n|false|0|not eligible|not authorized|incorrect|never|negative)$/i;
   const optionText = o => (typeof o === 'string' ? o : String(o?.label ?? o?.value ?? '')).trim();
@@ -197,11 +300,36 @@
     return null;
   }
 
-  function pickOption(field, desired) {
+  function visaCategory(text) {
+    const value = norm(text);
+    if (/\b(?:united states|us|u s) citizen\b/.test(value)) return 'us_citizen';
+    if (/\b(?:green card|permanent resident|lawful permanent)\b/.test(value)) return 'permanent_resident';
+    if (/\bh\s*1\s*b\b/.test(value)) return 'h1b';
+    if (/\bstem\s*opt\b/.test(value)) return 'stem_opt';
+    if (/\bopt\b/.test(value)) return 'opt';
+    if (/\bf\s*1\b/.test(value)) return 'f1';
+    if (/\b(?:ead|employment authorization document)\b/.test(value)) return 'ead';
+    if (/\btn\b/.test(value)) return 'tn';
+    if (/\bj\s*1\b/.test(value)) return 'j1';
+    if (/\bo\s*1\b/.test(value)) return 'o1';
+    if (/\bl\s*1\b/.test(value)) return 'l1';
+    return '';
+  }
+
+  function pickOption(field, desired, factKey = '') {
     const d = norm(desired), opts = field.options || [];
     if (!d) return null;
     const exact = opts.filter(o => norm(optionText(o)) === d);
     if (exact.length) return exact.length === 1 ? exact[0] : null;
+    // OPT, STEM OPT, F-1 and employment visas are not interchangeable.
+    // Never fall back to a loose substring when a distinct visa category is known.
+    if (factKey === 'visa_status' || factKey === 'work_authorization') {
+      const category = visaCategory(desired);
+      if (category) {
+        const matches = opts.filter(o => visaCategory(optionText(o)) === category);
+        return matches.length === 1 ? matches[0] : null;
+      }
+    }
     const code = Object.hasOwn(US_STATES, d) ? US_STATES[d] : Object.keys(US_STATES).find(state => US_STATES[state] === d);
     const aliases = { 'united states': ['us', 'usa', 'united states of america'], 'full time': ['permanent', 'fulltime'], 'part time': ['parttime'] };
     const equivalent = Object.entries(aliases).find(([key, values]) => key === d || values.includes(d));
@@ -302,11 +430,14 @@
 
     // An explicit null means "not known"; an absent value keeps the portal default.
     const rawAuth = facts.authorized_in_usa !== undefined ? facts.authorized_in_usa : candidate.authorized_in_usa;
-    const authKnown = typeof rawAuth === 'boolean' ? rawAuth : null;
+    const authKnown = normalizeBoolean(rawAuth);
     const sponsorPrimary = facts.need_sponsorship_now !== undefined ? facts.need_sponsorship_now : candidate.need_sponsorship_now;
     const sponsorFuture = facts.need_sponsorship_future !== undefined ? facts.need_sponsorship_future : candidate.need_sponsorship_future;
-    const sponsorKnown = sponsorPrimary === true || sponsorFuture === true ? true
-      : sponsorPrimary === false && sponsorFuture === false ? false : null;
+    const nowSponsor = normalizeBoolean(sponsorPrimary);
+    const futureSponsor = normalizeBoolean(sponsorFuture);
+    const directSponsor = normalizeBoolean(facts.needs_sponsorship ?? candidate.needs_sponsorship);
+    const sponsorKnown = nowSponsor === true || futureSponsor === true ? true
+      : nowSponsor === false && futureSponsor === false ? false : directSponsor;
     const skills = facts.primary_skills || candidate.primary_skills || (Array.isArray(candidate.skills) ? candidate.skills.join(', ') : candidate.skills || '');
 
     const rawPhone = String(facts.phone || candidate.phone || '').trim();
@@ -326,9 +457,35 @@
     const visaStatus = facts.visa_status || candidate.visa_status || facts.work_authorization || candidate.work_authorization || candFacts.visa_status || candFacts.work_authorization || '';
     const workAuth = facts.work_authorization || candidate.work_authorization || facts.visa_status || candidate.visa_status || candFacts.work_authorization || candFacts.visa_status || '';
     const linkedin = facts.linkedin_url || candidate.linkedin_url || candFacts.linkedin_url || '';
-    const city = facts.current_city || candidate.current_city || candFacts.current_city || candidate.city || '';
-    const state = facts.current_state || candidate.current_state || candFacts.current_state || candidate.state || '';
-    const loc = facts.location || candidate.location || candFacts.location || [city, state].filter(Boolean).join(', ') || facts.full_address || candidate.full_address || candFacts.full_address || facts.preferred_locations || candidate.preferred_locations || '';
+    const sourceLocation = facts.current_location || facts.location || candidate.current_location || candidate.location ||
+      candFacts.current_location || candFacts.location || '';
+    const locationParts = String(sourceLocation).split(',').map(part => part.trim()).filter(Boolean);
+    const city = facts.current_city || candidate.current_city || candFacts.current_city || facts.city || candidate.city ||
+      (locationParts.length >= 2 ? locationParts[0] : '');
+    const state = facts.current_state || candidate.current_state || candFacts.current_state || facts.state || candidate.state ||
+      (locationParts.length >= 2 ? locationParts[1] : '');
+    const loc = sourceLocation || [city, state].filter(Boolean).join(', ') ||
+      facts.full_address || candidate.full_address || candFacts.full_address || '';
+    const dateOfBirth = normalizeDateOfBirth(facts.date_of_birth || facts.dob || facts.birth_date ||
+      candidate.date_of_birth || candidate.dob || candidate.birth_date || candFacts.date_of_birth || candFacts.dob);
+
+    const rawZip = String(facts.zip_code || facts.postal_code || facts.zip || candidate.zip_code || candidate.zip || candidate.postal_code || candFacts.zip_code || candFacts.postal_code || '').trim();
+    const cleanZip = (rawZip.includes(',') || /\b[a-zA-Z]{3,}\b/.test(rawZip)) ? '' : rawZip;
+
+    const rawRelocation = facts.open_to_relocation ?? candidate.open_to_relocation ?? candFacts.open_to_relocation
+      ?? facts.relocation_preference ?? candidate.relocation_preference ?? candFacts.relocation_preference
+      ?? facts.willing_to_relocate ?? candidate.willing_to_relocate ?? candFacts.willing_to_relocate;
+    let relocationVal = '';
+    const relocationBool = normalizeBoolean(rawRelocation);
+    if (relocationBool !== null) {
+      relocationVal = relocationBool;
+    } else if (typeof rawRelocation === 'string' && rawRelocation.trim()) {
+      relocationVal = rawRelocation.trim();
+    }
+
+    const intendedCountry = facts.intended_work_country || candidate.intended_work_country || candFacts.intended_work_country ||
+      facts.employment_country || candidate.employment_country || candFacts.employment_country ||
+      facts.work_location_country || candidate.work_location_country || candFacts.work_location_country || '';
 
     return {
       ...facts,
@@ -343,9 +500,12 @@
       current_state: state,
       current_location: loc,
       location: loc,
-      zip_code: facts.zip_code || candidate.zip_code || candidate.zip || candidate.postal_code || '',
-      country: facts.country ?? candidate.country ?? '',
+      zip_code: cleanZip,
+      country: facts.country ?? candidate.country ?? candFacts.country ?? (locationParts.length >= 3 ? locationParts[2] : ''),
+      intended_work_country: intendedCountry,
       full_address: facts.full_address || candidate.full_address || candidate.address || candidate.street_address || '',
+      date_of_birth: dateOfBirth,
+      citizenship_status: facts.citizenship_status || candidate.citizenship_status || facts.citizenship || candidate.citizenship || '',
       current_employer: facts.current_employer || candidate.current_employer || facts.current_company || candidate.current_company || candidate.company || '',
       current_title: facts.current_job_title || candidate.current_job_title || candidate.headline || '',
       linkedin_url: linkedin,
@@ -359,7 +519,7 @@
       needs_sponsorship: sponsorKnown,
       visa_status: visaStatus,
       work_authorization: workAuth,
-      open_to_relocation: typeof (facts.open_to_relocation ?? candidate.open_to_relocation) === 'boolean' ? (facts.open_to_relocation ?? candidate.open_to_relocation) : '',
+      open_to_relocation: relocationVal,
       end_client: facts.end_client || candidate.end_client || '',
       point_of_contact: facts.point_of_contact || candidate.point_of_contact || '',
       pay_rate: facts.pay_rate || candidate.pay_rate || '',
@@ -385,7 +545,7 @@
       employment_history: candidate.employment_history || [],
       education_history: candidate.education_history || [],
       known_authorization: rawAuth !== undefined,
-      known_sponsorship: sponsorPrimary !== undefined || sponsorFuture !== undefined
+      known_sponsorship: sponsorPrimary !== undefined || sponsorFuture !== undefined || directSponsor !== null
     };
   }
 
@@ -403,8 +563,16 @@
       if (canonical) return { key: canonical, exact: true, length: nh.length };
     }
 
+    if (isDOBQuestion(label, hint)) return { key: 'date_of_birth', exact: true, length: 13 };
+    if (/\b(?:citizen|citizenship|nationality)\b/i.test(label) && !/\bsponsor/i.test(label)) {
+      return { key: 'citizenship_status', exact: true, length: 11 };
+    }
+
     const nl = norm(label);
     if (nl === 'name') return { key: 'full_name', exact: true, length: 4 };
+    if (/\bcountry code\b/i.test(nl) && /\b(?:number|phone|mobile|tel)\b/i.test(nl)) {
+      return { key: 'phone', exact: true, length: nl.length };
+    }
 
     const matches = [];
     for (const key of Object.keys(aliases)) {
@@ -458,13 +626,28 @@
       if (field.kind !== 'checkbox' && /\b(confirm\s*email|confirm\s*password|confirmation|re-?enter|retype|repeat|verification|verify)\b/i.test(nl + ' ' + nh)) {
         return { field, status: 'manual', reason: 'Confirmation field requires the candidate.' };
       }
-      // Date pickers / availability dates
-      if (field.kind === 'text' && (isDateInput(field.element) || /\b(start date|availability date|when can you start|earliest start date)\b/i.test(nl) || field.placeholder === 'Pick date...')) {
+      // Date of birth is explicit, sensitive information: use only a supplied,
+      // validated DOB. Never infer it from age, resume dates or availability.
+      if (isDOBQuestion(field.label, field.hint, field.element)) {
+        const iso = values.date_of_birth;
+        if (!iso) return { field, factKey: 'date_of_birth', status: 'unknown', reason: 'Enter your DOB in NextKinHR or the side panel.' };
+        const part = dobPart(field);
+        if (field.kind !== 'text' && !part) return { field, factKey: 'date_of_birth', status: 'needs_review', reason: 'Unsupported DOB control; review manually.' };
+        const value = part ? dobSegmentValue(iso, part, field) : formatDateOfBirth(iso, field);
+        if (!value) return { field, factKey: 'date_of_birth', status: 'needs_review', reason: 'DOB dropdown has no unambiguous option.' };
+        return { field, factKey: 'date_of_birth', value, status: 'supported',
+          consequential: true, exactMatch: true, reason: 'Candidate-provided date of birth.' };
+      }
+      // A generic date input is not necessarily an availability question.
+      if (field.kind === 'text' && /\b(start date|availability date|when can you start|earliest start date|available to start)\b/i.test(nl + ' ' + nh)) {
         const avail = values.availability || candidate.availability || candidate.available_to_join;
         if (avail) {
           return { field, factKey: 'availability', value: String(avail), status: 'supported', reason: 'Candidate availability.' };
         }
         return { field, factKey: 'availability', status: 'unknown', reason: 'Candidate availability not provided.' };
+      }
+      if (field.kind === 'text' && isDateInput(field.element) && !resolveFact(field.label, field.hint)) {
+        return { field, status: 'needs_review', reason: 'Unrecognized date field; do not substitute availability.' };
       }
       // Legal acknowledgements and signatures:
       if (field.kind === 'checkbox' && /\b(agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare|confirm|read the above|understand)\b/i.test(nl)) {
@@ -494,17 +677,114 @@
       if (factKey === 'e_signature') {
         return { field, factKey, status: 'manual', reason: 'Candidate signature is required.' };
       }
+      // A work permit is not citizenship. Never answer a citizenship yes/no
+      // question from authorized_in_usa or from an inferred visa category.
+      if (factKey === 'citizenship_status' && isChoiceKind(field.kind) &&
+        pickBooleanOption(field.options, true) && pickBooleanOption(field.options, false)) {
+        return { field, factKey, status: 'needs_review', reason: 'Citizenship requires an explicit yes/no answer.' };
+      }
       // A known United States authorization must not answer a question about an unrelated foreign country.
       if (factKey === 'authorized_in_usa' && !isUSQuestion(nl) && !/^(?:are you (?:legally )?authorized to work|legally authorized|work authorization|authorized to work|authorized in usa)$/.test(nl || nh)) {
         return { field, factKey, status: 'unknown', reason: 'Question is not about United States work authorization.' };
       }
 
       let val = values[factKey];
+
+      // Phone formatting for international / country code prompts
+      if (factKey === 'phone' && val) {
+        const question = nl + ' ' + nh + ' ' + norm(field.placeholder);
+        if (/\b(?:\+country code|country code|\+1|international)\b/i.test(question) || /^\s*\+\s*/.test(field.placeholder || '')) {
+          const rawDigits = String(val).replace(/\D/g, '');
+          if (rawDigits.length === 10) {
+            val = '+1' + rawDigits;
+          } else if (rawDigits.length === 11 && rawDigits.startsWith('1')) {
+            val = '+' + rawDigits;
+          } else if (String(val).startsWith('+')) {
+            val = String(val);
+          } else {
+            val = '+' + rawDigits;
+          }
+        }
+      }
+
+      // Zip / Postal code validation: reject city/state pollution
+      if (factKey === 'zip_code') {
+        const strVal = String(val || '').trim();
+        const hasCityState = strVal.includes(',') || /\b[a-zA-Z]{3,}\b/.test(strVal);
+        const validPostal = /^\d{5}(?:-\d{4})?$/.test(strVal) || (!hasCityState && /^[A-Z0-9\s-]{3,10}$/i.test(strVal));
+        if (hasCityState || !validPostal || !strVal) {
+          return { field, factKey, status: 'needs_review', reason: 'Postal code contains invalid city/state or malformed value.' };
+        }
+        val = strVal;
+      }
+
+      // Intended work country requires distinct confirmation
+      if (factKey === 'intended_work_country') {
+        if (!val) {
+          return { field, factKey, status: 'needs_review', reason: 'Intended country of work requires candidate confirmation.' };
+        }
+      }
+
+      // Open to relocation preference handling
+      if (factKey === 'open_to_relocation') {
+        if (typeof val === 'string') {
+          const normStr = norm(val);
+          if (normStr === 'remote only') {
+            const opt = field.options?.find(o => norm(optionText(o)).includes('remote only') || norm(o.value).includes('remote only'));
+            if (opt) {
+              return { field, factKey, value: optionText(opt), status: 'supported', exactMatch: resolved.exact, matchLength: resolved.length, reason: 'Candidate preference matched option.' };
+            }
+            val = false;
+          } else {
+            const bool = normalizeBoolean(val);
+            if (bool !== null) {
+              val = bool;
+            }
+          }
+        }
+      }
+
+      // Sponsorship truth table
       if (factKey === 'needs_sponsorship') {
         const question = nl + ' ' + nh;
-        const now = /\b(?:now|currently|current)\b/.test(question);
-        const future = /\bfuture\b/.test(question);
-        if (now !== future) val = (candidate.confirmed_facts || candidate)[now ? 'need_sponsorship_now' : 'need_sponsorship_future'];
+        const asksNow = /\b(?:now|currently|current)\b/.test(question);
+        const asksFuture = /\bfuture\b/.test(question);
+
+        if (asksNow && !asksFuture) {
+          const specific = (candidate.confirmed_facts || candidate).need_sponsorship_now ?? candidate.need_sponsorship_now;
+          val = normalizeBoolean(specific);
+          if (val === null) {
+            return { field, factKey, status: 'needs_review', reason: 'Sponsorship now requires candidate review.' };
+          }
+        } else if (!asksNow && asksFuture) {
+          const specific = (candidate.confirmed_facts || candidate).need_sponsorship_future ?? candidate.need_sponsorship_future;
+          val = normalizeBoolean(specific);
+          if (val === null) {
+            return { field, factKey, status: 'needs_review', reason: 'Future sponsorship requires candidate review.' };
+          }
+        } else {
+          const rawNow = (candidate.confirmed_facts || candidate).need_sponsorship_now ?? candidate.need_sponsorship_now;
+          const rawFuture = (candidate.confirmed_facts || candidate).need_sponsorship_future ?? candidate.need_sponsorship_future;
+          const bNow = normalizeBoolean(rawNow);
+          const bFuture = normalizeBoolean(rawFuture);
+          const directSponsor = normalizeBoolean((candidate.confirmed_facts || candidate).needs_sponsorship ?? candidate.needs_sponsorship);
+
+          if (bNow === true || bFuture === true) {
+            val = true;
+          } else if (bNow === false && bFuture === false) {
+            val = false;
+          } else if (bNow === false && bFuture === null) {
+            return { field, factKey, status: 'needs_review', reason: 'Future sponsorship is unknown; candidate review required.' };
+          } else if (bNow === null && bFuture === false) {
+            return { field, factKey, status: 'needs_review', reason: 'Current sponsorship is unknown; candidate review required.' };
+          } else if (bNow === null && bFuture === null) {
+            if (directSponsor === true) {
+              val = true;
+            } else {
+              return { field, factKey, status: 'needs_review', reason: 'Sponsorship status is unknown; candidate review required.' };
+            }
+          }
+        }
       }
       if (val === null || val === undefined || val === '') {
         return { field, status: 'unknown', factKey, reason: 'Candidate fact is missing.' };
@@ -536,7 +816,7 @@
         if (typeof val === 'boolean') return { field, factKey, status: 'needs_review' };
         const entries = Array.isArray(val) ? val : String(val).split(/[,;|\n]+/);
         if (field.kind === 'multi-combobox') return { field, factKey, value: entries.map(String).map(value => value.trim()).filter(Boolean).slice(0, 20), status: 'supported' };
-        const choices = entries.map(entry => pickOption(field, entry)).filter(Boolean).map(optionText);
+        const choices = entries.map(entry => pickOption(field, entry, factKey)).filter(Boolean).map(optionText);
         return { field, factKey, value: choices, status: choices.length ? 'supported' : 'needs_review' };
       }
       if (field.kind === 'checkbox') return { field, factKey, status: 'needs_review' };
@@ -583,7 +863,7 @@
       const reviewRequired = isConsequential && (options?.requireCandidateReview || candidate?.requireCandidateReview);
 
       if (isChoiceKind(field.kind)) {
-        const opt = pickOption(field, val);
+        const opt = pickOption(field, val, factKey);
         if (opt) {
           return {
             field,
@@ -595,6 +875,10 @@
             matchLength: resolved.length,
             reason: reviewRequired ? 'Consequential disclosure left for candidate review.' : 'Profile fact matched an option.',
           };
+        }
+        if (['visa_status', 'work_authorization', 'citizenship_status', 'date_of_birth'].includes(factKey)) {
+          return { field, factKey, status: 'needs_review', consequential: true,
+            reason: 'No unambiguous matching option for this sensitive profile fact.' };
         }
         return aiPlan(field, 'Choose the best option for this profile fact.');
       }

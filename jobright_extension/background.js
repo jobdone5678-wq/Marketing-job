@@ -59,14 +59,13 @@ async function isQueuePaused() {
   }
 }
 
-async function pauseQueue(reason, failedToken = null) {
+async function pauseQueue(reason) {
   try {
     if (typeof chrome !== 'undefined' && chrome.storage?.local?.set) {
       await chrome.storage.local.set({
         [QUEUE_PAUSE_KEY]: {
           paused: true,
           reason,
-          failedToken: failedToken || null,
           pausedAt: Date.now(),
         },
       });
@@ -139,12 +138,13 @@ async function enqueueSubmission(item) {
     const queue = await getSubmissionQueue();
     const existingIdx = queue.findIndex(q => q.id === item.id);
     const now = Date.now();
+    const { token, ...safeItem } = item;
     const entry = {
       attempts: 0,
       createdAt: now,
       nextRetryAt: now,
       syncStatus: 'QUEUED',
-      ...item,
+      ...safeItem,
     };
     if (existingIdx >= 0) {
       queue[existingIdx] = { ...queue[existingIdx], ...entry };
@@ -325,7 +325,7 @@ async function dispatchSingleItem(item) {
       lastError: 'Missing authentication token',
       lastAttemptAt: now,
     }));
-    await pauseQueue('AUTH_REQUIRED', null);
+    await pauseQueue('AUTH_REQUIRED');
     notifyAuthRequired(item);
     return { success: false, status: 401, error: 'AUTH_REQUIRED' };
   }
@@ -388,7 +388,7 @@ async function dispatchSingleItem(item) {
       lastError: 'Authentication required (401)',
       lastAttemptAt: now,
     }));
-    await pauseQueue('AUTH_REQUIRED', token);
+    await pauseQueue('AUTH_REQUIRED');
     notifyAuthRequired(item);
     return { success: false, status: 401, error: 'AUTH_REQUIRED' };
   }
@@ -487,16 +487,7 @@ async function processSubmissionQueue() {
 
   try {
     if (await isQueuePaused()) {
-      let pauseState = null;
-      try {
-        pauseState = (await chrome.storage?.local?.get(QUEUE_PAUSE_KEY))?.[QUEUE_PAUSE_KEY];
-      } catch {}
-      const creds = await getStoredCredentials();
-      if (creds.token && pauseState?.failedToken && creds.token !== pauseState.failedToken) {
-        await unpauseQueue();
-      } else {
-        return;
-      }
+      return;
     }
 
     const now = Date.now();
@@ -733,7 +724,7 @@ async function claimApplicationStep(tabId, sender) {
   await chrome.storage.session.remove(key);
   const url = new URL(sender.url);
   const current = await getStoredCredentials();
-  if (!sameApplicationStepScope(new URL(step.formUrl), url) || step.origin !== current.origin || step.token !== current.token ||
+  if (!sameApplicationStepScope(new URL(step.formUrl), url) || workspaceOrigin(step.origin) !== workspaceOrigin(current.origin) || !current.token ||
     /(?:login|sign[-_]?in|register|creat(?:e|ing)[-_]?account)(?:$|[/_-])/i.test(url.pathname)) return null;
   const [profile, resume] = await Promise.all([
     loadSavedProfile(step.candidateId),
@@ -853,14 +844,14 @@ async function saveOutsideDiscovery(key) {
   const context = (await chrome.storage.session.get(key))[key];
   if (!context?.externalJob || context.reported || outsideDiscoveries.get(key) === context.eventKey) return;
   const current = await getStoredCredentials();
-  if (workspaceOrigin(current.origin) !== context.workspace || current.token !== context.token) return;
+  if (workspaceOrigin(current.origin) !== context.workspace || !current.token) return;
   if (outsideDiscoveries.get(key) === context.eventKey) return;
   outsideDiscoveries.set(key, context.eventKey);
   const job = context.externalJob;
   let saved = false;
   try {
     const response = await fetch(context.workspace + '/api/extension/save-external-job', {
-      ...workspaceRequest(context.token), method: 'POST', body: JSON.stringify({
+      ...workspaceRequest(current.token || context.token), method: 'POST', body: JSON.stringify({
         candidateId: intentIdPattern.test(job.candidateId) ? job.candidateId : undefined,
         title: job.jobTitle, company: job.companyName, jobUrl: job.jobUrl, portalSource: job.portalSource,
         location: job.jobLocation, department: job.department, employmentType: job.employmentType, externalId: job.externalId,
@@ -899,13 +890,13 @@ async function prepareApplication(tabId, expectedUrl, job, candidateId, submitte
     || existingTabCandidate
     || (intentIdPattern.test(activeCandidateId || '') ? activeCandidateId : 'current');
 
-  if (submittedFromPage && context?.token === token && context.workspace === workspace && (
+  if (submittedFromPage && context && context.workspace === workspace && token && (
     context.applicationUrl === jobUrl ||
     (context.awaitSubmit && sameApplicationStepScope(new URL(context.applicationUrl), url))
   )) {
     if (context.reported) return false;
     if (submissionEvidence || context.awaitSubmit) {
-      await chrome.storage.session.set({ [key]: { ...context, awaitSubmit: false, ...(submissionEvidence ? { submissionEvidence } : {}) } });
+      await chrome.storage.session.set({ [key]: { ...context, token, awaitSubmit: false, ...(submissionEvidence ? { submissionEvidence } : {}) } });
     }
     return true;
   }
@@ -938,13 +929,13 @@ async function prepareApplication(tabId, expectedUrl, job, candidateId, submitte
   }
   if (!await stillOnApplication()) throw new Error('The application tab changed. Try autofill again.');
 
-  const changed = context?.intentId !== intentId || context?.jobOrigin !== jobOrigin || context.token !== token || context.workspace !== workspace
+  const changed = context?.intentId !== intentId || context?.jobOrigin !== jobOrigin || context.workspace !== workspace
     || (context.applicationUrl && context.applicationUrl !== jobUrl)
     || context.externalJob?.jobUrl !== externalJob?.jobUrl
     || (context.candidateId || context.externalJob?.candidateId) !== (tabCandidateId || externalJob?.candidateId);
 
   if (changed || submissionEvidence || !context.applicationUrl) {
-    const tracking = changed ? { intentId, candidateId: tabCandidateId, externalJob, jobOrigin, workspace, token, eventKey: crypto.randomUUID() } : context;
+    const tracking = changed ? { intentId, candidateId: tabCandidateId, externalJob, jobOrigin, workspace, token, eventKey: crypto.randomUUID() } : { ...context, token };
     await chrome.storage.session.set({ [key]: { ...tracking, candidateId: tabCandidateId, applicationUrl: jobUrl,
       ...(submissionEvidence ? { submissionEvidence } : {}) } });
   }
@@ -1061,7 +1052,7 @@ async function recordConfirmation(message, sender) {
   const embedded = sender.frameId !== 0;
   const key = embedded ? embeddedKey(sender.tab.id) : trackedKey(sender.tab.id);
   const context = (await chrome.storage.session.get(key))[key];
-  if (!context || context.awaitSubmit || (context.launchExpiresAt && context.launchExpiresAt <= Date.now()) ||
+  if (!context || (context.launchExpiresAt && context.launchExpiresAt <= Date.now()) ||
     portalOrigin(url) !== context.jobOrigin) return false;
   if (embedded) {
     if (sender.frameId !== context.frameId || sender.documentId !== context.documentId || !sender.tab.url) return false;
@@ -1070,8 +1061,13 @@ async function recordConfirmation(message, sender) {
   }
   if (context.reported) return true;
   const current = await getStoredCredentials();
-  if (workspaceOrigin(current.origin) !== context.workspace || current.token !== context.token) return false;
+  if (workspaceOrigin(current.origin) !== context.workspace || !current.token) return false;
   const receiptUrl = cleanApplicationUrl(url);
+
+  // Once authoritative confirmation receipt is observed, clear awaitSubmit
+  if (context.awaitSubmit) {
+    await chrome.storage.session.set({ [key]: { ...context, awaitSubmit: false } });
+  }
 
   // Tab-scoped candidate identity
   const tabCandidateId = intentIdPattern.test(context.candidateId || '') ? context.candidateId
@@ -1138,7 +1134,8 @@ async function recordConfirmation(message, sender) {
     return true;
   }
 
-  return false;
+  // The confirmation was securely persisted to durable storage for background sync/retry
+  return true;
 }
 
 const connectedPanels = new Set();
@@ -1257,6 +1254,36 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) {
       void (async () => {
         await saveStorageArray(CONFLICT_QUEUE_KEY, []);
         return true;
+      })().then(reply, () => reply(false));
+      return true;
+    }
+    if (message?.type === 'NEXTKIN_RETRY_SUBMISSION_QUEUE') {
+      void (async () => {
+        await unpauseQueue();
+        await withQueueLock(async () => {
+          const queue = await getSubmissionQueue();
+          const now = Date.now();
+          for (const item of queue) {
+            item.nextRetryAt = now;
+            if (item.syncStatus === 'AUTH_REQUIRED' || item.syncStatus === 'RETRY_PENDING') {
+              item.syncStatus = 'QUEUED';
+            }
+          }
+          await saveSubmissionQueue(queue);
+        });
+        void processSubmissionQueue();
+        return true;
+      })().then(reply, () => reply(false));
+      return true;
+    }
+    if (message?.type === 'NEXTKIN_DISMISS_DEAD_LETTER_ITEM' && message.id) {
+      void (async () => {
+        return withQueueLock(async () => {
+          const dlq = await getStorageArray(DEAD_LETTER_KEY);
+          const filtered = dlq.filter(d => d.id !== message.id);
+          await saveStorageArray(DEAD_LETTER_KEY, filtered);
+          return true;
+        });
       })().then(reply, () => reply(false));
       return true;
     }

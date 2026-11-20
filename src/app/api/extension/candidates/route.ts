@@ -185,6 +185,7 @@ export async function GET(request: Request) {
         if (!fields.saved_answers || typeof fields.saved_answers !== 'object' || Array.isArray(fields.saved_answers)) {
           delete fields.saved_answers;
         }
+        delete (fields as any).raw_text;
         return [{
           ...fields,
           id: candidate.id,

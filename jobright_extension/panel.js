@@ -25,6 +25,9 @@ const profileLabels = {
   current_job_title: 'Current title',
   current_city: 'City',
   current_state: 'State',
+  current_location: 'Current location',
+  visa_status: 'Visa status',
+  work_authorization: 'Work authorization',
   zip_code: 'Postal Code',
   authorized_in_usa: 'Authorized to work in the US',
   need_sponsorship_now: 'Requires sponsorship now',
@@ -50,6 +53,31 @@ let matchRequest = 0;
 let answerReview;
 let startedApplication;
 let pendingAppliedPrompt;
+const DOB_SESSION_KEY = 'nextkinCandidateDobOverrides';
+let candidateDobOverride = null;
+
+function candidateDobKey(session = connection, profile = candidate) {
+  return session?.origin && session.user?.id && profile?.id
+    ? [session.origin, session.user.id, profile.id].join('|') : null;
+}
+
+function isoDate(value) {
+  const raw = String(value || '').trim();
+  const canonical = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(raw);
+  const legacyUS = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(raw);
+  if (!canonical && !legacyUS) return '';
+  const [year, month, day] = canonical ? canonical.slice(1) : [legacyUS[3], legacyUS[1], legacyUS[2]];
+  const date = new Date(Date.UTC(+year, +month - 1, +day));
+  return +year >= 1900 && date.getUTCFullYear() === +year && date.getUTCMonth() + 1 === +month &&
+    date.getUTCDate() === +day && date.getTime() <= Date.now()
+    ? `${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')}` : '';
+}
+
+function effectiveDob(profile = candidate) {
+  return isoDate(candidateDobOverride !== null ? candidateDobOverride :
+    profile?.confirmed_facts?.date_of_birth || profile?.confirmed_facts?.dob ||
+    profile?.date_of_birth || profile?.dob || profile?.birth_date);
+}
 
 function apiOrigin(origin) {
   return origin === 'https://nextkinhr.com' ? portalOrigin : origin;
@@ -167,6 +195,9 @@ function renderAccount() {
   }));
   if (selected) $('resume-select').value = selected.id;
   showFacts('profile-facts', Object.entries(profileLabels).map(([key, label]) => [label, candidate?.[key]]));
+  $('candidate-dob').disabled = !candidate;
+  $('candidate-dob').value = effectiveDob();
+  $('dob-save-status').textContent = '';
   $('autofill').disabled = busy || !currentForm || !candidate;
   $('auto-submit-option').hidden = !currentForm || !candidate || currentForm.frameId !== 0;
   $('ai-screening-option').hidden = !currentForm || !candidate;
@@ -310,11 +341,13 @@ function buildScopedProfile(candidate) {
   const facts = candidate.confirmed_facts || candidate;
   const allowedKeys = [
     'full_name', 'first_name', 'last_name', 'preferred_first_name',
-    'email', 'phone', 'current_city', 'current_state', 'current_location',
+    'email', 'phone', 'current_city', 'current_state', 'current_location', 'date_of_birth',
     'zip_code', 'country', 'full_address', 'linkedin_url', 'github_url',
     'website', 'current_employer', 'current_title', 'total_experience_years',
-    'primary_skills', 'authorized_in_usa', 'needs_sponsorship', 'open_to_relocation',
-    'visa_status', 'work_authorization', 'summary', 'bio', 'gender', 'race',
+    'primary_skills', 'authorized_in_usa', 'needs_sponsorship', 'need_sponsorship_now',
+    'need_sponsorship_future', 'open_to_relocation', 'relocation_preference', 'willing_to_relocate',
+    'intended_work_country', 'employment_country', 'work_location_country',
+    'visa_status', 'work_authorization', 'citizenship_status', 'summary', 'bio', 'gender', 'race',
     'veteran', 'veteran_status', 'disability', 'disability_status', 'availability',
     'salary_expectation', 'highest_education', 'school', 'graduation_year',
     'preferred_work_type', 'saved_answers', 'highest_qualification'
@@ -324,6 +357,9 @@ function buildScopedProfile(candidate) {
     if (facts[key] !== undefined) scopedFacts[key] = facts[key];
     else if (candidate[key] !== undefined) scopedFacts[key] = candidate[key];
   }
+  const dob = effectiveDob(candidate);
+  if (dob) scopedFacts.date_of_birth = dob;
+  else delete scopedFacts.date_of_birth;
   return {
     id: candidate.id,
     version: candidate.version,
@@ -424,6 +460,14 @@ async function refresh() {
 
   candidate = allProfilesMap.get(activeCandId) || allProfilesMap.values().next().value || null;
 
+  // DOB entered in the side panel is per account/candidate and only retained
+  // in trusted, memory-backed session storage. It is never sent to AI drafts.
+  const dobKey = candidateDobKey(connection, candidate);
+  const dobState = await chrome.storage.session.get(DOB_SESSION_KEY).catch(() => ({}));
+  if (number !== refreshNumber || busy) return;
+  const dobOverrides = dobState[DOB_SESSION_KEY] || {};
+  candidateDobOverride = dobKey && Object.hasOwn(dobOverrides, dobKey) ? dobOverrides[dobKey] : null;
+
   documents = resumeList.filter(doc => doc?.id).map(doc => {
     const docCand = doc.candidate_id ? allProfilesMap.get(doc.candidate_id) : null;
     const candName = doc.candidate_name || docCand?.full_name || (candidate && doc.candidate_id === candidate.id ? candidate.full_name : '');
@@ -513,6 +557,96 @@ function renderAppliedPrompt() {
   $('applied-prompt-job').textContent = [job.title, job.company].filter(Boolean).join(' · ');
 }
 
+async function renderTrackingStatus() {
+  const panel = $('tracking-status-panel');
+  if (!panel) return;
+
+  try {
+    const queueStatus = await chrome.runtime.sendMessage({ type: 'NEXTKIN_GET_SUBMISSION_QUEUE_STATUS' }).catch(() => null);
+    const tabId = currentTab?.id;
+    let context = null;
+    if (tabId != null && typeof chrome !== 'undefined' && chrome.storage?.session?.get) {
+      const keys = ['application-intent:' + tabId, 'embedded-outside-application:' + tabId];
+      const sessionData = await chrome.storage.session.get(keys).catch(() => ({}));
+      context = sessionData[keys[0]] || sessionData[keys[1]] || null;
+    }
+
+    const badge = $('tracking-badge');
+    const msg = $('tracking-message');
+    const retryBtn = $('retry-sync-btn');
+    const conflictBtn = $('resolve-conflict-btn');
+    const dismissBtn = $('dismiss-tracking-btn');
+
+    retryBtn.hidden = true;
+    conflictBtn.hidden = true;
+    dismissBtn.hidden = true;
+
+    if (queueStatus?.conflicts?.length > 0) {
+      const conflict = queueStatus.conflicts[0];
+      badge.className = 'badge badge-conflict';
+      badge.textContent = 'CONFLICT_NEEDS_RESOLVE';
+      msg.textContent = `Conflict detected for ${conflict.body?.jobTitle || 'application'}. Candidate resolution needed.`;
+      conflictBtn.hidden = false;
+      dismissBtn.hidden = false;
+      panel.hidden = false;
+      return;
+    }
+
+    if (queueStatus?.pending?.length > 0) {
+      const item = queueStatus.pending[0];
+      if (item.syncStatus === 'AUTH_REQUIRED') {
+        badge.className = 'badge badge-auth-required';
+        badge.textContent = 'AUTH_REQUIRED';
+        msg.textContent = 'Authentication session expired. Please connect to NextKinHR to sync your application.';
+        retryBtn.hidden = false;
+      } else if (item.syncStatus === 'RETRY_PENDING') {
+        badge.className = 'badge badge-retrying';
+        badge.textContent = 'RETRYING';
+        msg.textContent = `Sync retry in progress (attempt ${item.attempts || 1} of 8)…`;
+        retryBtn.hidden = false;
+      } else {
+        badge.className = 'badge badge-queued';
+        badge.textContent = 'QUEUED';
+        msg.textContent = 'Application receipt saved locally. Syncing to your NextKinHR dashboard…';
+        retryBtn.hidden = false;
+      }
+      panel.hidden = false;
+      return;
+    }
+
+    if (queueStatus?.deadLetter?.length > 0) {
+      const item = queueStatus.deadLetter[0];
+      badge.className = 'badge badge-failed';
+      badge.textContent = 'FAILED';
+      msg.textContent = `Synchronization failed: ${item.syncStatus || 'Validation error'}.`;
+      retryBtn.hidden = false;
+      dismissBtn.hidden = false;
+      panel.hidden = false;
+      return;
+    }
+
+    if (context?.reported) {
+      badge.className = 'badge badge-synced';
+      badge.textContent = 'SYNCED';
+      msg.textContent = 'Application confirmed by employer and recorded in NextKinHR.';
+      panel.hidden = false;
+      return;
+    }
+
+    if (context?.submissionEvidence) {
+      badge.className = 'badge badge-submitted';
+      badge.textContent = 'SUBMITTED';
+      msg.textContent = 'Employer confirmation receipt verified.';
+      panel.hidden = false;
+      return;
+    }
+
+    panel.hidden = true;
+  } catch {
+    panel.hidden = true;
+  }
+}
+
 function scheduleRefresh(delay = 250) {
   clearTimeout(refreshTimer);
   refreshTimer = setTimeout(async () => {
@@ -521,7 +655,10 @@ function scheduleRefresh(delay = 250) {
       return;
     }
     refreshing = true;
-    try { await refresh(); } catch (error) { notice('notice', error.message, true); }
+    try {
+      await refresh();
+      void renderTrackingStatus();
+    } catch (error) { notice('notice', error.message, true); }
     finally { refreshing = false; }
   }, delay);
 }
@@ -581,6 +718,28 @@ $('connect').addEventListener('click', async () => {
 $('open-profile').addEventListener('click', async () => {
   if (connection) await chrome.tabs.create({ url: new URL('/dashboard/candidates', apiOrigin(connection.origin)).href });
 });
+$('candidate-dob').addEventListener('change', async event => {
+  const key = candidateDobKey();
+  if (!key) return;
+  const value = event.target.value;
+  if (value && !isoDate(value)) {
+    $('dob-save-status').textContent = 'Please enter a valid date of birth.';
+    return;
+  }
+  try {
+    const stored = await chrome.storage.session.get(DOB_SESSION_KEY);
+    const overrides = { ...(stored[DOB_SESSION_KEY] || {}), [key]: value };
+    await chrome.storage.session.set({ [DOB_SESSION_KEY]: overrides });
+    if (key === candidateDobKey()) {
+      candidateDobOverride = value;
+      $('dob-save-status').textContent = value
+        ? 'DOB ready for autofill during this browser session.'
+        : 'DOB cleared for this browser session.';
+    }
+  } catch {
+    $('dob-save-status').textContent = 'Could not save DOB for this session. Try again.';
+  }
+});
 $('change-resume').addEventListener('click', () => { $('resume-options').hidden = !$('resume-options').hidden; });
 for (const id of ['first-upload', 'upload-resume']) {
   $(id).addEventListener('click', () => { $('upload-form').hidden = !$('upload-form').hidden; });
@@ -592,9 +751,17 @@ $('resume-select').addEventListener('change', async event => {
   // If the selected resume belongs to a specific candidate, switch active candidate cleanly!
   if (selected?.candidate_id && allProfilesMap.has(selected.candidate_id)) {
     candidate = allProfilesMap.get(selected.candidate_id);
+    // Never reuse another candidate's session-only DOB while switching profiles.
+    candidateDobOverride = null;
     await chrome.storage.local.set({
       activeCandidateId: selected.candidate_id
     });
+    const key = candidateDobKey();
+    const stored = await chrome.storage.session.get(DOB_SESSION_KEY).catch(() => ({}));
+    if (key === candidateDobKey()) {
+      const overrides = stored[DOB_SESSION_KEY] || {};
+      candidateDobOverride = key && Object.hasOwn(overrides, key) ? overrides[key] : null;
+    }
   }
   renderAccount();
   ++matchRequest;
@@ -986,6 +1153,36 @@ chrome.storage.onChanged.addListener((changes, area) => {
     scheduleRefresh(0);
   }
 });
+$('retry-sync-btn')?.addEventListener('click', async () => {
+  $('retry-sync-btn').disabled = true;
+  try {
+    await chrome.runtime.sendMessage({ type: 'NEXTKIN_RETRY_SUBMISSION_QUEUE' });
+  } finally {
+    $('retry-sync-btn').disabled = false;
+    void renderTrackingStatus();
+  }
+});
+
+$('resolve-conflict-btn')?.addEventListener('click', async () => {
+  $('resolve-conflict-btn').disabled = true;
+  try {
+    await chrome.runtime.sendMessage({ type: 'NEXTKIN_CLEAR_CONFLICT_QUEUE' });
+  } finally {
+    $('resolve-conflict-btn').disabled = false;
+    void renderTrackingStatus();
+  }
+});
+
+$('dismiss-tracking-btn')?.addEventListener('click', async () => {
+  $('dismiss-tracking-btn').disabled = true;
+  try {
+    await chrome.runtime.sendMessage({ type: 'NEXTKIN_CLEAR_DEAD_LETTER_QUEUE' });
+  } finally {
+    $('dismiss-tracking-btn').disabled = false;
+    void renderTrackingStatus();
+  }
+});
+
 window.addEventListener('focus', () => scheduleRefresh());
 setInterval(() => {
   if (document.visibilityState === 'visible') scheduleRefresh(0);

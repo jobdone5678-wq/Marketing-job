@@ -18,17 +18,23 @@
     ['first_name', /first[\s._-]*name|given[\s._-]*name|forename|fname/i],
     ['last_name', /last[\s._-]*name|family[\s._-]*name|surname|lname/i],
     ['full_name', /full[\s._-]*name|applicant[\s._-]*name|candidate[\s._-]*name|your[\s._-]*name|system\s*field\s*name/i],
+    ['date_of_birth', /\bdate[\s._-]*of[\s._-]*birth\b|\bbirth[\s._-]*date\b|\bbirthdate\b|\bdob\b/i],
+    ['citizenship_status', /\bcitizenship\b|\b(?:us|u\.?s\.?)\s*citizen\b|\bnationality\b/i],
+    ['needs_sponsorship', /visa\s*sponsorship|require\s*sponsorship|need\s*sponsorship|employer\s*sponsorship|immigration\s*sponsorship/i],
+    ['authorized_in_usa', /legally\s*authorized|authorized\s*to\s*work|right\s*to\s*work|work\s*eligibility/i],
+    ['visa_status', /visa[\s._-]*(?:status|type)|immigration[\s._-]*(?:status|category)|work[\s._-]*authorization[\s._-]*(?:status|type)/i],
+    // Authorization and sponsorship questions can mention an "employer"; do not
+    // treat that word as a request for the candidate's previous company name.
     ['current_employer', /current[\s._-]*(employer|company|organization|organisation)|employer|company[\s._-]*name|organization|organisation/i],
     ['current_title', /current[\s._-]*(job[\s._-]*)?title|job[\s._-]*title|headline|designation/i],
-    ['current_city', /\bcity\b|\btown\b|municipality|\blocation\b/i],
+    ['current_city', /\bcity\b|\btown\b|municipality/i],
+    ['current_location', /\blocation\b|current[\s._-]*residence|\bbased[\s._-]*in\b/i],
     ['current_state', /\bstate\b|province|\bregion\b/i],
     ['zip_code', /zip|postal/i],
     ['country', /country|nationality/i],
     ['full_address', /address|street/i],
     ['total_experience_years', /years?[\s._-]*of[\s._-]*experience|experience[\s._-]*years/i],
     ['primary_skills', /skills|technolog|stack|expertise|competenc/i],
-    ['authorized_in_usa', /legally\s*authorized|authorized\s*to\s*work|right\s*to\s*work/i],
-    ['needs_sponsorship', /visa\s*sponsorship|require\s*sponsorship/i],
     ['salary_expectation', /salary|compensation|expected\s*pay|desired\s*salary/i],
     ['highest_education', /highest[\s._-]*education|highest[\s._-]*degree|degree[\s._-]*level/i],
     ['gender', /\bgender\b|\bsex\b/i],
@@ -47,7 +53,7 @@
     el.getAttribute('name'), el.getAttribute('id'), el.getAttribute('placeholder'),
     el.getAttribute('aria-label'), el.getAttribute('data-testid'), el.getAttribute('data-test'),
     el.getAttribute('data-automation-id'), el.getAttribute('data-ui'), el.getAttribute('data-field-name'),
-    el.getAttribute('data-field-id'), el.getAttribute('title')
+    el.getAttribute('data-field-id'), el.getAttribute('title'), el.getAttribute('autocomplete')
   ].filter(Boolean).join(' '))
     .replace(/[_\-.]+/g, ' ')
     .replace(/\s+/g, ' ')
@@ -57,6 +63,14 @@
   // Best-effort canonical fact for any element, used as the base for every adapter.
   function canonicalHint(el) {
     if (!el || !el.getAttribute) return '';
+    // HTML autocomplete tokens describe the semantic field even on unknown
+    // company-hosted forms with generated input IDs.
+    const autocomplete = String(el.getAttribute('autocomplete') || '').toLowerCase().trim();
+    if (autocomplete.split(/\s+/).some(token => /^bday(?:-(?:day|month|year))?$/.test(token))) return 'date_of_birth';
+    if (autocomplete.split(/\s+/).includes('address-level2')) return 'current_city';
+    if (autocomplete.split(/\s+/).includes('address-level1')) return 'current_state';
+    if (autocomplete.split(/\s+/).includes('postal-code')) return 'zip_code';
+    if (autocomplete.split(/\s+/).includes('country-name')) return 'country';
     const desc = descriptor(el);
     if (!desc || NOT_PRIMARY.test(desc)) return '';
     for (const [key, re] of CANON_RULES) {
@@ -79,7 +93,7 @@
         const name = el.getAttribute('name') || '';
         if (name === '_systemfield_name') return 'full_name';
         if (name === '_systemfield_email') return 'email';
-        if (name === '_systemfield_location') return 'current_city';
+        if (name === '_systemfield_location') return 'current_location';
         if (name === '_systemfield_phone') return 'phone';
         if (/urls\[([^\]]+)\]/i.test(name)) {
           const key = RegExp.$1.toLowerCase();
@@ -104,7 +118,7 @@
         if (id === 'email' || name === 'email') return 'email';
         if (id === 'phone' || name === 'phone') return 'phone';
         if (id === 'country' || name === 'country') return 'country';
-        if (id === 'candidate-location' || /job_application\[location\]/i.test(name)) return 'current_city';
+        if (id === 'candidate-location' || /job_application\[location\]/i.test(name)) return 'current_location';
         if (id === 'gender' || name === 'gender') return 'gender';
         if (id === 'veteran_status' || /veteran/i.test(name)) return 'veteran';
         if (id === 'hispanic_ethnicity' || /hispanic/i.test(name)) return 'race';
@@ -125,7 +139,7 @@
         if (name === 'email') return 'email';
         if (name === 'phone') return 'phone';
         if (name === 'org') return 'current_employer';
-        if (name === 'location') return 'current_city';
+        if (name === 'location') return 'current_location';
         if (/urls\[linkedin\]/i.test(name)) return 'linkedin_url';
         if (/urls\[github\]/i.test(name)) return 'github_url';
         if (/urls\[portfolio\]|urls\[website\]|urls\[other\]/i.test(name)) return 'website';
@@ -148,11 +162,11 @@
         if (desc.includes('legalname_lastname') || desc.includes('legalnamesection_lastname')) return 'last_name';
         if (desc.includes('email') || desc.includes('emailaddress')) return 'email';
         if (desc.includes('phone') || desc.includes('phonenumber')) return 'phone';
-        if (desc.includes('addresssection_addressline1')) return 'full_address';
+        if (desc.includes('addresssection_addressline1') || desc.includes('addresssection_addressline2')) return 'full_address';
         if (desc.includes('addresssection_city')) return 'current_city';
-        if (desc.includes('addresssection_countryregion')) return 'current_state';
+        if (desc.includes('addresssection_countrysubdivisioncode') || desc.includes('countrysubdivision') || desc.includes('subdivision')) return 'current_state';
+        if (desc.includes('addresssection_countryregion') || desc.includes('countrydropdown') || desc.includes('addresssection_country')) return 'country';
         if (desc.includes('addresssection_postalcode')) return 'zip_code';
-        if (desc.includes('countrydropdown')) return 'country';
         if (desc.includes('sourceprompt') || desc.includes('source')) return 'how_heard';
         if (desc.includes('gender')) return 'gender';
         if (desc.includes('veteran')) return 'veteran';

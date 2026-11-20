@@ -818,6 +818,9 @@
       const key = answerKey(field);
 
       if (plan.status === 'ai' || plan.status === 'needs_review' || plan.status === 'unknown') {
+        // Missing DOB, citizenship and work-authorization facts must not be
+        // guessed from a resume or replaced with an unrelated generic answer.
+        if (['date_of_birth', 'citizenship_status', 'authorized_in_usa', 'needs_sponsorship', 'visa_status', 'work_authorization'].includes(plan.factKey)) continue;
         if (label.length < 2 || key.length > 300 || manualQuestion.test(label) || writer.read(field)) continue;
         const choices = plan.options?.length ? plan.options : (await writer.readChoices(field, () => location.href === expectedUrl))
           .map(option => option.label);
@@ -851,22 +854,26 @@
 
         if (mapping.isChoiceKind(field.kind)) {
           const targetVisa = values.visa_status || candidate.visa_status || values.work_authorization || candidate.work_authorization || '';
-          if (/(visa status|immigration status|work authorization status|work authorization type|type of visa)/i.test(ql) || (/(authoriz|visa)/i.test(ql) && options.some(o => /citizen|green card|permanent|h-?1b|opt|stem|f-?1|ead|sponsor/i.test(o)))) {
+          if (!/sponsor|citizenship|citizen\?/i.test(ql) &&
+            (/(visa status|immigration status|work authorization status|work authorization type|type of visa)/i.test(ql) ||
+              (/(authoriz|visa)/i.test(ql) && options.some(o => /citizen|green card|permanent|h-?1b|opt|stem|f-?1|ead/i.test(o))))) {
             if (targetVisa) {
               const tvNorm = targetVisa.toLowerCase();
-              autoValue = options.find(o => {
+              const matches = options.filter(o => {
                 const ot = String(o).toLowerCase();
-                if (tvNorm.includes('citizen') && ot.includes('citizen')) return true;
-                if ((tvNorm.includes('green card') || tvNorm.includes('permanent')) && (ot.includes('green card') || ot.includes('permanent'))) return true;
-                if ((tvNorm.includes('h-1b') || tvNorm.includes('h1b')) && (ot.includes('h-1b') || ot.includes('h1b'))) return true;
-                if ((tvNorm.includes('opt') || tvNorm.includes('stem') || tvNorm.includes('f-1')) && (ot.includes('opt') || ot.includes('stem') || ot.includes('f-1') || ot.includes('ead'))) return true;
-                if (tvNorm.includes('tn') && ot.includes('tn')) return true;
-                if (tvNorm.includes('sponsor') && ot.includes('sponsor')) return true;
-                return ot.includes(tvNorm) || tvNorm.includes(ot);
-              }) || options.find(o => new RegExp(`^${targetVisa}\\b`, 'i').test(o)) || targetVisa;
-              fromFact = true;
+                if (/stem\s*opt/i.test(tvNorm)) return /stem\s*opt/i.test(ot);
+                if (/\bopt\b/i.test(tvNorm)) return /\bopt\b/i.test(ot) && !/stem/i.test(ot);
+                if (/h-?1b/i.test(tvNorm)) return /h-?1b/i.test(ot);
+                if (/f-?1\b/i.test(tvNorm)) return /f-?1\b/i.test(ot) && !/opt|stem/i.test(ot);
+                if (/green card|permanent resident/i.test(tvNorm)) return /green card|permanent resident/i.test(ot);
+                return ot.trim() === tvNorm.trim();
+              });
+              if (matches.length === 1) {
+                autoValue = matches[0];
+                fromFact = true;
+              }
             }
-          } else if (/(authoriz|eligible|legal right|citizen)/i.test(ql) && !/(require|need|sponsor)/i.test(ql)) {
+          } else if (/(authoriz|eligible|legal right)/i.test(ql) && !/(require|need|sponsor|citizen)/i.test(ql)) {
             if (values.authorized_in_usa !== undefined && values.authorized_in_usa !== null && values.authorized_in_usa !== '') {
               const affirmative = values.authorized_in_usa === true || values.authorized_in_usa === 'true';
               autoValue = options.find(o => mapping.normalizeBoolean(o) === affirmative) || (affirmative ? options.find(o => /^yes\b/i.test(o)) : options.find(o => /^no\b/i.test(o))) || affirmative;

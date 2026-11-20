@@ -70,6 +70,18 @@
           <button id="mark-applied" class="small-button primary" type="button">Mark as applied</button>
         </div>
       </section>
+      <section id="tracking-status-panel" aria-label="Application tracking status" hidden>
+        <div class="tracking-heading">
+          <h3 id="tracking-title">Application Status</h3>
+          <span id="tracking-badge" class="badge"></span>
+        </div>
+        <p id="tracking-message" class="tracking-message"></p>
+        <div id="tracking-actions" class="tracking-actions">
+          <button id="retry-sync-btn" class="small-button primary" type="button" hidden>Retry Sync</button>
+          <button id="resolve-conflict-btn" class="small-button" type="button" hidden>Resolve Conflict</button>
+          <button id="dismiss-tracking-btn" class="small-button" type="button" hidden>Dismiss</button>
+        </div>
+      </section>
       <p id="notice" role="status" hidden></p>
       <section id="results" class="results" aria-labelledby="results-title" hidden>
         <div class="results-heading"><h2 id="results-title"></h2><span id="verified" class="badge">Verified</span></div>
@@ -98,6 +110,12 @@
       <details id="profile-panel" hidden>
         <summary>Your Autofill Information</summary>
         <dl id="profile-facts"></dl>
+        <div class="dob-field">
+          <label for="candidate-dob">Date of birth (optional)</label>
+          <input id="candidate-dob" type="date" autocomplete="bday" aria-describedby="dob-privacy-note">
+          <p id="dob-privacy-note">Used only when you click Autofill. Changes here are kept for this browser session; update your NextKinHR profile for permanent storage.</p>
+          <p id="dob-save-status" role="status" aria-live="polite"></p>
+        </div>
         <button id="open-profile" class="link" type="button">Open My Profile</button>
       </details>
     </section>

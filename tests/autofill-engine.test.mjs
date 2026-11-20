@@ -663,3 +663,95 @@ test('Part 6: Dependent controls (Country -> State) - handles async enablement a
   assert.equal(stateSelect.value, 'CA');
 });
 
+test('Part 7: Complex ATS & Workday Field Mapping Matrix (Relocation, Phone Country Code, Address Hierarchy, Zip Sanitization)', async () => {
+  const candidate = {
+    full_name: 'Bhargav Reddy',
+    phone: '(512) 555-0187',
+    current_city: 'Austin',
+    current_state: 'TX',
+    full_address: 'Austin, TX',
+    authorized_in_usa: true,
+    confirmed_facts: {
+      phone: '(512) 555-0187',
+      country: 'United States',
+      zip_code: '78701',
+      open_to_relocation: true
+    }
+  };
+
+  const fields = [
+    {
+      key: 'f1',
+      label: 'Are you open to relocation?',
+      kind: 'select',
+      options: [
+        { label: '— Make a Selection —', value: '' },
+        { label: 'Yes', value: 'Yes' },
+        { label: 'No', value: 'No' }
+      ]
+    },
+    {
+      key: 'f2',
+      label: 'Number (Please include "+country code" before your number, e.g.+8612345678)',
+      kind: 'text',
+      placeholder: 'e.g. +1 555-0100'
+    },
+    {
+      key: 'f3',
+      label: 'Country of Residence*',
+      hint: 'addressSection_countryRegion',
+      kind: 'select',
+      options: [
+        { label: '— Make a Selection —', value: '' },
+        { label: 'United States of America', value: 'USA' },
+        { label: 'Canada', value: 'CAN' }
+      ]
+    },
+    {
+      key: 'f4',
+      label: 'State/Province',
+      hint: 'addressSection_countrySubdivisionCode',
+      kind: 'select',
+      options: [
+        { label: 'Please select a country', value: '' },
+        { label: 'Texas', value: 'TX' }
+      ]
+    },
+    {
+      key: 'f5',
+      label: 'Zip/Postal Code*',
+      hint: 'addressSection_postalCode',
+      kind: 'text'
+    }
+  ];
+
+  const plans = mapping.planFill(fields, candidate);
+  assert.equal(plans.length, 5);
+
+  // 1. Relocation dropdown
+  assert.equal(plans[0].factKey, 'open_to_relocation');
+  assert.equal(plans[0].status, 'supported');
+  assert.equal(plans[0].value, 'Yes');
+
+  // 2. Phone with international +country code
+  assert.equal(plans[1].factKey, 'phone');
+  assert.equal(plans[1].status, 'supported');
+  assert.equal(plans[1].value, '+15125550187');
+
+  // 3. Country of residence dropdown
+  assert.equal(plans[2].factKey, 'country');
+  assert.equal(plans[2].status, 'supported');
+  assert.equal(plans[2].value, 'United States of America');
+
+  // 4. State/Province dropdown
+  assert.equal(plans[3].factKey, 'current_state');
+  assert.equal(plans[3].status, 'supported');
+  assert.equal(plans[3].value, 'Texas');
+
+  // 5. Zip/Postal Code (must be 5 digits, never polluted with "Austin, TX")
+  assert.equal(plans[4].factKey, 'zip_code');
+  assert.equal(plans[4].status, 'supported');
+  assert.equal(plans[4].value, '78701');
+  assert.notEqual(plans[4].value, 'Austin, TX');
+});
+

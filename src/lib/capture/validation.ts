@@ -1,7 +1,9 @@
 import { applicationConfirmationPath, applicationUrlKey } from '../jobs/application-state';
 
 const confirmationHeading =
-  /^(?:thank you for (?:applying|your application|submitting your application)|(?:your )?(?:job )?application (?:has been |was |is )?(?:(?:successfully )?(?:submitted|received|sent|confirmed)|successful)|(?:(?:you (?:have )?|you've )?successfully submitted|(?:you (?:have )?|you've )submitted) (?:your |the )?(?:job )?application|submission (?:received|confirmed|successful)|(?:we(?: have|'ve)?) (?:successfully )?received your application|(?:you(?: have|'ve) )?successfully applied|(?:you (?:have )?|you've )?applied successfully)(?=$|[.!,:]|\s+(?:to|for|successfully)\b)/i;
+  /^(?:(?:thank you|thanks) for (?:applying|your application|submitting your application|your interest(?: in (?:our company|[\w\s]+))?)|(?:your )?(?:job )?(?:applications?|submissions?) (?:has been |have been |was |is |were )?(?:(?:successfully )?(?:submitted|received|sent|confirmed)|successful)|(?:(?:you (?:have )?|you've )?successfully submitted|(?:you (?:have )?|you've )submitted) (?:your |the )?(?:job )?(?:applications?|submissions?)|submissions? (?:received|confirmed|successful)|(?:we(?: have|'ve)?) (?:successfully )?received (?:your |the )?(?:job )?(?:applications?|submissions?)|(?:you(?: have|'ve) )?successfully applied|(?:you (?:have )?|you've )?applied successfully)(?=$|[.!,:]|\s+(?:to|for|successfully|at|with|and|by|on|in|we)\b)/i;
+const receiptPhrase =
+  /\b(?:(?:we(?: have|'ve)?) (?:successfully )?received (?:your |the )?(?:job )?(?:applications?|submissions?)|(?:your )?(?:job )?(?:applications?|submissions?) (?:has been|have been|was|is) (?:successfully )?(?:received|submitted)|thank you for (?:applying|your application|your interest(?: in (?:our company|[\w\s]+))?))\b/i;
 const pathEvidencePrefix = 'URL confirmation path: ';
 
 function receiptPostingMatches(receipt: URL, posting: URL) {
@@ -61,7 +63,7 @@ export function allowedCaptureUrl(
       new URL(expectedKey).hash ||
       new URL(observedKey).hash ||
       !['confirmed', 'submitted'].includes(status || '') ||
-      !confirmationHeading.test(evidence.trim()) ||
+      (!confirmationHeading.test(evidence.trim()) && !receiptPhrase.test(evidence.trim())) ||
       !applicationConfirmationPath.test(current.pathname) ||
       !receiptPostingMatches(new URL(observedKey), new URL(expectedKey))
     )
@@ -83,7 +85,7 @@ export function validateObservation(status: string, evidence: string) {
       )
     )
       return false;
-    if (confirmationHeading.test(text)) return true;
+    if (confirmationHeading.test(text) || receiptPhrase.test(text)) return true;
     if (
       text.startsWith(pathEvidencePrefix) &&
       applicationConfirmationPath.test(text.slice(pathEvidencePrefix.length))

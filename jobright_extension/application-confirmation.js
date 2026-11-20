@@ -3,16 +3,20 @@
   globalThis.nextkinConfirmationObserver = true;
 
   const confirmationPatterns = [
-    /^(?:(?:congratulations|congrats|thank you|thanks)[!.,:]*\s+)?(?:(?:thank you|thanks) for (?:applying|your application|submitting your application|your interest)|(?:(?:thank you|thanks)[!.,:]*\s+)?(?:your |the )?(?:job )?(?:applications?|submissions?)\s+(?:(?:has been |have been |was |is |were )?(?:(?:successfully )?(?:submitted|received|sent|confirmed|complete|completed)|successful)|(?:has been |have been |was |is |were )(?:received|submitted|sent|confirmed))|(?:(?:you (?:have )?|you've )?successfully submitted|(?:you (?:have )?|you've )submitted) (?:your |the )?(?:job )?(?:applications?|submissions?)|submissions? (?:received|confirmed|successful|complete|completed)|(?:we(?: have|'ve)?) (?:successfully )?received (?:your |the )?(?:job )?(?:applications?|submissions?)|(?:you(?: have|'ve) )?successfully applied|(?:you (?:have )?|you've )?applied successfully)(?=$|[.!,:]|\s+(?:to|for|successfully|at|with|and|by|on|in)\b)/i,
+    /^(?:(?:congratulations|congrats|thank you|thanks)[!.,:]*\s+)?(?:(?:thank you|thanks) for (?:applying|your application|submitting your application)|(?:(?:thank you|thanks)[!.,:]*\s+)?(?:your |the )?(?:job )?(?:applications?|submissions?)\s+(?:(?:has been |have been |was |is |were )?(?:(?:successfully )?(?:submitted|received|sent|confirmed|complete|completed)|successful)|(?:has been |have been |was |is |were )(?:received|submitted|sent|confirmed))|(?:(?:you (?:have )?|you've )?successfully submitted|(?:you (?:have )?|you've )submitted) (?:your |the )?(?:job )?(?:applications?|submissions?)|submissions? (?:received|confirmed|successful|complete|completed)|(?:we(?: have|'ve)?) (?:successfully )?received (?:your |the )?(?:job )?(?:applications?|submissions?)|(?:you(?: have|'ve) )?successfully applied|(?:you (?:have )?|you've )?applied successfully)(?=$|[.!,:]|\s+(?:to|for|successfully|at|with|and|by|on|in|we)\b)/i,
     /^(?:application submitted|application received|application have been received|application has been received|applications? (?:submitted|received|confirmed|complete|completed)|submissions? (?:received|confirmed|successful|complete|completed)|successfully submitted (?:your |the )?application|you (?:have )?applied successfully|you've applied successfully)(?=$|[.!,:]|\s+)/i,
-    /\b(?:(?:thank you|thanks) for (?:applying|your application|your interest)|(?:we|we've) received your (?:application|submission)|(?:application|submission) (?:has been|have been|was) received)\b/i
+    /\b(?:(?:thank\s+you|thanks)\s+for\s+(?:your\s+)?interest(?:(?:\s+in\s+)(?:our\s+company|[^,.:;!?]+?))?[,.\s]+)?(?:we(?: have|'ve)?\s+)?(?:successfully\s+)?received\s+(?:your|the)\s+(?:job\s+)?(?:applications?|submissions?)\b/i,
+    /\b(?:(?:thank you|thanks) for (?:applying|your application)|(?:we(?: have|'ve)?) (?:successfully )?received (?:your |the )?(?:job\s+)?(?:applications?|submissions?)|(?:job\s+)?(?:applications?|submissions?) (?:has been|have been|was|is) (?:successfully )?(?:received|submitted))\b/i
   ];
+
+  const appReceiptPattern = /\b(?:(?:we(?: have|'ve)?\s+(?:successfully\s+)?received\s+(?:your\s+|the\s+)?(?:job\s+)?(?:applications?|submissions?))|(?:(?:your\s+|the\s+)?(?:job\s+)?(?:applications?|submissions?)\s+(?:has been|have been|was|is)\s+(?:successfully\s+)?(?:received|submitted|confirmed))|(?:thank\s+you\s+for\s+(?:applying|your\s+application|submitting\s+your\s+application))|(?:thank\s+you\s+for\s+your\s+interest[,\s]+(?:in\s+our\s+company[,\s]*)?(?:we\s+have\s+received\s+your\s+application)?)|(?:applications?\s+received|applications?\s+submitted))\b/i;
+  const standaloneNonJob = /\b(?:thank\s+you\s+for\s+(?:taking|completing|submitting)\s+(?:our|the|this)?\s*(?:survey|questionnaire|feedback)|(?:survey|questionnaire|feedback)\s+(?:response\s+)?(?:has been\s+)?(?:submitted|received|recorded|complete|completed)|newsletter\s+sign[-_]?up|subscription\s+confirmed|order\s+confirmed|purchase\s+confirmed|order\s+summary|ticket\s+created|donation\s+received)\b/i;
+  const nonJobContext = /\b(?:contact\s+us|customer\s+support|newsletter|survey|feedback|subscribe|subscription|donation|cart|checkout|order\s+confirmed|purchase|order\s+summary|ticket\s+created)\b/i;
 
   const confirmationUrlPattern = /\/(?:application\/(?:confirmation|received|complete|thank[-_]?you)|confirmation|thank[-_]?you(?:[-_]for[-_]applying)?|thanks|applied|application[-_](?:submitted|success|received|complete)|submission[-_]success|success|submitted)\/?$/i;
 
   const statusSelectors = '[data-qa="job-application-success"], [data-automation-id="applicationSubmitted"], [data-automation-id="congratulations"], [data-testid="application-submitted"], [data-testid*="application-success" i], [class*="application-confirmation" i], [class*="application-submitted" i], #application_confirmation, [role="status"], [role="alert"], [role="dialog"], [aria-live="polite"], [aria-live="assertive"], dialog[open], [data-testid*="success" i], [data-testid*="confirmation" i], [class*="toast" i], [class*="snackbar" i]';
   const atsSuccessSelector = '[data-qa="job-application-success"], [data-automation-id="applicationSubmitted"], [data-automation-id="congratulations"], [data-testid="application-submitted"], [data-testid*="application-success" i], #application_confirmation, .application-confirmation, .application-submitted';
-  const nonJobContext = /\b(?:contact\s+us|customer\s+support|newsletter|survey|feedback|subscribe|subscription|donation|cart|checkout|order\s+confirmed|purchase|order\s+summary|ticket\s+created)\b/i;
 
   // Broaden hiddenSelectors to exclude footers, headers, navigation, and wizard progress bars
   const hiddenSelectors = [
@@ -218,9 +222,13 @@
 
   function confirmationEvidence(value, patterns = confirmationPatterns) {
     const text = value?.replace(/\s+/g, ' ').trim().replace(/^success[!.:]\s*/i, '');
-    if (!text || text.length > 320) return null;
-    if (nonJobContext.test(text)) return null;
+    if (!text || text.length > 500) return null;
     if (/\b(?:if|once|after|when|before|until|unless)\b.{0,50}\b(?:application|submit(?:ted)?|receiv(?:e|ed))\b|\b(?:not (?:been )?(?:submitted|received|sent)|unable to submit|submission failed|not successful)\b/i.test(text)) return null;
+
+    const hasAppReceipt = appReceiptPattern.test(text);
+    if (standaloneNonJob.test(text) && !hasAppReceipt) return null;
+    if (!hasAppReceipt && nonJobContext.test(text)) return null;
+
     for (const pattern of patterns) {
       const match = pattern.exec(text);
       if (match) return match[0];
@@ -380,6 +388,9 @@
 
     // 8. Terminal Route URL check
     const pathname = (window.location?.pathname || '').toLowerCase();
+    const bodyText = document.body?.innerText || document.body?.textContent || '';
+    if (standaloneNonJob.test(bodyText) && !appReceiptPattern.test(bodyText)) return null;
+    if (/\b(?:newsletter|subscribe|subscription|survey|feedback|donation|cart|checkout|order)\b/i.test(pathname)) return null;
     if (confirmationUrlPattern.test(pathname)) {
       const { requisitionId, confirmationId } = extractRequisitionAndConfirmationId(ats);
       return { status: 'SUBMITTED', evidence: `URL confirmation path: ${pathname}`, atsDetected: hasAtsSelector || ats !== 'generic', atsProvider: ats, requisitionId, confirmationId };

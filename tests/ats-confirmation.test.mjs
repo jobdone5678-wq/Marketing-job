@@ -180,6 +180,49 @@ function createSandbox({
   };
 }
 
+test('ATS Confirmation: Visiting Angels confirmation heading + receipt with survey invitation', () => {
+  const { sandbox, MockElement, run } = createSandbox({
+    url: 'https://visitingangels.careerportal.com/confirmation',
+    title: "You're ready for the next step"
+  });
+
+  const heading = new MockElement('H1', {}, "You're ready for the next step.");
+  const confirmationMsg = new MockElement('P', { class: 'confirmation-message' }, 'Thank you for your interest in our company, we have received your application. Please complete our brief survey to help us process your candidacy.');
+  sandbox.document.body.appendChild(heading);
+  sandbox.document.body.appendChild(confirmationMsg);
+
+  const messages = run();
+  assert.equal(messages.length, 1, 'Visiting Angels confirmation must be detected even with follow-up survey invitation');
+  assert.equal(messages[0].status, 'SUBMITTED');
+  assert.ok(messages[0].evidence.toLowerCase().includes('received your application'));
+});
+
+test('ATS Confirmation: Negative check - standalone survey completion is rejected', () => {
+  const { sandbox, MockElement, run } = createSandbox({
+    url: 'https://feedback.surveyportal.com/survey-complete',
+    title: 'Survey Completed'
+  });
+
+  const surveyMsg = new MockElement('DIV', { class: 'survey-response' }, 'Thank you for taking our survey! Your feedback has been recorded.');
+  sandbox.document.body.appendChild(surveyMsg);
+
+  const messages = run();
+  assert.equal(messages.length, 0, 'Standalone survey completion must not trigger application confirmation');
+});
+
+test('ATS Confirmation: Negative check - newsletter subscription is rejected', () => {
+  const { sandbox, MockElement, run } = createSandbox({
+    url: 'https://company.com/newsletter/thanks',
+    title: 'Newsletter Subscription'
+  });
+
+  const newsMsg = new MockElement('DIV', {}, 'Thank you for subscribing to our newsletter! Subscription confirmed.');
+  sandbox.document.body.appendChild(newsMsg);
+
+  const messages = run();
+  assert.equal(messages.length, 0, 'Newsletter signup must not trigger application confirmation');
+});
+
 test('ATS Confirmation: Workday verified terminal selector and requisition extraction', () => {
   const { sandbox, MockElement, run } = createSandbox({
     url: 'https://company.myworkdayjobs.com/en-US/Careers/job/Austin/Software-Engineer_JR10928/apply',

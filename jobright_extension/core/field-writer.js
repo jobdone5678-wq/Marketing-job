@@ -65,7 +65,9 @@
   const selected = el => (el.tagName === 'INPUT' && (el.type === 'radio' || el.type === 'checkbox') ? checked(el) : (
     checked(el) || el.getAttribute('aria-selected') === 'true' ||
     el.getAttribute('aria-pressed') === 'true' || el.getAttribute('data-selected') === 'true' ||
-    el.getAttribute('data-state') === 'checked' || (el.matches && el.matches('.active, .selected, .is-selected'))
+    el.getAttribute('data-state') === 'checked' || el.getAttribute('data-state') === 'on' ||
+    el.getAttribute('data-state') === 'active' || el.getAttribute('data-active') === 'true' ||
+    (el.matches && el.matches('.active, .selected, .is-selected'))
   ));
 
   const YES_REGEX = /^(yes|y|true|1|eligible|authorized|absolutely|of course|correct|affirmative|immediately|available)$/i;
@@ -241,7 +243,12 @@
     const target = findClickableTarget(el) || el;
     if (el.tagName !== 'INPUT') {
       if (selected(el)) return true;
-      try { return click(target); } catch { return false; }
+      try {
+        const ok = click(target);
+        notify(el);
+        if (target !== el) notify(target);
+        return ok;
+      } catch { return false; }
     }
 
     // Dispatch PointerEvent and Click on target
@@ -778,7 +785,7 @@
 
       if (isSelect) {
         const validOpts = Array.from(cur.options || []).filter(o => o.value && !placeholder.test(o.label || o.text || o.textContent || ''));
-        if (field.options?.length && !validOpts.length) return false;
+        if (!validOpts.length && cur.options && cur.options.length <= 1) return false;
       }
       return true;
     };
