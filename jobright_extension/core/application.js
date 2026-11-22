@@ -1206,23 +1206,29 @@
       learned: !!receipt.learned,
     }));
     const input = findResumeInput();
-    if (input?.isConnected && resume && !input.files?.length && location.href === expectedUrl) {
-      try {
-        if (!resume.base64) throw new Error('No resume data');
-        const bytes = Uint8Array.from(atob(resume.base64), char => char.charCodeAt(0));
-        const transfer = new DataTransfer();
-        transfer.items.add(new File([bytes], resume.filename, { type: resume.mimeType }));
-        input.files = transfer.files;
-        input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-        const file = input.files?.[0];
-        if (file?.name === resume.filename) {
-          const metadata = resumeMetadata(file);
-          if (metadata && file.size <= 2 * 1024 * 1024) fileEvidence.set(file, { ...metadata, base64: resume.base64 });
-          filled.push({ key: 'resume-file', label: 'Resume file', value: resume.filename });
-        }
-      } catch {
-        // A portal can require a manual upload. Leave that field in the total.
+    if (input?.isConnected && !input.files?.length && location.href === expectedUrl) {
+      if (resume?.base64) {
+        try {
+          const bytes = Uint8Array.from(atob(resume.base64), char => char.charCodeAt(0));
+          const transfer = new DataTransfer();
+          transfer.items.add(new File([bytes], resume.filename || 'Resume.pdf', { type: resume.mimeType || 'application/pdf' }));
+          input.files = transfer.files;
+          input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          const file = input.files?.[0];
+          if (file?.name === resume.filename) {
+            const metadata = resumeMetadata(file);
+            if (metadata && file.size <= 2 * 1024 * 1024) fileEvidence.set(file, { ...metadata, base64: resume.base64 });
+            filled.push({ key: 'resume-file', label: 'Resume file', value: resume.filename });
+          }
+        } catch {}
+      } else if (writer?.attachResumeFile) {
+        try {
+          const attachRes = await writer.attachResumeFile(input, candidate?.id);
+          if (attachRes?.file) {
+            filled.push({ key: 'resume-file', label: 'Resume file', value: attachRes.expected });
+          }
+        } catch {}
       }
     }
     const filledKeys = new Set(filled.map(f => f.key));

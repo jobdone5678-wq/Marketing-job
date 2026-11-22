@@ -906,6 +906,53 @@
     });
   }
 
+  async function attachResumeFile(fileInput, candidateId) {
+    if (!fileInput || fileInput.type !== 'file') return null;
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return null;
+
+    const res = await new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        { type: 'NEXTKIN_FETCH_RESUME_FILE', candidateId },
+        (response) => {
+          if (chrome.runtime?.lastError) {
+            resolve({ error: chrome.runtime.lastError.message });
+          } else {
+            resolve(response || { error: 'No response' });
+          }
+        }
+      );
+    });
+
+    if (!res || res.error || !res.base64) {
+      return null;
+    }
+
+    try {
+      const binaryStr = atob(res.base64);
+      const len = binaryStr.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+
+      const filename = res.filename || 'Resume.pdf';
+      const mimeType = res.mimeType || 'application/pdf';
+      const file = new File([bytes], filename, { type: mimeType, lastModified: Date.now() });
+
+      if (typeof DataTransfer !== 'undefined') {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        fileInput.files = dt.files;
+        fileInput.dispatchEvent(new Event('input', { bubbles: true }));
+        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+        return { expected: filename, file };
+      }
+    } catch (err) {
+      console.warn('[NextKin] Failed to attach resume file:', err);
+    }
+    return null;
+  }
+
   async function applyFill(plans, session) {
     const receipts = [];
     for (const plan of plans) {
@@ -936,6 +983,13 @@
         if (equals(previous, option?.label ?? value)) write = { expected: previous };
       } else if (hasAnswer && isProfileFact && equals(previous, value)) {
         write = { expected: previous };
+      } else if (field.kind === 'resume-file') {
+        const attachRes = await attachResumeFile(currentEl);
+        if (attachRes) {
+          write = { expected: attachRes.expected };
+          receipts.push({ field, writtenValue: attachRes.expected });
+        }
+        continue;
       } else if (field.kind === 'combobox') {
         write = await fillCombo(field, value, session.isCurrent);
       } else if (field.kind === 'multi-combobox') {
@@ -974,12 +1028,14 @@
 
   root.NextkinFieldWriter = {
     applyFill,
+    attachResumeFile,
     read,
     readChoices,
     setCheckbox,
     setRadio,
     setChoice,
     fillCombo,
+    fillCombobox: fillCombo,
     recordPreservedValues,
     getPreservedValue,
     clearPreservedValues,

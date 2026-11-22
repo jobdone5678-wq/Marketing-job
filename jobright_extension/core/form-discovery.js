@@ -25,6 +25,47 @@
       .trim();
   }
 
+  function querySelectorAllDeep(selector, rootNode = document) {
+    const results = [];
+    function search(node) {
+      if (!node) return;
+      if (node.querySelectorAll) {
+        try {
+          const matches = node.querySelectorAll(selector);
+          for (let i = 0; i < matches.length; i++) {
+            results.push(matches[i]);
+          }
+        } catch {}
+      }
+      const children = node.querySelectorAll ? node.querySelectorAll('*') : [];
+      for (let i = 0; i < children.length; i++) {
+        if (children[i].shadowRoot && children[i].id !== 'mp-copilot-root' && children[i].id !== 'nextkin-floating-widget-root') {
+          search(children[i].shadowRoot);
+        }
+      }
+    }
+    search(rootNode);
+    return results;
+  }
+
+  function isResumeInput(el, text = '') {
+    if (!el || el.tagName !== 'INPUT' || el.type !== 'file') return false;
+    const combined = [
+      text,
+      el.name || '',
+      el.id || '',
+      el.getAttribute('aria-label') || '',
+      el.getAttribute('placeholder') || '',
+      el.getAttribute('accept') || '',
+      el.closest('.application-question, [class*="question"], fieldset, [class*="field"]')?.textContent || '',
+    ].join(' ').toLowerCase();
+    const resumeRegex = /resume|cv|curriculum[\s_-]*vitae/i;
+    if (/cover[\s_-]*letter|portfolio|transcript/i.test(combined) && !resumeRegex.test(combined)) {
+      return false;
+    }
+    return resumeRegex.test(combined);
+  }
+
   function labelText(node) {
     if (!node?.querySelector('select, textarea, button, [role="listbox"]')) return node?.textContent;
     const copy = node.cloneNode(true);
@@ -189,10 +230,13 @@
         }
         const role = el.getAttribute('role');
         const isCheck = el.matches(CHECK_SELECTOR);
-        if (['hidden', 'file', 'password', 'submit', 'reset', 'button'].includes(el.type) && role !== 'combobox' && !isCheck && el.getAttribute('aria-haspopup') !== 'listbox') continue;
+        const text = label(el), hint = adapter?.hint(el) || '';
+        const isFile = el.tagName === 'INPUT' && el.type === 'file';
+        const isResume = isFile && isResumeInput(el, text);
+        if (['hidden', 'password', 'submit', 'reset', 'button'].includes(el.type) && role !== 'combobox' && !isCheck && el.getAttribute('aria-haspopup') !== 'listbox') continue;
+        if (isFile && !isResume) continue;
         // A yes/no group owns the hidden box behind its buttons.
         if (el.type === 'checkbox' && el.closest('.ashby-application-form-input-yesno, [class*="yesno" i], [class*="yes-no" i], [data-option]')) continue;
-        const text = label(el), hint = adapter?.hint(el) || '';
         const group = el.closest(HISTORY_SELECTOR);
         const groupLabel = group?.querySelector('legend')?.textContent?.trim() || group?.getAttribute('data-automation-id') || '';
         const isCombo = el.tagName !== 'SELECT' && el.matches(COMBO_SELECTOR);
@@ -201,7 +245,8 @@
         const isEditable = el.getAttribute('contenteditable') === '' || el.getAttribute('contenteditable') === 'true';
         const controlledList = isCombo && el.getRootNode().getElementById?.(el.getAttribute('aria-controls'));
         const multiCombo = isCombo && (el.matches(multiComboSelector) || controlledList?.matches(multiComboSelector));
-        const kind = isCombo ? (multiCombo ? 'multi-combobox' : 'combobox')
+        const kind = isResume ? 'resume-file'
+          : isCombo ? (multiCombo ? 'multi-combobox' : 'combobox')
           : el.tagName === 'SELECT' ? (el.multiple ? 'multi-select' : 'select') : el.type === 'radio' ? 'radio' : isCheck ? 'checkbox' : 'text';
         let elements = [el];
         if (kind === 'radio') {
@@ -351,5 +396,15 @@
     };
   }
 
-  root.NextkinForms = { discoverFields, label, findStepNavigation, isStepNavigation, detectNewFields, observeStepTransitions };
+  root.NextkinForms = {
+    discoverFields,
+    label,
+    findStepNavigation,
+    isStepNavigation,
+    detectNewFields,
+    observeStepTransitions,
+    querySelectorAllDeep,
+    isResumeInput,
+    discoverUniversal: discoverFields,
+  };
 })(globalThis);

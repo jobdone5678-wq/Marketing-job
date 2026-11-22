@@ -1051,8 +1051,7 @@ async function notifyOutsideApplicationSaved(workspace, payload) {
   await Promise.allSettled(tabs.flatMap(tab => {
     if (tab.id == null || workspaceOrigin(tab.url) !== workspace || !/^\/dashboard(?:\/|$)/.test(new URL(tab.url).pathname)) return [];
     return [
-      chrome.tabs.sendMessage(tab.id, { type: 'NEXTKIN_OUTSIDE_APPLICATION_SAVED' }, { frameId: 0 }).catch(() => {}),
-      chrome.tabs.sendMessage(tab.id, { type: 'NEXTKIN_APPLICATION_SUBMITTED', payload }, { frameId: 0 }).catch(() => {}),
+      chrome.tabs.sendMessage(tab.id, { type: 'NEXTKIN_OUTSIDE_APPLICATION_SAVED', payload }, { frameId: 0 }),
     ];
   }));
 }
