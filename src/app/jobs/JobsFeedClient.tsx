@@ -13,15 +13,26 @@ import { JobsActiveFilters } from '@/components/jobs/feed/JobsActiveFilters';
 import { JobsSwipeDeck } from '@/components/jobs/feed/JobsSwipeDeck';
 import { JobsMapGrid } from '@/components/jobs/feed/JobsMapGrid';
 import { JobsPagination } from '@/components/jobs/feed/JobsPagination';
+import { compareResumeToJob } from '@/lib/resumes/job-match';
+import { applicationUrlKey } from '@/lib/jobs/application-state';
 
 interface JobsFeedClientProps {
   initial: Slice<Job> | null;
   currentPage: number;
   pageSize: number;
   facets?: FacetsData;
+  appliedKeys?: string[];
+  candidateResume?: { text: string; skills: string[] } | null;
 }
 
-export function JobsFeedClient({ initial, currentPage, pageSize, facets }: JobsFeedClientProps) {
+export function JobsFeedClient({
+  initial,
+  currentPage,
+  pageSize,
+  facets,
+  appliedKeys = [],
+  candidateResume = null,
+}: JobsFeedClientProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -32,6 +43,40 @@ export function JobsFeedClient({ initial, currentPage, pageSize, facets }: JobsF
 
   const { savedJobs, toggleSavedJob } = useJobBookmarks();
   const jobBasePath = pathname.startsWith('/dashboard') ? '/dashboard/jobs' : '/jobs';
+
+  const appliedKeySet = useMemo(() => new Set(appliedKeys || []), [appliedKeys]);
+  const hasResumeProfile = Boolean(candidateResume?.text || candidateResume?.skills?.length);
+
+  const getAtsMatch = useCallback(
+    (job: Job) => {
+      const jobText = job.description || job.enrichment?.summary || '';
+      if (candidateResume?.text && jobText) {
+        return compareResumeToJob(candidateResume.text, jobText);
+      }
+      if (
+        candidateResume?.skills?.length &&
+        (job.skills?.length || job.enrichment?.skills?.length)
+      ) {
+        const jobSkills = job.enrichment?.skills || job.skills || [];
+        const matched = jobSkills.filter((s: string) =>
+          candidateResume.skills.some((cs: string) => cs.toLowerCase() === s.toLowerCase())
+        );
+        const score = Math.round((matched.length / Math.max(1, jobSkills.length)) * 100);
+        return { score, matched, missing: jobSkills.filter((s: string) => !matched.includes(s)) };
+      }
+      return null;
+    },
+    [candidateResume]
+  );
+
+  const getIsApplied = useCallback(
+    (job: Job) => {
+      const key1 = job.url ? applicationUrlKey(job.url) : null;
+      const key2 = job.source_url ? applicationUrlKey(job.source_url) : null;
+      return Boolean((key1 && appliedKeySet.has(key1)) || (key2 && appliedKeySet.has(key2)));
+    },
+    [appliedKeySet]
+  );
 
   // Read active filter params from URL
   const activeCategory = searchParams.get('category') || '';
@@ -277,16 +322,23 @@ export function JobsFeedClient({ initial, currentPage, pageSize, facets }: JobsF
               </div>
             ) : (
               <div className="flex flex-col gap-3.5">
-                {displayJobs.map((job) => (
-                  <JobCard
-                    key={job.public_slug}
-                    job={job}
-                    isSaved={savedJobs.has(job.public_slug)}
-                    jobBasePath={jobBasePath}
-                    onToggleSave={toggleSavedJob}
-                    onSkillClick={(skill) => updateFilter('skills', skill)}
-                  />
-                ))}
+                {displayJobs.map((job) => {
+                  const atsMatch = getAtsMatch(job);
+                  const isApplied = getIsApplied(job);
+                  return (
+                    <JobCard
+                      key={job.public_slug}
+                      job={job}
+                      isSaved={savedJobs.has(job.public_slug)}
+                      jobBasePath={jobBasePath}
+                      onToggleSave={toggleSavedJob}
+                      onSkillClick={(skill) => updateFilter('skills', skill)}
+                      atsMatch={atsMatch}
+                      isApplied={isApplied}
+                      hasResumeProfile={hasResumeProfile}
+                    />
+                  );
+                })}
               </div>
             )}
 

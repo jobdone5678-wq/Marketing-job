@@ -10,7 +10,7 @@
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
     "test": "node --experimental-strip-types --test --test-concurrency=1 tests/*.test.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit --incremental false",
     "worker:email": "node scripts/workers/email-sync-worker.mjs",
     "worker": "tsx --conditions=react-server scripts/workers/worker.ts",
     "test:unit": "node --experimental-strip-types --test --test-concurrency=1 tests/*.test.mjs",

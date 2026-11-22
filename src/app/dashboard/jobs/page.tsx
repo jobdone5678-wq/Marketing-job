@@ -3,6 +3,9 @@ import { Suspense } from 'react';
 import { searchFreehireJobs, getFreehireFacets } from '@/lib/jobs/freehire-api';
 import { JobsFeedClient } from '@/app/jobs/JobsFeedClient';
 import { JobsFeedSkeleton } from '@/components/jobs/feed/JobsFeedSkeleton';
+import { requireProfile } from '@/lib/auth/require-profile';
+import { database } from '@/lib/db/admin';
+import { candidateJobApplications } from '@/lib/jobs/applications';
 
 export const metadata: Metadata = {
   title: 'Jobs · Dashboard',
@@ -29,6 +32,37 @@ export default async function DashboardJobsPage({ searchParams }: PageProps) {
   if (typeof params.reality === 'string' && params.reality) urlParams.set('reality', params.reality);
   if (typeof params.sort === 'string' && params.sort) urlParams.set('sort', params.sort);
 
+  let candidateResume: { text: string; skills: string[] } | null = null;
+  let appliedKeys: string[] = [];
+
+  try {
+    const profile = await requireProfile();
+    if (profile) {
+      const db = database();
+      const { data: candidate } = await db
+        .from('candidates')
+        .select('id, primary_skills, secondary_skills, confirmed_facts')
+        .eq('user_id', profile.id)
+        .maybeSingle();
+
+      if (candidate) {
+        const { appliedKeys: keys } = await candidateJobApplications(candidate.id);
+        appliedKeys = Array.from(keys.urls);
+        const facts = (candidate.confirmed_facts || {}) as Record<string, any>;
+        const text = String(facts.raw_text || facts.resume_text || '');
+        const skillsList: string[] = Array.isArray(facts.skills)
+          ? facts.skills
+          : [
+              ...(candidate.primary_skills ? candidate.primary_skills.split(/,\s*/) : []),
+              ...(candidate.secondary_skills ? candidate.secondary_skills.split(/,\s*/) : []),
+            ].filter(Boolean);
+        candidateResume = { text, skills: skillsList };
+      }
+    }
+  } catch {
+    // Unauthenticated or guest view fallback
+  }
+
   const [initial, facets] = await Promise.all([
     searchFreehireJobs(urlParams, pageSize, offset),
     getFreehireFacets(),
@@ -41,6 +75,8 @@ export default async function DashboardJobsPage({ searchParams }: PageProps) {
         currentPage={page}
         pageSize={pageSize}
         facets={facets}
+        appliedKeys={appliedKeys}
+        candidateResume={candidateResume}
       />
     </Suspense>
   );

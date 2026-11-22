@@ -14,6 +14,13 @@ import {
   SOURCE_KINDS,
   SOURCE_DISPLAY_NAMES,
 } from '@/lib/jobs/freehire-formatters';
+import { cn } from 'cn';
+
+export interface AtsMatchInfo {
+  score: number | null;
+  matched: string[];
+  missing: string[];
+}
 
 interface JobCardProps {
   job: Job;
@@ -21,6 +28,9 @@ interface JobCardProps {
   jobBasePath: string;
   onToggleSave: (slug: string) => void;
   onSkillClick?: (skill: string) => void;
+  atsMatch?: AtsMatchInfo | null;
+  isApplied?: boolean;
+  hasResumeProfile?: boolean;
 }
 
 export const JobCard = React.memo(function JobCard({
@@ -29,6 +39,9 @@ export const JobCard = React.memo(function JobCard({
   jobBasePath,
   onToggleSave,
   onSkillClick,
+  atsMatch,
+  isApplied = false,
+  hasResumeProfile,
 }: JobCardProps) {
   const countryCode = job.countries?.[0];
   const flag = getCountryFlag(countryCode);
@@ -68,9 +81,9 @@ export const JobCard = React.memo(function JobCard({
 
   return (
     <article className="group relative flex flex-col gap-2 rounded-2xl border border-neutral-200/90 bg-white p-5 shadow-2xs transition-all hover:border-neutral-300 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-700">
-      {/* Top Header: Logo, Company Name, Time, Bookmark */}
+      {/* Top Header: Logo, Company Name, Time, Badges, Bookmark */}
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
           <CompanyLogo company={job.company} size="sm" />
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
             <span className="font-semibold text-neutral-800 dark:text-neutral-200">
@@ -85,16 +98,47 @@ export const JobCard = React.memo(function JobCard({
           </div>
         </div>
 
-        {/* Bookmark Button */}
-        <button
-          type="button"
-          onClick={() => onToggleSave(job.public_slug)}
-          aria-label={isSaved ? 'Remove bookmark' : 'Bookmark on this device'}
-          aria-pressed={isSaved}
-          className="p-1 text-neutral-400 transition hover:text-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 rounded dark:hover:text-neutral-100"
-        >
-          <Bookmark className="size-4.5" fill={isSaved ? 'currentColor' : 'none'} />
-        </button>
+        {/* Right Header: Applied Badge, ATS Match, Bookmark */}
+        <div className="flex items-center gap-2 shrink-0">
+          {isApplied && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 shadow-2xs dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+              Applied ✓
+            </span>
+          )}
+
+          {atsMatch?.score !== null && atsMatch?.score !== undefined ? (
+            <span
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold border shadow-2xs',
+                atsMatch.score >= 75
+                  ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                  : atsMatch.score >= 50
+                    ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                    : 'border-neutral-200 bg-neutral-100 text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300'
+              )}
+            >
+              {atsMatch.score}% Match
+            </span>
+          ) : hasResumeProfile === false ? (
+            <Link
+              href="/dashboard/candidates"
+              className="hidden sm:inline-flex items-center rounded-full border border-dashed border-neutral-300 px-2 py-0.5 text-xs font-medium text-neutral-500 transition hover:border-neutral-400 hover:text-neutral-700 dark:border-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+            >
+              Upload resume for ATS score
+            </Link>
+          ) : null}
+
+          {/* Bookmark Button */}
+          <button
+            type="button"
+            onClick={() => onToggleSave(job.public_slug)}
+            aria-label={isSaved ? 'Remove bookmark' : 'Bookmark on this device'}
+            aria-pressed={isSaved}
+            className="p-1 text-neutral-400 transition hover:text-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 rounded dark:hover:text-neutral-100"
+          >
+            <Bookmark className="size-4.5" fill={isSaved ? 'currentColor' : 'none'} />
+          </button>
+        </div>
       </div>
 
       {/* Job Title */}
@@ -143,16 +187,26 @@ export const JobCard = React.memo(function JobCard({
       {/* Skill Pills */}
       {displaySkills.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 pt-1">
-          {displaySkills.map((skill) => (
-            <button
-              key={skill}
-              type="button"
-              onClick={() => onSkillClick?.(skill)}
-              className="inline-flex items-center rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-normal text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 dark:border-neutral-800 dark:bg-neutral-800/80 dark:text-neutral-300 dark:hover:border-neutral-700 dark:hover:bg-neutral-800"
-            >
-              <span className="capitalize">{skill}</span>
-            </button>
-          ))}
+          {displaySkills.map((skill) => {
+            const isMatchedSkill = atsMatch?.matched?.some(
+              (m) => m.toLowerCase() === skill.toLowerCase()
+            );
+            return (
+              <button
+                key={skill}
+                type="button"
+                onClick={() => onSkillClick?.(skill)}
+                className={cn(
+                  'inline-flex items-center rounded-full px-3 py-1 text-xs transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400',
+                  isMatchedSkill
+                    ? 'border border-emerald-300 bg-emerald-50 text-emerald-850 font-medium dark:border-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
+                    : 'border border-neutral-200 bg-neutral-50 font-normal text-neutral-700 hover:border-neutral-300 hover:bg-neutral-100 dark:border-neutral-800 dark:bg-neutral-800/80 dark:text-neutral-300 dark:hover:border-neutral-700 dark:hover:bg-neutral-800'
+                )}
+              >
+                <span className="capitalize">{skill}</span>
+              </button>
+            );
+          })}
           {extraCount > 0 && (
             <span className="inline-flex items-center rounded-full border border-neutral-200/80 bg-neutral-50/80 px-2.5 py-1 text-xs font-normal text-neutral-500 dark:border-neutral-800 dark:bg-neutral-800/50 dark:text-neutral-400">
               +{extraCount} skills
