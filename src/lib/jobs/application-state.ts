@@ -53,53 +53,84 @@ export function applicationLaunchUrl(applicationUrl: string, intentId: string) {
 export const applicationConfirmationPath =
   /\/(?:application\/(?:confirmation|received|complete|thank[-_]?you)|confirmation|thank[-_]?you(?:[-_]for[-_]applying)?|thanks|applied|application[-_](?:submitted|success|received|complete)|submission[-_]success|success|submitted)\/?$/i;
 
-export function applicationUrlKey(value: string | null | undefined) {
+export const PRESERVED_JOB_PARAMS = new Set([
+  'gh_jid',
+  'jobid',
+  'job_id',
+  'jk',
+  'requisition',
+  'req_id',
+  'id',
+]);
+
+export function canonicalJobUrl(raw: string): string {
   try {
-    const url = new URL(value || '');
-    if (!['https:', 'http:'].includes(url.protocol)) return null;
-    const fields = new Set([
-      'id',
-      'jobid',
-      'job_id',
-      'gh_jid',
-      'jr_id',
-      'jobreqid',
-      'postingid',
-      'posting_id',
-      'requisitionid',
-      'requisition_id',
-      'jk',
-    ]);
+    const url = new URL(raw);
+    url.protocol = url.protocol.toLowerCase();
+    url.hostname = url.hostname.toLowerCase();
+    if (url.pathname.length > 1 && url.pathname.endsWith('/')) {
+      url.pathname = url.pathname.replace(/\/+$/, '');
+    }
+    const filtered = new URLSearchParams();
+    for (const [key, value] of url.searchParams.entries()) {
+      if (PRESERVED_JOB_PARAMS.has(key.toLowerCase())) {
+        filtered.append(key, value);
+      }
+    }
+    filtered.sort();
+    url.search = filtered.size ? `?${filtered.toString()}` : '';
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return raw;
+  }
+}
+
+export function applicationUrlKey(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const rawUrl = new URL(value);
+    if (!['https:', 'http:'].includes(rawUrl.protocol)) return null;
+    const fragment = rawUrl.hash.slice(1);
+    const [route, query] = fragment.split(/\?([\s\S]*)/, 2);
+    const hasHashRoute = /^!?\//.test(route);
+
+    const canonical = canonicalJobUrl(value);
+    const url = new URL(canonical);
+
     const greenhouse = url.hostname === 'greenhouse.io' || url.hostname.endsWith('.greenhouse.io');
     const identify = (params: URLSearchParams) => {
       const identity = new URLSearchParams();
-      for (const [name, value] of params) {
+      for (const [name, val] of params) {
         const key = name.toLowerCase();
-        if (fields.has(key) || (greenhouse && ['for', 'token'].includes(key)))
-          identity.append(key, value);
+        if (PRESERVED_JOB_PARAMS.has(key) || (greenhouse && ['for', 'token'].includes(key)))
+          identity.append(key, val);
       }
       identity.sort();
       return identity.size ? '?' + identity.toString() : '';
     };
+
     const normalizePath = (path: string) =>
       path
         .replace(applicationConfirmationPath, '')
         .replace(/\/(?:application|apply)\/?$/i, '')
         .replace(/\/$/, '');
+
     const path = normalizePath(url.pathname);
     const postingPath = /(^|\.)keka\.com$/i.test(url.hostname)
       ? path.replace(/^\/careers\/applyjob\/(\d+)$/i, '/careers/jobdetails/$1')
       : path;
-    const fragment = url.hash.slice(1);
-    const [route, query] = fragment.split(/\?([\s\S]*)/, 2);
-    const hashRoute = /^!?\//.test(route)
+
+    const hashRoute = hasHashRoute
       ? '#' + normalizePath(route) + identify(new URLSearchParams(query))
       : '';
+
     const origin =
       url.origin === 'https://job-boards.greenhouse.io'
         ? 'https://boards.greenhouse.io'
         : url.origin;
-    return origin + postingPath + identify(url.searchParams) + hashRoute;
+
+    return origin + postingPath + identify(rawUrl.searchParams) + hashRoute;
   } catch {
     return null;
   }

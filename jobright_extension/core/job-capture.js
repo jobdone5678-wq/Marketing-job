@@ -19,6 +19,33 @@
     }
   }
 
+  const PRESERVED_JOB_PARAMS = new Set(['gh_jid', 'jobid', 'job_id', 'jk', 'requisition', 'req_id', 'id']);
+
+  function cleanApplicationUrl(url) {
+    if (!url) return '';
+    try {
+      const parsed = typeof url === 'string' ? new URL(url) : (url instanceof URL ? url : new URL(String(url)));
+      const clean = params => {
+        for (const name of [...params.keys()]) {
+          const lower = name.toLowerCase();
+          if (!PRESERVED_JOB_PARAMS.has(lower) || lower.startsWith('utm_') || ['ref', 'source', 'fbclid', 'gclid', 'trk'].includes(lower)) {
+            params.delete(name);
+          }
+        }
+        params.sort();
+      };
+      clean(parsed.searchParams);
+      const [route, query] = parsed.hash.slice(1).split(/\?(.*)/s, 2);
+      const SearchParams = parsed.searchParams.constructor || URLSearchParams;
+      const routeParams = new SearchParams(query);
+      clean(routeParams);
+      parsed.hash = /^!?\//.test(route) ? route + (routeParams.size ? '?' + routeParams.toString() : '') : '';
+      return parsed.href;
+    } catch {
+      return typeof url === 'string' ? url : (url?.href || String(url));
+    }
+  }
+
   function structuredPosting(root) {
     const postings = [];
     function visit(node) {
@@ -172,5 +199,5 @@
     };
   }
 
-  globalThis.NextkinJobCapture = { read: jobFromDom, kekaPosting };
+  globalThis.NextkinJobCapture = { read: jobFromDom, kekaPosting, cleanApplicationUrl };
 })();
