@@ -110,9 +110,9 @@
 
   chrome.runtime.onMessage.addListener((message, sender) => {
     if (sender.id === chrome.runtime.id) {
-      if (message?.type === 'NEXTKIN_OUTSIDE_APPLICATION_SAVED') {
+      if (message?.type === 'NEXTKIN_OUTSIDE_APPLICATION_SAVED' || message?.type === 'NEXTKIN_APPLICATION_SUBMITTED') {
         if (isTrustedOrigin(location.origin)) {
-          window.postMessage({ type: message.type }, location.origin);
+          window.postMessage({ type: message.type, payload: message.payload || message.data }, location.origin);
         }
       } else if (message?.type === 'NEXTKIN_AUTH_REQUIRED') {
         if (isTrustedOrigin(location.origin)) {

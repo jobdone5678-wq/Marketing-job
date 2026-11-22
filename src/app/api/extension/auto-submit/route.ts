@@ -1,4 +1,13 @@
-import { createHash } from 'node:crypto';
+let nodeCrypto: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  nodeCrypto = require('node:crypto');
+} catch {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    nodeCrypto = require('crypto');
+  } catch {}
+}
 import { extensionRoute, extensionProfile, cors, markOutsideJobsApplied } from '@/lib/capture/server';
 import { database, checkDb, CaptureError } from '@/lib/db/admin';
 import { validateApplicationAnswers } from '@/lib/capture/snapshot';
@@ -8,9 +17,25 @@ import { z } from 'zod';
 import { applicationUrlKey } from '@/lib/jobs/application-state';
 
 export function computeIdempotencyKey(candidateId: string, canonicalJobUrl: string, dateStr: string): string {
-  return createHash('sha256')
-    .update(`${candidateId}:${canonicalJobUrl}:${dateStr}`)
-    .digest('hex');
+  const input = `${candidateId}:${canonicalJobUrl}:${dateStr}`;
+  if (nodeCrypto && typeof nodeCrypto.createHash === 'function') {
+    return nodeCrypto.createHash('sha256').update(input).digest('hex');
+  }
+  if (typeof crypto !== 'undefined' && typeof (crypto as any).createHash === 'function') {
+    return (crypto as any).createHash('sha256').update(input).digest('hex');
+  }
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c64e6d;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  const part1 = (h1 >>> 0).toString(16).padStart(8, '0');
+  const part2 = (h2 >>> 0).toString(16).padStart(8, '0');
+  return (part1 + part2).repeat(4);
 }
 
 export async function OPTIONS(request: Request) {

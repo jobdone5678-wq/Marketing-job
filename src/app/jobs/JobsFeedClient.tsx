@@ -15,6 +15,7 @@ import { JobsMapGrid } from '@/components/jobs/feed/JobsMapGrid';
 import { JobsPagination } from '@/components/jobs/feed/JobsPagination';
 import { compareResumeToJob } from '@/lib/resumes/job-match';
 import { applicationUrlKey } from '@/lib/jobs/application-state';
+import { useApplicationRealtime } from '@/hooks/use-application-realtime';
 
 interface JobsFeedClientProps {
   initial: Slice<Job> | null;
@@ -43,6 +44,14 @@ export function JobsFeedClient({
 
   const { savedJobs, toggleSavedJob } = useJobBookmarks();
   const jobBasePath = pathname.startsWith('/dashboard') ? '/dashboard/jobs' : '/jobs';
+
+  const refreshFeed = useCallback(() => {
+    startTransition(() => {
+      router.refresh();
+    });
+  }, [router]);
+
+  useApplicationRealtime(refreshFeed, true);
 
   const appliedKeySet = useMemo(() => new Set(appliedKeys || []), [appliedKeys]);
   const hasResumeProfile = Boolean(candidateResume?.text || candidateResume?.skills?.length);

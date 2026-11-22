@@ -24,8 +24,13 @@ export function useApplicationRealtime(
       }, 50);
     };
     const refreshAfterExtensionSave = (event: MessageEvent) => {
-      if (event.source === window && event.origin === window.location.origin &&
-        event.data?.type === 'NEXTKIN_OUTSIDE_APPLICATION_SAVED') scheduleRefresh();
+      if (
+        event.origin === window.location.origin &&
+        (event.data?.type === 'NEXTKIN_OUTSIDE_APPLICATION_SAVED' ||
+          event.data?.type === 'NEXTKIN_APPLICATION_SUBMITTED')
+      ) {
+        scheduleRefresh();
+      }
     };
     window.addEventListener('message', refreshAfterExtensionSave);
 
