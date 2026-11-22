@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { extensionRoute, extensionProfile, cors, markOutsideJobsApplied } from '@/lib/capture/server';
 import { database, checkDb, CaptureError } from '@/lib/db/admin';
 import { validateApplicationAnswers } from '@/lib/capture/snapshot';
@@ -5,6 +6,12 @@ import { allowedCaptureUrl, validateObservation } from '@/lib/capture/validation
 import { appliedResumeSchema, saveAppliedResume } from '@/lib/capture/applied-resume';
 import { z } from 'zod';
 import { applicationUrlKey } from '@/lib/jobs/application-state';
+
+export function computeIdempotencyKey(candidateId: string, canonicalJobUrl: string, dateStr: string): string {
+  return createHash('sha256')
+    .update(`${candidateId}:${canonicalJobUrl}:${dateStr}`)
+    .digest('hex');
+}
 
 export async function OPTIONS(request: Request) {
   return cors(request, new Response(null, { status: 204 }));
@@ -194,6 +201,13 @@ export async function POST(request: Request) {
         const matchingIntent = matches[0];
         const attempt = Math.max(body.attempt || 1, matchingIntent?.attempt || 1);
 
+        const calendarDate = new Date().toISOString().slice(0, 10);
+        const idempotencyKey = computeIdempotencyKey(
+          candidateId,
+          safeJobUrl || `${body.companyName}:${body.jobTitle}`,
+          calendarDate
+        );
+
         const atsNote =
           body.matchScore !== undefined && body.matchScore !== null
             ? `[ATS Match: ${body.matchScore}%]` +
@@ -209,7 +223,7 @@ export async function POST(request: Request) {
           (body.manualAttestation
             ? 'Manual attestation: ' + (body.evidence || 'Applicant reports submission')
             : body.evidence || 'Application submission observed by browser extension');
-        const finalNotes = [atsNote, userNotes].filter(Boolean).join(' • ');
+        const finalNotes = [atsNote, userNotes, `[IdempotencyKey: ${idempotencyKey}]`].filter(Boolean).join(' • ');
 
         const portalSource = body.portalSource || (body.confirmationUrl ? new URL(body.confirmationUrl).hostname : 'Outside Job');
 

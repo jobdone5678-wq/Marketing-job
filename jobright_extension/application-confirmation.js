@@ -112,6 +112,20 @@
     return null;
   }
 
+  const ignoredInputSelectors = [
+    'input[type="search"]',
+    'header input',
+    'nav input',
+    '[role="search"] input',
+    '[role="search"] button',
+    '[class*="newsletter" i]',
+    '[class*="alert" i]',
+    '[class*="subscribe" i]',
+    '[id*="subscribe" i]',
+    '[id*="newsletter" i]',
+    '[id*="alert" i]'
+  ].join(', ');
+
   function hasActiveSubmitButton() {
     const submitSelectors = [
       'form button[type="submit"]',
@@ -128,7 +142,7 @@
     const buttons = qAll(submitSelectors);
     for (const btn of buttons) {
       if (btn.disabled || (typeof btn.getAttribute === 'function' && btn.getAttribute('aria-disabled') === 'true')) continue;
-      if (btn.closest?.(hiddenSelectors)) continue;
+      if (btn.closest?.(hiddenSelectors) || btn.closest?.(ignoredInputSelectors)) continue;
       if (!isVisible(btn)) continue;
       const text = (btn.innerText || btn.value || (typeof btn.getAttribute === 'function' ? btn.getAttribute('aria-label') : '') || '').trim();
       if (/\b(?:submit|apply|send application|complete application)\b/i.test(text)) {

@@ -199,5 +199,40 @@
     };
   }
 
-  globalThis.NextkinJobCapture = { read: jobFromDom, kekaPosting, cleanApplicationUrl };
+  function snapshotJobMetadata(root = document, pageUrl = location.href) {
+    const job = jobFromDom(root, pageUrl);
+    if (!job) return null;
+    const snapshot = {
+      jobTitle: job.title,
+      companyName: job.company,
+      jobLocation: job.location,
+      jobUrl: cleanApplicationUrl(job.jobUrl || pageUrl),
+      portalSource: job.portalSource || (typeof location !== 'undefined' ? location.hostname : ''),
+      externalId: job.externalId || null,
+      department: job.department || null,
+      employmentType: job.employmentType || null,
+    };
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: 'NEXTKIN_SET_JOB_SNAPSHOT',
+          payload: snapshot,
+        }).catch(() => {});
+      }
+    } catch {}
+    return snapshot;
+  }
+
+  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    document.addEventListener('click', (event) => {
+      const btn = event.target?.closest?.('button, input[type="submit"], [role="button"]');
+      if (!btn) return;
+      const txt = (btn.innerText || btn.value || '').trim();
+      if (/\b(?:submit|apply|send application|complete application)\b/i.test(txt)) {
+        snapshotJobMetadata();
+      }
+    }, true);
+  }
+
+  globalThis.NextkinJobCapture = { read: jobFromDom, kekaPosting, cleanApplicationUrl, snapshot: snapshotJobMetadata };
 })();
