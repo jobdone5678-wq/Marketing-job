@@ -916,5 +916,39 @@
     return plans;
   }
 
-  root.NextkinFieldMapping = { planFill, resolveFact, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS, CONSEQUENTIAL_FACTS };
+  function isCompanySpecificQuestion(question, companyName) {
+    const text = String(question || '').toLowerCase();
+    const tokens = [
+      'this role',
+      'this job',
+      'this position',
+      'our company',
+      'this company',
+      'why do you want to work',
+      'why join',
+      'why are you interested',
+      'why should we hire you',
+      'what excites you about'
+    ];
+    if (companyName && companyName.trim() && text.includes(companyName.toLowerCase().trim())) {
+      return true;
+    }
+    return tokens.some((t) => text.includes(t));
+  }
+
+  function computeCacheKey(question, companyName, jobTitle) {
+    const normKey = String(question || '')
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (isCompanySpecificQuestion(question, companyName)) {
+      if (!companyName || !companyName.trim()) return null; // Skip caching if company is unresolved
+      return `${normKey}|${companyName.toLowerCase().trim()}|${(jobTitle || '').toLowerCase().trim()}`;
+    }
+    return normKey; // Factual question cached globally
+  }
+
+  root.NextkinFieldMapping = { planFill, resolveFact, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS, CONSEQUENTIAL_FACTS, isCompanySpecificQuestion, computeCacheKey };
 })(globalThis);

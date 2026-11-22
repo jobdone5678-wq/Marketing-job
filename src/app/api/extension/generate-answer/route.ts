@@ -10,6 +10,44 @@ export async function OPTIONS(request: Request) {
   return cors(request, new Response(null, { status: 204 }));
 }
 
+export function isCompanySpecificQuestion(question?: string, companyName?: string): boolean {
+  const text = String(question || '').toLowerCase();
+  const tokens = [
+    'this role',
+    'this job',
+    'this position',
+    'our company',
+    'this company',
+    'why do you want to work',
+    'why join',
+    'why are you interested',
+    'why should we hire you',
+    'what excites you about',
+  ];
+  if (companyName && companyName.trim() && text.includes(companyName.toLowerCase().trim())) {
+    return true;
+  }
+  return tokens.some((t) => text.includes(t));
+}
+
+export function computeCacheKey(
+  question?: string,
+  companyName?: string,
+  jobTitle?: string
+): string | null {
+  const normKey = String(question || '')
+    .toLowerCase()
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (isCompanySpecificQuestion(question, companyName)) {
+    if (!companyName || !companyName.trim()) return null; // Skip caching if company is unresolved
+    return `${normKey}|${companyName.toLowerCase().trim()}|${(jobTitle || '').toLowerCase().trim()}`;
+  }
+  return normKey; // Factual question cached globally
+}
+
 function normalizeQuestionKey(text: string): string {
   return String(text || '')
     .toLowerCase()
@@ -22,12 +60,20 @@ function normalizeQuestionKey(text: string): string {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { question, key, answer, candidateId } = body;
-    const normKey = key || normalizeQuestionKey(question);
-    if (!normKey || !answer) {
+    const { question, key, answer, candidateId, companyName, jobTitle } = body;
+    const cacheKey = key || computeCacheKey(question, companyName, jobTitle);
+
+    if (!cacheKey) {
       return cors(
         request,
-        NextResponse.json({ ok: false, error: 'Question key and answer required' }, { status: 400 })
+        NextResponse.json({ ok: true, saved: false, reason: 'unscoped_company_question' })
+      );
+    }
+
+    if (!answer) {
+      return cors(
+        request,
+        NextResponse.json({ ok: false, error: 'Answer required' }, { status: 400 })
       );
     }
 
@@ -41,9 +87,9 @@ export async function PUT(request: Request) {
         if (candRow) {
           const currentFacts = (candRow.confirmed_facts as Record<string, unknown>) || {};
           const currentSaved = (currentFacts.saved_answers as Record<string, unknown>) || {};
-          currentSaved[normKey] = {
+          currentSaved[cacheKey] = {
             answer: String(answer).trim(),
-            question: question || normKey,
+            question: question || cacheKey,
             updatedAt: new Date().toISOString(),
           };
           await database()
@@ -56,7 +102,7 @@ export async function PUT(request: Request) {
       }
     }
 
-    return cors(request, NextResponse.json({ ok: true, saved: true, key: normKey }));
+    return cors(request, NextResponse.json({ ok: true, saved: true, key: cacheKey }));
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Error saving answer';
     return cors(request, NextResponse.json({ ok: false, error: msg }, { status: 500 }));
@@ -67,9 +113,13 @@ export async function POST(request: Request) {
   try {
     // Resilient extension authentication: authenticate profile if token present, or allow verified extension origin
     let profileId = 'extension-autofill';
+    let authenticatedUserId: string | null = null;
     try {
       const profile = await extensionProfile(request);
-      if (profile && profile.id) profileId = profile.id;
+      if (profile && profile.id) {
+        profileId = profile.id;
+        authenticatedUserId = profile.id;
+      }
     } catch {
       // Allow browser extension or candidate app sessions without requiring pre-registered DB credentials
       const originHeader = request.headers.get('origin') || '';
@@ -97,13 +147,54 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { prompt, fieldLabel, candidate, jobTitle, companyName, options } = body;
     const choiceMode = Array.isArray(options) && options.length > 0;
-    const normKey = normalizeQuestionKey(fieldLabel || prompt || '');
+    const questionText = fieldLabel || prompt || '';
+    const scopedKey = computeCacheKey(questionText, companyName, jobTitle);
+    const globalKey = normalizeQuestionKey(questionText);
+
+    // Query candidate profile authoritative context server-side
+    let candidateData: Record<string, unknown> | null = null;
+    if (authenticatedUserId) {
+      try {
+        const { data: candRow } = await database()
+          .from('candidates')
+          .select('id, full_name, first_name, last_name, target_job_titles, current_job_title, skills, primary_skills, summary, bio, confirmed_facts, raw_text')
+          .eq('user_id', authenticatedUserId)
+          .maybeSingle();
+        if (candRow) candidateData = candRow as Record<string, unknown>;
+      } catch (dbErr) {
+        console.warn('Error querying candidate by user_id:', dbErr);
+      }
+    }
+    if (!candidateData && candidate?.id && typeof candidate.id === 'string' && candidate.id.length === 36) {
+      try {
+        const { data: candRow } = await database()
+          .from('candidates')
+          .select('id, full_name, first_name, last_name, target_job_titles, current_job_title, skills, primary_skills, summary, bio, confirmed_facts, raw_text')
+          .eq('id', candidate.id)
+          .maybeSingle();
+        if (candRow) candidateData = candRow as Record<string, unknown>;
+      } catch (dbErr) {
+        console.warn('Error querying candidate by id:', dbErr);
+      }
+    }
 
     // 1. Check if this repeated question already has a stored answer in candidate profile
-    const candidateSaved = candidate?.confirmed_facts?.saved_answers || candidate?.saved_answers;
-    if (candidateSaved && candidateSaved[normKey]) {
-      const saved = candidateSaved[normKey];
-      const answerVal = typeof saved === 'object' && saved?.answer ? saved.answer : String(saved);
+    const confirmedFacts = (candidateData?.confirmed_facts || candidate?.confirmed_facts) as Record<string, unknown> | undefined;
+    const candidateSaved = (confirmedFacts?.saved_answers || candidateData?.saved_answers || candidate?.saved_answers) as Record<string, unknown> | undefined;
+
+    let savedEntry: unknown = null;
+    if (candidateSaved) {
+      if (scopedKey && candidateSaved[scopedKey]) {
+        savedEntry = candidateSaved[scopedKey];
+      } else if (!isCompanySpecificQuestion(questionText, companyName) && candidateSaved[globalKey]) {
+        savedEntry = candidateSaved[globalKey];
+      }
+    }
+
+    if (savedEntry) {
+      const answerVal = typeof savedEntry === 'object' && (savedEntry as { answer?: string })?.answer
+        ? (savedEntry as { answer: string }).answer
+        : String(savedEntry);
       if (answerVal) {
         if (!choiceMode) {
           return cors(request, NextResponse.json({ ok: true, answer: answerVal, stored: true }));
@@ -124,24 +215,44 @@ export async function POST(request: Request) {
       }
     }
 
+    // Authoritative facts from database candidate if present, with client fallback
     const candName =
+      (candidateData?.full_name as string) ||
+      (candidateData?.first_name ? [candidateData.first_name, candidateData.last_name].filter(Boolean).join(' ') : null) ||
       candidate?.full_name ||
       candidate?.name ||
       [candidate?.first_name, candidate?.last_name].filter(Boolean).join(' ') ||
       'Applicant';
-    const skillsStr =
-      Array.isArray(candidate?.skills) && candidate.skills.length > 0
-        ? candidate.skills.join(', ')
-        : candidate?.primary_skills || '';
+
+    const dbSkills = Array.isArray(candidateData?.skills)
+      ? (candidateData.skills as string[]).join(', ')
+      : (candidateData?.primary_skills as string) || '';
+    const clientSkills = Array.isArray(candidate?.skills)
+      ? (candidate.skills as string[]).join(', ')
+      : (candidate?.primary_skills as string) || '';
+    const skillsStr = dbSkills || clientSkills;
+
     const candTitle =
-      candidate?.current_job_title || candidate?.target_job_titles || jobTitle || '';
+      (candidateData?.current_job_title as string) ||
+      (candidateData?.target_job_titles as string) ||
+      candidate?.current_job_title ||
+      candidate?.target_job_titles ||
+      jobTitle ||
+      '';
+
     const candSummary =
-      candidate?.summary || candidate?.bio || candidate?.confirmed_facts?.summary || '';
+      (candidateData?.summary as string) ||
+      (candidateData?.bio as string) ||
+      ((candidateData?.confirmed_facts as Record<string, unknown>)?.summary as string) ||
+      candidate?.summary ||
+      candidate?.bio ||
+      ((candidate?.confirmed_facts as Record<string, unknown>)?.summary as string) ||
+      '';
 
     // 2. Check if this is a bio/summary question and candidate already has a confirmed summary/bio
     const isBioQuestion =
       /\b(bio|biography|summary|about\s*(you|yourself)?|professional\s*summary|overview)\b/i.test(
-        normKey
+        globalKey
       );
     if (isBioQuestion && candSummary && String(candSummary).trim().length > 20 && !choiceMode) {
       return cors(
@@ -163,7 +274,12 @@ export async function POST(request: Request) {
 
     const baseUrl = process.env.OPENAI_BASE_URL || 'https://api.xkiro.com/v1/';
     const model = process.env.OPENAI_MODEL || 'mistralai/mistral-large-2512';
-    const rawSnippet = candidate?.source_text || candidate?.confirmed_facts?.raw_text || '';
+    const rawSnippet =
+      (candidateData?.raw_text as string) ||
+      ((candidateData?.confirmed_facts as Record<string, unknown>)?.raw_text as string) ||
+      candidate?.source_text ||
+      ((candidate?.confirmed_facts as Record<string, unknown>)?.raw_text as string) ||
+      '';
     const resumeContext = rawSnippet ? `Resume Highlights: ${rawSnippet.slice(0, 800)}` : '';
 
     const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
@@ -228,18 +344,19 @@ Strict Rules:
       if (match) answer = String(match);
     }
 
-    // Persist newly generated answer to candidate record in DB if candidate exists
-    if (candidate?.id && typeof candidate.id === 'string' && candidate.id.length === 36) {
+    // Persist newly generated answer to candidate record in DB if candidate exists and key is valid
+    const targetCandidateId = (candidateData?.id as string) || (candidate?.id as string);
+    if (scopedKey && targetCandidateId && typeof targetCandidateId === 'string' && targetCandidateId.length === 36) {
       try {
         const { data: candRow } = await database()
           .from('candidates')
           .select('id, confirmed_facts')
-          .eq('id', candidate.id)
+          .eq('id', targetCandidateId)
           .maybeSingle();
         if (candRow) {
           const currentFacts = (candRow.confirmed_facts as Record<string, unknown>) || {};
           const currentSaved = (currentFacts.saved_answers as Record<string, unknown>) || {};
-          currentSaved[normKey] = {
+          currentSaved[scopedKey] = {
             answer,
             question: fieldLabel || prompt,
             updatedAt: new Date().toISOString(),
@@ -247,7 +364,7 @@ Strict Rules:
           await database()
             .from('candidates')
             .update({ confirmed_facts: { ...currentFacts, saved_answers: currentSaved } })
-            .eq('id', candidate.id);
+            .eq('id', targetCandidateId);
         }
       } catch (saveErr) {
         console.warn('Failed to persist saved answer:', saveErr);

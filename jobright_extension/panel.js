@@ -834,7 +834,56 @@ function answerText(value) {
   return typeof value === 'boolean' ? (value ? 'Checked' : 'Unchecked') : value;
 }
 
+async function mapConcurrent(items, limit, fn) {
+  const results = [];
+  const executing = new Set();
+  for (const item of items) {
+    const p = Promise.resolve().then(() => fn(item));
+    results.push(p);
+    executing.add(p);
+    const clean = () => executing.delete(p);
+    p.then(clean, clean);
+    if (executing.size >= limit) {
+      await Promise.race(executing);
+    }
+  }
+  return Promise.all(results);
+}
+
 async function draftScreening(session, profile, tab, job, questions) {
+  if (!questions || !questions.length) return {};
+
+  // Direct concurrent answer generation with bounded concurrency (max 3 concurrent)
+  try {
+    const directAnswers = {};
+    await mapConcurrent(questions, 3, async (q) => {
+      try {
+        const res = await api('generate-answer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: q.label,
+            fieldLabel: q.label,
+            options: q.options || [],
+            jobTitle: job?.title || '',
+            companyName: job?.company || '',
+            candidateId: profile?.id,
+          }),
+        }, session);
+        if (res && res.ok && res.answer) {
+          directAnswers[q.id || q.label] = res.answer;
+        }
+      } catch (err) {
+        console.warn('generate-answer failed for screening question:', q.label, err);
+      }
+    });
+    if (Object.keys(directAnswers).length > 0) {
+      return directAnswers;
+    }
+  } catch (err) {
+    console.warn('Direct generation encountered error, trying background task:', err);
+  }
+
   if (!job || !job.description || job.description.trim().length < 40) {
     throw new Error('Open the complete job posting to draft screening answers.');
   }
@@ -964,9 +1013,25 @@ $('autofill').addEventListener('click', async () => {
     if (file || !selected) notice('notice', '');
     if (useAI && result.questions?.length) {
       notice('notice', 'Drafting screening answers…');
+      await chrome.scripting.executeScript({
+        target: formTarget(tab, frame),
+        func: (qIds) => {
+          for (const id of qIds) {
+            const el = document.querySelector(`[name="${id}"], #${id}`) || document.activeElement;
+            if (el) el.classList.add('nextkin-field-loading');
+          }
+        },
+        args: [result.questions.map(q => q.id).filter(Boolean)],
+      }).catch(() => {});
       const drafts = await draftScreening(session, profile, tab, job, result.questions);
       await checkFormContext(tab, session);
       const completed = await fillForm(tab, frame, profile, null, documentId, reusable, drafts);
+      await chrome.scripting.executeScript({
+        target: formTarget(tab, frame),
+        func: () => {
+          document.querySelectorAll('.nextkin-field-loading').forEach(el => el.classList.remove('nextkin-field-loading'));
+        },
+      }).catch(() => {});
       const fields = new Map(result.filled.map(field => [field.key, field]));
       for (const field of completed.filled) fields.set(field.key, field);
       renderResults({ filled: [...fields.values()], unfilled: completed.unfilled, total: completed.total });
