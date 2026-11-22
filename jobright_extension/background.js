@@ -1045,12 +1045,15 @@ if (typeof chrome !== 'undefined' && chrome.tabs?.onRemoved?.addListener) {
   });
 }
 
-async function notifyOutsideApplicationSaved(workspace) {
+async function notifyOutsideApplicationSaved(workspace, payload) {
   if (typeof chrome === 'undefined' || !chrome.tabs?.query) return;
   const tabs = await chrome.tabs.query({});
   await Promise.allSettled(tabs.flatMap(tab => {
     if (tab.id == null || workspaceOrigin(tab.url) !== workspace || !/^\/dashboard(?:\/|$)/.test(new URL(tab.url).pathname)) return [];
-    return [chrome.tabs.sendMessage(tab.id, { type: 'NEXTKIN_OUTSIDE_APPLICATION_SAVED' }, { frameId: 0 })];
+    return [
+      chrome.tabs.sendMessage(tab.id, { type: 'NEXTKIN_OUTSIDE_APPLICATION_SAVED' }, { frameId: 0 }).catch(() => {}),
+      chrome.tabs.sendMessage(tab.id, { type: 'NEXTKIN_APPLICATION_SUBMITTED', payload }, { frameId: 0 }).catch(() => {}),
+    ];
   }));
 }
 
@@ -1059,16 +1062,47 @@ async function recordConfirmation(message, sender) {
   const url = new URL(sender.url);
   const embedded = sender.frameId !== 0;
   const key = embedded ? embeddedKey(sender.tab.id) : trackedKey(sender.tab.id);
-  const context = (await chrome.storage.session.get(key))[key];
-  if (!context || (context.launchExpiresAt && context.launchExpiresAt <= Date.now()) ||
-    portalOrigin(url) !== context.jobOrigin) return false;
+  let context = (await chrome.storage.session.get(key))[key];
+
+  // Check 15-minute attempt TTL and pre-submit snapshot
+  const attemptKey = `submission_attempt:${sender.tab.id}`;
+  const attemptData = (await chrome.storage.session.get(attemptKey).catch(() => ({})))?.[attemptKey];
+  const isRecentAttempt = attemptData && Date.now() - attemptData.timestamp <= 15 * 60 * 1000;
+
+  const snapshotKey = `submission_snapshot:${sender.tab.id}`;
+  const snapshotData = (await chrome.storage.session.get(snapshotKey).catch(() => ({})))?.[snapshotKey];
+
+  const current = await getStoredCredentials();
+
+  if (!context) {
+    if (isRecentAttempt && snapshotData && current?.token) {
+      context = {
+        workspace: workspaceOrigin(current.origin),
+        jobOrigin: portalOrigin(url),
+        externalJob: {
+          title: snapshotData.jobTitle,
+          company: snapshotData.companyName,
+          location: snapshotData.jobLocation,
+          jobUrl: snapshotData.jobUrl || sender.url,
+          portalSource: snapshotData.portalSource || 'extension',
+          candidateId: current.activeCandidateId,
+        },
+        candidateId: current.activeCandidateId,
+        eventKey: `outside-submit-${sender.tab.id}-${Date.now()}`,
+      };
+    } else {
+      return false;
+    }
+  } else if ((context.launchExpiresAt && context.launchExpiresAt <= Date.now()) ||
+    portalOrigin(url) !== context.jobOrigin) {
+    return false;
+  }
   if (embedded) {
     if (sender.frameId !== context.frameId || sender.documentId !== context.documentId || !sender.tab.url) return false;
     const parent = new URL(sender.tab.url);
     if (parent.href !== context.parentUrl || !matchesEmbeddedPosting(parent, url)) return false;
   }
   if (context.reported) return true;
-  const current = await getStoredCredentials();
   if (workspaceOrigin(current.origin) !== context.workspace || !current.token) return false;
   const receiptUrl = cleanApplicationUrl(url);
 
@@ -1087,6 +1121,16 @@ async function recordConfirmation(message, sender) {
     confirmationUrl: receiptUrl,
     candidateId: tabCandidateId,
   };
+
+  if (snapshotData) {
+    payload = {
+      ...payload,
+      title: payload.title || payload.jobTitle || snapshotData.jobTitle,
+      company: payload.company || payload.companyName || snapshotData.companyName,
+      location: payload.location || payload.jobLocation || snapshotData.jobLocation,
+      jobUrl: payload.jobUrl || snapshotData.jobUrl,
+    };
+  }
 
   if (context.intentId) {
     const intent = await fetch(context.workspace + '/api/extension/intents/' + context.intentId, workspaceRequest(current.token));
@@ -1138,7 +1182,7 @@ async function recordConfirmation(message, sender) {
       const { submissionEvidence, ...completed } = latest;
       await chrome.storage.session.set({ [key]: { ...completed, reported: true } });
     }
-    void notifyOutsideApplicationSaved(context.workspace).catch(() => {});
+    void notifyOutsideApplicationSaved(context.workspace, confirmationBody).catch(() => {});
     return true;
   }
 
@@ -1176,6 +1220,67 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onConnect?.addListener) {
 
 if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) {
   chrome.runtime.onMessage.addListener((message, sender, reply) => {
+    if (message?.type === 'NEXTKIN_SET_SUBMISSION_ATTEMPT') {
+      const tabId = sender.tab?.id;
+      if (tabId != null) {
+        const key = `submission_attempt:${tabId}`;
+        void chrome.storage.session.set({ [key]: { timestamp: Date.now() } })
+          .then(() => reply({ success: true }), (err) => reply({ error: err.message }));
+        return true;
+      }
+      reply({ error: 'No tab id' });
+      return false;
+    }
+    if (message?.type === 'NEXTKIN_SET_JOB_SNAPSHOT') {
+      const tabId = sender.tab?.id;
+      if (tabId != null) {
+        const key = `submission_snapshot:${tabId}`;
+        void chrome.storage.session.set({ [key]: { ...(message.payload || {}), updatedAt: Date.now() } })
+          .then(() => reply({ success: true }), (err) => reply({ error: err.message }));
+        return true;
+      }
+      reply({ error: 'No tab id' });
+      return false;
+    }
+    if (message?.type === 'NEXTKIN_FETCH_RESUME_FILE') {
+      void (async () => {
+        try {
+          const { origin, token, activeCandidateId } = await getStoredCredentials();
+          const candidateId = message.candidateId || activeCandidateId;
+          if (!origin || !token) {
+            reply({ error: 'Extension is not connected to a server.' });
+            return;
+          }
+          if (!candidateId) {
+            reply({ error: 'No active candidate profile selected.' });
+            return;
+          }
+          const res = await fetch(`${origin}/api/extension/resume-file?candidateId=${encodeURIComponent(candidateId)}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            reply({ error: err.error || `Resume fetch failed (${res.status})` });
+            return;
+          }
+          const data = await res.json();
+          reply(data);
+        } catch (err) {
+          reply({ error: err.message });
+        }
+      })();
+      return true;
+    }
+    if (message?.type === 'NEXTKIN_BROADCAST_AUTOFILL_CHILD_FRAMES') {
+      const tabId = sender.tab?.id;
+      if (tabId != null) {
+        chrome.tabs.sendMessage(tabId, { type: 'NEXTKIN_TRIGGER_AUTOFILL' }).catch(() => {});
+        reply({ success: true });
+        return true;
+      }
+      reply({ error: 'No tab id' });
+      return false;
+    }
     if (message?.type === 'NEXTKIN_SAVE_CONNECTION') {
       const { token, user, origin } = message;
       if (typeof token === 'string' && /^[A-Za-z0-9_-]{20,128}$/.test(token)) {
