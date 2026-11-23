@@ -52,20 +52,22 @@
       });
     }
 
-    if (!matched || matched.answer === undefined || matched.answer === null) return null;
+    if (!matched) return null;
+    const ans = matched.answer !== undefined ? matched.answer : matched.answer_text;
+    if (ans === undefined || ans === null) return null;
 
     // Validate options if field is choice/select
     if (Array.isArray(field.options) && field.options.length > 0) {
       const matchOpt = field.options.find(opt => {
         const optText = String(opt.label || opt.text || opt.value || '').trim().toLowerCase();
-        const ansText = String(matched.answer).trim().toLowerCase();
-        return optText === ansText || opt.value === matched.answer;
+        const ansText = String(ans).trim().toLowerCase();
+        return optText === ansText || opt.value === ans;
       });
       if (!matchOpt) return null;
     }
 
     return {
-      answer: matched.answer,
+      answer: ans,
       entry: matched,
       source: 'answer_bank',
       companyScope: matched.company_scope || null

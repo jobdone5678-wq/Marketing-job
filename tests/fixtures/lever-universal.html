@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lever Universal Application - Acme Corp</title>
+</head>
+<body>
+  <div class="application-page">
+    <div class="content-wrapper">
+      <div class="posting-header">
+        <h2>Principal Frontend Engineer</h2>
+        <div class="posting-categories">
+          <span>Engineering</span> / <span>San Francisco, CA</span> / <span>Remote</span>
+        </div>
+      </div>
+      <form id="application-form" action="https://jobs.lever.co/acme/12345/apply" method="POST" enctype="multipart/form-data">
+        <ul class="application-questions">
+          <li class="application-question">
+            <label>
+              <span class="text">Resume/CV <span class="required">*</span></span>
+              <div class="file-upload-wrapper">
+                <input type="file" name="resume" id="resume-upload-input" required class="application-file-input">
+              </div>
+            </label>
+          </li>
+          <li class="application-question">
+            <label>
+              <span class="text">Full name <span class="required">*</span></span>
+              <input type="text" name="name" id="name" autocomplete="name" required class="application-input">
+            </label>
+          </li>
+          <li class="application-question">
+            <label>
+              <span class="text">Email <span class="required">*</span></span>
+              <input type="email" name="email" id="email" autocomplete="email" required class="application-input">
+            </label>
+          </li>
+          <li class="application-question">
+            <label>
+              <span class="text">Phone <span class="required">*</span></span>
+              <input type="tel" name="phone" id="phone" autocomplete="tel" required class="application-input">
+            </label>
+          </li>
+          <li class="application-question">
+            <label>
+              <span class="text">Current company</span>
+              <input type="text" name="org" id="org" autocomplete="organization" class="application-input">
+            </label>
+          </li>
+          <!-- Links / URLs -->
+          <li class="application-question">
+            <label>
+              <span class="text">LinkedIn URL</span>
+              <input type="text" name="urls[LinkedIn]" id="url-linkedin" class="application-input">
+            </label>
+          </li>
+          <li class="application-question">
+            <label>
+              <span class="text">GitHub URL</span>
+              <input type="text" name="urls[GitHub]" id="url-github" class="application-input">
+            </label>
+          </li>
+          <li class="application-question">
+            <label>
+              <span class="text">Portfolio URL</span>
+              <input type="text" name="urls[Portfolio]" id="url-portfolio" class="application-input">
+            </label>
+          </li>
+          <li class="application-question">
+            <label>
+              <span class="text">Twitter URL</span>
+              <input type="text" name="urls[Twitter]" id="url-twitter" class="application-input">
+            </label>
+          </li>
+          <li class="application-question">
+            <label>
+              <span class="text">Other website</span>
+              <input type="text" name="urls[Other]" id="url-other" class="application-input">
+            </label>
+          </li>
+          <!-- Custom screening questions -->
+          <li class="application-question">
+            <fieldset>
+              <legend>Are you authorized to work lawfully in the United States?</legend>
+              <label><input type="radio" name="authorized_in_usa" value="Yes"> Yes</label>
+              <label><input type="radio" name="authorized_in_usa" value="No"> No</label>
+            </fieldset>
+          </li>
+          <li class="application-question">
+            <label>
+              <span class="text">What is your notice period?</span>
+              <textarea name="comments" id="additional-comments" class="application-input"></textarea>
+            </label>
+          </li>
+          <li class="application-question">
+            <label>
+              <input type="checkbox" name="consent[marketing]" value="accepted">
+              <span class="text">I agree to allow Acme Corp to store my data for future job openings.</span>
+            </label>
+          </li>
+        </ul>
+        <div class="form-submit">
+          <button type="submit" id="btn-submit" class="template-btn-submit">Submit application</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

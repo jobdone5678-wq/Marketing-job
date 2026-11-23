@@ -165,6 +165,7 @@
     if (/(^|\.)(jobvite\.com)$/i.test(host)) return 'jobvite';
     if (/(^|\.)(taleo\.net)$/i.test(host)) return 'taleo';
     if (/(^|\.)(icims\.com)$/i.test(host)) return 'icims';
+    if (/(^|\.)linkedin\.com$/i.test(host)) return 'linkedin';
 
     // DOM fallbacks
     if (q('[data-automation-id*="workday" i], [data-automation-id="applicationSubmitted"]')) return 'workday';
@@ -172,6 +173,7 @@
     if (q('.lever-confirmation, .application-confirmation, .application-submitted')) return 'lever';
     if (q('[data-testid="application-submitted"], [class*="ashby" i]')) return 'ashby';
     if (q('[data-test="application-success"], [data-testid="application-success"]')) return 'smartrecruiters';
+    if (q('.jobs-easy-apply-modal, [data-test-modal="easy-apply-modal"], [data-test-easy-apply-modal]')) return 'linkedin';
     return 'generic';
   }
 
@@ -457,9 +459,13 @@
     if (receipt.status === 'SUBMITTED') {
       const isUrlOnly = String(receipt.evidence || '').startsWith('URL confirmation path:');
       const hasTerminalSelector = Boolean(qAll(atsSuccessSelector).length);
-      if (!submissionAttempted && !hasTerminalSelector) {
+      const isVerifiedAts = Boolean(receipt.atsDetected && receipt.atsProvider !== 'generic');
+
+      // On generic/unverified sites, require active submission attempt evidence unless terminal selector is present
+      if (!isVerifiedAts && !submissionAttempted && !hasTerminalSelector) {
         return;
       }
+      // URL-only matches always require submissionAttempted
       if (isUrlOnly && !submissionAttempted) {
         return;
       }

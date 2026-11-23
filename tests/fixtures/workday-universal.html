@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Workday Universal Application - Acme Global</title>
+</head>
+<body>
+  <div id="workday-root" data-automation-id="workdayApplicationLayout">
+    <div data-automation-id="pageHeader">
+      <h1 data-automation-id="jobTitle">Lead Software Engineer - Core Platform</h1>
+    </div>
+    <form id="workday-application-form">
+      <!-- Legal Name Section -->
+      <fieldset data-automation-id="legalNameSection">
+        <legend>Legal Name</legend>
+        <div class="form-group">
+          <label for="wd-firstName">First Name <span class="required">*</span></label>
+          <input type="text" id="wd-firstName" data-automation-id="legalNameSection_firstName" name="firstName" required>
+        </div>
+        <div class="form-group">
+          <label for="wd-lastName">Last Name <span class="required">*</span></label>
+          <input type="text" id="wd-lastName" data-automation-id="legalNameSection_lastName" name="lastName" required>
+        </div>
+      </fieldset>
+
+      <!-- Contact Information -->
+      <fieldset data-automation-id="contactInfoSection">
+        <legend>Contact Information</legend>
+        <div class="form-group">
+          <label for="wd-email">Email Address <span class="required">*</span></label>
+          <input type="email" id="wd-email" data-automation-id="email" name="email" required>
+        </div>
+        <div class="form-group">
+          <label for="wd-phone">Phone Number <span class="required">*</span></label>
+          <input type="tel" id="wd-phone" data-automation-id="phone-number" name="phone" required>
+        </div>
+        <div class="form-group">
+          <label for="wd-address">Address Line 1</label>
+          <input type="text" id="wd-address" data-automation-id="addressSection_addressLine1" name="address1">
+        </div>
+        <div class="form-group">
+          <label for="wd-city">City</label>
+          <input type="text" id="wd-city" data-automation-id="addressSection_city" name="city">
+        </div>
+        <div class="form-group">
+          <label for="wd-postal">Postal Code</label>
+          <input type="text" id="wd-postal" data-automation-id="addressSection_postalCode" name="postalCode">
+        </div>
+      </fieldset>
+
+      <!-- Resume Upload -->
+      <div class="form-group" data-automation-id="resumeSection">
+        <label for="wd-resume">Resume/CV <span class="required">*</span></label>
+        <input type="file" id="wd-resume" data-automation-id="file-upload-input-drop-zone" name="file" required>
+      </div>
+
+      <!-- Websites / Social Links -->
+      <fieldset data-automation-id="socialLinksSection">
+        <legend>Websites</legend>
+        <div class="form-group">
+          <label for="wd-linkedin">LinkedIn</label>
+          <input type="text" id="wd-linkedin" data-automation-id="linkedinQuestion" name="linkedin">
+        </div>
+        <div class="form-group">
+          <label for="wd-website">Personal Website</label>
+          <input type="text" id="wd-website" data-automation-id="websiteQuestion" name="website">
+        </div>
+        <div class="form-group">
+          <label for="wd-otherUrl">Other Link</label>
+          <input type="text" id="wd-otherUrl" data-automation-id="otherUrlQuestion" name="otherUrl">
+        </div>
+      </fieldset>
+
+      <!-- Source Dropdown / Combobox -->
+      <div class="form-group" data-automation-id="sourceSection">
+        <label for="wd-source">How Did You Hear About Us?</label>
+        <input type="text" id="wd-source" role="combobox" data-automation-id="sourceDropdown" aria-expanded="false" placeholder="Select source...">
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="button-bar" data-automation-id="bottomNavigation">
+        <button type="button" data-automation-id="bottom-navigation-next-button" id="wd-next">Next</button>
+        <button type="submit" data-automation-id="page-footer-submit-button" id="wd-submit">Submit</button>
+      </div>
+    </form>
+  </div>
+</body>
+</html>

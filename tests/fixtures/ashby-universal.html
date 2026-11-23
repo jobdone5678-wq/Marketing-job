@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Ashby Universal Application - Acme Corp</title>
+</head>
+<body>
+  <div id="ashby-app-root">
+    <div class="_container_1x8q9">
+      <h1>Staff Infrastructure Engineer</h1>
+      <form id="ashby-application-form" class="_form_1x8q9">
+        <div class="_field_1x8q9" data-testid="field-first-name">
+          <label for="ashby-first-name">First Name <span class="_required_1x8q9">*</span></label>
+          <input type="text" id="ashby-first-name" name="first_name" data-testid="input-first-name" autocomplete="given-name" required>
+        </div>
+        <div class="_field_1x8q9" data-testid="field-last-name">
+          <label for="ashby-last-name">Last Name <span class="_required_1x8q9">*</span></label>
+          <input type="text" id="ashby-last-name" name="last_name" data-testid="input-last-name" autocomplete="family-name" required>
+        </div>
+        <div class="_field_1x8q9" data-testid="field-email">
+          <label for="ashby-email">Email <span class="_required_1x8q9">*</span></label>
+          <input type="email" id="ashby-email" name="email" data-testid="input-email" autocomplete="email" required>
+        </div>
+        <div class="_field_1x8q9" data-testid="field-phone">
+          <label for="ashby-phone">Phone Number <span class="_required_1x8q9">*</span></label>
+          <input type="tel" id="ashby-phone" name="phone" data-testid="input-phone" autocomplete="tel" required>
+        </div>
+        <div class="_field_1x8q9" data-testid="field-resume">
+          <label for="ashby-resume">Resume <span class="_required_1x8q9">*</span></label>
+          <input type="file" id="ashby-resume" name="resume" data-testid="file-upload-resume" required>
+        </div>
+
+        <!-- URLs -->
+        <div class="_field_1x8q9" data-testid="field-linkedin">
+          <label for="ashby-linkedin">LinkedIn Profile</label>
+          <input type="text" id="ashby-linkedin" name="urls[LinkedIn]" data-testid="input-linkedin">
+        </div>
+        <div class="_field_1x8q9" data-testid="field-github">
+          <label for="ashby-github">GitHub Profile</label>
+          <input type="text" id="ashby-github" name="urls[GitHub]" data-testid="input-github">
+        </div>
+        <div class="_field_1x8q9" data-testid="field-portfolio">
+          <label for="ashby-portfolio">Portfolio URL</label>
+          <input type="text" id="ashby-portfolio" name="urls[Portfolio]" data-testid="input-portfolio">
+        </div>
+        <div class="_field_1x8q9" data-testid="field-other-url">
+          <label for="ashby-other-url">Other Website</label>
+          <input type="text" id="ashby-other-url" name="urls[Other]" data-testid="input-other-url">
+        </div>
+
+        <!-- Combobox / Custom Dropdown -->
+        <div class="_field_1x8q9" data-testid="field-location-select">
+          <label for="ashby-location-combobox">Preferred Work Location</label>
+          <input type="text" role="combobox" id="ashby-location-combobox" data-testid="select-location" aria-expanded="false" aria-autocomplete="list" placeholder="Select location...">
+          <ul class="_options-list_1x8q9" role="listbox" style="display: none;">
+            <li role="option" data-option-value="San Francisco, CA">San Francisco, CA</li>
+            <li role="option" data-option-value="Remote, US">Remote, US</li>
+            <li role="option" data-option-value="New York, NY">New York, NY</li>
+          </ul>
+        </div>
+
+        <!-- Custom Question -->
+        <div class="_field_1x8q9" data-testid="field-experience-question">
+          <label for="ashby-experience">Describe your experience building scalable web applications</label>
+          <textarea id="ashby-experience" name="custom_experience" data-testid="question-experience"></textarea>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="_submit-container_1x8q9">
+          <button type="submit" id="ashby-submit-button" data-testid="submit-application-button" class="_submit-btn_1x8q9">
+            Submit Application
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</body>
+</html>
