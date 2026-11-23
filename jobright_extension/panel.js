@@ -1188,34 +1188,60 @@ $('review-answers').addEventListener('click', async () => {
   }
 });
 
-$('save-answers').addEventListener('click', async () => {
+async function saveSelectedAnswers(companyScoped = false) {
   if (busy || !answerReview) return;
   const { tab, session, profile, answers } = answerReview;
   const keys = new Set([...$('answer-options').querySelectorAll('input:checked')].map(input => input.value));
   if (!keys.size) return notice('notice', 'Select at least one answer to save.');
   busy = true;
-  $('save-answers').disabled = true;
+  if ($('save-answers')) $('save-answers').disabled = true;
+  if ($('save-answers-company')) $('save-answers-company').disabled = true;
   try {
     await checkFormContext(tab, session);
+    const companyScope = companyScoped ? (activeJob?.company || activeJob?.companySlug || null) : null;
+    const isSensitive = globalThis.NextkinAnswerBank?.isSensitiveQuestion || (() => false);
+
     const scope = answerScope(session, profile);
     const storage = await chrome.storage.local.get(scope);
     const entries = new Map(Object.entries(storage[scope] || {}));
-    for (const answer of answers.filter(item => keys.has(item.key))) {
+
+    const selectedAnswers = answers.filter(item => keys.has(item.key) && !isSensitive(item.label || item.key));
+    for (const answer of selectedAnswers) {
       entries.delete(answer.key);
       entries.set(answer.key, { type: answer.type, value: answer.value });
+
+      if (session && profile?.id) {
+        api('answer-bank', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: answer.label || answer.key,
+            answer: answerText(answer.value),
+            companyScope,
+            candidateId: profile.id
+          })
+        }).catch(() => {});
+      }
     }
     await chrome.storage.local.set({ [scope]: Object.fromEntries([...entries].slice(-200)) });
     $('answer-review').hidden = true;
     answerReview = null;
-    notice('notice', `${keys.size} reusable answer${keys.size === 1 ? '' : 's'} saved for future applications.`);
+    const scopeLabel = companyScope ? ` for ${companyScope}` : ' for all jobs';
+    notice('notice', `${selectedAnswers.length} reusable answer${selectedAnswers.length === 1 ? '' : 's'} saved${scopeLabel}.`);
   } catch (error) {
     notice('notice', error.message, true);
   } finally {
     busy = false;
-    $('save-answers').disabled = false;
+    if ($('save-answers')) $('save-answers').disabled = false;
+    if ($('save-answers-company')) $('save-answers-company').disabled = false;
     renderAccount();
   }
-});
+}
+
+$('save-answers').addEventListener('click', () => saveSelectedAnswers(false));
+if ($('save-answers-company')) {
+  $('save-answers-company').addEventListener('click', () => saveSelectedAnswers(true));
+}
 
 $('not-applied').addEventListener('click', () => {
   pendingAppliedPrompt = null;

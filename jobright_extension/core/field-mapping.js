@@ -718,6 +718,31 @@
     return JSON.stringify([job.externalId || '', job.jobUrl || '', job.title || '', job.company || '']);
   }
 
+  function matchAnswerBankFallback(field, answers, companySlug) {
+    if (!field || !Array.isArray(answers) || answers.length === 0) return null;
+    const rawQ = String(field.label || field.name || field.hint || '').trim();
+    if (/\b(consent|agree|terms|privacy|policy|arbitration|acknowledg\w*|certify|declare|confirm|signature|sign\s+here)\b/i.test(rawQ)) return null;
+    if (/\b(race|ethnicity|hispanic|latino|gender|sex|veteran|disability|handicap)\b/i.test(rawQ)) return null;
+    const normQ = rawQ.toLowerCase().replace(/&/g, ' and ').replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+    if (!normQ) return null;
+    const slug = companySlug ? String(companySlug).toLowerCase().trim() : null;
+    if (slug) {
+      const companyMatch = answers.find(a => {
+        const aScope = a.company_scope ? String(a.company_scope).toLowerCase().trim() : null;
+        const aNorm = a.question_normalized || String(a.question || '').toLowerCase().replace(/&/g, ' and ').replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+        return aScope === slug && aNorm === normQ;
+      });
+      if (companyMatch) return { answer: companyMatch.answer, companyScope: companyMatch.company_scope || null };
+    }
+    const universalMatch = answers.find(a => {
+      const aScope = a.company_scope ? String(a.company_scope).toLowerCase().trim() : null;
+      const aNorm = a.question_normalized || String(a.question || '').toLowerCase().replace(/&/g, ' and ').replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+      return !aScope && aNorm === normQ;
+    });
+    if (universalMatch) return { answer: universalMatch.answer, companyScope: null };
+    return null;
+  }
+
   function planFill(fields, candidate, options = {}) {
     const values = buildValues(candidate);
     const aiPlan = (field, reason) => ({ field, status: 'ai', reason, options: (field.options || []).map(o => optionText(o)), aiPrompt: field.label });
@@ -801,6 +826,25 @@
 
       const resolved = resolveFact(field.label, field.hint, field);
       if (!resolved) {
+        // TIER 3: Candidate Answer Bank lookup before AI generation
+        const answerBank = options.answerBank || options.savedAnswers || (candidate && candidate.answerBank) || (candidate && candidate.confirmed_facts?.answer_bank);
+        if (answerBank) {
+          const bankList = Array.isArray(answerBank) ? answerBank : (answerBank.answers || Object.values(answerBank));
+          const companySlug = options.companySlug || options.company || options.job?.company || candidate?.companySlug;
+          const matchFn = (root.NextkinAnswerBank && root.NextkinAnswerBank.matchAnswer) || matchAnswerBankFallback;
+          const match = matchFn(field, bankList, companySlug);
+          if (match && match.answer !== undefined && match.answer !== null) {
+            return {
+              field,
+              value: match.answer,
+              status: 'ready',
+              source: 'answer_bank',
+              companyScope: match.companyScope || null,
+              reason: match.companyScope ? `Answer bank match for ${match.companyScope}` : 'Universal answer bank match'
+            };
+          }
+        }
+
         if (isChoiceKind(field.kind)) return aiPlan(field, 'Select an option supported by the candidate profile.');
         const isContactOrPersonal = /\b(name|first|last|given|surname|email|phone|tel|cell|city|state|zip|postal|address|country|linkedin|github|website|portfolio|date|when can you start|start date)\b/i.test(nl);
         const isBioOrScreening = !isContactOrPersonal && (field.element?.tagName === 'TEXTAREA' || field.editable ||

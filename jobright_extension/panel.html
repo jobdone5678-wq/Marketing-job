@@ -6,6 +6,7 @@
   <title>Recruiting Copilot</title>
   <link rel="stylesheet" href="panel.css">
   <script src="core/job-capture.js" defer></script>
+  <script src="core/answer-bank.js" defer></script>
   <script src="core/field-mapping.js" defer></script>
   <script src="panel.js" defer></script>
 </head>
@@ -61,7 +62,10 @@
       <section id="answer-review" aria-label="Reusable answers" hidden>
         <p>Select the answers you want to reuse on future applications.</p>
         <div id="answer-options"></div>
-        <button id="save-answers" class="small-button" type="button">Save selected answers</button>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <button id="save-answers" class="small-button" type="button">Save for all jobs</button>
+          <button id="save-answers-company" class="small-button" type="button">Save for this company only</button>
+        </div>
       </section>
       <section id="applied-prompt" aria-label="Confirm your application" hidden>
         <p class="applied-prompt-question">Did you submit your application?</p>

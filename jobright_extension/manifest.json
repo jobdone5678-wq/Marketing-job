@@ -57,6 +57,7 @@
       "js": [
         "adapters/ats-adapters.js",
         "core/job-capture.js",
+        "core/answer-bank.js",
         "core/field-mapping.js",
         "core/field-writer.js",
         "core/form-discovery.js",
