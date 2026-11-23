@@ -62,6 +62,9 @@ export interface CandidateDemographics {
   raceEthnicity: string;
   veteranStatus: string;
   disabilityStatus: string;
+  race_ethnicity?: string;
+  veteran_status?: string;
+  disability_status?: string;
 }
 
 export interface CandidateProfileState {

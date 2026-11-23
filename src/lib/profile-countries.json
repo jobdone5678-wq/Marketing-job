@@ -1,5 +1,17 @@
 [
   {
+    "code": "af",
+    "name": "Afghanistan",
+    "flag": "🇦🇫",
+    "region": "other"
+  },
+  {
+    "code": "ax",
+    "name": "Åland Islands",
+    "flag": "🇦🇽",
+    "region": "other"
+  },
+  {
     "code": "al",
     "name": "Albania",
     "flag": "🇦🇱",
@@ -10,6 +22,12 @@
     "name": "Algeria",
     "flag": "🇩🇿",
     "region": "mena"
+  },
+  {
+    "code": "as",
+    "name": "American Samoa",
+    "flag": "🇦🇸",
+    "region": "other"
   },
   {
     "code": "ad",
@@ -24,6 +42,24 @@
     "region": "africa"
   },
   {
+    "code": "ai",
+    "name": "Anguilla",
+    "flag": "🇦🇮",
+    "region": "other"
+  },
+  {
+    "code": "aq",
+    "name": "Antarctica",
+    "flag": "🇦🇶",
+    "region": "other"
+  },
+  {
+    "code": "ag",
+    "name": "Antigua & Barbuda",
+    "flag": "🇦🇬",
+    "region": "other"
+  },
+  {
     "code": "ar",
     "name": "Argentina",
     "flag": "🇦🇷",
@@ -34,6 +70,12 @@
     "name": "Armenia",
     "flag": "🇦🇲",
     "region": "cis"
+  },
+  {
+    "code": "aw",
+    "name": "Aruba",
+    "flag": "🇦🇼",
+    "region": "other"
   },
   {
     "code": "au",
@@ -54,6 +96,12 @@
     "region": "cis"
   },
   {
+    "code": "bs",
+    "name": "Bahamas",
+    "flag": "🇧🇸",
+    "region": "other"
+  },
+  {
     "code": "bh",
     "name": "Bahrain",
     "flag": "🇧🇭",
@@ -64,6 +112,12 @@
     "name": "Bangladesh",
     "flag": "🇧🇩",
     "region": "apac"
+  },
+  {
+    "code": "bb",
+    "name": "Barbados",
+    "flag": "🇧🇧",
+    "region": "other"
   },
   {
     "code": "by",
@@ -78,6 +132,30 @@
     "region": "eu"
   },
   {
+    "code": "bz",
+    "name": "Belize",
+    "flag": "🇧🇿",
+    "region": "other"
+  },
+  {
+    "code": "bj",
+    "name": "Benin",
+    "flag": "🇧🇯",
+    "region": "other"
+  },
+  {
+    "code": "bm",
+    "name": "Bermuda",
+    "flag": "🇧🇲",
+    "region": "other"
+  },
+  {
+    "code": "bt",
+    "name": "Bhutan",
+    "flag": "🇧🇹",
+    "region": "other"
+  },
+  {
     "code": "bo",
     "name": "Bolivia",
     "flag": "🇧🇴",
@@ -90,10 +168,34 @@
     "region": "eu"
   },
   {
+    "code": "bw",
+    "name": "Botswana",
+    "flag": "🇧🇼",
+    "region": "other"
+  },
+  {
+    "code": "bv",
+    "name": "Bouvet Island",
+    "flag": "🇧🇻",
+    "region": "other"
+  },
+  {
     "code": "br",
     "name": "Brazil",
     "flag": "🇧🇷",
     "region": "latam"
+  },
+  {
+    "code": "io",
+    "name": "British Indian Ocean Territory",
+    "flag": "🇮🇴",
+    "region": "other"
+  },
+  {
+    "code": "vg",
+    "name": "British Virgin Islands",
+    "flag": "🇻🇬",
+    "region": "other"
   },
   {
     "code": "bn",
@@ -106,6 +208,18 @@
     "name": "Bulgaria",
     "flag": "🇧🇬",
     "region": "eu"
+  },
+  {
+    "code": "bf",
+    "name": "Burkina Faso",
+    "flag": "🇧🇫",
+    "region": "other"
+  },
+  {
+    "code": "bi",
+    "name": "Burundi",
+    "flag": "🇧🇮",
+    "region": "other"
   },
   {
     "code": "kh",
@@ -126,6 +240,36 @@
     "region": "north_america"
   },
   {
+    "code": "cv",
+    "name": "Cape Verde",
+    "flag": "🇨🇻",
+    "region": "other"
+  },
+  {
+    "code": "bq",
+    "name": "Caribbean Netherlands",
+    "flag": "🇧🇶",
+    "region": "other"
+  },
+  {
+    "code": "ky",
+    "name": "Cayman Islands",
+    "flag": "🇰🇾",
+    "region": "other"
+  },
+  {
+    "code": "cf",
+    "name": "Central African Republic",
+    "flag": "🇨🇫",
+    "region": "other"
+  },
+  {
+    "code": "td",
+    "name": "Chad",
+    "flag": "🇹🇩",
+    "region": "other"
+  },
+  {
     "code": "cl",
     "name": "Chile",
     "flag": "🇨🇱",
@@ -138,10 +282,46 @@
     "region": "apac"
   },
   {
+    "code": "cx",
+    "name": "Christmas Island",
+    "flag": "🇨🇽",
+    "region": "other"
+  },
+  {
+    "code": "cc",
+    "name": "Cocos (Keeling) Islands",
+    "flag": "🇨🇨",
+    "region": "other"
+  },
+  {
     "code": "co",
     "name": "Colombia",
     "flag": "🇨🇴",
     "region": "latam"
+  },
+  {
+    "code": "km",
+    "name": "Comoros",
+    "flag": "🇰🇲",
+    "region": "other"
+  },
+  {
+    "code": "cg",
+    "name": "Congo - Brazzaville",
+    "flag": "🇨🇬",
+    "region": "other"
+  },
+  {
+    "code": "cd",
+    "name": "Congo - Kinshasa",
+    "flag": "🇨🇩",
+    "region": "other"
+  },
+  {
+    "code": "ck",
+    "name": "Cook Islands",
+    "flag": "🇨🇰",
+    "region": "other"
   },
   {
     "code": "cr",
@@ -162,6 +342,18 @@
     "region": "eu"
   },
   {
+    "code": "cu",
+    "name": "Cuba",
+    "flag": "🇨🇺",
+    "region": "other"
+  },
+  {
+    "code": "cw",
+    "name": "Curaçao",
+    "flag": "🇨🇼",
+    "region": "other"
+  },
+  {
     "code": "cy",
     "name": "Cyprus",
     "flag": "🇨🇾",
@@ -178,6 +370,18 @@
     "name": "Denmark",
     "flag": "🇩🇰",
     "region": "eu"
+  },
+  {
+    "code": "dj",
+    "name": "Djibouti",
+    "flag": "🇩🇯",
+    "region": "other"
+  },
+  {
+    "code": "dm",
+    "name": "Dominica",
+    "flag": "🇩🇲",
+    "region": "other"
   },
   {
     "code": "do",
@@ -204,16 +408,52 @@
     "region": "latam"
   },
   {
+    "code": "gq",
+    "name": "Equatorial Guinea",
+    "flag": "🇬🇶",
+    "region": "other"
+  },
+  {
+    "code": "er",
+    "name": "Eritrea",
+    "flag": "🇪🇷",
+    "region": "other"
+  },
+  {
     "code": "ee",
     "name": "Estonia",
     "flag": "🇪🇪",
     "region": "eu"
   },
   {
+    "code": "sz",
+    "name": "Eswatini",
+    "flag": "🇸🇿",
+    "region": "other"
+  },
+  {
     "code": "et",
     "name": "Ethiopia",
     "flag": "🇪🇹",
     "region": "africa"
+  },
+  {
+    "code": "fk",
+    "name": "Falkland Islands",
+    "flag": "🇫🇰",
+    "region": "other"
+  },
+  {
+    "code": "fo",
+    "name": "Faroe Islands",
+    "flag": "🇫🇴",
+    "region": "other"
+  },
+  {
+    "code": "fj",
+    "name": "Fiji",
+    "flag": "🇫🇯",
+    "region": "other"
   },
   {
     "code": "fi",
@@ -240,6 +480,24 @@
     "region": "apac"
   },
   {
+    "code": "tf",
+    "name": "French Southern Territories",
+    "flag": "🇹🇫",
+    "region": "other"
+  },
+  {
+    "code": "ga",
+    "name": "Gabon",
+    "flag": "🇬🇦",
+    "region": "other"
+  },
+  {
+    "code": "gm",
+    "name": "Gambia",
+    "flag": "🇬🇲",
+    "region": "other"
+  },
+  {
     "code": "ge",
     "name": "Georgia",
     "flag": "🇬🇪",
@@ -258,10 +516,28 @@
     "region": "africa"
   },
   {
+    "code": "gi",
+    "name": "Gibraltar",
+    "flag": "🇬🇮",
+    "region": "other"
+  },
+  {
     "code": "gr",
     "name": "Greece",
     "flag": "🇬🇷",
     "region": "eu"
+  },
+  {
+    "code": "gl",
+    "name": "Greenland",
+    "flag": "🇬🇱",
+    "region": "other"
+  },
+  {
+    "code": "gd",
+    "name": "Grenada",
+    "flag": "🇬🇩",
+    "region": "other"
   },
   {
     "code": "gp",
@@ -270,10 +546,52 @@
     "region": "latam"
   },
   {
+    "code": "gu",
+    "name": "Guam",
+    "flag": "🇬🇺",
+    "region": "other"
+  },
+  {
     "code": "gt",
     "name": "Guatemala",
     "flag": "🇬🇹",
     "region": "latam"
+  },
+  {
+    "code": "gg",
+    "name": "Guernsey",
+    "flag": "🇬🇬",
+    "region": "other"
+  },
+  {
+    "code": "gn",
+    "name": "Guinea",
+    "flag": "🇬🇳",
+    "region": "other"
+  },
+  {
+    "code": "gw",
+    "name": "Guinea-Bissau",
+    "flag": "🇬🇼",
+    "region": "other"
+  },
+  {
+    "code": "gy",
+    "name": "Guyana",
+    "flag": "🇬🇾",
+    "region": "other"
+  },
+  {
+    "code": "ht",
+    "name": "Haiti",
+    "flag": "🇭🇹",
+    "region": "other"
+  },
+  {
+    "code": "hm",
+    "name": "Heard & McDonald Islands",
+    "flag": "🇭🇲",
+    "region": "other"
   },
   {
     "code": "hn",
@@ -330,6 +648,12 @@
     "region": "eu"
   },
   {
+    "code": "im",
+    "name": "Isle of Man",
+    "flag": "🇮🇲",
+    "region": "other"
+  },
+  {
     "code": "il",
     "name": "Israel",
     "flag": "🇮🇱",
@@ -342,10 +666,22 @@
     "region": "eu"
   },
   {
+    "code": "jm",
+    "name": "Jamaica",
+    "flag": "🇯🇲",
+    "region": "other"
+  },
+  {
     "code": "jp",
     "name": "Japan",
     "flag": "🇯🇵",
     "region": "apac"
+  },
+  {
+    "code": "je",
+    "name": "Jersey",
+    "flag": "🇯🇪",
+    "region": "other"
   },
   {
     "code": "jo",
@@ -364,6 +700,12 @@
     "name": "Kenya",
     "flag": "🇰🇪",
     "region": "africa"
+  },
+  {
+    "code": "ki",
+    "name": "Kiribati",
+    "flag": "🇰🇮",
+    "region": "other"
   },
   {
     "code": "xk",
@@ -402,6 +744,18 @@
     "region": "mena"
   },
   {
+    "code": "ls",
+    "name": "Lesotho",
+    "flag": "🇱🇸",
+    "region": "other"
+  },
+  {
+    "code": "lr",
+    "name": "Liberia",
+    "flag": "🇱🇷",
+    "region": "other"
+  },
+  {
     "code": "ly",
     "name": "Libya",
     "flag": "🇱🇾",
@@ -432,10 +786,34 @@
     "region": "apac"
   },
   {
+    "code": "mg",
+    "name": "Madagascar",
+    "flag": "🇲🇬",
+    "region": "other"
+  },
+  {
+    "code": "mw",
+    "name": "Malawi",
+    "flag": "🇲🇼",
+    "region": "other"
+  },
+  {
     "code": "my",
     "name": "Malaysia",
     "flag": "🇲🇾",
     "region": "apac"
+  },
+  {
+    "code": "mv",
+    "name": "Maldives",
+    "flag": "🇲🇻",
+    "region": "other"
+  },
+  {
+    "code": "ml",
+    "name": "Mali",
+    "flag": "🇲🇱",
+    "region": "other"
   },
   {
     "code": "mt",
@@ -444,10 +822,22 @@
     "region": "eu"
   },
   {
+    "code": "mh",
+    "name": "Marshall Islands",
+    "flag": "🇲🇭",
+    "region": "other"
+  },
+  {
     "code": "mq",
     "name": "Martinique",
     "flag": "🇲🇶",
     "region": "latam"
+  },
+  {
+    "code": "mr",
+    "name": "Mauritania",
+    "flag": "🇲🇷",
+    "region": "other"
   },
   {
     "code": "mu",
@@ -456,10 +846,22 @@
     "region": "africa"
   },
   {
+    "code": "yt",
+    "name": "Mayotte",
+    "flag": "🇾🇹",
+    "region": "other"
+  },
+  {
     "code": "mx",
     "name": "Mexico",
     "flag": "🇲🇽",
     "region": "latam"
+  },
+  {
+    "code": "fm",
+    "name": "Micronesia",
+    "flag": "🇫🇲",
+    "region": "other"
   },
   {
     "code": "md",
@@ -486,6 +888,12 @@
     "region": "eu"
   },
   {
+    "code": "ms",
+    "name": "Montserrat",
+    "flag": "🇲🇸",
+    "region": "other"
+  },
+  {
     "code": "ma",
     "name": "Morocco",
     "flag": "🇲🇦",
@@ -504,6 +912,18 @@
     "region": "apac"
   },
   {
+    "code": "na",
+    "name": "Namibia",
+    "flag": "🇳🇦",
+    "region": "other"
+  },
+  {
+    "code": "nr",
+    "name": "Nauru",
+    "flag": "🇳🇷",
+    "region": "other"
+  },
+  {
     "code": "np",
     "name": "Nepal",
     "flag": "🇳🇵",
@@ -514,6 +934,12 @@
     "name": "Netherlands",
     "flag": "🇳🇱",
     "region": "eu"
+  },
+  {
+    "code": "nc",
+    "name": "New Caledonia",
+    "flag": "🇳🇨",
+    "region": "other"
   },
   {
     "code": "nz",
@@ -528,16 +954,46 @@
     "region": "latam"
   },
   {
+    "code": "ne",
+    "name": "Niger",
+    "flag": "🇳🇪",
+    "region": "other"
+  },
+  {
     "code": "ng",
     "name": "Nigeria",
     "flag": "🇳🇬",
     "region": "africa"
   },
   {
+    "code": "nu",
+    "name": "Niue",
+    "flag": "🇳🇺",
+    "region": "other"
+  },
+  {
+    "code": "nf",
+    "name": "Norfolk Island",
+    "flag": "🇳🇫",
+    "region": "other"
+  },
+  {
+    "code": "kp",
+    "name": "North Korea",
+    "flag": "🇰🇵",
+    "region": "other"
+  },
+  {
     "code": "mk",
     "name": "North Macedonia",
     "flag": "🇲🇰",
     "region": "eu"
+  },
+  {
+    "code": "mp",
+    "name": "Northern Mariana Islands",
+    "flag": "🇲🇵",
+    "region": "other"
   },
   {
     "code": "no",
@@ -558,6 +1014,12 @@
     "region": "apac"
   },
   {
+    "code": "pw",
+    "name": "Palau",
+    "flag": "🇵🇼",
+    "region": "other"
+  },
+  {
     "code": "ps",
     "name": "Palestinian Territories",
     "flag": "🇵🇸",
@@ -568,6 +1030,12 @@
     "name": "Panama",
     "flag": "🇵🇦",
     "region": "latam"
+  },
+  {
+    "code": "pg",
+    "name": "Papua New Guinea",
+    "flag": "🇵🇬",
+    "region": "other"
   },
   {
     "code": "py",
@@ -586,6 +1054,12 @@
     "name": "Philippines",
     "flag": "🇵🇭",
     "region": "apac"
+  },
+  {
+    "code": "pn",
+    "name": "Pitcairn Islands",
+    "flag": "🇵🇳",
+    "region": "other"
   },
   {
     "code": "pl",
@@ -636,10 +1110,22 @@
     "region": "africa"
   },
   {
+    "code": "ws",
+    "name": "Samoa",
+    "flag": "🇼🇸",
+    "region": "other"
+  },
+  {
     "code": "sm",
     "name": "San Marino",
     "flag": "🇸🇲",
     "region": "eu"
+  },
+  {
+    "code": "st",
+    "name": "São Tomé & Príncipe",
+    "flag": "🇸🇹",
+    "region": "other"
   },
   {
     "code": "sa",
@@ -660,10 +1146,28 @@
     "region": "eu"
   },
   {
+    "code": "sc",
+    "name": "Seychelles",
+    "flag": "🇸🇨",
+    "region": "other"
+  },
+  {
+    "code": "sl",
+    "name": "Sierra Leone",
+    "flag": "🇸🇱",
+    "region": "other"
+  },
+  {
     "code": "sg",
     "name": "Singapore",
     "flag": "🇸🇬",
     "region": "apac"
+  },
+  {
+    "code": "sx",
+    "name": "Sint Maarten",
+    "flag": "🇸🇽",
+    "region": "other"
   },
   {
     "code": "sk",
@@ -678,16 +1182,40 @@
     "region": "eu"
   },
   {
+    "code": "sb",
+    "name": "Solomon Islands",
+    "flag": "🇸🇧",
+    "region": "other"
+  },
+  {
+    "code": "so",
+    "name": "Somalia",
+    "flag": "🇸🇴",
+    "region": "other"
+  },
+  {
     "code": "za",
     "name": "South Africa",
     "flag": "🇿🇦",
     "region": "africa"
   },
   {
+    "code": "gs",
+    "name": "South Georgia & South Sandwich Islands",
+    "flag": "🇬🇸",
+    "region": "other"
+  },
+  {
     "code": "kr",
     "name": "South Korea",
     "flag": "🇰🇷",
     "region": "apac"
+  },
+  {
+    "code": "ss",
+    "name": "South Sudan",
+    "flag": "🇸🇸",
+    "region": "other"
   },
   {
     "code": "es",
@@ -702,6 +1230,66 @@
     "region": "apac"
   },
   {
+    "code": "bl",
+    "name": "St. Barthélemy",
+    "flag": "🇧🇱",
+    "region": "other"
+  },
+  {
+    "code": "sh",
+    "name": "St. Helena",
+    "flag": "🇸🇭",
+    "region": "other"
+  },
+  {
+    "code": "kn",
+    "name": "St. Kitts & Nevis",
+    "flag": "🇰🇳",
+    "region": "other"
+  },
+  {
+    "code": "lc",
+    "name": "St. Lucia",
+    "flag": "🇱🇨",
+    "region": "other"
+  },
+  {
+    "code": "mf",
+    "name": "St. Martin",
+    "flag": "🇲🇫",
+    "region": "other"
+  },
+  {
+    "code": "pm",
+    "name": "St. Pierre & Miquelon",
+    "flag": "🇵🇲",
+    "region": "other"
+  },
+  {
+    "code": "vc",
+    "name": "St. Vincent & Grenadines",
+    "flag": "🇻🇨",
+    "region": "other"
+  },
+  {
+    "code": "sd",
+    "name": "Sudan",
+    "flag": "🇸🇩",
+    "region": "other"
+  },
+  {
+    "code": "sr",
+    "name": "Suriname",
+    "flag": "🇸🇷",
+    "region": "other"
+  },
+  {
+    "code": "sj",
+    "name": "Svalbard & Jan Mayen",
+    "flag": "🇸🇯",
+    "region": "other"
+  },
+  {
     "code": "se",
     "name": "Sweden",
     "flag": "🇸🇪",
@@ -712,6 +1300,12 @@
     "name": "Switzerland",
     "flag": "🇨🇭",
     "region": "eu"
+  },
+  {
+    "code": "sy",
+    "name": "Syria",
+    "flag": "🇸🇾",
+    "region": "other"
   },
   {
     "code": "tw",
@@ -738,6 +1332,36 @@
     "region": "apac"
   },
   {
+    "code": "tl",
+    "name": "Timor-Leste",
+    "flag": "🇹🇱",
+    "region": "other"
+  },
+  {
+    "code": "tg",
+    "name": "Togo",
+    "flag": "🇹🇬",
+    "region": "other"
+  },
+  {
+    "code": "tk",
+    "name": "Tokelau",
+    "flag": "🇹🇰",
+    "region": "other"
+  },
+  {
+    "code": "to",
+    "name": "Tonga",
+    "flag": "🇹🇴",
+    "region": "other"
+  },
+  {
+    "code": "tt",
+    "name": "Trinidad & Tobago",
+    "flag": "🇹🇹",
+    "region": "other"
+  },
+  {
     "code": "tn",
     "name": "Tunisia",
     "flag": "🇹🇳",
@@ -754,6 +1378,30 @@
     "name": "Turkmenistan",
     "flag": "🇹🇲",
     "region": "cis"
+  },
+  {
+    "code": "tc",
+    "name": "Turks & Caicos Islands",
+    "flag": "🇹🇨",
+    "region": "other"
+  },
+  {
+    "code": "tv",
+    "name": "Tuvalu",
+    "flag": "🇹🇻",
+    "region": "other"
+  },
+  {
+    "code": "um",
+    "name": "U.S. Outlying Islands",
+    "flag": "🇺🇲",
+    "region": "other"
+  },
+  {
+    "code": "vi",
+    "name": "U.S. Virgin Islands",
+    "flag": "🇻🇮",
+    "region": "other"
   },
   {
     "code": "ug",
@@ -798,6 +1446,18 @@
     "region": "cis"
   },
   {
+    "code": "vu",
+    "name": "Vanuatu",
+    "flag": "🇻🇺",
+    "region": "other"
+  },
+  {
+    "code": "va",
+    "name": "Vatican City",
+    "flag": "🇻🇦",
+    "region": "other"
+  },
+  {
     "code": "ve",
     "name": "Venezuela",
     "flag": "🇻🇪",
@@ -808,6 +1468,18 @@
     "name": "Vietnam",
     "flag": "🇻🇳",
     "region": "apac"
+  },
+  {
+    "code": "wf",
+    "name": "Wallis & Futuna",
+    "flag": "🇼🇫",
+    "region": "other"
+  },
+  {
+    "code": "eh",
+    "name": "Western Sahara",
+    "flag": "🇪🇭",
+    "region": "other"
   },
   {
     "code": "ye",

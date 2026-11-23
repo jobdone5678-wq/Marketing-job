@@ -26,10 +26,13 @@ import {
   RotateCcw,
   Loader2,
   AlertCircle,
+  MapPin,
+  ChevronDown,
 } from 'lucide-react';
 import {
   COUNTRIES,
   POPULAR_COUNTRY_CODES,
+  LOCATION_STARTING_COUNTRIES,
 } from '@/lib/profile/countries';
 import { CountryFlag } from '@/components/ui/country-flag';
 import {
@@ -65,6 +68,50 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
+const LANGUAGE_FLAG_MAP: Record<string, string> = {
+  English: 'gb',
+  German: 'de',
+  French: 'fr',
+  Spanish: 'es',
+  Hindi: 'in',
+  Mandarin: 'cn',
+  Chinese: 'cn',
+  Japanese: 'jp',
+  Portuguese: 'pt',
+  Arabic: 'sa',
+  Russian: 'ru',
+  Italian: 'it',
+  Dutch: 'nl',
+  Polish: 'pl',
+  Korean: 'kr',
+  Swedish: 'se',
+  Turkish: 'tr',
+  Ukrainian: 'ua',
+  Vietnamese: 'vn',
+  Indonesian: 'id',
+  Greek: 'gr',
+  Czech: 'cz',
+  Romanian: 'ro',
+  Danish: 'dk',
+  Finnish: 'fi',
+  Norwegian: 'no',
+  Hungarian: 'hu',
+  Hebrew: 'il',
+  Thai: 'th',
+};
+
+const REMOTE_REGIONS = [
+  'Worldwide',
+  'North America',
+  'LATAM',
+  'Europe',
+  'UK',
+  'MENA',
+  'Africa',
+  'APAC',
+  'CIS',
+];
+
 export function ProfileView() {
   const [profile, setProfile] = useState<CandidateProfileState>(DEFAULT_PROFILE);
   const [activeTab, setActiveTab] = useState<'profile' | 'skills' | 'experience' | 'screening'>('profile');
@@ -96,6 +143,12 @@ export function ProfileView() {
 
   const [countrySearch, setCountrySearch] = useState('');
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
+
+  const [languageSearch, setLanguageSearch] = useState('');
+  const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
+
+  const [locationCountrySearch, setLocationCountrySearch] = useState('');
+  const [showLocationCountryDropdown, setShowLocationCountryDropdown] = useState(false);
 
   // Experience forms state
   const [addingJob, setAddingJob] = useState(false);
@@ -263,6 +316,17 @@ export function ProfileView() {
         const updated: CandidateProfileState = {
           ...prev,
           cv: parsed.cv,
+          headline: parsed.headline || prev.headline || '',
+          summary: parsed.summary || prev.summary || '',
+          demographics: {
+            gender: parsed.demographics?.gender || prev.demographics?.gender || '',
+            raceEthnicity: parsed.demographics?.raceEthnicity || parsed.demographics?.race_ethnicity || prev.demographics?.raceEthnicity || '',
+            veteranStatus: parsed.demographics?.veteranStatus || parsed.demographics?.veteran_status || prev.demographics?.veteranStatus || '',
+            disabilityStatus: parsed.demographics?.disabilityStatus || parsed.demographics?.disability_status || prev.demographics?.disabilityStatus || '',
+            race_ethnicity: parsed.demographics?.raceEthnicity || parsed.demographics?.race_ethnicity || prev.demographics?.raceEthnicity || '',
+            veteran_status: parsed.demographics?.veteranStatus || parsed.demographics?.veteran_status || prev.demographics?.veteranStatus || '',
+            disability_status: parsed.demographics?.disabilityStatus || parsed.demographics?.disability_status || prev.demographics?.disabilityStatus || '',
+          },
           roles: parsed.roles.length > 0 ? parsed.roles : prev.roles,
           seniorities: parsed.seniorities.length > 0 ? parsed.seniorities : prev.seniorities,
           jobLanguages: parsed.jobLanguages.length > 0 ? parsed.jobLanguages : prev.jobLanguages,
@@ -277,6 +341,9 @@ export function ProfileView() {
             workFormat: parsed.location.workFormat.length > 0 ? parsed.location.workFormat : ['Remote'],
             whereBased: parsed.location.whereBased || prev.location.whereBased,
             timezone: parsed.location.timezone && parsed.location.timezone !== 'UTC' ? parsed.location.timezone : prev.location.timezone || 'UTC',
+            regions: (parsed.location.regions && parsed.location.regions.length > 0) ? parsed.location.regions : (prev.location.regions || ['Worldwide']),
+            countries: (parsed.location.countries && parsed.location.countries.length > 0) ? parsed.location.countries : (prev.location.countries || []),
+            openToRelocation: typeof parsed.location.openToRelocation === 'boolean' ? parsed.location.openToRelocation : !!prev.location.openToRelocation,
           },
           skills: parsed.skills.length > 0 ? parsed.skills : prev.skills,
           workHistory: parsed.workHistory.length > 0 ? parsed.workHistory : prev.workHistory,
@@ -569,19 +636,7 @@ export function ProfileView() {
 
           {/* Your CV */}
           <section className="space-y-3 rounded-xl border border-neutral-200/80 bg-white p-5 shadow-xs dark:border-neutral-800 dark:bg-neutral-900">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Your CV</h2>
-              {profile.cv && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="gap-1.5 text-xs"
-                >
-                  <Pencil className="size-3.5" /> Replace CV
-                </Button>
-              )}
-            </div>
+            <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Your CV</h2>
 
             {/* Status alerts */}
             {parseSuccessMessage && (
@@ -608,31 +663,39 @@ export function ProfileView() {
                 </p>
               </div>
             ) : profile.cv ? (
-              <div className="flex items-center justify-between rounded-xl border border-neutral-200 bg-neutral-50/50 p-4 dark:border-neutral-800 dark:bg-neutral-900/50">
-                <div className="flex items-center gap-3">
-                  <div className="flex size-10 items-center justify-center rounded-lg bg-red-500/10 text-red-600 dark:text-red-400">
-                    <FileText className="size-5" />
+              <div className="rounded-xl border border-neutral-200/90 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-9 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+                      <Check className="size-4 stroke-[2.5]" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                        Uploaded {profile.cv.uploadedAt ? new Date(profile.cv.uploadedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'recently'}
+                      </p>
+                      <div className="mt-1 flex items-center gap-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="h-7 cursor-pointer px-3 text-xs text-neutral-700 dark:text-neutral-300"
+                        >
+                          Replace
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleDeleteCv}
+                          className="h-7 cursor-pointer gap-1 px-2 text-xs text-neutral-600 hover:text-red-600 dark:text-neutral-400 dark:hover:text-red-400"
+                        >
+                          <Trash2 className="size-3.5" /> Delete
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">{profile.cv.filename}</p>
-                    <p className="text-xs text-neutral-500">
-                      Uploaded {profile.cv.uploadedAt ? new Date(profile.cv.uploadedAt).toLocaleDateString() : 'recently'} · {profile.cv.sizeFormatted}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
                   <Badge variant="secondary" className="gap-1 bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
                     <Check className="size-3 text-emerald-600" /> ATS readable
                   </Badge>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleDeleteCv}
-                    className="cursor-pointer text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
-                    title="Delete resume and clear all parsed fields"
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
                 </div>
               </div>
             ) : (
@@ -656,6 +719,9 @@ export function ProfileView() {
                 </p>
               </div>
             )}
+            <p className="text-xs text-neutral-500">
+              PDF with selectable text, up to 8 MB · adds new skills to your profile; the file is stored to score its readiness.
+            </p>
             <input
               ref={fileInputRef}
               type="file"
@@ -667,6 +733,33 @@ export function ProfileView() {
             />
           </section>
 
+          {/* Summary Card */}
+          <section className="space-y-4 rounded-xl border border-neutral-200/80 bg-white p-5 shadow-xs dark:border-neutral-800 dark:bg-neutral-900">
+            <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Summary</h2>
+            <div className="space-y-1">
+              <label className="text-xs text-neutral-600 dark:text-neutral-400">Headline</label>
+              <Input
+                value={profile.headline || ''}
+                onChange={(e) => updateProfile((p) => ({ ...p, headline: e.target.value }))}
+                placeholder="Full Stack Developer - G2I Talent Pool"
+                className="h-10 rounded-lg"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-neutral-600 dark:text-neutral-400">Summary</label>
+              <textarea
+                rows={4}
+                value={profile.summary || ''}
+                onChange={(e) => updateProfile((p) => ({ ...p, summary: e.target.value }))}
+                placeholder="Full Stack Developer with 7+ years of software engineering experience..."
+                className="w-full rounded-md border border-neutral-300 bg-white p-3 text-xs text-neutral-900 shadow-2xs dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 focus:outline-hidden focus:ring-2 focus:ring-lime-600"
+              />
+            </div>
+            <p className="text-xs text-neutral-500">
+              As stated on your CV: {profile.contacts.location || profile.location.whereBased || 'Austin, TX'}
+            </p>
+          </section>
+
           {/* Roles & Level */}
           <section className="space-y-4 rounded-xl border border-neutral-200/80 bg-white p-5 shadow-xs dark:border-neutral-800 dark:bg-neutral-900">
             <div className="flex items-center justify-between">
@@ -674,9 +767,6 @@ export function ProfileView() {
                 <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
                   Roles <span className="text-neutral-500 font-normal">{profile.roles.length}/10</span>
                 </h2>
-                <p className="text-xs text-neutral-500">
-                  Try a job title such as SOC Analyst, Cloud Engineer or Helpdesk to find its specialization.
-                </p>
               </div>
               <Button
                 variant="outline"
@@ -731,28 +821,6 @@ export function ProfileView() {
               )}
             </div>
 
-            {/* Selected Roles Chips */}
-            {profile.roles.length > 0 && (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {profile.roles.map((r) => (
-                  <Badge
-                    key={r}
-                    variant="secondary"
-                    className="gap-1.5 rounded-md bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200"
-                  >
-                    {r}
-                    <button
-                      type="button"
-                      onClick={() => toggleRole(r)}
-                      className="cursor-pointer text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
-                    >
-                      <X className="size-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
-
             {/* Popular Roles Pills (Matches Freehire UI) */}
             <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
               {POPULAR_ROLES.map((role) => {
@@ -762,10 +830,10 @@ export function ProfileView() {
                     key={role.id}
                     type="button"
                     onClick={() => toggleRole(role.label)}
-                    className={`cursor-pointer rounded-full px-3 py-1 font-medium transition-colors ${
+                    className={`cursor-pointer rounded-full px-3.5 py-1 font-medium transition-colors ${
                       selected
-                        ? 'bg-lime-700 text-white'
-                        : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
+                        ? 'bg-[#3f5d13] text-white hover:bg-[#344e10]'
+                        : 'border border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
                     }`}
                   >
                     {role.label}
@@ -780,15 +848,20 @@ export function ProfileView() {
                 +49 more — type to search
               </button>
             </div>
+            <p className="text-xs text-neutral-500">
+              Try a job title such as SOC Analyst, Cloud Engineer or Helpdesk to find its specialization.
+            </p>
+            <a
+              href="#jobs"
+              className="inline-block text-xs font-medium text-neutral-900 underline hover:text-neutral-700 dark:text-neutral-100"
+            >
+              Find jobs in these specializations
+            </a>
 
             {/* Level (Pick every level you'd take) */}
             <div className="border-t border-neutral-200/80 pt-4 dark:border-neutral-800">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-700 dark:text-neutral-300">Level</h3>
-                  <p className="text-xs text-neutral-500">Pick every level you'd take</p>
-                </div>
-              </div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-700 dark:text-neutral-300">Level</h3>
+              <p className="text-xs text-neutral-500">Pick every level you'd take</p>
               <div className="mt-2.5 flex flex-wrap gap-2">
                 {SENIORITY_LEVELS.map((level) => {
                   const sel = profile.seniorities.includes(level);
@@ -797,9 +870,9 @@ export function ProfileView() {
                       key={level}
                       type="button"
                       onClick={() => toggleSeniority(level)}
-                      className={`cursor-pointer rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                      className={`cursor-pointer rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors ${
                         sel
-                          ? 'border-lime-700 bg-lime-700 text-white'
+                          ? 'border-[#3f5d13] bg-[#3f5d13] text-white hover:bg-[#344e10]'
                           : 'border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300'
                       }`}
                     >
@@ -812,29 +885,86 @@ export function ProfileView() {
 
             {/* Job languages */}
             <div className="border-t border-neutral-200/80 pt-4 dark:border-neutral-800">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-700 dark:text-neutral-300">Job languages</h3>
-              <p className="text-xs text-neutral-500">
+              <div className="flex items-center gap-1.5">
+                <LanguagesIcon className="size-4 text-neutral-700 dark:text-neutral-300" />
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-700 dark:text-neutral-300">Job languages</h3>
+              </div>
+              <p className="mt-0.5 text-xs text-neutral-500">
                 Show vacancies written in any of the selected languages. Leave empty for any language.
               </p>
-              <div className="mt-2.5 flex flex-wrap gap-1.5">
-                {POPULAR_JOB_LANGUAGES.map((lang) => {
-                  const sel = profile.jobLanguages.includes(lang);
-                  return (
-                    <button
-                      key={lang}
-                      type="button"
-                      onClick={() => toggleJobLanguage(lang)}
-                      className={`cursor-pointer rounded-md px-2.5 py-1 text-xs transition-colors ${
-                        sel
-                          ? 'bg-lime-700 font-medium text-white'
-                          : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-400'
-                      }`}
-                    >
-                      {lang}
-                    </button>
-                  );
-                })}
+
+              {/* Search languages dropdown */}
+              <div className="relative mt-2.5">
+                <div
+                  onClick={() => setShowLanguageDropdown((prev) => !prev)}
+                  className="flex h-10 w-full cursor-pointer items-center justify-between rounded-lg border border-neutral-300 bg-white px-3 text-xs text-neutral-500 shadow-2xs hover:border-neutral-400 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-400"
+                >
+                  <span>Search languages</span>
+                  <ChevronDown className="size-4 text-neutral-400" />
+                </div>
+
+                {showLanguageDropdown && (
+                  <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-neutral-200 bg-white p-2 shadow-lg dark:border-neutral-800 dark:bg-neutral-900">
+                    <div className="p-1">
+                      <Input
+                        value={languageSearch}
+                        onChange={(e) => setLanguageSearch(e.target.value)}
+                        placeholder="Filter languages..."
+                        className="h-8 text-xs"
+                        autoFocus
+                      />
+                    </div>
+                    <div className="mt-1 space-y-0.5">
+                      {POPULAR_JOB_LANGUAGES.filter((lang) =>
+                        lang.toLowerCase().includes(languageSearch.toLowerCase())
+                      ).map((lang) => {
+                        const sel = profile.jobLanguages.includes(lang);
+                        const flagCode = LANGUAGE_FLAG_MAP[lang] || 'gb';
+                        return (
+                          <div
+                            key={lang}
+                            onClick={() => toggleJobLanguage(lang)}
+                            className={`flex cursor-pointer items-center justify-between rounded-md px-3 py-1.5 text-xs transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 ${
+                              sel ? 'bg-neutral-100 font-medium text-lime-700 dark:bg-neutral-800 dark:text-lime-400' : 'text-neutral-700 dark:text-neutral-300'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2">
+                              <CountryFlag code={flagCode} name={lang} className="size-3.5 shrink-0 rounded-full" />
+                              <span>{lang}</span>
+                            </span>
+                            {sel && <Check className="size-3.5" />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {/* Selected Languages Pills with CountryFlag */}
+              {profile.jobLanguages.length > 0 && (
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  {profile.jobLanguages.map((lang) => {
+                    const flagCode = LANGUAGE_FLAG_MAP[lang] || 'gb';
+                    return (
+                      <span
+                        key={lang}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-2.5 py-1 text-xs font-medium text-neutral-800 shadow-2xs dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
+                      >
+                        <CountryFlag code={flagCode} name={lang} className="size-3.5 shrink-0 rounded-full" />
+                        <span>{lang}</span>
+                        <button
+                          type="button"
+                          onClick={() => toggleJobLanguage(lang)}
+                          className="cursor-pointer text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+                        >
+                          <X className="size-3" />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </section>
 
@@ -922,20 +1052,11 @@ export function ProfileView() {
 
           {/* Location & Timezone */}
           <section className="space-y-4 rounded-xl border border-neutral-200/80 bg-white p-5 shadow-xs dark:border-neutral-800 dark:bg-neutral-900">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Location</h2>
-                <p className="text-xs text-neutral-500">All optional — used to tailor your job filters.</p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setEditingLocation((prev) => !prev)}
-                className="gap-1.5 text-xs"
-              >
-                <Pencil className="size-3.5" /> {editingLocation ? 'Done' : 'Edit Location'}
-              </Button>
+            <div className="flex items-center gap-1.5">
+              <MapPin className="size-4 text-neutral-700 dark:text-neutral-300" />
+              <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Location</h2>
             </div>
+            <p className="-mt-2 text-xs text-neutral-500">All optional — used to tailor your job filters.</p>
 
             {/* Work format */}
             <div className="space-y-1.5">
@@ -948,10 +1069,10 @@ export function ProfileView() {
                       key={format}
                       type="button"
                       onClick={() => toggleWorkFormat(format)}
-                      className={`cursor-pointer rounded-full border px-3.5 py-1 text-xs font-medium transition-colors ${
+                      className={`cursor-pointer rounded-full px-3.5 py-1 text-xs font-medium transition-colors ${
                         sel
-                          ? 'border-lime-700 bg-lime-700 text-white'
-                          : 'border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300'
+                          ? 'bg-[#3f5d13] text-white hover:bg-[#344e10]'
+                          : 'border border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300'
                       }`}
                     >
                       {format}
@@ -969,13 +1090,209 @@ export function ProfileView() {
                 onChange={(e) =>
                   updateProfile((p) => ({ ...p, location: { ...p.location, whereBased: e.target.value } }))
                 }
-                placeholder="Pick a work format above to set where you can work (e.g. Austin, TX, USA or Berlin, Germany)"
-                className="h-9"
+                placeholder="e.g. Austin, United States"
+                className="h-10 rounded-lg"
               />
             </div>
 
-            {/* Timezone (Full IANA List) */}
-            <div className="space-y-1">
+            {/* Remote — regions you can work for */}
+            <div className="space-y-1.5">
+              <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                Remote — regions you can work for (empty = worldwide)
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {REMOTE_REGIONS.map((region) => {
+                  const isWorldwide = region === 'Worldwide';
+                  const sel = isWorldwide
+                    ? (profile.location.regions || []).includes('Worldwide') || (profile.location.regions || []).length === 0
+                    : (profile.location.regions || []).includes(region);
+
+                  return (
+                    <button
+                      key={region}
+                      type="button"
+                      onClick={() => {
+                        updateProfile((p) => {
+                          const curr = p.location.regions || [];
+                          if (isWorldwide) {
+                            return { ...p, location: { ...p.location, regions: ['Worldwide'] } };
+                          }
+                          const filtered = curr.filter((r) => r !== 'Worldwide');
+                          const next = filtered.includes(region)
+                            ? filtered.filter((r) => r !== region)
+                            : [...filtered, region];
+                          return {
+                            ...p,
+                            location: {
+                              ...p.location,
+                              regions: next.length === 0 ? ['Worldwide'] : next,
+                            },
+                          };
+                        });
+                      }}
+                      className={`cursor-pointer rounded-full px-3.5 py-1 text-xs font-medium transition-colors ${
+                        sel
+                          ? 'bg-[#3f5d13] text-white hover:bg-[#344e10]'
+                          : 'border border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300'
+                      }`}
+                    >
+                      {region}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Add specific countries */}
+            <div className="space-y-2">
+              <div className="relative">
+                <Input
+                  value={locationCountrySearch}
+                  onChange={(e) => setLocationCountrySearch(e.target.value)}
+                  onFocus={() => setShowLocationCountryDropdown(true)}
+                  placeholder="Add specific countries"
+                  className="h-10 rounded-lg bg-white dark:bg-neutral-900"
+                />
+
+                {showLocationCountryDropdown && (
+                  <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-neutral-200 bg-white p-2 shadow-xl dark:border-neutral-800 dark:bg-neutral-900">
+                    <div className="mb-1.5 flex items-center justify-between px-2 text-xs font-semibold text-neutral-400">
+                      <span>Search {COUNTRIES.length} Countries</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowLocationCountryDropdown(false)}
+                        className="cursor-pointer text-neutral-500 hover:text-neutral-800"
+                      >
+                        Close
+                      </button>
+                    </div>
+                    {COUNTRIES.filter((c) =>
+                      c.name.toLowerCase().includes(locationCountrySearch.toLowerCase()) ||
+                      c.code.toLowerCase().includes(locationCountrySearch.toLowerCase())
+                    ).map((c) => {
+                      const sel = (profile.location.countries || []).includes(c.code);
+                      return (
+                        <div
+                          key={c.code}
+                          onClick={() => {
+                            updateProfile((p) => {
+                              const list = p.location.countries || [];
+                              const next = list.includes(c.code)
+                                ? list.filter((code) => code !== c.code)
+                                : [...list, c.code];
+                              return {
+                                ...p,
+                                location: { ...p.location, countries: next },
+                              };
+                            });
+                          }}
+                          className={`flex cursor-pointer items-center justify-between rounded-md px-3 py-1.5 text-xs transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800 ${
+                            sel ? 'bg-neutral-100 font-medium text-lime-700 dark:bg-neutral-800 dark:text-lime-400' : 'text-neutral-700 dark:text-neutral-300'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <CountryFlag code={c.code} name={c.name} className="size-4 shrink-0 rounded-full" />
+                            <span>{c.name}</span>
+                          </span>
+                          {sel && <Check className="size-3.5" />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Country pills with CountryFlag */}
+              {(() => {
+                const selectedCodes = profile.location.countries || [];
+                const visibleCodes = [...selectedCodes];
+                for (const code of LOCATION_STARTING_COUNTRIES) {
+                  if (!visibleCodes.includes(code) && visibleCodes.length < 8) {
+                    visibleCodes.push(code);
+                  }
+                }
+                const remainingCount = Math.max(0, COUNTRIES.length - visibleCodes.length);
+
+                return (
+                  <div className="space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+                      {visibleCodes.map((code) => {
+                        const country = COUNTRIES.find((c) => c.code === code);
+                        if (!country) return null;
+                        const sel = selectedCodes.includes(code);
+
+                        return (
+                          <button
+                            key={code}
+                            type="button"
+                            onClick={() => {
+                              updateProfile((p) => {
+                                const list = p.location.countries || [];
+                                const next = list.includes(code)
+                                  ? list.filter((c) => c !== code)
+                                  : [...list, code];
+                                return {
+                                  ...p,
+                                  location: { ...p.location, countries: next },
+                                };
+                              });
+                            }}
+                            className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 font-medium transition-colors ${
+                              sel
+                                ? 'bg-[#3f5d13] text-white hover:bg-[#344e10]'
+                                : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
+                            }`}
+                          >
+                            <CountryFlag code={code} name={country.name} className="size-4 shrink-0 rounded-full" />
+                            <span>{country.name}</span>
+                            {sel && <X className="size-3" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {remainingCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowLocationCountryDropdown(true)}
+                        className="cursor-pointer text-xs text-neutral-500 hover:text-neutral-900 hover:underline dark:hover:text-neutral-200"
+                      >
+                        +{remainingCount} more — type to search
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Open to relocation checkbox */}
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="checkbox"
+                id="openToRelocation"
+                checked={!!profile.location.openToRelocation}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  updateProfile((p) => ({
+                    ...p,
+                    location: {
+                      ...p.location,
+                      openToRelocation: checked,
+                    },
+                    screeningAnswers: {
+                      ...p.screeningAnswers,
+                      willing_to_relocate: checked ? 'yes' : 'no',
+                    },
+                  }));
+                }}
+                className="size-4 rounded border-neutral-300 text-lime-700 focus:ring-lime-600"
+              />
+              <label htmlFor="openToRelocation" className="cursor-pointer text-xs font-medium text-neutral-800 dark:text-neutral-200">
+                Open to relocation
+              </label>
+            </div>
+
+            {/* Timezone */}
+            <div className="space-y-1 pt-1">
               <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">Timezone</span>
               <p className="text-xs text-neutral-500">
                 Used to schedule a daily search-alert digest and quiet hours at your own local time.
@@ -993,6 +1310,119 @@ export function ProfileView() {
                   </option>
                 ))}
               </select>
+            </div>
+          </section>
+
+          {/* Demographics & Equal Employment Opportunity (EEO) */}
+          <section className="space-y-4 rounded-xl border border-neutral-200/80 bg-white p-5 shadow-xs dark:border-neutral-800 dark:bg-neutral-900">
+            <div>
+              <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                Demographics & Equal Employment Opportunity (EEO)
+              </h2>
+              <p className="text-xs text-neutral-500">
+                Configured here as your single source of truth for job application autofill across Greenhouse, Lever, Workday, Ashby, and ATS portals.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {/* Gender */}
+              <div className="flex flex-col gap-1 text-xs">
+                <span className="font-medium text-neutral-600 dark:text-neutral-400">Gender</span>
+                <select
+                  value={profile.demographics?.gender || ''}
+                  onChange={(e) =>
+                    updateProfile((p) => ({
+                      ...p,
+                      demographics: {
+                        ...p.demographics,
+                        gender: e.target.value,
+                      },
+                    }))
+                  }
+                  className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-xs text-neutral-900 shadow-2xs dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+                >
+                  <option value="">Decline to self-identify / Prefer not to say</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Non-Binary">Non-Binary</option>
+                  <option value="Prefer not to say">Prefer not to say</option>
+                </select>
+              </div>
+
+              {/* Race / Ethnicity */}
+              <div className="flex flex-col gap-1 text-xs">
+                <span className="font-medium text-neutral-600 dark:text-neutral-400">Race / Ethnicity</span>
+                <select
+                  value={profile.demographics?.raceEthnicity || profile.demographics?.race_ethnicity || ''}
+                  onChange={(e) =>
+                    updateProfile((p) => ({
+                      ...p,
+                      demographics: {
+                        ...p.demographics,
+                        raceEthnicity: e.target.value,
+                        race_ethnicity: e.target.value,
+                      },
+                    }))
+                  }
+                  className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-xs text-neutral-900 shadow-2xs dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+                >
+                  <option value="">Decline to self-identify</option>
+                  <option value="White">White</option>
+                  <option value="Black or African American">Black or African American</option>
+                  <option value="Hispanic or Latino">Hispanic or Latino</option>
+                  <option value="Asian">Asian</option>
+                  <option value="Native American or Alaska Native">Native American or Alaska Native</option>
+                  <option value="Native Hawaiian or Other Pacific Islander">Native Hawaiian or Other Pacific Islander</option>
+                  <option value="Two or More Races">Two or More Races</option>
+                </select>
+              </div>
+
+              {/* Veteran Status */}
+              <div className="flex flex-col gap-1 text-xs">
+                <span className="font-medium text-neutral-600 dark:text-neutral-400">Veteran Status</span>
+                <select
+                  value={profile.demographics?.veteranStatus || profile.demographics?.veteran_status || ''}
+                  onChange={(e) =>
+                    updateProfile((p) => ({
+                      ...p,
+                      demographics: {
+                        ...p.demographics,
+                        veteranStatus: e.target.value,
+                        veteran_status: e.target.value,
+                      },
+                    }))
+                  }
+                  className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-xs text-neutral-900 shadow-2xs dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+                >
+                  <option value="">Decline to self-identify</option>
+                  <option value="I am not a veteran">I am not a veteran</option>
+                  <option value="I am a protected veteran">I am a protected veteran</option>
+                  <option value="I am a veteran, but not a protected veteran">I am a veteran, but not a protected veteran</option>
+                </select>
+              </div>
+
+              {/* Disability Status */}
+              <div className="flex flex-col gap-1 text-xs">
+                <span className="font-medium text-neutral-600 dark:text-neutral-400">Disability Status</span>
+                <select
+                  value={profile.demographics?.disabilityStatus || profile.demographics?.disability_status || ''}
+                  onChange={(e) =>
+                    updateProfile((p) => ({
+                      ...p,
+                      demographics: {
+                        ...p.demographics,
+                        disabilityStatus: e.target.value,
+                        disability_status: e.target.value,
+                      },
+                    }))
+                  }
+                  className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-xs text-neutral-900 shadow-2xs dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+                >
+                  <option value="">I do not wish to answer</option>
+                  <option value="No, I do not have a disability">No, I do not have a disability</option>
+                  <option value="Yes, I have a disability (or previously had a disability)">Yes, I have a disability (or previously had a disability)</option>
+                </select>
+              </div>
             </div>
           </section>
         </div>

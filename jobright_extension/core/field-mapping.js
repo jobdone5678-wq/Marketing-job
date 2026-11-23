@@ -18,7 +18,7 @@
   const CANONICAL_FACTS = new Set([
     'first_name', 'preferred_first_name', 'last_name', 'full_name', 'email', 'phone', 'current_city', 'current_state',
     'current_location', 'zip_code', 'country', 'full_address', 'date_of_birth', 'citizenship_status', 'linkedin_url', 'github_url', 'website',
-    'current_employer', 'current_title', 'total_experience_years', 'primary_skills',
+    'current_employer', 'current_title', 'headline', 'total_experience_years', 'primary_skills',
     'authorized_in_usa', 'needs_sponsorship', 'open_to_relocation', 'visa_status', 'work_authorization',
     'intended_work_country',
     'end_client', 'point_of_contact', 'pay_rate', 'vendor_email', 'personal_email', 'contract_type',
@@ -135,7 +135,7 @@
     vendor_email: ['vendor email', 'vendor contact email', 'recruiter email', 'staffing email', 'vendor contact', 'vendor e-mail'],
     personal_email: ['personal email', 'personal email address', 'personal e-mail', 'personal email id'],
     contract_type: ['contract type', 'employment type', 'w2', 'c2c', '1099', 'contractor', 'independent contractor', 'w-2', 'c2c contractor', 'type of employment', 'type of contract'],
-    summary: ['professional summary', 'executive summary', 'profile summary', 'candidate summary'],
+    summary: ['summary', 'professional summary', 'executive summary', 'profile summary', 'candidate summary', 'about me', 'bio'],
     bio: ['short bio', 'candidate bio', 'professional bio'],
     gender: ['gender', 'sex', 'gender identity', 'what is your gender', 'how do you identify your gender', 'voluntary self-identification of gender', 'demographic gender', 'please select your gender', 'gender self-identification'],
     race: ['race', 'ethnicity', 'race and ethnicity', 'racial background', 'ethnic background', 'race ethnicity', 'hispanic or latino', 'demographic race', 'demographics race', 'are you hispanic or latino', 'voluntary self-identification of race', 'what is your race', 'race/ethnicity'],
@@ -384,17 +384,15 @@
       }
 
       // Veteran matching
-      if (d.includes('not a protected veteran') || d === 'not a veteran') {
+      if (/not a (?:protected )?veteran|not a veteran|^no\b|neither/i.test(d)) {
         if (/not a (?:protected )?veteran|^no\b|neither|do not identify|not a veteran/i.test(t)) return true;
-      }
-      if (d.includes('identify as one or more') || d === 'protected veteran' || d === 'veteran') {
+      } else if (/identify as one or more|protected veteran|active duty/i.test(d) || d.includes('veteran')) {
         if (/i identify as one or more|protected veteran|active duty|veteran\b/i.test(t) && !/not a/i.test(t)) return true;
       }
       // Disability matching
-      if (d.includes('not have a disability') || d === 'no disability') {
+      if (/not have a disability|no disability|^no\b/i.test(d)) {
         if (/no,? (?:i )?do not have|no disability|^no\b/i.test(t)) return true;
-      }
-      if (d.includes('have a disability') && !d.includes('not')) {
+      } else if (/(?:yes,?\s*)?(?:i\s*)?(?:have|do have)\s*a disability/i.test(d) || d.includes('have a disability')) {
         if (/yes,? (?:i )?(?:have|do have)|have a disability|^yes\b/i.test(t)) return true;
       }
       // Work auth & Visa matching
@@ -414,8 +412,9 @@
   }
 
   function buildValues(candidate) {
+    const candFacts = candidate.confirmed_facts || {};
     const facts = candidate.provenance_status === 'confirmed' ? (candidate.confirmed_facts || {}) : candidate;
-    let fullName = String(facts.full_name || candidate.full_name || '').trim();
+    let fullName = String(facts.full_name || candidate.full_name || candFacts.full_name || candFacts.name || candidate.name || '').trim();
     if (/\.(docx?|pdf)$/i.test(fullName) || (fullName.includes('_') && !fullName.includes(' '))) {
       if (candidate.first_name && candidate.last_name) {
         fullName = `${candidate.first_name} ${candidate.last_name}`;
@@ -440,16 +439,14 @@
       : nowSponsor === false && futureSponsor === false ? false : directSponsor;
     const skills = facts.primary_skills || candidate.primary_skills || (Array.isArray(candidate.skills) ? candidate.skills.join(', ') : candidate.skills || '');
 
-    const rawPhone = String(facts.phone || candidate.phone || '').trim();
+    const rawPhone = String(facts.phone || candidate.phone || candFacts.phone || candFacts.phone_number || candidate.phone_number || '').trim();
     const phoneDigits = rawPhone.replace(/\D/g, '');
     const phone = rawPhone.startsWith('+') && !rawPhone.startsWith('+1') ? rawPhone
       : /^1\d{10}$/.test(phoneDigits) ? phoneDigits.slice(1)
       : phoneDigits.length === 10 ? phoneDigits : rawPhone;
 
-    const firstName = facts.first_name || candidate.first_name || names[0] || '';
-    const preferredFirst = facts.preferred_first_name || facts.preferred_name || candidate.preferred_first_name || candidate.preferred_name || firstName;
-
-    const candFacts = candidate.confirmed_facts || {};
+    const firstName = facts.first_name || candidate.first_name || candFacts.first_name || names[0] || '';
+    const preferredFirst = facts.preferred_first_name || facts.preferred_name || candidate.preferred_first_name || candidate.preferred_name || candFacts.preferred_first_name || candFacts.preferred_name || firstName;
     const gender = facts.gender || candidate.gender || candFacts.gender || '';
     const race = facts.race || candidate.race || candFacts.race || facts.race_ethnicity || candidate.race_ethnicity || candFacts.race_ethnicity || '';
     const veteran = facts.veteran || candidate.veteran || facts.veteran_status || candidate.veteran_status || candFacts.veteran || candFacts.veteran_status || '';
@@ -492,9 +489,9 @@
       first_name: firstName,
       preferred_first_name: preferredFirst,
       preferred_name: preferredFirst,
-      last_name: facts.last_name || candidate.last_name || names.slice(1).join(' ') || '',
+      last_name: facts.last_name || candidate.last_name || candFacts.last_name || names.slice(1).join(' ') || '',
       full_name: fullName,
-      email: facts.email || candidate.email || '',
+      email: facts.email || candidate.email || candFacts.email || '',
       phone: phone,
       current_city: city,
       current_state: state,
@@ -507,7 +504,8 @@
       date_of_birth: dateOfBirth,
       citizenship_status: facts.citizenship_status || candidate.citizenship_status || facts.citizenship || candidate.citizenship || '',
       current_employer: facts.current_employer || candidate.current_employer || facts.current_company || candidate.current_company || candidate.company || '',
-      current_title: facts.current_job_title || candidate.current_job_title || candidate.headline || '',
+      current_title: facts.current_job_title || candidate.current_job_title || candidate.headline || facts.headline || candFacts.headline || candFacts.current_job_title || '',
+      headline: facts.headline || candidate.headline || candFacts.headline || facts.current_job_title || candidate.current_job_title || '',
       linkedin_url: linkedin,
       github_url: facts.github_url || candidate.github_url || '',
       website: facts.website || candidate.website || candidate.portfolio_url || '',
@@ -526,8 +524,8 @@
       vendor_email: facts.vendor_email || candidate.vendor_email || '',
       personal_email: facts.personal_email || candidate.personal_email || '',
       contract_type: facts.contract_type || candidate.contract_type || facts.employment_types || candidate.employment_types || '',
-      summary: candidate.summary || candidate.bio || facts.summary || facts.bio || '',
-      bio: candidate.bio || candidate.summary || facts.bio || facts.summary || '',
+      summary: candidate.summary || candidate.bio || facts.summary || facts.bio || candFacts.summary || candFacts.bio || '',
+      bio: candidate.bio || candidate.summary || facts.bio || facts.summary || candFacts.bio || candFacts.summary || '',
       gender: gender,
       race: race,
       race_ethnicity: race,
