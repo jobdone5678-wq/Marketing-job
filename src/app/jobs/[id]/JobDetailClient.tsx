@@ -11,7 +11,8 @@ import {
 import type { Job, JobCopy } from '@/lib/jobs/freehire-types';
 import { useJobProfileSkills } from '@/hooks/use-job-profile-skills';
 import { useJobBookmarks } from '@/hooks/use-job-bookmarks';
-import { getJobLink, normalizeJobSkill } from '@/lib/jobs/freehire-display';
+import { getJobLink } from '@/lib/jobs/freehire-display';
+import { computeJobDetailsMatch } from '@/lib/resumes/job-match';
 import { CompanyLogo } from '@/components/company-logo';
 import {
   CATEGORY_LABELS,
@@ -63,15 +64,11 @@ export function JobDetailClient({
   const baseProfileSkills = useJobProfileSkills();
   const [claimedSkills, setClaimedSkills] = useState<Set<string>>(new Set());
   const [avoidedSkills, setAvoidedSkills] = useState<Set<string>>(new Set());
-  const [openClaimSkill, setOpenClaimSkill] = useState<string | null>(null);
-  const [lastAction, setLastAction] = useState<{ type: 'claim' | 'avoid'; skill: string } | null>(null);
 
-  // Draft Referral modal & CV Upload
+  // Draft Referral modal
   const [showReferralModal, setShowReferralModal] = useState(false);
-  const [cvUploaded, setCvUploaded] = useState(false);
 
   const titleRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const jobBasePath = pathname.startsWith('/dashboard') ? '/dashboard/jobs' : '/jobs';
 
@@ -142,51 +139,33 @@ export function JobDetailClient({
   const sourceKindLabel = sourceKind === 'ats' ? 'ATS' : 'Aggregator';
   const isSourceAvoided = avoidedSources.has(rawSource);
 
-  // Interactive Skill Calculations (Matched, Adjacent, Missing)
-  const { matchedSkills, adjacentSkills, missingSkills, matchPercentage, totalSkillsCount } = useMemo(() => {
-    const activeCandidateSkills = new Set([
-      ...baseProfileSkills.map(normalizeJobSkill),
-      ...Array.from(claimedSkills).map(normalizeJobSkill),
-    ]);
-
-    if (cvUploaded && activeCandidateSkills.size === 0) {
-      ['agile', 'automation', 'cloud', 'microservices'].forEach((s) => activeCandidateSkills.add(s));
+  // Collate candidate skills from server hydration, profile fallback, and client claims
+  const effectiveCandidateSkills = useMemo(() => {
+    const skills = new Set<string>();
+    if (candidateResume?.skills && Array.isArray(candidateResume.skills)) {
+      candidateResume.skills.forEach((s) => {
+        if (s) skills.add(s);
+      });
     }
+    if (baseProfileSkills && Array.isArray(baseProfileSkills)) {
+      baseProfileSkills.forEach((s) => {
+        if (s) skills.add(s);
+      });
+    }
+    claimedSkills.forEach((s) => skills.add(s));
+    return Array.from(skills);
+  }, [candidateResume?.skills, baseProfileSkills, claimedSkills]);
 
-    const matched: string[] = [];
-    const adjacent: { name: string; via: string }[] = [];
-    const missing: string[] = [];
+  // Deterministic profile match calculation
+  const { matchedSkills, missingSkills, matchPercentage, totalSkillsCount } = useMemo(() => {
+    return computeJobDetailsMatch(
+      skillsList,
+      effectiveCandidateSkills,
+      candidateResume?.text || ''
+    );
+  }, [skillsList, effectiveCandidateSkills, candidateResume?.text]);
 
-    skillsList.forEach((skill) => {
-      const norm = normalizeJobSkill(skill);
-      if (activeCandidateSkills.has(norm)) {
-        matched.push(skill);
-      } else if (
-        (norm.includes('cloud') && activeCandidateSkills.has('cloud')) ||
-        (norm.includes('react') && activeCandidateSkills.has('javascript')) ||
-        (norm.includes('native') && activeCandidateSkills.has('cloud'))
-      ) {
-        adjacent.push({ name: skill, via: norm.includes('cloud') ? 'Cloud' : 'JavaScript' });
-      } else {
-        missing.push(skill);
-      }
-    });
-
-    const total = skillsList.length || 1;
-    const exactPct = Math.round((matched.length / total) * 100);
-    const adjacentWeight = Math.round(((adjacent.length * 0.5) / total) * 100);
-    const calculatedPct = Math.min(100, exactPct + adjacentWeight);
-
-    return {
-      matchedSkills: matched,
-      adjacentSkills: adjacent,
-      missingSkills: missing,
-      matchPercentage: activeCandidateSkills.size > 0 ? calculatedPct : cvUploaded ? 85 : 0,
-      totalSkillsCount: skillsList.length,
-    };
-  }, [skillsList, baseProfileSkills, claimedSkills, cvUploaded]);
-
-  // Skill claim handler
+  // Skill claim handler (for JobDescriptionTab)
   const handleClaimSkill = useCallback((skill: string) => {
     setClaimedSkills((prev) => new Set([...prev, skill]));
     setAvoidedSkills((prev) => {
@@ -194,11 +173,9 @@ export function JobDetailClient({
       next.delete(skill);
       return next;
     });
-    setOpenClaimSkill(null);
-    setLastAction({ type: 'claim', skill });
   }, []);
 
-  // Skill avoid handler
+  // Skill avoid handler (for JobDescriptionTab)
   const handleAvoidSkill = useCallback((skill: string) => {
     setAvoidedSkills((prev) => new Set([...prev, skill]));
     setClaimedSkills((prev) => {
@@ -206,37 +183,7 @@ export function JobDetailClient({
       next.delete(skill);
       return next;
     });
-    setOpenClaimSkill(null);
-    setLastAction({ type: 'avoid', skill });
   }, []);
-
-  const handleStopAvoidingSkill = useCallback((skill: string) => {
-    setAvoidedSkills((prev) => {
-      const next = new Set(prev);
-      next.delete(skill);
-      return next;
-    });
-    setOpenClaimSkill(null);
-  }, []);
-
-  // Undo handler
-  const handleUndo = useCallback(() => {
-    if (!lastAction) return;
-    if (lastAction.type === 'claim') {
-      setClaimedSkills((prev) => {
-        const next = new Set(prev);
-        next.delete(lastAction.skill);
-        return next;
-      });
-    } else {
-      setAvoidedSkills((prev) => {
-        const next = new Set(prev);
-        next.delete(lastAction.skill);
-        return next;
-      });
-    }
-    setLastAction(null);
-  }, [lastAction]);
 
   // ATS Source avoid toggle
   const toggleAvoidSource = useCallback(() => {
@@ -272,14 +219,6 @@ export function JobDetailClient({
     [userVote]
   );
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setCvUploaded(true);
-      ['agile', 'automation', 'cloud', 'microservices'].forEach((s) => claimedSkills.add(s));
-      setClaimedSkills(new Set(claimedSkills));
-    }
-  };
-
   const requirementsList = job.enrichment?.requirements || [
     { text: 'Experience leading multiple engineering teams in a product-oriented environment', priority: 'required' },
     { text: 'Strong track record of creating direction, driving execution, and achieving measurable outcomes', priority: 'required' },
@@ -290,15 +229,6 @@ export function JobDetailClient({
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 font-sans">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".pdf,.doc,.docx"
-        onChange={handleFileUpload}
-        className="hidden"
-        aria-label="Upload CV file input"
-      />
-
       {/* STICKY SUB-HEADER ON SCROLL (Screenshot 3 / JobPinnedHeader) */}
       <JobPinnedHeader
         isSticky={isSticky}
@@ -320,15 +250,10 @@ export function JobDetailClient({
       <div className="flex flex-col items-start gap-6 lg:flex-row">
         {/* LEFT RAIL: JobFactsSidebar (Screenshot 2) */}
         <JobFactsSidebar
-          cvUploaded={cvUploaded}
           matchPercentage={matchPercentage}
           matchedSkills={matchedSkills}
-          adjacentSkills={adjacentSkills}
           missingSkills={missingSkills}
           totalSkillsCount={totalSkillsCount}
-          openClaimSkill={openClaimSkill}
-          avoidedSkills={avoidedSkills}
-          lastAction={lastAction}
           requirementsList={requirementsList}
           workFormat={workFormat}
           locationDisplay={locationDisplay}
@@ -346,12 +271,6 @@ export function JobDetailClient({
           downvotes={downvotes}
           userVote={userVote}
           sourceNote={sourceNote}
-          onUploadClick={() => fileInputRef.current?.click()}
-          onToggleClaimRow={(skill) => setOpenClaimSkill((prev) => (prev === skill ? null : skill))}
-          onClaimSkill={handleClaimSkill}
-          onAvoidSkill={handleAvoidSkill}
-          onStopAvoidingSkill={handleStopAvoidingSkill}
-          onUndo={handleUndo}
           onToggleAvoidSource={toggleAvoidSource}
           onCastVote={castVote}
         />
