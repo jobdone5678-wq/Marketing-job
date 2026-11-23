@@ -1279,7 +1279,30 @@ $('mark-applied').addEventListener('click', async () => {
     notice('notice', `✓ Marked as applied — ${job.title} is in your applications.`);
     chrome.runtime.sendMessage({ type: 'NEXTKIN_OUTSIDE_APPLICATION_SAVED' }).catch(() => {});
   } catch (error) {
-    notice('notice', error.message, true);
+    const isRetryable = error.status >= 500 || error.status === 429 || !error.status || /network|failed to fetch/i.test(error.message);
+    if (isRetryable) {
+      chrome.runtime.sendMessage({
+        type: 'queue-submission',
+        payload: {
+          candidateId: pending.candidateId,
+          eventKey: crypto.randomUUID(),
+          companyName: job.company,
+          jobTitle: job.title,
+          jobUrl: job.jobUrl || pending.url,
+          confirmationUrl: pending.url,
+          portalSource: job.portalSource,
+          jobLocation: job.location,
+          evidence: 'Candidate confirmed submission in the NextKinHR side panel (queued).',
+          manualAttestation: true,
+        }
+      }).catch(() => {});
+      pendingAppliedPrompt = null;
+      startedApplication = null;
+      renderAppliedPrompt();
+      notice('notice', `Application saved locally and queued for synchronization.`);
+    } else {
+      notice('notice', error.message, true);
+    }
   } finally {
     busy = false;
     $('mark-applied').disabled = false;

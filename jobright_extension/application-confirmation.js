@@ -15,8 +15,8 @@
 
   const confirmationUrlPattern = /\/(?:application\/(?:confirmation|received|complete|thank[-_]?you)|confirmation|thank[-_]?you(?:[-_]for[-_]applying)?|thanks|applied|application[-_](?:submitted|success|received|complete)|submission[-_]success|success|submitted)\/?$/i;
 
-  const statusSelectors = '[data-qa="job-application-success"], [data-automation-id="applicationSubmitted"], [data-automation-id="congratulations"], [data-testid="application-submitted"], [data-testid*="application-success" i], [class*="application-confirmation" i], [class*="application-submitted" i], #application_confirmation, [role="status"], [role="alert"], [role="dialog"], [aria-live="polite"], [aria-live="assertive"], dialog[open], [data-testid*="success" i], [data-testid*="confirmation" i], [class*="toast" i], [class*="snackbar" i]';
-  const atsSuccessSelector = '[data-qa="job-application-success"], [data-automation-id="applicationSubmitted"], [data-automation-id="congratulations"], [data-testid="application-submitted"], [data-testid*="application-success" i], #application_confirmation, .application-confirmation, .application-submitted';
+  const statusSelectors = '[data-qa="job-application-success"], [data-automation-id="applicationSubmitted"], [data-automation-id="congratulations"], [data-testid="application-submitted"], [data-testid*="application-success" i], [class*="application-confirmation" i], [class*="application-submitted" i], #application_confirmation, [role="status"], [role="alert"], [role="dialog"], [aria-live="polite"], [aria-live="assertive"], dialog[open], [data-testid*="success" i], [data-testid*="confirmation" i], [class*="toast" i], [class*="snackbar" i], .confirmation-message';
+  const atsSuccessSelector = '[data-qa="job-application-success"], [data-automation-id="applicationSubmitted"], [data-automation-id="congratulations"], [data-testid="application-submitted"], [data-testid*="application-success" i], #application_confirmation, .application-confirmation, .application-submitted, [data-test="application-success"], .confirmation-message';
 
   // Broaden hiddenSelectors to exclude footers, headers, navigation, and wizard progress bars
   const hiddenSelectors = [
@@ -159,6 +159,12 @@
     if (/(^|\.)lever\.co$/i.test(host)) return 'lever';
     if (/(^|\.)ashbyhq\.com$/i.test(host)) return 'ashby';
     if (/(^|\.)(smartrecruiters\.com|smartr\.me)$/i.test(host)) return 'smartrecruiters';
+    if (/(^|\.)(jazzhr\.com|applytojob\.com)$/i.test(host)) return 'jazzhr';
+    if (/(^|\.)(bamboohr\.com|bamboohr\.co\.uk)$/i.test(host)) return 'bamboohr';
+    if (/(^|\.)(workable\.com)$/i.test(host)) return 'workable';
+    if (/(^|\.)(jobvite\.com)$/i.test(host)) return 'jobvite';
+    if (/(^|\.)(taleo\.net)$/i.test(host)) return 'taleo';
+    if (/(^|\.)(icims\.com)$/i.test(host)) return 'icims';
 
     // DOM fallbacks
     if (q('[data-automation-id*="workday" i], [data-automation-id="applicationSubmitted"]')) return 'workday';
@@ -447,6 +453,17 @@
       receipt = detected ? { ...detected, url } : undefined;
     }
     if (!receipt) return;
+
+    if (receipt.status === 'SUBMITTED') {
+      const isUrlOnly = String(receipt.evidence || '').startsWith('URL confirmation path:');
+      const hasTerminalSelector = Boolean(qAll(atsSuccessSelector).length);
+      if (!submissionAttempted && !hasTerminalSelector) {
+        return;
+      }
+      if (isUrlOnly && !submissionAttempted) {
+        return;
+      }
+    }
 
     attempts++;
     const ok = await report(receipt);

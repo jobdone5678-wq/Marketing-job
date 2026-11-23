@@ -1350,6 +1350,24 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onConnect?.addListener) {
 
 if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) {
   chrome.runtime.onMessage.addListener((message, sender, reply) => {
+    if (message?.type === 'queue-submission' && message.payload) {
+      void (async () => {
+        try {
+          const connection = await getQueueConnection();
+          const item = sanitizeQueueItem({
+            id: message.payload.eventKey || crypto.randomUUID(),
+            workspace: connection.workspace,
+            accountId: connection.accountId,
+            body: message.payload,
+          }, connection.token);
+          await persistAndDeliverReceipt(item);
+          reply(true);
+        } catch {
+          reply(false);
+        }
+      })();
+      return true;
+    }
     if (message?.type === 'NEXTKIN_SET_SUBMISSION_ATTEMPT') {
       const tabId = sender.tab?.id;
       if (tabId != null) {
