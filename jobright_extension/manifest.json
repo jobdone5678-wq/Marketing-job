@@ -17,7 +17,8 @@
   "permissions": ["sidePanel", "storage", "tabs", "scripting", "alarms"],
   "host_permissions": [
     "https://*/*",
-    "http://*/*"
+    "http://localhost/*",
+    "http://127.0.0.1/*"
   ],
   "content_scripts": [
     {
@@ -37,7 +38,11 @@
       "run_at": "document_start"
     },
     {
-      "matches": ["https://*/*", "http://*/*"],
+      "matches": [
+        "https://*/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
       "exclude_matches": [
         "https://*.nextkinhr.com/*",
         "https://*.jobright-internal.com/*",
