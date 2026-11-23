@@ -169,6 +169,12 @@ function showFacts(id, facts) {
 
 function renderAccount() {
   const connected = !!connection;
+  const onboardingView = $('onboarding-view');
+  const authenticatedView = $('authenticated-view');
+  if (onboardingView && authenticatedView) {
+    onboardingView.hidden = connected;
+    authenticatedView.hidden = !connected;
+  }
   const name = candidate?.full_name || connection?.user?.name;
   setLine('connection', connected ? 'NextKinHR Connected' : 'Connect to NextKinHR', connected);
   setLine('candidate', name ? 'Candidate: ' + name : 'Candidate profile', !!name);
@@ -723,6 +729,15 @@ function renderResults(result) {
   if ($('unfilled-section')) $('unfilled-section').hidden = !unfilledCount;
 }
 
+$('onboarding-connect')?.addEventListener('click', async () => {
+  try {
+    const stored = await chrome.storage.local.get('origin');
+    const origin = apiOrigin(workspaceUrl(currentTab?.url) || workspaceUrl(stored.origin) || portalOrigin);
+    await chrome.tabs.create({ url: new URL('/auth/jobseeker', origin).href });
+  } catch (error) {
+    notice('notice', 'Could not open NextKinHR: ' + error.message, true);
+  }
+});
 $('connect').addEventListener('click', async () => {
   try {
     const stored = await chrome.storage.local.get('origin');

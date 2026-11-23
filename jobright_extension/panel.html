@@ -16,114 +16,133 @@
     <div id="connection" class="status-line"><i></i><span>Checking NextKinHR connection…</span></div>
   </header>
   <main>
-    <section class="context">
-      <div class="site">
-        <div class="site-heading"><span id="site-label" class="badge">NextKinHR Workspace</span><span id="active-site">Active Site</span></div>
-        <h2 id="site-title">My Profile and Applications</h2>
-        <p id="site-summary">Ready to assist on an outside career portal</p>
+    <section id="onboarding-view" class="onboarding-card" hidden>
+      <div class="onboarding-hero">
+        <div class="onboarding-badge">NextKinHR Recruiting Copilot</div>
+        <h2>Supercharge Your Job Applications</h2>
+        <p class="onboarding-subtitle">Connect your verified candidate profile to autofill applications and track your submissions across top career sites.</p>
       </div>
-      <div class="checklist">
-        <div class="candidate-line">
-          <div id="candidate" class="status-line"><i></i><span>Candidate profile</span></div>
-          <button id="connect" class="link" type="button">Connect</button>
+      <ul class="onboarding-features">
+        <li><span class="feature-icon">⚡</span><div><strong>1-Click Autofill</strong><p>Instantly fill ATS forms on Greenhouse, Lever, Workday, Ashby, and more.</p></div></li>
+        <li><span class="feature-icon">📄</span><div><strong>Smart Resume Sync</strong><p>Keep your verified experience, contact info, and portfolio links ready.</p></div></li>
+        <li><span class="feature-icon">🎯</span><div><strong>Automatic Tracking</strong><p>Submissions sync seamlessly to your NextKinHR dashboard.</p></div></li>
+      </ul>
+      <div class="onboarding-actions">
+        <button id="onboarding-connect" class="primary full-width" type="button">Connect / Create Free Account</button>
+        <p class="onboarding-hint">Free for job seekers. Signing in will automatically pair this extension.</p>
+      </div>
+    </section>
+
+    <div id="authenticated-view">
+      <section class="context">
+        <div class="site">
+          <div class="site-heading"><span id="site-label" class="badge">NextKinHR Workspace</span><span id="active-site">Active Site</span></div>
+          <h2 id="site-title">My Profile and Applications</h2>
+          <p id="site-summary">Ready to assist on an outside career portal</p>
         </div>
-        <div id="job-status" class="status-line"><i></i><span>Open a job page to evaluate ATS match</span></div>
-        <div id="form-status" class="status-line"><i></i><span>Open an application form to autofill</span></div>
-      </div>
-      <section class="resume" aria-labelledby="resume-title">
-        <div class="resume-row">
-          <div class="resume-text">
-            <h2 id="resume-title">Resume</h2>
-            <p id="resume-filename">Connect your NextKinHR account to sync your resume.</p>
-            <p id="resume-email" hidden></p>
+        <div class="checklist">
+          <div class="candidate-line">
+            <div id="candidate" class="status-line"><i></i><span>Candidate profile</span></div>
+            <button id="connect" class="link" type="button">Connect</button>
           </div>
-          <button id="change-resume" class="small-button" type="button" hidden>Change</button>
+          <div id="job-status" class="status-line"><i></i><span>Open a job page to evaluate ATS match</span></div>
+          <div id="form-status" class="status-line"><i></i><span>Open an application form to autofill</span></div>
         </div>
-        <div id="resume-options" class="resume-options" hidden>
-          <label id="resume-select-label" for="resume-select">Saved resumes</label>
-          <select id="resume-select"></select>
-          <button id="upload-resume" class="small-button" type="button">Upload resume</button>
-        </div>
-        <button id="first-upload" class="small-button" type="button" hidden>Upload resume</button>
-        <form id="upload-form" hidden>
-          <label for="resume-file">PDF or DOCX up to 10 MiB</label>
-          <input id="resume-file" name="resume" type="file" accept=".pdf,.docx" required>
-          <label class="consent"><input name="consent" type="checkbox" value="true" required> I consent to processing this resume for my candidate profile.</label>
-          <button class="small-button" type="submit">Save resume</button>
-        </form>
-        <p id="upload-status" role="status" hidden></p>
+        <section class="resume" aria-labelledby="resume-title">
+          <div class="resume-row">
+            <div class="resume-text">
+              <h2 id="resume-title">Resume</h2>
+              <p id="resume-filename">Connect your NextKinHR account to sync your resume.</p>
+              <p id="resume-email" hidden></p>
+            </div>
+            <button id="change-resume" class="small-button" type="button" hidden>Change</button>
+          </div>
+          <div id="resume-options" class="resume-options" hidden>
+            <label id="resume-select-label" for="resume-select">Saved resumes</label>
+            <select id="resume-select"></select>
+            <button id="upload-resume" class="small-button" type="button">Upload resume</button>
+          </div>
+          <button id="first-upload" class="small-button" type="button" hidden>Upload resume</button>
+          <form id="upload-form" hidden>
+            <label for="resume-file">PDF or DOCX up to 10 MiB</label>
+            <input id="resume-file" name="resume" type="file" accept=".pdf,.docx" required>
+            <label class="consent"><input name="consent" type="checkbox" value="true" required> I consent to processing this resume for my candidate profile.</label>
+            <button class="small-button" type="submit">Save resume</button>
+          </form>
+          <p id="upload-status" role="status" hidden></p>
+        </section>
       </section>
-    </section>
-    <section class="actions">
-      <button id="autofill" class="primary" type="button" disabled><span aria-hidden="true">⚡</span> Autofill Application Now</button>
-      <label id="ai-screening-option" hidden><input type="checkbox" id="ai-screening"> Use NextKinHR AI to draft bio and screening answers from my profile</label>
-      <label id="auto-submit-option" hidden><input type="checkbox" id="auto-submit"> Submit this application after autofill if the final form is ready</label>
-      <button id="review-answers" class="small-button" type="button" hidden>Save reusable answers</button>
-      <section id="answer-review" aria-label="Reusable answers" hidden>
-        <p>Select the answers you want to reuse on future applications.</p>
-        <div id="answer-options"></div>
-        <div style="display:flex;gap:6px;margin-top:8px;">
-          <button id="save-answers" class="small-button" type="button">Save for all jobs</button>
-          <button id="save-answers-company" class="small-button" type="button">Save for this company only</button>
-        </div>
+      <section class="actions">
+        <button id="autofill" class="primary" type="button" disabled><span aria-hidden="true">⚡</span> Autofill Application Now</button>
+        <label id="ai-screening-option" hidden><input type="checkbox" id="ai-screening"> Use NextKinHR AI to draft bio and screening answers from my profile</label>
+        <label id="auto-submit-option" hidden><input type="checkbox" id="auto-submit"> Submit this application after autofill if the final form is ready</label>
+        <button id="review-answers" class="small-button" type="button" hidden>Save reusable answers</button>
+        <section id="answer-review" aria-label="Reusable answers" hidden>
+          <p>Select the answers you want to reuse on future applications.</p>
+          <div id="answer-options"></div>
+          <div style="display:flex;gap:6px;margin-top:8px;">
+            <button id="save-answers" class="small-button" type="button">Save for all jobs</button>
+            <button id="save-answers-company" class="small-button" type="button">Save for this company only</button>
+          </div>
+        </section>
+        <section id="applied-prompt" aria-label="Confirm your application" hidden>
+          <p class="applied-prompt-question">Did you submit your application?</p>
+          <p id="applied-prompt-job" class="applied-prompt-job"></p>
+          <div class="applied-prompt-actions">
+            <button id="not-applied" class="small-button" type="button">Not yet</button>
+            <button id="mark-applied" class="small-button primary" type="button">Mark as applied</button>
+          </div>
+        </section>
+        <section id="tracking-status-panel" aria-label="Application tracking status" hidden>
+          <div class="tracking-heading">
+            <h3 id="tracking-title">Application Status</h3>
+            <span id="tracking-badge" class="badge"></span>
+          </div>
+          <p id="tracking-message" class="tracking-message"></p>
+          <div id="tracking-actions" class="tracking-actions">
+            <button id="retry-sync-btn" class="small-button primary" type="button" hidden>Retry Sync</button>
+            <button id="resolve-conflict-btn" class="small-button" type="button" hidden>Resolve Conflict</button>
+            <button id="dismiss-tracking-btn" class="small-button" type="button" hidden>Dismiss</button>
+          </div>
+        </section>
+        <p id="notice" role="status" hidden></p>
+        <section id="results" class="results" aria-labelledby="results-title" hidden>
+          <div class="results-heading"><h2 id="results-title"></h2><span id="verified" class="badge">Verified</span></div>
+          <p id="results-summary"></p>
+          <div id="filled-section" class="results-block">
+            <h3 class="results-subheading filled-subtitle">Autofilled Fields (<span id="filled-count">0</span>)</h3>
+            <ul id="fields-filled"></ul>
+          </div>
+          <div id="unfilled-section" class="results-block">
+            <h3 class="results-subheading unfilled-header">Unfilled Fields (<span id="unfilled-count">0</span>)</h3>
+            <p class="unfilled-description">These questions could not be populated from your uploaded resume/details and need your manual answer.</p>
+            <ul id="fields-unfilled"></ul>
+          </div>
+        </section>
+        <details id="match-panel" open hidden>
+          <summary id="match-title">ATS Match</summary>
+          <p id="match-status" role="status"></p>
+          <div id="match-breakdown" hidden>
+            <dl id="match-skills"></dl>
+            <h2>Matched requirements</h2>
+            <ul id="match-points"></ul>
+            <h2>Unmatched requirements</h2>
+            <ul id="unmatched-points"></ul>
+          </div>
+        </details>
+        <details id="profile-panel" hidden>
+          <summary>Your Autofill Information</summary>
+          <dl id="profile-facts"></dl>
+          <div class="dob-field">
+            <label for="candidate-dob">Date of birth (optional)</label>
+            <input id="candidate-dob" type="date" autocomplete="bday" aria-describedby="dob-privacy-note">
+            <p id="dob-privacy-note">Used only when you click Autofill. Changes here are kept for this browser session; update your NextKinHR profile for permanent storage.</p>
+            <p id="dob-save-status" role="status" aria-live="polite"></p>
+          </div>
+          <button id="open-profile" class="link" type="button">Open My Profile</button>
+        </details>
       </section>
-      <section id="applied-prompt" aria-label="Confirm your application" hidden>
-        <p class="applied-prompt-question">Did you submit your application?</p>
-        <p id="applied-prompt-job" class="applied-prompt-job"></p>
-        <div class="applied-prompt-actions">
-          <button id="not-applied" class="small-button" type="button">Not yet</button>
-          <button id="mark-applied" class="small-button primary" type="button">Mark as applied</button>
-        </div>
-      </section>
-      <section id="tracking-status-panel" aria-label="Application tracking status" hidden>
-        <div class="tracking-heading">
-          <h3 id="tracking-title">Application Status</h3>
-          <span id="tracking-badge" class="badge"></span>
-        </div>
-        <p id="tracking-message" class="tracking-message"></p>
-        <div id="tracking-actions" class="tracking-actions">
-          <button id="retry-sync-btn" class="small-button primary" type="button" hidden>Retry Sync</button>
-          <button id="resolve-conflict-btn" class="small-button" type="button" hidden>Resolve Conflict</button>
-          <button id="dismiss-tracking-btn" class="small-button" type="button" hidden>Dismiss</button>
-        </div>
-      </section>
-      <p id="notice" role="status" hidden></p>
-      <section id="results" class="results" aria-labelledby="results-title" hidden>
-        <div class="results-heading"><h2 id="results-title"></h2><span id="verified" class="badge">Verified</span></div>
-        <p id="results-summary"></p>
-        <div id="filled-section" class="results-block">
-          <h3 class="results-subheading filled-subtitle">Autofilled Fields (<span id="filled-count">0</span>)</h3>
-          <ul id="fields-filled"></ul>
-        </div>
-        <div id="unfilled-section" class="results-block">
-          <h3 class="results-subheading unfilled-header">Unfilled Fields (<span id="unfilled-count">0</span>)</h3>
-          <p class="unfilled-description">These questions could not be populated from your uploaded resume/details and need your manual answer.</p>
-          <ul id="fields-unfilled"></ul>
-        </div>
-      </section>
-      <details id="match-panel" open hidden>
-        <summary id="match-title">ATS Match</summary>
-        <p id="match-status" role="status"></p>
-        <div id="match-breakdown" hidden>
-          <dl id="match-skills"></dl>
-          <h2>Matched requirements</h2>
-          <ul id="match-points"></ul>
-          <h2>Unmatched requirements</h2>
-          <ul id="unmatched-points"></ul>
-        </div>
-      </details>
-      <details id="profile-panel" hidden>
-        <summary>Your Autofill Information</summary>
-        <dl id="profile-facts"></dl>
-        <div class="dob-field">
-          <label for="candidate-dob">Date of birth (optional)</label>
-          <input id="candidate-dob" type="date" autocomplete="bday" aria-describedby="dob-privacy-note">
-          <p id="dob-privacy-note">Used only when you click Autofill. Changes here are kept for this browser session; update your NextKinHR profile for permanent storage.</p>
-          <p id="dob-save-status" role="status" aria-live="polite"></p>
-        </div>
-        <button id="open-profile" class="link" type="button">Open My Profile</button>
-      </details>
-    </section>
+    </div>
   </main>
 </body>
 </html>
