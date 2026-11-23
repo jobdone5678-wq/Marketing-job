@@ -56,6 +56,21 @@ export async function extensionResumeActor(request: Request): Promise<UserProfil
   return actor as UserProfile;
 }
 
+export async function extensionOwnedCandidate(actor: UserProfile, candidateId: string) {
+  if (!z.uuid().safeParse(candidateId).success) {
+    throw new CaptureError('Invalid candidate identifier.', 400);
+  }
+  const { data, error } = await database()
+    .from('candidates')
+    .select('*')
+    .eq('id', candidateId)
+    .eq('user_id', actor.id)
+    .maybeSingle();
+  checkDb(error);
+  if (!data) throw new CaptureError('Candidate not found.', 404);
+  return data;
+}
+
 export async function resumeRequestBody(request: Request): Promise<unknown> {
   const body = await request.text();
   if (body.length > 220000) {

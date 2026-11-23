@@ -9,8 +9,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       className="h-svh min-h-0 overflow-hidden"
       style={
         {
-          '--sidebar-width': '15.5rem',
-          '--header-height': 'calc(var(--spacing) * 12)',
+          '--sidebar-width': '16rem',
+          '--header-height': '3.5rem',
         } as React.CSSProperties
       }
     >

@@ -3,6 +3,7 @@ import mammoth from 'mammoth';
 
 // Only these controlled validation messages may be shown to an uploader.
 export class ResumeReadError extends Error {}
+export const MAX_RESUME_BYTES = 10 * 1024 * 1024;
 
 export function hasPdfHeader(raw: Buffer): boolean {
   return raw.subarray(0, 1024).indexOf(Buffer.from('%PDF-')) >= 0;
@@ -12,7 +13,7 @@ export async function readResume(
   raw: Buffer,
   filename: string
 ): Promise<{ text: string; pages: number | null; mime: string }> {
-  if (raw.length > 10 * 1024 * 1024) throw new ResumeReadError('Resume must be at most 10 MiB.');
+  if (raw.length > MAX_RESUME_BYTES) throw new ResumeReadError('Resume must be at most 10 MiB.');
   if (/\.pdf$/i.test(filename)) {
     if (!hasPdfHeader(raw))
       throw new ResumeReadError(

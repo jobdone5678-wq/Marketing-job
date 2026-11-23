@@ -34,7 +34,7 @@ const STATUS_OPTIONS: { label: string; value: SubmissionStatus }[] = [
   { label: '4. Interview Scheduled', value: 'Interview_Scheduled' },
   { label: '5. Round 1 Interview', value: 'Round_1' },
   { label: '6. Round 2 Interview / Loop', value: 'Round_2' },
-  { label: '7. Offer Received 🎉', value: 'Offer_Received' },
+  { label: '7. Offer Received', value: 'Offer_Received' },
   { label: '8. Rejected', value: 'Rejected' },
   { label: '9. No Response', value: 'No_Response' },
 ];

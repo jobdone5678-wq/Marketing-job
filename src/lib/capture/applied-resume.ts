@@ -37,7 +37,8 @@ export function appliedResumeArchivePath(candidateId: string, submissionId: stri
 export async function saveAppliedResume(
   submissionId: string,
   candidateId: string,
-  resume: z.infer<typeof appliedResumeSchema>
+  resume: z.infer<typeof appliedResumeSchema>,
+  receipt: { actor: string; eventKey: string }
 ) {
   if (!resume) return null;
   const db = database();
@@ -60,14 +61,13 @@ export async function saveAppliedResume(
     checkDb(uploadError);
     snapshot.archiveHash = hash;
   }
-  const { data, error } = await db
-    .from('job_submissions')
-    .update({ applied_resume: snapshot })
-    .eq('id', submissionId)
-    .eq('candidate_id', candidateId)
-    .select('id')
-    .maybeSingle();
+  const { data, error } = await db.rpc('save_application_receipt_resume', {
+    p_actor: receipt.actor,
+    p_candidate: candidateId,
+    p_submission: submissionId,
+    p_event_key: receipt.eventKey,
+    p_resume: snapshot,
+  });
   checkDb(error);
-  if (!data) throw new CaptureError('Applied resume could not be saved to this application.', 404);
-  return snapshot;
+  return data as AppliedResumeSnapshot | null;
 }

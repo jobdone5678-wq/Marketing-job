@@ -971,6 +971,10 @@
 
       const currentEl = field.element;
       const domVal = read(field);
+      if (mapping.isUrlField?.(field) && (
+        domVal || plan.ai || plan.learned || !plan.factKey || !mapping.candidateHttpUrl(value) ||
+        (currentEl.maxLength > 0 && value.length > currentEl.maxLength)
+      )) continue;
       const previous = domVal;
       const isCountryCodeOnly = field.kind === 'text' && (currentEl.type === 'tel' || /phone/i.test(field.hint || field.label)) && /^\+?\d{1,3}\s*$/.test(String(previous).trim());
       const hasAnswer = !isCountryCodeOnly && (Array.isArray(previous) ? previous.length > 0 : (typeof previous === 'boolean' ? previous : Boolean(previous && String(previous).trim().length > 0)));

@@ -459,6 +459,7 @@
     const key = answerKey(field);
     return key.length >= 5 && key.length <= 200 && keys.indexOf(key) === keys.lastIndexOf(key) &&
       !plan.factKey && plan.status !== 'manual' && !field.excluded &&
+      !mapping.isUrlField?.(field) &&
       !/Repeated history|Job target/.test(plan.reason || '') &&
       !manualQuestion.test(key) && !jobSpecific.test(key);
   }
@@ -818,6 +819,7 @@
       const key = answerKey(field);
 
       if (plan.status === 'ai' || plan.status === 'needs_review' || plan.status === 'unknown') {
+        if (mapping.isUrlField?.(field)) continue;
         // Missing DOB, citizenship and work-authorization facts must not be
         // guessed from a resume or replaced with an unrelated generic answer.
         if (['date_of_birth', 'citizenship_status', 'authorized_in_usa', 'needs_sponsorship', 'visa_status', 'work_authorization'].includes(plan.factKey)) continue;

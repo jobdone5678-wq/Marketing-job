@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isUrlField } from '../../../jobright_extension/core/field-mapping.js';
 export const questionSchema = z
   .object({
     id: z.string().min(1).max(200),
@@ -6,7 +7,8 @@ export const questionSchema = z
     type: z.string().max(40).default('text'),
     options: z.array(z.string().max(1000)).max(200).optional(),
   })
-  .strict();
+  .strict()
+  .refine((question) => !isUrlField(question), 'Profile URL fields require a saved candidate link.');
 export const screeningSelectionSchema = z
   .object({
     decisions: z
@@ -39,7 +41,7 @@ export function validateScreening(questions: Question[], facts: Fact[], output: 
   const answers: Record<string, string> = Object.create(null);
   const decisions = questions.map((question) => {
     const row = selected.decisions.find((r) => r.questionId === question.id);
-    if (manualQuestion.test(question.label))
+    if (isUrlField(question) || manualQuestion.test(question.label))
       return { questionId: question.id, status: 'manual', evidence: [] };
     const evidence = (row?.factIds || []).map((id) => {
       const fact = byId.get(id);

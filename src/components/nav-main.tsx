@@ -32,13 +32,13 @@ export function NavMain({ items }: { items: NavItem[] }) {
                 <Link
                   href={url}
                   aria-current={active ? 'page' : undefined}
-                  className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium focus-visible:outline-2 ${
+                  className={`flex h-9 items-center gap-2.5 rounded-md px-3 text-xs font-medium transition-colors duration-150 focus-visible:outline-2 ${
                     active
                       ? 'bg-sidebar-accent text-foreground'
                       : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground'
                   }`}
                 >
-                  <span className={active ? 'text-primary' : undefined}>{icon}</span>
+                  <span className={active ? 'text-primary' : 'text-muted-foreground'}>{icon}</span>
                   <span className="truncate">{title}</span>
                 </Link>
               </SidebarMenuItem>

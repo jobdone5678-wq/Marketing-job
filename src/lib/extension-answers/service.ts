@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto';
 import { after } from 'next/server';
 import { z } from 'zod';
 import { database, checkDb, CaptureError } from '@/lib/db/admin';
-import { candidateAccess } from '@/lib/resumes/repository';
 import { enqueueTask, taskLease } from '@/lib/tasks/repository';
 import { structuredAI } from '@/lib/ai/client';
 import { aiConfiguration } from '@/lib/ai/config';
@@ -11,7 +10,7 @@ import { withAIExecutionWindow } from '@/lib/ai/execution-window';
 import {
   extensionJobSchema,
   canonicalExtensionJob,
-  currentExtensionCandidate,
+  extensionOwnedCandidate,
   type ExtensionResumeInput,
   extensionFactCatalog,
   fingerprint,
@@ -45,6 +44,11 @@ export const answerRequestSchema = extensionJobSchema
     'Question IDs must be unique.'
   );
 type AnswerInput = ExtensionResumeInput & { sessionId: string; questions: Question[] };
+
+async function currentScreeningCandidate(actor: UserProfile, input: AnswerInput) {
+  return input.uploadedCandidate || (await extensionOwnedCandidate(actor, input.candidateId));
+}
+
 export async function answerTaskStatus(actor: UserProfile, id: string) {
   if (!z.uuid().safeParse(id).success) throw new CaptureError('Invalid screening task.', 400);
   const { data: task, error } = await database()
@@ -57,7 +61,7 @@ export async function answerTaskStatus(actor: UserProfile, id: string) {
   const input = task?.payload?.screening as AnswerInput | undefined;
   if (!task || task.kind !== 'application_answers' || !input)
     throw new CaptureError('Screening task not found.', 404);
-  await currentExtensionCandidate(actor, input);
+  await currentScreeningCandidate(actor, input);
   if (['failed', 'cancelled'].includes(task.status))
     throw new CaptureError(task.error || 'Screening failed. Generate again to retry.', 422);
   return {
@@ -74,7 +78,8 @@ export async function answerTaskStatus(actor: UserProfile, id: string) {
 }
 export async function generateScreening(task: BackgroundTask) {
   const input = task.payload.screening as AnswerInput;
-  if (!input || input.version !== 'screening-v1')
+  if (!input || input.version !== 'screening-v1' ||
+      !z.array(questionSchema).min(1).max(30).safeParse(input.questions).success)
     throw new CaptureError('Unsupported screening task. Generate again.', 409);
   const { data: actor, error } = await database()
     .from('profiles')
@@ -84,7 +89,7 @@ export async function generateScreening(task: BackgroundTask) {
   checkDb(error);
   if (!actor || actor.status !== 'active' || actor.role !== 'candidate')
     throw new CaptureError('Active screening access required.', 403);
-  const candidate = await currentExtensionCandidate(actor, input),
+  const candidate = await currentScreeningCandidate(actor, input),
     facts = extensionFactCatalog(candidate);
   await taskLease(task.id, task.lease_token);
   const selected = await structuredAI(
@@ -104,7 +109,7 @@ export async function generateScreening(task: BackgroundTask) {
     );
   }
   await taskLease(task.id, task.lease_token);
-  await currentExtensionCandidate(actor, input);
+  await currentScreeningCandidate(actor, input);
   return { ...result, sessionId: input.sessionId, scopeKey: input.scopeKey };
 }
 export async function requestScreening(actor: UserProfile, body: unknown) {
@@ -123,7 +128,7 @@ export async function requestScreening(actor: UserProfile, body: unknown) {
       throw new CaptureError('Upload a readable source resume first.', 422);
     }
   } else {
-    candidate = { ...(await candidateAccess(actor, request.candidateId!)) };
+    candidate = { ...(await extensionOwnedCandidate(actor, request.candidateId!)) };
     if (candidate.provenance_status !== 'confirmed')
       throw new CaptureError('Review and confirm candidate facts first.', 409);
   }

@@ -325,12 +325,15 @@ async function scan(tab) {
 }
 
 async function getStoredCredentials() {
-  const session = await chrome.storage.session.get(['token', 'origin']).catch(() => ({}));
+  const session = await chrome.storage.session.get(['token', 'origin', 'accountId']).catch(() => ({}));
   const local = await chrome.storage.local.get(['origin', 'token', 'user', 'resumePreferences', 'activeCandidateId']);
+  const paired = session.accountId && session.accountId === local.user?.id &&
+    workspaceUrl(session.origin) === workspaceUrl(local.origin);
   return {
     origin: session.origin || local.origin,
-    token: session.token || local.token,
-    user: local.user,
+    token: paired ? session.token : undefined,
+    needsPairing: !paired && Boolean(session.token || local.token),
+    user: paired ? local.user : undefined,
     resumePreferences: local.resumePreferences,
     activeCandidateId: local.activeCandidateId,
   };
@@ -342,8 +345,8 @@ function buildScopedProfile(candidate) {
   const allowedKeys = [
     'full_name', 'first_name', 'last_name', 'preferred_first_name',
     'email', 'phone', 'current_city', 'current_state', 'current_location', 'date_of_birth',
-    'zip_code', 'country', 'full_address', 'linkedin_url', 'github_url',
-    'website', 'current_employer', 'current_title', 'total_experience_years',
+    'zip_code', 'country', 'full_address', 'linkedin_url', 'github_url', 'twitter_url', 'other_url',
+    'website', 'portfolio_url', 'current_employer', 'current_title', 'total_experience_years',
     'primary_skills', 'authorized_in_usa', 'needs_sponsorship', 'need_sponsorship_now',
     'need_sponsorship_future', 'open_to_relocation', 'relocation_preference', 'willing_to_relocate',
     'intended_work_country', 'employment_country', 'work_location_country',
@@ -401,7 +404,7 @@ async function refresh() {
   const scans = scan(tab);
   let account;
   let resumeList = [];
-  let issue = null;
+  let issue = storage.needsPairing ? 'Click Connect to pair your NextKinHR account again.' : null;
   let authenticated = false;
   let canUpload = false;
   if (session) {
@@ -567,8 +570,11 @@ async function renderTrackingStatus() {
     let context = null;
     if (tabId != null && typeof chrome !== 'undefined' && chrome.storage?.session?.get) {
       const keys = ['application-intent:' + tabId, 'embedded-outside-application:' + tabId];
-      const sessionData = await chrome.storage.session.get(keys).catch(() => ({}));
-      context = sessionData[keys[0]] || sessionData[keys[1]] || null;
+      const sessionData = await chrome.storage.session.get([...keys, 'origin', 'accountId', 'token']).catch(() => ({}));
+      if (sessionData.token && sessionData.accountId) {
+        context = keys.map(key => sessionData[key]).find(item =>
+          item?.accountId === sessionData.accountId && item.workspace === workspaceUrl(sessionData.origin)) || null;
+      }
     }
 
     const badge = $('tracking-badge');
@@ -582,10 +588,9 @@ async function renderTrackingStatus() {
     dismissBtn.hidden = true;
 
     if (queueStatus?.conflicts?.length > 0) {
-      const conflict = queueStatus.conflicts[0];
       badge.className = 'badge badge-conflict';
       badge.textContent = 'CONFLICT_NEEDS_RESOLVE';
-      msg.textContent = `Conflict detected for ${conflict.body?.jobTitle || 'application'}. Candidate resolution needed.`;
+      msg.textContent = 'Synchronization needs review for an application receipt.';
       conflictBtn.hidden = false;
       dismissBtn.hidden = false;
       panel.hidden = false;
@@ -594,7 +599,12 @@ async function renderTrackingStatus() {
 
     if (queueStatus?.pending?.length > 0) {
       const item = queueStatus.pending[0];
-      if (item.syncStatus === 'AUTH_REQUIRED') {
+      if (item.syncStatus === 'SAVE_FAILED') {
+        badge.className = 'badge badge-failed';
+        badge.textContent = 'SAVE FAILED';
+        msg.textContent = 'Could not save or sync this application receipt. Retry to recover it.';
+        retryBtn.hidden = false;
+      } else if (item.syncStatus === 'AUTH_REQUIRED') {
         badge.className = 'badge badge-auth-required';
         badge.textContent = 'AUTH_REQUIRED';
         msg.textContent = 'Authentication session expired. Please connect to NextKinHR to sync your application.';
@@ -621,6 +631,14 @@ async function renderTrackingStatus() {
       msg.textContent = `Synchronization failed: ${item.syncStatus || 'Validation error'}.`;
       retryBtn.hidden = false;
       dismissBtn.hidden = false;
+      panel.hidden = false;
+      return;
+    }
+
+    if (queueStatus?.ownershipReviewCount > 0) {
+      badge.className = 'badge badge-conflict';
+      badge.textContent = 'REVIEW NEEDED';
+      msg.textContent = 'Older application receipts are on hold because their accounts could not be verified.';
       panel.hidden = false;
       return;
     }
@@ -796,12 +814,13 @@ $('upload-form').addEventListener('submit', async event => {
     scheduleRefresh(0);
   }
 });
-async function checkFormContext(tab, session) {
+async function checkFormContext(tab, session, candidateId) {
   const [[activeTab], auth] = await Promise.all([
     chrome.tabs.query({ active: true, currentWindow: true }),
     getStoredCredentials(),
   ]);
-  if (activeTab?.id !== tab.id || activeTab.url !== tab.url || auth.origin !== session.origin || auth.token !== session.token) {
+  if (activeTab?.id !== tab.id || activeTab.url !== tab.url || auth.origin !== session.origin ||
+    auth.token !== session.token || (candidateId && candidate?.id !== candidateId)) {
     throw new Error('The active tab or account changed. Open the application and try again.');
   }
 }
@@ -809,6 +828,47 @@ async function checkFormContext(tab, session) {
 function formTarget(tab, frame) {
   return frame.documentId ? { tabId: tab.id, documentIds: [frame.documentId] }
     : { tabId: tab.id, frameIds: [frame.frameId] };
+}
+
+async function readScreeningFrame(tab, frame) {
+  const [snapshot] = await chrome.scripting.executeScript({
+    target: formTarget(tab, frame),
+    func: () => {
+      const scan = globalThis.NextkinApplication?.scan();
+      return scan && { url: scan.url, jobKey: globalThis.NextkinFieldMapping.screeningJobKey(scan.job) };
+    },
+  });
+  if (!snapshot?.result || snapshot.result.url !== frame.result.url ||
+    (frame.documentId && snapshot.documentId !== frame.documentId)) {
+    throw new Error('The application frame changed. Start autofill again.');
+  }
+  return snapshot.result;
+}
+
+async function checkScreeningContext(tab, session, candidateId, { frame, source, kekaDetails, jobKey, selection }) {
+  await checkFormContext(tab, session, candidateId);
+  const target = await readScreeningFrame(tab, frame);
+  if (source) {
+    const posting = source === frame ? target : await readScreeningFrame(tab, source);
+    if (!jobKey || posting.jobKey !== jobKey) throw new Error('The job changed. Start autofill again.');
+  } else if (!kekaDetails || NextkinJobCapture.kekaPosting(new URL(tab.url))?.details !== kekaDetails) {
+    throw new Error('The job could not be verified. Enter the remaining answers manually.');
+  }
+  const auth = await getStoredCredentials();
+  if ((auth.activeCandidateId ?? null) !== selection || auth.token !== session.token || auth.origin !== session.origin) {
+    throw new Error('The selected candidate or account changed. Start autofill again.');
+  }
+}
+
+async function postingForAutofill(tab, frame, embedded) {
+  if (frame.result.job) return { job: embedded ? embeddedOutsideJob(frame) : frame.result.job, source: frame };
+  const frames = await scan(tab);
+  const source = frames.find(entry => entry.frameId === 0 && entry.result?.job) ||
+    frames.find(entry => entry.result?.job);
+  if (source) return { job: source.result.job, source };
+  const kekaDetails = NextkinJobCapture.kekaPosting(new URL(tab.url))?.details;
+  if (kekaDetails && activeJob?.jobUrl === kekaDetails) return { job: activeJob, kekaDetails };
+  return { job: activeJob };
 }
 
 function answerScope(session, profile) {
@@ -850,63 +910,67 @@ async function mapConcurrent(items, limit, fn) {
   return Promise.all(results);
 }
 
-async function draftScreening(session, profile, tab, job, questions) {
-  if (!questions || !questions.length) return {};
+async function draftScreening(session, profile, tab, job, questions, scope) {
+  const eligible = (questions || []).filter(q => !globalThis.NextkinFieldMapping.isUrlField(q));
+  if (!eligible.length) return {};
 
-  // Direct concurrent answer generation with bounded concurrency (max 3 concurrent)
-  try {
-    const directAnswers = {};
-    await mapConcurrent(questions, 3, async (q) => {
-      try {
-        const res = await api('generate-answer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: q.label,
-            fieldLabel: q.label,
-            options: q.options || [],
-            jobTitle: job?.title || '',
-            companyName: job?.company || '',
-            candidateId: profile?.id,
-          }),
-        }, session);
-        if (res && res.ok && res.answer) {
-          directAnswers[q.id || q.label] = res.answer;
-        }
-      } catch (err) {
-        console.warn('generate-answer failed for screening question:', q.label, err);
-      }
-    });
-    if (Object.keys(directAnswers).length > 0) {
-      return directAnswers;
+  const answers = Object.create(null);
+  await mapConcurrent(eligible, 3, async (q) => {
+    await checkScreeningContext(tab, session, profile.id, scope);
+    try {
+      const result = await api('generate-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: q.label,
+          fieldLabel: q.label,
+          fieldType: q.type,
+          questionId: q.id,
+          options: q.options || [],
+          jobTitle: job?.title || '',
+          companyName: job?.company || '',
+          candidateId: profile.id,
+        }),
+      }, session);
+      if (result?.ok && typeof result.answer === 'string' && result.answer.trim())
+        answers[q.id || q.label] = result.answer;
+    } catch {
+      // Unresolved questions can use the background fallback.
     }
-  } catch (err) {
-    console.warn('Direct generation encountered error, trying background task:', err);
-  }
+  });
+  await checkScreeningContext(tab, session, profile.id, scope);
+  const unresolved = eligible.filter(q => !Object.hasOwn(answers, q.id || q.label)).slice(0, 30);
+  if (!unresolved.length || !job?.description || job.description.trim().length < 40) return answers;
 
-  if (!job || !job.description || job.description.trim().length < 40) {
-    throw new Error('Open the complete job posting to draft screening answers.');
+  try {
+    const sessionId = crypto.randomUUID();
+    let result = await api('answer-drafts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId, requestId: crypto.randomUUID(), consent: true, candidateId: profile.id,
+        jobTitle: job.title, companyName: job.company, jobDescription: job.description,
+        jobUrl: job.jobUrl, questions: unresolved,
+      }),
+    }, session);
+    for (let attempt = 0; attempt < 25 && result.status !== 'succeeded'; attempt++) {
+      if (result.sessionId !== sessionId || !result.taskId) throw new Error('NextKinHR returned an invalid screening task.');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      await checkScreeningContext(tab, session, profile.id, scope);
+      result = await api('answer-drafts?taskId=' + encodeURIComponent(result.taskId), {}, session);
+    }
+    if (result.sessionId !== sessionId || result.status !== 'succeeded') {
+      throw new Error('AI drafts are still processing. Try again shortly.');
+    }
+    for (const q of unresolved) {
+      const key = q.id || q.label;
+      if (typeof result.answers?.[key] === 'string' && result.answers[key].trim()) answers[key] = result.answers[key];
+    }
+  } catch (error) {
+    if (!Object.keys(answers).length) throw error;
   }
-  const sessionId = crypto.randomUUID();
-  const requestId = crypto.randomUUID();
-  let result = await api('answer-drafts', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionId, requestId, consent: true, candidateId: profile.id,
-      jobTitle: job.title, companyName: job.company, jobDescription: job.description, jobUrl: job.jobUrl, questions,
-    }),
-  }, session);
-  for (let attempt = 0; attempt < 25 && result.status !== 'succeeded'; attempt++) {
-    if (result.sessionId !== sessionId || !result.taskId) throw new Error('NextKinHR returned an invalid screening task.');
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    await checkFormContext(tab, session);
-    result = await api('answer-drafts?taskId=' + encodeURIComponent(result.taskId), {}, session);
-  }
-  if (result.sessionId !== sessionId || result.status !== 'succeeded') {
-    throw new Error('AI drafts are still processing. Try again shortly.');
-  }
-  return result.answers || {};
+  await checkScreeningContext(tab, session, profile.id, scope);
+  return answers;
 }
 
 function outsideApplicationPage(value) {
@@ -942,16 +1006,20 @@ function armOutsideForm(tab, frame, embeddedFrame, candidateId, discover = true)
   }, () => { if (armedOutsideForm === scope) armedOutsideForm = null; });
 }
 
-async function fillForm(tab, frame, profile, file, documentId, saved = null, aiAnswers = null) {
+async function fillForm(tab, frame, profile, file, documentId, saved = null, aiAnswers = null, expectedJobKey = null) {
   const scopedProfile = buildScopedProfile(profile);
   const [filled] = await chrome.scripting.executeScript({
     target: formTarget(tab, frame),
-    func: async (url, profile, resume, documentId, reusable, drafts, continuation) => {
+    func: async (url, profile, resume, documentId, reusable, drafts, jobKey) => {
       try {
-        return await globalThis.NextkinApplication.startAutofill(url, profile, resume, documentId, continuation, reusable, drafts);
+        const engine = globalThis.NextkinApplication;
+        if (jobKey && globalThis.NextkinFieldMapping.screeningJobKey(engine.scan().job) !== jobKey) {
+          throw new Error('The job changed. Start autofill again.');
+        }
+        return await engine.startAutofill(url, profile, resume, documentId, false, reusable, drafts);
       } catch (error) { return { error: error.message }; }
     },
-    args: [frame.result.url, scopedProfile, file, documentId, saved, aiAnswers, false],
+    args: [frame.result.url, scopedProfile, file, documentId, saved, aiAnswers, expectedJobKey],
   });
   if (!filled?.result || filled.result.error) throw new Error(filled?.result?.error || 'Could not fill this form.');
   return filled.result;
@@ -975,11 +1043,14 @@ $('autofill').addEventListener('click', async () => {
   $('results').hidden = true;
   notice('notice', 'Filling the application…');
   try {
-    const [freshProfile, job] = await Promise.all([
+    const selection = (await getStoredCredentials()).activeCandidateId ?? null;
+    if (selection && selection !== cachedProfile.id) throw new Error('The selected candidate changed. Start autofill again.');
+    const [freshProfile, posting] = await Promise.all([
       api('candidates?' + new URLSearchParams({ candidateId: cachedProfile.id, savedOnly: 'true' }), {}, session)
         .then(data => data.candidates?.[0]),
-      embeddedFrame ? embeddedOutsideJob(frame) : activeJob || scan(tab).then(frames => frames.find(frame => frame.result?.job)?.result.job),
+      postingForAutofill(tab, frame, embeddedFrame),
     ]);
+    const { job, source, kekaDetails } = posting;
     if (freshProfile?.provenance_status !== 'confirmed' || !freshProfile.confirmed_facts?.full_name ||
       String(freshProfile.confirmed_facts.notes || '').startsWith('Profile created from an uploaded resume.')) {
       throw new Error('Save your candidate details in My Profile first.');
@@ -1023,9 +1094,11 @@ $('autofill').addEventListener('click', async () => {
         },
         args: [result.questions.map(q => q.id).filter(Boolean)],
       }).catch(() => {});
-      const drafts = await draftScreening(session, profile, tab, job, result.questions);
-      await checkFormContext(tab, session);
-      const completed = await fillForm(tab, frame, profile, null, documentId, reusable, drafts);
+      const jobKey = globalThis.NextkinFieldMapping.screeningJobKey(source?.result?.job);
+      const scope = { frame, source, kekaDetails, selection, jobKey };
+      const drafts = await draftScreening(session, profile, tab, job, result.questions, scope);
+      await checkScreeningContext(tab, session, profile.id, scope);
+      const completed = await fillForm(tab, frame, profile, null, documentId, reusable, drafts, source === frame ? jobKey : null);
       await chrome.scripting.executeScript({
         target: formTarget(tab, frame),
         func: () => {
@@ -1195,6 +1268,7 @@ function clearResumeMatch() {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === 'NEXTKIN_RECEIPT_SAVE_FAILED') void renderTrackingStatus();
   if (message?.type === 'NEXTKIN_PROFILE_SAVED') {
     clearResumeMatch();
     scheduleRefresh(0);
@@ -1213,6 +1287,12 @@ chrome.tabs.onUpdated.addListener((id, change) => {
   }
 });
 chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'session' && ['token', 'origin', 'accountId'].some(key => key in changes)) {
+    clearResumeMatch();
+    scheduleRefresh(0);
+  }
+  if (['pending_submission_queue', 'submission_dead_letter_queue', 'conflict_submission_queue',
+    'submission_queue_recovery', 'accountId'].some(key => key in changes)) void renderTrackingStatus();
   if (area === 'local' && ['token', 'origin', 'resumePreferences', 'activeCandidateId', 'user'].some(key => key in changes)) {
     if ('token' in changes || 'origin' in changes || 'user' in changes) clearResumeMatch();
     scheduleRefresh(0);

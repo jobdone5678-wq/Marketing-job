@@ -463,24 +463,6 @@ export async function parseResumeFile(
     }
   }
 
-  // 16. Screening Answers & Work Authorization Detection
-  const authCountries: string[] = [];
-  if (/united states|usa|\bus\b|california|\bca\b|texas|\btx\b|new york|\bny\b|seattle|austin|san francisco|chicago/i.test(locCombined)) {
-    authCountries.push('us');
-  }
-  if (/india|bengaluru|bangalore|hyderabad|mumbai|delhi|pune|chennai/i.test(locCombined)) {
-    authCountries.push('in');
-  }
-  if (/united kingdom|\buk\b|london|manchester|birmingham/i.test(locCombined)) {
-    authCountries.push('gb');
-  }
-  if (/canada|toronto|vancouver|montreal|ontario/i.test(locCombined)) {
-    authCountries.push('ca');
-  }
-  if (/germany|berlin|munich|frankfurt/i.test(locCombined)) {
-    authCountries.push('de');
-  }
-
   // Notice Period Detection
   let noticePeriodDays = '';
   const noticeMatch = parsedText.match(/notice\s+period\s*[:\-–]?\s*(\d+)\s*(?:days?|weeks?|months?)|(immediate(?:ly)?)/i);
@@ -546,8 +528,6 @@ export async function parseResumeFile(
     certifications: certs,
     screeningAnswers: {
       ...DEFAULT_SCREENING_ANSWERS,
-      authorized_countries: authCountries.length > 0 ? authCountries : ['us'],
-      age_18_or_older: 'yes',
       willing_to_relocate: 'negotiable' as any,
       notice_period_days: noticePeriodDays,
     },

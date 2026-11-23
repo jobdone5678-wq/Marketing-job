@@ -3,12 +3,13 @@ import { database, checkDb, CaptureError } from '@/lib/db/admin';
 import { z } from 'zod';
 import type { Candidate } from '@/types/database';
 import { textFields, booleanFields } from '@/lib/ai/schemas';
+import { approvedSavedAnswers } from '@/lib/extension-answers/saved-answers';
 
 const unsavedResumeNote = 'Profile created from an uploaded resume. Review the extracted facts and edit anything that is wrong.';
 const autofillKeys = [
   ...textFields, ...booleanFields, 'employment_types',
   'first_name', 'last_name', 'preferred_first_name', 'preferred_name',
-  'zip_code', 'postal_code', 'country', 'github_url', 'website',
+  'zip_code', 'postal_code', 'country', 'github_url', 'twitter_url', 'website', 'portfolio_url', 'other_url',
   'current_company', 'headline', 'summary', 'bio', 'availability', 'how_heard',
   'school', 'languages', 'employment_history', 'education_history', 'saved_answers',
 ];
@@ -182,9 +183,9 @@ export async function GET(request: Request) {
 
         const fields = Object.fromEntries(autofillKeys.filter(key => Object.hasOwn(facts, key))
           .map(key => [key, facts[key]]));
-        if (!fields.saved_answers || typeof fields.saved_answers !== 'object' || Array.isArray(fields.saved_answers)) {
-          delete fields.saved_answers;
-        }
+        const answers = approvedSavedAnswers(fields.saved_answers);
+        if (Object.keys(answers).length) fields.saved_answers = answers;
+        else delete fields.saved_answers;
         delete (fields as any).raw_text;
         return [{
           ...fields,
@@ -200,9 +201,12 @@ export async function GET(request: Request) {
     }
 
     const resolvedCandidates = (candidates || []).map((c: any) => {
-      const facts = (c.confirmed_facts || {}) as Record<string, any>;
+      const { saved_answers, ...facts } = (c.confirmed_facts || {}) as Record<string, any>;
+      const answers = approvedSavedAnswers(saved_answers);
+      if (Object.keys(answers).length) facts.saved_answers = answers;
       return {
         ...c,
+        confirmed_facts: facts,
         gender: c.gender || facts.gender || facts.demographics?.gender || null,
         race: c.race || facts.race || facts.race_ethnicity || facts.demographics?.raceEthnicity || null,
         race_ethnicity: c.race_ethnicity || facts.race_ethnicity || c.race || facts.race || facts.demographics?.raceEthnicity || null,

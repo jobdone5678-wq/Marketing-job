@@ -23,7 +23,7 @@ export function SiteHeader({ title, subtitle }: { title?: string; subtitle?: str
   const resolvedTitle = title || titles[section || ''] || 'Workspace details';
 
   return (
-    <header className="border-border/80 bg-card/85 sticky top-0 z-30 flex h-13 shrink-0 items-center justify-between gap-3 border-b px-4 backdrop-blur-md transition-colors sm:px-6">
+    <header className="border-border/60 bg-card sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4 transition-colors sm:px-6">
       <a href="#workspace-content" className="skip-link">
         Skip to workspace
       </a>
@@ -31,7 +31,7 @@ export function SiteHeader({ title, subtitle }: { title?: string; subtitle?: str
       {/* Left side: Sidebar trigger & Breadcrumbs */}
       <div className="flex min-w-0 items-center gap-2.5">
         <SidebarTrigger className="text-muted-foreground hover:bg-muted/70 hover:text-foreground size-8 rounded-md transition-colors" />
-        <div className="bg-border/70 hidden h-4 w-px sm:block" />
+        <div className="bg-border/60 hidden h-4 w-px sm:block" />
 
         <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5">
           <Link
@@ -41,7 +41,7 @@ export function SiteHeader({ title, subtitle }: { title?: string; subtitle?: str
             <span>NextKinHR</span>
           </Link>
           <ChevronRight className="text-muted-foreground/40 hidden size-3 sm:block" />
-          <span className="text-foreground truncate text-xs font-semibold tracking-tight">
+          <span className="text-foreground truncate text-xs font-medium">
             {resolvedTitle}
           </span>
           {subtitle && (
@@ -52,15 +52,15 @@ export function SiteHeader({ title, subtitle }: { title?: string; subtitle?: str
         </nav>
       </div>
 
-      {/* Right side: Search, Live Status, Theme, Help */}
-      <div className="flex items-center gap-1.5 sm:gap-2">
+      {/* Right side: Search & Theme */}
+      <div className="flex items-center gap-2">
         <Link
           href="/dashboard/jobs"
           aria-label="Search jobs"
-          className="border-border/70 bg-muted/40 text-muted-foreground hover:border-border hover:bg-muted/80 hover:text-foreground flex h-8 items-center gap-2 rounded-lg border px-2.5 text-xs transition-all duration-150"
+          className="border-border/60 bg-muted/40 text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground flex h-8 items-center gap-2 rounded-md border px-2.5 text-xs transition-colors duration-150"
         >
-          <Search className="size-3.5" />
-          <span className="hidden font-normal md:inline">Search jobs…</span>
+          <Search className="size-3.5 stroke-[1.5]" />
+          <span className="hidden font-normal md:inline">Search jobs</span>
         </Link>
 
         <ThemeToggle />

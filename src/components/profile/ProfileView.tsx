@@ -54,8 +54,8 @@ import {
   persistProfileToServer,
   clearLocalProfile,
   clearRemoteProfile,
-  saveLocalProfile,
   DEFAULT_PROFILE,
+  type EligibilityDraft,
 } from '@/lib/profile/profile-store';
 import type {
   CandidateProfileState,
@@ -131,6 +131,15 @@ export function ProfileView() {
   const [editingLanguages, setEditingLanguages] = useState(false);
   const [editingCertifications, setEditingCertifications] = useState(false);
   const [editingScreening, setEditingScreening] = useState(false);
+  const [eligibilityDraft, setEligibilityDraft] = useState<EligibilityDraft>({});
+  const screeningForReview = {
+    ...profile.screeningAnswers,
+    ...eligibilityDraft,
+    country_specific_answers: {
+      ...profile.screeningAnswers.country_specific_answers,
+      ...eligibilityDraft.country_specific_answers,
+    },
+  };
 
   // Search States
   const [roleSearch, setRoleSearch] = useState('');
@@ -267,6 +276,7 @@ export function ProfileView() {
       if (!confirm) return;
     }
     setProfile(DEFAULT_PROFILE);
+    setEligibilityDraft({});
     clearLocalProfile();
     setParseSuccessMessage(null);
     setParseError(null);
@@ -280,6 +290,7 @@ export function ProfileView() {
   // Handle CV deletion - deletes the resume file and wipes all parsed details from input fields!
   const handleDeleteCv = async () => {
     setProfile(DEFAULT_PROFILE);
+    setEligibilityDraft({});
     clearLocalProfile();
     setParseSuccessMessage(null);
     setParseError(null);
@@ -313,7 +324,7 @@ export function ProfileView() {
       const parsed: CandidateProfileState = data.profile;
 
       updateProfile((prev) => {
-        const updated: CandidateProfileState = {
+        return {
           ...prev,
           cv: parsed.cv,
           headline: parsed.headline || prev.headline || '',
@@ -353,16 +364,9 @@ export function ProfileView() {
           certifications: parsed.certifications.length > 0 ? parsed.certifications : prev.certifications,
           screeningAnswers: {
             ...prev.screeningAnswers,
-            ...parsed.screeningAnswers,
-            authorized_countries: parsed.screeningAnswers.authorized_countries.length > 0
-              ? parsed.screeningAnswers.authorized_countries
-              : prev.screeningAnswers.authorized_countries,
+            notice_period_days: parsed.screeningAnswers.notice_period_days || prev.screeningAnswers.notice_period_days,
           },
         };
-
-        saveLocalProfile(updated);
-        void persistProfileToServer(updated);
-        return updated;
       });
 
       setParseSuccessMessage(
@@ -484,15 +488,11 @@ export function ProfileView() {
 
   // Screening Answers
   const toggleCountry = (code: string) => {
-    updateProfile((p) => {
-      const list = p.screeningAnswers.authorized_countries;
-      const next = list.includes(code) ? list.filter((c) => c !== code) : [...list, code];
+    setEligibilityDraft((draft) => {
+      const countries = draft.authorized_countries ?? profile.screeningAnswers.authorized_countries;
       return {
-        ...p,
-        screeningAnswers: {
-          ...p.screeningAnswers,
-          authorized_countries: next,
-        },
+        ...draft,
+        authorized_countries: countries.includes(code) ? countries.filter((c) => c !== code) : [...countries, code],
       };
     });
   };
@@ -643,6 +643,9 @@ export function ProfileView() {
               <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300">
                 <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                 <span>{parseSuccessMessage}</span>
+                <button type="button" onClick={() => setActiveTab('screening')} className="shrink-0 underline">
+                  Review screening answers
+                </button>
               </div>
             )}
             {parseError && (
@@ -715,7 +718,7 @@ export function ProfileView() {
                   Drop PDF or DOCX here <span className="font-normal text-lime-700 underline dark:text-lime-400">or choose from disk</span>
                 </p>
                 <p className="mt-1 text-xs text-neutral-500">
-                  PDF or DOCX with selectable text, up to 15 MB · Automatically extracts and populates your contact info, roles, skills, experience, and education.
+                  PDF or DOCX with selectable text, up to 10 MiB · Automatically extracts and populates your contact info, roles, skills, experience, and education.
                 </p>
               </div>
             )}
@@ -2321,6 +2324,9 @@ export function ProfileView() {
           {/* Authorized to work in (138+ Countries) */}
           <section className="space-y-3 rounded-xl border border-neutral-200/80 bg-white p-5 shadow-xs dark:border-neutral-800 dark:bg-neutral-900">
             <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">Authorized to work in</span>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              Select the countries for your profile. Use the United States screening question below to save your answer for application autofill.
+            </p>
 
             {/* Country search input */}
             <div className="relative">
@@ -2348,7 +2354,7 @@ export function ProfileView() {
                     c.name.toLowerCase().includes(countrySearch.toLowerCase()) ||
                     c.code.toLowerCase().includes(countrySearch.toLowerCase())
                   ).map((c) => {
-                    const sel = profile.screeningAnswers.authorized_countries.includes(c.code);
+                    const sel = screeningForReview.authorized_countries.includes(c.code);
                     return (
                       <div
                         key={c.code}
@@ -2370,9 +2376,9 @@ export function ProfileView() {
             </div>
 
             {/* Selected Countries Badges */}
-            {profile.screeningAnswers.authorized_countries.length > 0 && (
+            {screeningForReview.authorized_countries.length > 0 && (
               <div className="flex flex-wrap gap-2 pt-1">
-                {profile.screeningAnswers.authorized_countries.map((code) => {
+                {screeningForReview.authorized_countries.map((code) => {
                   const country = COUNTRIES.find((c) => c.code === code);
                   if (!country) return null;
                   return (
@@ -2401,7 +2407,7 @@ export function ProfileView() {
               {POPULAR_COUNTRY_CODES.map((code) => {
                 const country = COUNTRIES.find((c) => c.code === code);
                 if (!country) return null;
-                const sel = profile.screeningAnswers.authorized_countries.includes(code);
+                const sel = screeningForReview.authorized_countries.includes(code);
                 return (
                   <button
                     key={code}
@@ -2430,12 +2436,36 @@ export function ProfileView() {
 
           {/* Standard Screening Form Fields (Matches Image 4) */}
           <section className="grid grid-cols-1 gap-4 rounded-xl border border-neutral-200/80 bg-white p-5 shadow-xs sm:grid-cols-2 dark:border-neutral-800 dark:bg-neutral-900">
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-neutral-600 dark:text-neutral-400">Authorized to work in the United States?</span>
+              <select
+                value={(screeningForReview.country_specific_answers.us_auth ?? '').toLowerCase()}
+                onChange={(e) => {
+                  const answer = e.target.value;
+                  setEligibilityDraft((draft) => ({
+                    ...draft,
+                    country_specific_answers: {
+                    ...draft.country_specific_answers,
+                      us_auth: answer,
+                    },
+                  }));
+                }}
+                className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 shadow-2xs dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+              >
+                <option value="">Not stated</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </label>
             {/* Need visa sponsorship? */}
             <div className="flex flex-col gap-1 text-xs">
               <span className="text-neutral-600 dark:text-neutral-400">Need visa sponsorship?</span>
               <select
-                value={profile.screeningAnswers.visa_sponsorship_needed}
-                onChange={(e) => updateScreeningField('visa_sponsorship_needed', e.target.value as any)}
+                value={screeningForReview.visa_sponsorship_needed}
+                onChange={(e) => {
+                  const answer = e.target.value as ScreeningAnswers['visa_sponsorship_needed'];
+                  setEligibilityDraft((draft) => ({ ...draft, visa_sponsorship_needed: answer }));
+                }}
                 className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 shadow-2xs dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
               >
                 <option value="">Not stated</option>
@@ -2462,8 +2492,11 @@ export function ProfileView() {
             <div className="flex flex-col gap-1 text-xs">
               <span className="text-neutral-600 dark:text-neutral-400">18 or older?</span>
               <select
-                value={profile.screeningAnswers.age_18_or_older}
-                onChange={(e) => updateScreeningField('age_18_or_older', e.target.value as any)}
+                value={screeningForReview.age_18_or_older}
+                onChange={(e) => {
+                  const answer = e.target.value as ScreeningAnswers['age_18_or_older'];
+                  setEligibilityDraft((draft) => ({ ...draft, age_18_or_older: answer }));
+                }}
                 className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 shadow-2xs dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
               >
                 <option value="">Not stated</option>
@@ -2549,9 +2582,23 @@ export function ProfileView() {
               onClick={async () => {
                 setSaveStatus('saving');
                 setSaveMessage('Saving to database...');
-                const ok = await persistProfileToServer(profile);
+                const ok = await persistProfileToServer(
+                  { ...profile, screeningAnswers: screeningForReview },
+                  eligibilityDraft,
+                );
+                if (ok) {
+                  setProfile((previous) => ({
+                    ...previous,
+                    screeningAnswers: {
+                      ...previous.screeningAnswers,
+                      ...eligibilityDraft,
+                      country_specific_answers: screeningForReview.country_specific_answers,
+                    },
+                  }));
+                  setEligibilityDraft((draft) => draft === eligibilityDraft ? {} : draft);
+                }
                 setSaveStatus('saved');
-                setSaveMessage(ok ? 'Saved successfully' : 'Saved locally');
+                setSaveMessage(ok ? 'Saved successfully' : 'Could not save screening answers');
               }}
               className="gap-2 bg-lime-700 px-6 text-white hover:bg-lime-800"
             >

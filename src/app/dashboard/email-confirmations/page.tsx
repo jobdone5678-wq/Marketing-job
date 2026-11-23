@@ -186,51 +186,44 @@ export default function EmailConfirmationsPage() {
   const visible = receipts.filter((receipt) => filter === 'all' || receipt.disposition === filter);
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-4 lg:p-6">
+    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-6 lg:p-8">
       {/* Header section */}
       <div className="flex flex-col justify-between gap-4 pb-1 sm:flex-row sm:items-center">
         <div>
-          <div className="text-primary mb-1 flex items-center gap-2 text-xs font-semibold tracking-wider uppercase">
-            <span className="bg-primary inline-block h-1.5 w-1.5 animate-pulse rounded-full" />
-            Application confirmations
-          </div>
-          <h1 className="text-foreground flex items-center gap-2.5 text-2xl font-bold tracking-tight">
-            <span className="bg-primary/10 text-primary flex h-9 w-9 items-center justify-center rounded-xl shadow-2xs">
-              <MailIcon className="h-5 w-5" />
-            </span>
+          <h1 className="text-foreground text-2xl font-medium tracking-tight sm:text-3xl">
             Email Sync
           </h1>
-          <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
-            Connect the Gmail mailbox that receives your job application confirmations.
+          <p className="text-muted-foreground mt-1 text-xs">
+            Connect the mailbox that receives your job application confirmations
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
-            className="border-border/80 hover:border-primary/50 h-9 cursor-pointer rounded-xl px-3 text-xs font-medium shadow-xs transition-all"
+            className="border-border/60 hover:bg-muted/50 h-8 cursor-pointer rounded-md px-3 text-xs font-normal transition-colors"
             disabled={loading || !!busy}
             onClick={() => void load()}
           >
-            <RefreshCwIcon className={`mr-1.5 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCwIcon className={`mr-1.5 size-3.5 stroke-[1.5] ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
           <Button
             variant="outline"
-            className="border-border/80 hover:border-primary/50 h-9 cursor-pointer rounded-xl px-3 text-xs font-medium shadow-xs transition-all"
+            className="border-border/60 hover:bg-muted/50 h-8 cursor-pointer rounded-md px-3 text-xs font-normal transition-colors"
             disabled={!!busy}
             onClick={() => uploadRef.current?.click()}
           >
-            <UploadIcon className="text-primary mr-1.5 h-3.5 w-3.5" />
+            <UploadIcon className="mr-1.5 size-3.5 stroke-[1.5]" />
             Import receipt
           </Button>
           <Button
             variant="outline"
-            className="border-border/80 hover:border-primary/50 h-9 cursor-pointer rounded-xl px-3 text-xs font-medium shadow-xs transition-all"
+            className="border-border/60 hover:bg-muted/50 h-8 cursor-pointer rounded-md px-3 text-xs font-normal transition-colors"
             render={<Link href="/dashboard/submissions" />}
           >
             Applications
-            <ExternalLinkIcon className="text-muted-foreground ml-1.5 h-3.5 w-3.5" />
+            <ExternalLinkIcon className="text-muted-foreground ml-1.5 size-3.5 stroke-[1.5]" />
           </Button>
         </div>
 

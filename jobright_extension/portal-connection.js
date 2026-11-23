@@ -24,31 +24,8 @@
 
   const onConnectionPage = () => location.pathname.replace(/\/$/, '') === '/auth/jobseeker/connected';
 
-  async function handleAuthRequired(reason) {
-    try {
-      if (typeof chrome !== 'undefined' && chrome.storage?.session?.remove) {
-        await chrome.storage.session.remove('token').catch(() => {});
-      }
-      if (typeof chrome !== 'undefined' && chrome.storage?.local?.remove) {
-        await chrome.storage.local.remove('token').catch(() => {});
-      }
-      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-        chrome.runtime.sendMessage({
-          type: 'NEXTKIN_AUTH_REQUIRED',
-          origin: location.origin,
-          reason: reason || 'Authentication required',
-        });
-      }
-    } catch {}
-
-    try {
-      if (isTrustedOrigin(location.origin)) {
-        window.postMessage({
-          type: 'NEXTKIN_AUTH_REQUIRED',
-          reason: reason || 'Authentication required',
-        }, location.origin);
-      }
-    } catch {}
+  function reportAuthRequired(reason) {
+    window.postMessage({ type: 'NEXTKIN_AUTH_REQUIRED', reason }, location.origin);
   }
 
   async function saveConnection(token, user) {
@@ -56,56 +33,36 @@
 
     if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{20,128}$/.test(token) ||
       typeof user?.id !== 'string' || user.role !== 'candidate') {
-      await handleAuthRequired('Invalid pairing token or role');
+      reportAuthRequired('Invalid pairing token or role');
       return;
     }
 
-    let current = {};
     try {
       if (typeof chrome !== 'undefined' && chrome.storage?.local?.get) {
-        current = (await chrome.storage.local.get(['origin', 'user'])) || {};
-      }
-    } catch {}
-
-    const accountChanged = current.origin !== location.origin || current.user?.id !== user.id;
-
-    // 1. Sensitive tokens are NEVER written to chrome.storage.local!
-    // 2. Store token strictly in chrome.storage.session
-    try {
-      if (typeof chrome !== 'undefined' && chrome.storage?.session?.set) {
-        await chrome.storage.session.set({
-          origin: location.origin,
-          token,
-        });
-      }
-    } catch {}
-
-    // 3. Store non-sensitive metadata in chrome.storage.local, removing any legacy token
-    // Pending submission queues are strictly preserved!
-    try {
-      if (typeof chrome !== 'undefined' && chrome.storage?.local?.set) {
+        const current = await chrome.storage.local.get(['user', 'origin']);
+        const accountChanged = current?.user?.id && current.user.id !== user.id;
         await chrome.storage.local.set({
           origin: location.origin,
           user: { id: user.id, name: user.name, email: user.email },
           ...(accountChanged ? { activeCandidateId: null } : {}),
-        });
-      }
-      if (typeof chrome !== 'undefined' && chrome.storage?.local?.remove) {
+        }).catch(() => {});
         await chrome.storage.local.remove('token').catch(() => {});
+      }
+      if (typeof chrome !== 'undefined' && chrome.storage?.session?.set) {
+        await chrome.storage.session.set({
+          origin: location.origin,
+          token,
+        }).catch(() => {});
       }
     } catch {}
 
-    // 4. Handoff to background service worker for session token storage and queue resumption
-    try {
-      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-        chrome.runtime.sendMessage({
-          type: 'NEXTKIN_SAVE_CONNECTION',
-          origin: location.origin,
-          token,
-          user: { id: user.id, name: user.name, email: user.email },
-        });
-      }
-    } catch {}
+    const saved = await chrome.runtime.sendMessage({
+      type: 'NEXTKIN_SAVE_CONNECTION',
+      origin: location.origin,
+      token,
+      user: { id: user.id, name: user.name, email: user.email },
+    }).catch(() => false);
+    if (saved === false) reportAuthRequired('Could not save the extension connection.');
   }
 
   chrome.runtime.onMessage.addListener((message, sender) => {
@@ -146,7 +103,25 @@
     } else if (data.type === 'NEXTKIN_EXTENSION_PAIRED') {
       void saveConnection(data.token, data.user).catch(() => {});
     } else if (data.type === 'NEXTKIN_AUTH_REQUIRED' || data.type === 'NEXTKIN_TOKEN_EXPIRED' || data.type === 'NEXTKIN_LOGOUT') {
-      void handleAuthRequired(data.reason).catch(() => {});
+      try {
+        if (typeof chrome !== 'undefined') {
+          chrome.storage?.session?.remove?.('token')?.catch?.(() => {});
+          chrome.storage?.local?.remove?.('token')?.catch?.(() => {});
+          chrome.runtime?.sendMessage?.({
+            type: 'NEXTKIN_AUTH_REQUIRED',
+            origin: location.origin,
+            reason: data.reason || 'Authentication required',
+          })?.catch?.(() => {});
+        }
+      } catch {}
+      window.postMessage({
+        type: 'NEXTKIN_AUTH_REQUIRED',
+        reason: data.reason || 'Authentication required',
+      }, location.origin);
+      const accountId = data.accountId || data.actorId || data.user?.id;
+      if (typeof accountId === 'string' && accountId) {
+        void chrome.runtime.sendMessage({ type: 'NEXTKIN_REVOKE_CONNECTION', origin: location.origin, accountId }).catch(() => {});
+      }
     } else if (/^\/dashboard\/candidates(?:\/|$)/.test(location.pathname) &&
       ['NEXTKIN_PROFILE_SAVED', 'NEXTKIN_RESUME_UPLOADED', 'candidate_updated'].includes(data.type)) {
       void chrome.runtime.sendMessage({ type: 'NEXTKIN_PROFILE_SAVED' }).catch(() => {});

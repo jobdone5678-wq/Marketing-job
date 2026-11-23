@@ -46,8 +46,6 @@ import {
   ExternalLinkIcon,
   EditIcon,
   Trash2Icon,
-  TrendingUpIcon,
-  SparklesIcon,
   Building2Icon,
   BriefcaseIcon,
   ClockIcon,
@@ -134,8 +132,7 @@ export default function SubmissionsPage() {
     switch (status) {
       case 'Offer_Received':
         return (
-          <Badge className="gap-1.5 rounded-full border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1 font-semibold text-emerald-700 shadow-2xs dark:text-emerald-300">
-            <SparklesIcon className="size-3 text-emerald-500" />
+          <Badge className="gap-1.5 rounded-md border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
             Offer Received
           </Badge>
         );
@@ -143,22 +140,22 @@ export default function SubmissionsPage() {
       case 'Round_2':
       case 'Interview_Scheduled':
         return (
-          <Badge className="bg-primary/10 text-primary border-primary/25 gap-1.5 rounded-full px-2.5 py-1 font-medium shadow-2xs">
-            <CalendarIcon className="text-primary size-3" />
+          <Badge className="border-primary/25 bg-primary/10 text-primary gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium">
+            <CalendarIcon className="text-primary size-3 stroke-[1.5]" />
             {status.replace(/_/g, ' ')}
           </Badge>
         );
       case 'Submitted_to_Client':
         return (
-          <Badge className="gap-1.5 rounded-full border-blue-500/30 bg-blue-500/15 px-2.5 py-1 font-medium text-blue-700 shadow-2xs dark:text-blue-300">
-            <Building2Icon className="size-3 text-blue-500" />
+          <Badge className="border-border/60 bg-muted/60 text-foreground gap-1.5 rounded-md px-2 py-0.5 text-xs font-normal">
+            <Building2Icon className="text-muted-foreground size-3 stroke-[1.5]" />
             Client Review
           </Badge>
         );
       case 'Vendor_Screening':
         return (
-          <Badge className="gap-1.5 rounded-full border-amber-500/30 bg-amber-500/15 px-2.5 py-1 font-medium text-amber-700 shadow-2xs dark:text-amber-300">
-            <ClockIcon className="size-3 text-amber-500" />
+          <Badge className="border-border/60 bg-muted/60 text-muted-foreground gap-1.5 rounded-md px-2 py-0.5 text-xs font-normal">
+            <ClockIcon className="size-3 stroke-[1.5]" />
             Vendor Screening
           </Badge>
         );
@@ -166,9 +163,9 @@ export default function SubmissionsPage() {
         return (
           <Badge
             variant="outline"
-            className="border-border/80 text-foreground/80 bg-background gap-1.5 rounded-full px-2.5 py-1 font-medium shadow-2xs"
+            className="border-border/60 text-muted-foreground gap-1.5 rounded-md px-2 py-0.5 text-xs font-normal"
           >
-            <SendIcon className="text-primary size-3" />
+            <SendIcon className="size-3 stroke-[1.5]" />
             Applied
           </Badge>
         );
@@ -176,7 +173,7 @@ export default function SubmissionsPage() {
         return (
           <Badge
             variant="destructive"
-            className="gap-1 rounded-full px-2.5 py-1 font-medium opacity-85 shadow-2xs"
+            className="border-destructive/20 bg-destructive/10 text-destructive gap-1 rounded-md px-2 py-0.5 text-xs font-normal"
           >
             Rejected
           </Badge>
@@ -185,7 +182,7 @@ export default function SubmissionsPage() {
         return (
           <Badge
             variant="secondary"
-            className="gap-1 rounded-full px-2.5 py-1 font-medium shadow-2xs"
+            className="border-border/60 bg-muted/50 text-muted-foreground gap-1 rounded-md px-2 py-0.5 text-xs font-normal"
           >
             {status.replace(/_/g, ' ')}
           </Badge>
@@ -371,8 +368,8 @@ export default function SubmissionsPage() {
     link.click();
     document.body.removeChild(link);
 
-    toast.success('Excel Tracker Exported!', {
-      description: `Downloaded ${filteredSubmissions.length} submission records as CSV.`,
+    toast.success('Exported applications as CSV', {
+      description: `Downloaded ${filteredSubmissions.length} submission records.`,
     });
   };
 
@@ -390,25 +387,16 @@ export default function SubmissionsPage() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-6 p-4 lg:p-6">
+    <div className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-6 p-6 lg:p-8">
       {/* Page Header */}
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-foreground text-2xl font-bold tracking-tight sm:text-3xl">
-                My Applications
-              </h1>
-              <Badge
-                variant="outline"
-                className="gap-1.5 rounded-full border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400"
-              >
-                <TrendingUpIcon className="size-3" />
-                Application tracker
-              </Badge>
-            </div>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Track your submitted applications, interviews, and statuses.
+            <h1 className="text-foreground text-2xl font-medium tracking-tight sm:text-3xl">
+              My Applications
+            </h1>
+            <p className="text-muted-foreground mt-1 text-xs">
+              Submissions, interviews, and pipeline status across active portals
             </p>
           </div>
 
@@ -417,19 +405,19 @@ export default function SubmissionsPage() {
               variant="outline"
               size="sm"
               render={<Link href="/dashboard/email-confirmations" />}
-              className="border-border/70 hover:bg-muted/50 h-9 cursor-pointer gap-1.5 rounded-lg text-xs"
+              className="border-border/60 hover:bg-muted/50 h-8 cursor-pointer gap-1.5 rounded-md text-xs font-normal"
             >
-              <MailIcon className="size-3.5" /> Email Sync
+              <MailIcon className="size-3.5 stroke-[1.5]" /> Email sync
             </Button>
 
             <Button
               variant="outline"
               size="sm"
               onClick={handleExportCSV}
-              className="border-border/70 hover:bg-muted/50 h-9 cursor-pointer gap-1.5 rounded-lg text-xs"
+              className="border-border/60 hover:bg-muted/50 h-8 cursor-pointer gap-1.5 rounded-md text-xs font-normal"
             >
-              <DownloadIcon className="size-3.5" />
-              Export to Excel (CSV)
+              <DownloadIcon className="size-3.5 stroke-[1.5]" />
+              Export CSV
             </Button>
 
             <Button
@@ -437,16 +425,13 @@ export default function SubmissionsPage() {
               size="sm"
               onClick={loadData}
               disabled={loading}
-              className="border-border/70 hover:bg-muted/50 h-9 cursor-pointer gap-1.5 rounded-lg text-xs"
+              className="border-border/60 hover:bg-muted/50 h-8 cursor-pointer gap-1.5 rounded-md text-xs font-normal"
             >
-              <RefreshCwIcon className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCwIcon className={`size-3.5 stroke-[1.5] ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
-
           </div>
         </div>
-
-
 
         {/* Application metrics */}
         <section
@@ -455,66 +440,56 @@ export default function SubmissionsPage() {
         >
           {[
             {
-              label: 'Application records',
+              label: 'Total records',
               value: stats.total,
               note: 'Includes unsubmitted drafts',
-              icon: SendIcon,
-              color: 'text-primary bg-primary/10 border-primary/20',
             },
             {
-              label: 'Active Interviews',
+              label: 'Active interviews',
               value: stats.interviews,
-              note: 'Scheduled · Round 1 · Round 2',
-              icon: CalendarIcon,
-              color: 'text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/20',
+              note: 'Scheduled, round 1, round 2',
             },
             {
-              label: 'Client Review',
+              label: 'Client review',
               value: stats.clientReview,
-              note: 'With end-client managers',
-              icon: Building2Icon,
-              color: 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 border-indigo-500/20',
+              note: 'With hiring managers',
             },
             {
               label: 'Offers',
               value: stats.offers,
-              note: 'Received & in negotiation',
-              icon: SparklesIcon,
-              color:
-                'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+              note: 'Received and in review',
+              positive: stats.offers > 0,
             },
             {
-              label: 'Duplicate Alerts',
+              label: 'Duplicate alerts',
               value: stats.duplicates,
-              note: '30-day application safeguard',
-              icon: AlertTriangleIcon,
-              color: stats.duplicates
-                ? 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20'
-                : 'text-muted-foreground bg-muted border-border/60',
+              note: '30-day safeguard check',
+              warning: stats.duplicates > 0,
             },
           ].map((metric) => (
             <div
               key={metric.label}
-              className="border-border/70 bg-card hover:border-border flex flex-col justify-between rounded-2xl border p-4 shadow-xs transition-all"
+              className="border-border/60 bg-card flex flex-col justify-between rounded-xl border p-4 transition-colors"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+              <div>
+                <span className="text-muted-foreground text-xs font-normal">
                   {metric.label}
                 </span>
-                <div
-                  className={`flex size-7 items-center justify-center rounded-lg border shadow-2xs ${metric.color}`}
+                <p
+                  className={`mt-2 font-mono text-2xl font-medium tracking-tight tabular-nums sm:text-3xl ${
+                    metric.positive
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : metric.warning
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-foreground'
+                  }`}
                 >
-                  <metric.icon className="size-3.5" />
-                </div>
-              </div>
-              <div className="mt-2.5">
-                <p className="text-foreground font-mono text-2xl leading-none font-bold tracking-tight tabular-nums sm:text-3xl">
                   {loading ? '—' : metric.value}
                 </p>
-                <p className="text-muted-foreground mt-1.5 line-clamp-1 text-[10px]">
-                  {metric.note}
-                </p>
               </div>
+              <p className="text-muted-foreground mt-2 line-clamp-1 text-[11px]">
+                {metric.note}
+              </p>
             </div>
           ))}
         </section>
@@ -531,19 +506,19 @@ export default function SubmissionsPage() {
       <div className="flex flex-col gap-3">
         {/* Status Pipeline Pills */}
         <div className="flex flex-wrap items-center gap-1.5 pb-1">
-          <span className="text-muted-foreground mr-1 flex items-center gap-1.5 text-xs font-semibold">
-            <FilterIcon className="text-primary size-3.5" />
+          <span className="text-muted-foreground mr-1 flex items-center gap-1.5 text-xs font-normal">
+            <FilterIcon className="text-muted-foreground size-3.5 stroke-[1.5]" />
             Stage:
           </span>
-          <div className="bg-muted/40 border-border/60 inline-flex flex-wrap items-center gap-1 rounded-xl border p-1">
+          <div className="bg-muted/40 border-border/60 inline-flex flex-wrap items-center gap-1 rounded-lg border p-1">
             {[
               { id: 'all', label: 'All stages' },
               { id: 'interviews', label: 'Interviews' },
-              { id: 'Submitted_to_Client', label: 'Client Review' },
-              { id: 'Vendor_Screening', label: 'Vendor Screening' },
+              { id: 'Submitted_to_Client', label: 'Client review' },
+              { id: 'Vendor_Screening', label: 'Vendor screening' },
               { id: 'Applied', label: 'Applied' },
               { id: 'offers', label: 'Offers' },
-              { id: 'active', label: 'All Active' },
+              { id: 'active', label: 'All active' },
               { id: 'Rejected', label: 'Rejected' },
             ].map((tab) => {
               const isSelected = selectedStatusTab === tab.id;
@@ -553,10 +528,11 @@ export default function SubmissionsPage() {
                   aria-pressed={isSelected}
                   type="button"
                   onClick={() => setSelectedStatusTab(tab.id)}
-                  className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-150 ${isSelected
-                      ? 'bg-background text-foreground ring-border/60 font-semibold shadow-xs ring-1'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                    }`}
+                  className={`cursor-pointer rounded-md px-3 py-1 text-xs transition-colors duration-150 ${
+                    isSelected
+                      ? 'bg-background text-foreground font-medium shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50 font-normal'
+                  }`}
                 >
                   {tab.label}
                 </button>
@@ -568,18 +544,17 @@ export default function SubmissionsPage() {
         {/* Search & Select dropdowns */}
         <div className="flex flex-col items-center gap-3 sm:flex-row">
           <div className="relative w-full flex-1">
-            <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
+            <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 stroke-[1.5]" />
             <Input
               aria-label="Search submissions"
-              placeholder="Search company, role, vendor or notes…"
+              placeholder="Search by company, role, or contact"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-background border-border/70 focus-visible:ring-primary/20 focus-visible:border-primary h-9.5 rounded-xl pl-9 text-xs shadow-2xs focus-visible:ring-2"
+              className="bg-background border-border/60 h-9 rounded-md pl-8.5 text-xs"
             />
           </div>
 
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-
             {/* Portal Source Filter */}
             <Select
               value={selectedPortalFilter}
@@ -587,7 +562,7 @@ export default function SubmissionsPage() {
             >
               <SelectTrigger
                 aria-label="Filter by portal"
-                className="bg-background border-border/70 h-9.5 w-[140px] rounded-xl text-xs shadow-2xs"
+                className="bg-background border-border/60 h-9 w-[140px] rounded-md text-xs"
               >
                 <SelectValue>
                   {selectedPortalFilter === 'all'
@@ -598,7 +573,7 @@ export default function SubmissionsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all" className="text-xs">
-                  All Portals
+                  All portals
                 </SelectItem>
                 {portalOptions.map(([value, label]) => (
                   <SelectItem key={value} value={value} className="text-xs">
@@ -615,27 +590,25 @@ export default function SubmissionsPage() {
             >
               <SelectTrigger
                 aria-label="Filter by source type"
-                className="bg-background border-border/70 h-9.5 w-[150px] rounded-xl text-xs shadow-2xs"
+                className="bg-background border-border/60 h-9 w-[150px] rounded-md text-xs"
               >
                 <SelectValue>
                   {selectedSourceFilter === 'all'
-                    ? 'All Sources'
+                    ? 'All sources'
                     : selectedSourceFilter === 'portal'
-                      ? '🏢 Portal'
-                      : '🌐 Extension'}
+                      ? 'Internal portal'
+                      : 'Extension captured'}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all" className="text-xs">
-                  All Sources
+                  All sources
                 </SelectItem>
-                <SelectItem value="portal" className="flex items-center gap-2 text-xs">
-                  <Building2Icon className="text-primary size-3.5" />
-                  Portal (Inside Jobs)
+                <SelectItem value="portal" className="text-xs">
+                  Internal portal
                 </SelectItem>
-                <SelectItem value="extension" className="flex items-center gap-2 text-xs">
-                  <GlobeIcon className="size-3.5 text-blue-600" />
-                  Extension (Outside Jobs)
+                <SelectItem value="extension" className="text-xs">
+                  Extension captured
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -646,35 +619,35 @@ export default function SubmissionsPage() {
       {/* Application date filters card */}
       <section
         aria-label="Application date filters"
-        className="border-border/70 bg-card space-y-3 rounded-2xl border p-4 shadow-xs"
+        className="border-border/60 bg-card space-y-3 rounded-xl border p-4"
       >
         <div className="flex items-center justify-between">
-          <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase">
-            <CalendarIcon className="text-primary size-3.5" />
-            Application date · Counts and exports follow your filters
+          <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
+            <CalendarIcon className="text-muted-foreground size-3.5 stroke-[1.5]" />
+            Application date range
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-2.5">
-          <label className="text-foreground space-y-1 text-xs font-medium">
-            <span className="block">From date</span>
+          <label className="text-foreground space-y-1 text-xs font-normal">
+            <span className="block text-muted-foreground">From date</span>
             <Input
               aria-label="From application date"
               type="date"
               value={dateFrom}
               max={dateTo || undefined}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="bg-background border-border/70 h-9 rounded-lg text-xs shadow-2xs"
+              className="bg-background border-border/60 h-8 rounded-md text-xs"
             />
           </label>
-          <label className="text-foreground space-y-1 text-xs font-medium">
-            <span className="block">To date</span>
+          <label className="text-foreground space-y-1 text-xs font-normal">
+            <span className="block text-muted-foreground">To date</span>
             <Input
               aria-label="To application date"
               type="date"
               value={dateTo}
               min={dateFrom || undefined}
               onChange={(e) => setDateTo(e.target.value)}
-              className="bg-background border-border/70 h-9 rounded-lg text-xs shadow-2xs"
+              className="bg-background border-border/60 h-8 rounded-md text-xs"
             />
           </label>
           <div className="flex flex-wrap items-center gap-1.5">
@@ -689,7 +662,7 @@ export default function SubmissionsPage() {
                 key={preset.id}
                 variant="outline"
                 size="sm"
-                className="border-border/70 hover:bg-muted/50 h-9 cursor-pointer rounded-lg text-xs font-medium"
+                className="border-border/60 hover:bg-muted/50 h-8 cursor-pointer rounded-md text-xs font-normal"
                 onClick={() => {
                   const range = submissionDatePreset(preset.id);
                   setDateFrom(range.from);
@@ -702,7 +675,7 @@ export default function SubmissionsPage() {
             <Button
               variant="ghost"
               size="sm"
-              className="text-muted-foreground hover:text-foreground hover:bg-muted/50 h-9 cursor-pointer rounded-lg text-xs font-medium"
+              className="text-muted-foreground hover:text-foreground hover:bg-muted/50 h-8 cursor-pointer rounded-md text-xs font-normal"
               onClick={() => {
                 setDateFrom('');
                 setDateTo('');
@@ -721,7 +694,7 @@ export default function SubmissionsPage() {
         {dateFrom && dateTo && dateFrom > dateTo && (
           <p
             role="alert"
-            className="text-destructive border-destructive/20 bg-destructive/10 rounded-lg border p-2.5 text-xs"
+            className="text-destructive border-destructive/20 bg-destructive/10 rounded-md border p-2.5 text-xs"
           >
             From date must be on or before To date.
           </p>
@@ -729,16 +702,16 @@ export default function SubmissionsPage() {
 
         <div className="border-border/40 space-y-2 border-t pt-2">
           <p role="status" className="text-muted-foreground text-xs">
-            <strong className="text-foreground font-semibold">{filteredSubmissions.length}</strong>{' '}
+            <strong className="text-foreground font-medium">{filteredSubmissions.length}</strong>{' '}
             matching applications across{' '}
-            <strong className="text-foreground font-semibold">{dailyCounts.length}</strong>{' '}
+            <strong className="text-foreground font-medium">{dailyCounts.length}</strong>{' '}
             application dates.
           </p>
           <details className="w-full">
             <summary className="text-primary cursor-pointer text-xs font-medium select-none hover:underline">
               Applications by date · {dailyCounts.length} dates
             </summary>
-            <div className="border-border/60 bg-muted/20 mt-3 max-h-60 overflow-auto rounded-xl border p-2">
+            <div className="border-border/60 bg-muted/20 mt-3 max-h-60 overflow-auto rounded-lg border p-2">
               {dailyCounts.length ? (
                 <table className="w-full text-xs">
                   <caption className="sr-only">
@@ -788,11 +761,11 @@ export default function SubmissionsPage() {
       </section>
 
       {/* THE CENTRAL EXCEL-REPLACEMENT SUBMISSIONS TABLE */}
-      <div className="border-border/70 bg-card overflow-hidden rounded-2xl border shadow-xs">
-        <div className="border-border/60 bg-muted/20 text-muted-foreground flex items-center justify-between border-b p-3.5 text-xs">
+      <div className="border-border/60 bg-card overflow-hidden rounded-xl border">
+        <div className="border-border/60 bg-muted/20 text-muted-foreground flex items-center justify-between border-b p-3 text-xs">
           <div>
             Showing{' '}
-            <strong className="text-foreground font-semibold">{filteredSubmissions.length}</strong>{' '}
+            <strong className="text-foreground font-medium">{filteredSubmissions.length}</strong>{' '}
             of <strong>{submissions.length}</strong> submissions
           </div>
           <label className="flex cursor-pointer items-center gap-2 text-xs select-none">
@@ -810,59 +783,59 @@ export default function SubmissionsPage() {
           <Table
             className={`submissions-table min-w-[1250px] ${showDetails ? 'show-details' : ''}`}
           >
-            <TableHeader className="bg-muted/40 border-border/60 border-b">
+            <TableHeader className="bg-muted/30 border-border/60 border-b">
               <TableRow>
                 <TableHead
                   data-col="client"
-                  className="text-muted-foreground w-[200px] text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
+                  className="text-muted-foreground w-[200px] text-xs font-medium normal-case whitespace-normal"
                 >
-                  End Client &amp; Role
+                  End client &amp; role
                 </TableHead>
                 <TableHead
                   data-col="resume"
-                  className="text-muted-foreground w-[220px] text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
+                  className="text-muted-foreground w-[220px] text-xs font-medium normal-case whitespace-normal"
                 >
                   Applied resume &amp; answers
                 </TableHead>
                 <TableHead
                   data-col="rtr"
-                  className="text-muted-foreground w-[160px] text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
+                  className="text-muted-foreground w-[160px] text-xs font-medium normal-case whitespace-normal"
                 >
-                  RTR Document
+                  RTR document
                 </TableHead>
                 <TableHead
                   data-col="vendor"
-                  className="text-muted-foreground w-[180px] text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
+                  className="text-muted-foreground w-[180px] text-xs font-medium normal-case whitespace-normal"
                 >
-                  Vendor &amp; Recruiter
+                  Vendor &amp; recruiter
                 </TableHead>
                 <TableHead
                   data-col="rate"
-                  className="text-muted-foreground w-[110px] text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
+                  className="text-muted-foreground w-[110px] text-xs font-medium normal-case whitespace-normal"
                 >
                   Rate
                 </TableHead>
                 <TableHead
                   data-col="date"
-                  className="text-muted-foreground w-[110px] text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
+                  className="text-muted-foreground w-[110px] text-xs font-medium normal-case whitespace-normal"
                 >
                   Date
                 </TableHead>
                 <TableHead
                   data-col="stage"
-                  className="text-muted-foreground w-[220px] text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
+                  className="text-muted-foreground w-[220px] text-xs font-medium normal-case whitespace-normal"
                 >
                   Recruiting stage &amp; capture
                 </TableHead>
                 <TableHead
                   data-col="interview"
-                  className="text-muted-foreground w-[220px] text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
+                  className="text-muted-foreground w-[220px] text-xs font-medium normal-case whitespace-normal"
                 >
-                  Interview / Schedule / Notes
+                  Interview &amp; notes
                 </TableHead>
                 <TableHead
                   data-col="actions"
-                  className="text-muted-foreground w-[90px] text-right text-[11px] leading-tight font-semibold tracking-wider whitespace-normal uppercase"
+                  className="text-muted-foreground w-[90px] text-right text-xs font-medium normal-case whitespace-normal"
                 >
                   Actions
                 </TableHead>
@@ -936,36 +909,23 @@ export default function SubmissionsPage() {
                         <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-2 text-[10px]">
                           <Badge
                             variant="secondary"
-                            className="h-4 px-1.5 py-0 text-[9px] font-medium"
+                            className="border-border/60 bg-muted/60 text-muted-foreground h-4 rounded px-1.5 py-0 text-[10px] font-normal"
                           >
                             {sub.portal_source || 'Not recorded'}
                           </Badge>
                           {sub.source_type && (
                             <Badge
                               variant="outline"
-                              className="flex h-4 items-center gap-1 px-1.5 py-0 text-[9px] font-semibold"
-                              style={
-                                sub.source_type === 'extension'
-                                  ? {
-                                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                    borderColor: 'rgba(59, 130, 246, 0.3)',
-                                    color: '#3b82f6',
-                                  }
-                                  : {
-                                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                                    borderColor: 'rgba(139, 92, 246, 0.3)',
-                                    color: '#8b5cf6',
-                                  }
-                              }
+                              className="border-border/60 bg-muted/40 text-muted-foreground flex h-4 items-center gap-1 rounded px-1.5 py-0 text-[10px] font-normal"
                             >
                               {sub.source_type === 'extension' ? (
                                 <>
-                                  <GlobeIcon className="size-3" />
+                                  <GlobeIcon className="size-2.5 stroke-[1.5]" />
                                   Extension
                                 </>
                               ) : (
                                 <>
-                                  <Building2Icon className="size-3" />
+                                  <Building2Icon className="size-2.5 stroke-[1.5]" />
                                   Portal
                                 </>
                               )}
@@ -974,9 +934,9 @@ export default function SubmissionsPage() {
                           {Boolean(sub.portal_source?.toLowerCase().includes('outside')) && (
                             <Badge
                               variant="outline"
-                              className="h-4 border-blue-500/30 bg-blue-500/10 px-1.5 py-0 text-[9px] font-semibold text-blue-700 dark:text-blue-400"
+                              className="border-border/60 bg-muted/40 text-muted-foreground h-4 rounded px-1.5 py-0 text-[10px] font-normal"
                             >
-                              Outside Portal
+                              Outside portal
                             </Badge>
                           )}
                           <span>{sub.job_location || 'Not recorded'}</span>
@@ -985,9 +945,9 @@ export default function SubmissionsPage() {
                               href={sub.job_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-primary flex items-center gap-0.5 font-medium hover:underline"
+                              className="text-primary flex items-center gap-0.5 font-normal hover:underline"
                             >
-                              Link <ExternalLinkIcon className="size-2.5" />
+                              Link <ExternalLinkIcon className="size-2.5 stroke-[1.5]" />
                             </a>
                           )}
                         </div>
@@ -1084,9 +1044,9 @@ export default function SubmissionsPage() {
                       {/* Interview & Notes */}
                       <TableCell data-col="interview" className="py-3.5 align-top text-xs">
                         {sub.interview_time ? (
-                          <div className="border-border/80 bg-muted/40 mb-1.5 rounded-xl border p-2.5 text-xs shadow-2xs">
-                            <div className="text-foreground flex items-center gap-1.5 font-semibold">
-                              <CalendarIcon className="text-primary size-3.5" />
+                          <div className="border-border/60 bg-muted/30 mb-1.5 rounded-md border p-2 text-xs">
+                            <div className="text-foreground flex items-center gap-1.5 font-medium">
+                              <CalendarIcon className="text-primary size-3.5 stroke-[1.5]" />
                               {new Date(sub.interview_time).toLocaleDateString(undefined, {
                                 month: 'short',
                                 day: 'numeric',
@@ -1097,16 +1057,16 @@ export default function SubmissionsPage() {
                                 minute: '2-digit',
                               })}
                             </div>
-                            <div className="text-muted-foreground mt-1 flex items-center justify-between gap-1 text-[10px]">
+                            <div className="text-muted-foreground mt-1 flex items-center justify-between gap-1 text-[11px]">
                               <span>Mode: {sub.interview_mode || 'Not recorded'}</span>
                               {sub.interview_meeting_link && (
                                 <a
                                   href={sub.interview_meeting_link}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-primary flex items-center gap-0.5 font-medium hover:underline"
+                                  className="text-primary flex items-center gap-0.5 font-normal hover:underline"
                                 >
-                                  Join <ExternalLinkIcon className="size-2.5" />
+                                  Join <ExternalLinkIcon className="size-2.5 stroke-[1.5]" />
                                 </a>
                               )}
                             </div>
@@ -1123,11 +1083,11 @@ export default function SubmissionsPage() {
                               .trim()
                             : '';
                           return cleanNotes ? (
-                            <p className="text-muted-foreground line-clamp-2 text-[11px] italic">
+                            <p className="text-muted-foreground line-clamp-2 text-xs">
                               &quot;{cleanNotes}&quot;
                             </p>
                           ) : (
-                            <span className="text-muted-foreground/60 text-[10px]">No notes</span>
+                            <span className="text-muted-foreground/60 text-[11px]">No notes</span>
                           );
                         })()}
                       </TableCell>
@@ -1142,7 +1102,7 @@ export default function SubmissionsPage() {
                               setActiveSubmissionForStatus(sub);
                               setStatusDialogOpen(true);
                             }}
-                            className="border-border/70 hover:border-primary/40 hover:bg-primary/5 hover:text-primary h-7 cursor-pointer rounded-lg px-2.5 text-[11px] font-medium transition-all"
+                            className="border-border/60 hover:border-border hover:bg-muted/50 h-7 cursor-pointer rounded-md px-2 text-xs font-normal transition-colors"
                             title="Update Status"
                           >
                             Stage
@@ -1151,22 +1111,22 @@ export default function SubmissionsPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="text-muted-foreground hover:text-foreground size-7 cursor-pointer rounded-lg p-0"
+                              className="text-muted-foreground hover:text-foreground size-7 cursor-pointer rounded-md p-0"
                               aria-label={`Edit ${sub.company_name} submission`}
                               title="Edit Submission"
                             >
-                              <EditIcon className="size-3.5" />
+                              <EditIcon className="size-3.5 stroke-[1.5]" />
                             </Button>
                           </Link>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDelete(sub.id, sub.company_name)}
-                            className="text-destructive/70 hover:text-destructive hover:bg-destructive/10 size-7 cursor-pointer rounded-lg p-0"
+                            className="text-destructive/70 hover:text-destructive hover:bg-destructive/10 size-7 cursor-pointer rounded-md p-0"
                             aria-label={`Delete ${sub.company_name} submission`}
                             title="Delete"
                           >
-                            <Trash2Icon className="size-3.5" />
+                            <Trash2Icon className="size-3.5 stroke-[1.5]" />
                           </Button>
                         </div>
                       </TableCell>

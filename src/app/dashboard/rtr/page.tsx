@@ -286,34 +286,27 @@ export default function RTRManagementPage() {
   const expiredCount = documents.filter((d) => d.rtr_status === 'expired').length;
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-4 font-sans lg:p-6">
+    <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-6 lg:p-8">
       {/* Header Bar */}
       <div className="flex flex-col justify-between gap-4 pb-1 sm:flex-row sm:items-center">
         <div>
-          <div className="text-primary mb-1 flex items-center gap-2 text-xs font-semibold tracking-wider uppercase">
-            <span className="bg-primary inline-block h-1.5 w-1.5 animate-pulse rounded-full" />
-            Compliance & Representation
-          </div>
-          <h1 className="text-foreground flex items-center gap-2.5 text-2xl font-bold tracking-tight">
-            <span className="bg-primary/10 text-primary flex h-9 w-9 items-center justify-center rounded-xl shadow-2xs">
-              <FileSignature className="h-5 w-5 stroke-[1.8]" />
-            </span>
+          <h1 className="text-foreground text-2xl font-medium tracking-tight sm:text-3xl">
             My RTR
           </h1>
-          <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
-            Upload your Right to Represent agreements and track their terms, rates, and expiration dates.
+          <p className="text-muted-foreground mt-1 text-xs">
+            Right to Represent exclusivity agreements, terms, and representation tracking
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             size="sm"
-            className="border-border/80 hover:border-primary/50 h-9 cursor-pointer rounded-xl px-3 text-xs font-medium shadow-xs transition-all"
+            className="border-border/60 hover:bg-muted/50 h-8 cursor-pointer rounded-md px-3 text-xs font-normal"
             onClick={() => void fetchRtrDocuments()}
             disabled={loading}
           >
-            <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`mr-1.5 size-3.5 stroke-[1.5] ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
 
@@ -329,59 +322,47 @@ export default function RTRManagementPage() {
               setOcrFile(null);
               setOcrModalOpen(true);
             }}
-            className="bg-primary text-primary-foreground hover:bg-primary/90 flex h-9 cursor-pointer items-center gap-1.5 rounded-xl px-3.5 text-xs font-medium shadow-sm transition-all"
+            className="border-border/60 bg-foreground text-background hover:bg-foreground/90 flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-3 text-xs font-normal"
           >
-            <Sparkles className="size-3.5" />
-            <span>Upload & OCR Extract</span>
+            <Upload className="size-3.5 stroke-[1.5]" />
+            <span>Upload agreement</span>
           </Button>
         </div>
       </div>
 
       {/* Metric Stat Cards */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <div className="border-border/70 bg-card space-y-1 rounded-xl border p-4 shadow-2xs">
-          <div className="text-muted-foreground flex items-center justify-between text-xs font-medium">
-            <span>Total Agreements</span>
-            <FileText className="text-muted-foreground/70 size-4" />
-          </div>
-          <div className="text-foreground text-2xl font-bold tracking-tight">{totalCount}</div>
-          <p className="text-muted-foreground text-[11px]">Active & archived</p>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="border-border/60 bg-card rounded-xl border p-4">
+          <span className="text-muted-foreground text-xs font-normal">Total agreements</span>
+          <div className="text-foreground mt-2 font-mono text-2xl font-medium tracking-tight tabular-nums sm:text-3xl">{totalCount}</div>
+          <p className="text-muted-foreground mt-1 text-[11px]">Active and archived</p>
         </div>
 
-        <div className="border-border/70 bg-card space-y-1 rounded-xl border p-4 shadow-2xs">
-          <div className="text-muted-foreground flex items-center justify-between text-xs font-medium">
-            <span>Signed / Active</span>
-            <CheckCircle2 className="size-4 text-emerald-600" />
-          </div>
-          <div className="text-2xl font-bold tracking-tight text-emerald-600">{signedCount}</div>
-          <p className="text-muted-foreground text-[11px]">Exclusivity confirmed</p>
+        <div className="border-border/60 bg-card rounded-xl border p-4">
+          <span className="text-muted-foreground text-xs font-normal">Signed and active</span>
+          <div className="mt-2 font-mono text-2xl font-medium tracking-tight tabular-nums text-emerald-600 dark:text-emerald-400 sm:text-3xl">{signedCount}</div>
+          <p className="text-muted-foreground mt-1 text-[11px]">Exclusivity confirmed</p>
         </div>
 
-        <div className="border-border/70 bg-card space-y-1 rounded-xl border p-4 shadow-2xs">
-          <div className="text-muted-foreground flex items-center justify-between text-xs font-medium">
-            <span>Pending Review</span>
-            <Clock className="size-4 text-amber-600" />
-          </div>
-          <div className="text-2xl font-bold tracking-tight text-amber-600">{receivedCount}</div>
-          <p className="text-muted-foreground text-[11px]">Awaiting signature</p>
+        <div className="border-border/60 bg-card rounded-xl border p-4">
+          <span className="text-muted-foreground text-xs font-normal">Pending review</span>
+          <div className="mt-2 font-mono text-2xl font-medium tracking-tight tabular-nums text-amber-600 dark:text-amber-400 sm:text-3xl">{receivedCount}</div>
+          <p className="text-muted-foreground mt-1 text-[11px]">Awaiting signature</p>
         </div>
 
-        <div className="border-border/70 bg-card space-y-1 rounded-xl border p-4 shadow-2xs">
-          <div className="text-muted-foreground flex items-center justify-between text-xs font-medium">
-            <span>Expired / Rejected</span>
-            <AlertCircle className="text-destructive size-4" />
-          </div>
-          <div className="text-destructive text-2xl font-bold tracking-tight">{expiredCount}</div>
-          <p className="text-muted-foreground text-[11px]">Requires renewal</p>
+        <div className="border-border/60 bg-card rounded-xl border p-4">
+          <span className="text-muted-foreground text-xs font-normal">Expired or rejected</span>
+          <div className="mt-2 font-mono text-2xl font-medium tracking-tight tabular-nums text-destructive sm:text-3xl">{expiredCount}</div>
+          <p className="text-muted-foreground mt-1 text-[11px]">Requires renewal</p>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col items-stretch justify-between gap-3 pt-2 sm:flex-row sm:items-center">
+      <div className="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
         {/* Status Tabs */}
-        <div className="bg-muted/50 border-border/60 flex items-center gap-1 overflow-x-auto rounded-xl border p-1 text-xs">
+        <div className="bg-muted/40 border-border/60 flex items-center gap-1 overflow-x-auto rounded-lg border p-1 text-xs">
           {[
-            { id: 'all', label: 'All Agreements' },
+            { id: 'all', label: 'All agreements' },
             { id: 'signed', label: 'Signed' },
             { id: 'received', label: 'Pending' },
             { id: 'expired', label: 'Expired' },
@@ -390,10 +371,10 @@ export default function RTRManagementPage() {
             <button
               key={tab.id}
               onClick={() => setStatusFilter(tab.id)}
-              className={`cursor-pointer rounded-lg px-3 py-1.5 font-medium whitespace-nowrap transition-all ${
+              className={`cursor-pointer rounded-md px-3 py-1 text-xs transition-colors duration-150 ${
                 statusFilter === tab.id
-                  ? 'bg-background text-foreground font-semibold shadow-2xs'
-                  : 'text-muted-foreground hover:text-foreground'
+                  ? 'bg-background text-foreground font-medium shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground font-normal'
               }`}
             >
               {tab.label}
@@ -403,30 +384,30 @@ export default function RTRManagementPage() {
 
         {/* Search */}
         <div className="relative w-full sm:w-72">
-          <Search className="text-muted-foreground absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
+          <Search className="text-muted-foreground absolute top-1/2 left-3 size-3.5 -translate-y-1/2 stroke-[1.5]" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search candidate, company, vendor..."
-            className="border-border/80 bg-background h-9 rounded-xl pl-9 text-xs"
+            placeholder="Search candidate, company, or vendor"
+            className="border-border/60 bg-background h-9 rounded-md pl-8.5 text-xs"
           />
         </div>
       </div>
 
       {/* Table of RTR Documents */}
-      <div className="border-border/70 bg-card overflow-hidden rounded-xl border shadow-2xs">
+      <div className="border-border/60 bg-card overflow-hidden rounded-xl border">
         {loading ? (
           <div className="text-muted-foreground space-y-2 p-12 text-center text-xs">
-            <RefreshCw className="text-primary mx-auto size-5 animate-spin" />
+            <RefreshCw className="text-primary mx-auto size-5 animate-spin stroke-[1.5]" />
             <p>Loading representation agreements...</p>
           </div>
         ) : documents.length === 0 ? (
           <div className="space-y-3 p-12 text-center">
-            <div className="bg-muted text-muted-foreground mx-auto flex size-10 items-center justify-center rounded-full">
-              <FileSignature className="size-5" />
+            <div className="bg-muted text-muted-foreground mx-auto flex size-10 items-center justify-center rounded-md border border-border/60">
+              <FileSignature className="size-5 stroke-[1.5]" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-foreground text-sm font-semibold">No RTR agreements found</h3>
+              <h3 className="text-foreground text-sm font-medium">No RTR agreements found</h3>
               <p className="text-muted-foreground mx-auto max-w-sm text-xs">
                 Upload an RTR agreement image or PDF using OCR extraction to populate this table
                 automatically.
@@ -436,22 +417,22 @@ export default function RTRManagementPage() {
               variant="outline"
               size="sm"
               onClick={() => setOcrModalOpen(true)}
-              className="rounded-xl text-xs"
+              className="border-border/60 hover:bg-muted/50 h-8 rounded-md text-xs font-normal"
             >
-              <Upload className="mr-1.5 size-3.5" />
+              <Upload className="mr-1.5 size-3.5 stroke-[1.5]" />
               Upload first RTR
             </Button>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-muted/40 border-border/60 text-muted-foreground border-b text-[11px] font-semibold tracking-wider uppercase">
+              <thead className="bg-muted/30 border-border/60 text-muted-foreground border-b text-xs font-medium normal-case">
                 <tr>
-                  <th className="px-4 py-3">Candidate & Role</th>
-                  <th className="px-4 py-3">Client / Company</th>
-                  <th className="px-4 py-3">Vendor & Recruiter</th>
+                  <th className="px-4 py-3">Candidate &amp; role</th>
+                  <th className="px-4 py-3">Client or company</th>
+                  <th className="px-4 py-3">Vendor &amp; recruiter</th>
                   <th className="px-4 py-3">Rate</th>
-                  <th className="px-4 py-3">Status & Type</th>
+                  <th className="px-4 py-3">Status &amp; type</th>
                   <th className="px-4 py-3">Dates</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>

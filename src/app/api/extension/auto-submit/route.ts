@@ -8,7 +8,7 @@ try {
     nodeCrypto = require('crypto');
   } catch {}
 }
-import { extensionRoute, extensionProfile, cors, markOutsideJobsApplied } from '@/lib/capture/server';
+import { extensionRoute, extensionProfile, cors } from '@/lib/capture/server';
 import { database, checkDb, CaptureError } from '@/lib/db/admin';
 import { validateApplicationAnswers } from '@/lib/capture/snapshot';
 import { allowedCaptureUrl, validateObservation } from '@/lib/capture/validation';
@@ -80,7 +80,19 @@ const autoSubmitSchema = z.object({
 }).passthrough();
 
 const isUuid = (val: string) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+
+function legacyReceiptKey(
+  actor: string, candidate: string, posting: string | null, company: string, title: string,
+  manual: boolean, legacyKey: string, attempt: number
+) {
+  const digest = nodeCrypto.createHash('sha256').update(JSON.stringify([
+    'application-receipt', actor, candidate,
+    posting ?? [company.toLowerCase(), title.toLowerCase()], manual, legacyKey, attempt,
+  ])).digest('hex');
+  const variant = ((Number.parseInt(digest[16], 16) & 3) | 8).toString(16);
+  return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-8${digest.slice(13, 16)}-${variant}${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+}
 
 export async function POST(request: Request) {
   const urlObj = new URL(request.url);
@@ -198,8 +210,11 @@ export async function POST(request: Request) {
           }
         }
 
-        const eventKey = rawEventKey && isUuid(rawEventKey) ? rawEventKey : crypto.randomUUID();
         const safeJobUrl = applicationUrlKey(body.jobUrl);
+        const eventKey = isUuid(rawEventKey) ? rawEventKey : legacyReceiptKey(
+          actor.id, candidateId, safeJobUrl, body.companyName, body.jobTitle,
+          body.manualAttestation, rawEventKey, body.attempt
+        );
         const finalAppliedResume = body.appliedResume || null;
 
         // Check for matching portal intent
@@ -224,6 +239,7 @@ export async function POST(request: Request) {
           );
         }
         const matchingIntent = matches[0];
+        const matchedJob = Array.isArray(matchingIntent?.job) ? matchingIntent.job[0] : matchingIntent?.job;
         const attempt = Math.max(body.attempt || 1, matchingIntent?.attempt || 1);
 
         const calendarDate = new Date().toISOString().slice(0, 10);
@@ -252,336 +268,92 @@ export async function POST(request: Request) {
 
         const portalSource = body.portalSource || (body.confirmationUrl ? new URL(body.confirmationUrl).hostname : 'Outside Job');
 
-        let result: {
-          submission: any;
-          duplicate: boolean;
-          replayed?: boolean;
-          code?: string | null;
-          job_id?: string | null;
-        } = null as any;
-
         const db = database();
-        let rpcSucceeded = false;
+        const rpcPayload = {
+          companyName: body.companyName,
+          jobTitle: body.jobTitle,
+          jobUrl: safeJobUrl,
+          confirmationUrl: body.confirmationUrl || null,
+          portalSource: portalSource,
+          jobLocation: body.jobLocation || null,
+          jobDescription: body.jobDescription || null,
+          jobDescriptionHtml: body.jobDescriptionHtml || null,
+          department: body.department || null,
+          employmentType: body.employmentType || (requireReceipt ? 'Full-time' : 'unknown'),
+          compensation: body.compensation || null,
+          arrangements: body.arrangements || null,
+          externalId: body.externalId || null,
+          notes: finalNotes,
+          evidence: body.evidence || null,
+          matchScore: body.matchScore ?? null,
+          matchedSkills: body.matchedSkills || [],
+          missingSkills: body.missingSkills || [],
+          extractedSkills: body.extractedSkills || [],
+          atsAnalysis: body.atsAnalysis || null,
+          answers: answers || null,
+          intentId: matchingIntent?.id || null,
+          postingKeys: [safeJobUrl, applicationUrlKey(matchedJob?.application_url)].filter(Boolean),
+          source: body.manualAttestation ? 'recruiter_attestation' : 'extension_observation',
+        };
 
-        // 3. ATOMIC DUAL-WRITE via PostgreSQL RPC (job_submissions + outside_jobs + idempotency)
-        if (typeof db?.rpc === 'function') {
-          const rpcPayload = {
-            companyName: body.companyName,
-            jobTitle: body.jobTitle,
-            jobUrl: safeJobUrl,
-            confirmationUrl: body.confirmationUrl || null,
-            portalSource: portalSource,
-            jobLocation: body.jobLocation || null,
-            jobDescription: body.jobDescription || null,
-            jobDescriptionHtml: body.jobDescriptionHtml || null,
-            department: body.department || null,
-            employmentType: body.employmentType || (requireReceipt ? 'Full-time' : 'unknown'),
-            compensation: body.compensation || null,
-            arrangements: body.arrangements || null,
-            externalId: body.externalId || null,
-            notes: finalNotes,
-            evidence: body.evidence || null,
-            appliedResume: finalAppliedResume,
-            matchScore: body.matchScore ?? null,
-            matchedSkills: body.matchedSkills || [],
-            missingSkills: body.missingSkills || [],
-            extractedSkills: body.extractedSkills || [],
-            atsAnalysis: body.atsAnalysis || null,
-            answers: answers || null,
-            intentId: matchingIntent?.id || null,
-            source: body.manualAttestation ? 'recruiter_attestation' : 'extension_observation',
-          };
+        const { data: rpcData, error: rpcError } = await db.rpc('record_extension_submission', {
+          p_actor: actor.id,
+          p_candidate: candidateId,
+          p_event_key: eventKey,
+          p_attempt: attempt,
+          p_fields: rpcPayload,
+        });
 
-          const { data: rpcData, error: rpcError } = await db.rpc('record_extension_submission', {
-            p_actor: actor.id,
-            p_candidate: candidateId,
-            p_event_key: eventKey,
-            p_attempt: attempt,
-            p_fields: rpcPayload,
-          });
+        if (rpcError?.message?.includes('conflict')) throw new CaptureError(rpcError.message, 409);
+        checkDb(rpcError);
+        if (!rpcData?.submission?.id) throw new Error('Submission RPC returned no application.');
+        const result = rpcData;
+        const receiptAttempt = result.attempt ?? attempt;
+        const observedAt = result.observed_at ?? new Date().toISOString();
 
-          const isRealRpc = rpcData && ('job_id' in rpcData || 'code' in rpcData || 'replayed' in rpcData);
-          if (!rpcError && isRealRpc) {
-            result = rpcData as typeof result;
-            rpcSucceeded = true;
-          } else if (rpcError) {
-            if (rpcError.message?.includes('conflict') || rpcError.code === '23505') {
-              throw new CaptureError('Submission event key conflict', 409);
-            }
-            console.warn('[RPC Submission Note]', rpcError.message);
-          }
-        }
-
-        // Fallback for mocked unit test environments where db.rpc is not stubbed
-        if (!rpcSucceeded) {
-          if (matchingIntent) {
-            const observedAt = new Date().toISOString();
-            if (typeof db.rpc === 'function') {
-              await db.rpc('record_browser_event', {
-                p_actor: actor.id,
-                p_intent: matchingIntent.id,
-                p_key: eventKey,
-                p_status: 'submitted',
-                p_attempt: attempt,
-                p_source: body.manualAttestation ? 'recruiter_attestation' : 'extension_observation',
-                p_evidence: body.evidence || 'Applicant manually attested submission',
-                p_url: safeJobUrl,
-                p_observed: observedAt,
-              });
-            }
-            const { data: existing, error: existingError } = await db
-              .from('job_submissions')
-              .select('*')
-              .eq('id', matchingIntent.submission_id)
-              .eq('candidate_id', candidateId)
-              .single();
-            checkDb(existingError);
-            if (!existing) throw new CaptureError('Application draft not found.', 404);
-
-            const jobObj = Array.isArray(matchingIntent.job) ? matchingIntent.job[0] : matchingIntent.job;
-            if (body.confirmationUrl) {
-              await markOutsideJobsApplied(actor.id, candidateId, existing.id, observedAt, [jobObj?.application_url, body.jobUrl]);
-            }
-            result = { submission: existing, duplicate: existing.duplicate_flag || false };
-          } else {
-            let existingSubmission: any = null;
-            if (safeJobUrl) {
-              let existingQuery = db
-                .from('job_submissions')
-                .select('*')
-                .eq('candidate_id', candidateId)
-                .order('created_at', { ascending: false })
-                .limit(50);
-              if (body.confirmationUrl) existingQuery = existingQuery.eq('job_url', safeJobUrl);
-              else existingQuery = existingQuery.in('status', ['Draft', 'Applied']);
-              const { data: existingSubs, error: existingSubsError } = await existingQuery;
-              checkDb(existingSubsError);
-              existingSubmission = (existingSubs || []).find((sub: any) => {
-                const subKey = applicationUrlKey(sub.job_url);
-                return subKey && subKey === safeJobUrl;
-              });
-            }
-
-            if (
-              existingSubmission && body.confirmationUrl && existingSubmission.status !== 'Draft' &&
-              ['submitted', 'confirmed'].includes(existingSubmission.capture_status)
-            ) {
-              result = {
-                submission: existingSubmission,
-                duplicate: true,
-                code: 'IDEMPOTENT_SUBMISSION_EXISTS',
-                replayed: true,
-              };
-            } else if (existingSubmission) {
-              const updatePayload: any = {
-                ...(!body.confirmationUrl || existingSubmission.status === 'Draft' ? { status: 'Applied' } : {}),
-                ...(existingSubmission.status === 'Draft' ? { submission_date: new Date().toISOString().slice(0, 10) } : {}),
-                capture_status: 'submitted',
-                notes: finalNotes || existingSubmission.notes,
-                source_type: 'extension',
-              };
-              const { error: updateError } = await db
-                .from('job_submissions')
-                .update(updatePayload)
-                .eq('id', existingSubmission.id);
-              checkDb(updateError);
-              Object.assign(existingSubmission, updatePayload);
-              result = { submission: existingSubmission, duplicate: false, replayed: true };
-            } else if (body.confirmationUrl) {
-              const { data: inserted, error: insertError } = await db
-                .from('job_submissions')
-                .upsert(
-                  {
-                    id: eventKey,
-                    candidate_id: candidateId,
-                    company_name: body.companyName,
-                    job_title: body.jobTitle,
-                    job_url: safeJobUrl,
-                    portal_source: portalSource,
-                    job_location: body.jobLocation || null,
-                    submission_date: new Date().toISOString().slice(0, 10),
-                    status: 'Applied',
-                    capture_status: 'submitted',
-                    source_type: 'extension',
-                    notes: finalNotes,
-                  },
-                  { onConflict: 'id', ignoreDuplicates: true, defaultToNull: false }
-                )
-                .select('*')
-                .maybeSingle();
-              checkDb(insertError);
-              if (inserted) {
-                result = { submission: inserted, duplicate: inserted.duplicate_flag || false };
-              } else {
-                const { data: existing, error } = await db
-                  .from('job_submissions')
-                  .select('*')
-                  .eq('id', eventKey)
-                  .eq('candidate_id', candidateId)
-                  .eq('job_url', safeJobUrl!)
-                  .maybeSingle();
-                checkDb(error);
-                if (!existing)
-                  throw new CaptureError('Submission event does not match this posting.', 409);
-                result = {
-                  submission: existing,
-                  duplicate: true,
-                  code: 'IDEMPOTENT_SUBMISSION_EXISTS',
-                  replayed: true,
-                };
-              }
-            } else {
-              const { data: newSub, error: subErr } = await db
-                .from('job_submissions')
-                .insert({
-                  candidate_id: candidateId,
-                  submission_date: new Date().toISOString().split('T')[0],
-                  company_name: body.companyName,
-                  job_title: body.jobTitle,
-                  job_url: safeJobUrl,
-                  portal_source: portalSource,
-                  job_location: body.jobLocation || null,
-                  status: 'Applied',
-                  capture_status: 'submitted',
-                  notes: finalNotes,
-                  source_type: 'extension',
-                })
-                .select('*')
-                .single();
-              checkDb(subErr);
-              result = { submission: newSub, duplicate: false };
-            }
-
-            // Sync outside_jobs in fallback path
-            const sourceHost = safeJobUrl ? new URL(safeJobUrl).hostname : '';
-            const isPortal = /(^|\.)(nextkinhr\.com|jobright-internal\.com)$/.test(sourceHost);
-            if (!matchingIntent && !isPortal && safeJobUrl) {
-              try {
-                const outsideJobPayload = {
-                  candidate_id: candidateId,
-                  submission_id: result.submission.id,
-                  title: body.jobTitle,
-                  company: body.companyName,
-                  job_url: safeJobUrl || '',
-                  portal_source: portalSource,
-                  location: body.jobLocation || (requireReceipt ? undefined : null),
-                  department: body.department || (requireReceipt ? undefined : null),
-                  employment_type: body.employmentType || (requireReceipt ? undefined : 'Full-time'),
-                  description: body.jobDescription || (requireReceipt ? undefined : null),
-                  description_html: body.jobDescriptionHtml || (requireReceipt ? undefined : null),
-                  match_score: body.matchScore,
-                  matched_skills: body.matchedSkills,
-                  missing_skills: body.missingSkills,
-                  extracted_skills: body.extractedSkills,
-                  ats_analysis: body.atsAnalysis,
-                  answers: answers || undefined,
-                  status: 'Applied',
-                  applied_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                };
-
-                const table = db.from('outside_jobs');
-                if (body.confirmationUrl) {
-                  const { error } = await table.upsert(
-                    {
-                      ...outsideJobPayload,
-                      capture_owner_id: actor.id,
-                    },
-                    { onConflict: 'capture_owner_id,job_url', defaultToNull: false }
-                  );
-                  checkDb(error);
-                } else if (typeof table?.select === 'function' && typeof table?.insert === 'function') {
-                  const { data: existingOutside } = await table
-                    .select('id')
-                    .eq('candidate_id', candidateId)
-                    .eq('job_url', safeJobUrl)
-                    .eq('capture_owner_id', actor.id)
-                    .order('capture_owner_id', { ascending: false, nullsFirst: false })
-                    .limit(1)
-                    .maybeSingle();
-
-                  if (existingOutside) {
-                    const { error: updateError } = await table
-                      .update(outsideJobPayload)
-                      .eq('id', existingOutside.id);
-                    checkDb(updateError);
-                  } else {
-                    const { error: insertError } = await table.insert(outsideJobPayload);
-                    checkDb(insertError);
-                  }
-                }
-              } catch (outsideErr) {
-                if (body.confirmationUrl) throw outsideErr;
-                console.warn('[Outside Jobs Save Warn]', outsideErr);
-              }
-            }
-          }
-        }
-
-        // 4. Archive applied resume if provided
-        const archivedResume = finalAppliedResume
-          ? await saveAppliedResume(result.submission.id, candidateId, {
-              ...finalAppliedResume,
-              appliedAt: new Date().toISOString(),
-            })
-          : null;
-
-        if (archivedResume) {
-          result.submission.applied_resume = archivedResume;
-          if (safeJobUrl) {
-            let outsideResume = db
-              .from('outside_jobs')
-              .update({ applied_resume: archivedResume })
-              .eq('submission_id', result.submission.id)
-              .eq('candidate_id', candidateId)
-              .eq('job_url', safeJobUrl);
-            if (body.confirmationUrl) outsideResume = outsideResume.eq('capture_owner_id', actor.id);
-            const { error: outsideResumeError } = await outsideResume;
-            if (outsideResumeError) {
-              if (body.confirmationUrl) checkDb(outsideResumeError);
-              console.warn('[Outside Jobs Resume Save Warn]', outsideResumeError);
-            }
-          }
-        }
-
-        // 5. Save application answer snapshot if answers present
-        let snapshot = null;
-        if (answers && Array.isArray(answers) && answers.length > 0 && typeof db.rpc === 'function') {
+        const archiveResume = async () => {
+          if (!finalAppliedResume) return;
+          const archivedResume = await saveAppliedResume(result.submission.id, candidateId, {
+            ...finalAppliedResume, appliedAt: observedAt,
+          }, { actor: actor.id, eventKey });
+          if (archivedResume) result.submission.applied_resume = archivedResume;
+        };
+        const saveAnswers = async () => {
+          if (!answers?.length) return null;
+          let safeUrl = '';
           try {
-            let safeUrl = '';
-            try {
-              const parsed = new URL(
-                safeJobUrl || request.headers.get('origin') || 'https://unknown.invalid'
-              );
-              parsed.search = '';
-              parsed.hash = '';
-              safeUrl = parsed.toString();
-            } catch {
-              safeUrl = 'https://unknown.invalid';
-            }
-            const { data: saved, error: snapshotError } = await db.rpc(
-              'save_application_answer_snapshot',
-              {
-                p_actor: actor.id,
-                p_intent: matchingIntent?.id || null,
-                p_submission: result.submission.id,
-                p_candidate: candidateId,
-                p_attempt: attempt,
-                p_event_key: eventKey,
-                p_portal: portalSource,
-                p_url: safeUrl,
-                p_profile_version: candidateVersion,
-                p_answers: answers,
-                p_observed_at: new Date().toISOString(),
-              }
+            const parsed = new URL(
+              safeJobUrl || request.headers.get('origin') || 'https://unknown.invalid'
             );
-            checkDb(snapshotError);
-            snapshot = saved;
-          } catch (snapshotErr) {
-            if (body.confirmationUrl) throw snapshotErr;
-            console.warn('[Snapshot Warning]', snapshotErr);
+            parsed.search = '';
+            parsed.hash = '';
+            safeUrl = parsed.toString();
+          } catch {
+            safeUrl = 'https://unknown.invalid';
           }
-        }
+          const { data: saved, error: snapshotError } = await db.rpc(
+            'save_application_answer_snapshot',
+            {
+              p_actor: actor.id,
+              p_intent: result.intent_id ?? null,
+              p_submission: result.submission.id,
+              p_candidate: candidateId,
+              p_attempt: receiptAttempt,
+              p_event_key: eventKey,
+              p_portal: portalSource,
+              p_url: safeUrl,
+              p_profile_version: candidateVersion,
+              p_answers: answers,
+              p_observed_at: observedAt,
+            }
+          );
+          checkDb(snapshotError);
+          return saved;
+        };
+        const [archiveResult, snapshotResult] = await Promise.allSettled([archiveResume(), saveAnswers()]);
+        if (archiveResult.status === 'rejected') throw archiveResult.reason;
+        if (snapshotResult.status === 'rejected') throw snapshotResult.reason;
+        const snapshot = snapshotResult.value;
 
         // 6. ENFORCE EVENT IDEMPOTENCY:
         // Return 200 with { duplicate: true, code: 'IDEMPOTENT_SUBMISSION_EXISTS' } when event_key was already processed

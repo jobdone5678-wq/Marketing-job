@@ -104,18 +104,79 @@ export async function POST(request: Request) {
     const universityName = body.university_name || education[0]?.institution || null;
     const graduationYear = body.graduation_year || education[0]?.year || null;
 
-    // Screening answers
-    const screening = (body.screeningAnswers || {}) as Record<string, any>;
+    const { data: existingCandidate, error: lookupError } = await database()
+      .from('candidates')
+      .select('id, version, confirmed_facts')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    checkDb(lookupError);
+
+    const existingFacts = (existingCandidate?.confirmed_facts || {}) as Record<string, any>;
+    const existingScreening = existingFacts.screeningAnswers || {};
+    const submittedScreening = (body.screeningAnswers || {}) as Record<string, any>;
+    // Older screening clients post answers without attaching a resume or sending a review patch.
+    const legacyReview = body.eligibilityReview === undefined && !filename && !raw_text;
+    const hasDirectAnswer = (key: string) => legacyReview && Object.hasOwn(body, key);
+    const review = (legacyReview ? submittedScreening : body.eligibilityReview || {}) as Record<string, any>;
+    const submittedCountryAnswers = review.country_specific_answers || {};
+    const screening = {
+      ...existingScreening,
+      ...submittedScreening,
+      authorized_countries: review.authorized_countries ?? existingScreening.authorized_countries ?? [],
+      age_18_or_older: review.age_18_or_older ?? existingScreening.age_18_or_older ?? '',
+      visa_sponsorship_needed: review.visa_sponsorship_needed ?? existingScreening.visa_sponsorship_needed ?? '',
+      country_specific_answers: {
+        ...existingScreening.country_specific_answers,
+        ...submittedCountryAnswers,
+      },
+    };
     const countryAnswers = screening.country_specific_answers || {};
-    const usAuthorization = String(countryAnswers.us_auth || '').toLowerCase();
-    const authorizedInUsa = usAuthorization === 'yes' ? true : usAuthorization === 'no' ? false
-      : body.authorized_in_usa ?? null;
-    const sponsorshipAnswer = String(countryAnswers.us_sponsorship || screening.visa_sponsorship_needed || '').toLowerCase();
-    const needsSponsorship = sponsorshipAnswer === 'yes'
-      ? true
-      : sponsorshipAnswer === 'no'
-      ? false
-      : body.need_sponsorship_now ?? null;
+    const yesNo = (answer: unknown) => {
+      const value = String(answer ?? '').toLowerCase();
+      return value === 'yes' ? true : value === 'no' ? false : null;
+    };
+    const countryAuthorizationReviewed = Object.hasOwn(submittedCountryAnswers, 'us_auth');
+    const authorizationReviewed = countryAuthorizationReviewed || hasDirectAnswer('authorized_in_usa');
+    const authorizedInUsa = countryAuthorizationReviewed
+      ? yesNo(submittedCountryAnswers.us_auth)
+      : authorizationReviewed ? body.authorized_in_usa : existingFacts.authorized_in_usa ?? null;
+    const generalSponsorshipReviewed = Object.hasOwn(review, 'visa_sponsorship_needed');
+    const screeningSponsorshipReviewed = generalSponsorshipReviewed || Object.hasOwn(submittedCountryAnswers, 'us_sponsorship');
+    const sponsorshipReviewed = screeningSponsorshipReviewed || hasDirectAnswer('need_sponsorship_now');
+    const needsSponsorship = screeningSponsorshipReviewed
+      ? yesNo(submittedCountryAnswers.us_sponsorship ?? review.visa_sponsorship_needed)
+      : sponsorshipReviewed ? body.need_sponsorship_now : existingFacts.need_sponsorship_now ?? null;
+    const futureSponsorshipReviewed = sponsorshipReviewed || hasDirectAnswer('need_sponsorship_future');
+    const futureSponsorship = hasDirectAnswer('need_sponsorship_future')
+      ? body.need_sponsorship_future
+      : sponsorshipReviewed ? needsSponsorship : existingFacts.need_sponsorship_future ?? null;
+    const answerLabel = (value: boolean | null) => value === true ? 'yes' : value === false ? 'no' : '';
+    if (authorizationReviewed) {
+      countryAnswers.us_auth = answerLabel(authorizedInUsa);
+    }
+    if (sponsorshipReviewed) {
+      screening.visa_sponsorship_needed = answerLabel(needsSponsorship);
+      if (Object.hasOwn(countryAnswers, 'us_sponsorship')) {
+        countryAnswers.us_sponsorship = answerLabel(needsSponsorship);
+      }
+    }
+    const visaStatusReviewed = authorizationReviewed || hasDirectAnswer('visa_status');
+    const visaStatus = hasDirectAnswer('visa_status')
+      ? body.visa_status || null
+      : authorizationReviewed && authorizedInUsa !== true ? null : existingFacts.visa_status ?? null;
+    const workAuthorizationReviewed = authorizationReviewed || hasDirectAnswer('work_authorization');
+    const workAuthorization = hasDirectAnswer('work_authorization')
+      ? body.work_authorization || null
+      : authorizationReviewed
+        ? (authorizedInUsa ? existingFacts.work_authorization || 'Authorized to work in US' : null)
+        : existingFacts.work_authorization ?? null;
+    const reviewedEligibility = {
+      authorized_in_usa: authorizationReviewed ? authorizedInUsa : undefined,
+      need_sponsorship_now: sponsorshipReviewed ? needsSponsorship : undefined,
+      need_sponsorship_future: futureSponsorshipReviewed ? futureSponsorship : undefined,
+      visa_status: visaStatusReviewed ? visaStatus : undefined,
+      work_authorization: workAuthorizationReviewed ? workAuthorization : undefined,
+    };
     const locationObj = (body.location || {}) as Record<string, any>;
     const openToRelocation = locationObj.openToRelocation !== undefined
       ? Boolean(locationObj.openToRelocation)
@@ -137,15 +198,8 @@ export async function POST(request: Request) {
     const disability = countryAnswers.us_disability === 'Not stated' ? null
       : demographics.disabilityStatus || countryAnswers.us_disability || usAnswers.disability_status || body.disability || body.disability_status || null;
 
-    // Check if candidate record already exists for this user
-    const { data: existingCandidate } = await database()
-      .from('candidates')
-      .select('id, version, confirmed_facts')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
     const mergedFacts = {
-      ...((existingCandidate?.confirmed_facts || {}) as Record<string, unknown>),
+      ...existingFacts,
       raw_text,
       filename,
       has_parsed_resume,
@@ -169,12 +223,12 @@ export async function POST(request: Request) {
       primary_skills: skills,
       skills: Array.isArray(body.skills) ? body.skills : skills.split(/,\s*/).filter(Boolean),
       authorized_in_usa: authorizedInUsa,
-      needs_sponsorship: needsSponsorship,
+      needs_sponsorship: sponsorshipReviewed ? needsSponsorship : existingFacts.needs_sponsorship ?? needsSponsorship,
       need_sponsorship_now: needsSponsorship,
-      need_sponsorship_future: needsSponsorship,
+      need_sponsorship_future: futureSponsorship,
       open_to_relocation: openToRelocation,
-      visa_status: body.visa_status || null,
-      work_authorization: body.work_authorization || (authorizedInUsa ? 'Authorized to work in US' : null),
+      visa_status: visaStatus,
+      work_authorization: workAuthorization,
       demographics: {
         gender,
         raceEthnicity: race,
@@ -227,8 +281,7 @@ export async function POST(request: Request) {
         linkedin_url: linkedinUrl || undefined,
         current_employer: currentEmployer || undefined,
         current_job_title: currentJobTitle || undefined,
-        authorized_in_usa: authorizedInUsa !== null ? authorizedInUsa : undefined,
-        need_sponsorship_now: needsSponsorship !== null ? needsSponsorship : undefined,
+        ...reviewedEligibility,
         open_to_relocation: openToRelocation !== null ? openToRelocation : undefined,
         notice_period: noticePeriod ? String(noticePeriod) : undefined,
         expected_salary: expectedSalary ? String(expectedSalary) : undefined,
@@ -238,7 +291,6 @@ export async function POST(request: Request) {
         race: (mergedFacts.race as string) || (mergedFacts.race_ethnicity as string) || undefined,
         veteran: (mergedFacts.veteran as string) || (mergedFacts.veteran_status as string) || undefined,
         disability: (mergedFacts.disability as string) || (mergedFacts.disability_status as string) || undefined,
-        visa_status: (mergedFacts.visa_status as string) || (mergedFacts.work_authorization as string) || undefined,
         highest_qualification: (mergedFacts.highest_qualification as string) || undefined,
         university_name: (mergedFacts.university_name as string) || undefined,
         graduation_year: (mergedFacts.graduation_year as string) || undefined,
@@ -252,9 +304,13 @@ export async function POST(request: Request) {
         .from('candidates')
         .update(candidateUpdate)
         .eq('id', existingCandidate.id)
+        .eq('version', existingCandidate.version)
         .select()
         .single();
 
+      if (error?.code === 'PGRST116') {
+        throw new CaptureError('The profile changed while saving. Please try again.', 409);
+      }
       checkDb(error);
       savedCandidate = data;
     } else {
@@ -272,8 +328,7 @@ export async function POST(request: Request) {
           linkedin_url: linkedinUrl,
           current_employer: currentEmployer,
           current_job_title: currentJobTitle,
-          authorized_in_usa: authorizedInUsa !== null ? authorizedInUsa : undefined,
-          need_sponsorship_now: needsSponsorship !== null ? needsSponsorship : undefined,
+          ...reviewedEligibility,
           open_to_relocation: openToRelocation !== null ? openToRelocation : undefined,
           notice_period: noticePeriod ? String(noticePeriod) : undefined,
           expected_salary: expectedSalary ? String(expectedSalary) : undefined,

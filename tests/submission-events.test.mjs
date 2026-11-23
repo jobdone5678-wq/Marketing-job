@@ -459,3 +459,134 @@ test('Submission Events: Webhook alias /api/webhooks/application-submitted forwa
   assert.equal(data.success, true);
   assert.equal(data.submission.status, 'Applied');
 });
+
+test('Submission Events: legacy receipt identities survive retry and distinguish explicit events and attempts', async () => {
+  const actor = { id: '00000000-0000-4000-8000-000000000001' };
+  const candidateId = '11111111-1111-4000-8000-111111111111';
+  const captured = [];
+  const db = {
+    from() {
+      return {
+        select() { return this; }, eq() { return this; },
+        async maybeSingle() { return { data: { id: candidateId, user_id: actor.id } }; },
+        then(resolve) { resolve({ data: [] }); },
+      };
+    },
+    async rpc(name, args) {
+      assert.equal(name, 'record_extension_submission');
+      captured.push(args.p_event_key);
+      return { data: { submission: { id: args.p_event_key } } };
+    },
+  };
+  const { POST } = loadRoute('extension/auto-submit', {
+    'node:crypto': await import('node:crypto'),
+    '@/lib/capture/server': {
+      extensionProfile: async () => actor,
+      extensionRoute: async (_request, work) => Response.json(await work()),
+    },
+    '@/lib/db/admin': { database: () => db, checkDb: assert.ifError, CaptureError: Error },
+    '@/lib/capture/snapshot': {},
+    '@/lib/capture/validation': { allowedCaptureUrl, validateObservation },
+    '@/lib/capture/applied-resume': { appliedResumeSchema: z.unknown(), saveAppliedResume: async () => null },
+    '@/lib/jobs/application-state': { applicationUrlKey }, zod: { z },
+  });
+  const send = fields => POST(new Request('https://www.nextkinhr.com/api/extension/auto-submit', {
+    method: 'POST', body: JSON.stringify({
+      candidateId, companyName: 'Fixture', jobTitle: 'Engineer', jobUrl: 'https://jobs.lever.co/acme/engineer/apply',
+      manualAttestation: true, ...fields,
+    }),
+  }));
+  const explicit = '22222222-2222-4000-8000-222222222222';
+  await send({});
+  await send({ jobUrl: 'https://jobs.lever.co/acme/engineer' });
+  await send({ eventKey: 'legacy-123' });
+  await send({ eventKey: 'legacy-123' });
+  await send({ eventKey: 'legacy-123', attempt: 2 });
+  await send({ eventKey: explicit });
+  assert.equal(captured[0], captured[1]);
+  assert.equal(captured[2], captured[3]);
+  assert.equal(captured[5], explicit);
+  assert.equal(new Set(captured).size, 4);
+  for (const key of captured) assert.equal(z.uuid().safeParse(key).success, true);
+});
+
+test('Submission Events: rediscovery cannot update another candidate’s outside capture', async () => {
+  const actor = { id: '00000000-0000-4000-8000-000000000001' };
+  const candidateA = '11111111-1111-4000-8000-111111111111';
+  const candidateB = '11111111-1111-4000-8000-222222222222';
+  const jobUrl = 'https://jobs.lever.co/acme/engineer';
+  let stored = { submission_id: null, id: 'outside-a', candidate_id: candidateA, title: 'Existing title' };
+  const db = {
+    from(table) {
+      let fields;
+      let pendingInsert;
+      let candidateFilter;
+      const filters = new Map();
+      return {
+        select() { return this; }, order() { return this; }, limit() { return this; },
+        eq(key, value) { filters.set(key, value); return this; },
+        is(key, value) { filters.set(key, value); return this; },
+        or(filter) { candidateFilter = filter; return this; },
+        upsert(input) { pendingInsert = input; return this; },
+        update(input) { fields = input; return this; },
+        async maybeSingle() {
+          if (table === 'candidates') return { data: filters.has('id') ? { id: filters.get('id') } : null };
+          if (pendingInsert && !stored) {
+            stored = { ...pendingInsert, id: 'outside-a', submission_id: null };
+            return { data: { id: stored.id } };
+          }
+          const scoped = fields && filters.get('capture_owner_id') === actor.id && filters.get('job_url') === jobUrl;
+          const nullUnlinked = stored?.candidate_id == null && stored?.submission_id == null;
+          const eligible = fields?.candidate_id
+            ? candidateFilter === 'candidate_id.eq.' + fields.candidate_id + ',and(candidate_id.is.null,submission_id.is.null)'
+              && (stored.candidate_id === fields.candidate_id || nullUnlinked)
+            : filters.get('candidate_id') === null && filters.get('submission_id') === null && nullUnlinked;
+          if (scoped && eligible) {
+            Object.assign(stored, fields);
+            return { data: { id: stored.id } };
+          }
+          return { data: null };
+        },
+      };
+    },
+  };
+  const { POST } = loadRoute('extension/save-external-job', {
+    'node:crypto': await import('node:crypto'),
+    '@/lib/capture/server': {
+      extensionProfile: async () => actor,
+      extensionRoute: async (_request, work) => {
+        try { return Response.json(await work()); }
+        catch (error) { return Response.json({ error: error.message }, { status: error.status || 500 }); }
+      },
+    },
+    '@/lib/db/admin': {
+      database: () => db, checkDb: assert.ifError,
+      CaptureError: class extends Error { constructor(message, status) { super(message); this.status = status; } },
+    },
+    '@/lib/html-sanitizer': { sanitizeJobHtml: () => null },
+    '@/lib/jobs/skills-extractor': {},
+    '@/lib/jobs/application-state': { applicationUrlKey }, zod: { z },
+  });
+  const send = (candidateId, title) => POST(new Request('https://www.nextkinhr.com/api/extension/save-external-job', {
+    method: 'POST', body: JSON.stringify({ candidateId, title, company: 'Fixture', jobUrl, description: 'A fixture job description' }),
+  }));
+  assert.equal((await send(candidateB, 'Other candidate title')).status, 409);
+  assert.equal(stored.title, 'Existing title');
+  assert.equal((await send(candidateA, 'Updated title')).status, 200);
+  assert.equal(stored.title, 'Updated title');
+
+  stored = undefined;
+  assert.equal((await send(undefined, 'Discovery before profile')).status, 200);
+  assert.equal(stored.candidate_id, null);
+  const discoveredId = stored.id;
+  assert.equal((await send(candidateB, 'Capture after profile')).status, 200);
+  assert.equal(stored.id, discoveredId);
+  assert.equal(stored.candidate_id, candidateB);
+  assert.equal(stored.title, 'Capture after profile');
+
+  stored.candidate_id = null;
+  stored.submission_id = 'existing-link';
+  assert.equal((await send(candidateA, 'Do not adopt linked capture')).status, 409);
+  assert.equal(stored.candidate_id, null);
+  assert.equal(stored.submission_id, 'existing-link');
+});

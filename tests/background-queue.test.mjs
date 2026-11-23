@@ -3,9 +3,16 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 
+const workspace = 'https://www.nextkinhr.com';
+const owner = { workspace, accountId: 'account-a' };
+const panel = { id: 'extension', url: 'chrome-extension://extension/panel.html' };
+const receipt = (id, body = {}) => ({ ...owner, id, body: { eventKey: id, ...body } });
+
 function createMockWorker(customFetch, initialStorage = {}) {
-  const localStorage = { origin: 'https://www.nextkinhr.com', token: 'test-token', ...initialStorage.local };
-  const sessionStorage = { ...initialStorage.session };
+  const localStorage = initialStorage.local || { origin: workspace };
+  const sessionStorage = initialStorage.session || { origin: workspace, accountId: owner.accountId, token: 'first-account-valid-token' };
+  let storageError = false;
+  let onMessage;
   const alarms = new Map();
   const notices = [];
   const noop = { addListener() {} };
@@ -16,7 +23,9 @@ function createMockWorker(customFetch, initialStorage = {}) {
       onInstalled: noop,
       onStartup: noop,
       onConnect: noop,
-      onMessage: noop,
+      id: 'extension',
+      getURL: path => 'chrome-extension://extension/' + path,
+      onMessage: { addListener: listener => { onMessage = listener; } },
       sendMessage: async (msg) => { notices.push(msg); },
     },
     action: {
@@ -54,6 +63,7 @@ function createMockWorker(customFetch, initialStorage = {}) {
           return { ...localStorage };
         },
         set: async (obj) => {
+          if (storageError) throw new Error('storage rejected write');
           Object.assign(localStorage, obj);
         },
         remove: async (keys) => {
@@ -92,6 +102,8 @@ function createMockWorker(customFetch, initialStorage = {}) {
     chrome: chromeMock,
     fetch: customFetch,
     _localStorage: localStorage,
+    _rejectLocalWrites: value => { storageError = value; },
+    _message: (message, sender = panel) => new Promise(resolve => onMessage(message, sender, resolve)),
     _sessionStorage: sessionStorage,
     _alarms: alarms,
     _notices: notices,
@@ -110,6 +122,7 @@ test('Background Queue: 2xx delivers and dequeues submission', async () => {
   });
 
   const item = {
+    ...owner,
     id: 'sub-1',
     url: 'https://www.nextkinhr.com/api/webhooks/application-submitted',
     token: 'valid-token',
@@ -134,6 +147,7 @@ test('Background Queue: 401 preserves event, flags syncStatus as AUTH_REQUIRED, 
   });
 
   const item = {
+    ...owner,
     id: 'sub-401',
     url: 'https://www.nextkinhr.com/api/webhooks/application-submitted',
     token: 'expired-token',
@@ -153,7 +167,7 @@ test('Background Queue: 401 preserves event, flags syncStatus as AUTH_REQUIRED, 
 
   // Second processSubmissionQueue call should do nothing while paused
   let fetchCount = 0;
-  worker.fetch = async () => { fetchCount++; return new Response('', { status: 200 }); };
+  worker.fetch = async () => { fetchCount++; return Response.json({ success: true }); };
   await worker.processSubmissionQueue();
   assert.equal(fetchCount, 0, 'Must not process queue while paused on 401');
 
@@ -174,6 +188,7 @@ test('Background Queue: 403 preserves event, flags syncStatus as FORBIDDEN, noti
   });
 
   const item = {
+    ...owner,
     id: 'sub-403',
     url: 'https://www.nextkinhr.com/api/webhooks/application-submitted',
     token: 'forbidden-token',
@@ -199,6 +214,7 @@ test('Background Queue: 409 duplicate vs state conflict', async () => {
   });
 
   const itemA = {
+    ...owner,
     id: 'sub-409-dup',
     url: 'https://www.nextkinhr.com/api/webhooks/application-submitted',
     token: 'token',
@@ -228,6 +244,7 @@ test('Background Queue: 409 duplicate vs state conflict', async () => {
   });
 
   const itemConflict = {
+    ...owner,
     id: 'sub-409-conflict',
     url: 'https://www.nextkinhr.com/api/webhooks/application-submitted',
     token: 'token',
@@ -255,6 +272,7 @@ test('Background Queue: 422 preserves in reviewable dead-letter queue (VALIDATIO
   });
 
   const item = {
+    ...owner,
     id: 'sub-422',
     url: 'https://www.nextkinhr.com/api/webhooks/application-submitted',
     token: 'token',
@@ -273,7 +291,7 @@ test('Background Queue: 422 preserves in reviewable dead-letter queue (VALIDATIO
   assert.equal(dlq.length, 1);
   assert.equal(dlq[0].id, 'sub-422');
   assert.equal(dlq[0].syncStatus, 'VALIDATION_FAILED');
-  assert.deepEqual(dlq[0].errorDetails, { error: 'Missing required field: resume' });
+  assert.equal(dlq[0].errorDetails, undefined);
 });
 
 test('Background Queue: 429/5xx/timeout retries with exponential backoff up to 8 attempts', async () => {
@@ -285,6 +303,7 @@ test('Background Queue: 429/5xx/timeout retries with exponential backoff up to 8
   });
 
   const item = {
+    ...owner,
     id: 'sub-retry',
     url: 'https://www.nextkinhr.com/api/webhooks/application-submitted',
     token: 'token',
@@ -296,7 +315,7 @@ test('Background Queue: 429/5xx/timeout retries with exponential backoff up to 8
   // Simulate 8 retries
   for (let i = 1; i <= 8; i++) {
     // Force nextRetryAt to now
-    await worker.updateQueueItem('sub-retry', prev => ({ ...prev, nextRetryAt: Date.now() - 1000 }));
+    await worker.updateQueueItem(item, prev => ({ ...prev, nextRetryAt: Date.now() - 1000 }));
     await worker.processSubmissionQueue();
 
     const queue = await worker.getSubmissionQueue();
@@ -309,7 +328,7 @@ test('Background Queue: 429/5xx/timeout retries with exponential backoff up to 8
   assert.deepEqual(attemptsSeen, [1, 2, 3, 4, 5, 6, 7, 8]);
 
   // 9th attempt should exceed max retries and move to DLQ
-  await worker.updateQueueItem('sub-retry', prev => ({ ...prev, nextRetryAt: Date.now() - 1000 }));
+  await worker.updateQueueItem(item, prev => ({ ...prev, nextRetryAt: Date.now() - 1000 }));
   await worker.processSubmissionQueue();
 
   const queueAfterMax = await worker.getSubmissionQueue();
@@ -329,6 +348,7 @@ test('Background Queue: chrome.alarms durable retry scheduling across MV3 restar
   });
 
   const item = {
+    ...owner,
     id: 'sub-alarm',
     url: 'https://www.nextkinhr.com/api/webhooks/application-submitted',
     token: 'token',
@@ -355,7 +375,7 @@ test('Background Queue: prevents read-modify-write race condition during process
 
   const worker = createMockWorker(async (url, opts) => {
     const body = JSON.parse(opts.body);
-    if (body.test === 'item-1') {
+    if (body.eventKey === 'item-1') {
       fetchStartedResolve();
       await allowFetchToFinish;
       return new Response(JSON.stringify({ success: true }), { status: 200 });
@@ -364,10 +384,11 @@ test('Background Queue: prevents read-modify-write race condition during process
   });
 
   const item1 = {
+    ...owner,
     id: 'item-1',
     url: 'https://www.nextkinhr.com/api/webhooks/application-submitted',
     token: 'token',
-    body: { test: 'item-1' },
+    body: { eventKey: 'item-1' },
   };
 
   await worker.enqueueSubmission(item1);
@@ -378,10 +399,11 @@ test('Background Queue: prevents read-modify-write race condition during process
 
   // While item-1 fetch is in flight, item-2 arrives and is enqueued!
   const item2 = {
+    ...owner,
     id: 'item-2',
     url: 'https://www.nextkinhr.com/api/webhooks/application-submitted',
     token: 'token',
-    body: { test: 'item-2' },
+    body: { eventKey: 'item-2' },
   };
   await worker.enqueueSubmission(item2);
 
@@ -396,7 +418,7 @@ test('Background Queue: prevents read-modify-write race condition during process
 
 test('Background Queue: eliminates cross-tab profile bleed', async () => {
   const worker = createMockWorker(async () => {
-    return new Response(JSON.stringify({ success: true }), { status: 200 });
+    return Response.json({ intentId: null });
   });
 
   const tabId = 42;
@@ -421,4 +443,156 @@ test('Background Queue: eliminates cross-tab profile bleed', async () => {
 
   const contextAfterNav = (await worker.chrome.storage.session.get('application-intent:' + tabId))['application-intent:' + tabId];
   assert.equal(contextAfterNav.candidateId, candA, 'Tab candidate identity must NOT be overwritten by global activeCandidateId');
+});
+
+const connectionMessage = (accountId, token, origin = workspace) => ({
+  type: 'NEXTKIN_SAVE_CONNECTION', user: { id: accountId }, origin, token,
+});
+const pairingSender = (origin = workspace) => ({
+  id: 'extension', frameId: 0, url: origin + '/auth/jobseeker/connected',
+});
+const statusMessage = { type: 'NEXTKIN_GET_SUBMISSION_QUEUE_STATUS' };
+
+test('Background Queue: storage rejection and offline delivery do not acknowledge a receipt', async () => {
+  const worker = createMockWorker(async () => { throw new Error('offline'); });
+  worker._rejectLocalWrites(true);
+  await assert.rejects(worker.enqueueSubmission(receipt('direct')), /storage rejected/);
+  assert.equal(await worker.persistAndDeliverReceipt(receipt('recover')), false);
+  assert.equal(worker._localStorage.pending_submission_queue, undefined);
+  assert.equal((await worker._message(statusMessage)).pending[0].syncStatus, 'SAVE_FAILED');
+
+  const restarted = createMockWorker(async () => Response.json({ success: true }), {
+    local: worker._localStorage,
+    session: worker._sessionStorage,
+  });
+  assert.equal((await restarted._message(statusMessage)).pending[0].syncStatus, 'SAVE_FAILED');
+  await restarted.processSubmissionQueue();
+  assert.equal((await restarted._message(statusMessage)).pendingCount, 0);
+});
+
+test('Background Queue: confirmed delivery acknowledges despite rejected local writes', async () => {
+  const worker = createMockWorker(async () => Response.json({ success: true }));
+  worker._rejectLocalWrites(true);
+  assert.equal(await worker.persistAndDeliverReceipt(receipt('direct-confirmed')), true);
+  assert.equal((await worker._message(statusMessage)).pendingCount, 0);
+
+  worker.fetch = async () => new Response('<html>Sign in</html>', { status: 200 });
+  assert.equal(await worker.persistAndDeliverReceipt(receipt('invalid-success')), false);
+  assert.equal((await worker._message(statusMessage)).pendingCount, 1);
+});
+
+test('Background Queue: restart and disconnect hold a receipt until the original account and workspace reconnect', async () => {
+  const requests = [];
+  const otherWorkspace = 'https://tenant.nextkinhr.com';
+  const worker = createMockWorker(async () => new Response('unauthorized', { status: 401 }));
+  assert.equal(await worker.persistAndDeliverReceipt(receipt('account-bound')), true);
+  assert.equal((await worker._message(statusMessage)).pending[0].syncStatus, 'AUTH_REQUIRED');
+  assert.equal(await worker._message({ type: 'NEXTKIN_DISCONNECT' }), true);
+
+  const restarted = createMockWorker(async (url, options) => {
+    requests.push({ url, authorization: options.headers.Authorization });
+    return Response.json({ success: true });
+  }, { local: worker._localStorage, session: worker._sessionStorage });
+  await restarted.processSubmissionQueue();
+  assert.equal(requests.length, 0);
+
+  assert.equal(await restarted._message(connectionMessage('account-b', 'account-b-valid-token-123'), pairingSender()), true);
+  assert.equal(await restarted._message({ type: 'NEXTKIN_RETRY_SUBMISSION_QUEUE' }), true);
+  assert.equal((await restarted._message(statusMessage)).pendingCount, 0);
+  assert.equal(requests.length, 0);
+
+  assert.equal(await restarted._message(connectionMessage(owner.accountId, 'another-workspace-token-123', otherWorkspace),
+    pairingSender(otherWorkspace)), true);
+  await restarted.processSubmissionQueue();
+  assert.equal(requests.length, 0);
+  assert.equal((await restarted.getSubmissionQueue()).length, 1);
+
+  const newToken = 'original-account-new-token-123';
+  assert.equal(await restarted._message(connectionMessage(owner.accountId, newToken), pairingSender()), true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(requests, [{
+    url: workspace + '/api/webhooks/application-submitted',
+    authorization: 'Bearer ' + newToken,
+  }]);
+  assert.equal((await restarted.getSubmissionQueue()).length, 0);
+});
+
+test('Background Queue: credentials and raw server data are redacted from immediate failures and status', async () => {
+  const secret = 'private-credential';
+  let status = 409;
+  const worker = createMockWorker(async () => Response.json({
+    error: 'Bearer ' + secret, token: secret, secret,
+  }, { status }));
+  const body = {
+    token: secret,
+    evidence: 'Bearer ' + secret,
+    jobUrl: 'https://name:password@careers.example.com/job?token=' + secret,
+    answers: [{ label: 'Password', value: secret }, { label: 'Name', value: 'Candidate' }],
+  };
+
+  const conflict = { ...receipt('conflict', body), token: secret, url: 'https://otherwise.example.com/receive' };
+  assert.equal(await worker.persistAndDeliverReceipt(conflict), true);
+  status = 422;
+  assert.equal(await worker.persistAndDeliverReceipt({ ...receipt('invalid', body), token: secret }), true);
+  const stored = JSON.stringify(worker._localStorage);
+  assert.ok(!stored.includes(secret) && !stored.includes('name:password') && !stored.includes('otherwise.example.com'));
+  const result = await worker._message(statusMessage);
+  assert.equal(result.conflictCount, 1);
+  assert.equal(result.deadLetterCount, 1);
+  assert.equal(result.conflicts[0].body, undefined);
+  const content = { id: panel.id, url: 'https://careers.example.com/job', frameId: 0 };
+  assert.equal(await worker._message(statusMessage, content), false);
+  assert.equal(await worker._message({ type: 'NEXTKIN_CLEAR_CONFLICT_QUEUE' }, content), false);
+  assert.equal((await worker._message(statusMessage)).conflictCount, 1);
+});
+
+test('Background Queue: legacy ownership is held for review across retries and cleared queues', async () => {
+  const legacy = { id: 'legacy', token: 'old-secret', url: workspace + '/api/webhooks/application-submitted', body: { jobTitle: 'Engineer' } };
+  let sent = 0;
+  const worker = createMockWorker(async () => { sent++; return Response.json({ success: true }); }, {
+    local: { pending_submission_queue: [legacy], submission_dead_letter_queue: [legacy] },
+  });
+  await worker.scrubLegacyQueue();
+  assert.equal(await worker._message({ type: 'NEXTKIN_RETRY_DEAD_LETTER_ITEM', id: legacy.id }), false);
+  assert.equal(await worker._message({ type: 'NEXTKIN_CLEAR_DEAD_LETTER_QUEUE' }), true);
+  await worker.processSubmissionQueue();
+  assert.equal(sent, 0);
+  const status = await worker._message(statusMessage);
+  assert.equal(status.ownershipReviewCount, 2);
+  assert.equal(status.pendingCount, 0);
+  assert.ok(!JSON.stringify(worker._localStorage).includes(legacy.token));
+});
+
+test('Background Queue: an offline intent receipt is saved and resolves its attempt during recovery', async () => {
+  const intentId = '8b1d6779-6dc3-419c-855a-fa293123aba0';
+  const worker = createMockWorker(async () => { throw new Error('offline'); });
+  const url = 'https://careers.example.com/jobs/1/confirmation';
+  await worker.chrome.storage.session.set({
+    'application-intent:1': {
+      ...owner, intentId, eventKey: 'intent-receipt', applicationUrl: 'https://careers.example.com/jobs/1',
+      jobOrigin: 'https://careers.example.com',
+    },
+  });
+  assert.equal(await worker.recordConfirmation({ evidence: 'Application successfully submitted' }, {
+    url, frameId: 0, tab: { id: 1, url },
+  }), true);
+  const [pending] = await worker.getSubmissionQueue();
+  assert.equal(pending.body.intentId, intentId);
+  assert.equal(pending.body.attempt, undefined);
+  await worker.updateQueueItem(pending, previous => ({ ...previous, nextRetryAt: 0 }));
+
+  const requests = [];
+  worker.fetch = async (url, options) => {
+    requests.push(url);
+    if (!options.method) return Response.json({ intent: { id: intentId, attempt: 2 } });
+    const body = JSON.parse(options.body);
+    const [stored] = await worker.getSubmissionQueue();
+    assert.equal(stored.body.attempt, 2);
+    assert.equal(body.attempt, 2);
+    assert.equal(body.eventKey, 'intent-receipt');
+    return Response.json({ status: 'confirmed' });
+  };
+  await worker.processSubmissionQueue();
+  assert.deepEqual(requests, [workspace + '/api/extension/intents/' + intentId, workspace + '/api/extension/events']);
+  assert.equal((await worker.getSubmissionQueue()).length, 0);
 });

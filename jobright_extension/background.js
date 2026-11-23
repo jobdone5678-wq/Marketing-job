@@ -8,6 +8,7 @@ async function configureStorageAccess() {
   if (typeof chrome !== 'undefined' && chrome.storage?.session?.setAccessLevel) {
     await chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' }).catch(() => {});
   }
+  await chrome.storage.local?.setAccessLevel?.({ accessLevel: 'TRUSTED_CONTEXTS' }).catch(() => {});
 }
 
 const QUEUE_KEY = 'pending_submission_queue';
@@ -23,22 +24,123 @@ function withQueueLock(fn) {
   return next;
 }
 
-async function getStorageArray(key) {
-  try {
-    if (typeof chrome === 'undefined' || !chrome.storage?.local?.get) return [];
-    const data = await chrome.storage.local.get(key);
-    return Array.isArray(data?.[key]) ? data[key] : [];
-  } catch {
-    return [];
+
+const RECOVERY_KEY = 'submission_queue_recovery';
+const unsavedReceipts = new Map();
+const bodyFields = new Set([
+  'eventKey', 'intentId', 'attempt', 'status', 'candidateId', 'url', 'applicationUrl',
+  'observedAt', 'jobUrl', 'confirmationUrl', 'companyName', 'jobTitle', 'jobLocation',
+  'company', 'title', 'location', 'portalSource', 'externalId', 'department',
+  'employmentType', 'jobDescription', 'evidence', 'captureMethod', 'atsDetected',
+  'answers', 'appliedResume',
+]);
+
+function redactReceipt(value, token) {
+  if (typeof value === 'string') {
+    const safe = token ? value.replaceAll(token, '[redacted]') : value;
+    return safe.replace(/\bBearer\s+[A-Za-z0-9_./+=-]+/gi, '[redacted]');
   }
+  if (Array.isArray(value)) return value.map(entry => redactReceipt(entry, token));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value)
+      .filter(([key]) => !/token|authorization|password|cookie|credential|secret|api.?key/i.test(key))
+      .map(([key, entry]) => [key, redactReceipt(entry, token)]));
+  }
+  return value;
+}
+
+function sanitizeQueueItem(item, token = item.token) {
+  const { id, workspace, accountId, attempts, createdAt, nextRetryAt, syncStatus,
+    lastAttemptAt, failedAt } = item;
+  const bound = workspaceOrigin(workspace) === workspace && typeof accountId === 'string' && accountId;
+  const body = redactReceipt(Object.fromEntries(Object.entries(item.body || {})
+    .filter(([key]) => bodyFields.has(key))), token);
+  for (const key of ['url', 'applicationUrl', 'jobUrl', 'confirmationUrl']) {
+    if (!body[key]) continue;
+    try {
+      const url = new URL(body[key]);
+      url.username = '';
+      url.password = '';
+      body[key] = cleanApplicationUrl(url);
+    } catch {
+      delete body[key];
+    }
+  }
+  if (Array.isArray(body.answers)) {
+    body.answers = body.answers.filter(answer => answer &&
+      !/password|passphrase|secret|credential|verification.?code|security.?code|one.?time.?code|api.?key|token|captcha|otp/i
+        .test([answer.key, answer.label].join(' ')));
+  }
+  return { id, workspace: bound ? workspace : undefined, accountId: bound ? accountId : undefined,
+    attempts, createdAt, nextRetryAt, syncStatus: bound ? syncStatus : 'OWNERSHIP_REVIEW',
+    lastAttemptAt, failedAt, body };
+}
+
+async function getStorageArray(key) {
+  const data = await chrome.storage.local.get(key);
+  return Array.isArray(data[key]) ? data[key].filter(item => item?.id).map(item => sanitizeQueueItem(item)) : [];
 }
 
 async function saveStorageArray(key, arr) {
-  try {
-    if (typeof chrome !== 'undefined' && chrome.storage?.local?.set) {
-      await chrome.storage.local.set({ [key]: arr });
+  await chrome.storage.local.set({ [key]: arr.map(item => sanitizeQueueItem(item)) });
+}
+
+async function scrubLegacyQueue() {
+  await withQueueLock(async () => {
+    const keys = [QUEUE_KEY, DEAD_LETTER_KEY, CONFLICT_QUEUE_KEY];
+    const data = await chrome.storage.local.get(keys);
+    const patch = {};
+    for (const key of keys) {
+      if (!Array.isArray(data[key])) continue;
+      const sanitized = data[key].filter(item => item?.id).map(item => sanitizeQueueItem(item));
+      if (JSON.stringify(sanitized) !== JSON.stringify(data[key])) patch[key] = sanitized;
     }
-  } catch {}
+    if (Object.keys(patch).length) await chrome.storage.local.set(patch);
+  });
+}
+
+async function getQueueConnection() {
+  const { token, origin, accountId } = await chrome.storage.session.get(['token', 'origin', 'accountId']);
+  return { token, workspace: workspaceOrigin(origin), accountId };
+}
+
+function matchesQueueAccount(item, connection) {
+  return Boolean(connection.token && connection.workspace && connection.accountId &&
+    item.workspace === connection.workspace && item.accountId === connection.accountId);
+}
+
+function sameQueueItem(a, b) {
+  return a.id === b.id && a.workspace === b.workspace && a.accountId === b.accountId;
+}
+
+function queueItemKey(item) {
+  return JSON.stringify([item.workspace, item.accountId, item.id]);
+}
+
+function publicQueueItem({ id, attempts, syncStatus, nextRetryAt }) {
+  return { id, attempts, syncStatus, nextRetryAt };
+}
+
+async function getRecoveryQueue() {
+  const data = await chrome.storage.session.get(RECOVERY_KEY).catch(() => ({}));
+  const receipts = new Map((data[RECOVERY_KEY] || []).map(item => [queueItemKey(item), sanitizeQueueItem(item)]));
+  for (const [key, item] of unsavedReceipts) receipts.set(key, item);
+  return [...receipts.values()];
+}
+
+async function updateRecovery(item, preserve) {
+  const key = queueItemKey(item);
+  if (preserve) unsavedReceipts.set(key, item);
+  else unsavedReceipts.delete(key);
+  await withQueueLock(async () => {
+    const data = await chrome.storage.session.get(RECOVERY_KEY);
+    const previous = data[RECOVERY_KEY] || [];
+    const receipts = previous.filter(entry => !sameQueueItem(entry, item)).map(entry => sanitizeQueueItem(entry));
+    if (preserve) receipts.push(item);
+    if (preserve || receipts.length !== previous.length) {
+      await chrome.storage.session.set({ [RECOVERY_KEY]: receipts });
+    }
+  }).catch(() => {});
 }
 
 async function getSubmissionQueue() {
@@ -49,52 +151,34 @@ async function saveSubmissionQueue(queue) {
   return saveStorageArray(QUEUE_KEY, queue);
 }
 
-async function isQueuePaused() {
-  try {
-    if (typeof chrome === 'undefined' || !chrome.storage?.local?.get) return false;
+async function isQueuePaused(connection) {
+  connection ??= await getQueueConnection();
+  const data = await chrome.storage.local.get(QUEUE_PAUSE_KEY);
+  const pauses = data[QUEUE_PAUSE_KEY];
+  return Array.isArray(pauses) && pauses.some(item => matchesQueueAccount(item, connection));
+}
+
+async function setQueuePaused(connection, paused) {
+  await withQueueLock(async () => {
     const data = await chrome.storage.local.get(QUEUE_PAUSE_KEY);
-    return Boolean(data?.[QUEUE_PAUSE_KEY]?.paused);
-  } catch {
-    return false;
-  }
+    const pauses = Array.isArray(data[QUEUE_PAUSE_KEY]) ? data[QUEUE_PAUSE_KEY] : [];
+    const remaining = pauses.filter(item => !matchesQueueAccount(item, connection));
+    if (paused) remaining.push({ workspace: connection.workspace, accountId: connection.accountId });
+    await chrome.storage.local.set({ [QUEUE_PAUSE_KEY]: remaining });
+  });
 }
 
-async function pauseQueue(reason) {
-  try {
-    if (typeof chrome !== 'undefined' && chrome.storage?.local?.set) {
-      await chrome.storage.local.set({
-        [QUEUE_PAUSE_KEY]: {
-          paused: true,
-          reason,
-          pausedAt: Date.now(),
-        },
-      });
-    }
-  } catch {}
-}
-
-async function unpauseQueue() {
-  try {
-    if (typeof chrome !== 'undefined' && chrome.storage?.local?.remove) {
-      await chrome.storage.local.remove(QUEUE_PAUSE_KEY);
-    }
-    // Reset syncStatus for any AUTH_REQUIRED items in pending queue so they retry immediately
-    await withQueueLock(async () => {
-      const queue = await getSubmissionQueue();
-      let modified = false;
-      const now = Date.now();
-      for (const item of queue) {
-        if (item.syncStatus === 'AUTH_REQUIRED') {
-          item.syncStatus = 'RETRY_PENDING';
-          item.nextRetryAt = now;
-          modified = true;
-        }
-      }
-      if (modified) {
-        await saveSubmissionQueue(queue);
-      }
-    });
-  } catch {}
+async function unpauseQueue(connection, retryAll = false) {
+  connection ??= await getQueueConnection();
+  await setQueuePaused(connection, false);
+  await withQueueLock(async () => {
+    const queue = await getSubmissionQueue();
+    const next = queue.map(item => matchesQueueAccount(item, connection) &&
+      (retryAll || item.syncStatus === 'AUTH_REQUIRED')
+      ? { ...item, nextRetryAt: Date.now(), syncStatus: 'QUEUED' }
+      : item);
+    if (next.some((item, index) => item !== queue[index])) await saveSubmissionQueue(next);
+  });
 }
 
 function scheduleQueueAlarm(delayMs = 0) {
@@ -103,12 +187,12 @@ function scheduleQueueAlarm(delayMs = 0) {
   chrome.alarms.create('process_submission_queue', { when: targetWhen });
 }
 
-async function scheduleNextRetryAlarm() {
+async function scheduleNextRetryAlarm(connection) {
   if (typeof chrome === 'undefined' || !chrome.alarms?.create) return;
   const queue = await getSubmissionQueue();
   const retryable = queue.filter(item => {
     if (item.syncStatus === 'FORBIDDEN' || item.syncStatus === 'AUTH_REQUIRED') return false;
-    return typeof item.nextRetryAt === 'number';
+    return matchesQueueAccount(item, connection) && typeof item.nextRetryAt === 'number';
   });
 
   if (!retryable.length) {
@@ -133,92 +217,40 @@ async function scheduleNextRetryAlarm() {
 }
 
 async function enqueueSubmission(item) {
-  if (typeof chrome === 'undefined' || !chrome.storage?.local?.set) return;
   return withQueueLock(async () => {
     const queue = await getSubmissionQueue();
-    const existingIdx = queue.findIndex(q => q.id === item.id);
+    const existing = queue.find(entry => sameQueueItem(entry, item));
+    if (existing) return existing;
     const now = Date.now();
-    const { token, ...safeItem } = item;
-    const entry = {
-      attempts: 0,
-      createdAt: now,
-      nextRetryAt: now,
-      syncStatus: 'QUEUED',
-      ...safeItem,
-    };
-    if (existingIdx >= 0) {
-      queue[existingIdx] = { ...queue[existingIdx], ...entry };
-    } else {
-      queue.push(entry);
-    }
+    const entry = sanitizeQueueItem({
+      attempts: 0, createdAt: now, nextRetryAt: now, syncStatus: 'QUEUED', ...item,
+    });
+    await saveSubmissionQueue([...queue, entry]);
+    try { scheduleQueueAlarm(); } catch {}
+    return entry;
+  });
+}
+
+async function updateQueueItem(item, updater) {
+  await withQueueLock(async () => {
+    const queue = await getSubmissionQueue();
+    const idx = queue.findIndex(entry => sameQueueItem(entry, item));
+    if (idx < 0) return;
+    const updated = updater(queue[idx]);
+    if (updated === null) queue.splice(idx, 1);
+    else queue[idx] = updated;
     await saveSubmissionQueue(queue);
-    scheduleQueueAlarm(0);
   });
 }
 
-async function dequeueSubmission(id) {
-  if (typeof chrome === 'undefined' || !chrome.storage?.local?.set) return;
-  return withQueueLock(async () => {
-    const queue = await getSubmissionQueue();
-    const filtered = queue.filter(q => q.id !== id);
-    if (filtered.length !== queue.length) {
-      await saveSubmissionQueue(filtered);
-    }
-  });
-}
-
-async function updateQueueItem(id, updater) {
-  if (typeof chrome === 'undefined' || !chrome.storage?.local?.set) return;
-  return withQueueLock(async () => {
-    const queue = await getSubmissionQueue();
-    const idx = queue.findIndex(q => q.id === id);
-    if (idx >= 0) {
-      const updated = updater(queue[idx]);
-      if (updated === null) {
-        queue.splice(idx, 1);
-      } else {
-        queue[idx] = updated;
-      }
-      await saveSubmissionQueue(queue);
-    }
-  });
-}
-
-async function moveToDeadLetterQueue(item, errorDetails, failureReason = 'VALIDATION_FAILED') {
-  return withQueueLock(async () => {
-    const dlq = await getStorageArray(DEAD_LETTER_KEY);
-    const deadItem = {
-      ...item,
-      syncStatus: failureReason,
-      errorDetails,
-      failedAt: Date.now(),
-    };
-    const idx = dlq.findIndex(d => d.id === item.id);
-    if (idx >= 0) {
-      dlq[idx] = deadItem;
-    } else {
-      dlq.push(deadItem);
-    }
-    await saveStorageArray(DEAD_LETTER_KEY, dlq.slice(-100));
-  });
-}
-
-async function moveToConflictQueue(item, conflictDetails) {
-  return withQueueLock(async () => {
-    const conflicts = await getStorageArray(CONFLICT_QUEUE_KEY);
-    const conflictItem = {
-      ...item,
-      syncStatus: 'CONFLICT_NEEDS_RESOLVE',
-      conflictDetails,
-      conflictAt: Date.now(),
-    };
-    const idx = conflicts.findIndex(c => c.id === item.id);
-    if (idx >= 0) {
-      conflicts[idx] = conflictItem;
-    } else {
-      conflicts.push(conflictItem);
-    }
-    await saveStorageArray(CONFLICT_QUEUE_KEY, conflicts.slice(-100));
+async function moveSubmission(item, key, syncStatus) {
+  await withQueueLock(async () => {
+    const [pending, destination] = await Promise.all([getSubmissionQueue(), getStorageArray(key)]);
+    const updated = sanitizeQueueItem({ ...item, syncStatus, failedAt: Date.now() });
+    await chrome.storage.local.set({
+      [key]: [...destination.filter(entry => !sameQueueItem(entry, item)), updated],
+      [QUEUE_KEY]: pending.filter(entry => !sameQueueItem(entry, item)),
+    });
   });
 }
 
@@ -293,7 +325,7 @@ async function handleRetryableFailure(item, errorMsg) {
     const delayMs = Math.min(60000, baseDelay + jitter);
     const nextRetryAt = now + delayMs;
 
-    await updateQueueItem(item.id, prev => ({
+    await updateQueueItem(item, prev => ({
       ...prev,
       attempts,
       nextRetryAt,
@@ -303,8 +335,7 @@ async function handleRetryableFailure(item, errorMsg) {
     }));
     return { success: false, retryScheduled: true, attempts, nextRetryAt };
   } else {
-    await moveToDeadLetterQueue(item, { error: 'Exceeded 8 retry attempts', lastError: errorMsg }, 'MAX_RETRIES_EXCEEDED');
-    await dequeueSubmission(item.id);
+    await moveSubmission(item, DEAD_LETTER_KEY, 'MAX_RETRIES_EXCEEDED');
     broadcastSyncAlert('NEXTKIN_DEAD_LETTER_ITEM', {
       status: 'MAX_RETRIES_EXCEEDED',
       itemId: item.id,
@@ -314,43 +345,64 @@ async function handleRetryableFailure(item, errorMsg) {
   }
 }
 
-async function dispatchSingleItem(item) {
+const activeDeliveries = new Map();
+
+function dispatchSingleItem(item, allowQueueUpdates = true) {
+  const key = queueItemKey(item);
+  if (!activeDeliveries.has(key)) {
+    const delivery = deliverReceipt(item, allowQueueUpdates).finally(() => activeDeliveries.delete(key));
+    activeDeliveries.set(key, delivery);
+  }
+  return activeDeliveries.get(key);
+}
+
+async function deliverReceipt(item, allowQueueUpdates) {
   const now = Date.now();
-  const creds = await getStoredCredentials();
-  const token = creds.token || item.token;
-  if (!token) {
-    await updateQueueItem(item.id, prev => ({
-      ...prev,
-      syncStatus: 'AUTH_REQUIRED',
-      lastError: 'Missing authentication token',
-      lastAttemptAt: now,
-    }));
-    await pauseQueue('AUTH_REQUIRED');
-    notifyAuthRequired(item);
-    return { success: false, status: 401, error: 'AUTH_REQUIRED' };
+  const connection = await getQueueConnection();
+  if (!matchesQueueAccount(item, connection)) return { success: false, error: 'ACCOUNT_REQUIRED' };
+  const intentId = item.body.intentId;
+  const route = intentId ? '/api/extension/events' : '/api/webhooks/application-submitted';
+  if (intentId && !Number.isInteger(item.body.attempt)) {
+    if (!intentIdPattern.test(intentId)) {
+      if (allowQueueUpdates) await moveSubmission(item, DEAD_LETTER_KEY, 'VALIDATION_FAILED');
+      return { success: false };
+    }
+    const response = await fetch(item.workspace + '/api/extension/intents/' + intentId,
+      workspaceRequest(connection.token)).catch(() => null);
+    if (!response?.ok) {
+      if (!allowQueueUpdates) return { success: false };
+      if (response?.status === 401) return recordReceiptAuthFailure(item, connection, now);
+      if (response?.status === 403 || response?.status === 404) {
+        await moveSubmission(item, DEAD_LETTER_KEY, 'INTENT_UNAVAILABLE');
+        return { success: false };
+      }
+      return handleRetryableFailure(item, 'Application attempt lookup failed');
+    }
+    const data = await response.json().catch(() => null);
+    if (data?.intent?.id !== intentId || !Number.isInteger(data.intent.attempt)) {
+      if (allowQueueUpdates) await moveSubmission(item, DEAD_LETTER_KEY, 'VALIDATION_FAILED');
+      return { success: false };
+    }
+    item.body = { ...item.body, attempt: Math.max(1, data.intent.attempt) };
+    if (allowQueueUpdates) await updateQueueItem(item, previous => ({ ...previous, body: item.body }));
+    const current = await getQueueConnection();
+    if (!matchesQueueAccount(item, current) || current.token !== connection.token) return { success: false };
   }
 
-  let response = null;
-  let fetchError = null;
+  let response;
 
   try {
-    response = await fetch(item.url, {
+    response = await fetch(item.workspace + route, {
+      ...workspaceRequest(connection.token),
       method: 'POST',
-      headers: {
-        Authorization: 'Bearer ' + token,
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(item.body),
-      signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined,
     });
-  } catch (err) {
-    fetchError = err;
-  }
+  } catch {}
 
   // Network Timeout or Network Error (fetch threw)
-  if (fetchError || !response) {
-    const errorMsg = fetchError?.message || 'Network error / timeout';
-    return await handleRetryableFailure(item, errorMsg);
+  if (!response) {
+    if (!allowQueueUpdates) return { success: false };
+    return handleRetryableFailure(item, 'Network error or timeout');
   }
 
   // 2xx Success: mark delivered and dequeue
@@ -361,41 +413,34 @@ async function dispatchSingleItem(item) {
     } catch {}
     const isIntent = item.body?.intentId;
     const isSuccess = isIntent
-      ? (!data || data.status == null || ['submitted', 'confirmed'].includes(data.status))
-      : (!data || data.success == null || data.success === true);
+      ? ['submitted', 'confirmed'].includes(data?.status)
+      : data?.success === true;
 
     if (isSuccess) {
-      await dequeueSubmission(item.id);
+      await updateQueueItem(item, () => null).catch(() => {});
       await markSessionReported(item);
       clearAlertBadge();
       broadcastSyncAlert('NEXTKIN_SYNC_SUCCESS', {
         status: 'DELIVERED',
         itemId: item.id,
       });
-      return { success: true, status: response.status, data };
+      return { success: true, status: response.status };
     } else {
-      await moveToDeadLetterQueue(item, data, 'SERVER_REJECTED');
-      await dequeueSubmission(item.id);
-      return { success: false, status: response.status, data };
+      if (allowQueueUpdates) await moveSubmission(item, DEAD_LETTER_KEY, 'SERVER_REJECTED');
+      return { success: false, status: response.status };
     }
   }
 
   // 401 Unauthorized: Do NOT drop! Preserve event, flag syncStatus as AUTH_REQUIRED, pause queue until re-auth.
   if (response.status === 401) {
-    await updateQueueItem(item.id, prev => ({
-      ...prev,
-      syncStatus: 'AUTH_REQUIRED',
-      lastError: 'Authentication required (401)',
-      lastAttemptAt: now,
-    }));
-    await pauseQueue('AUTH_REQUIRED');
-    notifyAuthRequired(item);
-    return { success: false, status: 401, error: 'AUTH_REQUIRED' };
+    if (!allowQueueUpdates) return { success: false };
+    return recordReceiptAuthFailure(item, connection, now);
   }
 
   // 403 Forbidden: Preserve event, flag syncStatus as FORBIDDEN, notify user.
   if (response.status === 403) {
-    await updateQueueItem(item.id, prev => ({
+    if (!allowQueueUpdates) return { success: false };
+    await updateQueueItem(item, prev => ({
       ...prev,
       syncStatus: 'FORBIDDEN',
       lastError: 'Forbidden (403)',
@@ -421,7 +466,7 @@ async function dispatchSingleItem(item) {
       body?.status === 'confirmed';
 
     if (isDuplicate) {
-      await dequeueSubmission(item.id);
+      await updateQueueItem(item, () => null).catch(() => {});
       await markSessionReported(item);
       clearAlertBadge();
       broadcastSyncAlert('NEXTKIN_SYNC_SUCCESS', {
@@ -429,36 +474,23 @@ async function dispatchSingleItem(item) {
         itemId: item.id,
         duplicate: true,
       });
-      return { success: true, status: 409, duplicate: true, data: body };
+      return { success: true, status: 409, duplicate: true };
     } else {
       // State conflict: move to CONFLICT_NEEDS_RESOLVE
-      await moveToConflictQueue(item, body);
-      await dequeueSubmission(item.id);
+      if (allowQueueUpdates) await moveSubmission(item, CONFLICT_QUEUE_KEY, 'CONFLICT_NEEDS_RESOLVE');
       broadcastSyncAlert('NEXTKIN_SYNC_CONFLICT', {
         status: 'CONFLICT_NEEDS_RESOLVE',
         itemId: item.id,
-        conflictDetails: body,
       });
-      return { success: false, status: 409, error: 'CONFLICT_NEEDS_RESOLVE', data: body };
+      return { success: false, status: 409, error: 'CONFLICT_NEEDS_RESOLVE' };
     }
   }
 
-  // 422 Unprocessable Entity: Preserve in reviewable dead-letter queue (VALIDATION_FAILED)
+  if (!allowQueueUpdates) return { success: false };
   if (response.status === 422) {
-    let body = null;
-    try {
-      body = await response.json();
-    } catch {
-      try { body = { raw: await response.text() }; } catch {}
-    }
-    await moveToDeadLetterQueue(item, body, 'VALIDATION_FAILED');
-    await dequeueSubmission(item.id);
-    broadcastSyncAlert('NEXTKIN_DEAD_LETTER_ITEM', {
-      status: 'VALIDATION_FAILED',
-      itemId: item.id,
-      errorDetails: body,
-    });
-    return { success: false, status: 422, error: 'VALIDATION_FAILED', data: body };
+    await moveSubmission(item, DEAD_LETTER_KEY, 'VALIDATION_FAILED');
+    broadcastSyncAlert('NEXTKIN_DEAD_LETTER_ITEM', { status: 'VALIDATION_FAILED', itemId: item.id });
+    return { success: false, status: 422, error: 'VALIDATION_FAILED' };
   }
 
   // 429 or 5xx: Retry with exponential backoff and jitter up to 8 attempts
@@ -466,16 +498,18 @@ async function dispatchSingleItem(item) {
     return await handleRetryableFailure(item, `HTTP ${response.status}`);
   }
 
-  // Any other client errors (400, 404, etc.): preserve in dead-letter queue
-  let errBody = null;
-  try {
-    errBody = await response.json();
-  } catch {
-    try { errBody = { raw: await response.text() }; } catch {}
+  await moveSubmission(item, DEAD_LETTER_KEY, 'CLIENT_ERROR_' + response.status);
+  return { success: false, status: response.status, error: 'CLIENT_ERROR_' + response.status };
+}
+
+async function recordReceiptAuthFailure(item, connection, lastAttemptAt) {
+  const current = await getQueueConnection();
+  if (current.token === connection.token && matchesQueueAccount(item, current)) {
+    await updateQueueItem(item, previous => ({ ...previous, syncStatus: 'AUTH_REQUIRED', lastAttemptAt }));
+    await setQueuePaused(connection, true);
+    notifyAuthRequired(item);
   }
-  await moveToDeadLetterQueue(item, errBody, `CLIENT_ERROR_${response.status}`);
-  await dequeueSubmission(item.id);
-  return { success: false, status: response.status, error: `CLIENT_ERROR_${response.status}`, data: errBody };
+  return { success: false, status: 401, error: 'AUTH_REQUIRED' };
 }
 
 let isProcessingQueue = false;
@@ -486,35 +520,35 @@ async function processSubmissionQueue() {
   isProcessingQueue = true;
 
   try {
-    if (await isQueuePaused()) {
-      return;
+    const connection = await getQueueConnection();
+    if (!connection.token || await isQueuePaused(connection)) return;
+
+    let recoveryPending = false;
+    for (const item of await getRecoveryQueue()) {
+      if (!matchesQueueAccount(item, connection)) continue;
+      try {
+        await enqueueSubmission({ ...item, syncStatus: 'QUEUED' });
+        await updateRecovery(item, false);
+      } catch {
+        recoveryPending = true;
+      }
     }
 
     const now = Date.now();
-    const currentQueue = await getSubmissionQueue();
-    if (!currentQueue.length) return;
-
-    const eligibleItems = currentQueue.filter(item => {
-      if (item.syncStatus === 'FORBIDDEN') return false;
-      if (item.syncStatus === 'AUTH_REQUIRED') return false;
-      return !item.nextRetryAt || item.nextRetryAt <= now;
-    });
-
-    if (!eligibleItems.length) {
-      await scheduleNextRetryAlarm();
-      return;
-    }
-
-    for (const item of eligibleItems) {
-      if (await isQueuePaused()) {
-        break;
-      }
+    for (const item of await getSubmissionQueue()) {
+      if (!matchesQueueAccount(item, connection) || item.syncStatus === 'FORBIDDEN' ||
+        item.syncStatus === 'AUTH_REQUIRED' || item.nextRetryAt > now) continue;
       await dispatchSingleItem(item);
+      if (await isQueuePaused(connection)) break;
     }
 
-    await scheduleNextRetryAlarm();
-  } catch (err) {
-    console.error('Error in processSubmissionQueue:', err);
+    const current = await getQueueConnection();
+    if (current.token !== connection.token || current.workspace !== connection.workspace || current.accountId !== connection.accountId) {
+      scheduleQueueAlarm();
+    } else if (recoveryPending) scheduleQueueAlarm(60000);
+    else await scheduleNextRetryAlarm(connection);
+  } catch {
+    try { scheduleQueueAlarm(60000); } catch {}
   } finally {
     isProcessingQueue = false;
   }
@@ -525,6 +559,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onInstalled?.addListener) {
     await Promise.all([
       configurePanel(),
       configureStorageAccess(),
+      scrubLegacyQueue().catch(() => {}),
       processSubmissionQueue(),
       chrome.storage.local?.remove?.(['candidateProfile', 'resumeData', 'savedProfiles', 'savedResumes', 'token']),
     ]);
@@ -536,6 +571,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onStartup?.addListener) {
     await Promise.all([
       configurePanel(),
       configureStorageAccess(),
+      scrubLegacyQueue().catch(() => {}),
       processSubmissionQueue(),
       chrome.storage.local?.remove?.('token'),
     ]);
@@ -566,12 +602,13 @@ if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
 async function getStoredCredentials() {
   let sessionToken = null;
   let sessionOrigin = null;
+  let accountId;
   try {
     if (typeof chrome !== 'undefined' && chrome.storage?.session?.get) {
-      const resT = await chrome.storage.session.get('token');
-      sessionToken = resT?.token;
-      const resO = await chrome.storage.session.get('origin');
-      sessionOrigin = resO?.origin;
+      const session = await chrome.storage.session.get(['token', 'origin', 'accountId']);
+      sessionToken = session?.token;
+      sessionOrigin = session?.origin;
+      accountId = session?.accountId;
     }
   } catch {}
 
@@ -606,7 +643,9 @@ async function getStoredCredentials() {
 
   const token = sessionToken || local.token || null;
   const origin = sessionOrigin || local.origin || null;
-  return { token, origin, user: local.user, activeCandidateId: local.activeCandidateId };
+  const matchingAccount = !accountId || (accountId === local.user?.id && workspaceOrigin(origin) === workspaceOrigin(local.origin));
+  return { token, origin, accountId, user: matchingAccount ? local.user : undefined,
+    activeCandidateId: matchingAccount ? local.activeCandidateId : undefined };
 }
 
 const trackedKey = tabId => 'application-intent:' + tabId;
@@ -778,18 +817,18 @@ async function prepareEmbeddedOutsideApplication(tabId, tabUrl, frame, job, cand
   const parent = new URL(tabUrl);
   const url = new URL(frame.url);
   if (!outsidePage(parent) || !outsidePage(url) || !matchesEmbeddedPosting(parent, url)) return false;
-  const { origin, token, activeCandidateId } = await getStoredCredentials();
+  const { origin, token, activeCandidateId, accountId } = await getStoredCredentials();
   const workspace = workspaceOrigin(origin);
   if (!workspace || !token || (await chrome.tabs.get(tabId)).url !== tabUrl) return false;
 
   const key = embeddedKey(tabId);
   const storage = await chrome.storage.session.get([key, trackedKey(tabId)]);
   const top = storage[trackedKey(tabId)];
-  if (top?.intentId && top.jobOrigin === portalOrigin(parent)) {
+  if (top?.intentId && top.accountId === accountId && top.jobOrigin === portalOrigin(parent)) {
     if (storage[key]) await chrome.storage.session.remove(key);
     return true;
   }
-  const previous = storage[key];
+  const previous = storage[key]?.accountId === accountId ? storage[key] : undefined;
   const jobUrl = cleanApplicationUrl(new URL(url));
   const sameForm = previous?.documentId === frame.documentId && previous.parentUrl === parent.href && previous.externalJob?.jobUrl === jobUrl &&
     previous.token === token && previous.workspace === workspace;
@@ -798,8 +837,8 @@ async function prepareEmbeddedOutsideApplication(tabId, tabUrl, frame, job, cand
   // Tab-scoped candidate identity takes priority over global activeCandidateId
   const existingTabCandidate = (intentIdPattern.test(previous?.candidateId || '') ? previous.candidateId : null)
     || (intentIdPattern.test(previous?.externalJob?.candidateId || '') ? previous.externalJob.candidateId : null)
-    || (intentIdPattern.test(top?.candidateId || '') ? top.candidateId : null)
-    || (intentIdPattern.test(top?.externalJob?.candidateId || '') ? top.externalJob.candidateId : null);
+    || (top?.accountId === accountId && intentIdPattern.test(top?.candidateId || '') ? top.candidateId : null)
+    || (top?.accountId === accountId && intentIdPattern.test(top?.externalJob?.candidateId || '') ? top.externalJob.candidateId : null);
 
   const selectedCandidate = (intentIdPattern.test(candidateId || '') ? candidateId : null)
     || existingTabCandidate
@@ -817,7 +856,7 @@ async function prepareEmbeddedOutsideApplication(tabId, tabUrl, frame, job, cand
   const externalJob = externalJobDetails(job, url, jobUrl, selectedCandidate);
   if (!externalJob) return false;
   const context = {
-    frameId: frame.frameId, documentId: frame.documentId, parentUrl: parent.href, jobOrigin: portalOrigin(url), workspace, token,
+    frameId: frame.frameId, documentId: frame.documentId, parentUrl: parent.href, jobOrigin: portalOrigin(url), workspace, token, accountId,
     candidateId: selectedCandidate,
     externalJob: { ...externalJob, candidateId: selectedCandidate, externalId: ashbyFramePosting(url) || externalJob.externalId }, eventKey: crypto.randomUUID(),
     ...(submissionEvidence ? { submissionEvidence } : {}),
@@ -881,14 +920,15 @@ async function prepareApplication(tabId, expectedUrl, job, candidateId, submitte
     return urlNow === expectedUrl || (submittedFromPage && urlNow && portalOrigin(new URL(urlNow)) === jobOrigin);
   };
   if (!await stillOnApplication()) throw new Error('The application tab changed. Try autofill again.');
-  const { origin, token, activeCandidateId } = await getStoredCredentials();
+  const { origin, token, activeCandidateId, accountId } = await getStoredCredentials();
   const workspace = workspaceOrigin(origin);
   if (!workspace || !token) return false;
 
   let intentId = new URLSearchParams(url.hash.slice(1)).get('marketing-intent');
   const jobUrl = cleanApplicationUrl(url);
   const key = trackedKey(tabId);
-  const context = (await chrome.storage.session.get(key))[key];
+  const savedContext = (await chrome.storage.session.get(key))[key];
+  const context = savedContext?.accountId === accountId ? savedContext : undefined;
 
   // Tab-scoped candidate identity to prevent cross-tab profile bleed
   const existingTabCandidate = (intentIdPattern.test(context?.candidateId || '') ? context.candidateId : null)
@@ -943,7 +983,7 @@ async function prepareApplication(tabId, expectedUrl, job, candidateId, submitte
     || (context.candidateId || context.externalJob?.candidateId) !== (tabCandidateId || externalJob?.candidateId);
 
   if (changed || submissionEvidence || !context.applicationUrl) {
-    const tracking = changed ? { intentId, candidateId: tabCandidateId, externalJob, jobOrigin, workspace, token, eventKey: crypto.randomUUID() } : { ...context, token };
+    const tracking = changed ? { intentId, candidateId: tabCandidateId, externalJob, jobOrigin, workspace, token, accountId, eventKey: crypto.randomUUID() } : { ...context, token };
     await chrome.storage.session.set({ [key]: { ...tracking, candidateId: tabCandidateId, applicationUrl: jobUrl,
       ...(submissionEvidence ? { submissionEvidence } : {}) } });
   }
@@ -958,7 +998,7 @@ async function watchPortalLaunch(sender, job, actorId, candidateParam) {
   if (!Number.isInteger(tabId) || sender.frameId !== 0 || !sender.url) return false;
   const launch = new URL(sender.url);
   if (!workspaceLaunchPath.test(launch.pathname)) return false;
-  const { origin, token, user, activeCandidateId } = await getStoredCredentials();
+  const { origin, token, user, activeCandidateId, accountId } = await getStoredCredentials();
   const workspace = workspaceOrigin(origin);
   if (!workspace || workspaceOrigin(launch.href) !== workspace || !token || (await chrome.tabs.get(tabId)).url !== launch.href) return false;
   if (launch.pathname.startsWith('/dashboard/') && (!actorId || user?.id !== actorId)) return false;
@@ -976,7 +1016,7 @@ async function watchPortalLaunch(sender, job, actorId, candidateParam) {
   if (current?.applicationUrl === applicationUrl && current.token === token && current.candidateId === candidateId) return true;
   await chrome.storage.session.set({ [key]: {
     intentId: null, candidateId, applicationUrl, externalJob, jobOrigin: portalOrigin(destination),
-    workspace, token, eventKey: crypto.randomUUID(), awaitSubmit: true, launchExpiresAt: Date.now() + 2 * 60 * 60 * 1000,
+    workspace, token, accountId, eventKey: crypto.randomUUID(), awaitSubmit: true, launchExpiresAt: Date.now() + 2 * 60 * 60 * 1000,
   } });
   return true;
 }
@@ -1006,11 +1046,12 @@ async function trackApplication(tabId, tabUrl) {
     return;
   }
   if (intentIdPattern.test(intentId || '') && (intentId !== context?.intentId || jobOrigin !== context?.jobOrigin)) {
-    const { origin, token } = await getStoredCredentials();
+    const { origin, token, accountId } = await getStoredCredentials();
     const workspace = workspaceOrigin(origin);
     if (!workspace || !token) return;
-    const existingCandidateId = context?.candidateId || context?.externalJob?.candidateId;
-    context = { intentId, candidateId: existingCandidateId, jobOrigin, workspace, token, eventKey: crypto.randomUUID() };
+    const existingCandidateId = context?.accountId === accountId && context?.workspace === workspace
+      ? context.candidateId || context.externalJob?.candidateId : undefined;
+    context = { intentId, candidateId: existingCandidateId, jobOrigin, workspace, token, accountId, eventKey: crypto.randomUUID() };
     await chrome.storage.session.set({ [key]: context });
   }
   if (!context && outsideJobPosting(url)) {
@@ -1069,25 +1110,29 @@ async function recordConfirmation(message, sender) {
   const isRecentAttempt = attemptData && Date.now() - attemptData.timestamp <= 15 * 60 * 1000;
 
   const snapshotKey = `submission_snapshot:${sender.tab.id}`;
-  const snapshotData = (await chrome.storage.session.get(snapshotKey).catch(() => ({})))?.[snapshotKey];
+  const snapshot = (await chrome.storage.session.get(snapshotKey).catch(() => ({})))?.[snapshotKey];
 
   const current = await getStoredCredentials();
+  const connection = await getQueueConnection();
+  if (current.token !== connection.token || workspaceOrigin(current.origin) !== connection.workspace || !connection.accountId) return false;
+  const snapshotData = snapshot && matchesQueueAccount(snapshot, connection) ? snapshot : null;
 
   if (!context) {
-    if (isRecentAttempt && snapshotData && current?.token) {
+    if (isRecentAttempt && matchesQueueAccount(attemptData, connection) && snapshotData) {
       context = {
-        workspace: workspaceOrigin(current.origin),
+        workspace: connection.workspace,
+        accountId: connection.accountId,
         jobOrigin: portalOrigin(url),
         externalJob: {
-          title: snapshotData.jobTitle,
-          company: snapshotData.companyName,
-          location: snapshotData.jobLocation,
+          jobTitle: snapshotData.jobTitle,
+          companyName: snapshotData.companyName,
+          jobLocation: snapshotData.jobLocation,
           jobUrl: snapshotData.jobUrl || sender.url,
           portalSource: snapshotData.portalSource || 'extension',
           candidateId: current.activeCandidateId,
         },
         candidateId: current.activeCandidateId,
-        eventKey: `outside-submit-${sender.tab.id}-${Date.now()}`,
+        eventKey: snapshotData.eventKey,
       };
     } else {
       return false;
@@ -1101,20 +1146,15 @@ async function recordConfirmation(message, sender) {
     const parent = new URL(sender.tab.url);
     if (parent.href !== context.parentUrl || !matchesEmbeddedPosting(parent, url)) return false;
   }
+  if (context.workspace !== connection.workspace || !connection.token ||
+    (context.accountId ? context.accountId !== connection.accountId : context.token !== connection.token)) return false;
   if (context.reported) return true;
-  if (workspaceOrigin(current.origin) !== context.workspace || !current.token) return false;
   const receiptUrl = cleanApplicationUrl(url);
-
-  // Once authoritative confirmation receipt is observed, clear awaitSubmit
-  if (context.awaitSubmit) {
-    await chrome.storage.session.set({ [key]: { ...context, awaitSubmit: false } });
-  }
 
   // Tab-scoped candidate identity
   const tabCandidateId = intentIdPattern.test(context.candidateId || '') ? context.candidateId
     : (intentIdPattern.test(context.externalJob?.candidateId || '') ? context.externalJob.candidateId : undefined);
 
-  let endpoint = '/api/webhooks/application-submitted';
   let payload = {
     ...context.externalJob,
     confirmationUrl: receiptUrl,
@@ -1132,14 +1172,8 @@ async function recordConfirmation(message, sender) {
   }
 
   if (context.intentId) {
-    const intent = await fetch(context.workspace + '/api/extension/intents/' + context.intentId, workspaceRequest(current.token));
-    if (!intent.ok) return false;
-    const { intent: detail } = await intent.json();
-    if (detail?.id !== context.intentId || !Number.isInteger(detail.attempt)) return false;
-    endpoint = '/api/extension/events';
     payload = {
       intentId: context.intentId,
-      attempt: Math.max(1, detail.attempt),
       status: 'confirmed',
       candidateId: tabCandidateId,
       url: receiptUrl,
@@ -1158,35 +1192,132 @@ async function recordConfirmation(message, sender) {
     atsDetected: Boolean(message.atsDetected),
   };
 
-  const queueItem = {
+  const queueItem = sanitizeQueueItem({
     id: context.eventKey,
-    url: context.workspace + endpoint,
-    token: current.token,
+    workspace: context.workspace,
+    accountId: connection.accountId,
     body: confirmationBody,
-    attempts: 0,
-    createdAt: Date.now(),
-    nextRetryAt: Date.now(),
-    syncStatus: 'QUEUED',
-  };
+  }, connection.token);
 
-  // Persist minimal pending event to durable storage before dispatching
-  await enqueueSubmission(queueItem);
-
-  // Attempt immediate delivery
-  const deliveryResult = await dispatchSingleItem(queueItem);
-
-  if (deliveryResult?.success) {
-    const latest = (await chrome.storage.session.get(key))[key];
-    if (latest?.eventKey === context.eventKey) {
-      const { submissionEvidence, ...completed } = latest;
-      await chrome.storage.session.set({ [key]: { ...completed, reported: true } });
-    }
-    void notifyOutsideApplicationSaved(context.workspace, confirmationBody).catch(() => {});
-    return true;
+  const latest = (await chrome.storage.session.get(key).catch(() => ({})))[key];
+  if (!latest || latest.eventKey === context.eventKey) {
+    await chrome.storage.session.set({ [key]: { ...context, accountId: connection.accountId,
+      awaitSubmit: false } }).catch(() => {});
   }
 
-  // The confirmation was securely persisted to durable storage for background sync/retry
+  return persistAndDeliverReceipt(queueItem);
+
+}
+
+async function persistAndDeliverReceipt(item) {
+  item = sanitizeQueueItem(item);
+  let pending;
+  try {
+    pending = await enqueueSubmission(item);
+  } catch {
+    const result = await dispatchSingleItem(item, false).catch(() => null);
+    if (result?.success) {
+      await updateRecovery(item, false);
+      return true;
+    }
+    await updateRecovery({ ...item, syncStatus: 'SAVE_FAILED' }, true);
+    try { scheduleQueueAlarm(60000); } catch {}
+    broadcastSyncAlert('NEXTKIN_RECEIPT_SAVE_FAILED', { status: 'SAVE_FAILED', itemId: item.id });
+    return false;
+  }
+
+  await updateRecovery(item, false);
+  if (await isQueuePaused().catch(() => true)) return true;
+  if (['AUTH_REQUIRED', 'FORBIDDEN'].includes(pending.syncStatus) || pending.nextRetryAt > Date.now()) return true;
+  const result = await dispatchSingleItem(pending).catch(() => null);
+  if (result?.success && matchesQueueAccount(item, await getQueueConnection().catch(() => ({})))) {
+    void notifyOutsideApplicationSaved(item.workspace).catch(() => {});
+  }
   return true;
+}
+
+const trustedPanel = sender => sender.id === chrome.runtime.id &&
+  Boolean(chrome.runtime.getURL) && sender.url === chrome.runtime.getURL('panel.html');
+
+function trustedWorkspacePage(sender, origin) {
+  try {
+    return sender.id === chrome.runtime.id && sender.frameId === 0 &&
+      Boolean(workspaceOrigin(origin)) && new URL(sender.url).origin === origin;
+  } catch {
+    return false;
+  }
+}
+
+function trustedPairingPage(sender, origin) {
+  return trustedWorkspacePage(sender, origin) &&
+    new URL(sender.url).pathname.replace(/\/$/, '') === '/auth/jobseeker/connected';
+}
+
+async function disconnectQueueConnection(expected) {
+  return withQueueLock(async () => {
+    if (expected && !matchesQueueAccount(expected, await getQueueConnection())) return false;
+    await chrome.storage.session.remove(['token', 'origin', 'accountId']);
+    const session = await chrome.storage.session.get(null);
+    await Promise.all([
+      chrome.storage.local.remove(['origin', 'token', 'user', 'activeCandidateId', 'candidateProfile', 'savedProfiles', 'resumePreferences']),
+      chrome.storage.session.remove(Object.keys(session).filter(key => key !== RECOVERY_KEY)),
+    ]);
+    return true;
+  });
+}
+
+const queueActions = new Set([
+  'NEXTKIN_GET_QUEUE_STATUS', 'NEXTKIN_GET_SUBMISSION_QUEUE_STATUS',
+  'NEXTKIN_RETRY_DEAD_LETTER_ITEM', 'NEXTKIN_CLEAR_DEAD_LETTER_QUEUE',
+  'NEXTKIN_CLEAR_CONFLICT_QUEUE', 'NEXTKIN_RETRY_SUBMISSION_QUEUE',
+  'NEXTKIN_DISMISS_DEAD_LETTER_ITEM', 'NEXTKIN_DISCONNECT',
+]);
+
+async function manageQueue(action, id) {
+  const connection = await getQueueConnection();
+  const owned = item => matchesQueueAccount(item, connection);
+  if (action === 'NEXTKIN_GET_QUEUE_STATUS' || action === 'NEXTKIN_GET_SUBMISSION_QUEUE_STATUS') {
+    const [queue, deadLetter, conflicts, recovery, isPaused] = await Promise.all([
+      getSubmissionQueue(), getStorageArray(DEAD_LETTER_KEY), getStorageArray(CONFLICT_QUEUE_KEY),
+      getRecoveryQueue(), isQueuePaused(connection),
+    ]);
+    const pending = [...recovery.filter(item => !queue.some(entry => sameQueueItem(entry, item))), ...queue];
+    return {
+      pendingCount: pending.filter(owned).length,
+      deadLetterCount: deadLetter.filter(owned).length,
+      conflictCount: conflicts.filter(owned).length,
+      ownershipReviewCount: [...queue, ...deadLetter, ...conflicts].filter(item => item.syncStatus === 'OWNERSHIP_REVIEW').length,
+      isPaused,
+      pending: pending.filter(owned).map(publicQueueItem),
+      deadLetter: deadLetter.filter(owned).map(publicQueueItem),
+      conflicts: conflicts.filter(owned).map(publicQueueItem),
+    };
+  }
+  if (!connection.token || !connection.accountId || !connection.workspace) return false;
+  if (action === 'NEXTKIN_RETRY_SUBMISSION_QUEUE') {
+    await unpauseQueue(connection, true);
+    scheduleQueueAlarm();
+    void processSubmissionQueue();
+    return true;
+  }
+  const key = action === 'NEXTKIN_CLEAR_CONFLICT_QUEUE' ? CONFLICT_QUEUE_KEY : DEAD_LETTER_KEY;
+  return withQueueLock(async () => {
+    const items = await getStorageArray(key);
+    const clear = action === 'NEXTKIN_CLEAR_CONFLICT_QUEUE' || action === 'NEXTKIN_CLEAR_DEAD_LETTER_QUEUE';
+    const item = clear ? null : items.find(entry => owned(entry) && entry.id === id);
+    if (!clear && !item) return false;
+    const remaining = items.filter(entry => !(owned(entry) && (clear || sameQueueItem(entry, item))));
+    if (action === 'NEXTKIN_RETRY_DEAD_LETTER_ITEM') {
+      const pending = await getSubmissionQueue();
+      const retry = { ...item, attempts: 0, nextRetryAt: Date.now(), syncStatus: 'QUEUED' };
+      await chrome.storage.local.set({
+        [QUEUE_KEY]: [...pending.filter(entry => !sameQueueItem(entry, retry)), retry],
+        [key]: remaining,
+      });
+      scheduleQueueAlarm();
+    } else await saveStorageArray(key, remaining);
+    return true;
+  });
 }
 
 const connectedPanels = new Set();
@@ -1223,7 +1354,8 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) {
       const tabId = sender.tab?.id;
       if (tabId != null) {
         const key = `submission_attempt:${tabId}`;
-        void chrome.storage.session.set({ [key]: { timestamp: Date.now() } })
+        void getQueueConnection().then(({ workspace, accountId }) =>
+          chrome.storage.session.set({ [key]: { timestamp: Date.now(), workspace, accountId } }))
           .then(() => reply({ success: true }), (err) => reply({ error: err.message }));
         return true;
       }
@@ -1234,7 +1366,13 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) {
       const tabId = sender.tab?.id;
       if (tabId != null) {
         const key = `submission_snapshot:${tabId}`;
-        void chrome.storage.session.set({ [key]: { ...(message.payload || {}), updatedAt: Date.now() } })
+        void getQueueConnection().then(async ({ workspace, accountId }) => {
+          const prior = (await chrome.storage.session.get(key))[key];
+          const eventKey = prior?.eventKey && prior.workspace === workspace && prior.accountId === accountId &&
+            prior?.jobUrl === message.payload?.jobUrl ? prior.eventKey : crypto.randomUUID();
+          await chrome.storage.session.set({ [key]: { ...(message.payload || {}), workspace, accountId,
+            eventKey, updatedAt: Date.now() } });
+        })
           .then(() => reply({ success: true }), (err) => reply({ error: err.message }));
         return true;
       }
@@ -1282,121 +1420,49 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) {
     }
     if (message?.type === 'NEXTKIN_SAVE_CONNECTION') {
       const { token, user, origin } = message;
-      if (typeof token === 'string' && /^[A-Za-z0-9_-]{20,128}$/.test(token)) {
-        void (async () => {
-          // Token is ONLY written to session storage, never local storage
-          await chrome.storage.session.set({ token, origin });
+      if (!trustedPairingPage(sender, origin) || typeof user?.id !== 'string' || !user.id ||
+        typeof token !== 'string' || !/^[A-Za-z0-9_-]{20,128}$/.test(token)) {
+        reply(false);
+        return false;
+      }
+      void (async () => {
+        await withQueueLock(async () => {
           const current = await chrome.storage.local.get(['origin', 'user']);
-          const accountChanged = current.origin !== origin || current.user?.id !== user?.id;
+          const accountChanged = current.origin !== origin || current.user?.id !== user.id;
+          await chrome.storage.session.set({ token, origin, accountId: user.id });
           await chrome.storage.local.set({
             origin,
-            user: { id: user?.id, name: user?.name, email: user?.email },
+            user: { id: user.id, name: user.name, email: user.email },
             ...(accountChanged ? { activeCandidateId: null } : {}),
           });
           await chrome.storage.local.remove('token').catch(() => {});
-
-          // Re-authentication completed: unpause submission queue and process pending submissions
-          await unpauseQueue();
-          void processSubmissionQueue();
-        })().then(() => reply(true), () => reply(false));
-        return true;
-      }
-      reply(false);
-      return false;
-    }
-    if (message?.type === 'NEXTKIN_DISCONNECT') {
-      void (async () => {
-        await Promise.all([
-          chrome.storage.local.remove(['origin', 'token', 'user', 'activeCandidateId', 'candidateProfile', 'savedProfiles', 'resumePreferences']),
-          chrome.storage.session.clear(),
-        ]);
+        });
+        await unpauseQueue({ token, workspace: workspaceOrigin(origin), accountId: user.id }).catch(() => {});
+        scheduleQueueAlarm();
+        void processSubmissionQueue();
       })().then(() => reply(true), () => reply(false));
       return true;
     }
-    if (message?.type === 'NEXTKIN_GET_QUEUE_STATUS' || message?.action === 'get_submission_queue_status') {
-      void (async () => {
-        const queue = await getSubmissionQueue();
-        const dlq = await getStorageArray(DEAD_LETTER_KEY);
-        const conflicts = await getStorageArray(CONFLICT_QUEUE_KEY);
-        const paused = await isQueuePaused();
-        return {
-          pendingCount: queue.length,
-          deadLetterCount: dlq.length,
-          conflictCount: conflicts.length,
-          isPaused: paused,
-          pending: queue,
-          deadLetter: dlq,
-          conflicts: conflicts,
-        };
-      })().then(reply, () => reply(null));
+    if (message?.type === 'NEXTKIN_REVOKE_CONNECTION') {
+      if (!trustedWorkspacePage(sender, message.origin) || typeof message.accountId !== 'string' || !message.accountId) {
+        reply(false);
+        return false;
+      }
+      const expected = { accountId: message.accountId, workspace: workspaceOrigin(message.origin) };
+      void disconnectQueueConnection(expected).then(reply, () => reply(false));
       return true;
     }
-    if (message?.type === 'NEXTKIN_RETRY_DEAD_LETTER_ITEM' && message.id) {
-      void (async () => {
-        return withQueueLock(async () => {
-          const dlq = await getStorageArray(DEAD_LETTER_KEY);
-          const itemIdx = dlq.findIndex(d => d.id === message.id);
-          if (itemIdx < 0) return false;
-          const [item] = dlq.splice(itemIdx, 1);
-          await saveStorageArray(DEAD_LETTER_KEY, dlq);
-          const { errorDetails, failedAt, syncStatus, ...rest } = item;
-          const retryItem = {
-            ...rest,
-            attempts: 0,
-            nextRetryAt: Date.now(),
-            syncStatus: 'QUEUED',
-          };
-          const queue = await getSubmissionQueue();
-          queue.push(retryItem);
-          await saveSubmissionQueue(queue);
-          scheduleQueueAlarm(0);
-          return true;
-        });
-      })().then(reply, () => reply(false));
-      return true;
-    }
-    if (message?.type === 'NEXTKIN_CLEAR_DEAD_LETTER_QUEUE') {
-      void (async () => {
-        await saveStorageArray(DEAD_LETTER_KEY, []);
+    const queueAction = message?.action === 'get_submission_queue_status' ? 'NEXTKIN_GET_QUEUE_STATUS' : message?.type;
+    if (queueActions.has(queueAction)) {
+      if (!trustedPanel(sender)) {
+        reply(false);
+        return false;
+      }
+      if (queueAction === 'NEXTKIN_DISCONNECT') {
+        void disconnectQueueConnection().then(reply, () => reply(false));
         return true;
-      })().then(reply, () => reply(false));
-      return true;
-    }
-    if (message?.type === 'NEXTKIN_CLEAR_CONFLICT_QUEUE') {
-      void (async () => {
-        await saveStorageArray(CONFLICT_QUEUE_KEY, []);
-        return true;
-      })().then(reply, () => reply(false));
-      return true;
-    }
-    if (message?.type === 'NEXTKIN_RETRY_SUBMISSION_QUEUE') {
-      void (async () => {
-        await unpauseQueue();
-        await withQueueLock(async () => {
-          const queue = await getSubmissionQueue();
-          const now = Date.now();
-          for (const item of queue) {
-            item.nextRetryAt = now;
-            if (item.syncStatus === 'AUTH_REQUIRED' || item.syncStatus === 'RETRY_PENDING') {
-              item.syncStatus = 'QUEUED';
-            }
-          }
-          await saveSubmissionQueue(queue);
-        });
-        void processSubmissionQueue();
-        return true;
-      })().then(reply, () => reply(false));
-      return true;
-    }
-    if (message?.type === 'NEXTKIN_DISMISS_DEAD_LETTER_ITEM' && message.id) {
-      void (async () => {
-        return withQueueLock(async () => {
-          const dlq = await getStorageArray(DEAD_LETTER_KEY);
-          const filtered = dlq.filter(d => d.id !== message.id);
-          await saveStorageArray(DEAD_LETTER_KEY, filtered);
-          return true;
-        });
-      })().then(reply, () => reply(false));
+      }
+      void manageQueue(queueAction, message.id).then(reply, () => reply(false));
       return true;
     }
     if (message?.type === 'embedded-application-document') {

@@ -268,6 +268,11 @@ export async function fetchRemoteProfile(): Promise<CandidateProfileState | null
           : c.authorized_in_usa
           ? ['us']
           : [],
+        country_specific_answers: {
+          ...(facts.authorized_in_usa === true ? { us_auth: 'yes' } : {}),
+          ...(facts.authorized_in_usa === false ? { us_auth: 'no' } : {}),
+          ...facts.screeningAnswers?.country_specific_answers,
+        },
         notice_period_days: c.notice_period || facts.screeningAnswers?.notice_period_days || '',
         desired_salary_amount: c.expected_salary || facts.screeningAnswers?.desired_salary_amount || '',
       },
@@ -281,8 +286,15 @@ export async function fetchRemoteProfile(): Promise<CandidateProfileState | null
   }
 }
 
-export async function persistProfileToServer(profile: CandidateProfileState): Promise<boolean> {
-  saveLocalProfile(profile);
+export type EligibilityDraft = Partial<Pick<ScreeningAnswers,
+  'authorized_countries' | 'age_18_or_older' | 'visa_sponsorship_needed' | 'country_specific_answers'
+>>;
+
+export async function persistProfileToServer(
+  profile: CandidateProfileState,
+  eligibilityDraft?: EligibilityDraft,
+): Promise<boolean> {
+  if (!eligibilityDraft) saveLocalProfile(profile);
   // Only persist to server if a resume has been uploaded/parsed or explicit edits made
   const hasContent = !!(
     (profile.cv && profile.cv.filename) ||
@@ -291,7 +303,7 @@ export async function persistProfileToServer(profile: CandidateProfileState): Pr
     profile.contacts.fullName
   );
   if (!hasContent) {
-    return true;
+    return !eligibilityDraft || Object.keys(eligibilityDraft).length === 0;
   }
   try {
     const payload = {
@@ -320,16 +332,22 @@ export async function persistProfileToServer(profile: CandidateProfileState): Pr
       languages: profile.languages,
       certifications: profile.certifications,
       screeningAnswers: profile.screeningAnswers,
+      eligibilityReview: eligibilityDraft ?? null,
     };
 
-    const res = await fetch('/api/jobseeker/resume', {
+    const request = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
+      credentials: 'include' as const,
       body: JSON.stringify(payload),
-    });
+    };
+    let res = await fetch('/api/jobseeker/resume', request);
+    if (res.status === 409) res = await fetch('/api/jobseeker/resume', request);
 
-    if (res.ok) window.postMessage({ type: 'NEXTKIN_PROFILE_SAVED' }, window.location.origin);
+    if (res.ok) {
+      if (eligibilityDraft) saveLocalProfile(profile);
+      window.postMessage({ type: 'NEXTKIN_PROFILE_SAVED' }, window.location.origin);
+    }
     return res.ok;
   } catch (err) {
     console.error('persistProfileToServer error:', err);

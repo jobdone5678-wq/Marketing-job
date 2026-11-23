@@ -205,14 +205,19 @@ export async function POST(request: Request) {
     checkDb(insertError);
     let job = inserted;
     if (!job) {
-      const { data: existing, error: updateError } = await db
+      const update = db
         .from('outside_jobs')
-        .update(metadata)
+        .update({ ...metadata, candidate_id: candidate?.id || null })
         .eq('capture_owner_id', profile.id)
-        .eq('job_url', jobUrl)
-        .select('id')
-        .single();
+        .eq('job_url', jobUrl);
+      if (candidate?.id) {
+        update.or(`candidate_id.eq.${candidate.id},and(candidate_id.is.null,submission_id.is.null)`);
+      } else {
+        update.is('candidate_id', null).is('submission_id', null);
+      }
+      const { data: existing, error: updateError } = await update.select('id').maybeSingle();
       checkDb(updateError);
+      if (!existing) throw new CaptureError('A different candidate already captured this posting.', 409);
       job = existing;
     }
     if (!job) throw new CaptureError('Failed to save outside job.', 500);

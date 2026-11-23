@@ -2267,6 +2267,55 @@
     return { key: uniqueKeys[0], exact: !!best?.exact, length: best?.length || 0 };
   }
 
+  function linkMetadata(value) {
+    return norm(String(value || '').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[^a-z\d]+/gi, ' '))
+      .replace(/^(?:(?:please|your|provide|enter|share|paste)\s+)+/, '')
+      .replace(/\bgit hub\b/g, 'github')
+      .replace(/\s+(?:optional|required)$/, '');
+  }
+
+  function linkFieldKey(field) {
+    const element = field.element;
+    const candidates = [element?.name, element?.id, field.name, field.id, field.hint, field.label];
+    for (const value of candidates) {
+      const name = linkMetadata(value);
+      if (/^(?:urls? )?(?:twitter|x twitter|twitter x)(?: (?:profile|url|link)){0,2}$|^(?:urls? x|x (?:profile|url|link))$/.test(name))
+        return 'twitter_url';
+      if (aliases.github_url.includes(name) || /^(?:urls? )?git ?hub(?: (?:profile|url|link)){0,2}$/.test(name)) return 'github_url';
+      if (aliases.linkedin_url.includes(name) || /^(?:urls? )?linked ?in(?: (?:profile|url|link)){0,2}$/.test(name)) return 'linkedin_url';
+      if (/^(?:urls? )?(?:personal |professional )?portfolio(?: (?:website|url|link)){0,2}$/.test(name)) return 'portfolio_url';
+      if (/^(?:urls? other|other (?:url|link|website))$/.test(name)) return 'other_url';
+      if (aliases.website.includes(name) || /^(?:urls? )?(?:personal (?:website|site|url)|website|blog)(?: (?:website|url|link)){0,2}$/.test(name))
+        return 'website';
+    }
+    return null;
+  }
+
+  function isUrlField(field) {
+    if (field.type === 'url' || field.kind === 'url' || field.element?.type === 'url' || linkFieldKey(field)) return true;
+    return [field.label, field.name, field.id, field.hint, field.element?.name, field.element?.id].some(value =>
+      /^(?:urls?|(?:profile|social|personal|professional|website|external) (?:urls?|links?))$/
+        .test(linkMetadata(value))
+    );
+  }
+
+  function candidateHttpUrl(value) {
+    if (typeof value !== 'string') return null;
+    const text = value.trim();
+    if (!/^https?:\/\/[^\s\\/?#][^\s\\]*$/i.test(text)) return null;
+    try {
+      const url = new URL(text);
+      return url.hostname && !url.username && !url.password ? text : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function screeningJobKey(job) {
+    if (!job?.externalId && !job?.jobUrl && !(job?.title && job?.company)) return null;
+    return JSON.stringify([job.externalId || '', job.jobUrl || '', job.title || '', job.company || '']);
+  }
+
   function planFill(fields, candidate, options = {}) {
     const values = buildValues(candidate);
     const aiPlan = (field, reason) => ({ field, status: 'ai', reason, options: (field.options || []).map(o => optionText(o)), aiPrompt: field.label });
@@ -2277,6 +2326,15 @@
       }
       if (HISTORY_SCOPE.test(field.scope)) {
         return { field, status: 'needs_review', reason: 'Repeated history requires explicit record-to-section review.' };
+      }
+      if (isUrlField(field)) {
+        const factKey = linkFieldKey(field);
+        const facts = candidate.confirmed_facts || candidate;
+        const fallback = factKey === 'portfolio_url' ? values.website : values[factKey];
+        const value = factKey && candidateHttpUrl(facts[factKey] || fallback);
+        return value
+          ? { field, factKey, status: 'supported', value }
+          : { field, factKey, status: 'manual', reason: 'Enter a valid profile URL manually.' };
       }
 
       const nl = norm(field.label);
@@ -2610,13 +2668,17 @@
       .trim();
 
     if (isCompanySpecificQuestion(question, companyName)) {
-      if (!companyName || !companyName.trim()) return null; // Skip caching if company is unresolved
-      return `${normKey}|${companyName.toLowerCase().trim()}|${(jobTitle || '').toLowerCase().trim()}`;
+      const company = companyName?.trim().toLowerCase();
+      const role = jobTitle?.trim().toLowerCase();
+      if (!company || !role) return null;
+      const scope = [company, role].map(part => part.replace(/%/g, '%25').replace(/\|/g, '%7C'));
+      return [normKey, ...scope].join('|');
     }
     return normKey; // Factual question cached globally
   }
 
-  root.NextkinFieldMapping = { planFill, resolveFact, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS, CONSEQUENTIAL_FACTS, isCompanySpecificQuestion, computeCacheKey };
+  root.NextkinFieldMapping = { planFill, resolveFact, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS, CONSEQUENTIAL_FACTS, isCompanySpecificQuestion, computeCacheKey, isUrlField, candidateHttpUrl, screeningJobKey };
+  if (typeof exports !== 'undefined') exports.isUrlField = isUrlField;
 })(globalThis);
 
 
@@ -3594,6 +3656,10 @@
 
       const currentEl = field.element;
       const domVal = read(field);
+      if (mapping.isUrlField?.(field) && (
+        domVal || plan.ai || plan.learned || !plan.factKey || !mapping.candidateHttpUrl(value) ||
+        (currentEl.maxLength > 0 && value.length > currentEl.maxLength)
+      )) continue;
       const previous = domVal;
       const isCountryCodeOnly = field.kind === 'text' && (currentEl.type === 'tel' || /phone/i.test(field.hint || field.label)) && /^\+?\d{1,3}\s*$/.test(String(previous).trim());
       const hasAnswer = !isCountryCodeOnly && (Array.isArray(previous) ? previous.length > 0 : (typeof previous === 'boolean' ? previous : Boolean(previous && String(previous).trim().length > 0)));
@@ -4545,6 +4611,7 @@
     const key = answerKey(field);
     return key.length >= 5 && key.length <= 200 && keys.indexOf(key) === keys.lastIndexOf(key) &&
       !plan.factKey && plan.status !== 'manual' && !field.excluded &&
+      !mapping.isUrlField?.(field) &&
       !/Repeated history|Job target/.test(plan.reason || '') &&
       !manualQuestion.test(key) && !jobSpecific.test(key);
   }
@@ -4904,6 +4971,7 @@
       const key = answerKey(field);
 
       if (plan.status === 'ai' || plan.status === 'needs_review' || plan.status === 'unknown') {
+        if (mapping.isUrlField?.(field)) continue;
         // Missing DOB, citizenship and work-authorization facts must not be
         // guessed from a resume or replaced with an unrelated generic answer.
         if (['date_of_birth', 'citizenship_status', 'authorized_in_usa', 'needs_sponsorship', 'visa_status', 'work_authorization'].includes(plan.factKey)) continue;

@@ -51,25 +51,25 @@ export function NavUser({
             render={
               <SidebarMenuButton
                 size="lg"
-                className="group border-border/40 bg-card/40 hover:border-border hover:bg-sidebar-accent/70 aria-expanded:bg-sidebar-accent/80 relative flex cursor-pointer items-center gap-2.5 rounded-lg border p-2 text-left shadow-2xs transition-all duration-150"
+                className="group border-border/40 bg-card/40 hover:border-border hover:bg-sidebar-accent/70 aria-expanded:bg-sidebar-accent/80 relative flex cursor-pointer items-center gap-2.5 rounded-md border p-2 text-left transition-colors duration-150"
               />
             }
           >
-            <Avatar className="ring-border/60 group-hover:ring-primary/40 size-8 rounded-lg shadow-xs ring-1 transition-all duration-150">
+            <Avatar className="size-8 rounded-md border border-border/60">
               {user.avatar ? <AvatarImage src={user.avatar} alt={user.name} /> : null}
-              <AvatarFallback className="bg-primary/10 text-primary ring-primary/20 rounded-lg text-xs font-semibold ring-1">
+              <AvatarFallback className="bg-muted text-foreground rounded-md text-xs font-medium">
                 {initials}
               </AvatarFallback>
             </Avatar>
             <div className="grid min-w-0 flex-1 text-left text-xs leading-tight">
               <div className="flex items-center gap-1.5">
-                <span className="text-foreground truncate text-[12.5px] font-semibold">
+                <span className="text-foreground truncate text-xs font-medium">
                   {user.name}
                 </span>
               </div>
               <div className="mt-0.5 flex items-center gap-1.5">
                 {roleDisplay && (
-                  <span className="py-0.2 bg-primary/10 text-primary border-primary/25 shrink-0 rounded border px-1.5 text-[9.5px] font-semibold">
+                  <span className="bg-muted text-muted-foreground border-border/60 shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-normal">
                     {roleDisplay}
                   </span>
                 )}

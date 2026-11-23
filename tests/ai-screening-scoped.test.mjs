@@ -31,3 +31,9 @@ test('company-specific question without resolved company skips caching', () => {
   const key = computeCacheKey('Why do you want to join our company?', '', 'Frontend Engineer');
   assert.equal(key, null);
 });
+
+test('contextual local cache requires a role and preserves distinct composite scopes', () => {
+  const question = 'Why are you interested in this role?';
+  assert.equal(computeCacheKey(question, 'Stripe', ''), null);
+  assert.notEqual(computeCacheKey(question, 'A|B', 'C'), computeCacheKey(question, 'A', 'B|C'));
+});

@@ -1,7 +1,15 @@
-import { NextResponse } from 'next/server';
-import { extensionProfile, cors } from '@/lib/capture/server';
+import { cors, extensionRoute } from '@/lib/capture/server';
+import { CaptureError, checkDb, database } from '@/lib/db/admin';
+import {
+  extensionOwnedCandidate,
+  extensionResumeActor,
+  normalizeCandidate,
+  resumeRequestBody,
+} from '@/lib/extension-answers/candidate-context';
+import { approvedSavedAnswers } from '@/lib/extension-answers/saved-answers';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { database } from '@/lib/db/admin';
+import { z } from 'zod';
+import { isUrlField } from '../../../../../jobright_extension/core/field-mapping.js';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -10,7 +18,7 @@ export async function OPTIONS(request: Request) {
   return cors(request, new Response(null, { status: 204 }));
 }
 
-export function isCompanySpecificQuestion(question?: string, companyName?: string): boolean {
+function isCompanySpecificQuestion(question?: string, companyName?: string): boolean {
   const text = String(question || '').toLowerCase();
   const tokens = [
     'this role',
@@ -30,7 +38,7 @@ export function isCompanySpecificQuestion(question?: string, companyName?: strin
   return tokens.some((t) => text.includes(t));
 }
 
-export function computeCacheKey(
+function computeCacheKey(
   question?: string,
   companyName?: string,
   jobTitle?: string
@@ -42,8 +50,11 @@ export function computeCacheKey(
     .trim();
 
   if (isCompanySpecificQuestion(question, companyName)) {
-    if (!companyName || !companyName.trim()) return null; // Skip caching if company is unresolved
-    return `${normKey}|${companyName.toLowerCase().trim()}|${(jobTitle || '').toLowerCase().trim()}`;
+    const company = companyName?.trim().toLowerCase();
+    const role = jobTitle?.trim().toLowerCase();
+    if (!company || !role) return null;
+    const scope = [company, role].map((part) => part.replace(/%/g, '%25').replace(/\|/g, '%7C'));
+    return [normKey, ...scope].join('|');
   }
   return normKey; // Factual question cached globally
 }
@@ -57,230 +68,141 @@ function normalizeQuestionKey(text: string): string {
     .trim();
 }
 
+const candidateRequest = z.object({
+  candidateId: z.uuid(),
+  companyName: z.string().optional(),
+  jobTitle: z.string().optional(),
+});
+
+const approvalRequest = candidateRequest.extend({
+  question: z.string().trim().min(1).max(2000),
+  answer: z.string().trim().min(1),
+});
+
+const generationRequest = candidateRequest.extend({
+  prompt: z.string().optional(),
+  fieldLabel: z.string().optional(),
+  fieldType: z.string().max(40).optional(),
+  questionId: z.string().max(200).optional(),
+  options: z.array(z.string()).optional(),
+});
+
 export async function PUT(request: Request) {
-  try {
-    const body = await request.json();
-    const { question, key, answer, candidateId, companyName, jobTitle } = body;
-    const cacheKey = key || computeCacheKey(question, companyName, jobTitle);
-
+  return extensionRoute(request, async () => {
+    const actor = await extensionResumeActor(request);
+    const { candidateId, question, answer, companyName, jobTitle } = approvalRequest.parse(
+      await resumeRequestBody(request)
+    );
+    if (isUrlField({ label: question }))
+      throw new CaptureError('Provide profile links in your candidate profile.', 422);
+    const candidate = await extensionOwnedCandidate(actor, candidateId);
+    const cacheKey = computeCacheKey(question, companyName, jobTitle);
     if (!cacheKey) {
-      return cors(
-        request,
-        NextResponse.json({ ok: true, saved: false, reason: 'unscoped_company_question' })
-      );
+      return { ok: true, saved: false, reason: 'unscoped_company_question' };
     }
 
-    if (!answer) {
-      return cors(
-        request,
-        NextResponse.json({ ok: false, error: 'Answer required' }, { status: 400 })
-      );
-    }
+    const facts = candidate.confirmed_facts || {};
+    const saved = (facts.saved_answers as Record<string, unknown>) || {};
+    // The database refreshes updated_at on every candidate write.
+    const { data, error } = await database()
+      .from('candidates')
+      .update({
+        confirmed_facts: {
+          ...facts,
+          saved_answers: {
+            ...saved,
+            [cacheKey]: {
+              approved: true,
+              answer,
+              question,
+              updatedAt: new Date().toISOString(),
+            },
+          },
+        },
+      })
+      .eq('id', candidate.id)
+      .eq('user_id', actor.id)
+      .eq('updated_at', candidate.updated_at)
+      .select('id')
+      .maybeSingle();
+    checkDb(error);
+    if (!data) throw new CaptureError('Candidate facts changed. Retry saving your answer.', 409);
 
-    if (candidateId && typeof candidateId === 'string' && candidateId.length === 36) {
-      try {
-        const { data: candRow } = await database()
-          .from('candidates')
-          .select('id, confirmed_facts')
-          .eq('id', candidateId)
-          .maybeSingle();
-        if (candRow) {
-          const currentFacts = (candRow.confirmed_facts as Record<string, unknown>) || {};
-          const currentSaved = (currentFacts.saved_answers as Record<string, unknown>) || {};
-          currentSaved[cacheKey] = {
-            answer: String(answer).trim(),
-            question: question || cacheKey,
-            updatedAt: new Date().toISOString(),
-          };
-          await database()
-            .from('candidates')
-            .update({ confirmed_facts: { ...currentFacts, saved_answers: currentSaved } })
-            .eq('id', candidateId);
-        }
-      } catch (err) {
-        console.warn('Could not save candidate answer to db:', err);
-      }
-    }
-
-    return cors(request, NextResponse.json({ ok: true, saved: true, key: cacheKey }));
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Error saving answer';
-    return cors(request, NextResponse.json({ ok: false, error: msg }, { status: 500 }));
-  }
+    return { ok: true, saved: true, key: cacheKey };
+  });
 }
 
 export async function POST(request: Request) {
-  try {
-    // Resilient extension authentication: authenticate profile if token present, or allow verified extension origin
-    let profileId = 'extension-autofill';
-    let authenticatedUserId: string | null = null;
-    try {
-      const profile = await extensionProfile(request);
-      if (profile && profile.id) {
-        profileId = profile.id;
-        authenticatedUserId = profile.id;
-      }
-    } catch {
-      // Allow browser extension or candidate app sessions without requiring pre-registered DB credentials
-      const originHeader = request.headers.get('origin') || '';
-      const isExtension =
-        originHeader.startsWith('chrome-extension://') ||
-        Boolean(request.headers.get('x-extension-id'));
-      const isLocalOrPortal =
-        originHeader.includes('localhost') ||
-        originHeader.includes('127.0.0.1') ||
-        originHeader.includes('nextkinhr.com');
-      profileId = isExtension || isLocalOrPortal ? 'verified-extension' : 'public-copilot';
-    }
-
-    const limit = checkRateLimit(`gen-answer:${profileId}`, { windowMs: 60000, max: 60 });
+  return extensionRoute(request, async () => {
+    const actor = await extensionResumeActor(request);
+    const limit = checkRateLimit(`gen-answer:${actor.id}`, { windowMs: 60000, max: 60 });
     if (!limit.allowed) {
-      return cors(
-        request,
-        NextResponse.json(
-          { ok: false, error: 'Rate limit exceeded. Please wait a moment.' },
-          { status: 429 }
-        )
-      );
+      throw new CaptureError('Rate limit exceeded. Please wait a moment.', 429);
     }
 
-    const body = await request.json();
-    const { prompt, fieldLabel, candidate, jobTitle, companyName, options } = body;
-    const choiceMode = Array.isArray(options) && options.length > 0;
+    const {
+      candidateId,
+      prompt,
+      fieldLabel,
+      fieldType,
+      questionId,
+      jobTitle,
+      companyName,
+      options = [],
+    } = generationRequest.parse(await resumeRequestBody(request));
+    if (isUrlField({ type: fieldType, label: fieldLabel || prompt, id: questionId }))
+      throw new CaptureError('Profile URL fields require a saved candidate link.', 422);
+    const candidate = await extensionOwnedCandidate(actor, candidateId);
+    const choiceMode = options.length > 0;
     const questionText = fieldLabel || prompt || '';
     const scopedKey = computeCacheKey(questionText, companyName, jobTitle);
     const globalKey = normalizeQuestionKey(questionText);
+    const confirmedFacts = candidate.confirmed_facts || {};
+    const candidateSaved = approvedSavedAnswers(confirmedFacts.saved_answers);
+    const savedAnswer =
+      (scopedKey ? candidateSaved[scopedKey]?.answer : undefined) ||
+      (!isCompanySpecificQuestion(questionText, companyName)
+        ? candidateSaved[globalKey]?.answer
+        : undefined);
 
-    // Query candidate profile authoritative context server-side
-    let candidateData: Record<string, unknown> | null = null;
-    if (authenticatedUserId) {
-      try {
-        const { data: candRow } = await database()
-          .from('candidates')
-          .select('id, full_name, first_name, last_name, target_job_titles, current_job_title, skills, primary_skills, summary, bio, confirmed_facts, raw_text')
-          .eq('user_id', authenticatedUserId)
-          .maybeSingle();
-        if (candRow) candidateData = candRow as Record<string, unknown>;
-      } catch (dbErr) {
-        console.warn('Error querying candidate by user_id:', dbErr);
+    if (savedAnswer) {
+      if (!choiceMode) {
+        return { ok: true, answer: savedAnswer, stored: true };
       }
-    }
-    if (!candidateData && candidate?.id && typeof candidate.id === 'string' && candidate.id.length === 36) {
-      try {
-        const { data: candRow } = await database()
-          .from('candidates')
-          .select('id, full_name, first_name, last_name, target_job_titles, current_job_title, skills, primary_skills, summary, bio, confirmed_facts, raw_text')
-          .eq('id', candidate.id)
-          .maybeSingle();
-        if (candRow) candidateData = candRow as Record<string, unknown>;
-      } catch (dbErr) {
-        console.warn('Error querying candidate by id:', dbErr);
+      const normalizedAnswer = savedAnswer.toLowerCase().trim();
+      const match = options.find((option) => option.toLowerCase().trim() === normalizedAnswer);
+      if (match) {
+        return { ok: true, answer: match, stored: true };
       }
     }
 
-    // 1. Check if this repeated question already has a stored answer in candidate profile
-    const confirmedFacts = (candidateData?.confirmed_facts || candidate?.confirmed_facts) as Record<string, unknown> | undefined;
-    const candidateSaved = (confirmedFacts?.saved_answers || candidateData?.saved_answers || candidate?.saved_answers) as Record<string, unknown> | undefined;
+    const profile = normalizeCandidate(candidate);
+    const candName = profile.name || 'Applicant';
+    const candTitle = profile.title || jobTitle || '';
+    const skillsStr = profile.skills.join(', ');
+    const candSummary = profile.summary || candidate.bio || '';
 
-    let savedEntry: unknown = null;
-    if (candidateSaved) {
-      if (scopedKey && candidateSaved[scopedKey]) {
-        savedEntry = candidateSaved[scopedKey];
-      } else if (!isCompanySpecificQuestion(questionText, companyName) && candidateSaved[globalKey]) {
-        savedEntry = candidateSaved[globalKey];
-      }
-    }
-
-    if (savedEntry) {
-      const answerVal = typeof savedEntry === 'object' && (savedEntry as { answer?: string })?.answer
-        ? (savedEntry as { answer: string }).answer
-        : String(savedEntry);
-      if (answerVal) {
-        if (!choiceMode) {
-          return cors(request, NextResponse.json({ ok: true, answer: answerVal, stored: true }));
-        }
-        const match =
-          (options as string[]).find(
-            (o) => String(o).toLowerCase().trim() === answerVal.toLowerCase().trim()
-          ) ||
-          (options as string[]).find((o) =>
-            answerVal.toLowerCase().includes(String(o).toLowerCase().trim())
-          );
-        if (match) {
-          return cors(
-            request,
-            NextResponse.json({ ok: true, answer: String(match), stored: true })
-          );
-        }
-      }
-    }
-
-    // Authoritative facts from database candidate if present, with client fallback
-    const candName =
-      (candidateData?.full_name as string) ||
-      (candidateData?.first_name ? [candidateData.first_name, candidateData.last_name].filter(Boolean).join(' ') : null) ||
-      candidate?.full_name ||
-      candidate?.name ||
-      [candidate?.first_name, candidate?.last_name].filter(Boolean).join(' ') ||
-      'Applicant';
-
-    const dbSkills = Array.isArray(candidateData?.skills)
-      ? (candidateData.skills as string[]).join(', ')
-      : (candidateData?.primary_skills as string) || '';
-    const clientSkills = Array.isArray(candidate?.skills)
-      ? (candidate.skills as string[]).join(', ')
-      : (candidate?.primary_skills as string) || '';
-    const skillsStr = dbSkills || clientSkills;
-
-    const candTitle =
-      (candidateData?.current_job_title as string) ||
-      (candidateData?.target_job_titles as string) ||
-      candidate?.current_job_title ||
-      candidate?.target_job_titles ||
-      jobTitle ||
-      '';
-
-    const candSummary =
-      (candidateData?.summary as string) ||
-      (candidateData?.bio as string) ||
-      ((candidateData?.confirmed_facts as Record<string, unknown>)?.summary as string) ||
-      candidate?.summary ||
-      candidate?.bio ||
-      ((candidate?.confirmed_facts as Record<string, unknown>)?.summary as string) ||
-      '';
-
-    // 2. Check if this is a bio/summary question and candidate already has a confirmed summary/bio
+    // Answer biography and summary questions from the candidate's saved profile when possible.
     const isBioQuestion =
       /\b(bio|biography|summary|about\s*(you|yourself)?|professional\s*summary|overview)\b/i.test(
         globalKey
       );
     if (isBioQuestion && candSummary && String(candSummary).trim().length > 20 && !choiceMode) {
-      return cors(
-        request,
-        NextResponse.json({ ok: true, answer: String(candSummary).trim(), stored: true })
-      );
+      return { ok: true, answer: String(candSummary).trim(), stored: true };
     }
 
     const apiKey = process.env.OPENAI_API_KEY?.trim();
     if (!apiKey) {
-      return cors(
-        request,
-        NextResponse.json(
-          { ok: false, error: 'AI generation service is not configured.' },
-          { status: 503 }
-        )
-      );
+      throw new CaptureError('AI generation service is not configured.', 503);
     }
 
     const baseUrl = process.env.OPENAI_BASE_URL || 'https://api.xkiro.com/v1/';
     const model = process.env.OPENAI_MODEL || 'mistralai/mistral-large-2512';
-    const rawSnippet =
-      (candidateData?.raw_text as string) ||
-      ((candidateData?.confirmed_facts as Record<string, unknown>)?.raw_text as string) ||
-      candidate?.source_text ||
-      ((candidate?.confirmed_facts as Record<string, unknown>)?.raw_text as string) ||
-      '';
-    const resumeContext = rawSnippet ? `Resume Highlights: ${rawSnippet.slice(0, 800)}` : '';
+    const rawSnippet = candidate.raw_text || confirmedFacts.raw_text || '';
+    const resumeContext =
+      typeof rawSnippet === 'string' && rawSnippet
+        ? `Resume Highlights: ${rawSnippet.slice(0, 800)}`
+        : '';
 
     const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
     const completionsUrl = `${cleanBaseUrl}/chat/completions`;
@@ -326,11 +248,7 @@ Strict Rules:
     });
 
     if (!resp.ok) {
-      const errText = await resp.text();
-      return cors(
-        request,
-        NextResponse.json({ ok: false, error: errText }, { status: resp.status })
-      );
+      throw new CaptureError('AI generation failed. Please try again.', resp.status);
     }
 
     const data = await resp.json();
@@ -339,48 +257,11 @@ Strict Rules:
     if (choiceMode) {
       const lower = answer.toLowerCase();
       const match =
-        (options as string[]).find((o) => String(o).toLowerCase().trim() === lower) ||
-        (options as string[]).find((o) => lower.includes(String(o).toLowerCase().trim()));
+        options.find((o) => String(o).toLowerCase().trim() === lower) ||
+        options.find((o) => lower.includes(String(o).toLowerCase().trim()));
       if (match) answer = String(match);
     }
 
-    // Persist newly generated answer to candidate record in DB if candidate exists and key is valid
-    const targetCandidateId = (candidateData?.id as string) || (candidate?.id as string);
-    if (scopedKey && targetCandidateId && typeof targetCandidateId === 'string' && targetCandidateId.length === 36) {
-      try {
-        const { data: candRow } = await database()
-          .from('candidates')
-          .select('id, confirmed_facts')
-          .eq('id', targetCandidateId)
-          .maybeSingle();
-        if (candRow) {
-          const currentFacts = (candRow.confirmed_facts as Record<string, unknown>) || {};
-          const currentSaved = (currentFacts.saved_answers as Record<string, unknown>) || {};
-          currentSaved[scopedKey] = {
-            answer,
-            question: fieldLabel || prompt,
-            updatedAt: new Date().toISOString(),
-          };
-          await database()
-            .from('candidates')
-            .update({ confirmed_facts: { ...currentFacts, saved_answers: currentSaved } })
-            .eq('id', targetCandidateId);
-        }
-      } catch (saveErr) {
-        console.warn('Failed to persist saved answer:', saveErr);
-      }
-    }
-
-    return cors(
-      request,
-      NextResponse.json({
-        ok: true,
-        answer,
-        stored: false,
-      })
-    );
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error generating answer';
-    return cors(request, NextResponse.json({ ok: false, error: msg }, { status: 500 }));
-  }
+    return { ok: true, answer, stored: false };
+  });
 }

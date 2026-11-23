@@ -8,6 +8,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { z } from 'zod';
 import { isAppliedApplication, applicationUrlKey, withoutAppliedJobs } from '../src/lib/jobs/application-state.ts';
 import { normalizeSnapshot } from '../src/lib/jobs/normalize.ts';
+import { approvedSavedAnswers } from '../src/lib/extension-answers/saved-answers.ts';
 
 // Next.js resolves this extensionless TypeScript import. Resolve it in Node's test runner too.
 const hooks = registerHooks({
@@ -198,7 +199,7 @@ test('Application Lifecycle: a portal receipt updates the draft and links matchi
     },
     async rpc(name, args) {
       writes.push({ name, args });
-      return { data: 'submitted' };
+      return { data: { status: 'submitted', attempt: args.p_attempt, observed_at: args.p_observed } };
     },
   };
   const { recordObservation } = loadSource('lib/capture/server', {
@@ -214,22 +215,19 @@ test('Application Lifecycle: a portal receipt updates the draft and links matchi
     applicationUrl, url: applicationUrl + '/application/received', evidence: "We've successfully received your application",
     observedAt: '2026-11-19T05:00:00Z', answers: 'invalid',
   }), /Invalid answer snapshot/);
-  assert.equal(writes[0].name, 'record_browser_event');
+  assert.equal(writes[0].name, 'record_application_observation');
   assert.equal(writes[0].args.p_status, 'submitted');
-  assert.equal(writes[1].data.status, 'Applied');
-  assert.equal(writes[2].data.status, 'Applied');
-  assert.deepEqual(Array.from(writes[2].filters.job_url), [applicationUrl + '?jobid=REQ-123', applicationUrl]);
-  assert.equal(writes[2].filters.capture_owner_id, 'account');
-  assert.equal(writes[2].filters.submission_id, null);
+  assert.deepEqual(Array.from(writes[0].args.p_postings), [applicationUrl + '?jobid=REQ-123', applicationUrl]);
+  assert.equal(writes.length, 1);
 });
 
 test('Application Lifecycle: autofill restores tracking on an already-open posting and records its receipt', async () => {
   const intentId = '8b1d6779-6dc3-419c-855a-fa293123aba0';
   const posting = 'https://jobs.lever.co/fixture/123/apply';
   const tab = { id: 17, url: posting + '?email=private@example.test' };
-  const state = {};
   const noop = { addListener() {} };
   const workspace = 'https://www.nextkinhr.com';
+  const state = { origin: workspace, token: 'paired-token-for-receipts', accountId: 'actor' };
   const requests = [];
   const scripts = [];
   const notices = [];
@@ -252,9 +250,12 @@ test('Application Lifecycle: autofill restores tracking on an already-open posti
         sendMessage: async (tabId, message) => notices.push([tabId, message.type]),
       },
       storage: {
-        local: { get: async () => ({ origin: workspace, token: 'fixture' }) },
+        local: {
+          get: async keys => Object.fromEntries([keys].flat().map(key => [key, state['local:' + key]])),
+          set: async patch => { for (const [key, value] of Object.entries(patch)) state['local:' + key] = value; },
+        },
         session: {
-          get: async key => ({ [key]: state[key] }),
+          get: async keys => keys == null ? { ...state } : Object.fromEntries([keys].flat().map(key => [key, state[key]])),
           set: async records => Object.assign(state, records),
         },
       },
@@ -335,7 +336,7 @@ test('Application Lifecycle: an embedded Ashby receipt saves the outside posting
   const frame = { frameId: 3, documentId: 'embedded-document', url: hosted + '/application?embed=js' };
   const tab = { id: 17, url: parent };
   const profile = '8b1d6779-6dc3-419c-855a-fa293123aba0';
-  const state = {};
+  const state = { origin: workspace, token: 'paired-token-for-receipts', accountId: 'actor' };
   const scripts = [];
   const requests = [];
   const noop = { addListener() {} };
@@ -345,9 +346,12 @@ test('Application Lifecycle: an embedded Ashby receipt saves the outside posting
       runtime: { onInstalled: noop, onStartup: noop, onConnect: noop, onMessage: noop },
       tabs: { onUpdated: noop, onRemoved: noop, get: async () => tab },
       storage: {
-        local: { get: async () => ({ origin: workspace, token: 'fixture' }) },
+        local: {
+          get: async keys => Object.fromEntries([keys].flat().map(key => [key, state['local:' + key]])),
+          set: async patch => { for (const [key, value] of Object.entries(patch)) state['local:' + key] = value; },
+        },
         session: {
-          get: async (keys) => Object.fromEntries([keys].flat().map(key => [key, state[key]])),
+          get: async keys => keys == null ? { ...state } : Object.fromEntries([keys].flat().map(key => [key, state[key]])),
           set: async (records) => Object.assign(state, records),
         },
       },
@@ -399,7 +403,7 @@ test('Application Lifecycle: a provider-independent outside form saves discovery
   const receipt = { evidence: 'Your application has been received' };
   const sender = { tab, frameId: 4, documentId: 'receipt-document', url: 'https://hiring.example.test/employer/thank-you' };
   const candidateId = '8b1d6779-6dc3-419c-855a-fa293123aba0';
-  const state = {};
+  const state = { origin: workspace, token: 'paired-token-for-receipts', accountId: 'actor' };
   const requests = [];
   const injected = [];
   const noop = { addListener() {} };
@@ -409,9 +413,12 @@ test('Application Lifecycle: a provider-independent outside form saves discovery
       runtime: { onInstalled: noop, onStartup: noop, onConnect: noop, onMessage: noop },
       tabs: { onUpdated: noop, onRemoved: noop, get: async () => tab },
       storage: {
-        local: { get: async () => ({ origin: workspace, token: 'fixture' }) },
+        local: {
+          get: async keys => Object.fromEntries([keys].flat().map(key => [key, state['local:' + key]])),
+          set: async patch => { for (const [key, value] of Object.entries(patch)) state['local:' + key] = value; },
+        },
         session: {
-          get: async (keys) => Object.fromEntries([keys].flat().map(key => [key, state[key]])),
+          get: async keys => keys == null ? { ...state } : Object.fromEntries([keys].flat().map(key => [key, state[key]])),
           set: async (records) => Object.assign(state, records),
         },
       },
@@ -453,7 +460,7 @@ test('Application Lifecycle: a provider-independent outside form saves discovery
 test('Application Lifecycle: a LinkedIn posting arms outside tracking without a panel or an intent', async () => {
   const posting = 'https://www.linkedin.com/jobs/view/1234567890';
   const workspace = 'https://www.nextkinhr.com';
-  const state = {};
+  const state = { origin: workspace, token: 'paired-token-for-receipts', accountId: 'actor' };
   const scripts = [];
   const noop = { addListener() {} };
   const tab = { id: 31, url: posting };
@@ -464,7 +471,10 @@ test('Application Lifecycle: a LinkedIn posting arms outside tracking without a 
       runtime: { onInstalled: noop, onStartup: noop, onConnect: noop, onMessage: noop },
       tabs: { onUpdated: noop, onRemoved: noop, get: async () => tab },
       storage: {
-        local: { get: async () => ({ origin: workspace, token: 'fixture' }) },
+        local: {
+          get: async keys => Object.fromEntries([keys].flat().map(key => [key, state['local:' + key]])),
+          set: async patch => { for (const [key, value] of Object.entries(patch)) state['local:' + key] = value; },
+        },
         session: {
           get: async key => Object.fromEntries([key].flat().map(name => [name, state[name]])),
           set: async records => Object.assign(state, records),
@@ -595,16 +605,19 @@ test('Application Lifecycle: applied resumes archive the exact bytes without put
   const submissionId = '52f9b8ef-3394-47f9-8227-961b750bf550';
   let archive;
   let stored;
-  const filters = [];
-  const query = {
-    update(fields) { stored = fields.applied_resume; return this; },
-    eq(key, value) { filters.push([key, value]); return this; }, select() { return this; },
-    async maybeSingle() { return { data: { id: submissionId } }; },
-  };
+  const receipt = { actor: 'fixture-actor', eventKey: 'fixture-event' };
   const { saveAppliedResume } = loadSource('lib/capture/applied-resume', {
     'node:crypto': await import('node:crypto'), zod: { z },
     '@/lib/db/admin': {
-      database: () => ({ from: () => query, storage: { from: bucket => ({
+      database: () => ({ rpc: async (name, args) => {
+        assert.equal(name, 'save_application_receipt_resume');
+        assert.equal(args.p_actor, receipt.actor);
+        assert.equal(args.p_event_key, receipt.eventKey);
+        assert.equal(args.p_candidate, candidateId);
+        assert.equal(args.p_submission, submissionId);
+        stored = args.p_resume;
+        return { data: stored };
+      }, storage: { from: bucket => ({
         upload: async (path, bytes) => { archive = { bucket, path, bytes }; return {}; },
       }) } }),
       checkDb: assert.ifError, CaptureError: Error,
@@ -612,12 +625,11 @@ test('Application Lifecycle: applied resumes archive the exact bytes without put
   });
   const snapshot = await saveAppliedResume(submissionId, candidateId, {
     filename: 'resume.pdf', mimeType: 'application/pdf', base64: 'AQID',
-  });
+  }, receipt);
   assert.equal(archive.bucket, 'candidate-resumes');
   assert.deepEqual([...archive.bytes], [1, 2, 3]);
   assert.equal(archive.path, `applied/${candidateId}/${submissionId}/${snapshot.archiveHash}`);
   assert.equal(stored.base64, undefined);
-  assert.deepEqual(filters, [['id', submissionId], ['candidate_id', candidateId]]);
 });
 
 test('Application Lifecycle: the worker retrieves the original resume for the active account', async () => {
@@ -672,7 +684,8 @@ test('Autofill resumes a new wizard document once and rejects other postings', a
 
 test('The Autofill profile endpoint returns candidate-submitted values only', async () => {
   const actor = { id: 'candidate-user', role: 'candidate' };
-  const savedAnswers = { 'why do you want to join': { value: 'I like building with React.', type: 'text' } };
+  const approvedAnswers = { 'why do you want to join': { answer: 'I like building with React.', approved: true } };
+  const savedAnswers = { ...approvedAnswers, 'legacy answer': { answer: 'Approval unavailable.' } };
   const candidate = { id: 'candidate-profile', version: 2, provenance_status: 'confirmed', email: 'account@example.test',
     resume_url: 'data:application/pdf;base64,AQID',
     confirmed_facts: { full_name: 'Fixture Candidate', open_to_relocation: false, phone: '', raw_text: 'Never use this resume text', saved_answers: savedAnswers } };
@@ -684,6 +697,7 @@ test('The Autofill profile endpoint returns candidate-submitted values only', as
     '@/lib/capture/server': { extensionRoute: (_request, work) => work(), extensionProfile: async () => actor },
     '@/lib/db/admin': { database: () => ({ from: () => query }), checkDb: assert.ifError },
     '@/lib/ai/schemas': { textFields: ['full_name', 'email', 'phone'], booleanFields: ['open_to_relocation'] }, zod: { z },
+    '@/lib/extension-answers/saved-answers': { approvedSavedAnswers },
   });
   const response = await GET(new Request('https://www.nextkinhr.com/api/extension/candidates?savedOnly=true'));
   assert.equal(response.candidates.length, 1);
@@ -694,7 +708,8 @@ test('The Autofill profile endpoint returns candidate-submitted values only', as
   assert.equal(response.candidates[0].has_original_resume, true);
   assert.equal(response.candidates[0].resume_url, undefined);
   assert.equal(response.candidates[0].confirmed_facts.raw_text, undefined);
-  assert.deepEqual(response.candidates[0].confirmed_facts.saved_answers, savedAnswers);
+  assert.deepEqual(response.candidates[0].confirmed_facts.saved_answers, approvedAnswers);
+  assert.ok(candidate.confirmed_facts.saved_answers['legacy answer']);
 });
 
 test('Profile screening answers are saved using the fields the dashboard sends', async () => {
@@ -751,7 +766,7 @@ test('Application Lifecycle: Autofill fills ten saved candidate fields without a
     key: String(index), label, kind: 'text', element: new Input(),
   }));
   const fixture = {
-    location: url, document: { querySelectorAll: () => [] }, crypto, Event, HTMLInputElement: Input,
+    location: url, document: { querySelectorAll: () => [] }, crypto, Event, URL, HTMLInputElement: Input,
     NextkinJobCapture: { read: () => null },
     NextkinForms: { discoverFields: () => fields },
   };
@@ -891,34 +906,41 @@ test('Application Lifecycle: an external receipt promotes one posting in Outside
   const outside = { id: 'existing-outside-job', job_url: jobUrl, capture_owner_id: actor.id, status: 'Discovered' };
   let submission;
   let outsideWrites = 0;
+  let rpcFailure = true;
+  let archiveFailure = true;
+  let snapshotFailure = false;
+  let archiveCalls = 0;
+  const snapshots = new Map();
   const db = {
     from(table) {
-      let row = table === 'candidates' ? { id: candidateId, version: 1 } : null;
       return {
-        select() { return this; }, eq() { return this; }, order() { return this; }, limit() { return this; },
-        async maybeSingle() { return { data: row }; },
-        then(resolve) {
-          resolve({ data: table === 'job_submissions' && submission ? [submission] : [] });
-        },
-        update(data) {
-          assert.equal(table, 'job_submissions');
-          Object.assign(submission, data);
-          return this;
-        },
-        upsert(data, options) {
-          if (table === 'job_submissions') {
-            submission = row = data;
-          } else {
-            assert.equal(table, 'outside_jobs');
-            assert.equal(options.onConflict, 'capture_owner_id,job_url');
-            assert.equal(data.job_url, outside.job_url);
-            assert.equal(data.capture_owner_id, outside.capture_owner_id);
-            outsideWrites++;
-            Object.assign(outside, data);
-          }
-          return this;
-        },
+        select() { return this; }, eq() { return this; },
+        async maybeSingle() { return { data: { id: candidateId, version: 1 } }; },
+        then(resolve) { assert.ok(['application_intents', 'outside_jobs'].includes(table)); resolve({ data: [] }); },
+        update() { assert.equal(table, 'outside_jobs'); return this; },
       };
+    },
+    async rpc(name, args) {
+      if (name === 'save_application_answer_snapshot') {
+        assert.equal(args.p_attempt, 1, 'snapshot belongs to the first recorded attempt');
+        if (snapshotFailure) return { error: new Error('Snapshot unavailable') };
+        const key = args.p_event_key + ':' + args.p_attempt;
+        if (!snapshots.has(key)) snapshots.set(key, { id: key });
+        return { data: snapshots.get(key) };
+      }
+      assert.equal(name, 'record_extension_submission');
+      if (rpcFailure) return { error: new Error('Authoritative RPC failed') };
+      assert.equal('appliedResume' in args.p_fields, false);
+      assert.equal(args.p_fields.jobUrl, jobUrl);
+      assert.equal(args.p_fields.source, 'extension_observation');
+      const replayed = Boolean(submission);
+      submission ??= { id: args.p_event_key, status: 'Applied' };
+      submission.capture_status = 'submitted';
+      if (!replayed) {
+        outsideWrites++;
+        Object.assign(outside, { status: 'Applied', submission_id: submission.id });
+      }
+      return { data: { submission, replayed, attempt: 1, observed_at: '2026-11-23T08:00:00Z' } };
     },
   };
   const { POST } = loadRoute('extension/auto-submit', {
@@ -933,32 +955,52 @@ test('Application Lifecycle: an external receipt promotes one posting in Outside
       database: () => db, checkDb: assert.ifError,
       CaptureError: class extends Error { constructor(message, status) { super(message); this.status = status; } },
     },
-    '@/lib/capture/snapshot': {},
+    '@/lib/capture/snapshot': { validateApplicationAnswers: value => value },
     '@/lib/capture/validation': { allowedCaptureUrl, validateObservation },
     '@/lib/capture/applied-resume': {
       appliedResumeSchema: z.unknown(),
-      saveAppliedResume: async () => { throw new Error('Archive unavailable'); },
+      saveAppliedResume: async (_submissionId, _candidateId, resume) => {
+        archiveCalls++;
+        assert.equal(resume.appliedAt, '2026-11-23T08:00:00Z');
+        if (archiveFailure) throw new Error('Archive unavailable');
+        return { archiveHash: 'fixture-content-hash' };
+      },
     },
     '@/lib/jobs/application-state': { applicationUrlKey }, zod: { z },
   });
-  const send = (confirmationUrl, evidence, appliedResume) => POST(new Request('https://www.nextkinhr.com/api/webhooks/application-submitted', {
+  const send = (confirmationUrl, evidence, appliedResume, attempt = 1) => POST(new Request('https://www.nextkinhr.com/api/webhooks/application-submitted', {
     method: 'POST', body: JSON.stringify({
       candidateId, eventKey: 'a71cb53e-586a-4aa6-a17e-507d6730eafc', companyName: 'Fixture', jobTitle: 'Engineer',
-      jobUrl: jobUrl + '/apply', confirmationUrl, evidence, appliedResume,
+      jobUrl: jobUrl + '/apply', confirmationUrl, evidence, appliedResume, attempt,
+      answers: [{ key: 'name', label: 'Name', value: 'Fixture' }],
     }),
   }));
   assert.equal((await send(undefined, 'Application submitted')).status, 422);
   assert.equal((await send(jobUrl + '/apply', 'Application was not submitted')).status, 422);
   assert.equal(outside.status, 'Discovered');
   assert.equal(outsideWrites, 0);
+  const rpcError = await send(jobUrl + '/confirmation', 'Successfully applied!');
+  assert.equal(rpcError.status, 500);
+  assert.equal(outsideWrites, 0);
+  assert.equal(submission, undefined);
+  assert.equal(snapshots.size, 0);
+  rpcFailure = false;
   const archiveError = await send(jobUrl + '/application/received', "We've successfully received your application", { filename: 'resume.pdf' });
   assert.equal(archiveError.status, 500);
   assert.equal(submission.status, 'Applied');
   assert.equal(outside.status, 'Applied');
+  assert.equal(snapshots.size, 1, 'answers are persisted even when archive fails');
+  archiveFailure = false;
+  snapshotFailure = true;
+  assert.equal((await send(jobUrl + '/confirmation', 'Successfully applied!', { filename: 'resume.pdf' }, 2)).status, 500);
+  assert.equal(archiveCalls, 2);
+  assert.equal(submission.applied_resume.archiveHash, 'fixture-content-hash');
+  snapshotFailure = false;
   const submissionId = submission.id;
-  const result = await send(jobUrl + '/confirmation', 'Successfully applied!');
+  const result = await send(jobUrl + '/confirmation', 'Successfully applied!', { filename: 'resume.pdf' }, 3);
   assert.equal(result.status, 200);
   assert.equal((await result.json()).submission.status, 'Applied');
+  assert.equal(snapshots.size, 1);
   assert.equal(outside.status, 'Applied');
   assert.equal(outside.id, 'existing-outside-job');
   assert.equal(outside.submission_id, submissionId);
@@ -972,26 +1014,20 @@ test('Application Lifecycle: an external receipt promotes one posting in Outside
 test('Application Lifecycle: a side-panel manual attestation records an application without a receipt', async () => {
   const actor = { id: 'account-id' };
   const candidateId = '8b1d6779-6dc3-419c-855a-fa293123aba0';
-  const writes = [];
-  let storedSubmission;
+  let receipt;
   const db = {
     from(table) {
       return {
-        select() { return this; }, eq() { return this; }, order() { return this; }, limit() { return this; },
-        async maybeSingle() {
-          return { data: table === 'candidates' ? { id: candidateId, version: 1 } : storedSubmission || null };
-        },
-        then(resolve) { resolve({ data: [] }); },
-        upsert(data) {
-          writes.push({ table, data });
-          if (table === 'job_submissions') storedSubmission = { ...data, id: data.id || candidateId };
-          return this;
-        },
-        update(data) { writes.push({ table, data }); return this; },
-        insert(data) { writes.push({ table, data }); return this; },
+        select() { return this; }, eq() { return this; },
+        async maybeSingle() { return { data: { id: candidateId, version: 1 } }; },
+        then(resolve) { assert.equal(table, 'application_intents'); resolve({ data: [] }); },
       };
     },
-    async rpc() { return { data: { submission: { id: candidateId } } }; },
+    async rpc(name, args) {
+      assert.equal(name, 'record_extension_submission');
+      receipt = args.p_fields;
+      return { data: { submission: { id: args.p_event_key, status: 'Applied' } } };
+    },
   };
   const { POST } = loadRoute('extension/auto-submit', {
     '@/lib/capture/server': {
@@ -1021,7 +1057,7 @@ test('Application Lifecycle: a side-panel manual attestation records an applicat
     }),
   }));
   assert.equal(response.status, 200);
-  assert.ok(writes.some(write => write.table === 'job_submissions'), 'a My Applications record must be written');
+  assert.equal(receipt.source, 'recruiter_attestation');
 });
 
 test('Application Lifecycle: profile saves trigger a refresh without copying page data', async () => {
@@ -1086,6 +1122,9 @@ test('Application Lifecycle: profile saves trigger a refresh without copying pag
   assert.equal(storage.token, undefined);
   assert.equal(storage.user.id, 'new-account');
   assert.equal(storage.activeCandidateId, null);
+  assert.equal(runtimeMessages.at(-1).type, 'NEXTKIN_SAVE_CONNECTION');
+  assert.equal(runtimeMessages.at(-1).token, pairing.token);
+  assert.equal(runtimeMessages.at(-1).user.id, 'new-account');
 
   const message = { type: 'NEXTKIN_OUTSIDE_APPLICATION_SAVED' };
   receiveExtension(message, { id: 'another-extension' });

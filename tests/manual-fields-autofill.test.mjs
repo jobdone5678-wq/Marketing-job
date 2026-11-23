@@ -20,9 +20,11 @@ function createTestSandbox() {
     },
     navigator: { userAgent: 'test' },
     console: console,
+    URL: URL,
   };
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
+  sandbox.URL = URL;
   vm.createContext(sandbox);
   vm.runInContext(bundleCode, sandbox);
   return sandbox;

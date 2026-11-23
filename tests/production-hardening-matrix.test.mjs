@@ -39,7 +39,8 @@ test('Production Hardening: Queue HTTP Response Matrix full coverage', async () 
     origin: 'https://www.nextkinhr.com',
     token: 'test-token',
   };
-  const sessionStorage = {};
+  const owner = { workspace: localStorage.origin, accountId: 'account-a' };
+  const sessionStorage = { origin: owner.workspace, accountId: owner.accountId, token: 'test-token' };
   const alarms = new Map();
   const notices = [];
   const actionBadges = [];
@@ -134,6 +135,7 @@ test('Production Hardening: Queue HTTP Response Matrix full coverage', async () 
 
   // 1.1: 200 OK -> dequeued and delivered
   await enqueueSubmission({
+    ...owner,
     id: 'sub-200',
     url: 'https://nextkinhr.com/api/test',
     token: 'valid-token',
@@ -146,6 +148,7 @@ test('Production Hardening: Queue HTTP Response Matrix full coverage', async () 
 
   // 1.2: 401 Unauthorized -> preserved in queue, syncStatus AUTH_REQUIRED, queue paused
   await enqueueSubmission({
+    ...owner,
     id: 'sub-401',
     url: 'https://nextkinhr.com/api/test',
     token: 'expired-token',
@@ -166,6 +169,7 @@ test('Production Hardening: Queue HTTP Response Matrix full coverage', async () 
 
   // 1.3: 403 Forbidden -> preserved in queue, syncStatus FORBIDDEN, user alerted
   await enqueueSubmission({
+    ...owner,
     id: 'sub-403',
     url: 'https://nextkinhr.com/api/test',
     token: 'bad-token',
@@ -181,6 +185,7 @@ test('Production Hardening: Queue HTTP Response Matrix full coverage', async () 
 
   // 1.4: 409 with duplicate / IDEMPOTENT_SUBMISSION_EXISTS -> dequeued as delivered
   await enqueueSubmission({
+    ...owner,
     id: 'sub-409-dup',
     url: 'https://nextkinhr.com/api/test',
     token: 'valid-token',
@@ -194,6 +199,7 @@ test('Production Hardening: Queue HTTP Response Matrix full coverage', async () 
 
   // 1.5: 409 with state conflict -> moved to conflict_submission_queue
   await enqueueSubmission({
+    ...owner,
     id: 'sub-409-conflict',
     url: 'https://nextkinhr.com/api/test',
     token: 'valid-token',
@@ -209,6 +215,7 @@ test('Production Hardening: Queue HTTP Response Matrix full coverage', async () 
 
   // 1.6: 422 Unprocessable Entity -> moved to submission_dead_letter_queue
   await enqueueSubmission({
+    ...owner,
     id: 'sub-422',
     url: 'https://nextkinhr.com/api/test',
     token: 'valid-token',
@@ -226,6 +233,7 @@ test('Production Hardening: Queue HTTP Response Matrix full coverage', async () 
 
   // 1.7: 429 Too Many Requests -> retry backoff scheduled
   await enqueueSubmission({
+    ...owner,
     id: 'sub-429',
     url: 'https://nextkinhr.com/api/test',
     token: 'valid-token',
@@ -242,6 +250,7 @@ test('Production Hardening: Queue HTTP Response Matrix full coverage', async () 
 
   // 1.8: 500 Internal Server Error -> retry backoff scheduled
   await enqueueSubmission({
+    ...owner,
     id: 'sub-500',
     url: 'https://nextkinhr.com/api/test',
     token: 'valid-token',
@@ -256,6 +265,7 @@ test('Production Hardening: Queue HTTP Response Matrix full coverage', async () 
 
   // 1.9: Network Error / timeout -> retry backoff scheduled
   await enqueueSubmission({
+    ...owner,
     id: 'sub-neterr',
     url: 'https://nextkinhr.com/api/test',
     token: 'valid-token',
@@ -270,6 +280,7 @@ test('Production Hardening: Queue HTTP Response Matrix full coverage', async () 
 
   // 1.10: 8th retry exhaustion -> moved to DLQ with MAX_RETRIES_EXCEEDED
   await enqueueSubmission({
+    ...owner,
     id: 'sub-exhausted',
     url: 'https://nextkinhr.com/api/test',
     token: 'valid-token',
