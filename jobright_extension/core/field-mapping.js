@@ -254,7 +254,7 @@
 
   const YES_OPTION = /^(yes|y|true|1|eligible|authorized|absolutely|of course|correct|affirmative)$/i;
   const NO_OPTION = /^(no|n|false|0|not eligible|not authorized|incorrect|never|negative)$/i;
-  const optionText = o => (typeof o === 'string' ? o : String(o?.label ?? o?.value ?? '')).trim();
+  const optionText = o => (typeof o === 'string' ? o : String(o?.label ?? o?.text ?? o?.textContent ?? o?.value ?? '')).trim();
 
   function normalizeBoolean(v) {
     if (typeof v === 'boolean') return v;

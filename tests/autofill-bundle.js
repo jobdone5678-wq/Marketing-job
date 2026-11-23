@@ -19,17 +19,23 @@
     ['first_name', /first[\s._-]*name|given[\s._-]*name|forename|fname/i],
     ['last_name', /last[\s._-]*name|family[\s._-]*name|surname|lname/i],
     ['full_name', /full[\s._-]*name|applicant[\s._-]*name|candidate[\s._-]*name|your[\s._-]*name|system\s*field\s*name/i],
+    ['date_of_birth', /\bdate[\s._-]*of[\s._-]*birth\b|\bbirth[\s._-]*date\b|\bbirthdate\b|\bdob\b/i],
+    ['citizenship_status', /\bcitizenship\b|\b(?:us|u\.?s\.?)\s*citizen\b|\bnationality\b/i],
+    ['needs_sponsorship', /visa\s*sponsorship|require\s*sponsorship|need\s*sponsorship|employer\s*sponsorship|immigration\s*sponsorship/i],
+    ['authorized_in_usa', /legally\s*authorized|authorized\s*to\s*work|right\s*to\s*work|work\s*eligibility/i],
+    ['visa_status', /visa[\s._-]*(?:status|type)|immigration[\s._-]*(?:status|category)|work[\s._-]*authorization[\s._-]*(?:status|type)/i],
+    // Authorization and sponsorship questions can mention an "employer"; do not
+    // treat that word as a request for the candidate's previous company name.
     ['current_employer', /current[\s._-]*(employer|company|organization|organisation)|employer|company[\s._-]*name|organization|organisation/i],
     ['current_title', /current[\s._-]*(job[\s._-]*)?title|job[\s._-]*title|headline|designation/i],
-    ['current_city', /\bcity\b|\btown\b|municipality|\blocation\b/i],
+    ['current_city', /\bcity\b|\btown\b|municipality/i],
+    ['current_location', /\blocation\b|current[\s._-]*residence|\bbased[\s._-]*in\b/i],
     ['current_state', /\bstate\b|province|\bregion\b/i],
     ['zip_code', /zip|postal/i],
     ['country', /country|nationality/i],
     ['full_address', /address|street/i],
     ['total_experience_years', /years?[\s._-]*of[\s._-]*experience|experience[\s._-]*years/i],
     ['primary_skills', /skills|technolog|stack|expertise|competenc/i],
-    ['authorized_in_usa', /legally\s*authorized|authorized\s*to\s*work|right\s*to\s*work/i],
-    ['needs_sponsorship', /visa\s*sponsorship|require\s*sponsorship/i],
     ['salary_expectation', /salary|compensation|expected\s*pay|desired\s*salary/i],
     ['highest_education', /highest[\s._-]*education|highest[\s._-]*degree|degree[\s._-]*level/i],
     ['gender', /\bgender\b|\bsex\b/i],
@@ -48,7 +54,7 @@
     el.getAttribute('name'), el.getAttribute('id'), el.getAttribute('placeholder'),
     el.getAttribute('aria-label'), el.getAttribute('data-testid'), el.getAttribute('data-test'),
     el.getAttribute('data-automation-id'), el.getAttribute('data-ui'), el.getAttribute('data-field-name'),
-    el.getAttribute('data-field-id'), el.getAttribute('title')
+    el.getAttribute('data-field-id'), el.getAttribute('title'), el.getAttribute('autocomplete')
   ].filter(Boolean).join(' '))
     .replace(/[_\-.]+/g, ' ')
     .replace(/\s+/g, ' ')
@@ -58,6 +64,14 @@
   // Best-effort canonical fact for any element, used as the base for every adapter.
   function canonicalHint(el) {
     if (!el || !el.getAttribute) return '';
+    // HTML autocomplete tokens describe the semantic field even on unknown
+    // company-hosted forms with generated input IDs.
+    const autocomplete = String(el.getAttribute('autocomplete') || '').toLowerCase().trim();
+    if (autocomplete.split(/\s+/).some(token => /^bday(?:-(?:day|month|year))?$/.test(token))) return 'date_of_birth';
+    if (autocomplete.split(/\s+/).includes('address-level2')) return 'current_city';
+    if (autocomplete.split(/\s+/).includes('address-level1')) return 'current_state';
+    if (autocomplete.split(/\s+/).includes('postal-code')) return 'zip_code';
+    if (autocomplete.split(/\s+/).includes('country-name')) return 'country';
     const desc = descriptor(el);
     if (!desc || NOT_PRIMARY.test(desc)) return '';
     for (const [key, re] of CANON_RULES) {
@@ -80,7 +94,7 @@
         const name = el.getAttribute('name') || '';
         if (name === '_systemfield_name') return 'full_name';
         if (name === '_systemfield_email') return 'email';
-        if (name === '_systemfield_location') return 'current_city';
+        if (name === '_systemfield_location') return 'current_location';
         if (name === '_systemfield_phone') return 'phone';
         if (/urls\[([^\]]+)\]/i.test(name)) {
           const key = RegExp.$1.toLowerCase();
@@ -105,7 +119,7 @@
         if (id === 'email' || name === 'email') return 'email';
         if (id === 'phone' || name === 'phone') return 'phone';
         if (id === 'country' || name === 'country') return 'country';
-        if (id === 'candidate-location' || /job_application\[location\]/i.test(name)) return 'current_city';
+        if (id === 'candidate-location' || /job_application\[location\]/i.test(name)) return 'current_location';
         if (id === 'gender' || name === 'gender') return 'gender';
         if (id === 'veteran_status' || /veteran/i.test(name)) return 'veteran';
         if (id === 'hispanic_ethnicity' || /hispanic/i.test(name)) return 'race';
@@ -126,7 +140,7 @@
         if (name === 'email') return 'email';
         if (name === 'phone') return 'phone';
         if (name === 'org') return 'current_employer';
-        if (name === 'location') return 'current_city';
+        if (name === 'location') return 'current_location';
         if (/urls\[linkedin\]/i.test(name)) return 'linkedin_url';
         if (/urls\[github\]/i.test(name)) return 'github_url';
         if (/urls\[portfolio\]|urls\[website\]|urls\[other\]/i.test(name)) return 'website';
@@ -149,11 +163,11 @@
         if (desc.includes('legalname_lastname') || desc.includes('legalnamesection_lastname')) return 'last_name';
         if (desc.includes('email') || desc.includes('emailaddress')) return 'email';
         if (desc.includes('phone') || desc.includes('phonenumber')) return 'phone';
-        if (desc.includes('addresssection_addressline1')) return 'full_address';
+        if (desc.includes('addresssection_addressline1') || desc.includes('addresssection_addressline2')) return 'full_address';
         if (desc.includes('addresssection_city')) return 'current_city';
-        if (desc.includes('addresssection_countryregion')) return 'current_state';
+        if (desc.includes('addresssection_countrysubdivisioncode') || desc.includes('countrysubdivision') || desc.includes('subdivision')) return 'current_state';
+        if (desc.includes('addresssection_countryregion') || desc.includes('countrydropdown') || desc.includes('addresssection_country')) return 'country';
         if (desc.includes('addresssection_postalcode')) return 'zip_code';
-        if (desc.includes('countrydropdown')) return 'country';
         if (desc.includes('sourceprompt') || desc.includes('source')) return 'how_heard';
         if (desc.includes('gender')) return 'gender';
         if (desc.includes('veteran')) return 'veteran';
@@ -1432,6 +1446,33 @@
     }
   }
 
+  const PRESERVED_JOB_PARAMS = new Set(['gh_jid', 'jobid', 'job_id', 'jk', 'requisition', 'req_id', 'id']);
+
+  function cleanApplicationUrl(url) {
+    if (!url) return '';
+    try {
+      const parsed = typeof url === 'string' ? new URL(url) : (url instanceof URL ? url : new URL(String(url)));
+      const clean = params => {
+        for (const name of [...params.keys()]) {
+          const lower = name.toLowerCase();
+          if (!PRESERVED_JOB_PARAMS.has(lower) || lower.startsWith('utm_') || ['ref', 'source', 'fbclid', 'gclid', 'trk'].includes(lower)) {
+            params.delete(name);
+          }
+        }
+        params.sort();
+      };
+      clean(parsed.searchParams);
+      const [route, query] = parsed.hash.slice(1).split(/\?(.*)/s, 2);
+      const SearchParams = parsed.searchParams.constructor || URLSearchParams;
+      const routeParams = new SearchParams(query);
+      clean(routeParams);
+      parsed.hash = /^!?\//.test(route) ? route + (routeParams.size ? '?' + routeParams.toString() : '') : '';
+      return parsed.href;
+    } catch {
+      return typeof url === 'string' ? url : (url?.href || String(url));
+    }
+  }
+
   function structuredPosting(root) {
     const postings = [];
     function visit(node) {
@@ -1585,7 +1626,42 @@
     };
   }
 
-  globalThis.NextkinJobCapture = { read: jobFromDom, kekaPosting };
+  function snapshotJobMetadata(root = document, pageUrl = location.href) {
+    const job = jobFromDom(root, pageUrl);
+    if (!job) return null;
+    const snapshot = {
+      jobTitle: job.title,
+      companyName: job.company,
+      jobLocation: job.location,
+      jobUrl: cleanApplicationUrl(job.jobUrl || pageUrl),
+      portalSource: job.portalSource || (typeof location !== 'undefined' ? location.hostname : ''),
+      externalId: job.externalId || null,
+      department: job.department || null,
+      employmentType: job.employmentType || null,
+    };
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: 'NEXTKIN_SET_JOB_SNAPSHOT',
+          payload: snapshot,
+        }).catch(() => {});
+      }
+    } catch {}
+    return snapshot;
+  }
+
+  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    document.addEventListener('click', (event) => {
+      const btn = event.target?.closest?.('button, input[type="submit"], [role="button"]');
+      if (!btn) return;
+      const txt = (btn.innerText || btn.value || '').trim();
+      if (/\b(?:submit|apply|send application|complete application)\b/i.test(txt)) {
+        snapshotJobMetadata();
+      }
+    }, true);
+  }
+
+  globalThis.NextkinJobCapture = { read: jobFromDom, kekaPosting, cleanApplicationUrl, snapshot: snapshotJobMetadata };
 })();
 
 
@@ -1609,9 +1685,10 @@
   // Facts an adapter hint may name outright. A hint is stronger evidence than the visible label.
   const CANONICAL_FACTS = new Set([
     'first_name', 'preferred_first_name', 'last_name', 'full_name', 'email', 'phone', 'current_city', 'current_state',
-    'current_location', 'zip_code', 'country', 'full_address', 'linkedin_url', 'github_url', 'website',
+    'current_location', 'zip_code', 'country', 'full_address', 'date_of_birth', 'citizenship_status', 'linkedin_url', 'github_url', 'website',
     'current_employer', 'current_title', 'total_experience_years', 'primary_skills',
     'authorized_in_usa', 'needs_sponsorship', 'open_to_relocation', 'visa_status', 'work_authorization',
+    'intended_work_country',
     'end_client', 'point_of_contact', 'pay_rate', 'vendor_email', 'personal_email', 'contract_type',
     'summary', 'bio', 'gender', 'race', 'veteran', 'veteran_status', 'disability', 'disability_status', 'availability', 'salary_expectation',
     'how_heard', 'highest_education', 'school', 'graduation_year', 'preferred_work_type', 'current_salary', 'e_signature', 'consent'
@@ -1619,7 +1696,7 @@
 
   // Consequential or voluntary disclosure fields that should be flagged for candidate review
   const CONSEQUENTIAL_FACTS = new Set([
-    'authorized_in_usa', 'needs_sponsorship', 'visa_status', 'work_authorization',
+    'authorized_in_usa', 'needs_sponsorship', 'visa_status', 'work_authorization', 'date_of_birth', 'citizenship_status',
     'gender', 'race', 'race_ethnicity', 'veteran', 'veteran_status', 'disability', 'disability_status'
   ]);
 
@@ -1635,12 +1712,25 @@
     e_signature: ['e signature', 'signature', 'sign here', 'certify by entering your name', 'by entering your name into the field below', 'typed signature', 'electronic signature'],
     email: ['email', 'email address', 'e mail', 'email id', 'work email', 'personal email', 'contact email', 'business email', 'primary email'],
     phone: ['phone', 'phone number', 'mobile', 'mobile phone', 'tel', 'cell phone', 'contact number', 'contact phone', 'telephone', 'telephone number', 'best phone number', 'primary phone', 'work phone', 'mobile number', 'phone or cell'],
-    current_city: ['city', 'current city', 'town', 'municipality', 'present city', 'where do you live', 'city of residence', 'address level2', 'where are you currently located'],
-    current_location: ['location', 'current location', 'present location', 'city and state', 'city state', 'city, state', 'city and country', 'city & state'],
+    current_city: ['city', 'current city', 'town', 'municipality', 'present city', 'where do you live', 'city of residence', 'address level2', 'which city do you live in', 'city you currently reside in'],
+    current_location: ['location', 'current location', 'present location', 'city and state', 'city state', 'city, state', 'city and country', 'city & state', 'where are you currently located', 'where are you based', 'where do you currently reside', 'current residence location', 'location of residence', 'your current location', 'based in', 'location city state'],
     current_state: ['state', 'province', 'region', 'current state', 'address level1', 'state province', 'state/province', 'which state', 'current state province', 'state of residence'],
     zip_code: ['zip', 'zip code', 'postal code', 'postcode', 'zip postal code', 'zipcode', 'postal code number'],
-    country: ['country', 'country name', 'country of residence', 'current country', 'which country', 'country region'],
+    country: ['country of residence', 'residence country', 'current country', 'country you live in', 'country', 'country name', 'country region', 'which country'],
+    intended_work_country: [
+      'which country do you intend to work from',
+      'country of employment',
+      'work location country',
+      'country where you will work',
+      'intended work location',
+      'employment country',
+      'country you intend to work from',
+      'intended employment country',
+      'intended work country'
+    ],
     full_address: ['street address', 'address line1', 'address line 1', 'address', 'street', 'address1', 'home address', 'mailing address', 'current address', 'address line one', 'street address line 1'],
+    date_of_birth: ['date of birth', 'birth date', 'birthdate', 'date of birth dob', 'dob', 'date of birth mm dd yyyy'],
+    citizenship_status: ['citizenship status', 'country of citizenship', 'nationality', 'are you a us citizen', 'are you a u s citizen', 'are you a united states citizen'],
     linkedin_url: ['linkedin', 'linkedin profile', 'linkedin url', 'urls linkedin', 'linkedin profile url', 'linked in'],
     github_url: ['github', 'github url', 'github profile', 'urls github', 'github com'],
     website: ['website', 'portfolio', 'personal website', 'portfolio url', 'urls portfolio', 'urls other', 'personal url', 'homepage', 'home page', 'personal site', 'other url', 'blog url'],
@@ -1683,14 +1773,30 @@
       'sponsorship required',
       'sponsorship for employment visa status',
       'need sponsorship now',
-      'need sponsorship future', 'sponsorship', 'needs sponsorship now', 'needs sponsorship in the future'
+      'need sponsorship future', 'sponsorship', 'needs sponsorship now', 'needs sponsorship in the future',
+      'will you need employer sponsorship', 'do you need employer sponsorship', 'require immigration sponsorship',
+      'require immigration support for employment', 'sponsorship to work', 'sponsorship to maintain employment authorization',
+      'will you require employment authorization sponsorship', 'need visa sponsorship in the future'
     ],
     visa_status: [
       'visa status', 'visa', 'current visa', 'work authorization status', 'current work authorization',
       'immigration status', 'work eligibility', 'work authorization type', 'visa type', 'employment authorization status',
-      'us work authorization', 'visa sponsorship status', 'work authorization'
+      'us work authorization', 'work authorization', 'immigration classification', 'current immigration category', 'current visa type', 'type of work permit'
     ],
-    open_to_relocation: ['willing to relocate', 'are you willing to relocate', 'open to relocation', 'willing to move', 'are you open to relocation', 'open to moving', 'willingness to relocate', 'relocation willingness'],
+    open_to_relocation: [
+      'are you open to relocation',
+      'are you willing to relocate',
+      'willing to relocate',
+      'relocation preference',
+      'open to relocate',
+      'would you consider relocating',
+      'open to relocation',
+      'willing to move',
+      'open to moving',
+      'willingness to relocate',
+      'relocation willingness',
+      'relocation'
+    ],
     end_client: ['end client', 'client', 'client company', 'client name', 'customer', 'customer company', 'end client company', 'client organization'],
     point_of_contact: ['point of contact', 'poc', 'contact person', 'client contact', 'hiring manager', 'recruiter contact', 'vendor contact'],
     pay_rate: ['pay rate', 'rate', 'hourly rate', 'salary', 'compensation', 'wage', 'hourly', 'bill rate', 'pay'],
@@ -1741,9 +1847,82 @@
     Boolean(el.closest('.react-datepicker-wrapper, [class*="datepicker" i], [class*="date-picker" i]'))
   );
 
+  const DOB_QUESTION = /\b(?:date\s*of\s*birth|birth\s*date|birthdate|d\.?\s*o\.?\s*b\.?|dob|birth\s*(?:day|month|year)|(?:day|month|year)\s*of\s*birth)\b/i;
+  const NON_DOB_QUESTION = /\b(?:place|city|country|state|certificate|name)\s*of\s*birth\b/i;
+  const isDOBQuestion = (label, hint = '', el = null) => {
+    const question = norm(`${label || ''} ${hint || ''}`);
+    const autocomplete = String(el?.getAttribute?.('autocomplete') || '').toLowerCase();
+    return (DOB_QUESTION.test(question) || /\bbday(?:-(?:day|month|year))?\b/.test(autocomplete)) &&
+      !NON_DOB_QUESTION.test(question);
+  };
+
+  const DOB_MONTHS = ['january', 'february', 'march', 'april', 'may', 'june',
+    'july', 'august', 'september', 'october', 'november', 'december'];
+
+  function dobPart(field) {
+    const autocomplete = String(field.element?.getAttribute?.('autocomplete') || '').toLowerCase();
+    const token = /\bbday-(day|month|year)\b/.exec(autocomplete);
+    if (token) return token[1];
+    const label = norm(`${field.label || ''} ${field.hint || ''}`);
+    // A full DOB label is not enough to decide which of three dropdowns this is.
+    const segment = /\b(day|month|year)\b/.exec(label);
+    if (!segment || !/\bbirth|\bdob\b/.test(label)) return null;
+    if (/\bdate of birth\b/.test(label) && !/\b(?:birth|dob) (?:day|month|year)\b|\b(?:day|month|year) of birth\b/.test(label)) return null;
+    return segment[1];
+  }
+
+  function dobSegmentValue(iso, part, field) {
+    const [year, month, day] = iso.split('-');
+    const value = part === 'day' ? day : part === 'month' ? month : year;
+    if (!isChoiceKind(field.kind)) return value;
+    const monthNumber = Number(month);
+    const acceptable = part === 'month' ? new Set([
+      String(monthNumber), month, DOB_MONTHS[monthNumber - 1], DOB_MONTHS[monthNumber - 1].slice(0, 3)
+    ]) : new Set([value, String(Number(value))]);
+    const matches = (field.options || []).filter(option => {
+      const label = norm(optionText(option));
+      const rawValue = norm(option?.value);
+      return acceptable.has(label) || acceptable.has(rawValue);
+    });
+    if (matches.length === 1) return optionText(matches[0]);
+    return field.kind === 'combobox' ? (part === 'month' ? DOB_MONTHS[monthNumber - 1] : value) : null;
+  }
+
+  // Avoid Date.parse(): it silently swaps day/month for ambiguous dates and can shift a
+  // birthday across time zones. The portal should persist the canonical YYYY-MM-DD form.
+  function normalizeDateOfBirth(value) {
+    const raw = String(value ?? '').trim();
+    let year, month, day;
+    let match = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(raw);
+    if (match) [, year, month, day] = match;
+    else {
+      match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(raw);
+      if (!match) return '';
+      [, month, day, year] = match; // Legacy US profile format only.
+    }
+    const y = Number(year), m = Number(month), d = Number(day);
+    const date = new Date(Date.UTC(y, m - 1, d));
+    const today = new Date();
+    if (y < 1900 || !Number.isFinite(date.getTime()) ||
+      date.getUTCFullYear() !== y || date.getUTCMonth() + 1 !== m || date.getUTCDate() !== d ||
+      date.getTime() > today.getTime()) return '';
+    return `${year.padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+
+  function formatDateOfBirth(iso, field) {
+    const el = field.element;
+    if (el?.type === 'date') return iso;
+    const [year, month, day] = iso.split('-');
+    const format = [field.placeholder, el?.getAttribute?.('placeholder'), el?.getAttribute?.('data-date-format'),
+      el?.getAttribute?.('aria-label')].filter(Boolean).join(' ').toLowerCase();
+    if (/dd[\s./-]*mm[\s./-]*yyyy|day[\s./-]*month[\s./-]*year/.test(format)) return `${day}/${month}/${year}`;
+    if (/mm[\s./-]*dd[\s./-]*yyyy|month[\s./-]*day[\s./-]*year/.test(format)) return `${month}/${day}/${year}`;
+    return iso; // Unspecified text format: use unambiguous ISO instead of guessing.
+  }
+
   const YES_OPTION = /^(yes|y|true|1|eligible|authorized|absolutely|of course|correct|affirmative)$/i;
   const NO_OPTION = /^(no|n|false|0|not eligible|not authorized|incorrect|never|negative)$/i;
-  const optionText = o => (typeof o === 'string' ? o : String(o?.label ?? o?.value ?? '')).trim();
+  const optionText = o => (typeof o === 'string' ? o : String(o?.label ?? o?.text ?? o?.textContent ?? o?.value ?? '')).trim();
 
   function normalizeBoolean(v) {
     if (typeof v === 'boolean') return v;
@@ -1789,11 +1968,36 @@
     return null;
   }
 
-  function pickOption(field, desired) {
+  function visaCategory(text) {
+    const value = norm(text);
+    if (/\b(?:united states|us|u s) citizen\b/.test(value)) return 'us_citizen';
+    if (/\b(?:green card|permanent resident|lawful permanent)\b/.test(value)) return 'permanent_resident';
+    if (/\bh\s*1\s*b\b/.test(value)) return 'h1b';
+    if (/\bstem\s*opt\b/.test(value)) return 'stem_opt';
+    if (/\bopt\b/.test(value)) return 'opt';
+    if (/\bf\s*1\b/.test(value)) return 'f1';
+    if (/\b(?:ead|employment authorization document)\b/.test(value)) return 'ead';
+    if (/\btn\b/.test(value)) return 'tn';
+    if (/\bj\s*1\b/.test(value)) return 'j1';
+    if (/\bo\s*1\b/.test(value)) return 'o1';
+    if (/\bl\s*1\b/.test(value)) return 'l1';
+    return '';
+  }
+
+  function pickOption(field, desired, factKey = '') {
     const d = norm(desired), opts = field.options || [];
     if (!d) return null;
     const exact = opts.filter(o => norm(optionText(o)) === d);
     if (exact.length) return exact.length === 1 ? exact[0] : null;
+    // OPT, STEM OPT, F-1 and employment visas are not interchangeable.
+    // Never fall back to a loose substring when a distinct visa category is known.
+    if (factKey === 'visa_status' || factKey === 'work_authorization') {
+      const category = visaCategory(desired);
+      if (category) {
+        const matches = opts.filter(o => visaCategory(optionText(o)) === category);
+        return matches.length === 1 ? matches[0] : null;
+      }
+    }
     const code = Object.hasOwn(US_STATES, d) ? US_STATES[d] : Object.keys(US_STATES).find(state => US_STATES[state] === d);
     const aliases = { 'united states': ['us', 'usa', 'united states of america'], 'full time': ['permanent', 'fulltime'], 'part time': ['parttime'] };
     const equivalent = Object.entries(aliases).find(([key, values]) => key === d || values.includes(d));
@@ -1894,11 +2098,14 @@
 
     // An explicit null means "not known"; an absent value keeps the portal default.
     const rawAuth = facts.authorized_in_usa !== undefined ? facts.authorized_in_usa : candidate.authorized_in_usa;
-    const authKnown = typeof rawAuth === 'boolean' ? rawAuth : null;
+    const authKnown = normalizeBoolean(rawAuth);
     const sponsorPrimary = facts.need_sponsorship_now !== undefined ? facts.need_sponsorship_now : candidate.need_sponsorship_now;
     const sponsorFuture = facts.need_sponsorship_future !== undefined ? facts.need_sponsorship_future : candidate.need_sponsorship_future;
-    const sponsorKnown = sponsorPrimary === true || sponsorFuture === true ? true
-      : sponsorPrimary === false && sponsorFuture === false ? false : null;
+    const nowSponsor = normalizeBoolean(sponsorPrimary);
+    const futureSponsor = normalizeBoolean(sponsorFuture);
+    const directSponsor = normalizeBoolean(facts.needs_sponsorship ?? candidate.needs_sponsorship);
+    const sponsorKnown = nowSponsor === true || futureSponsor === true ? true
+      : nowSponsor === false && futureSponsor === false ? false : directSponsor;
     const skills = facts.primary_skills || candidate.primary_skills || (Array.isArray(candidate.skills) ? candidate.skills.join(', ') : candidate.skills || '');
 
     const rawPhone = String(facts.phone || candidate.phone || '').trim();
@@ -1918,9 +2125,35 @@
     const visaStatus = facts.visa_status || candidate.visa_status || facts.work_authorization || candidate.work_authorization || candFacts.visa_status || candFacts.work_authorization || '';
     const workAuth = facts.work_authorization || candidate.work_authorization || facts.visa_status || candidate.visa_status || candFacts.work_authorization || candFacts.visa_status || '';
     const linkedin = facts.linkedin_url || candidate.linkedin_url || candFacts.linkedin_url || '';
-    const city = facts.current_city || candidate.current_city || candFacts.current_city || candidate.city || '';
-    const state = facts.current_state || candidate.current_state || candFacts.current_state || candidate.state || '';
-    const loc = facts.location || candidate.location || candFacts.location || [city, state].filter(Boolean).join(', ') || facts.full_address || candidate.full_address || candFacts.full_address || facts.preferred_locations || candidate.preferred_locations || '';
+    const sourceLocation = facts.current_location || facts.location || candidate.current_location || candidate.location ||
+      candFacts.current_location || candFacts.location || '';
+    const locationParts = String(sourceLocation).split(',').map(part => part.trim()).filter(Boolean);
+    const city = facts.current_city || candidate.current_city || candFacts.current_city || facts.city || candidate.city ||
+      (locationParts.length >= 2 ? locationParts[0] : '');
+    const state = facts.current_state || candidate.current_state || candFacts.current_state || facts.state || candidate.state ||
+      (locationParts.length >= 2 ? locationParts[1] : '');
+    const loc = sourceLocation || [city, state].filter(Boolean).join(', ') ||
+      facts.full_address || candidate.full_address || candFacts.full_address || '';
+    const dateOfBirth = normalizeDateOfBirth(facts.date_of_birth || facts.dob || facts.birth_date ||
+      candidate.date_of_birth || candidate.dob || candidate.birth_date || candFacts.date_of_birth || candFacts.dob);
+
+    const rawZip = String(facts.zip_code || facts.postal_code || facts.zip || candidate.zip_code || candidate.zip || candidate.postal_code || candFacts.zip_code || candFacts.postal_code || '').trim();
+    const cleanZip = (rawZip.includes(',') || /\b[a-zA-Z]{3,}\b/.test(rawZip)) ? '' : rawZip;
+
+    const rawRelocation = facts.open_to_relocation ?? candidate.open_to_relocation ?? candFacts.open_to_relocation
+      ?? facts.relocation_preference ?? candidate.relocation_preference ?? candFacts.relocation_preference
+      ?? facts.willing_to_relocate ?? candidate.willing_to_relocate ?? candFacts.willing_to_relocate;
+    let relocationVal = '';
+    const relocationBool = normalizeBoolean(rawRelocation);
+    if (relocationBool !== null) {
+      relocationVal = relocationBool;
+    } else if (typeof rawRelocation === 'string' && rawRelocation.trim()) {
+      relocationVal = rawRelocation.trim();
+    }
+
+    const intendedCountry = facts.intended_work_country || candidate.intended_work_country || candFacts.intended_work_country ||
+      facts.employment_country || candidate.employment_country || candFacts.employment_country ||
+      facts.work_location_country || candidate.work_location_country || candFacts.work_location_country || '';
 
     return {
       ...facts,
@@ -1935,9 +2168,12 @@
       current_state: state,
       current_location: loc,
       location: loc,
-      zip_code: facts.zip_code || candidate.zip_code || candidate.zip || candidate.postal_code || '',
-      country: facts.country ?? candidate.country ?? '',
+      zip_code: cleanZip,
+      country: facts.country ?? candidate.country ?? candFacts.country ?? (locationParts.length >= 3 ? locationParts[2] : ''),
+      intended_work_country: intendedCountry,
       full_address: facts.full_address || candidate.full_address || candidate.address || candidate.street_address || '',
+      date_of_birth: dateOfBirth,
+      citizenship_status: facts.citizenship_status || candidate.citizenship_status || facts.citizenship || candidate.citizenship || '',
       current_employer: facts.current_employer || candidate.current_employer || facts.current_company || candidate.current_company || candidate.company || '',
       current_title: facts.current_job_title || candidate.current_job_title || candidate.headline || '',
       linkedin_url: linkedin,
@@ -1951,7 +2187,7 @@
       needs_sponsorship: sponsorKnown,
       visa_status: visaStatus,
       work_authorization: workAuth,
-      open_to_relocation: typeof (facts.open_to_relocation ?? candidate.open_to_relocation) === 'boolean' ? (facts.open_to_relocation ?? candidate.open_to_relocation) : '',
+      open_to_relocation: relocationVal,
       end_client: facts.end_client || candidate.end_client || '',
       point_of_contact: facts.point_of_contact || candidate.point_of_contact || '',
       pay_rate: facts.pay_rate || candidate.pay_rate || '',
@@ -1977,7 +2213,7 @@
       employment_history: candidate.employment_history || [],
       education_history: candidate.education_history || [],
       known_authorization: rawAuth !== undefined,
-      known_sponsorship: sponsorPrimary !== undefined || sponsorFuture !== undefined
+      known_sponsorship: sponsorPrimary !== undefined || sponsorFuture !== undefined || directSponsor !== null
     };
   }
 
@@ -1995,8 +2231,16 @@
       if (canonical) return { key: canonical, exact: true, length: nh.length };
     }
 
+    if (isDOBQuestion(label, hint)) return { key: 'date_of_birth', exact: true, length: 13 };
+    if (/\b(?:citizen|citizenship|nationality)\b/i.test(label) && !/\bsponsor/i.test(label)) {
+      return { key: 'citizenship_status', exact: true, length: 11 };
+    }
+
     const nl = norm(label);
     if (nl === 'name') return { key: 'full_name', exact: true, length: 4 };
+    if (/\bcountry code\b/i.test(nl) && /\b(?:number|phone|mobile|tel)\b/i.test(nl)) {
+      return { key: 'phone', exact: true, length: nl.length };
+    }
 
     const matches = [];
     for (const key of Object.keys(aliases)) {
@@ -2050,13 +2294,28 @@
       if (field.kind !== 'checkbox' && /\b(confirm\s*email|confirm\s*password|confirmation|re-?enter|retype|repeat|verification|verify)\b/i.test(nl + ' ' + nh)) {
         return { field, status: 'manual', reason: 'Confirmation field requires the candidate.' };
       }
-      // Date pickers / availability dates
-      if (field.kind === 'text' && (isDateInput(field.element) || /\b(start date|availability date|when can you start|earliest start date)\b/i.test(nl) || field.placeholder === 'Pick date...')) {
+      // Date of birth is explicit, sensitive information: use only a supplied,
+      // validated DOB. Never infer it from age, resume dates or availability.
+      if (isDOBQuestion(field.label, field.hint, field.element)) {
+        const iso = values.date_of_birth;
+        if (!iso) return { field, factKey: 'date_of_birth', status: 'unknown', reason: 'Enter your DOB in NextKinHR or the side panel.' };
+        const part = dobPart(field);
+        if (field.kind !== 'text' && !part) return { field, factKey: 'date_of_birth', status: 'needs_review', reason: 'Unsupported DOB control; review manually.' };
+        const value = part ? dobSegmentValue(iso, part, field) : formatDateOfBirth(iso, field);
+        if (!value) return { field, factKey: 'date_of_birth', status: 'needs_review', reason: 'DOB dropdown has no unambiguous option.' };
+        return { field, factKey: 'date_of_birth', value, status: 'supported',
+          consequential: true, exactMatch: true, reason: 'Candidate-provided date of birth.' };
+      }
+      // A generic date input is not necessarily an availability question.
+      if (field.kind === 'text' && /\b(start date|availability date|when can you start|earliest start date|available to start)\b/i.test(nl + ' ' + nh)) {
         const avail = values.availability || candidate.availability || candidate.available_to_join;
         if (avail) {
           return { field, factKey: 'availability', value: String(avail), status: 'supported', reason: 'Candidate availability.' };
         }
         return { field, factKey: 'availability', status: 'unknown', reason: 'Candidate availability not provided.' };
+      }
+      if (field.kind === 'text' && isDateInput(field.element) && !resolveFact(field.label, field.hint)) {
+        return { field, status: 'needs_review', reason: 'Unrecognized date field; do not substitute availability.' };
       }
       // Legal acknowledgements and signatures:
       if (field.kind === 'checkbox' && /\b(agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare|confirm|read the above|understand)\b/i.test(nl)) {
@@ -2086,17 +2345,114 @@
       if (factKey === 'e_signature') {
         return { field, factKey, status: 'manual', reason: 'Candidate signature is required.' };
       }
+      // A work permit is not citizenship. Never answer a citizenship yes/no
+      // question from authorized_in_usa or from an inferred visa category.
+      if (factKey === 'citizenship_status' && isChoiceKind(field.kind) &&
+        pickBooleanOption(field.options, true) && pickBooleanOption(field.options, false)) {
+        return { field, factKey, status: 'needs_review', reason: 'Citizenship requires an explicit yes/no answer.' };
+      }
       // A known United States authorization must not answer a question about an unrelated foreign country.
       if (factKey === 'authorized_in_usa' && !isUSQuestion(nl) && !/^(?:are you (?:legally )?authorized to work|legally authorized|work authorization|authorized to work|authorized in usa)$/.test(nl || nh)) {
         return { field, factKey, status: 'unknown', reason: 'Question is not about United States work authorization.' };
       }
 
       let val = values[factKey];
+
+      // Phone formatting for international / country code prompts
+      if (factKey === 'phone' && val) {
+        const question = nl + ' ' + nh + ' ' + norm(field.placeholder);
+        if (/\b(?:\+country code|country code|\+1|international)\b/i.test(question) || /^\s*\+\s*/.test(field.placeholder || '')) {
+          const rawDigits = String(val).replace(/\D/g, '');
+          if (rawDigits.length === 10) {
+            val = '+1' + rawDigits;
+          } else if (rawDigits.length === 11 && rawDigits.startsWith('1')) {
+            val = '+' + rawDigits;
+          } else if (String(val).startsWith('+')) {
+            val = String(val);
+          } else {
+            val = '+' + rawDigits;
+          }
+        }
+      }
+
+      // Zip / Postal code validation: reject city/state pollution
+      if (factKey === 'zip_code') {
+        const strVal = String(val || '').trim();
+        const hasCityState = strVal.includes(',') || /\b[a-zA-Z]{3,}\b/.test(strVal);
+        const validPostal = /^\d{5}(?:-\d{4})?$/.test(strVal) || (!hasCityState && /^[A-Z0-9\s-]{3,10}$/i.test(strVal));
+        if (hasCityState || !validPostal || !strVal) {
+          return { field, factKey, status: 'needs_review', reason: 'Postal code contains invalid city/state or malformed value.' };
+        }
+        val = strVal;
+      }
+
+      // Intended work country requires distinct confirmation
+      if (factKey === 'intended_work_country') {
+        if (!val) {
+          return { field, factKey, status: 'needs_review', reason: 'Intended country of work requires candidate confirmation.' };
+        }
+      }
+
+      // Open to relocation preference handling
+      if (factKey === 'open_to_relocation') {
+        if (typeof val === 'string') {
+          const normStr = norm(val);
+          if (normStr === 'remote only') {
+            const opt = field.options?.find(o => norm(optionText(o)).includes('remote only') || norm(o.value).includes('remote only'));
+            if (opt) {
+              return { field, factKey, value: optionText(opt), status: 'supported', exactMatch: resolved.exact, matchLength: resolved.length, reason: 'Candidate preference matched option.' };
+            }
+            val = false;
+          } else {
+            const bool = normalizeBoolean(val);
+            if (bool !== null) {
+              val = bool;
+            }
+          }
+        }
+      }
+
+      // Sponsorship truth table
       if (factKey === 'needs_sponsorship') {
         const question = nl + ' ' + nh;
-        const now = /\b(?:now|currently|current)\b/.test(question);
-        const future = /\bfuture\b/.test(question);
-        if (now !== future) val = (candidate.confirmed_facts || candidate)[now ? 'need_sponsorship_now' : 'need_sponsorship_future'];
+        const asksNow = /\b(?:now|currently|current)\b/.test(question);
+        const asksFuture = /\bfuture\b/.test(question);
+
+        if (asksNow && !asksFuture) {
+          const specific = (candidate.confirmed_facts || candidate).need_sponsorship_now ?? candidate.need_sponsorship_now;
+          val = normalizeBoolean(specific);
+          if (val === null) {
+            return { field, factKey, status: 'needs_review', reason: 'Sponsorship now requires candidate review.' };
+          }
+        } else if (!asksNow && asksFuture) {
+          const specific = (candidate.confirmed_facts || candidate).need_sponsorship_future ?? candidate.need_sponsorship_future;
+          val = normalizeBoolean(specific);
+          if (val === null) {
+            return { field, factKey, status: 'needs_review', reason: 'Future sponsorship requires candidate review.' };
+          }
+        } else {
+          const rawNow = (candidate.confirmed_facts || candidate).need_sponsorship_now ?? candidate.need_sponsorship_now;
+          const rawFuture = (candidate.confirmed_facts || candidate).need_sponsorship_future ?? candidate.need_sponsorship_future;
+          const bNow = normalizeBoolean(rawNow);
+          const bFuture = normalizeBoolean(rawFuture);
+          const directSponsor = normalizeBoolean((candidate.confirmed_facts || candidate).needs_sponsorship ?? candidate.needs_sponsorship);
+
+          if (bNow === true || bFuture === true) {
+            val = true;
+          } else if (bNow === false && bFuture === false) {
+            val = false;
+          } else if (bNow === false && bFuture === null) {
+            return { field, factKey, status: 'needs_review', reason: 'Future sponsorship is unknown; candidate review required.' };
+          } else if (bNow === null && bFuture === false) {
+            return { field, factKey, status: 'needs_review', reason: 'Current sponsorship is unknown; candidate review required.' };
+          } else if (bNow === null && bFuture === null) {
+            if (directSponsor === true) {
+              val = true;
+            } else {
+              return { field, factKey, status: 'needs_review', reason: 'Sponsorship status is unknown; candidate review required.' };
+            }
+          }
+        }
       }
       if (val === null || val === undefined || val === '') {
         return { field, status: 'unknown', factKey, reason: 'Candidate fact is missing.' };
@@ -2128,7 +2484,7 @@
         if (typeof val === 'boolean') return { field, factKey, status: 'needs_review' };
         const entries = Array.isArray(val) ? val : String(val).split(/[,;|\n]+/);
         if (field.kind === 'multi-combobox') return { field, factKey, value: entries.map(String).map(value => value.trim()).filter(Boolean).slice(0, 20), status: 'supported' };
-        const choices = entries.map(entry => pickOption(field, entry)).filter(Boolean).map(optionText);
+        const choices = entries.map(entry => pickOption(field, entry, factKey)).filter(Boolean).map(optionText);
         return { field, factKey, value: choices, status: choices.length ? 'supported' : 'needs_review' };
       }
       if (field.kind === 'checkbox') return { field, factKey, status: 'needs_review' };
@@ -2175,7 +2531,7 @@
       const reviewRequired = isConsequential && (options?.requireCandidateReview || candidate?.requireCandidateReview);
 
       if (isChoiceKind(field.kind)) {
-        const opt = pickOption(field, val);
+        const opt = pickOption(field, val, factKey);
         if (opt) {
           return {
             field,
@@ -2187,6 +2543,10 @@
             matchLength: resolved.length,
             reason: reviewRequired ? 'Consequential disclosure left for candidate review.' : 'Profile fact matched an option.',
           };
+        }
+        if (['visa_status', 'work_authorization', 'citizenship_status', 'date_of_birth'].includes(factKey)) {
+          return { field, factKey, status: 'needs_review', consequential: true,
+            reason: 'No unambiguous matching option for this sensitive profile fact.' };
         }
         return aiPlan(field, 'Choose the best option for this profile fact.');
       }
@@ -2224,7 +2584,41 @@
     return plans;
   }
 
-  root.NextkinFieldMapping = { planFill, resolveFact, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS, CONSEQUENTIAL_FACTS };
+  function isCompanySpecificQuestion(question, companyName) {
+    const text = String(question || '').toLowerCase();
+    const tokens = [
+      'this role',
+      'this job',
+      'this position',
+      'our company',
+      'this company',
+      'why do you want to work',
+      'why join',
+      'why are you interested',
+      'why should we hire you',
+      'what excites you about'
+    ];
+    if (companyName && companyName.trim() && text.includes(companyName.toLowerCase().trim())) {
+      return true;
+    }
+    return tokens.some((t) => text.includes(t));
+  }
+
+  function computeCacheKey(question, companyName, jobTitle) {
+    const normKey = String(question || '')
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (isCompanySpecificQuestion(question, companyName)) {
+      if (!companyName || !companyName.trim()) return null; // Skip caching if company is unresolved
+      return `${normKey}|${companyName.toLowerCase().trim()}|${(jobTitle || '').toLowerCase().trim()}`;
+    }
+    return normKey; // Factual question cached globally
+  }
+
+  root.NextkinFieldMapping = { planFill, resolveFact, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS, CONSEQUENTIAL_FACTS, isCompanySpecificQuestion, computeCacheKey };
 })(globalThis);
 
 
@@ -2296,7 +2690,9 @@
   const selected = el => (el.tagName === 'INPUT' && (el.type === 'radio' || el.type === 'checkbox') ? checked(el) : (
     checked(el) || el.getAttribute('aria-selected') === 'true' ||
     el.getAttribute('aria-pressed') === 'true' || el.getAttribute('data-selected') === 'true' ||
-    el.getAttribute('data-state') === 'checked' || (el.matches && el.matches('.active, .selected, .is-selected'))
+    el.getAttribute('data-state') === 'checked' || el.getAttribute('data-state') === 'on' ||
+    el.getAttribute('data-state') === 'active' || el.getAttribute('data-active') === 'true' ||
+    (el.matches && el.matches('.active, .selected, .is-selected'))
   ));
 
   const YES_REGEX = /^(yes|y|true|1|eligible|authorized|absolutely|of course|correct|affirmative|immediately|available)$/i;
@@ -2472,7 +2868,12 @@
     const target = findClickableTarget(el) || el;
     if (el.tagName !== 'INPUT') {
       if (selected(el)) return true;
-      try { return click(target); } catch { return false; }
+      try {
+        const ok = click(target);
+        notify(el);
+        if (target !== el) notify(target);
+        return ok;
+      } catch { return false; }
     }
 
     // Dispatch PointerEvent and Click on target
@@ -2574,7 +2975,7 @@
       case 'select': {
         if (el?.tagName === 'SELECT' && typeof el.selectedIndex === 'number' && el.selectedIndex >= 0 && el.options?.[el.selectedIndex]) {
           const opt = el.options[el.selectedIndex];
-          const lbl = opt.text?.trim() || opt.label?.trim() || opt.value?.trim() || '';
+          const lbl = (opt.text || opt.textContent || opt.label || opt.value || '').trim();
           if (!placeholder.test(lbl)) return lbl;
         }
         return (field.options || []).find(option => option?.element?.selected && !placeholder.test(option.label))?.label || (el?.value?.trim() || '');
@@ -2882,11 +3283,11 @@
     const doc = field.element.ownerDocument || globalThis.document;
     if (!doc || typeof doc.querySelector !== 'function') return field.element;
 
-    // 1. Try to find connected element by id
+    // 1. Try to find connected element by id using attribute selector
     if (field.element.id) {
       if (typeof doc.querySelectorAll === 'function') {
         try {
-          const candidates = doc.querySelectorAll('#' + safeCssEscape(field.element.id) + ', [id="' + safeCssEscape(field.element.id) + '"]');
+          const candidates = doc.querySelectorAll(`[id="${safeCssEscape(field.element.id)}"]`);
           const byId = Array.from(candidates).find(el => el.isConnected);
           if (byId) {
             field.element = byId;
@@ -3002,14 +3403,14 @@
       ensureConnectedElement(field);
       const cur = field.element;
       if (!cur || !cur.isConnected) return false;
-      const isDisabled = cur.disabled || (typeof cur.getAttribute === 'function' && (cur.getAttribute('aria-disabled') === 'true' || cur.hasAttribute('disabled')));
+      const isDisabled = cur.disabled || (typeof cur.getAttribute === 'function' && (cur.getAttribute('aria-disabled') === 'true' || (typeof cur.hasAttribute === 'function' && cur.hasAttribute('disabled'))));
       if (isDisabled) return false;
       const isBusy = typeof cur.getAttribute === 'function' && (cur.getAttribute('aria-busy') === 'true' || cur.closest?.('[aria-busy="true"]'));
       if (isBusy) return false;
 
       if (isSelect) {
-        const validOpts = Array.from(cur.options || []).filter(o => o.value && !placeholder.test(o.label || o.text || ''));
-        if (field.options?.length && !validOpts.length) return false;
+        const validOpts = Array.from(cur.options || []).filter(o => o.value && !placeholder.test(o.label || o.text || o.textContent || ''));
+        if (!validOpts.length && cur.options && cur.options.length <= 1) return false;
       }
       return true;
     };
@@ -3045,7 +3446,7 @@
           if (isSelect && field.element.options) {
             field.options = Array.from(field.element.options).map(opt => ({
               element: opt,
-              label: opt.text?.trim() || opt.label?.trim() || opt.value?.trim(),
+              label: (opt.text || opt.textContent || opt.label || opt.value || '').trim(),
               value: opt.value?.trim()
             }));
           }
@@ -3130,6 +3531,53 @@
     });
   }
 
+  async function attachResumeFile(fileInput, candidateId) {
+    if (!fileInput || fileInput.type !== 'file') return null;
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return null;
+
+    const res = await new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        { type: 'NEXTKIN_FETCH_RESUME_FILE', candidateId },
+        (response) => {
+          if (chrome.runtime?.lastError) {
+            resolve({ error: chrome.runtime.lastError.message });
+          } else {
+            resolve(response || { error: 'No response' });
+          }
+        }
+      );
+    });
+
+    if (!res || res.error || !res.base64) {
+      return null;
+    }
+
+    try {
+      const binaryStr = atob(res.base64);
+      const len = binaryStr.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+
+      const filename = res.filename || 'Resume.pdf';
+      const mimeType = res.mimeType || 'application/pdf';
+      const file = new File([bytes], filename, { type: mimeType, lastModified: Date.now() });
+
+      if (typeof DataTransfer !== 'undefined') {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        fileInput.files = dt.files;
+        fileInput.dispatchEvent(new Event('input', { bubbles: true }));
+        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+        return { expected: filename, file };
+      }
+    } catch (err) {
+      console.warn('[NextKin] Failed to attach resume file:', err);
+    }
+    return null;
+  }
+
   async function applyFill(plans, session) {
     const receipts = [];
     for (const plan of plans) {
@@ -3160,6 +3608,13 @@
         if (equals(previous, option?.label ?? value)) write = { expected: previous };
       } else if (hasAnswer && isProfileFact && equals(previous, value)) {
         write = { expected: previous };
+      } else if (field.kind === 'resume-file') {
+        const attachRes = await attachResumeFile(currentEl);
+        if (attachRes) {
+          write = { expected: attachRes.expected };
+          receipts.push({ field, writtenValue: attachRes.expected });
+        }
+        continue;
       } else if (field.kind === 'combobox') {
         write = await fillCombo(field, value, session.isCurrent);
       } else if (field.kind === 'multi-combobox') {
@@ -3198,12 +3653,14 @@
 
   root.NextkinFieldWriter = {
     applyFill,
+    attachResumeFile,
     read,
     readChoices,
     setCheckbox,
     setRadio,
     setChoice,
     fillCombo,
+    fillCombobox: fillCombo,
     recordPreservedValues,
     getPreservedValue,
     clearPreservedValues,
@@ -3241,6 +3698,47 @@
       .replace(/[*:]+$/, '')
       .replace(/\s*\(\s*(required|optional)\s*\)\s*$/i, '')
       .trim();
+  }
+
+  function querySelectorAllDeep(selector, rootNode = document) {
+    const results = [];
+    function search(node) {
+      if (!node) return;
+      if (node.querySelectorAll) {
+        try {
+          const matches = node.querySelectorAll(selector);
+          for (let i = 0; i < matches.length; i++) {
+            results.push(matches[i]);
+          }
+        } catch {}
+      }
+      const children = node.querySelectorAll ? node.querySelectorAll('*') : [];
+      for (let i = 0; i < children.length; i++) {
+        if (children[i].shadowRoot && children[i].id !== 'mp-copilot-root' && children[i].id !== 'nextkin-floating-widget-root') {
+          search(children[i].shadowRoot);
+        }
+      }
+    }
+    search(rootNode);
+    return results;
+  }
+
+  function isResumeInput(el, text = '') {
+    if (!el || el.tagName !== 'INPUT' || el.type !== 'file') return false;
+    const combined = [
+      text,
+      el.name || '',
+      el.id || '',
+      el.getAttribute('aria-label') || '',
+      el.getAttribute('placeholder') || '',
+      el.getAttribute('accept') || '',
+      el.closest('.application-question, [class*="question"], fieldset, [class*="field"]')?.textContent || '',
+    ].join(' ').toLowerCase();
+    const resumeRegex = /resume|cv|curriculum[\s_-]*vitae/i;
+    if (/cover[\s_-]*letter|portfolio|transcript/i.test(combined) && !resumeRegex.test(combined)) {
+      return false;
+    }
+    return resumeRegex.test(combined);
   }
 
   function labelText(node) {
@@ -3407,10 +3905,13 @@
         }
         const role = el.getAttribute('role');
         const isCheck = el.matches(CHECK_SELECTOR);
-        if (['hidden', 'file', 'password', 'submit', 'reset', 'button'].includes(el.type) && role !== 'combobox' && !isCheck && el.getAttribute('aria-haspopup') !== 'listbox') continue;
+        const text = label(el), hint = adapter?.hint(el) || '';
+        const isFile = el.tagName === 'INPUT' && el.type === 'file';
+        const isResume = isFile && isResumeInput(el, text);
+        if (['hidden', 'password', 'submit', 'reset', 'button'].includes(el.type) && role !== 'combobox' && !isCheck && el.getAttribute('aria-haspopup') !== 'listbox') continue;
+        if (isFile && !isResume) continue;
         // A yes/no group owns the hidden box behind its buttons.
         if (el.type === 'checkbox' && el.closest('.ashby-application-form-input-yesno, [class*="yesno" i], [class*="yes-no" i], [data-option]')) continue;
-        const text = label(el), hint = adapter?.hint(el) || '';
         const group = el.closest(HISTORY_SELECTOR);
         const groupLabel = group?.querySelector('legend')?.textContent?.trim() || group?.getAttribute('data-automation-id') || '';
         const isCombo = el.tagName !== 'SELECT' && el.matches(COMBO_SELECTOR);
@@ -3419,7 +3920,8 @@
         const isEditable = el.getAttribute('contenteditable') === '' || el.getAttribute('contenteditable') === 'true';
         const controlledList = isCombo && el.getRootNode().getElementById?.(el.getAttribute('aria-controls'));
         const multiCombo = isCombo && (el.matches(multiComboSelector) || controlledList?.matches(multiComboSelector));
-        const kind = isCombo ? (multiCombo ? 'multi-combobox' : 'combobox')
+        const kind = isResume ? 'resume-file'
+          : isCombo ? (multiCombo ? 'multi-combobox' : 'combobox')
           : el.tagName === 'SELECT' ? (el.multiple ? 'multi-select' : 'select') : el.type === 'radio' ? 'radio' : isCheck ? 'checkbox' : 'text';
         let elements = [el];
         if (kind === 'radio') {
@@ -3569,7 +4071,17 @@
     };
   }
 
-  root.NextkinForms = { discoverFields, label, findStepNavigation, isStepNavigation, detectNewFields, observeStepTransitions };
+  root.NextkinForms = {
+    discoverFields,
+    label,
+    findStepNavigation,
+    isStepNavigation,
+    detectNewFields,
+    observeStepTransitions,
+    querySelectorAllDeep,
+    isResumeInput,
+    discoverUniversal: discoverFields,
+  };
 })(globalThis);
 
 
@@ -4394,6 +4906,9 @@
       const key = answerKey(field);
 
       if (plan.status === 'ai' || plan.status === 'needs_review' || plan.status === 'unknown') {
+        // Missing DOB, citizenship and work-authorization facts must not be
+        // guessed from a resume or replaced with an unrelated generic answer.
+        if (['date_of_birth', 'citizenship_status', 'authorized_in_usa', 'needs_sponsorship', 'visa_status', 'work_authorization'].includes(plan.factKey)) continue;
         if (label.length < 2 || key.length > 300 || manualQuestion.test(label) || writer.read(field)) continue;
         const choices = plan.options?.length ? plan.options : (await writer.readChoices(field, () => location.href === expectedUrl))
           .map(option => option.label);
@@ -4427,22 +4942,26 @@
 
         if (mapping.isChoiceKind(field.kind)) {
           const targetVisa = values.visa_status || candidate.visa_status || values.work_authorization || candidate.work_authorization || '';
-          if (/(visa status|immigration status|work authorization status|work authorization type|type of visa)/i.test(ql) || (/(authoriz|visa)/i.test(ql) && options.some(o => /citizen|green card|permanent|h-?1b|opt|stem|f-?1|ead|sponsor/i.test(o)))) {
+          if (!/sponsor|citizenship|citizen\?/i.test(ql) &&
+            (/(visa status|immigration status|work authorization status|work authorization type|type of visa)/i.test(ql) ||
+              (/(authoriz|visa)/i.test(ql) && options.some(o => /citizen|green card|permanent|h-?1b|opt|stem|f-?1|ead/i.test(o))))) {
             if (targetVisa) {
               const tvNorm = targetVisa.toLowerCase();
-              autoValue = options.find(o => {
+              const matches = options.filter(o => {
                 const ot = String(o).toLowerCase();
-                if (tvNorm.includes('citizen') && ot.includes('citizen')) return true;
-                if ((tvNorm.includes('green card') || tvNorm.includes('permanent')) && (ot.includes('green card') || ot.includes('permanent'))) return true;
-                if ((tvNorm.includes('h-1b') || tvNorm.includes('h1b')) && (ot.includes('h-1b') || ot.includes('h1b'))) return true;
-                if ((tvNorm.includes('opt') || tvNorm.includes('stem') || tvNorm.includes('f-1')) && (ot.includes('opt') || ot.includes('stem') || ot.includes('f-1') || ot.includes('ead'))) return true;
-                if (tvNorm.includes('tn') && ot.includes('tn')) return true;
-                if (tvNorm.includes('sponsor') && ot.includes('sponsor')) return true;
-                return ot.includes(tvNorm) || tvNorm.includes(ot);
-              }) || options.find(o => new RegExp(`^${targetVisa}\\b`, 'i').test(o)) || targetVisa;
-              fromFact = true;
+                if (/stem\s*opt/i.test(tvNorm)) return /stem\s*opt/i.test(ot);
+                if (/\bopt\b/i.test(tvNorm)) return /\bopt\b/i.test(ot) && !/stem/i.test(ot);
+                if (/h-?1b/i.test(tvNorm)) return /h-?1b/i.test(ot);
+                if (/f-?1\b/i.test(tvNorm)) return /f-?1\b/i.test(ot) && !/opt|stem/i.test(ot);
+                if (/green card|permanent resident/i.test(tvNorm)) return /green card|permanent resident/i.test(ot);
+                return ot.trim() === tvNorm.trim();
+              });
+              if (matches.length === 1) {
+                autoValue = matches[0];
+                fromFact = true;
+              }
             }
-          } else if (/(authoriz|eligible|legal right|citizen)/i.test(ql) && !/(require|need|sponsor)/i.test(ql)) {
+          } else if (/(authoriz|eligible|legal right)/i.test(ql) && !/(require|need|sponsor|citizen)/i.test(ql)) {
             if (values.authorized_in_usa !== undefined && values.authorized_in_usa !== null && values.authorized_in_usa !== '') {
               const affirmative = values.authorized_in_usa === true || values.authorized_in_usa === 'true';
               autoValue = options.find(o => mapping.normalizeBoolean(o) === affirmative) || (affirmative ? options.find(o => /^yes\b/i.test(o)) : options.find(o => /^no\b/i.test(o))) || affirmative;
@@ -4775,23 +5294,29 @@
       learned: !!receipt.learned,
     }));
     const input = findResumeInput();
-    if (input?.isConnected && resume && !input.files?.length && location.href === expectedUrl) {
-      try {
-        if (!resume.base64) throw new Error('No resume data');
-        const bytes = Uint8Array.from(atob(resume.base64), char => char.charCodeAt(0));
-        const transfer = new DataTransfer();
-        transfer.items.add(new File([bytes], resume.filename, { type: resume.mimeType }));
-        input.files = transfer.files;
-        input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-        const file = input.files?.[0];
-        if (file?.name === resume.filename) {
-          const metadata = resumeMetadata(file);
-          if (metadata && file.size <= 2 * 1024 * 1024) fileEvidence.set(file, { ...metadata, base64: resume.base64 });
-          filled.push({ key: 'resume-file', label: 'Resume file', value: resume.filename });
-        }
-      } catch {
-        // A portal can require a manual upload. Leave that field in the total.
+    if (input?.isConnected && !input.files?.length && location.href === expectedUrl) {
+      if (resume?.base64) {
+        try {
+          const bytes = Uint8Array.from(atob(resume.base64), char => char.charCodeAt(0));
+          const transfer = new DataTransfer();
+          transfer.items.add(new File([bytes], resume.filename || 'Resume.pdf', { type: resume.mimeType || 'application/pdf' }));
+          input.files = transfer.files;
+          input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          const file = input.files?.[0];
+          if (file?.name === resume.filename) {
+            const metadata = resumeMetadata(file);
+            if (metadata && file.size <= 2 * 1024 * 1024) fileEvidence.set(file, { ...metadata, base64: resume.base64 });
+            filled.push({ key: 'resume-file', label: 'Resume file', value: resume.filename });
+          }
+        } catch {}
+      } else if (writer?.attachResumeFile) {
+        try {
+          const attachRes = await writer.attachResumeFile(input, candidate?.id);
+          if (attachRes?.file) {
+            filled.push({ key: 'resume-file', label: 'Resume file', value: attachRes.expected });
+          }
+        } catch {}
       }
     }
     const filledKeys = new Set(filled.map(f => f.key));
