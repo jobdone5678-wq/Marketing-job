@@ -33,9 +33,14 @@ interface JobDetailClientProps {
   job: Job;
   similarJobs?: Job[];
   copies?: JobCopy[];
+  candidateResume?: { text?: string; skills?: string[] } | null;
 }
 
-export function JobDetailClient({ job, similarJobs = [] }: JobDetailClientProps) {
+export function JobDetailClient({
+  job,
+  similarJobs = [],
+  candidateResume,
+}: JobDetailClientProps) {
   const pathname = usePathname();
   const { savedJobs, toggleSavedJob } = useJobBookmarks();
   const isSaved = savedJobs.has(job.public_slug);
