@@ -1,7 +1,17 @@
 (function (root) {
   const mapping = root.NextkinFieldMapping;
   const normalize = value => String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
-  const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const wait = ms => new Promise(resolve => {
+    const timerFn = (typeof setTimeout === 'function') ? setTimeout
+      : (typeof globalThis.setTimeout === 'function') ? globalThis.setTimeout
+      : (typeof root.setTimeout === 'function') ? root.setTimeout
+      : null;
+    if (timerFn) {
+      timerFn(resolve, ms);
+    } else {
+      resolve();
+    }
+  });
   const placeholder = /^(?:(?:please\s+)?(?:select|choose)(?:\s+(?:an?|your|the)\s+[^.]+|\s+one)?(?:\.{3}|…)?|[-–—]+)$/i;
 
   const optionSelector = [
@@ -42,6 +52,16 @@
   ].join(', ');
 
   const optionLabel = option => option.label || option.value;
+
+  const isMultiKind = kind => {
+    if (mapping?.isMultiKind) return mapping.isMultiKind(kind);
+    return kind === 'multi-select' || kind === 'checkbox-group';
+  };
+
+  const isChoiceKind = kind => {
+    if (mapping?.isChoiceKind) return mapping.isChoiceKind(kind);
+    return kind === 'select' || kind === 'radio' || kind === 'choice';
+  };
 
   function safeCssEscape(str) {
     if (typeof globalThis.CSS !== 'undefined' && typeof globalThis.CSS.escape === 'function') {
@@ -154,20 +174,67 @@
     el.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  function writeValue(el, value) {
-    if (el.isContentEditable) el.textContent = value;
-    else {
-      const view = el.ownerDocument?.defaultView || globalThis;
-      const proto = el.tagName === 'SELECT' ? view.HTMLSelectElement.prototype
-        : el.tagName === 'TEXTAREA' ? view.HTMLTextAreaElement.prototype : view.HTMLInputElement.prototype;
-      const desc = Object.getOwnPropertyDescriptor(proto, 'value') || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(proto), 'value');
-      if (desc?.set) desc.set.call(el, value);
-      else el.value = value;
-      if (el._valueTracker) {
-        el._valueTracker.setValue?.('');
+  function getNativePropertyDescriptor(element, prop = 'value') {
+    if (!element) return null;
+    const view = element.ownerDocument?.defaultView || globalThis;
+    const proto = element.tagName === 'SELECT'
+      ? (view.HTMLSelectElement?.prototype || globalThis.HTMLSelectElement?.prototype)
+      : element.tagName === 'TEXTAREA'
+      ? (view.HTMLTextAreaElement?.prototype || globalThis.HTMLTextAreaElement?.prototype)
+      : (view.HTMLInputElement?.prototype || globalThis.HTMLInputElement?.prototype);
+
+    if (proto) {
+      const desc = Object.getOwnPropertyDescriptor(proto, prop);
+      if (desc?.set) return desc;
+    }
+
+    let p = Object.getPrototypeOf(element);
+    while (p && p !== Object.prototype) {
+      const desc = Object.getOwnPropertyDescriptor(p, prop);
+      if (desc?.set) return desc;
+      p = Object.getPrototypeOf(p);
+    }
+    return null;
+  }
+
+  function setNativeValue(element, value) {
+    if (!element) return false;
+    const view = element.ownerDocument?.defaultView || globalThis;
+    const strVal = value == null ? '' : String(value);
+
+    if (element.isContentEditable) {
+      element.textContent = strVal;
+    } else {
+      const desc = getNativePropertyDescriptor(element, 'value');
+      if (desc?.set) {
+        desc.set.call(element, strVal);
+      } else {
+        element.value = strVal;
+      }
+      if (element._valueTracker) {
+        try {
+          element._valueTracker.setValue?.('');
+        } catch {}
       }
     }
-    notify(el);
+
+    const Evt = view.Event || globalThis.Event;
+    const FocusEvt = view.FocusEvent || view.Event || globalThis.FocusEvent || globalThis.Event;
+    try {
+      element.dispatchEvent(new Evt('input', { bubbles: true, composed: true }));
+    } catch {}
+    try {
+      element.dispatchEvent(new Evt('change', { bubbles: true }));
+    } catch {}
+    try {
+      element.dispatchEvent(new FocusEvt('blur', { bubbles: true, composed: true }));
+    } catch {}
+
+    return true;
+  }
+
+  function writeValue(el, value) {
+    return setNativeValue(el, value);
   }
 
   function setCheckbox(el, targetChecked) {
@@ -310,10 +377,13 @@
 
   function comboTrigger(el) {
     if (!el) return null;
-    if (el.tagName === 'BUTTON' || el.matches('button, [data-slot="select-trigger"], .select2-selection, .ng-select, [data-automation-id*="prompt" i]')) return el;
-    const btn = el.querySelector('button, [data-slot="select-trigger"], [class*="select-trigger" i], [class*="selectTrigger" i], [role="combobox"], [aria-haspopup="listbox"], .select2-selection, .ng-select, [data-automation-id*="prompt" i]');
+    if (el.tagName === 'BUTTON' || (el.matches && el.matches('button, [data-slot="select-trigger"], .select2-selection, .ng-select, [data-automation-id*="prompt" i]'))) return el;
+    const btn = el.querySelector ? el.querySelector('button, [data-slot="select-trigger"], [class*="select-trigger" i], [class*="selectTrigger" i], [role="combobox"], [aria-haspopup="listbox"], .select2-selection, .ng-select, [data-automation-id*="prompt" i]') : null;
     if (btn) return btn;
-    if (el.matches('[role="combobox"], [aria-haspopup="listbox"]')) return el;
+    const role = (el.getAttribute ? el.getAttribute('role') : null) || '';
+    const popup = (el.getAttribute ? el.getAttribute('aria-haspopup') : null) || '';
+    if (role.toLowerCase() === 'combobox' || popup.toLowerCase() === 'listbox' || popup.toLowerCase() === 'true') return el;
+    if (el.matches && el.matches('[role="combobox"], [aria-haspopup="listbox"]')) return el;
     return comboInput(el) || el;
   }
 
@@ -359,9 +429,10 @@
       case 'choice': return field.options.find(option => selected(option.element) || checked(option.element))?.label || '';
       case 'combobox': return comboValue(el);
       case 'multi-combobox': {
-        const chips = el.querySelectorAll('.ng-value-label, .select2-selection__choice__display, .k-chip-label, [data-slot="multi-select-value"]');
+        const chips = el.querySelectorAll ? el.querySelectorAll('.ng-value-label, .select2-selection__choice__display, .k-chip-label, [data-slot="multi-select-value"]') : [];
         return [...chips].map(chip => chip.textContent.trim()).filter(Boolean);
       }
+      case 'resume-file': return el?.files?.[0]?.name || (el?.value ? String(el.value).split(/[/\\]/).pop() : '');
       default: return el.isContentEditable ? el.textContent.trim() : el.value?.trim() || '';
     }
   }
@@ -405,17 +476,25 @@
 
   function choose(field, desired) {
     const bool = normalizeBoolean(desired);
-    if (bool !== null && mapping.pickBooleanOption) {
+    if (bool !== null && mapping?.pickBooleanOption) {
       const bOpt = mapping.pickBooleanOption(field.options, bool);
       if (bOpt) return bOpt;
     }
-    if (typeof desired === 'boolean' && mapping.pickBooleanOption) {
+    if (typeof desired === 'boolean' && mapping?.pickBooleanOption) {
       return mapping.pickBooleanOption(field.options, desired);
     }
-    const opt = mapping.pickOption(field, desired);
+    const opt = mapping?.pickOption ? mapping.pickOption(field, desired) : null;
     if (opt) return opt;
-    if (bool !== null && mapping.pickBooleanOption) {
+    if (bool !== null && mapping?.pickBooleanOption) {
       return mapping.pickBooleanOption(field.options, bool);
+    }
+    const norm = s => String(s ?? '').toLowerCase().trim().replace(/[^a-z0-9]+/g, ' ');
+    const target = norm(desired);
+    if (target && Array.isArray(field.options)) {
+      const exact = field.options.find(o => norm(optionLabel(o)) === target || norm(o.value) === target);
+      if (exact) return exact;
+      const partial = field.options.find(o => norm(optionLabel(o)).includes(target) || target.includes(norm(optionLabel(o))));
+      if (partial) return partial;
     }
     return null;
   }
@@ -456,7 +535,7 @@
     if (input?.list) {
       const option = choose(field, desired);
       if (!option) return null;
-      writeValue(input, option.value);
+      setNativeValue(input, option.value);
       return { expected: option.value };
     }
 
@@ -481,8 +560,15 @@
     let option = choose({ options }, desired);
     if (option) {
       const ok = click(option.element);
+      try {
+        const view = el.ownerDocument?.defaultView || globalThis;
+        const KeyEvt = view.KeyboardEvent || globalThis.KeyboardEvent;
+        option.element.dispatchEvent(new KeyEvt('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+      } catch {}
       closeCombo(el);
-      return ok ? { expected: option.label, option: option.element, typed: false } : null;
+      const actualVal = comboValue(el);
+      const isSel = selected(option.element) || (actualVal && equals(actualVal, option.label));
+      return ok ? { expected: option.label, option: option.element, typed: false, verified: Boolean(isSel) } : null;
     }
 
     // Type into combobox search input if present
@@ -491,7 +577,7 @@
     let typed = false;
     const query = typeof desired === 'boolean' ? (desired ? 'Yes' : 'No') : String(desired);
     if (search && !search.readOnly && isCurrent()) {
-      writeValue(search, query);
+      setNativeValue(search, query);
       typed = true;
       const searchStart = Date.now();
       // await filtered options asynchronously (up to 800ms for network search)
@@ -505,13 +591,20 @@
 
     if (option) {
       const ok = click(option.element);
+      try {
+        const view = el.ownerDocument?.defaultView || globalThis;
+        const KeyEvt = view.KeyboardEvent || globalThis.KeyboardEvent;
+        option.element.dispatchEvent(new KeyEvt('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+      } catch {}
       closeCombo(el);
-      return ok ? { expected: option.label, option: option.element, typed } : null;
+      const actualVal = comboValue(el);
+      const isSel = selected(option.element) || (actualVal && equals(actualVal, option.label));
+      return ok ? { expected: option.label, option: option.element, typed, verified: Boolean(isSel) } : null;
     }
 
     // Close with Escape fallback
     if (typed && search && normalize(search.value) === normalize(query)) {
-      writeValue(search, '');
+      setNativeValue(search, '');
     }
     closeCombo(el);
     return null;
@@ -522,28 +615,13 @@
     if (!option) return null;
     if (field.kind === 'select') {
       const el = field.element;
-      const view = el.ownerDocument?.defaultView || globalThis;
-      try {
-        const proto = view.HTMLSelectElement?.prototype || HTMLSelectElement.prototype;
-        const desc = Object.getOwnPropertyDescriptor(proto, 'value') || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(proto), 'value');
-        if (desc?.set) {
-          desc.set.call(el, option.value);
-        } else {
-          el.value = option.value;
-        }
-        if (el._valueTracker) {
-          el._valueTracker.setValue?.('');
-        }
-      } catch {
-        el.value = option.value;
-      }
+      setNativeValue(el, option.value);
       if (option.element && typeof option.element.index === 'number') {
         el.selectedIndex = option.element.index;
       } else {
         const idx = Array.from(el.options || []).findIndex(o => o.value === option.value || o === option.element);
         if (idx >= 0) el.selectedIndex = idx;
       }
-      notify(el);
       return { expected: option.label };
     } else if (field.kind === 'radio' || field.kind === 'choice') {
       if (!setRadio(option)) return null;
@@ -953,28 +1031,119 @@
     return null;
   }
 
-  async function applyFill(plans, session) {
-    const receipts = [];
+  function verifyWrites(plans) {
+    const filled = [];
+    const unverified = [];
+    const manual = [];
+    const unmapped = [];
+
+    if (!Array.isArray(plans)) {
+      return { filled, unverified, manual, unmapped };
+    }
+
+    for (const plan of plans) {
+      if (plan.status === 'manual') {
+        manual.push(plan);
+        continue;
+      }
+      if (plan.status === 'unmapped' || plan.status === 'unsupported') {
+        unmapped.push(plan);
+        continue;
+      }
+
+      const field = plan.field;
+      if (!field || !field.element || !field.element.isConnected) {
+        unverified.push({
+          ...plan,
+          field: plan.field,
+          expected: plan.value,
+          actual: null,
+          status: 'unverified'
+        });
+        continue;
+      }
+
+      if (plan._writeFailed) {
+        unverified.push({
+          ...plan,
+          field: plan.field,
+          expected: plan.value,
+          actual: read(field),
+          status: 'unverified'
+        });
+        continue;
+      }
+
+      const actual = read(field);
+      const expected = plan.writtenValue ?? plan.expected ?? plan._writtenExpected ?? plan.value;
+      const write = plan._write;
+
+      const isVerified = (
+        equals(actual, expected) ||
+        (write?.matches ? write.matches(actual) : false) ||
+        (field.kind === 'combobox' && expected && String(actual || '').toLowerCase().includes(String(expected).toLowerCase())) ||
+        (write?.option && !write.option.isConnected && expected) ||
+        (write?.option?.isConnected && selected(write.option)) ||
+        (field.kind === 'checkbox' && (typeof expected === 'boolean' ? actual === expected : equals(actual, expected)))
+      );
+
+      if (isVerified) {
+        recordPreservedValues([field]);
+        filled.push({
+          ...plan,
+          field: plan.field,
+          value: plan.value,
+          writtenValue: expected,
+          ai: !!plan.ai,
+          learned: !!plan.learned,
+          status: 'filled'
+        });
+      } else {
+        unverified.push({
+          ...plan,
+          field: plan.field,
+          expected,
+          actual,
+          status: 'unverified'
+        });
+      }
+    }
+
+    return { filled, unverified, manual, unmapped };
+  }
+
+  async function applyFill(plans, session = {}) {
+    const ctx = typeof session?.isCurrent === 'function' ? session : { isCurrent: () => true, ...session };
+
     for (const plan of plans) {
       const { field, value } = plan;
-      if (plan.status !== 'supported' || !session.isCurrent() || field.excluded) continue;
+      if (plan.status !== 'supported' || !ctx.isCurrent() || field.excluded) continue;
 
       // Handle React rerendering: re-resolve element if it was disconnected
       ensureConnectedElement(field);
       const el = field.element;
-      if (!el?.isConnected) continue;
+      if (!el?.isConnected) {
+        plan._writeFailed = true;
+        continue;
+      }
 
       // Bounded async wait for dependent controls (Country -> State -> City)
       // to become enabled / populated with options after previous field changes
-      await waitForFieldReady(field, session, 1200);
-      if (!session.isCurrent() || !field.element?.isConnected) continue;
+      await waitForFieldReady(field, ctx, 1200);
+      if (!ctx.isCurrent() || !field.element?.isConnected) {
+        plan._writeFailed = true;
+        continue;
+      }
 
       const currentEl = field.element;
       const domVal = read(field);
-      if (mapping.isUrlField?.(field) && (
+      if (mapping?.isUrlField?.(field) && (
         domVal || plan.ai || plan.learned || !plan.factKey || !mapping.candidateHttpUrl(value) ||
         (currentEl.maxLength > 0 && value.length > currentEl.maxLength)
-      )) continue;
+      )) {
+        plan._writeFailed = true;
+        continue;
+      }
       const previous = domVal;
       const isCountryCodeOnly = field.kind === 'text' && (currentEl.type === 'tel' || /phone/i.test(field.hint || field.label)) && /^\+?\d{1,3}\s*$/.test(String(previous).trim());
       const hasAnswer = !isCountryCodeOnly && (Array.isArray(previous) ? previous.length > 0 : (typeof previous === 'boolean' ? previous : Boolean(previous && String(previous).trim().length > 0)));
@@ -991,47 +1160,56 @@
         const attachRes = await attachResumeFile(currentEl);
         if (attachRes) {
           write = { expected: attachRes.expected };
-          receipts.push({ field, writtenValue: attachRes.expected });
+        } else {
+          plan._writeFailed = true;
         }
-        continue;
       } else if (field.kind === 'combobox') {
-        write = await fillCombo(field, value, session.isCurrent);
+        write = await fillCombo(field, value, ctx.isCurrent);
       } else if (field.kind === 'multi-combobox') {
-        write = await fillMultiCombo(field, value, session.isCurrent);
-      } else if (mapping.isMultiKind(field.kind)) {
+        write = await fillMultiCombo(field, value, ctx.isCurrent);
+      } else if (isMultiKind(field.kind)) {
         write = setMultiple(field, value);
-      } else if (mapping.isChoiceKind(field.kind)) {
+      } else if (isChoiceKind(field.kind)) {
         write = setChoice(field, value);
       } else if (field.kind === 'checkbox') {
         const boolVal = typeof value === 'boolean' ? value : normalizeBoolean(value);
         if (typeof boolVal === 'boolean') {
-          if (previous !== boolVal) setCheckbox(currentEl, boolVal);
-          write = { expected: boolVal };
+          const ok = previous !== boolVal ? setCheckbox(currentEl, boolVal) : true;
+          if (ok) write = { expected: boolVal };
         }
       } else {
         const expected = currentEl.maxLength > 0 ? String(value).slice(0, currentEl.maxLength) : String(value);
-        writeValue(currentEl, expected);
+        setNativeValue(currentEl, expected);
         write = { expected };
       }
-      if (!write) continue;
+      if (!write) {
+        plan._writeFailed = true;
+        continue;
+      }
 
-      const verified = () => session.isCurrent() && field.element?.isConnected &&
-        (equals(read(field), write.expected) || write.matches?.(read(field)) ||
-         (field.kind === 'combobox' && write.expected && String(read(field) || '').toLowerCase().includes(String(write.expected).toLowerCase())) ||
-         (write.option && !write.option.isConnected && write.expected) ||
-         (write.option?.isConnected && selected(write.option)));
-
-      const isVerified = await waitForVerification(verified, session, 250, 25);
-      if (!isVerified) continue;
-
-      recordPreservedValues([field]);
-      receipts.push({ field, writtenValue: write.expected, ai: !!plan.ai, learned: !!plan.learned });
+      plan._write = write;
+      plan._writtenExpected = write.expected;
     }
-    return receipts;
+
+    // Step 3: Wait 50ms for framework reconciliation, then readback verification
+    await wait(50);
+
+    const verification = verifyWrites(plans);
+
+    // Build array report for 100% backwards compatibility
+    const report = [...verification.filled];
+    report.filled = verification.filled;
+    report.unverified = verification.unverified;
+    report.manual = verification.manual;
+    report.unmapped = verification.unmapped;
+
+    return report;
   }
 
   root.NextkinFieldWriter = {
     applyFill,
+    verifyWrites,
+    setNativeValue,
     attachResumeFile,
     read,
     readChoices,
