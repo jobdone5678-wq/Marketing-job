@@ -61,7 +61,13 @@ function getSkillVariants(skill: string): string[] {
 
 function containsTerm(source: string, term: string): boolean {
   const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const suffix = term === 'React' ? '(?![ -]+Native\\b)' : '';
+  const lower = term.toLowerCase();
+  let suffix = '';
+  if (lower === 'react') {
+    suffix = '(?![ -]+native\\b)';
+  } else if (lower === 'java') {
+    suffix = '(?![ -]*(?:script|Script)\\b)';
+  }
   return new RegExp('(^|[^a-z0-9])' + escaped + suffix + '(?=$|[^a-z0-9+#])', 'i').test(source);
 }
 
@@ -288,5 +294,73 @@ export function computeJobDetailsMatch(
     matchedSkills,
     missingSkills,
     totalSkillsCount,
+  };
+}
+
+export function extractJobSkills(job?: {
+  skills?: string[] | null;
+  enrichment?: { skills?: string[] | null } | null;
+} | null): string[] {
+  if (!job) return [];
+  if (Array.isArray(job.skills) && job.skills.length > 0) return job.skills;
+  if (Array.isArray(job.enrichment?.skills) && job.enrichment.skills.length > 0) return job.enrichment.skills;
+  return [];
+}
+
+export function computeUnifiedJobMatch(
+  job?: {
+    title?: string;
+    description?: string;
+    skills?: string[] | null;
+    enrichment?: {
+      skills?: string[] | null;
+      summary?: string | null;
+    } | null;
+  } | null,
+  candidateResume?: { text?: string; skills?: string[] } | null,
+  fallbackProfileSkills: string[] = []
+): JobDetailsMatchResult {
+  if (!job) {
+    return {
+      matchPercentage: 0,
+      matchedSkills: [],
+      missingSkills: [],
+      totalSkillsCount: 0,
+    };
+  }
+
+  const candidateSkills = Array.from(
+    new Set([
+      ...(candidateResume?.skills || []),
+      ...(fallbackProfileSkills || []),
+    ].filter(Boolean))
+  );
+  const resumeText = candidateResume?.text || '';
+
+  const skillsList = extractJobSkills(job);
+
+  if (skillsList.length > 0) {
+    return computeJobDetailsMatch(skillsList, candidateSkills, resumeText);
+  }
+
+  // Fallback: If job has no structured skills, use description text matching if available
+  const jobText = job.description || job.enrichment?.summary || '';
+  if (resumeText && jobText) {
+    const textMatch = compareResumeToJob(resumeText, jobText);
+    const matched = textMatch.matched || [];
+    const missing = textMatch.missing || [];
+    return {
+      matchPercentage: textMatch.score ?? 0,
+      matchedSkills: matched,
+      missingSkills: missing,
+      totalSkillsCount: matched.length + missing.length,
+    };
+  }
+
+  return {
+    matchPercentage: 0,
+    matchedSkills: [],
+    missingSkills: [],
+    totalSkillsCount: 0,
   };
 }
