@@ -51,7 +51,17 @@ export interface CandidateContacts {
 export interface CandidateLocation {
   workFormat: string[];
   whereBased: string;
+  regions: string[];
+  countries: string[];
+  openToRelocation: boolean;
   timezone: string;
+}
+
+export interface CandidateDemographics {
+  gender: string;
+  raceEthnicity: string;
+  veteranStatus: string;
+  disabilityStatus: string;
 }
 
 export interface CandidateProfileState {
@@ -64,11 +74,14 @@ export interface CandidateProfileState {
     atsReadable: boolean;
     yearsExperience: number;
   } | null;
+  headline: string;
+  summary: string;
   roles: string[];
   seniorities: string[];
   jobLanguages: string[];
   contacts: CandidateContacts;
   location: CandidateLocation;
+  demographics: CandidateDemographics;
   skills: string[];
   excludedSkills: string[];
   excludedSources: string[];
