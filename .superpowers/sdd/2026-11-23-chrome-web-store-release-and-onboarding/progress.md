@@ -13,6 +13,8 @@
 - 2026-11-23: Task 3 complete (commit 3196751). Implemented #onboarding-view and #authenticated-view binary switch in panel.html/css/js.
 - 2026-11-23: Task 4 complete (commit 1d3eaa1). Fixed pack-extension to output clean sanitized dist/jobright_extension-v3.3.19.zip.
 - 2026-11-23: Task 5 complete (commit 81154b6). Generated 4 store screenshots (1280x800) and aligned CHROMEWEBSTORE.md.
+- 2026-11-23: Review pass complete (commit 34f1092). Swapped initial hidden attributes in panel.html to eliminate unauthenticated flash, called renderAccount synchronously, and added graceful pack error handling.
+
 
 
 
