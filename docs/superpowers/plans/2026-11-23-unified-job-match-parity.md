@@ -37,7 +37,7 @@
   - `computeUnifiedJobMatch(job: Partial<Job>, candidateResume?: { text?: string; skills?: string[] } | null, fallbackProfileSkills?: string[]): JobDetailsMatchResult`
 - Consumes: `computeJobDetailsMatch`, `compareResumeToJob`.
 
-- [ ] **Step 1: Write unit tests in `tests/ats-scoring-feed.test.mjs` for word-boundary matching and unified match parity**
+- [x] **Step 1: Write unit tests in `tests/ats-scoring-feed.test.mjs` for word-boundary matching and unified match parity**
 
 Add tests to `tests/ats-scoring-feed.test.mjs`:
 ```javascript
@@ -76,12 +76,12 @@ test('word-boundary prevents false positive substring matching', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node --experimental-strip-types --test tests/ats-scoring-feed.test.mjs`  
 Expected: FAIL (`computeUnifiedJobMatch is not a function`)
 
-- [ ] **Step 3: Implement `extractJobSkills`, `computeUnifiedJobMatch`, and harden `containsTerm` in `src/lib/resumes/job-match.ts`**
+- [x] **Step 3: Implement `extractJobSkills`, `computeUnifiedJobMatch`, and harden `containsTerm` in `src/lib/resumes/job-match.ts`**
 
 1. In `containsTerm`:
    - Add lookahead negative assertion for Java: `term.toLowerCase() === 'java' ? '(?![ -]*(?:script|Script)\\b)' : ...`
@@ -95,12 +95,12 @@ Expected: FAIL (`computeUnifiedJobMatch is not a function`)
    - If job has no skills, falls back to `compareResumeToJob` if resume text and job description/summary exist.
    - Returns `JobDetailsMatchResult`.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `node --experimental-strip-types --test tests/ats-scoring-feed.test.mjs`  
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/resumes/job-match.ts tests/ats-scoring-feed.test.mjs
@@ -116,7 +116,7 @@ git commit -m "feat: implement computeUnifiedJobMatch with hardened word-boundar
 - Modify: `src/app/jobs/[id]/JobDetailClient.tsx`
 - Modify: `src/components/jobs/feed/JobCard.tsx`
 
-- [ ] **Step 1: Update `JobsFeedClient.tsx` to use `computeUnifiedJobMatch`**
+- [x] **Step 1: Update `JobsFeedClient.tsx` to use `computeUnifiedJobMatch`**
 
 Replace `getAtsMatch` callback in `JobsFeedClient.tsx`:
 ```typescript
@@ -134,7 +134,7 @@ const getAtsMatch = useCallback(
 );
 ```
 
-- [ ] **Step 2: Update `JobDetailClient.tsx` to use `computeUnifiedJobMatch`**
+- [x] **Step 2: Update `JobDetailClient.tsx` to use `computeUnifiedJobMatch`**
 
 In `JobDetailClient.tsx`:
 ```typescript
@@ -146,7 +146,7 @@ const { matchedSkills, missingSkills, matchPercentage, totalSkillsCount } = useM
 }, [job, candidateResume, baseProfileSkills, claimedSkills]);
 ```
 
-- [ ] **Step 3: Update `JobCard.tsx` to ensure normalized case-insensitive matched skill highlighting**
+- [x] **Step 3: Update `JobCard.tsx` to ensure normalized case-insensitive matched skill highlighting**
 
 In `JobCard.tsx`:
 Ensure `isMatchedSkill`:
@@ -157,17 +157,17 @@ const isMatchedSkill = atsMatch?.matched?.some(
 ```
 Matches correctly against `atsMatch.matched` output from `computeUnifiedJobMatch`.
 
-- [ ] **Step 4: Run typecheck and unit tests**
+- [x] **Step 4: Run typecheck and unit tests**
 
 Run: `npm run typecheck; node --experimental-strip-types --test tests/ats-scoring-feed.test.mjs tests/job-details-match.test.mjs`  
 Expected: PASS with 0 errors.
 
-- [ ] **Step 5: Run full test suite for zero regression**
+- [x] **Step 5: Run full test suite for zero regression**
 
 Run: `node --experimental-strip-types --test tests/url-canonicalization.test.mjs tests/ats-scoring-feed.test.mjs tests/background-storage-proxy.test.mjs tests/universal-discovery-attachment.test.mjs tests/ai-screening-scoped.test.mjs tests/submission-pipeline-resilience.test.mjs tests/cross-tab-sync.test.mjs tests/application-lifecycle.test.mjs tests/job-details-match.test.mjs`  
 Expected: 59 tests pass, 0 fail.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/app/jobs/JobsFeedClient.tsx src/app/jobs/[id]/JobDetailClient.tsx src/components/jobs/feed/JobCard.tsx
