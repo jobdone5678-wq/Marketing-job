@@ -89,6 +89,7 @@ export interface Slice<T> {
   items: T[];
   total?: number;
   hasMore: boolean;
+  error?: string;
 }
 
 export interface JobCopy {
