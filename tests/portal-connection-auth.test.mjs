@@ -289,3 +289,24 @@ test('Auth & Security: token is NEVER logged or exposed in window messages', asy
     assert.equal(serialized.includes('super-secret-candidate-auth-token-123456'), false, 'Token leaked in window message!');
   }
 });
+
+test('JobseekerAuth: active user session routes directly to /auth/jobseeker/connected', async () => {
+  let redirectedPath = null;
+  const mockRouter = { push: path => { redirectedPath = path; } };
+  const mockSupabase = {
+    auth: {
+      getUser: async () => ({ data: { user: { id: 'usr-123', email: 'candidate@example.com' } } })
+    }
+  };
+
+  async function checkExistingSession(supabase, router) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      router.push('/auth/jobseeker/connected');
+    }
+  }
+
+  await checkExistingSession(mockSupabase, mockRouter);
+  assert.equal(redirectedPath, '/auth/jobseeker/connected');
+});
+

@@ -23,6 +23,26 @@ export function JobseekerAuthCard() {
   const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
+    let isMounted = true;
+    async function checkActiveSession() {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user && isMounted) {
+          router.push('/auth/jobseeker/connected');
+        }
+      } catch {
+        // Allow user to proceed with manual login if session check fails
+      }
+    }
+    checkActiveSession();
+    return () => {
+      isMounted = false;
+    };
+  }, [supabase, router]);
+
+  useEffect(() => {
     if (countdown <= 0) return;
     const timer = setInterval(() => {
       setCountdown((prev) => (prev > 0 ? prev - 1 : 0));
