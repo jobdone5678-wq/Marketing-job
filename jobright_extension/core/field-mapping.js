@@ -65,7 +65,7 @@
     citizenship_status: ['citizenship status', 'country of citizenship', 'nationality', 'are you a us citizen', 'are you a u s citizen', 'are you a united states citizen'],
     linkedin_url: ['linkedin', 'linkedin profile', 'linkedin url', 'urls linkedin', 'linkedin profile url', 'linked in'],
     github_url: ['github', 'github url', 'github profile', 'urls github', 'github com'],
-    website: ['website', 'portfolio', 'personal website', 'portfolio url', 'urls portfolio', 'urls other', 'personal url', 'homepage', 'home page', 'personal site', 'other url', 'blog url'],
+    website: ['website', 'portfolio', 'personal website', 'portfolio url', 'urls portfolio', 'personal url', 'homepage', 'home page', 'personal site', 'blog url'],
     current_employer: ['current employer', 'current company', 'most recent company', 'employer', 'company', 'org', 'current organization', 'organization', 'company name', 'present employer', 'most recent employer', 'last employer', 'current organisation'],
     current_title: ['current title', 'current job title', 'most recent title', 'headline', 'current role', 'job title', 'present title', 'current position', 'designation', 'most recent job title'],
     total_experience_years: ['years of experience', 'total experience', 'experience years', 'how many years of experience', 'total years of experience', 'years of professional experience', 'years of work experience', 'relevant experience', 'total work experience', 'overall experience'],
@@ -508,7 +508,8 @@
       headline: facts.headline || candidate.headline || candFacts.headline || facts.current_job_title || candidate.current_job_title || '',
       linkedin_url: linkedin,
       github_url: facts.github_url || candidate.github_url || '',
-      website: facts.website || candidate.website || candidate.portfolio_url || '',
+      portfolio_url: facts.portfolio_url || candidate.portfolio_url || facts.website || candidate.website || '',
+      website: facts.website || candidate.website || facts.portfolio_url || candidate.portfolio_url || '',
       total_experience_years: facts.total_experience_years !== undefined ? facts.total_experience_years
         : (candidate.total_experience_years !== undefined ? candidate.total_experience_years
           : (candidate.experience_years !== undefined ? candidate.experience_years : (candidate.years_of_experience ?? ''))),
@@ -607,16 +608,14 @@
   }
 
   function linkFieldKey(field) {
-    const element = field.element;
-    const candidates = [element?.name, element?.id, field.name, field.id, field.hint, field.label];
+    const element = field?.element;
+    const candidates = [element?.name, element?.id, field?.name, field?.id, field?.key, field?.hint, field?.label];
     for (const value of candidates) {
+      if (!value) continue;
       const name = linkMetadata(value);
-      if (/^(?:urls? )?(?:twitter|x twitter|twitter x)(?: (?:profile|url|link)){0,2}$|^(?:urls? x|x (?:profile|url|link))$/.test(name))
-        return 'twitter_url';
       if (aliases.github_url.includes(name) || /^(?:urls? )?git ?hub(?: (?:profile|url|link)){0,2}$/.test(name)) return 'github_url';
       if (aliases.linkedin_url.includes(name) || /^(?:urls? )?linked ?in(?: (?:profile|url|link)){0,2}$/.test(name)) return 'linkedin_url';
       if (/^(?:urls? )?(?:personal |professional )?portfolio(?: (?:website|url|link)){0,2}$/.test(name)) return 'portfolio_url';
-      if (/^(?:urls? other|other (?:url|link|website))$/.test(name)) return 'other_url';
       if (aliases.website.includes(name) || /^(?:urls? )?(?:personal (?:website|site|url)|website|blog)(?: (?:website|url|link)){0,2}$/.test(name))
         return 'website';
     }
@@ -624,22 +623,30 @@
   }
 
   function isUrlField(field) {
+    if (!field) return false;
     if (field.type === 'url' || field.kind === 'url' || field.element?.type === 'url' || linkFieldKey(field)) return true;
-    return [field.label, field.name, field.id, field.hint, field.element?.name, field.element?.id].some(value =>
-      /^(?:urls?|(?:profile|social|personal|professional|website|external) (?:urls?|links?))$/
-        .test(linkMetadata(value))
-    );
+    const candidates = [field.label, field.name, field.id, field.hint, field.key, field.element?.name, field.element?.id];
+    return candidates.some(value => {
+      if (!value) return false;
+      const str = String(value);
+      if (/^urls?\[/i.test(str) || /[_-]urls?(?:[_-]|$)/i.test(str) || /[_-]links?(?:[_-]|$)/i.test(str)) return true;
+      const meta = linkMetadata(str);
+      return /^(?:urls?|links?|websites?)$/.test(meta) ||
+        /^(?:urls? )?(?:twitter|x twitter|twitter x|x|other|additional|social|blog|portfolio|website|github|linkedin|custom)(?: (?:profile|url|link|website)){0,2}$/.test(meta) ||
+        /^(?:profile|social|personal|professional|website|external|other|additional|custom) (?:urls?|links?)$/.test(meta) ||
+        /^(?:urls? )?(?:other|additional)$/.test(meta);
+    });
   }
 
   function candidateHttpUrl(value) {
     if (typeof value !== 'string') return null;
-    const text = value.trim();
-    if (!/^https?:\/\/[^\s\\/?#][^\s\\]*$/i.test(text)) return null;
+    if (/\s/.test(value)) return null;
+    if (!/^https?:\/\/[^\s\\/?#][^\s\\]*$/i.test(value)) return null;
     const UrlCtor = typeof URL !== 'undefined' ? URL : (typeof globalThis !== 'undefined' ? globalThis.URL : null);
-    if (!UrlCtor) return text;
+    if (!UrlCtor) return value;
     try {
-      const url = new UrlCtor(text);
-      return url.hostname && !url.username && !url.password ? text : null;
+      const url = new UrlCtor(value);
+      return url.hostname && !url.username && !url.password ? value : null;
     } catch {
       return null;
     }
@@ -653,6 +660,7 @@
   function planFill(fields, candidate, options = {}) {
     const values = buildValues(candidate);
     const aiPlan = (field, reason) => ({ field, status: 'ai', reason, options: (field.options || []).map(o => optionText(o)), aiPrompt: field.label });
+    const consumedUrls = new Set();
 
     const plans = fields.map(field => {
       if (field.kind === 'inaccessible' || field.excluded) {
@@ -663,15 +671,27 @@
       }
       if (isUrlField(field)) {
         const factKey = linkFieldKey(field);
+        if (!factKey) {
+          return { field, factKey: null, status: 'manual', reason: 'Unmapped link field; enter manually.' };
+        }
         const facts = candidate.confirmed_facts || candidate;
         const candidateLink = factKey === 'linkedin_url'
           ? (facts.linkedin_url || facts.linkedin || candidate.linkedin_url || candidate.linkedin)
           : facts[factKey];
-        const fallback = factKey === 'portfolio_url' ? (values.portfolio_url || values.website) : values[factKey];
-        const value = factKey && candidateHttpUrl(candidateLink || fallback);
-        return value
-          ? { field, factKey, status: 'supported', value }
-          : { field, factKey, status: 'manual', reason: 'Enter a valid profile URL manually.' };
+        const fallback = (factKey === 'portfolio_url' || factKey === 'website')
+          ? (facts.portfolio_url || facts.website || candidate.portfolio_url || candidate.website || values.portfolio_url || values.website)
+          : values[factKey];
+        const rawUrl = candidateLink || fallback;
+        const value = candidateHttpUrl(rawUrl);
+        if (!value) {
+          return { field, factKey, status: 'manual', reason: 'Enter a valid profile URL manually.' };
+        }
+        const normalizedUrl = value.toLowerCase();
+        if (consumedUrls.has(normalizedUrl)) {
+          return { field, factKey: null, status: 'manual', reason: 'Unmapped link field; enter manually.' };
+        }
+        consumedUrls.add(normalizedUrl);
+        return { field, factKey, status: 'supported', value };
       }
 
       const nl = norm(field.label);
@@ -1015,5 +1035,12 @@
   }
 
   root.NextkinFieldMapping = { planFill, resolveFact, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS, CONSEQUENTIAL_FACTS, isCompanySpecificQuestion, computeCacheKey, isUrlField, candidateHttpUrl, screeningJobKey };
-  if (typeof exports !== 'undefined') exports.isUrlField = isUrlField;
+  if (typeof exports !== 'undefined') {
+    exports.isUrlField = isUrlField;
+    exports.planFill = planFill;
+    exports.candidateHttpUrl = candidateHttpUrl;
+    exports.resolveFact = resolveFact;
+    exports.buildValues = buildValues;
+    exports.NextkinFieldMapping = root.NextkinFieldMapping;
+  }
 })(globalThis);
