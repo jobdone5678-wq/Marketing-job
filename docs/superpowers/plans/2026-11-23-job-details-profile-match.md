@@ -35,7 +35,7 @@
 - Produces: `computeJobDetailsMatch(jobSkills: string[], candidateSkills: string[], resumeText?: string): JobDetailsMatchResult`
 - Consumes: canonical skill lists and candidate profile/resume context.
 
-- [ ] **Step 1: Write failing unit test for job details skill matching**
+- [x] **Step 1: Write failing unit test for job details skill matching**
 
 Create `tests/job-details-match.test.mjs`:
 ```javascript
@@ -78,21 +78,21 @@ test('handles empty job skills without NaN or crashing', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node --experimental-strip-types --test tests/job-details-match.test.mjs`  
 Expected: FAIL (`computeJobDetailsMatch is not a function`)
 
-- [ ] **Step 3: Implement `computeJobDetailsMatch` in `src/lib/resumes/job-match.ts`**
+- [x] **Step 3: Implement `computeJobDetailsMatch` in `src/lib/resumes/job-match.ts`**
 
 Export `computeJobDetailsMatch` supporting skill normalization, alias matching, and optional resume text token lookup.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `node --experimental-strip-types --test tests/job-details-match.test.mjs`  
 Expected: PASS (3/3 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/resumes/job-match.ts tests/job-details-match.test.mjs
@@ -110,7 +110,7 @@ git commit -m "feat: implement computeJobDetailsMatch helper with comprehensive 
 - Produces: `candidateResume = { text: string; skills: string[] }` passed to `JobDetailClient`.
 - Consumes: Supabase server client `createClient()` and tables `candidates`, `resumes`.
 
-- [ ] **Step 1: Update `src/app/dashboard/jobs/[id]/page.tsx` to query candidate data**
+- [x] **Step 1: Update `src/app/dashboard/jobs/[id]/page.tsx` to query candidate data**
 
 1. Import `createClient` from `@/lib/supabase/server`.
 2. Retrieve current user via `supabase.auth.getUser()`.
@@ -120,12 +120,12 @@ git commit -m "feat: implement computeJobDetailsMatch helper with comprehensive 
    - Collate all unique skills and full resume text.
 4. Pass `candidateResume` prop to `<JobDetailClient />`.
 
-- [ ] **Step 2: Verify typecheck passes**
+- [x] **Step 2: Verify typecheck passes**
 
 Run: `npm run typecheck`  
 Expected: PASS with 0 errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/app/dashboard/jobs/[id]/page.tsx
@@ -145,7 +145,7 @@ git commit -m "feat: hydrate candidate profile and resume server-side on dashboa
 - Produces: Clean Profile Match card matching reference layout with "• You have" and "• Missing" skill chips.
 - Consumes: `computeJobDetailsMatch` with server hydrated or client fallback skills.
 
-- [ ] **Step 1: Redesign `JobMatchCard.tsx`**
+- [x] **Step 1: Redesign `JobMatchCard.tsx`**
 
 1. Remove:
    - "Upload CV" box.
@@ -159,27 +159,27 @@ git commit -m "feat: hydrate candidate profile and resume server-side on dashboa
    - `• Missing` group: Red dot `size-2 rounded-full bg-rose-500` + label `Missing`, rendering missing pills (`bg-neutral-50 text-neutral-700 border border-neutral-200 rounded-full px-3 py-1 text-xs font-medium dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-300`).
    - Enforce: NO "Tailor my CV" button.
 
-- [ ] **Step 2: Update `JobFactsSidebar.tsx`**
+- [x] **Step 2: Update `JobFactsSidebar.tsx`**
 
 Streamline props passed to `JobMatchCard`: pass `matchPercentage`, `matchedSkills`, `missingSkills`, `totalSkillsCount`.
 
-- [ ] **Step 3: Update `JobDetailClient.tsx`**
+- [x] **Step 3: Update `JobDetailClient.tsx`**
 
 1. Accept optional prop `candidateResume?: { text?: string; skills?: string[] } | null`.
 2. Compute `matchedSkills`, `missingSkills`, and `matchPercentage` using `computeJobDetailsMatch` combining `candidateResume?.skills`, `candidateResume?.text`, and fallback `baseProfileSkills`.
 3. Pass values to `JobFactsSidebar`.
 
-- [ ] **Step 4: Run unit tests and typecheck**
+- [x] **Step 4: Run unit tests and typecheck**
 
 Run: `node --experimental-strip-types --test tests/job-details-match.test.mjs; npm run typecheck`  
 Expected: PASS with 0 errors.
 
-- [ ] **Step 5: Run full test suite to guarantee zero regression**
+- [x] **Step 5: Run full test suite to guarantee zero regression**
 
 Run: `node --experimental-strip-types --test tests/url-canonicalization.test.mjs tests/ats-scoring-feed.test.mjs tests/background-storage-proxy.test.mjs tests/universal-discovery-attachment.test.mjs tests/ai-screening-scoped.test.mjs tests/submission-pipeline-resilience.test.mjs tests/cross-tab-sync.test.mjs tests/application-lifecycle.test.mjs tests/job-details-match.test.mjs`  
 Expected: 57 tests pass, 0 fail.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/components/jobs/detail/JobMatchCard.tsx src/components/jobs/detail/JobFactsSidebar.tsx src/app/jobs/[id]/JobDetailClient.tsx
