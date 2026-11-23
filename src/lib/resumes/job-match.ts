@@ -42,6 +42,23 @@ const ALIASES: Record<string, string[]> = {
   'REST APIs': ['RESTful APIs', 'REST API'],
 };
 
+const ALIAS_MAP = new Map<string, string[]>();
+for (const [canonical, aliasList] of Object.entries(ALIASES)) {
+  const allVariants = [canonical, ...aliasList];
+  for (const variant of allVariants) {
+    const key = variant.toLowerCase();
+    const existing = ALIAS_MAP.get(key) || [];
+    ALIAS_MAP.set(key, [...new Set([...existing, ...allVariants])]);
+  }
+}
+
+function getSkillVariants(skill: string): string[] {
+  const trimmed = skill.trim();
+  const lower = trimmed.toLowerCase();
+  const aliases = ALIAS_MAP.get(lower) || [];
+  return Array.from(new Set([trimmed, ...aliases]));
+}
+
 function containsTerm(source: string, term: string): boolean {
   const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const suffix = term === 'React' ? '(?![ -]+Native\\b)' : '';
@@ -49,13 +66,14 @@ function containsTerm(source: string, term: string): boolean {
 }
 
 function hasTerm(source: string, term: string): boolean {
-  if (term === 'Go') {
+  if (term.toLowerCase() === 'go') {
     return (
       /\b(?:Golang|Go (?:programming|language|developer|engineer))\b/i.test(source) ||
       /(?:^|[,|:])\s*Go\s*(?=$|[,|])/m.test(source)
     );
   }
-  return [term, ...(ALIASES[term] || [])].some((val) => containsTerm(source, val));
+  const variants = getSkillVariants(term);
+  return variants.some((val) => containsTerm(source, val));
 }
 
 function positiveTerm(source: string, term: string): boolean {
@@ -169,5 +187,106 @@ export function compareResumeToJob(resumeText: string, jobDescription: string) {
       .filter((point: Point) => !point.evidence)
       .slice(0, 8)
       .map((point: Point) => point.requirement),
+  };
+}
+
+export interface JobDetailsMatchResult {
+  matchPercentage: number;
+  matchedSkills: string[];
+  missingSkills: string[];
+  totalSkillsCount: number;
+}
+
+export function computeJobDetailsMatch(
+  jobSkills: string[],
+  candidateSkills: string[] = [],
+  resumeText?: string
+): JobDetailsMatchResult {
+  const validJobSkills = Array.isArray(jobSkills) ? jobSkills : [];
+  const validCandidateSkills = Array.isArray(candidateSkills) ? candidateSkills : [];
+
+  const uniqueJobSkills: string[] = [];
+  const seenJobSkills = new Set<string>();
+
+  for (const raw of validJobSkills) {
+    if (typeof raw !== 'string') continue;
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const lower = trimmed.toLowerCase();
+    if (!seenJobSkills.has(lower)) {
+      seenJobSkills.add(lower);
+      uniqueJobSkills.push(trimmed);
+    }
+  }
+
+  if (uniqueJobSkills.length === 0) {
+    return {
+      matchPercentage: 100,
+      matchedSkills: [],
+      missingSkills: [],
+      totalSkillsCount: 0,
+    };
+  }
+
+  const matchedSkills: string[] = [];
+  const missingSkills: string[] = [];
+
+  for (const jobSkill of uniqueJobSkills) {
+    const jobVariants = getSkillVariants(jobSkill);
+
+    // 1. Check against candidate explicit skills
+    const matchedBySkills = validCandidateSkills.some((candSkill) => {
+      if (typeof candSkill !== 'string') return false;
+      const candTrimmed = candSkill.trim();
+      if (!candTrimmed) return false;
+
+      // Exact case-insensitive match
+      if (candTrimmed.toLowerCase() === jobSkill.toLowerCase()) {
+        return true;
+      }
+
+      // Alias match
+      const candVariants = getSkillVariants(candTrimmed);
+      if (
+        jobVariants.some((jv) =>
+          candVariants.some((cv) => jv.toLowerCase() === cv.toLowerCase())
+        )
+      ) {
+        return true;
+      }
+
+      // Candidate skill string contains the job skill term
+      return hasTerm(candTrimmed, jobSkill);
+    });
+
+    if (matchedBySkills) {
+      matchedSkills.push(jobSkill);
+      continue;
+    }
+
+    // 2. Check against candidate resume text if provided
+    let matchedByResume = false;
+    if (resumeText && typeof resumeText === 'string') {
+      matchedByResume = jobVariants.some((variant) => positiveTerm(resumeText, variant));
+    }
+
+    if (matchedByResume) {
+      matchedSkills.push(jobSkill);
+    } else {
+      missingSkills.push(jobSkill);
+    }
+  }
+
+  const totalSkillsCount = uniqueJobSkills.length;
+  const matchPercentage =
+    totalSkillsCount === 0
+      ? 100
+      : Math.round((matchedSkills.length / totalSkillsCount) * 100);
+
+  return {
+    matchPercentage,
+    matchedSkills,
+    missingSkills,
+    totalSkillsCount,
   };
 }
