@@ -7,6 +7,8 @@ test('Side Panel DOM: contains onboarding and authenticated view containers', ()
 
   assert.ok(html.includes('id="onboarding-view"'), 'Must have #onboarding-view container');
   assert.ok(html.includes('id="authenticated-view"'), 'Must have #authenticated-view container');
+  assert.ok(!html.includes('id="onboarding-view" class="onboarding-card" hidden'), 'Initial HTML must NOT hide #onboarding-view');
+  assert.ok(html.includes('id="authenticated-view" hidden'), 'Initial HTML must hide #authenticated-view to prevent flash of disabled content');
   assert.ok(html.includes('id="onboarding-connect"'), 'Must have #onboarding-connect button');
   assert.ok(html.includes('1-Click Autofill'), 'Must list 1-Click Autofill value prop');
   assert.ok(html.includes('Smart Resume Sync'), 'Must list Smart Resume Sync value prop');

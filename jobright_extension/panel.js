@@ -1392,6 +1392,7 @@ $('dismiss-tracking-btn')?.addEventListener('click', async () => {
   }
 });
 
+renderAccount();
 window.addEventListener('focus', () => scheduleRefresh());
 setInterval(() => {
   if (document.visibilityState === 'visible') scheduleRefresh(0);

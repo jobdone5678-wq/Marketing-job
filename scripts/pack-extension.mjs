@@ -34,5 +34,10 @@ function getFiles(dir, base = '') {
 const files = getFiles(sourceDir);
 const zipped = fflate.zipSync(files, { level: 9 });
 
-fs.writeFileSync(targetZip, zipped);
-console.log(`Created ${targetZip} (${zipped.length} bytes) successfully!`);
+try {
+  fs.writeFileSync(targetZip, zipped);
+  console.log(`Created ${targetZip} (${zipped.length} bytes) successfully!`);
+} catch (err) {
+  console.error(`Failed to write extension package to ${targetZip}: ${err.message}`);
+  process.exit(1);
+}
