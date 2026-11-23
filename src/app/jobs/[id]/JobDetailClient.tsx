@@ -12,7 +12,7 @@ import type { Job, JobCopy } from '@/lib/jobs/freehire-types';
 import { useJobProfileSkills } from '@/hooks/use-job-profile-skills';
 import { useJobBookmarks } from '@/hooks/use-job-bookmarks';
 import { getJobLink } from '@/lib/jobs/freehire-display';
-import { computeJobDetailsMatch } from '@/lib/resumes/job-match';
+import { computeUnifiedJobMatch } from '@/lib/resumes/job-match';
 import { CompanyLogo } from '@/components/company-logo';
 import {
   CATEGORY_LABELS,
@@ -139,31 +139,13 @@ export function JobDetailClient({
   const sourceKindLabel = sourceKind === 'ats' ? 'ATS' : 'Aggregator';
   const isSourceAvoided = avoidedSources.has(rawSource);
 
-  // Collate candidate skills from server hydration, profile fallback, and client claims
-  const effectiveCandidateSkills = useMemo(() => {
-    const skills = new Set<string>();
-    if (candidateResume?.skills && Array.isArray(candidateResume.skills)) {
-      candidateResume.skills.forEach((s) => {
-        if (s) skills.add(s);
-      });
-    }
-    if (baseProfileSkills && Array.isArray(baseProfileSkills)) {
-      baseProfileSkills.forEach((s) => {
-        if (s) skills.add(s);
-      });
-    }
-    claimedSkills.forEach((s) => skills.add(s));
-    return Array.from(skills);
-  }, [candidateResume?.skills, baseProfileSkills, claimedSkills]);
-
-  // Deterministic profile match calculation
+  // Deterministic profile match calculation using shared unified helper
   const { matchedSkills, missingSkills, matchPercentage, totalSkillsCount } = useMemo(() => {
-    return computeJobDetailsMatch(
-      skillsList,
-      effectiveCandidateSkills,
-      candidateResume?.text || ''
-    );
-  }, [skillsList, effectiveCandidateSkills, candidateResume?.text]);
+    return computeUnifiedJobMatch(job, candidateResume, [
+      ...baseProfileSkills,
+      ...Array.from(claimedSkills),
+    ]);
+  }, [job, candidateResume, baseProfileSkills, claimedSkills]);
 
   // Skill claim handler (for JobDescriptionTab)
   const handleClaimSkill = useCallback((skill: string) => {

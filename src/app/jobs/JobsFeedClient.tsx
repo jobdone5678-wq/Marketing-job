@@ -13,7 +13,7 @@ import { JobsActiveFilters } from '@/components/jobs/feed/JobsActiveFilters';
 import { JobsSwipeDeck } from '@/components/jobs/feed/JobsSwipeDeck';
 import { JobsMapGrid } from '@/components/jobs/feed/JobsMapGrid';
 import { JobsPagination } from '@/components/jobs/feed/JobsPagination';
-import { compareResumeToJob } from '@/lib/resumes/job-match';
+import { computeUnifiedJobMatch } from '@/lib/resumes/job-match';
 import { applicationUrlKey } from '@/lib/jobs/application-state';
 import { useApplicationRealtime } from '@/hooks/use-application-realtime';
 
@@ -58,24 +58,15 @@ export function JobsFeedClient({
 
   const getAtsMatch = useCallback(
     (job: Job) => {
-      const jobText = job.description || job.enrichment?.summary || '';
-      if (candidateResume?.text && jobText) {
-        return compareResumeToJob(candidateResume.text, jobText);
-      }
-      if (
-        candidateResume?.skills?.length &&
-        (job.skills?.length || job.enrichment?.skills?.length)
-      ) {
-        const jobSkills = job.enrichment?.skills || job.skills || [];
-        const matched = jobSkills.filter((s: string) =>
-          candidateResume.skills.some((cs: string) => cs.toLowerCase() === s.toLowerCase())
-        );
-        const score = Math.round((matched.length / Math.max(1, jobSkills.length)) * 100);
-        return { score, matched, missing: jobSkills.filter((s: string) => !matched.includes(s)) };
-      }
-      return null;
+      if (!hasResumeProfile) return null;
+      const result = computeUnifiedJobMatch(job, candidateResume);
+      return {
+        score: result.matchPercentage,
+        matched: result.matchedSkills,
+        missing: result.missingSkills,
+      };
     },
-    [candidateResume]
+    [candidateResume, hasResumeProfile]
   );
 
   const getIsApplied = useCallback(
