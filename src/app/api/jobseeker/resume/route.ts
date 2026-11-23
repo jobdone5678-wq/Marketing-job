@@ -116,7 +116,10 @@ export async function POST(request: Request) {
       : sponsorshipAnswer === 'no'
       ? false
       : body.need_sponsorship_now ?? null;
-    const openToRelocation = screening.willing_to_relocate === 'yes'
+    const locationObj = (body.location || {}) as Record<string, any>;
+    const openToRelocation = locationObj.openToRelocation !== undefined
+      ? Boolean(locationObj.openToRelocation)
+      : screening.willing_to_relocate === 'yes'
       ? true
       : screening.willing_to_relocate === 'no'
       ? false
@@ -124,14 +127,15 @@ export async function POST(request: Request) {
     const noticePeriod = screening.notice_period_days || body.notice_period || null;
     const expectedSalary = screening.desired_salary_amount || body.expected_salary || null;
 
-    // Demographics
+    // Demographics (from Tab 1 Demographics card or legacy screening country_specific_answers)
+    const demographics = (body.demographics || {}) as Record<string, any>;
     const usAnswers = (countryAnswers.us || {}) as Record<string, any>;
-    const gender = usAnswers.gender || body.gender || null;
-    const race = usAnswers.race_ethnicity || body.race || null;
+    const gender = demographics.gender || usAnswers.gender || body.gender || null;
+    const race = demographics.raceEthnicity || usAnswers.race_ethnicity || body.race || body.race_ethnicity || null;
     const veteran = countryAnswers.us_veteran === 'Not stated' ? null
-      : countryAnswers.us_veteran || usAnswers.veteran_status || body.veteran || null;
+      : demographics.veteranStatus || countryAnswers.us_veteran || usAnswers.veteran_status || body.veteran || body.veteran_status || null;
     const disability = countryAnswers.us_disability === 'Not stated' ? null
-      : countryAnswers.us_disability || usAnswers.disability_status || body.disability || null;
+      : demographics.disabilityStatus || countryAnswers.us_disability || usAnswers.disability_status || body.disability || body.disability_status || null;
 
     // Check if candidate record already exists for this user
     const { data: existingCandidate } = await database()
@@ -145,6 +149,8 @@ export async function POST(request: Request) {
       raw_text,
       filename,
       has_parsed_resume,
+      headline: body.headline || null,
+      summary: body.summary || null,
       full_name: fullName,
       first_name: firstName,
       last_name: lastName,
@@ -169,6 +175,12 @@ export async function POST(request: Request) {
       open_to_relocation: openToRelocation,
       visa_status: body.visa_status || null,
       work_authorization: body.work_authorization || (authorizedInUsa ? 'Authorized to work in US' : null),
+      demographics: {
+        gender,
+        raceEthnicity: race,
+        veteranStatus: veteran,
+        disabilityStatus: disability,
+      },
       gender,
       race,
       race_ethnicity: race,
@@ -267,6 +279,10 @@ export async function POST(request: Request) {
           expected_salary: expectedSalary ? String(expectedSalary) : undefined,
           employment_history: workHistory.length ? workHistory : undefined,
           education_history: education.length ? education : undefined,
+          gender: (mergedFacts.gender as string) || undefined,
+          race: (mergedFacts.race as string) || (mergedFacts.race_ethnicity as string) || undefined,
+          veteran: (mergedFacts.veteran as string) || (mergedFacts.veteran_status as string) || undefined,
+          disability: (mergedFacts.disability as string) || (mergedFacts.disability_status as string) || undefined,
           confirmed_facts: mergedFacts,
           provenance_status: 'confirmed',
           is_active_bench: false,

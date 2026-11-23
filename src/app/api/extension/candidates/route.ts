@@ -9,7 +9,7 @@ const autofillKeys = [
   ...textFields, ...booleanFields, 'employment_types',
   'first_name', 'last_name', 'preferred_first_name', 'preferred_name',
   'zip_code', 'postal_code', 'country', 'github_url', 'website',
-  'current_company', 'summary', 'bio', 'availability', 'how_heard',
+  'current_company', 'headline', 'summary', 'bio', 'availability', 'how_heard',
   'school', 'languages', 'employment_history', 'education_history', 'saved_answers',
 ];
 
@@ -203,12 +203,16 @@ export async function GET(request: Request) {
       const facts = (c.confirmed_facts || {}) as Record<string, any>;
       return {
         ...c,
-        gender: c.gender || facts.gender || null,
-        veteran: c.veteran || facts.veteran || facts.veteran_status || null,
-        veteran_status: c.veteran_status || facts.veteran_status || facts.veteran || null,
-        disability: c.disability || facts.disability || facts.disability_status || null,
+        gender: c.gender || facts.gender || facts.demographics?.gender || null,
+        race: c.race || facts.race || facts.race_ethnicity || facts.demographics?.raceEthnicity || null,
+        race_ethnicity: c.race_ethnicity || facts.race_ethnicity || c.race || facts.race || facts.demographics?.raceEthnicity || null,
+        veteran: c.veteran || facts.veteran || facts.veteran_status || facts.demographics?.veteranStatus || null,
+        veteran_status: c.veteran_status || facts.veteran_status || facts.veteran || facts.demographics?.veteranStatus || null,
+        disability: c.disability || facts.disability || facts.disability_status || facts.demographics?.disabilityStatus || null,
         disability_status:
-          c.disability_status || facts.disability_status || facts.disability || null,
+          c.disability_status || facts.disability_status || facts.disability || facts.demographics?.disabilityStatus || null,
+        headline: c.headline || facts.headline || null,
+        summary: c.summary || facts.summary || null,
         work_authorization:
           c.work_authorization || facts.work_authorization || c.visa_status || null,
         location:
