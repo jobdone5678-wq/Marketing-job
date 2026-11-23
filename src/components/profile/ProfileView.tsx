@@ -30,8 +30,8 @@ import {
 import {
   COUNTRIES,
   POPULAR_COUNTRY_CODES,
-  getCountrySpecificQuestions,
 } from '@/lib/profile/countries';
+import { CountryFlag } from '@/components/ui/country-flag';
 import {
   POPULAR_ROLES,
   ALL_ROLES,
@@ -439,23 +439,6 @@ export function ProfileView() {
       },
     }));
   };
-
-  const updateCountryQuestionAnswer = (qId: string, value: string) => {
-    updateProfile((p) => ({
-      ...p,
-      screeningAnswers: {
-        ...p.screeningAnswers,
-        country_specific_answers: {
-          ...p.screeningAnswers.country_specific_answers,
-          [qId]: value,
-        },
-      },
-    }));
-  };
-
-  const countryQuestions = useMemo(() => {
-    return getCountrySpecificQuestions(profile.screeningAnswers.authorized_countries);
-  }, [profile.screeningAnswers.authorized_countries]);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-20 font-sans">
@@ -1945,7 +1928,7 @@ export function ProfileView() {
                         }`}
                       >
                         <span className="flex items-center gap-2">
-                          <span>{c.flag}</span>
+                          <CountryFlag code={c.code} name={c.name} className="size-4 shrink-0 rounded-full" />
                           <span>{c.name}</span>
                         </span>
                         {sel && <Check className="size-3.5" />}
@@ -1968,7 +1951,7 @@ export function ProfileView() {
                       variant="secondary"
                       className="gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-800 shadow-2xs dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
                     >
-                      <span>{country.flag}</span>
+                      <CountryFlag code={code} name={country.name} className="size-3.5 shrink-0 rounded-full" />
                       <span>{country.name}</span>
                       <button
                         type="button"
@@ -2000,7 +1983,7 @@ export function ProfileView() {
                         : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
                     }`}
                   >
-                    <span>{country.flag}</span>
+                    <CountryFlag code={code} name={country.name} className="size-4 shrink-0 rounded-full" />
                     <span>{country.name}</span>
                   </button>
                 );
@@ -2014,52 +1997,6 @@ export function ProfileView() {
               </button>
             </div>
           </section>
-
-          {/* DYNAMIC COUNTRY-SPECIFIC SCREENING QUESTIONS */}
-          {countryQuestions.length > 0 && (
-            <section className="space-y-4 rounded-xl border border-lime-600/30 bg-lime-50/20 p-5 dark:border-lime-500/20 dark:bg-lime-950/10">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="size-2 rounded-full bg-lime-600 shadow-xs" />
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-lime-900 dark:text-lime-300">
-                    Country-Specific Screening Questions ({countryQuestions.length})
-                  </h3>
-                </div>
-                <p className="text-xs text-neutral-600 dark:text-neutral-400">
-                  Customized requirements for your selected work authorization jurisdictions. The extension will automatically supply these on matching country portals.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {countryQuestions.map((q) => {
-                  const val = profile.screeningAnswers.country_specific_answers[q.id] || '';
-                  return (
-                    <div key={q.id} className="flex flex-col gap-1 text-xs">
-                      <span className="font-medium text-neutral-800 dark:text-neutral-200">
-                        {q.question}
-                      </span>
-                      {q.type === 'select' && q.options && (
-                        <select
-                          value={val}
-                          onChange={(e) => updateCountryQuestionAnswer(q.id, e.target.value)}
-                          className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-xs text-neutral-900 shadow-2xs dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-                        >
-                          {q.options.map((opt) => (
-                            <option key={opt} value={opt === 'Not stated' ? '' : opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                      {q.helpText && (
-                        <span className="text-[11px] text-neutral-500">{q.helpText}</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          )}
 
           {/* Standard Screening Form Fields (Matches Image 4) */}
           <section className="grid grid-cols-1 gap-4 rounded-xl border border-neutral-200/80 bg-white p-5 shadow-xs sm:grid-cols-2 dark:border-neutral-800 dark:bg-neutral-900">

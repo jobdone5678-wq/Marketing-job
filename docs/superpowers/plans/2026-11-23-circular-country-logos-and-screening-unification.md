@@ -34,7 +34,7 @@
 **Interfaces:**
 - Produces: `export function CountryFlag({ code, name, className }: { code: string; name?: string; className?: string })`
 
-- [ ] **Step 1: Write failing test in `tests/country-flag.test.mjs`**
+- [x] **Step 1: Write failing test in `tests/country-flag.test.mjs`**
 
 Verify that:
 1. `getCountryFlagUrl(code)` normalizes the code to lowercase and builds the proper HatScripts circle-flags SVG URL.
@@ -52,12 +52,12 @@ test('getCountryFlagUrl normalizes country codes to lowercase SVG URLs', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node --experimental-strip-types --test tests/country-flag.test.mjs`  
 Expected: FAIL ("cannot find module '../src/components/ui/country-flag.tsx'")
 
-- [ ] **Step 3: Implement `src/components/ui/country-flag.tsx`**
+- [x] **Step 3: Implement `src/components/ui/country-flag.tsx`**
 
 Implement helper `getCountryFlagUrl(code: string): string` and client component `CountryFlag`:
 ```tsx
@@ -106,12 +106,12 @@ export function CountryFlag({ code, name, className = 'size-4 shrink-0 rounded-f
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `node --experimental-strip-types --test tests/country-flag.test.mjs`  
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/components/ui/country-flag.tsx tests/country-flag.test.mjs
@@ -128,25 +128,25 @@ git commit -m "feat: create CountryFlag component with circle-flags SVG and erro
 **Interfaces:**
 - Consumes: `<CountryFlag code={code} name={name} className="size-4 shrink-0 rounded-full" />` from `@/components/ui/country-flag`
 
-- [ ] **Step 1: Update `ProfileView.tsx` to use `<CountryFlag />`**
+- [x] **Step 1: Update `ProfileView.tsx` to use `<CountryFlag />`**
 
 1. Import `CountryFlag` from `@/components/ui/country-flag`.
 2. Replace `{c.flag}` in country search dropdown with `<CountryFlag code={c.code} name={c.name} />`.
 3. Replace `{country.flag}` in selected country badges with `<CountryFlag code={country.code} name={country.name} />`.
 4. Replace `{country.flag}` in popular country pills (`POPULAR_COUNTRY_CODES`) with `<CountryFlag code={code} name={country.name} />`.
 
-- [ ] **Step 2: Remove redundant dynamic `Country-Specific Screening Questions` card**
+- [x] **Step 2: Remove redundant dynamic `Country-Specific Screening Questions` card**
 
 1. Remove `const countryQuestions = useMemo(...)` and unused `getCountrySpecificQuestions` import.
 2. Remove JSX block `{countryQuestions.length > 0 && (<section>...</section>)}`.
 3. Retain the universal 8-question screening form directly beneath the country pills.
 
-- [ ] **Step 3: Run typecheck and full test suite**
+- [x] **Step 3: Run typecheck and full test suite**
 
 Run: `npm run typecheck; node --experimental-strip-types --test tests/country-flag.test.mjs tests/no-mock-fallback.test.mjs tests/url-canonicalization.test.mjs tests/ats-scoring-feed.test.mjs tests/background-storage-proxy.test.mjs tests/universal-discovery-attachment.test.mjs tests/ai-screening-scoped.test.mjs tests/submission-pipeline-resilience.test.mjs tests/cross-tab-sync.test.mjs tests/application-lifecycle.test.mjs tests/job-details-match.test.mjs`  
 Expected: PASS with 0 compiler errors and all 64 tests passing.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/components/profile/ProfileView.tsx
