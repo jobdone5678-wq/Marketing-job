@@ -187,26 +187,36 @@ flowchart TD
   - Generate an explicit fill report: `{ filled: [...], unverified: [...], manual: [...], unmapped: [...] }`.
 
 ### 6.4 `jobright_extension/core/answer-bank.js` (New Module) & Backend Endpoints
-**Role:** Persistent cache and synchronization of user-confirmed answers to custom screening questions.
+**Role:** Persistent cache, candidate management, and safe synchronization of user-confirmed answers to custom screening questions.
 - **Backend Authentication & Route**:
   - The extension does NOT connect directly to Supabase with client-side SQL/RLS.
   - All synchronization flows through authenticated Next.js backend endpoints:
     - `GET /api/extension/answer-bank`: Fetches the candidate's active Answer Bank on browser/extension session initialization.
     - `POST /api/extension/answer-bank`: Upserts a newly saved question-answer pair. Authenticated via extension pairing session token.
+    - `PUT /api/extension/answer-bank/[id]`: Updates an existing answer.
+    - `DELETE /api/extension/answer-bank/[id]`: Removes a saved answer.
   - The extension caches the answer bank locally in `chrome.storage.local` for instant offline matching.
+- **Candidate Answer Management UI**:
+  - Candidates can review, edit, and delete their saved answers in the NextKinHR candidate profile settings and extension sidepanel.
+  - Sensitive information is never cached without explicit candidate opt-in.
+- **Context-Aware Semantic Matching & Safety Rules**:
+  - Match by question meaning, answer type (`text`, `choice`, `boolean`), available dropdown/radio options, and context—never by raw normalized string alone.
+  - Factual candidate profile data (`confirmed_facts`) always takes precedence over the Answer Bank.
+  - High-consequence answers (salary expectations, visa sponsorship, work authorization, role-specific experience) require strict option matching or explicit candidate reconfirmation.
+  - Legal consent, arbitration, background check authorization, and electronic signature fields are strictly barred from the Answer Bank and remain `{ status: 'manual' }`.
 - **Keying & Normalization**:
   - Normalize question text (strip required asterisks, lowercase, trim punctuation).
   - Scope questions:
-    - *Universal / Factual* (e.g. "How many years of React experience?", salary, notice period): Keyed by `normalized_question`.
+    - *Universal / Factual* (e.g. "How many years of React experience?", notice period): Keyed by `normalized_question`.
     - *Company / Role Specific* (e.g. "Why do you want to join Stripe?"): Keyed by `company_slug + ':' + normalized_question`. The company identifier is the normalized company name slug (e.g. `stripe`) parsed client-side from the job posting, avoiding any blocking API lookup.
 - **Candidate Approval Workflow**:
   - When a user manually answers or edits an unfamiliar field in the sidepanel, display an inline prompt: *"Save this answer for future applications?"* with options: `[ Save for all jobs ]` or `[ Save for this company only ]`.
   - When approved, write to local cache and asynchronously sync to `/api/extension/answer-bank`.
 
 ### 6.5 `jobright_extension/application-confirmation.js` & `panel.js`
-**Role:** Reliable application tracking with two-tier submission confirmation.
+**Role:** Reliable application tracking with two-tier submission confirmation and durable retry queue.
 - **Two-Tier Submission Confirmation**:
-  1. **Tier A (High-Confidence Auto-Detection)**: When an application transitions to an explicit ATS confirmation receipt (e.g., explicit confirmation selectors, `/thanks`, `/thank-you`, `/applied` URL transitions), the extension automatically captures and submits the receipt as it does today.
+  1. **Tier A (High-Confidence Auto-Detection)**: When an application transitions to an explicit ATS confirmation receipt (e.g., explicit confirmation selectors, verified ATS success banner), the extension verifies that an actual submission attempt preceded the receipt before recording. A URL containing `/thanks`, `/applied`, or `/success` alone is insufficient without preceding submission attempt evidence within the active session.
   2. **Tier B (Ambiguous Form Disappearance Prompt)**: If an active application form that was previously autofilled disappears or is torn down from the DOM *without* triggering a verified confirmation receipt:
      - The extension displays a non-intrusive prompt in the sidepanel/widget:
        ```
@@ -216,17 +226,20 @@ flowchart TD
        └──────────────────────────────────────────────┘
        ```
      - Intermediate wizard navigation ("Next", "Continue") is filtered out so it never triggers this prompt.
-- **Idempotent Atomic Sync**:
-  - Upon user confirmation (or auto-receipt), call `/api/extension/auto-submit` with the stable normalized job URL, candidate ID, and submission timestamp.
-  - Relays confirmation event to open NextKinHR dashboard tabs via `postMessage`.
+- **Canonical Job Identity & Durable Retry Sync**:
+  - Associate each submission with a stable canonical job identifier (e.g. `job_id`, `gh_jid`, requisition number) or normalized career posting URL, backed by database-level idempotency (`uq_candidate_job_submission`).
+  - If the backend request to `/api/extension/auto-submit` fails or experiences network timeout:
+    - The submission event is retained in a durable pending queue in `chrome.storage.local`.
+    - Retries automatically with exponential backoff on reconnection or page change.
+    - The dashboard is **NOT** marked as synchronized until server acknowledgement is received.
 
-### 6.6 Feature Flag Delivery & Fallback Cascade
+### 6.6 Feature Flag Delivery & Unconditional Safety Invariants
 - **Flag Delivery**:
   - Controlled by `NEXT_PUBLIC_ENABLE_UNIVERSAL_AUTOFILL_V2`.
   - Returned in the extension configuration / profile payload from `GET /api/extension/candidates` and cached in `chrome.storage.local`.
-- **Fallback Behavior**:
-  - If the flag is `false`: Tier 1 adapters continue executing, and Tier 2 reverts to the legacy matching heuristics in `field-mapping.js`.
-  - If the flag is `true`: The full Universal Semantic Engine (question grouping, anchored prefix matching, 1-to-1 URL slotting, combobox protocol, and Answer Bank) is activated.
+- **Unconditional Safety Invariants**:
+  - **Crucial Rule**: Disabling the feature flag (`NEXT_PUBLIC_ENABLE_UNIVERSAL_AUTOFILL_V2 = false`) only disables Tier 2 universal question scanning on unlisted domains.
+  - **Safety Validation Never Disables**: 1-to-1 URL slotting, blocking duplicate URLs, blocking prose in URL fields, native event dispatch, and safe demographic protection remain **unconditionally active** across all adapters and legacy matching paths. Disabling the universal engine will NEVER re-introduce URL duplication or unsafe autofill.
 
 ---
 
@@ -248,9 +261,17 @@ CREATE TABLE IF NOT EXISTS public.candidate_answer_bank (
   use_count INTEGER DEFAULT 1,
   last_used_at TIMESTAMPTZ DEFAULT NOW(),
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  CONSTRAINT uq_candidate_question_scope UNIQUE (candidate_id, question_normalized, company_scope)
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Separate partial unique indexes to safely handle NULL company_scope without duplicates
+CREATE UNIQUE INDEX IF NOT EXISTS uq_candidate_answer_universal 
+  ON public.candidate_answer_bank (candidate_id, question_normalized) 
+  WHERE company_scope IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_candidate_answer_company 
+  ON public.candidate_answer_bank (candidate_id, question_normalized, company_scope) 
+  WHERE company_scope IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_answer_bank_lookup 
   ON public.candidate_answer_bank (candidate_id, question_normalized);
