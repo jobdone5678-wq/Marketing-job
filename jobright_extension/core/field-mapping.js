@@ -35,6 +35,25 @@
   // Adapters spell a fact as "current_state" or "current state"; normalise before lookup.
   const CANONICAL_BY_NORM = new Map([...CANONICAL_FACTS].map(k => [norm(k), k]));
 
+  // Anchored prefix matching: synonym must open the label at a word/token boundary.
+  function opensWith(label, synonym) {
+    if (typeof label !== 'string' || typeof synonym !== 'string') return false;
+    const l = norm(label);
+    const s = norm(synonym);
+    if (!s) return false;
+    if (!l.startsWith(s)) return false;
+    return !/[a-z0-9]/i.test(l.charAt(s.length));
+  }
+
+  const NON_BOOLEAN_FACTS = new Set([
+    'country', 'first_name', 'preferred_first_name', 'last_name', 'full_name', 'email', 'phone',
+    'current_city', 'current_state', 'current_location', 'current_employer',
+    'current_title', 'headline', 'zip_code', 'full_address', 'salary_expectation',
+    'summary', 'bio', 'website', 'linkedin_url', 'github_url', 'total_experience_years',
+    'primary_skills', 'school', 'graduation_year', 'end_client', 'point_of_contact', 'pay_rate',
+    'vendor_email', 'personal_email', 'contract_type', 'current_salary'
+  ]);
+
   // Field labels seen across job boards, ATS platforms and bespoke career sites.
   const aliases = {
     first_name: ['first name', 'given name', 'forename', 'fname', 'first and middle name', 'first/given name', 'middle and first name'],
@@ -71,6 +90,10 @@
     total_experience_years: ['years of experience', 'total experience', 'experience years', 'how many years of experience', 'total years of experience', 'years of professional experience', 'years of work experience', 'relevant experience', 'total work experience', 'overall experience'],
     primary_skills: ['skills', 'primary skills', 'technical skills', 'key skills', 'ideal tech stack', 'tech stack', 'languages frameworks', 'strongest in', 'languages and frameworks', 'programming languages', 'skills and abilities', 'core competencies', 'technologies', 'expertise', 'programming languages and frameworks', 'skills list', 'your skills'],
     authorized_in_usa: [
+      'are you legally authorized to work in this country',
+      'are you authorized to work in this country',
+      'authorized to work in this country',
+      'legally authorized to work in this country',
       'are you legally authorized to work in the country for which you are applying',
       'are you legally authorized to work in the united states',
       'legally authorized to work in the country for which you are applying',
@@ -90,6 +113,14 @@
       'work authorization'
     ],
     needs_sponsorship: [
+      'will your employer need to sponsor your visa status',
+      'will your employer need to sponsor your visa',
+      'will your employer need to sponsor',
+      'will your employer require sponsorship',
+      'will an employer need to sponsor',
+      'will you or your employer require sponsorship',
+      'will you or your employer need sponsorship',
+      'employer sponsorship',
       'will you now or in the future require sponsorship for employment visa status',
       'will you now or in the future require sponsorship',
       'do you now or in the future require sponsorship for employment visa status',
@@ -428,13 +459,13 @@
     const names = fullName.split(/\s+/);
 
     // An explicit null means "not known"; an absent value keeps the portal default.
-    const rawAuth = facts.authorized_in_usa !== undefined ? facts.authorized_in_usa : candidate.authorized_in_usa;
+    const rawAuth = facts.authorized_in_usa !== undefined ? facts.authorized_in_usa : (candidate.authorized_in_usa !== undefined ? candidate.authorized_in_usa : candFacts.authorized_in_usa);
     const authKnown = normalizeBoolean(rawAuth);
-    const sponsorPrimary = facts.need_sponsorship_now !== undefined ? facts.need_sponsorship_now : candidate.need_sponsorship_now;
-    const sponsorFuture = facts.need_sponsorship_future !== undefined ? facts.need_sponsorship_future : candidate.need_sponsorship_future;
+    const sponsorPrimary = facts.need_sponsorship_now !== undefined ? facts.need_sponsorship_now : (candidate.need_sponsorship_now !== undefined ? candidate.need_sponsorship_now : candFacts.need_sponsorship_now);
+    const sponsorFuture = facts.need_sponsorship_future !== undefined ? facts.need_sponsorship_future : (candidate.need_sponsorship_future !== undefined ? candidate.need_sponsorship_future : candFacts.need_sponsorship_future);
     const nowSponsor = normalizeBoolean(sponsorPrimary);
     const futureSponsor = normalizeBoolean(sponsorFuture);
-    const directSponsor = normalizeBoolean(facts.needs_sponsorship ?? candidate.needs_sponsorship);
+    const directSponsor = normalizeBoolean(facts.needs_sponsorship ?? candidate.needs_sponsorship ?? candFacts.needs_sponsorship);
     const sponsorKnown = nowSponsor === true || futureSponsor === true ? true
       : nowSponsor === false && futureSponsor === false ? false : directSponsor;
     const skills = facts.primary_skills || candidate.primary_skills || (Array.isArray(candidate.skills) ? candidate.skills.join(', ') : candidate.skills || '');
@@ -555,19 +586,48 @@
   }
 
   // Which profile fact a control is asking for, and how sure we are.
-  function resolveFact(label, hint) {
-    const nh = norm(hint);
+  function resolveFact(label, hint, context) {
+    const field = (typeof label === 'object' && label !== null) ? label : (typeof context === 'object' && context !== null ? context : null);
+    const rawLabel = (typeof label === 'string' ? label : field?.label) || '';
+    const rawHint = (typeof hint === 'string' ? hint : field?.hint) || '';
+    const kind = field?.kind || '';
+    const options = field?.options || [];
+
+    const nl = norm(rawLabel);
+    const cleanLabel = nl.replace(/^(?:(?:please|your|provide|enter|share|paste|input|select|choose)\s+)+/, '');
+    let nh = norm(rawHint);
+    const cleanHint = nh.replace(/^(?:(?:please|your|provide|enter|share|paste|input|select|choose)\s+)+/, '');
+
+    const hasBooleanOptions = Boolean(
+      (options && options.length > 0 && pickBooleanOption(options, true) && pickBooleanOption(options, false)) ||
+      (kind === 'checkbox')
+    );
+
+    const isAuthLabel = aliases.authorized_in_usa.some(a => opensWith(cleanLabel, a) || opensWith(nl, a));
+    const isSponsorLabel = aliases.needs_sponsorship.some(a => opensWith(cleanLabel, a) || opensWith(nl, a)) ||
+      (/\b(?:sponsor|sponsorship)\b/i.test(nl) && /\b(?:visa|work|employment|require|need)\b/i.test(nl));
+
+    // Tier 1 adapter hint sanitization through Tier 2 safety rules
+    if (nh) {
+      if (hasBooleanOptions && NON_BOOLEAN_FACTS.has(nh)) {
+        nh = '';
+      } else if (isAuthLabel && nh !== 'authorized_in_usa' && nh !== 'work_authorization' && nh !== 'visa_status') {
+        nh = '';
+      } else if (isSponsorLabel && nh !== 'needs_sponsorship' && nh !== 'visa_status') {
+        nh = '';
+      }
+    }
+
     if (nh) {
       const canonical = CANONICAL_BY_NORM.get(nh);
       if (canonical) return { key: canonical, exact: true, length: nh.length };
     }
 
-    if (isDOBQuestion(label, hint)) return { key: 'date_of_birth', exact: true, length: 13 };
-    if (/\b(?:citizen|citizenship|nationality)\b/i.test(label) && !/\bsponsor/i.test(label)) {
+    if (isDOBQuestion(rawLabel, rawHint, field?.element)) return { key: 'date_of_birth', exact: true, length: 13 };
+    if (/\b(?:citizen|citizenship|nationality)\b/i.test(rawLabel) && !/\bsponsor/i.test(rawLabel)) {
       return { key: 'citizenship_status', exact: true, length: 11 };
     }
 
-    const nl = norm(label);
     if (nl === 'name') return { key: 'full_name', exact: true, length: 4 };
     if (/\bcountry code\b/i.test(nl) && /\b(?:number|phone|mobile|tel)\b/i.test(nl)) {
       return { key: 'phone', exact: true, length: nl.length };
@@ -575,13 +635,14 @@
 
     const matches = [];
     for (const key of Object.keys(aliases)) {
+      if (hasBooleanOptions && NON_BOOLEAN_FACTS.has(key)) continue;
       for (const a of aliases[key]) {
         const na = norm(a);
-        if (nl === na || (nh && nh === na)) matches.push({ key, exact: true, length: na.length });
-        else if (na.length <= 4) {
-          const re = new RegExp('\\b' + na.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
-          if (re.test(nl) || (nh && re.test(nh))) matches.push({ key, exact: false, length: na.length });
-        } else if (nl.includes(na) || (nh && nh.includes(na))) {
+        if (nl === na || (nh && nh === na)) {
+          matches.push({ key, exact: true, length: na.length });
+        } else if (opensWith(nl, na) || (cleanLabel && opensWith(cleanLabel, na))) {
+          matches.push({ key, exact: true, length: na.length });
+        } else if (nh && (opensWith(nh, na) || (cleanHint && opensWith(cleanHint, na)))) {
           matches.push({ key, exact: false, length: na.length });
         }
       }
@@ -727,7 +788,7 @@
         }
         return { field, factKey: 'availability', status: 'unknown', reason: 'Candidate availability not provided.' };
       }
-      if (field.kind === 'text' && isDateInput(field.element) && !resolveFact(field.label, field.hint)) {
+      if (field.kind === 'text' && isDateInput(field.element) && !resolveFact(field.label, field.hint, field)) {
         return { field, status: 'needs_review', reason: 'Unrecognized date field; do not substitute availability.' };
       }
       // Legal acknowledgements and signatures:
@@ -738,7 +799,7 @@
         return { field, factKey: 'e_signature', status: 'manual', reason: 'Candidate signature is required.' };
       }
 
-      const resolved = resolveFact(field.label, field.hint);
+      const resolved = resolveFact(field.label, field.hint, field);
       if (!resolved) {
         if (isChoiceKind(field.kind)) return aiPlan(field, 'Select an option supported by the candidate profile.');
         const isContactOrPersonal = /\b(name|first|last|given|surname|email|phone|tel|cell|city|state|zip|postal|address|country|linkedin|github|website|portfolio|date|when can you start|start date)\b/i.test(nl);
@@ -765,7 +826,9 @@
         return { field, factKey, status: 'needs_review', reason: 'Citizenship requires an explicit yes/no answer.' };
       }
       // A known United States authorization must not answer a question about an unrelated foreign country.
-      if (factKey === 'authorized_in_usa' && !isUSQuestion(nl) && !/^(?:are you (?:legally )?authorized to work|legally authorized|work authorization|authorized to work|authorized in usa)$/.test(nl || nh)) {
+      if (factKey === 'authorized_in_usa' && !isUSQuestion(nl) &&
+        !/^(?:are you\s+)?(?:legally\s+)?authorized to work(?:\s+in\s+(?:this country|the country\b[^?]*))?[?.\s]*$/i.test(nl || nh) &&
+        !/^(?:are you (?:legally )?authorized to work|legally authorized|work authorization|authorized to work|authorized in usa)[?.\s]*$/i.test(nl || nh)) {
         return { field, factKey, status: 'unknown', reason: 'Question is not about United States work authorization.' };
       }
 
@@ -1034,12 +1097,13 @@
     return normKey; // Factual question cached globally
   }
 
-  root.NextkinFieldMapping = { planFill, resolveFact, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS, CONSEQUENTIAL_FACTS, isCompanySpecificQuestion, computeCacheKey, isUrlField, candidateHttpUrl, screeningJobKey };
+  root.NextkinFieldMapping = { planFill, resolveFact, opensWith, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS, CONSEQUENTIAL_FACTS, isCompanySpecificQuestion, computeCacheKey, isUrlField, candidateHttpUrl, screeningJobKey };
   if (typeof exports !== 'undefined') {
     exports.isUrlField = isUrlField;
     exports.planFill = planFill;
     exports.candidateHttpUrl = candidateHttpUrl;
     exports.resolveFact = resolveFact;
+    exports.opensWith = opensWith;
     exports.buildValues = buildValues;
     exports.NextkinFieldMapping = root.NextkinFieldMapping;
   }

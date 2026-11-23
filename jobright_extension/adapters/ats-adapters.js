@@ -84,6 +84,13 @@
   const hostIs = re => host => re.test(String(host || '').toLowerCase());
 
   const adapters = [
+    // 0. Generic Universal ATS Fallback
+    {
+      id: 'generic',
+      name: 'Universal ATS Generic Adapter',
+      matches: () => true,
+      hint: el => canonicalHint(el)
+    },
     // 1. Ashby
     {
       id: 'ashby',
