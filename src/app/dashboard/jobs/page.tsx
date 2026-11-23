@@ -77,6 +77,7 @@ export default async function DashboardJobsPage({ searchParams }: PageProps) {
         facets={facets}
         appliedKeys={appliedKeys}
         candidateResume={candidateResume}
+        error={initial?.error || null}
       />
     </Suspense>
   );

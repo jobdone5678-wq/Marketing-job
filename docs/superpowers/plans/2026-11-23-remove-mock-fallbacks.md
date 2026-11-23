@@ -30,11 +30,11 @@
 - Modify: `src/lib/jobs/freehire-types.ts`
 - Delete: `src/lib/jobs/freehire-fallback.ts`
 
-- [ ] **Step 1: Update `src/lib/jobs/freehire-types.ts` to support optional error in `Slice<T>`**
+- [x] **Step 1: Update `src/lib/jobs/freehire-types.ts` to support optional error in `Slice<T>`**
 
 Add `error?: string;` to `Slice<T>`.
 
-- [ ] **Step 2: Update `src/lib/jobs/freehire-api.ts` to remove all fallback mock data**
+- [x] **Step 2: Update `src/lib/jobs/freehire-api.ts` to remove all fallback mock data**
 
 1. Remove import from `./freehire-fallback`.
 2. In `searchFreehireJobs`:
@@ -49,12 +49,12 @@ Add `error?: string;` to `Slice<T>`.
    - Return `data` or `[]` on failure.
 6. Delete `src/lib/jobs/freehire-fallback.ts`.
 
-- [ ] **Step 3: Run typecheck to verify no compiler errors**
+- [x] **Step 3: Run typecheck to verify no compiler errors**
 
 Run: `npm run typecheck`  
 Expected: PASS with 0 errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git rm src/lib/jobs/freehire-fallback.ts
@@ -70,11 +70,11 @@ git commit -m "feat: remove mock fallback datasets from freehire-api and delete 
 - Modify: `src/app/dashboard/jobs/page.tsx`
 - Modify: `src/app/jobs/JobsFeedClient.tsx`
 
-- [ ] **Step 1: Pass error prop in `src/app/dashboard/jobs/page.tsx`**
+- [x] **Step 1: Pass error prop in `src/app/dashboard/jobs/page.tsx`**
 
 Extract `initial?.error` and pass `error={initial?.error || null}` to `JobsFeedClient`.
 
-- [ ] **Step 2: Render error UI in `src/app/jobs/JobsFeedClient.tsx`**
+- [x] **Step 2: Render error UI in `src/app/jobs/JobsFeedClient.tsx`**
 
 Accept `error?: string | null` in `JobsFeedClientProps`.
 When `error` is present or `!initial`:
@@ -99,12 +99,12 @@ Render clean error container:
 </div>
 ```
 
-- [ ] **Step 3: Run typecheck and full test suite**
+- [x] **Step 3: Run typecheck and full test suite**
 
 Run: `npm run typecheck; node --experimental-strip-types --test tests/url-canonicalization.test.mjs tests/ats-scoring-feed.test.mjs tests/background-storage-proxy.test.mjs tests/universal-discovery-attachment.test.mjs tests/ai-screening-scoped.test.mjs tests/submission-pipeline-resilience.test.mjs tests/cross-tab-sync.test.mjs tests/application-lifecycle.test.mjs tests/job-details-match.test.mjs`  
 Expected: PASS with 59 tests passing, 0 failing.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/app/dashboard/jobs/page.tsx src/app/jobs/JobsFeedClient.tsx
