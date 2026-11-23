@@ -55,6 +55,7 @@ next-env.d.ts
 *.crx
 
 *.zip
+/dist/
 jobright_extension (2)/
 prompt-master/
 /docs/operations/legacy-data-review.json
