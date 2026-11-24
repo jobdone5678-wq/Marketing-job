@@ -85,6 +85,13 @@
   const hostIs = re => host => re.test(String(host || '').toLowerCase());
 
   const adapters = [
+    // 0. Generic Universal ATS Fallback
+    {
+      id: 'generic',
+      name: 'Universal ATS Generic Adapter',
+      matches: () => true,
+      hint: el => canonicalHint(el)
+    },
     // 1. Ashby
     {
       id: 'ashby',
@@ -1703,6 +1710,25 @@
   // Adapters spell a fact as "current_state" or "current state"; normalise before lookup.
   const CANONICAL_BY_NORM = new Map([...CANONICAL_FACTS].map(k => [norm(k), k]));
 
+  // Anchored prefix matching: synonym must open the label at a word/token boundary.
+  function opensWith(label, synonym) {
+    if (typeof label !== 'string' || typeof synonym !== 'string') return false;
+    const l = norm(label);
+    const s = norm(synonym);
+    if (!s) return false;
+    if (!l.startsWith(s)) return false;
+    return !/[a-z0-9]/i.test(l.charAt(s.length));
+  }
+
+  const NON_BOOLEAN_FACTS = new Set([
+    'country', 'first_name', 'preferred_first_name', 'last_name', 'full_name', 'email', 'phone',
+    'current_city', 'current_state', 'current_location', 'current_employer',
+    'current_title', 'headline', 'zip_code', 'full_address', 'salary_expectation',
+    'summary', 'bio', 'website', 'linkedin_url', 'github_url', 'total_experience_years',
+    'primary_skills', 'school', 'graduation_year', 'end_client', 'point_of_contact', 'pay_rate',
+    'vendor_email', 'personal_email', 'contract_type', 'current_salary'
+  ]);
+
   // Field labels seen across job boards, ATS platforms and bespoke career sites.
   const aliases = {
     first_name: ['first name', 'given name', 'forename', 'fname', 'first and middle name', 'first/given name', 'middle and first name'],
@@ -1733,12 +1759,16 @@
     citizenship_status: ['citizenship status', 'country of citizenship', 'nationality', 'are you a us citizen', 'are you a u s citizen', 'are you a united states citizen'],
     linkedin_url: ['linkedin', 'linkedin profile', 'linkedin url', 'urls linkedin', 'linkedin profile url', 'linked in'],
     github_url: ['github', 'github url', 'github profile', 'urls github', 'github com'],
-    website: ['website', 'portfolio', 'personal website', 'portfolio url', 'urls portfolio', 'urls other', 'personal url', 'homepage', 'home page', 'personal site', 'other url', 'blog url'],
+    website: ['website', 'portfolio', 'personal website', 'portfolio url', 'urls portfolio', 'personal url', 'homepage', 'home page', 'personal site', 'blog url'],
     current_employer: ['current employer', 'current company', 'most recent company', 'employer', 'company', 'org', 'current organization', 'organization', 'company name', 'present employer', 'most recent employer', 'last employer', 'current organisation'],
     current_title: ['current title', 'current job title', 'most recent title', 'headline', 'current role', 'job title', 'present title', 'current position', 'designation', 'most recent job title'],
     total_experience_years: ['years of experience', 'total experience', 'experience years', 'how many years of experience', 'total years of experience', 'years of professional experience', 'years of work experience', 'relevant experience', 'total work experience', 'overall experience'],
     primary_skills: ['skills', 'primary skills', 'technical skills', 'key skills', 'ideal tech stack', 'tech stack', 'languages frameworks', 'strongest in', 'languages and frameworks', 'programming languages', 'skills and abilities', 'core competencies', 'technologies', 'expertise', 'programming languages and frameworks', 'skills list', 'your skills'],
     authorized_in_usa: [
+      'are you legally authorized to work in this country',
+      'are you authorized to work in this country',
+      'authorized to work in this country',
+      'legally authorized to work in this country',
       'are you legally authorized to work in the country for which you are applying',
       'are you legally authorized to work in the united states',
       'legally authorized to work in the country for which you are applying',
@@ -1758,9 +1788,19 @@
       'work authorization'
     ],
     needs_sponsorship: [
+      'will your employer need to sponsor your visa status',
+      'will your employer need to sponsor your visa',
+      'will your employer need to sponsor',
+      'will your employer require sponsorship',
+      'will an employer need to sponsor',
+      'will you or your employer require sponsorship',
+      'will you or your employer need sponsorship',
+      'employer sponsorship',
       'will you now or in the future require sponsorship for employment visa status',
       'will you now or in the future require sponsorship',
+      'will you now or in the future require visa sponsorship',
       'do you now or in the future require sponsorship for employment visa status',
+      'do you now or in the future require visa sponsorship',
       'will you require visa sponsorship',
       'will you require visa sponsorship now or in the future',
       'do you require visa sponsorship',
@@ -2096,13 +2136,13 @@
     const names = fullName.split(/\s+/);
 
     // An explicit null means "not known"; an absent value keeps the portal default.
-    const rawAuth = facts.authorized_in_usa !== undefined ? facts.authorized_in_usa : candidate.authorized_in_usa;
+    const rawAuth = facts.authorized_in_usa !== undefined ? facts.authorized_in_usa : (candidate.authorized_in_usa !== undefined ? candidate.authorized_in_usa : candFacts.authorized_in_usa);
     const authKnown = normalizeBoolean(rawAuth);
-    const sponsorPrimary = facts.need_sponsorship_now !== undefined ? facts.need_sponsorship_now : candidate.need_sponsorship_now;
-    const sponsorFuture = facts.need_sponsorship_future !== undefined ? facts.need_sponsorship_future : candidate.need_sponsorship_future;
+    const sponsorPrimary = facts.need_sponsorship_now !== undefined ? facts.need_sponsorship_now : (candidate.need_sponsorship_now !== undefined ? candidate.need_sponsorship_now : candFacts.need_sponsorship_now);
+    const sponsorFuture = facts.need_sponsorship_future !== undefined ? facts.need_sponsorship_future : (candidate.need_sponsorship_future !== undefined ? candidate.need_sponsorship_future : candFacts.need_sponsorship_future);
     const nowSponsor = normalizeBoolean(sponsorPrimary);
     const futureSponsor = normalizeBoolean(sponsorFuture);
-    const directSponsor = normalizeBoolean(facts.needs_sponsorship ?? candidate.needs_sponsorship);
+    const directSponsor = normalizeBoolean(facts.needs_sponsorship ?? candidate.needs_sponsorship ?? candFacts.needs_sponsorship);
     const sponsorKnown = nowSponsor === true || futureSponsor === true ? true
       : nowSponsor === false && futureSponsor === false ? false : directSponsor;
     const skills = facts.primary_skills || candidate.primary_skills || (Array.isArray(candidate.skills) ? candidate.skills.join(', ') : candidate.skills || '');
@@ -2176,7 +2216,8 @@
       headline: facts.headline || candidate.headline || candFacts.headline || facts.current_job_title || candidate.current_job_title || '',
       linkedin_url: linkedin,
       github_url: facts.github_url || candidate.github_url || '',
-      website: facts.website || candidate.website || candidate.portfolio_url || '',
+      portfolio_url: facts.portfolio_url || candidate.portfolio_url || facts.website || candidate.website || '',
+      website: facts.website || candidate.website || facts.portfolio_url || candidate.portfolio_url || '',
       total_experience_years: facts.total_experience_years !== undefined ? facts.total_experience_years
         : (candidate.total_experience_years !== undefined ? candidate.total_experience_years
           : (candidate.experience_years !== undefined ? candidate.experience_years : (candidate.years_of_experience ?? ''))),
@@ -2222,19 +2263,48 @@
   }
 
   // Which profile fact a control is asking for, and how sure we are.
-  function resolveFact(label, hint) {
-    const nh = norm(hint);
+  function resolveFact(label, hint, context) {
+    const field = (typeof label === 'object' && label !== null) ? label : (typeof context === 'object' && context !== null ? context : null);
+    const rawLabel = (typeof label === 'string' ? label : field?.label) || '';
+    const rawHint = (typeof hint === 'string' ? hint : field?.hint) || '';
+    const kind = field?.kind || '';
+    const options = field?.options || [];
+
+    const nl = norm(rawLabel);
+    const cleanLabel = nl.replace(/^(?:(?:what is your|what's your|whats your|what is|please|your|provide|enter|share|paste|input|select|choose)\s+)+/, '');
+    let nh = norm(rawHint);
+    const cleanHint = nh.replace(/^(?:(?:what is your|what's your|whats your|what is|please|your|provide|enter|share|paste|input|select|choose)\s+)+/, '');
+
+    const hasBooleanOptions = Boolean(
+      (options && options.length > 0 && pickBooleanOption(options, true) && pickBooleanOption(options, false)) ||
+      (kind === 'checkbox')
+    );
+
+    const isAuthLabel = aliases.authorized_in_usa.some(a => opensWith(cleanLabel, a) || opensWith(nl, a));
+    const isSponsorLabel = aliases.needs_sponsorship.some(a => opensWith(cleanLabel, a) || opensWith(nl, a)) ||
+      (/\b(?:sponsor|sponsorship)\b/i.test(nl) && /\b(?:visa|work|employment|require|need)\b/i.test(nl));
+
+    // Tier 1 adapter hint sanitization through Tier 2 safety rules
+    if (nh) {
+      if (hasBooleanOptions && NON_BOOLEAN_FACTS.has(nh)) {
+        nh = '';
+      } else if (isAuthLabel && nh !== 'authorized_in_usa' && nh !== 'work_authorization' && nh !== 'visa_status') {
+        nh = '';
+      } else if (isSponsorLabel && nh !== 'needs_sponsorship' && nh !== 'visa_status') {
+        nh = '';
+      }
+    }
+
     if (nh) {
       const canonical = CANONICAL_BY_NORM.get(nh);
       if (canonical) return { key: canonical, exact: true, length: nh.length };
     }
 
-    if (isDOBQuestion(label, hint)) return { key: 'date_of_birth', exact: true, length: 13 };
-    if (/\b(?:citizen|citizenship|nationality)\b/i.test(label) && !/\bsponsor/i.test(label)) {
+    if (isDOBQuestion(rawLabel, rawHint, field?.element)) return { key: 'date_of_birth', exact: true, length: 13 };
+    if (/\b(?:citizen|citizenship|nationality)\b/i.test(rawLabel) && !/\bsponsor/i.test(rawLabel)) {
       return { key: 'citizenship_status', exact: true, length: 11 };
     }
 
-    const nl = norm(label);
     if (nl === 'name') return { key: 'full_name', exact: true, length: 4 };
     if (/\bcountry code\b/i.test(nl) && /\b(?:number|phone|mobile|tel)\b/i.test(nl)) {
       return { key: 'phone', exact: true, length: nl.length };
@@ -2242,13 +2312,14 @@
 
     const matches = [];
     for (const key of Object.keys(aliases)) {
+      if (hasBooleanOptions && NON_BOOLEAN_FACTS.has(key)) continue;
       for (const a of aliases[key]) {
         const na = norm(a);
-        if (nl === na || (nh && nh === na)) matches.push({ key, exact: true, length: na.length });
-        else if (na.length <= 4) {
-          const re = new RegExp('\\b' + na.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
-          if (re.test(nl) || (nh && re.test(nh))) matches.push({ key, exact: false, length: na.length });
-        } else if (nl.includes(na) || (nh && nh.includes(na))) {
+        if (nl === na || (nh && nh === na)) {
+          matches.push({ key, exact: true, length: na.length });
+        } else if (opensWith(nl, na) || (cleanLabel && opensWith(cleanLabel, na))) {
+          matches.push({ key, exact: true, length: na.length });
+        } else if (nh && (opensWith(nh, na) || (cleanHint && opensWith(cleanHint, na)))) {
           matches.push({ key, exact: false, length: na.length });
         }
       }
@@ -2275,16 +2346,14 @@
   }
 
   function linkFieldKey(field) {
-    const element = field.element;
-    const candidates = [element?.name, element?.id, field.name, field.id, field.hint, field.label];
+    const element = field?.element;
+    const candidates = [element?.name, element?.id, field?.name, field?.id, field?.key, field?.hint, field?.label];
     for (const value of candidates) {
+      if (!value) continue;
       const name = linkMetadata(value);
-      if (/^(?:urls? )?(?:twitter|x twitter|twitter x)(?: (?:profile|url|link)){0,2}$|^(?:urls? x|x (?:profile|url|link))$/.test(name))
-        return 'twitter_url';
       if (aliases.github_url.includes(name) || /^(?:urls? )?git ?hub(?: (?:profile|url|link)){0,2}$/.test(name)) return 'github_url';
       if (aliases.linkedin_url.includes(name) || /^(?:urls? )?linked ?in(?: (?:profile|url|link)){0,2}$/.test(name)) return 'linkedin_url';
       if (/^(?:urls? )?(?:personal |professional )?portfolio(?: (?:website|url|link)){0,2}$/.test(name)) return 'portfolio_url';
-      if (/^(?:urls? other|other (?:url|link|website))$/.test(name)) return 'other_url';
       if (aliases.website.includes(name) || /^(?:urls? )?(?:personal (?:website|site|url)|website|blog)(?: (?:website|url|link)){0,2}$/.test(name))
         return 'website';
     }
@@ -2292,20 +2361,30 @@
   }
 
   function isUrlField(field) {
+    if (!field) return false;
     if (field.type === 'url' || field.kind === 'url' || field.element?.type === 'url' || linkFieldKey(field)) return true;
-    return [field.label, field.name, field.id, field.hint, field.element?.name, field.element?.id].some(value =>
-      /^(?:urls?|(?:profile|social|personal|professional|website|external) (?:urls?|links?))$/
-        .test(linkMetadata(value))
-    );
+    const candidates = [field.label, field.name, field.id, field.hint, field.key, field.element?.name, field.element?.id];
+    return candidates.some(value => {
+      if (!value) return false;
+      const str = String(value);
+      if (/^urls?\[/i.test(str) || /[_-]urls?(?:[_-]|$)/i.test(str) || /[_-]links?(?:[_-]|$)/i.test(str)) return true;
+      const meta = linkMetadata(str);
+      return /^(?:urls?|links?|websites?)$/.test(meta) ||
+        /^(?:urls? )?(?:twitter|x twitter|twitter x|x|other|additional|social|blog|portfolio|website|github|linkedin|custom)(?: (?:profile|url|link|website)){0,2}$/.test(meta) ||
+        /^(?:profile|social|personal|professional|website|external|other|additional|custom) (?:urls?|links?)$/.test(meta) ||
+        /^(?:urls? )?(?:other|additional)$/.test(meta);
+    });
   }
 
   function candidateHttpUrl(value) {
     if (typeof value !== 'string') return null;
-    const text = value.trim();
-    if (!/^https?:\/\/[^\s\\/?#][^\s\\]*$/i.test(text)) return null;
+    if (/\s/.test(value)) return null;
+    if (!/^https?:\/\/[^\s\\/?#][^\s\\]*$/i.test(value)) return null;
+    const UrlCtor = typeof URL !== 'undefined' ? URL : (typeof globalThis !== 'undefined' ? globalThis.URL : null);
+    if (!UrlCtor) return value;
     try {
-      const url = new URL(text);
-      return url.hostname && !url.username && !url.password ? text : null;
+      const url = new UrlCtor(value);
+      return url.hostname && !url.username && !url.password ? value : null;
     } catch {
       return null;
     }
@@ -2316,9 +2395,35 @@
     return JSON.stringify([job.externalId || '', job.jobUrl || '', job.title || '', job.company || '']);
   }
 
+  function matchAnswerBankFallback(field, answers, companySlug) {
+    if (!field || !Array.isArray(answers) || answers.length === 0) return null;
+    const rawQ = String(field.label || field.name || field.hint || '').trim();
+    if (/\b(consent|agree|terms|privacy|policy|arbitration|acknowledg\w*|certify|declare|confirm|signature|sign\s+here)\b/i.test(rawQ)) return null;
+    if (/\b(race|ethnicity|hispanic|latino|gender|sex|veteran|disability|handicap)\b/i.test(rawQ)) return null;
+    const normQ = rawQ.toLowerCase().replace(/&/g, ' and ').replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+    if (!normQ) return null;
+    const slug = companySlug ? String(companySlug).toLowerCase().trim() : null;
+    if (slug) {
+      const companyMatch = answers.find(a => {
+        const aScope = a.company_scope ? String(a.company_scope).toLowerCase().trim() : null;
+        const aNorm = a.question_normalized || String(a.question || '').toLowerCase().replace(/&/g, ' and ').replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+        return aScope === slug && aNorm === normQ;
+      });
+      if (companyMatch) return { answer: companyMatch.answer, companyScope: companyMatch.company_scope || null };
+    }
+    const universalMatch = answers.find(a => {
+      const aScope = a.company_scope ? String(a.company_scope).toLowerCase().trim() : null;
+      const aNorm = a.question_normalized || String(a.question || '').toLowerCase().replace(/&/g, ' and ').replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+      return !aScope && aNorm === normQ;
+    });
+    if (universalMatch) return { answer: universalMatch.answer, companyScope: null };
+    return null;
+  }
+
   function planFill(fields, candidate, options = {}) {
     const values = buildValues(candidate);
     const aiPlan = (field, reason) => ({ field, status: 'ai', reason, options: (field.options || []).map(o => optionText(o)), aiPrompt: field.label });
+    const consumedUrls = new Set();
 
     const plans = fields.map(field => {
       if (field.kind === 'inaccessible' || field.excluded) {
@@ -2329,12 +2434,27 @@
       }
       if (isUrlField(field)) {
         const factKey = linkFieldKey(field);
+        if (!factKey) {
+          return { field, factKey: null, status: 'manual', reason: 'Unmapped link field; enter manually.' };
+        }
         const facts = candidate.confirmed_facts || candidate;
-        const fallback = factKey === 'portfolio_url' ? values.website : values[factKey];
-        const value = factKey && candidateHttpUrl(facts[factKey] || fallback);
-        return value
-          ? { field, factKey, status: 'supported', value }
-          : { field, factKey, status: 'manual', reason: 'Enter a valid profile URL manually.' };
+        const candidateLink = factKey === 'linkedin_url'
+          ? (facts.linkedin_url || facts.linkedin || candidate.linkedin_url || candidate.linkedin)
+          : facts[factKey];
+        const fallback = (factKey === 'portfolio_url' || factKey === 'website')
+          ? (facts.portfolio_url || facts.website || candidate.portfolio_url || candidate.website || values.portfolio_url || values.website)
+          : values[factKey];
+        const rawUrl = candidateLink || fallback;
+        const value = candidateHttpUrl(rawUrl);
+        if (!value) {
+          return { field, factKey, status: 'manual', reason: 'Enter a valid profile URL manually.' };
+        }
+        const normalizedUrl = value.toLowerCase();
+        if (consumedUrls.has(normalizedUrl)) {
+          return { field, factKey: null, status: 'manual', reason: 'Unmapped link field; enter manually.' };
+        }
+        consumedUrls.add(normalizedUrl);
+        return { field, factKey, status: 'supported', value };
       }
 
       const nl = norm(field.label);
@@ -2370,19 +2490,44 @@
         }
         return { field, factKey: 'availability', status: 'unknown', reason: 'Candidate availability not provided.' };
       }
-      if (field.kind === 'text' && isDateInput(field.element) && !resolveFact(field.label, field.hint)) {
+      if (field.kind === 'text' && isDateInput(field.element) && !resolveFact(field.label, field.hint, field)) {
         return { field, status: 'needs_review', reason: 'Unrecognized date field; do not substitute availability.' };
       }
       // Legal acknowledgements and signatures:
-      if (field.kind === 'checkbox' && /\b(agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare|confirm|read the above|understand)\b/i.test(nl)) {
-        return { field, factKey: 'consent', status: 'manual', reason: 'Candidate consent is required.' };
+      const MARKETING_REGEX = /(marketing|promotional|newsletter|sms|text message|job alert|future opportunit|talent network|third[- ]?party|partner)/i;
+      if (field.kind === 'checkbox') {
+        const consentText = [nl, nh, field.label, field.hint].filter(Boolean).join(' ');
+        if (MARKETING_REGEX.test(consentText) || MARKETING_REGEX.test(nl || nh || field.label || field.hint)) {
+          return { field, factKey: 'consent', status: 'manual', reason: 'Promotional and marketing opt-ins are not auto-checked.' };
+        } else if (/\b(agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare|confirm.*(?:terms|agreement|policy)|read the above|understand)\b/i.test(consentText) || /\b(agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare|confirm.*(?:terms|agreement|policy)|read the above|understand)\b/i.test(nl || nh || field.label || field.hint)) {
+          return { field, factKey: 'consent', value: true, status: 'supported', reason: 'Standard legal terms and privacy acknowledgement.' };
+        }
       }
       if (/\b(signature|sign here|certify by entering your name)\b/i.test(nl)) {
         return { field, factKey: 'e_signature', status: 'manual', reason: 'Candidate signature is required.' };
       }
 
-      const resolved = resolveFact(field.label, field.hint);
+      const resolved = resolveFact(field.label, field.hint, field);
       if (!resolved) {
+        // TIER 3: Candidate Answer Bank lookup before AI generation
+        const answerBank = options.answerBank || options.savedAnswers || (candidate && candidate.answerBank) || (candidate && candidate.confirmed_facts?.answer_bank);
+        if (answerBank) {
+          const bankList = Array.isArray(answerBank) ? answerBank : (answerBank.answers || Object.values(answerBank));
+          const companySlug = options.companySlug || options.company || options.job?.company || candidate?.companySlug;
+          const matchFn = (root.NextkinAnswerBank && root.NextkinAnswerBank.matchAnswer) || matchAnswerBankFallback;
+          const match = matchFn(field, bankList, companySlug);
+          if (match && match.answer !== undefined && match.answer !== null) {
+            return {
+              field,
+              value: match.answer,
+              status: 'ready',
+              source: 'answer_bank',
+              companyScope: match.companyScope || null,
+              reason: match.companyScope ? `Answer bank match for ${match.companyScope}` : 'Universal answer bank match'
+            };
+          }
+        }
+
         if (isChoiceKind(field.kind)) return aiPlan(field, 'Select an option supported by the candidate profile.');
         const isContactOrPersonal = /\b(name|first|last|given|surname|email|phone|tel|cell|city|state|zip|postal|address|country|linkedin|github|website|portfolio|date|when can you start|start date)\b/i.test(nl);
         const isBioOrScreening = !isContactOrPersonal && (field.element?.tagName === 'TEXTAREA' || field.editable ||
@@ -2408,7 +2553,9 @@
         return { field, factKey, status: 'needs_review', reason: 'Citizenship requires an explicit yes/no answer.' };
       }
       // A known United States authorization must not answer a question about an unrelated foreign country.
-      if (factKey === 'authorized_in_usa' && !isUSQuestion(nl) && !/^(?:are you (?:legally )?authorized to work|legally authorized|work authorization|authorized to work|authorized in usa)$/.test(nl || nh)) {
+      if (factKey === 'authorized_in_usa' && !isUSQuestion(nl) &&
+        !/^(?:are you\s+)?(?:legally\s+)?authorized to work(?:\s+in\s+(?:this country|the country\b[^?]*))?[?.\s]*$/i.test(nl || nh) &&
+        !/^(?:are you (?:legally )?authorized to work|legally authorized|work authorization|authorized to work|authorized in usa)[?.\s]*$/i.test(nl || nh)) {
         return { field, factKey, status: 'unknown', reason: 'Question is not about United States work authorization.' };
       }
 
@@ -2677,8 +2824,16 @@
     return normKey; // Factual question cached globally
   }
 
-  root.NextkinFieldMapping = { planFill, resolveFact, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS, CONSEQUENTIAL_FACTS, isCompanySpecificQuestion, computeCacheKey, isUrlField, candidateHttpUrl, screeningJobKey };
-  if (typeof exports !== 'undefined') exports.isUrlField = isUrlField;
+  root.NextkinFieldMapping = { planFill, resolveFact, opensWith, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS, CONSEQUENTIAL_FACTS, isCompanySpecificQuestion, computeCacheKey, isUrlField, candidateHttpUrl, screeningJobKey };
+  if (typeof exports !== 'undefined') {
+    exports.isUrlField = isUrlField;
+    exports.planFill = planFill;
+    exports.candidateHttpUrl = candidateHttpUrl;
+    exports.resolveFact = resolveFact;
+    exports.opensWith = opensWith;
+    exports.buildValues = buildValues;
+    exports.NextkinFieldMapping = root.NextkinFieldMapping;
+  }
 })(globalThis);
 
 
@@ -2686,7 +2841,17 @@
 (function (root) {
   const mapping = root.NextkinFieldMapping;
   const normalize = value => String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
-  const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const wait = ms => new Promise(resolve => {
+    const timerFn = (typeof setTimeout === 'function') ? setTimeout
+      : (typeof globalThis.setTimeout === 'function') ? globalThis.setTimeout
+      : (typeof root.setTimeout === 'function') ? root.setTimeout
+      : null;
+    if (timerFn) {
+      timerFn(resolve, ms);
+    } else {
+      resolve();
+    }
+  });
   const placeholder = /^(?:(?:please\s+)?(?:select|choose)(?:\s+(?:an?|your|the)\s+[^.]+|\s+one)?(?:\.{3}|…)?|[-–—]+)$/i;
 
   const optionSelector = [
@@ -2713,6 +2878,9 @@
     '[role="listbox"]',
     '[data-radix-popper-content-wrapper]',
     '[data-radix-select-viewport]',
+    '[data-floating-ui-portal]',
+    '.select2-dropdown',
+    '.k-animation-container',
     '[id^="headlessui-listbox-options"]',
     '.select2-results',
     '.ng-dropdown-panel',
@@ -2727,6 +2895,16 @@
   ].join(', ');
 
   const optionLabel = option => option.label || option.value;
+
+  const isMultiKind = kind => {
+    if (mapping?.isMultiKind) return mapping.isMultiKind(kind);
+    return kind === 'multi-select' || kind === 'checkbox-group';
+  };
+
+  const isChoiceKind = kind => {
+    if (mapping?.isChoiceKind) return mapping.isChoiceKind(kind);
+    return kind === 'select' || kind === 'radio' || kind === 'choice';
+  };
 
   function safeCssEscape(str) {
     if (typeof globalThis.CSS !== 'undefined' && typeof globalThis.CSS.escape === 'function') {
@@ -2839,36 +3017,80 @@
     el.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  function writeValue(el, value) {
-    if (el.isContentEditable) el.textContent = value;
-    else {
-      const view = el.ownerDocument?.defaultView || globalThis;
-      const proto = el.tagName === 'SELECT' ? view.HTMLSelectElement.prototype
-        : el.tagName === 'TEXTAREA' ? view.HTMLTextAreaElement.prototype : view.HTMLInputElement.prototype;
-      const desc = Object.getOwnPropertyDescriptor(proto, 'value') || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(proto), 'value');
-      if (desc?.set) desc.set.call(el, value);
-      else el.value = value;
-      if (el._valueTracker) {
-        el._valueTracker.setValue?.('');
+  function getNativePropertyDescriptor(element, prop = 'value') {
+    if (!element) return null;
+    const view = element.ownerDocument?.defaultView || globalThis;
+    const proto = element.tagName === 'SELECT'
+      ? (view.HTMLSelectElement?.prototype || globalThis.HTMLSelectElement?.prototype)
+      : element.tagName === 'TEXTAREA'
+      ? (view.HTMLTextAreaElement?.prototype || globalThis.HTMLTextAreaElement?.prototype)
+      : (view.HTMLInputElement?.prototype || globalThis.HTMLInputElement?.prototype);
+
+    if (proto) {
+      const desc = Object.getOwnPropertyDescriptor(proto, prop);
+      if (desc?.set) return desc;
+    }
+
+    let p = Object.getPrototypeOf(element);
+    while (p && p !== Object.prototype) {
+      const desc = Object.getOwnPropertyDescriptor(p, prop);
+      if (desc?.set) return desc;
+      p = Object.getPrototypeOf(p);
+    }
+    return null;
+  }
+
+  function setNativeValue(element, value) {
+    if (!element) return false;
+    const view = element.ownerDocument?.defaultView || globalThis;
+    const strVal = value == null ? '' : String(value);
+
+    if (element.isContentEditable) {
+      element.textContent = strVal;
+    } else {
+      const prevValue = element.value;
+      const desc = getNativePropertyDescriptor(element, 'value');
+      if (desc?.set) {
+        desc.set.call(element, strVal);
+      } else {
+        element.value = strVal;
+      }
+      if (element._valueTracker) {
+        try {
+          element._valueTracker.setValue?.(prevValue ?? '');
+        } catch {}
       }
     }
-    notify(el);
+
+    const Evt = view.Event || globalThis.Event;
+    const FocusEvt = view.FocusEvent || view.Event || globalThis.FocusEvent || globalThis.Event;
+    try {
+      element.dispatchEvent(new Evt('input', { bubbles: true, composed: true }));
+    } catch {}
+    try {
+      element.dispatchEvent(new Evt('change', { bubbles: true }));
+    } catch {}
+    try {
+      element.dispatchEvent(new FocusEvt('blur', { bubbles: true, composed: true }));
+    } catch {}
+
+    return true;
+  }
+
+  function writeValue(el, value) {
+    return setNativeValue(el, value);
   }
 
   function setCheckbox(el, targetChecked) {
-    if (!el?.isConnected || el.disabled || el.getAttribute('aria-disabled') === 'true') return false;
-    const boolVal = Boolean(targetChecked);
+    if (!el?.isConnected || el.disabled || el.getAttribute?.('aria-disabled') === 'true') return false;
+    const desired = Boolean(targetChecked);
     const view = el.ownerDocument?.defaultView || globalThis;
-    const target = findClickableTarget(el) || el;
 
-    if (checked(el) === boolVal) {
+    if (checked(el) === desired) {
       return true;
     }
-    if (el.tagName !== 'INPUT') {
-      try { click(target); } catch {}
-      return checked(el) === boolVal;
-    }
 
+    const target = findClickableTarget(el) || el;
     const PointerEvt = view.PointerEvent || view.MouseEvent;
     const MouseEvt = view.MouseEvent;
     const downInit = { bubbles: true, composed: true, cancelable: true, view, button: 0, buttons: 1, detail: 1 };
@@ -2885,40 +3107,39 @@
       try { target.click(); } catch {}
     }
 
-    // If native checkbox and not matching targetChecked, try direct el.click() if target wasn't el
-    if (el.tagName === 'INPUT' && el.type === 'checkbox' && el.checked !== boolVal) {
-      if (target !== el) {
-        try {
-          el.dispatchEvent(new PointerEvt('pointerdown', { ...downInit, pointerType: 'mouse', isPrimary: true }));
-          el.dispatchEvent(new MouseEvt('mousedown', downInit));
-          el.dispatchEvent(new PointerEvt('pointerup', { ...upInit, pointerType: 'mouse', isPrimary: true }));
-          el.dispatchEvent(new MouseEvt('mouseup', upInit));
-          el.click();
-        } catch {
-          try { el.click(); } catch {}
-        }
-      }
+    if (checked(el) === desired) {
+      return true;
     }
 
-    // If still not matching, force with descriptor & React tracker
-    if (el.tagName === 'INPUT' && el.type === 'checkbox' && el.checked !== boolVal) {
+    // If still not toggled (e.g. React controlled component ignoring synthetic click):
+    if (el._valueTracker) {
       try {
-        const proto = view.HTMLInputElement?.prototype || HTMLInputElement.prototype;
-        const desc = Object.getOwnPropertyDescriptor(proto, 'checked') || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(proto), 'checked');
-        if (desc?.set) desc.set.call(el, boolVal);
-        else el.checked = boolVal;
-        el._valueTracker?.setValue?.('');
-      } catch {
-        el.checked = boolVal;
-      }
-      try {
-        const Evt = view.Event;
-        el.dispatchEvent(new Evt('input', { bubbles: true, composed: true }));
-        el.dispatchEvent(new Evt('change', { bubbles: true }));
+        el._valueTracker.setValue?.(String(!desired));
       } catch {}
     }
 
-    return checked(el) === boolVal;
+    const desc = getNativePropertyDescriptor(el, 'checked');
+    try {
+      if (desc?.set) {
+        desc.set.call(el, desired);
+      } else if (el.tagName === 'INPUT' || 'checked' in el) {
+        el.checked = desired;
+      }
+    } catch {
+      if (el.tagName === 'INPUT' || 'checked' in el) {
+        el.checked = desired;
+      }
+    }
+
+    const Evt = view.Event || globalThis.Event;
+    try {
+      el.dispatchEvent(new Evt('input', { bubbles: true, composed: true }));
+    } catch {}
+    try {
+      el.dispatchEvent(new Evt('change', { bubbles: true }));
+    } catch {}
+
+    return checked(el) === desired;
   }
 
   function setRadio(option) {
@@ -2975,7 +3196,7 @@
         const desc = Object.getOwnPropertyDescriptor(proto, 'checked') || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(proto), 'checked');
         if (desc?.set) desc.set.call(el, true);
         else el.checked = true;
-        el._valueTracker?.setValue?.('');
+        el._valueTracker?.setValue?.('false');
       } catch {
         el.checked = true;
       }
@@ -2984,6 +3205,16 @@
         el.dispatchEvent(new Evt('input', { bubbles: true, composed: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
       } catch {}
+    }
+
+    // Ensure sibling radios in the same group are unchecked
+    if (el.tagName === 'INPUT' && (el.type === 'radio' || el.getAttribute?.('type') === 'radio')) {
+      const siblings = getRadioGroupElements(el);
+      for (const sib of siblings) {
+        if (sib !== el && sib.tagName === 'INPUT' && (sib.type === 'radio' || sib.getAttribute?.('type') === 'radio')) {
+          sib.checked = false;
+        }
+      }
     }
 
     return el.tagName === 'INPUT' && el.type === 'radio' ? el.checked : true;
@@ -2995,10 +3226,13 @@
 
   function comboTrigger(el) {
     if (!el) return null;
-    if (el.tagName === 'BUTTON' || el.matches('button, [data-slot="select-trigger"], .select2-selection, .ng-select, [data-automation-id*="prompt" i]')) return el;
-    const btn = el.querySelector('button, [data-slot="select-trigger"], [class*="select-trigger" i], [class*="selectTrigger" i], [role="combobox"], [aria-haspopup="listbox"], .select2-selection, .ng-select, [data-automation-id*="prompt" i]');
+    if (el.tagName === 'BUTTON' || (el.matches && el.matches('button, [data-slot="select-trigger"], .select2-selection, .ng-select, [data-automation-id*="prompt" i]'))) return el;
+    const btn = el.querySelector ? el.querySelector('button, [data-slot="select-trigger"], [class*="select-trigger" i], [class*="selectTrigger" i], [role="combobox"], [aria-haspopup="listbox"], .select2-selection, .ng-select, [data-automation-id*="prompt" i]') : null;
     if (btn) return btn;
-    if (el.matches('[role="combobox"], [aria-haspopup="listbox"]')) return el;
+    const role = (el.getAttribute ? el.getAttribute('role') : null) || '';
+    const popup = (el.getAttribute ? el.getAttribute('aria-haspopup') : null) || '';
+    if (role.toLowerCase() === 'combobox' || popup.toLowerCase() === 'listbox' || popup.toLowerCase() === 'true') return el;
+    if (el.matches && el.matches('[role="combobox"], [aria-haspopup="listbox"]')) return el;
     return comboInput(el) || el;
   }
 
@@ -3044,42 +3278,97 @@
       case 'choice': return field.options.find(option => selected(option.element) || checked(option.element))?.label || '';
       case 'combobox': return comboValue(el);
       case 'multi-combobox': {
-        const chips = el.querySelectorAll('.ng-value-label, .select2-selection__choice__display, .k-chip-label, [data-slot="multi-select-value"]');
+        const chips = el.querySelectorAll ? el.querySelectorAll('.ng-value-label, .select2-selection__choice__display, .k-chip-label, [data-slot="multi-select-value"]') : [];
         return [...chips].map(chip => chip.textContent.trim()).filter(Boolean);
       }
+      case 'resume-file': return el?.files?.[0]?.name || (el?.value ? String(el.value).split(/[/\\]/).pop() : '');
       default: return el.isContentEditable ? el.textContent.trim() : el.value?.trim() || '';
     }
   }
 
   function getListboxRoots(el) {
+    if (!el) return [];
     const control = comboInput(el) || el;
-    const ids = [el, control].flatMap(node => [node.getAttribute('aria-controls'), node.getAttribute('aria-owns')])
+    const ids = [el, control].flatMap(node => [node?.getAttribute?.('aria-controls'), node?.getAttribute?.('aria-owns')])
       .filter(Boolean).flatMap(idStr => idStr.split(/\s+/));
-    const doc = el.ownerDocument;
-    const roots = ids.map(id => el.getRootNode?.().getElementById?.(id) || doc.getElementById(id)).filter(Boolean);
-    const isVisible = node => !!node.getClientRects().length && doc.defaultView.getComputedStyle(node).visibility !== 'hidden';
+    const doc = el.ownerDocument || globalThis.document;
+    const view = doc?.defaultView || globalThis;
+    const isVisible = node => {
+      if (!node) return false;
+      if (node.getClientRects && !node.getClientRects().length) return false;
+      const style = view.getComputedStyle?.(node);
+      if (!style) return true;
+      return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+    };
+
+    const roots = ids.map(id => el.getRootNode?.().getElementById?.(id) || doc.getElementById?.(id)).filter(r => r && isVisible(r));
+
+    // Discover portals in document.body
+    const portalSelector = '[data-radix-popper-content-wrapper], [data-floating-ui-portal], .select2-dropdown, .k-animation-container';
+    const bodyPortals = doc.body?.querySelectorAll ? Array.from(doc.body.querySelectorAll(portalSelector)).filter(isVisible) : [];
+
+    // Query open shadow roots
+    const shadowRoots = [];
+    const collectShadowRoots = (rootNode) => {
+      if (!rootNode) return;
+      const stack = [rootNode];
+      while (stack.length) {
+        const curr = stack.pop();
+        if (curr?.shadowRoot) {
+          shadowRoots.push(curr.shadowRoot);
+          stack.push(curr.shadowRoot);
+        }
+        if (curr?.children) {
+          for (let i = 0; i < curr.children.length; i++) {
+            stack.push(curr.children[i]);
+          }
+        }
+      }
+    };
+    if (doc.body) collectShadowRoots(doc.body);
+
+    const shadowPortals = shadowRoots.flatMap(sr => [
+      ...(sr.querySelectorAll?.(portalSelector) || []),
+      ...(sr.querySelectorAll?.(listboxSelector) || [])
+    ]).filter(isVisible);
+
+    if (bodyPortals.length || shadowPortals.length) {
+      roots.push(...bodyPortals, ...shadowPortals);
+    }
+
     if (!roots.length) {
-      const menus = [...new Set([...(el.getRootNode?.()?.querySelectorAll?.(listboxSelector) || []), ...doc.querySelectorAll(listboxSelector)])].filter(isVisible);
+      const menus = [...new Set([...(el.getRootNode?.()?.querySelectorAll?.(listboxSelector) || []), ...(doc.querySelectorAll ? doc.querySelectorAll(listboxSelector) : [])])].filter(isVisible);
       const fieldContainer = el.closest?.('.select, .select__container, .select-shell, [class*="select__container"], [class*="form-group"], [class*="field-container"], [class*="application-question"]');
       const nearby = menus.filter(menu => (el.contains?.(menu)) || (el.parentElement?.contains?.(menu)) || (fieldContainer?.contains?.(menu)));
       if (nearby.length >= 1) roots.push(...nearby);
       else if (menus.length === 1) roots.push(menus[0]);
       else if (menus.length > 1) roots.push(menus[menus.length - 1]);
     }
-    return roots;
+    return [...new Set(roots)];
   }
 
   function comboOptions(el) {
     const roots = getListboxRoots(el);
-    const doc = el.ownerDocument;
-    const isVisible = node => !!node.getClientRects().length && doc.defaultView.getComputedStyle(node).visibility !== 'hidden';
+    const doc = el.ownerDocument || globalThis.document;
+    const view = doc?.defaultView || globalThis;
+    const isVisible = node => {
+      if (!node) return false;
+      if (node.getClientRects && !node.getClientRects().length) return false;
+      const style = view.getComputedStyle?.(node);
+      if (!style) return true;
+      return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+    };
     if (!roots.length) return [];
 
-    const candidateNodes = roots.flatMap(menu => [...menu.querySelectorAll(optionSelector)]);
+    const candidateNodes = roots.flatMap(menu => {
+      const opts = menu.querySelectorAll ? [...menu.querySelectorAll(optionSelector)] : [];
+      if (menu.matches && menu.matches(optionSelector)) opts.unshift(menu);
+      return opts;
+    });
 
     return [...new Set(candidateNodes)]
       .filter(option => isVisible(option) && !option.disabled && option.getAttribute('aria-disabled') !== 'true' &&
-        !option.matches('.disabled, .ng-option-disabled, .select2-results__option--disabled, [aria-disabled="true"]'))
+        !option.matches?.('.disabled, .ng-option-disabled, .select2-results__option--disabled, [aria-disabled="true"]'))
       .map(element => ({
         element,
         label: (element.getAttribute('aria-label') || element.getAttribute('data-label') || element.textContent).trim(),
@@ -3090,29 +3379,79 @@
 
   function choose(field, desired) {
     const bool = normalizeBoolean(desired);
-    if (bool !== null && mapping.pickBooleanOption) {
+    if (bool !== null && mapping?.pickBooleanOption) {
       const bOpt = mapping.pickBooleanOption(field.options, bool);
       if (bOpt) return bOpt;
     }
-    if (typeof desired === 'boolean' && mapping.pickBooleanOption) {
+    if (typeof desired === 'boolean' && mapping?.pickBooleanOption) {
       return mapping.pickBooleanOption(field.options, desired);
     }
-    const opt = mapping.pickOption(field, desired);
+    const opt = mapping?.pickOption ? mapping.pickOption(field, desired) : null;
     if (opt) return opt;
-    if (bool !== null && mapping.pickBooleanOption) {
+    if (bool !== null && mapping?.pickBooleanOption) {
       return mapping.pickBooleanOption(field.options, bool);
+    }
+    const norm = s => String(s ?? '').toLowerCase().trim().replace(/[^a-z0-9]+/g, ' ');
+    const target = norm(desired);
+    if (target && Array.isArray(field.options)) {
+      const exact = field.options.find(o => norm(optionLabel(o)) === target || norm(o.value) === target);
+      if (exact) return exact;
+      const partial = field.options.find(o => norm(optionLabel(o)).includes(target) || target.includes(norm(optionLabel(o))));
+      if (partial) return partial;
     }
     return null;
   }
 
-  function closeCombo(el) {
+  function isComboOpen(el) {
+    if (!el) return false;
+    const trigger = comboTrigger(el);
+    const input = comboInput(el);
+    for (const node of [el, trigger, input]) {
+      if (node?.getAttribute?.('aria-expanded') === 'true') return true;
+    }
+
+    const roots = getListboxRoots(el);
+    const doc = el.ownerDocument || globalThis.document;
+    const view = doc?.defaultView || globalThis;
+    for (const root of roots) {
+      if (!root || !root.isConnected) continue;
+      if (root.tagName === 'BODY' || root.tagName === 'HTML' || (root.matches && root.matches('.modal, .modal-dialog, .dialog-content, [role="dialog"]'))) continue;
+      if (root.getClientRects && root.getClientRects().length > 0) {
+        const style = view.getComputedStyle ? view.getComputedStyle(root) : null;
+        if (!style || (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0')) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function closeCombo(el, force = false) {
+    if (!el) return;
     const view = el.ownerDocument?.defaultView || globalThis;
-    const { KeyboardEvent } = view;
-    const targets = [comboSearchInput(el), comboInput(el), comboTrigger(el), el, el.ownerDocument?.activeElement].filter(Boolean);
-    for (const target of targets) {
+    const doc = el.ownerDocument || globalThis.document;
+    const search = comboSearchInput(el, getListboxRoots(el));
+    const input = comboInput(el);
+    const trigger = comboTrigger(el);
+
+    if (force || isComboOpen(el)) {
+      const KeyEvt = view.KeyboardEvent || globalThis.KeyboardEvent;
+      const targets = [search, input, trigger, el, doc?.activeElement].filter(Boolean);
+      for (const target of targets) {
+        try {
+          target.dispatchEvent(new KeyEvt('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true, composed: true, cancelable: true }));
+          target.dispatchEvent(new KeyEvt('keyup', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true, composed: true, cancelable: true }));
+        } catch {}
+      }
+    }
+
+    // Always blur cleanly
+    const FocusEvt = view.FocusEvent || view.Event || globalThis.FocusEvent || globalThis.Event;
+    const blurTargets = [search, input, trigger, el].filter(Boolean);
+    for (const target of blurTargets) {
       try {
-        target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true, composed: true, cancelable: true }));
-        target.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true, composed: true, cancelable: true }));
+        target.blur?.();
+        target.dispatchEvent(new FocusEvt('blur', { bubbles: true, composed: true }));
       } catch {}
     }
   }
@@ -3141,7 +3480,7 @@
     if (input?.list) {
       const option = choose(field, desired);
       if (!option) return null;
-      writeValue(input, option.value);
+      setNativeValue(input, option.value);
       return { expected: option.value };
     }
 
@@ -3160,27 +3499,30 @@
         options = comboOptions(el);
         if (options.length) break;
       }
+      // ArrowDown fallback if options still not open
+      if (!options.length && isCurrent()) {
+        try {
+          const view = el.ownerDocument?.defaultView || globalThis;
+          const KeyEvt = view.KeyboardEvent || globalThis.KeyboardEvent;
+          (trigger || el).dispatchEvent(new KeyEvt('keydown', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
+          (trigger || el).dispatchEvent(new KeyEvt('keyup', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
+        } catch {}
+        const arrowStart = Date.now();
+        while (Date.now() - arrowStart < 250 && isCurrent()) {
+          await wait(30);
+          options = comboOptions(el);
+          if (options.length) break;
+        }
+      }
     }
 
     // Match candidate value against option text
     let option = choose({ options }, desired);
-    if (option) {
-      const ok = click(option.element);
-      closeCombo(el);
-      return ok ? { expected: option.label, option: option.element, typed: false } : null;
-    }
 
-    // Type into combobox search input if present
-    const roots = getListboxRoots(el);
-    const search = comboSearchInput(el, roots);
-    let typed = false;
-    const query = typeof desired === 'boolean' ? (desired ? 'Yes' : 'No') : String(desired);
-    if (search && !search.readOnly && isCurrent()) {
-      writeValue(search, query);
-      typed = true;
-      const searchStart = Date.now();
-      // await filtered options asynchronously (up to 800ms for network search)
-      while (Date.now() - searchStart < 800 && isCurrent()) {
+    // If no immediate match, allow options up to 400ms to settle/populate (cascading parent just selected)
+    if (!option) {
+      const settleStart = Date.now();
+      while (Date.now() - settleStart < 400 && isCurrent()) {
         await wait(30);
         options = comboOptions(el);
         option = choose({ options }, desired);
@@ -3190,15 +3532,54 @@
 
     if (option) {
       const ok = click(option.element);
+      try {
+        const view = el.ownerDocument?.defaultView || globalThis;
+        const KeyEvt = view.KeyboardEvent || globalThis.KeyboardEvent;
+        option.element.dispatchEvent(new KeyEvt('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+      } catch {}
       closeCombo(el);
-      return ok ? { expected: option.label, option: option.element, typed } : null;
+      const actualVal = comboValue(el);
+      const isSel = selected(option.element) || (actualVal && equals(actualVal, option.label));
+      return ok ? { expected: option.label, option: option.element, typed: false, verified: Boolean(isSel) } : null;
+    }
+
+    // Type into combobox search input if present (Typeahead search fallback)
+    const roots = getListboxRoots(el);
+    const search = comboSearchInput(el, roots);
+    let typed = false;
+    const query = typeof desired === 'boolean' ? (desired ? 'Yes' : 'No') : String(desired);
+    if (search && !search.readOnly && isCurrent()) {
+      search.focus?.();
+      setNativeValue(search, query);
+      typed = true;
+      const searchStart = Date.now();
+      // await filtered options asynchronously (up to 850ms, allowing settling)
+      while (Date.now() - searchStart < 850 && isCurrent()) {
+        await wait(30);
+        options = comboOptions(el);
+        option = choose({ options }, desired);
+        if (option) break;
+      }
+    }
+
+    if (option) {
+      const ok = click(option.element);
+      try {
+        const view = el.ownerDocument?.defaultView || globalThis;
+        const KeyEvt = view.KeyboardEvent || globalThis.KeyboardEvent;
+        option.element.dispatchEvent(new KeyEvt('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+      } catch {}
+      closeCombo(el);
+      const actualVal = comboValue(el);
+      const isSel = selected(option.element) || (actualVal && equals(actualVal, option.label));
+      return ok ? { expected: option.label, option: option.element, typed, verified: Boolean(isSel) } : null;
     }
 
     // Close with Escape fallback
     if (typed && search && normalize(search.value) === normalize(query)) {
-      writeValue(search, '');
+      setNativeValue(search, '');
     }
-    closeCombo(el);
+    closeCombo(el, typed);
     return null;
   }
 
@@ -3207,28 +3588,13 @@
     if (!option) return null;
     if (field.kind === 'select') {
       const el = field.element;
-      const view = el.ownerDocument?.defaultView || globalThis;
-      try {
-        const proto = view.HTMLSelectElement?.prototype || HTMLSelectElement.prototype;
-        const desc = Object.getOwnPropertyDescriptor(proto, 'value') || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(proto), 'value');
-        if (desc?.set) {
-          desc.set.call(el, option.value);
-        } else {
-          el.value = option.value;
-        }
-        if (el._valueTracker) {
-          el._valueTracker.setValue?.('');
-        }
-      } catch {
-        el.value = option.value;
-      }
+      setNativeValue(el, option.value);
       if (option.element && typeof option.element.index === 'number') {
         el.selectedIndex = option.element.index;
       } else {
         const idx = Array.from(el.options || []).findIndex(o => o.value === option.value || o === option.element);
         if (idx >= 0) el.selectedIndex = idx;
       }
-      notify(el);
       return { expected: option.label };
     } else if (field.kind === 'radio' || field.kind === 'choice') {
       if (!setRadio(option)) return null;
@@ -3283,34 +3649,195 @@
     return false;
   }
 
-  // Preserved values store across wizard step transitions
-  const preservedStore = new Map();
+  // Dual-layer edit tracking & durable field store across wizard step transitions
+  const userEditedElements = new WeakSet();
+  const durableFieldStore = new Map();
+  const preservedStore = durableFieldStore;
+
+  function getRadioGroupElements(control) {
+    if (!control) return [];
+    const isRadio = (control.tagName === 'INPUT' && (control.type === 'radio' || control.getAttribute?.('type') === 'radio')) ||
+                    control.getAttribute?.('role') === 'radio';
+    if (!isRadio) return [];
+
+    const group = new Set([control]);
+    const name = control.name || control.getAttribute?.('name');
+    const doc = control.ownerDocument || globalThis.document;
+
+    if (name && doc) {
+      const scope = control.form || (control.getRootNode ? control.getRootNode() : null) || doc;
+      if (scope.querySelectorAll) {
+        try {
+          const matches = scope.querySelectorAll(`input[name="${safeCssEscape(name)}"], [role="radio"][name="${safeCssEscape(name)}"]`);
+          for (const m of matches) {
+            if ((m.tagName === 'INPUT' && (m.type === 'radio' || m.getAttribute?.('type') === 'radio')) || m.getAttribute?.('role') === 'radio') {
+              group.add(m);
+            }
+          }
+        } catch {}
+      }
+    }
+
+    const radiogroup = control.closest?.('[role="radiogroup"], fieldset');
+    if (radiogroup && radiogroup.querySelectorAll) {
+      try {
+        const matches = radiogroup.querySelectorAll('input[type="radio"], [role="radio"]');
+        for (const m of matches) {
+          group.add(m);
+        }
+      } catch {}
+    }
+
+    return Array.from(group);
+  }
+
+  function resolveTargetControl(node) {
+    if (!node) return null;
+    const label = node.tagName === 'LABEL' ? node : node.closest?.('label');
+    if (label) {
+      if (label.control) return label.control;
+      const forId = label.htmlFor || label.getAttribute?.('for');
+      if (forId) {
+        const doc = label.ownerDocument || globalThis.document;
+        const ctrl = doc?.getElementById?.(forId) || doc?.querySelector?.(`[id="${safeCssEscape(forId)}"]`);
+        if (ctrl) return ctrl;
+      }
+      const inner = label.querySelector?.('input, select, textarea, [role="radio"], [role="checkbox"], [role="combobox"], [role="switch"]');
+      if (inner) return inner;
+    }
+    return node.closest?.('input, select, textarea, [role="radio"], [role="checkbox"], [role="combobox"], [role="switch"]') || node;
+  }
+
+  function handleUserInteraction(evt) {
+    if (!evt || (!evt.isTrusted && !evt._isTrusted)) return;
+    const target = evt.target;
+    if (!target) return;
+
+    const control = resolveTargetControl(target);
+    if (!control) return;
+
+    userEditedElements.add(control);
+    if (target !== control) {
+      userEditedElements.add(target);
+    }
+
+    const isRadio = (control.tagName === 'INPUT' && (control.type === 'radio' || control.getAttribute?.('type') === 'radio')) ||
+                    control.getAttribute?.('role') === 'radio';
+    if (isRadio) {
+      const groupRadios = getRadioGroupElements(control);
+      for (const r of groupRadios) {
+        userEditedElements.add(r);
+      }
+    }
+  }
+
+  function installUserEditTracking(doc = root.document || globalThis.document) {
+    if (!doc || typeof doc.addEventListener !== 'function') return;
+    const events = ['change', 'input', 'click', 'keydown'];
+    for (const eventName of events) {
+      try {
+        doc.addEventListener(eventName, handleUserInteraction, true);
+      } catch {}
+    }
+  }
+
+  if (typeof root.document !== 'undefined') {
+    installUserEditTracking(root.document);
+  } else if (typeof globalThis.document !== 'undefined') {
+    installUserEditTracking(globalThis.document);
+  }
+
+  function isFieldUserEdited(field) {
+    if (!field) return false;
+    const stored = (field.key && durableFieldStore.get(field.key)) ||
+                   (field.label && durableFieldStore.get('label:' + normalize(field.label)));
+    if (stored && typeof stored === 'object' && stored.userEdited) {
+      return true;
+    }
+    if (field.element && userEditedElements.has(field.element)) {
+      return true;
+    }
+    if (Array.isArray(field.options)) {
+      for (const opt of field.options) {
+        if (opt.element && userEditedElements.has(opt.element)) return true;
+      }
+    }
+    if (field.element) {
+      const radios = getRadioGroupElements(field.element);
+      for (const r of radios) {
+        if (userEditedElements.has(r)) return true;
+      }
+    }
+    return false;
+  }
+
+  function isFieldUnfilled(field, domVal) {
+    if (!field) return true;
+    if (domVal == null) return true;
+    if (Array.isArray(domVal)) return domVal.length === 0;
+    if (typeof domVal === 'string') {
+      const trimmed = domVal.trim();
+      if (!trimmed) return true;
+      if (placeholder.test(trimmed) || /^(?:(?:please\s+)?(?:select|choose)|--|placeholder)/i.test(trimmed)) return true;
+    }
+
+    const el = field.element;
+    if (el?.tagName === 'SELECT' || field.kind === 'select') {
+      if (el?.selectedIndex != null && el.selectedIndex <= 0) {
+        const opt = el.options?.[el.selectedIndex];
+        const optVal = (opt?.value || opt?.text || '').trim();
+        if (!optVal || placeholder.test(optVal) || /select|choose|--|placeholder/i.test(optVal)) {
+          return true;
+        }
+      }
+    }
+
+    if (field.kind === 'radio' || field.kind === 'choice') {
+      if (!isFieldUserEdited(field)) {
+        const checkedOpt = (field.options || []).find(opt => checked(opt.element) || selected(opt.element));
+        if (!checkedOpt) return true;
+        const optEl = checkedOpt.element;
+        const isDefaultChecked = Boolean(
+          optEl?.defaultChecked ||
+          optEl?.hasAttribute?.('checked') ||
+          optEl?.getAttribute?.('data-default-checked') === 'true'
+        );
+        if (isDefaultChecked) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
 
   function recordPreservedValues(fields) {
-    if (!Array.isArray(fields)) return preservedStore;
+    if (!Array.isArray(fields)) return durableFieldStore;
     for (const f of fields) {
       if (!f?.element?.isConnected) continue;
       const val = read(f);
       const hasVal = Array.isArray(val) ? val.length > 0 : (typeof val === 'boolean' ? true : Boolean(val));
       if (hasVal) {
-        if (f.key) preservedStore.set(f.key, val);
-        if (f.label) preservedStore.set('label:' + normalize(f.label), val);
+        const record = { value: val, userEdited: isFieldUserEdited(f) };
+        if (f.key) durableFieldStore.set(f.key, record);
+        if (f.label) durableFieldStore.set('label:' + normalize(f.label), record);
       }
     }
-    return preservedStore;
+    return durableFieldStore;
   }
 
   function getPreservedValue(field) {
     if (!field) return undefined;
-    if (field.key && preservedStore.has(field.key)) return preservedStore.get(field.key);
-    if (field.label && preservedStore.has('label:' + normalize(field.label))) {
-      return preservedStore.get('label:' + normalize(field.label));
+    const entry = (field.key && durableFieldStore.get(field.key)) ||
+                  (field.label && durableFieldStore.get('label:' + normalize(field.label)));
+    if (entry !== undefined) {
+      return entry && typeof entry === 'object' && 'value' in entry ? entry.value : entry;
     }
     return undefined;
   }
 
   function clearPreservedValues() {
-    preservedStore.clear();
+    durableFieldStore.clear();
   }
 
   function advanceStep(scope = document) {
@@ -3638,85 +4165,227 @@
     return null;
   }
 
-  async function applyFill(plans, session) {
-    const receipts = [];
+  function verifyWrites(plans) {
+    const filled = [];
+    const unverified = [];
+    const manual = [];
+    const unmapped = [];
+
+    if (!Array.isArray(plans)) {
+      return { filled, unverified, manual, unmapped };
+    }
+
     for (const plan of plans) {
+      if (plan.status === 'manual') {
+        manual.push(plan);
+        continue;
+      }
+      if (plan.status === 'unmapped' || plan.status === 'unsupported') {
+        unmapped.push(plan);
+        continue;
+      }
+
+      const field = plan.field;
+      if (!field || !field.element || !field.element.isConnected) {
+        unverified.push({
+          ...plan,
+          field: plan.field,
+          expected: plan.value,
+          actual: null,
+          status: 'unverified'
+        });
+        continue;
+      }
+
+      if (plan._writeFailed) {
+        unverified.push({
+          ...plan,
+          field: plan.field,
+          expected: plan.value,
+          actual: read(field),
+          status: 'unverified'
+        });
+        continue;
+      }
+
+      const actual = read(field);
+      const expected = plan.writtenValue ?? plan.expected ?? plan._writtenExpected ?? plan.value;
+      const write = plan._write;
+
+      const isVerified = (
+        equals(actual, expected) ||
+        (write?.matches ? write.matches(actual) : false) ||
+        (field.kind === 'combobox' && expected && String(actual || '').toLowerCase().includes(String(expected).toLowerCase())) ||
+        (write?.option && !write.option.isConnected && expected) ||
+        (write?.option?.isConnected && selected(write.option)) ||
+        (field.kind === 'checkbox' && (typeof expected === 'boolean' ? actual === expected : equals(actual, expected)))
+      );
+
+      if (isVerified) {
+        recordPreservedValues([field]);
+        filled.push({
+          ...plan,
+          field: plan.field,
+          value: plan.value,
+          writtenValue: expected,
+          ai: !!plan.ai,
+          learned: !!plan.learned,
+          status: 'filled'
+        });
+      } else {
+        unverified.push({
+          ...plan,
+          field: plan.field,
+          expected,
+          actual,
+          status: 'unverified'
+        });
+      }
+    }
+
+    return { filled, unverified, manual, unmapped };
+  }
+
+  function sortCascadingPlans(plans) {
+    if (!Array.isArray(plans) || plans.length <= 1) return plans;
+
+    const getRank = plan => {
+      const f = plan?.field || {};
+      const str = `${plan?.factKey || ''} ${f.key || ''} ${f.label || ''} ${f.name || ''}`.toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+      if (/\bcountry\b/.test(str)) return 1;
+      if (/\b(state|province|region)\b/.test(str)) return 2;
+      if (/\bcity\b/.test(str)) return 3;
+      return 0;
+    };
+
+    const cascadeIndices = [];
+    const cascadePlans = [];
+    for (let i = 0; i < plans.length; i++) {
+      const rank = getRank(plans[i]);
+      if (rank > 0) {
+        cascadeIndices.push(i);
+        cascadePlans.push({ plan: plans[i], rank });
+      }
+    }
+
+    if (cascadePlans.length <= 1) return plans;
+
+    cascadePlans.sort((a, b) => a.rank - b.rank);
+
+    const result = [...plans];
+    for (let i = 0; i < cascadeIndices.length; i++) {
+      result[cascadeIndices[i]] = cascadePlans[i].plan;
+    }
+    return result;
+  }
+
+  async function applyFill(plans, session = {}) {
+    const ctx = typeof session?.isCurrent === 'function' ? session : { isCurrent: () => true, ...session };
+    const sortedPlans = sortCascadingPlans(plans);
+
+    for (const plan of sortedPlans) {
       const { field, value } = plan;
-      if (plan.status !== 'supported' || !session.isCurrent() || field.excluded) continue;
+      if (plan.status !== 'supported' || !ctx.isCurrent() || field.excluded) continue;
 
       // Handle React rerendering: re-resolve element if it was disconnected
       ensureConnectedElement(field);
       const el = field.element;
-      if (!el?.isConnected) continue;
+      if (!el?.isConnected) {
+        plan._writeFailed = true;
+        continue;
+      }
 
       // Bounded async wait for dependent controls (Country -> State -> City)
       // to become enabled / populated with options after previous field changes
-      await waitForFieldReady(field, session, 1200);
-      if (!session.isCurrent() || !field.element?.isConnected) continue;
+      await waitForFieldReady(field, ctx, 1200);
+      if (!ctx.isCurrent() || !field.element?.isConnected) {
+        plan._writeFailed = true;
+        continue;
+      }
 
       const currentEl = field.element;
       const domVal = read(field);
-      if (mapping.isUrlField?.(field) && (
+      if (mapping?.isUrlField?.(field) && (
         domVal || plan.ai || plan.learned || !plan.factKey || !mapping.candidateHttpUrl(value) ||
         (currentEl.maxLength > 0 && value.length > currentEl.maxLength)
-      )) continue;
+      )) {
+        plan._writeFailed = true;
+        continue;
+      }
       const previous = domVal;
       const isCountryCodeOnly = field.kind === 'text' && (currentEl.type === 'tel' || /phone/i.test(field.hint || field.label)) && /^\+?\d{1,3}\s*$/.test(String(previous).trim());
       const hasAnswer = !isCountryCodeOnly && (Array.isArray(previous) ? previous.length > 0 : (typeof previous === 'boolean' ? previous : Boolean(previous && String(previous).trim().length > 0)));
       let write;
       const isProfileFact = Boolean(plan.factKey && !plan.ai);
-      if (hasAnswer && !plan.overwriteExisting) {
+      const userEdited = isFieldUserEdited(field);
+      const unfilled = isFieldUnfilled(field, previous);
+
+      if (hasAnswer && userEdited) {
         write = { expected: previous, preserved: true };
-      } else if (hasAnswer && !isProfileFact) {
+      } else if (hasAnswer && !unfilled && !plan.overwriteExisting && !isProfileFact) {
         const option = field.options?.length ? choose(field, value) : null;
         if (equals(previous, option?.label ?? value)) write = { expected: previous };
-      } else if (hasAnswer && isProfileFact && equals(previous, value)) {
-        write = { expected: previous };
+        else write = { expected: previous, preserved: true };
+      } else if (hasAnswer && !unfilled && !plan.overwriteExisting && isProfileFact) {
+        if (equals(previous, value)) {
+          write = { expected: previous };
+        } else {
+          write = { expected: previous, preserved: true };
+        }
       } else if (field.kind === 'resume-file') {
         const attachRes = await attachResumeFile(currentEl);
         if (attachRes) {
           write = { expected: attachRes.expected };
-          receipts.push({ field, writtenValue: attachRes.expected });
+        } else {
+          plan._writeFailed = true;
         }
-        continue;
       } else if (field.kind === 'combobox') {
-        write = await fillCombo(field, value, session.isCurrent);
+        write = await fillCombo(field, value, ctx.isCurrent);
       } else if (field.kind === 'multi-combobox') {
-        write = await fillMultiCombo(field, value, session.isCurrent);
-      } else if (mapping.isMultiKind(field.kind)) {
+        write = await fillMultiCombo(field, value, ctx.isCurrent);
+      } else if (isMultiKind(field.kind)) {
         write = setMultiple(field, value);
-      } else if (mapping.isChoiceKind(field.kind)) {
+      } else if (isChoiceKind(field.kind)) {
         write = setChoice(field, value);
       } else if (field.kind === 'checkbox') {
         const boolVal = typeof value === 'boolean' ? value : normalizeBoolean(value);
         if (typeof boolVal === 'boolean') {
-          if (previous !== boolVal) setCheckbox(currentEl, boolVal);
-          write = { expected: boolVal };
+          const ok = previous !== boolVal ? setCheckbox(currentEl, boolVal) : true;
+          if (ok) write = { expected: boolVal };
         }
       } else {
         const expected = currentEl.maxLength > 0 ? String(value).slice(0, currentEl.maxLength) : String(value);
-        writeValue(currentEl, expected);
+        setNativeValue(currentEl, expected);
         write = { expected };
       }
-      if (!write) continue;
+      if (!write) {
+        plan._writeFailed = true;
+        continue;
+      }
 
-      const verified = () => session.isCurrent() && field.element?.isConnected &&
-        (equals(read(field), write.expected) || write.matches?.(read(field)) ||
-         (field.kind === 'combobox' && write.expected && String(read(field) || '').toLowerCase().includes(String(write.expected).toLowerCase())) ||
-         (write.option && !write.option.isConnected && write.expected) ||
-         (write.option?.isConnected && selected(write.option)));
-
-      const isVerified = await waitForVerification(verified, session, 250, 25);
-      if (!isVerified) continue;
-
-      recordPreservedValues([field]);
-      receipts.push({ field, writtenValue: write.expected, ai: !!plan.ai, learned: !!plan.learned });
+      plan._write = write;
+      plan._writtenExpected = write.expected;
     }
-    return receipts;
+
+    // Step 3: Wait 50ms for framework reconciliation, then readback verification
+    await wait(50);
+
+    const verification = verifyWrites(plans);
+
+    // Build array report for 100% backwards compatibility
+    const report = [...verification.filled];
+    report.filled = verification.filled;
+    report.unverified = verification.unverified;
+    report.manual = verification.manual;
+    report.unmapped = verification.unmapped;
+
+    return report;
   }
 
   root.NextkinFieldWriter = {
     applyFill,
+    verifyWrites,
+    setNativeValue,
     attachResumeFile,
     read,
     readChoices,
@@ -3725,13 +4394,20 @@
     setChoice,
     fillCombo,
     fillCombobox: fillCombo,
+    closeCombo,
     recordPreservedValues,
     getPreservedValue,
     clearPreservedValues,
     advanceStep,
     ensureConnectedElement,
     waitForFieldReady,
-    waitForVerification
+    waitForVerification,
+    userEditedElements,
+    durableFieldStore,
+    preservedStore: durableFieldStore,
+    isFieldUnfilled,
+    isFieldUserEdited,
+    installUserEditTracking
   };
 })(globalThis);
 
@@ -3788,6 +4464,12 @@
   }
 
   function isResumeInput(el, text = '') {
+    if (typeof el === 'string') {
+      const s = el.toLowerCase();
+      const resumeRegex = /resume|cv|curriculum[\s_-]*vitae/i;
+      if (/cover[\s_-]*letter|portfolio|transcript/i.test(s) && !resumeRegex.test(s)) return false;
+      return resumeRegex.test(s);
+    }
     if (!el || el.tagName !== 'INPUT' || el.type !== 'file') return false;
     const combined = [
       text,
@@ -3863,6 +4545,14 @@
       }
     }
 
+    if (!found) {
+      let next = el.nextElementSibling;
+      if (!next && el.parentElement && !el.parentElement.matches?.('fieldset, form, body')) next = el.parentElement.nextElementSibling;
+      if (next && (next.tagName === 'LABEL' || next.tagName === 'SPAN' || /label|text|desc|prompt/i.test(next.className || ''))) {
+        if (next.textContent && next.textContent.trim().length < 2500) found = clean(next.textContent);
+      }
+    }
+
     // Direct ATS system field attribute hint
     if (!found && el.name) {
       if (el.name === '_systemfield_name') found = 'Full Name';
@@ -3924,7 +4614,76 @@
     return list.find(a => a && a.id === 'generic') || null;
   }
 
+  // Multi-Step / Wizard transition and scoping support
+  const NEXT_TEXT_REGEX = /^(next|continue|proceed|save and continue|save & continue|next step|review & submit|review|next page|step \d+)\b/i;
+
+  function isStepNavigation(button) {
+    if (!button || !visibleChoice(button)) return false;
+    const text = clean(button.textContent || button.value || button.getAttribute('aria-label'));
+    if (/\b(?:submit|complete|finish|send)\b/i.test(text)) return false;
+    const id = button.getAttribute('data-automation-id') || button.getAttribute('data-testid') || '';
+    return NEXT_TEXT_REGEX.test(text) || /(?:^|[_-])(?:next|continue|nextstep)(?:$|[_-])/i.test(id);
+  }
+
+  function scopeToApplication(rootNode = document) {
+    if (!rootNode) return rootNode;
+    if (rootNode.tagName === 'FORM' || rootNode.matches?.('form')) return rootNode;
+
+    // 1. Anchor on <input type="file"> matching resume criteria
+    const fileInputs = querySelectorAllDeep('input[type="file"]', rootNode);
+    for (const fileInput of fileInputs) {
+      if (isResumeInput(fileInput, label(fileInput))) {
+        let curr = fileInput;
+        while (curr && curr !== rootNode) {
+          if (curr.closest) {
+            const form = curr.closest('form');
+            if (form && form !== rootNode) return form;
+            const container = curr.closest('[class*="application-form" i], [class*="apply-form" i], [data-automation-id*="application" i], main, [role="main"]');
+            if (container && container !== rootNode) return container;
+          }
+          curr = curr.getRootNode?.()?.host || curr.parentElement;
+        }
+      }
+    }
+
+    // 2. Multi-step wizard fallback (Steps 2+, where no resume input is present)
+    const forms = Array.from(rootNode.querySelectorAll ? rootNode.querySelectorAll('form') : []);
+    if (forms.length === 1) {
+      return forms[0];
+    }
+    if (forms.length > 1) {
+      // Find the active application form container holding submit/next controls
+      const appForm = forms.find(f => {
+        if (f.getAttribute('role') === 'search') return false;
+        const formIdentity = [f.id, f.getAttribute('class'), f.getAttribute('action')].filter(Boolean).join(' ');
+        if (/search|subscribe|newsletter|alert/i.test(formIdentity)) return false;
+        const buttons = Array.from(f.querySelectorAll('button, input[type="submit"], input[type="button"], a[role="button"], [role="button"]'));
+        const hasAction = buttons.some(b => isStepNavigation(b) || /submit|apply|continue|next|proceed|save/i.test(clean(b.textContent || b.value || b.getAttribute('aria-label'))));
+        return hasAction;
+      });
+      if (appForm) return appForm;
+
+      // Secondary fallback: find first non-search form with inputs
+      const nonSearchForm = forms.find(f => {
+        if (f.getAttribute('role') === 'search') return false;
+        const formIdentity = [f.id, f.getAttribute('class')].filter(Boolean).join(' ');
+        if (/search|subscribe|newsletter|alert/i.test(formIdentity)) return false;
+        return !!f.querySelector('input:not([type="hidden"]), select, textarea, [role="combobox"]');
+      });
+      if (nonSearchForm) return nonSearchForm;
+    }
+
+    // Container fallback if no form tags (e.g. div-based application steps)
+    const appContainer = rootNode.querySelector?.('[class*="application" i], [class*="apply" i], [data-automation-id*="application" i], main, [role="main"]');
+    if (appContainer && appContainer.querySelector(CONTROL_SELECTOR)) {
+      return appContainer;
+    }
+
+    return rootNode;
+  }
+
   function discoverFields(tree = document) {
+    const scopedTree = scopeToApplication(tree) || tree;
     const fields = [], seen = new Set();
     const adapter = activeAdapter();
     const walk = scope => {
@@ -3933,17 +4692,37 @@
         if (group.closest('#mp-copilot-root') || !group.getClientRects().length) continue;
         if (group.querySelector('button[data-option]')) continue; // yes/no groups are choices
         const boxes = Array.from(group.querySelectorAll(CHECK_SELECTOR)).filter(visibleChoice);
+        // Group-of-one exception: lone controls retain own specific label rather than fieldset legend
         if (boxes.length < 2 || boxes.some(b => seen.has(b)) ||
           group.querySelector('input:not([type=checkbox]):not([type=hidden]), select, textarea, fieldset')) continue;
         const title = groupTitle(group);
         if (!title) continue;
-        if (boxes.some(box => booleanFacts.has(root.NextkinFieldMapping?.resolveFact(label(box), controlName(box))?.key))) continue;
         boxes.forEach(b => seen.add(b));
         const groupHint = adapter?.hint(group) || '';
         fields.push({
           element: group, elements: boxes, key: 'checkbox-group:' + fields.length,
           label: title, hint: groupHint, kind: 'checkbox-group',
           options: boxes.map(box => ({ label: label(box), value: box.value || '', element: box })), scope: '',
+          excluded: excluded.test([title, groupHint, group.id || ''].join(' ').replace(/[_-]/g, ' ')),
+          adapter: adapter?.id || 'generic'
+        });
+      }
+
+      // Sibling radio options inside a fieldset, [role="group"], or [role="radiogroup"] are grouped into one Question field
+      for (const group of scope.querySelectorAll('fieldset, [role="group"], [role="radiogroup"]')) {
+        if (group.closest('#mp-copilot-root') || !group.getClientRects().length) continue;
+        if (group.querySelector('button[data-option]')) continue; // yes/no groups are choices
+        const radios = Array.from(group.querySelectorAll('input[type="radio"]')).filter(visibleChoice);
+        // Group-of-one exception: if radios.length < 2, do NOT group as choice question
+        if (radios.length < 2 || radios.some(r => seen.has(r))) continue;
+        const title = groupTitle(group);
+        if (!title) continue;
+        radios.forEach(r => seen.add(r));
+        const groupHint = adapter?.hint(group) || (radios[0] ? controlName(radios[0]) : '');
+        fields.push({
+          element: group, elements: radios, key: 'choice:' + fields.length,
+          label: title, hint: groupHint, kind: 'choice',
+          options: radios.map(r => ({ label: label(r) || r.value, value: r.value, element: r })), scope: '',
           excluded: excluded.test([title, groupHint, group.id || ''].join(' ').replace(/[_-]/g, ' ')),
           adapter: adapter?.id || 'generic'
         });
@@ -3989,7 +4768,7 @@
           : el.tagName === 'SELECT' ? (el.multiple ? 'multi-select' : 'select') : el.type === 'radio' ? 'radio' : isCheck ? 'checkbox' : 'text';
         let elements = [el];
         if (kind === 'radio') {
-          const radioGroup = el.closest('[role="radiogroup"], fieldset, ' + QUESTION_CONTAINER);
+          const radioGroup = el.closest('[role="radiogroup"], [role="group"], fieldset, ' + QUESTION_CONTAINER);
           elements = Array.from((el.name ? scope : radioGroup || scope).querySelectorAll('input[type="radio"]'))
             .filter(r => visibleChoice(r) && (el.name ? r.name === el.name && r.form === el.form : radioGroup ? !r.name : r === el));
           if (elements.some(r => seen.has(r))) continue; elements.forEach(r => seen.add(r));
@@ -4000,7 +4779,8 @@
           : el.list ? [...el.list.options].filter(available).map(o => ({ label: o.label || o.value, value: o.value, element: o })) : [];
         const question = kind === 'radio' ? choiceQuestion(el) || controlName(el) || text : text;
         const factHint = hint || (kind === 'radio' || isCheck ? controlName(el) : '');
-        fields.push({ element: el, elements, key: 'field:' + fields.length + ':' + (el.id || el.name || factHint), label: question, hint: factHint, kind, options, scope: groupLabel, excluded: excluded.test([question, factHint, el.id, el.name, groupLabel].join(' ').replace(/[_-]/g, ' ')), adapter: adapter?.id || 'generic', editable: isEditable });
+        const fieldKind = (kind === 'radio' && elements.length > 1) ? 'choice' : kind;
+        fields.push({ element: el, elements, key: (fieldKind === 'choice' ? 'choice:' : 'field:') + fields.length + ':' + (el.id || el.name || factHint), label: question, hint: factHint, kind: fieldKind, options, scope: groupLabel, excluded: excluded.test([question, factHint, el.id, el.name, groupLabel].join(' ').replace(/[_-]/g, ' ')), adapter: adapter?.id || 'generic', editable: isEditable });
       }
 
       // Button-based choice groups (Ashby/Greenhouse/Lever Yes/No and segmented radio groups)
@@ -4036,19 +4816,8 @@
       }
       for (const el of scope.querySelectorAll('*')) if (el.shadowRoot && el.id !== 'mp-copilot-root') walk(el.shadowRoot);
     };
-    walk(tree);
+    walk(scopedTree);
     return fields;
-  }
-
-  // Wizard / Multi-Step transition support
-  const NEXT_TEXT_REGEX = /^(next|continue|proceed|save and continue|save & continue|next step|review & submit|review|next page|step \d+)\b/i;
-
-  function isStepNavigation(button) {
-    if (!button || !visibleChoice(button)) return false;
-    const text = clean(button.textContent || button.value || button.getAttribute('aria-label'));
-    if (/\b(?:submit|complete|finish|send)\b/i.test(text)) return false;
-    const id = button.getAttribute('data-automation-id') || button.getAttribute('data-testid') || '';
-    return NEXT_TEXT_REGEX.test(text) || /(?:^|[_-])(?:next|continue|nextstep)(?:$|[_-])/i.test(id);
   }
 
   function findStepNavigation(scope = document) {
@@ -4144,6 +4913,7 @@
     observeStepTransitions,
     querySelectorAllDeep,
     isResumeInput,
+    scopeToApplication,
     discoverUniversal: discoverFields,
   };
 })(globalThis);

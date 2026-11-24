@@ -262,3 +262,40 @@ test('Autofill maps and selects all 8 Race / Ethnicity categories accurately', (
     assert.strictEqual(plan[0].value, expected, `Failed for short race category ${input}`);
   }
 });
+
+test('planFill auto-checks privacy/terms legal acknowledgement checkboxes', () => {
+  const sandbox = createTestSandbox();
+  const mapping = sandbox.NextkinFieldMapping;
+
+  const candidate = { id: 'cand_123', full_name: 'Test Candidate' };
+  const fields = [
+    { label: 'I agree to the Terms of Service and Privacy Policy', kind: 'checkbox' }
+  ];
+
+  const plan = mapping.planFill(fields, candidate);
+  assert.strictEqual(plan.length, 1);
+  assert.strictEqual(plan[0].status, 'supported');
+  assert.strictEqual(plan[0].factKey, 'consent');
+  assert.strictEqual(plan[0].value, true);
+});
+
+test('planFill rejects marketing, SMS, and promotional checkboxes from auto-checking', () => {
+  const sandbox = createTestSandbox();
+  const mapping = sandbox.NextkinFieldMapping;
+
+  const candidate = { id: 'cand_123', full_name: 'Test Candidate' };
+  const fields = [
+    { label: 'I agree to receive promotional SMS messages and job alerts', kind: 'checkbox' },
+    { label: 'Join our talent network for marketing newsletters', kind: 'checkbox' }
+  ];
+
+  const plan = mapping.planFill(fields, candidate);
+  assert.strictEqual(plan.length, 2);
+  assert.strictEqual(plan[0].status, 'manual');
+  assert.strictEqual(plan[0].factKey, 'consent');
+  assert.notStrictEqual(plan[0].status, 'supported');
+  assert.strictEqual(plan[1].status, 'manual');
+  assert.strictEqual(plan[1].factKey, 'consent');
+  assert.notStrictEqual(plan[1].status, 'supported');
+});
+
