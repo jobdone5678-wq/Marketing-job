@@ -97,12 +97,16 @@
       name: 'Ashby',
       matches: hostIs(/(^|\.)ashbyhq\.com$/i),
       hint: el => {
-        const name = el.getAttribute('name') || '';
-        if (name === '_systemfield_name') return 'full_name';
-        if (name === '_systemfield_email') return 'email';
-        if (name === '_systemfield_location') return 'current_location';
-        if (name === '_systemfield_phone') return 'phone';
-        if (/urls\[([^\]]+)\]/i.test(name)) {
+        const name = el.getAttribute('name') || el.id || '';
+        const path = el.getAttribute('data-field-path') ||
+          el.closest?.('[data-field-path]')?.getAttribute('data-field-path') ||
+          el.closest?.('.ashby-application-form-field-entry')?.querySelector('label')?.getAttribute('for') || '';
+        const identifier = name || path;
+        if (identifier === '_systemfield_name') return 'full_name';
+        if (identifier === '_systemfield_email') return 'email';
+        if (identifier === '_systemfield_location') return 'current_location';
+        if (identifier === '_systemfield_phone') return 'phone';
+        if (/urls\[([^\]]+)\]/i.test(name || identifier)) {
           const key = RegExp.$1.toLowerCase();
           if (/linkedin/.test(key)) return 'linkedin_url';
           if (/github/.test(key)) return 'github_url';
