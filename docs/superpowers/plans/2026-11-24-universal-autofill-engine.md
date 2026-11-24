@@ -190,7 +190,7 @@ git commit -m "feat(writer): add smart edit tracking for radio groups, labels an
 - Consumes: Target boolean value and checkbox DOM element, or text/select element with target value.
 - Produces: Guaranteed checkbox toggle without flipping back, universal `_valueTracker` reset across native text inputs, textareas, `<select>`, and checkboxes using `String(!desired)` for React string comparisons.
 
-- [ ] **Step 1: Write the failing test in `tests/autofill-engine.test.mjs`**
+- [x] **Step 1: Write the failing test in `tests/autofill-engine.test.mjs`**
 
 ```javascript
 test('setCheckbox toggles an unchecked React controlled checkbox to true without double-toggling', () => {
@@ -204,12 +204,12 @@ test('setNativeValue resets React _valueTracker on text input, textarea, and sel
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node --test tests/autofill-engine.test.mjs`
 Expected: FAIL
 
-- [ ] **Step 3: Implement state-guarded toggle & universal `_valueTracker` reset in `jobright_extension/core/field-writer.js`**
+- [x] **Step 3: Implement state-guarded toggle & universal `_valueTracker` reset in `jobright_extension/core/field-writer.js`**
 
 1. In `setNativeValue(el, val)`:
    - For text inputs, textareas, and `<select>`: reset `el._valueTracker?.setValue?.(prevValue)` before applying prototype setter and dispatching events.
@@ -220,12 +220,12 @@ Expected: FAIL
    - If not toggled: reset `el._valueTracker?.setValue?.(String(!desired))`, apply native prototype descriptor `desc.set.call(el, desired)`, and dispatch synthetic `input` and `change` events.
    - Return `checked(el) === desired`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `node --test tests/autofill-engine.test.mjs`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add jobright_extension/core/field-writer.js tests/autofill-engine.test.mjs
