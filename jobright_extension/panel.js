@@ -352,13 +352,14 @@ function buildScopedProfile(candidate) {
     'full_name', 'first_name', 'last_name', 'preferred_first_name',
     'email', 'phone', 'current_city', 'current_state', 'current_location', 'date_of_birth',
     'zip_code', 'country', 'full_address', 'linkedin_url', 'github_url', 'twitter_url', 'other_url',
-    'website', 'portfolio_url', 'current_employer', 'current_title', 'total_experience_years',
-    'primary_skills', 'authorized_in_usa', 'needs_sponsorship', 'need_sponsorship_now',
+    'website', 'portfolio_url', 'current_employer', 'current_title', 'current_job_title',
+    'experience_years', 'total_experience_years', 'primary_skills', 'skills',
+    'authorized_in_usa', 'needs_sponsorship', 'need_sponsorship_now',
     'need_sponsorship_future', 'open_to_relocation', 'relocation_preference', 'willing_to_relocate',
     'intended_work_country', 'employment_country', 'work_location_country',
-    'visa_status', 'work_authorization', 'citizenship_status', 'summary', 'bio', 'gender', 'race',
-    'veteran', 'veteran_status', 'disability', 'disability_status', 'availability',
-    'salary_expectation', 'highest_education', 'school', 'graduation_year',
+    'visa_status', 'work_authorization', 'citizenship_status', 'summary', 'bio', 'gender',
+    'race', 'race_ethnicity', 'veteran', 'veteran_status', 'disability', 'disability_status',
+    'availability', 'salary_expectation', 'highest_education', 'school', 'graduation_year',
     'preferred_work_type', 'saved_answers', 'highest_qualification'
   ];
   const scopedFacts = {};
@@ -372,6 +373,7 @@ function buildScopedProfile(candidate) {
   return {
     id: candidate.id,
     version: candidate.version,
+    provenance_status: candidate.provenance_status || 'confirmed',
     ...scopedFacts,
     confirmed_facts: scopedFacts,
   };
