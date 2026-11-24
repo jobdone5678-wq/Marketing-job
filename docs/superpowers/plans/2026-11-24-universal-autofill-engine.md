@@ -133,7 +133,7 @@ git commit -m "fix(panel): retain provenance_status and extended keys in buildSc
 - Consumes: `plans` array and DOM elements from form discovery.
 - Produces: Smart write decision: overwrites untouched portal defaults (`defaultChecked`, blank `<select>`, placeholder text), preserves `isTrusted` user edits across radio groups and label clicks, and stores values in `durableFieldStore`.
 
-- [ ] **Step 1: Write the failing test in `tests/verified-combobox-writer.test.mjs`**
+- [x] **Step 1: Write the failing test in `tests/verified-combobox-writer.test.mjs`**
 
 ```javascript
 test('writer overwrites untouched initial default radio (e.g. pre-checked "No") with confirmed candidate fact', async () => {
@@ -152,12 +152,12 @@ test('writer tracks isTrusted clicks on <label> or sibling radio across the enti
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node --test tests/verified-combobox-writer.test.mjs`
 Expected: FAIL
 
-- [ ] **Step 3: Implement edit tracking & smart `hasAnswer` in `jobright_extension/core/field-writer.js`**
+- [x] **Step 3: Implement edit tracking & smart `hasAnswer` in `jobright_extension/core/field-writer.js`**
 
 1. Install global `isTrusted` listener capturing `change`, `input`, and `click`/`keydown` on native controls and custom ARIA controls (`[role="combobox"], [role="radio"], [role="checkbox"]`).
    - If target is a `<label>` with a `control` property or `for` attribute, resolve and mark the associated control.
@@ -166,12 +166,12 @@ Expected: FAIL
 3. Define `isFieldUnfilled(field, domVal)`: true if empty, placeholder string, `<select>` index 0 without meaningful value, or radio with untouched `defaultChecked`.
 4. Update `applyFill`: If `hasAnswer` is true but `!userEditedElements.has(el)` and `!durableFieldStore.get(fieldKey)?.userEdited`, allow overwrite by profile facts.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `node --test tests/verified-combobox-writer.test.mjs`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add jobright_extension/core/field-writer.js tests/verified-combobox-writer.test.mjs
