@@ -263,6 +263,17 @@ export function buildVerifiedFacts(
     addFact('profile.work_auth.need_sponsorship_future', 'boolean', sponFuture, 'work_auth', 'profile', 'need_sponsorship_future');
   }
 
+  // Preferences & Relocation
+  const openToReloc = parseBoolean(candidate.open_to_relocation);
+  if (openToReloc !== null) {
+    addFact('profile.preferences.open_to_relocation', 'boolean', openToReloc, 'personal', 'profile', 'open_to_relocation');
+    addFact('profile.open_to_relocation', 'boolean', openToReloc, 'personal', 'profile', 'open_to_relocation');
+  }
+  if (isNonEmptyString(candidate.preferred_locations)) {
+    addFact('profile.preferences.preferred_locations', 'string', candidate.preferred_locations.trim(), 'location', 'profile', 'preferred_locations');
+    addFact('profile.preferred_locations', 'string', candidate.preferred_locations.trim(), 'location', 'profile', 'preferred_locations');
+  }
+
   // 5. Experience
   const totalExp = parseNumber(candidate.total_experience_years);
   if (totalExp !== null) {

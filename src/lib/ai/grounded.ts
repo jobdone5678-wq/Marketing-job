@@ -110,6 +110,7 @@ function getDegreeTier(text: unknown): number {
 function isNegativeStance(text: string): boolean {
   const norm = normalize(text);
   if (/^(no|false|none|n\s*a|never|not applicable)$/i.test(norm)) return true;
+  if (/\b(not authorized|unauthorized|no right to work|ineligible)\b/i.test(norm)) return true;
   if (/\b(do not|does not|will not|don t|won t|no longer|without|cannot|not require|do not require|does not require|will not require)\b/i.test(norm)) return true;
   return false;
 }
@@ -121,7 +122,8 @@ function isPositiveStance(text: string): boolean {
   if (isNegativeStance(text)) return false;
   const norm = normalize(text);
   if (/^(yes|true|i do|i will|definitely|correct)$/i.test(norm)) return true;
-  if (/\b(require|need|will require|sponsorship required|require sponsorship|need sponsorship)\b/i.test(norm)) return true;
+  if (/\b(authorized|legally authorized|eligible|permitted|i am authorized|right to work)\b/i.test(norm)) return true;
+  if (/\b(yes\b|require|need|will require|sponsorship required|require sponsorship|need sponsorship)\b/i.test(norm)) return true;
   return false;
 }
 
@@ -545,6 +547,34 @@ export function validateGroundedAnswer(
     const cityFact = facts.get('profile.location.city');
     if (cityFact && (normalize(cityFact.value) === normAns || normAns.includes(normalize(cityFact.value)))) {
       return validResult([cityFact.id], 'verified');
+    }
+  }
+
+  // Relocation preferences
+  const isRelocQuestion =
+    canonical === 'open_to_relocation' ||
+    canonical === 'willing_to_relocate' ||
+    category === 'relocation' ||
+    /\b(relocat(?:e|ion)|willing\s+to\s+move)\b/i.test(normQ);
+
+  if (isRelocQuestion) {
+    const relocFact = facts.get('profile.preferences.open_to_relocation') || facts.get('profile.open_to_relocation');
+    if (relocFact) {
+      const openToReloc = Boolean(relocFact.value);
+      if (openToReloc) {
+        if (isPositiveStance(answer)) return validResult([relocFact.id], 'verified');
+        if (isNegativeStance(answer)) return unresolvedResult('Negation error: Candidate is willing to relocate but answered No', [relocFact.id]);
+      } else {
+        if (isNegativeStance(answer)) return validResult([relocFact.id], 'verified');
+        if (isPositiveStance(answer)) return unresolvedResult('Negation error: Candidate is not willing to relocate but answered Yes', [relocFact.id]);
+      }
+    }
+  }
+
+  if (/\b(preferred\s+location|list\s+preferred\s+locations?)\b/i.test(normQ)) {
+    const prefLocFact = facts.get('profile.preferences.preferred_locations') || facts.get('profile.preferred_locations');
+    if (prefLocFact && typeof prefLocFact.value === 'string') {
+      return validResult([prefLocFact.id], 'verified');
     }
   }
 

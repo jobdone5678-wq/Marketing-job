@@ -84,7 +84,7 @@ export function checkFeatureFlag(): void {
 
 async function getDb(options?: OrchestratorOptions): Promise<any> {
   if (options?.db) return options.db;
-  const admin = await import('../db/admin.js');
+  const admin = await import('@/lib/db/admin');
   return admin.database();
 }
 
