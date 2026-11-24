@@ -131,7 +131,7 @@ git commit -m "fix(panel): retain provenance_status and extended keys in buildSc
 
 **Interfaces:**
 - Consumes: `plans` array and DOM elements from form discovery.
-- Produces: Smart write decision: overwrites untouched portal defaults (`defaultChecked`, blank `<select>`, placeholder text), preserves `isTrusted` user edits, and stores values in `durableFieldStore`.
+- Produces: Smart write decision: overwrites untouched portal defaults (`defaultChecked`, blank `<select>`, placeholder text), preserves `isTrusted` user edits across radio groups and label clicks, and stores values in `durableFieldStore`.
 
 - [ ] **Step 1: Write the failing test in `tests/verified-combobox-writer.test.mjs`**
 
@@ -145,6 +145,11 @@ test('writer strictly preserves field if modified by an isTrusted user event', a
   // Input received an isTrusted input event
   // Writer must preserve the user-edited value
 });
+
+test('writer tracks isTrusted clicks on <label> or sibling radio across the entire radio group', async () => {
+  // Radio group where Option B's label received an isTrusted click
+  // Writer must recognize the entire radio group as user-edited and preserve it
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -154,7 +159,9 @@ Expected: FAIL
 
 - [ ] **Step 3: Implement edit tracking & smart `hasAnswer` in `jobright_extension/core/field-writer.js`**
 
-1. Install global `isTrusted` listener capturing `change`, `input`, and `click`/`keydown` on native controls and custom ARIA controls (`[role="combobox"], [role="radio"], [role="checkbox"]`), adding elements to `userEditedElements = new WeakSet()`.
+1. Install global `isTrusted` listener capturing `change`, `input`, and `click`/`keydown` on native controls and custom ARIA controls (`[role="combobox"], [role="radio"], [role="checkbox"]`).
+   - If target is a `<label>` with a `control` property or `for` attribute, resolve and mark the associated control.
+   - For radio inputs, mark all sibling radio inputs in the same named group (`input[name="..."]`) or parent `[role="radiogroup"]` as user-edited in `userEditedElements = new WeakSet()`.
 2. Update `durableFieldStore = new Map()` (`preservedStore`) to record `{ value, userEdited: boolean }` keyed by normalized field key/label.
 3. Define `isFieldUnfilled(field, domVal)`: true if empty, placeholder string, `<select>` index 0 without meaningful value, or radio with untouched `defaultChecked`.
 4. Update `applyFill`: If `hasAnswer` is true but `!userEditedElements.has(el)` and `!durableFieldStore.get(fieldKey)?.userEdited`, allow overwrite by profile facts.
@@ -168,20 +175,20 @@ Expected: PASS
 
 ```bash
 git add jobright_extension/core/field-writer.js tests/verified-combobox-writer.test.mjs
-git commit -m "feat(writer): add smart edit tracking and allow overwriting untouched portal defaults"
+git commit -m "feat(writer): add smart edit tracking for radio groups, labels and allow overwriting untouched portal defaults"
 ```
 
 ---
 
-### Task 4: State-Guarded Checkbox Single Toggle & React `_valueTracker` Reset
+### Task 4: State-Guarded Checkbox Single Toggle & Universal React `_valueTracker` Reset
 
 **Files:**
 - Modify: `jobright_extension/core/field-writer.js:250-305, 1170-1185`
 - Test: `tests/autofill-engine.test.mjs`
 
 **Interfaces:**
-- Consumes: Target boolean value and checkbox DOM element.
-- Produces: Guaranteed checkbox toggle without flipping back, notifying React via `_valueTracker` reset.
+- Consumes: Target boolean value and checkbox DOM element, or text/select element with target value.
+- Produces: Guaranteed checkbox toggle without flipping back, universal `_valueTracker` reset across native text inputs, textareas, `<select>`, and checkboxes using `String(!desired)` for React string comparisons.
 
 - [ ] **Step 1: Write the failing test in `tests/autofill-engine.test.mjs`**
 
@@ -190,6 +197,11 @@ test('setCheckbox toggles an unchecked React controlled checkbox to true without
   // Mock React checkbox that flips state on click and updates _valueTracker
   // Verifies element ends up checked: true and event dispatched once
 });
+
+test('setNativeValue resets React _valueTracker on text input, textarea, and select controls', () => {
+  // Mock React text input and select with _valueTracker
+  // Verifies tracker.setValue is invoked with previous value before dispatch
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -197,13 +209,15 @@ test('setCheckbox toggles an unchecked React controlled checkbox to true without
 Run: `node --test tests/autofill-engine.test.mjs`
 Expected: FAIL
 
-- [ ] **Step 3: Implement state-guarded toggle in `jobright_extension/core/field-writer.js`**
+- [ ] **Step 3: Implement state-guarded toggle & universal `_valueTracker` reset in `jobright_extension/core/field-writer.js`**
 
-1. In `setCheckbox(el, desired)`:
+1. In `setNativeValue(el, val)`:
+   - For text inputs, textareas, and `<select>`: reset `el._valueTracker?.setValue?.(prevValue)` before applying prototype setter and dispatching events.
+2. In `setCheckbox(el, desired)`:
    - Check `if (checked(el) === desired) return true;`
    - Single click target: `target = findClickableTarget(el) || el; click(target);`
    - If `checked(el) === desired`, return true.
-   - If not toggled: reset `el._valueTracker?.setValue?.(!desired)`, apply native prototype descriptor `desc.set.call(el, desired)`, and dispatch synthetic `input` and `change` events.
+   - If not toggled: reset `el._valueTracker?.setValue?.(String(!desired))`, apply native prototype descriptor `desc.set.call(el, desired)`, and dispatch synthetic `input` and `change` events.
    - Return `checked(el) === desired`.
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -215,20 +229,20 @@ Expected: PASS
 
 ```bash
 git add jobright_extension/core/field-writer.js tests/autofill-engine.test.mjs
-git commit -m "fix(writer): prevent checkbox double-toggling and reset React _valueTracker"
+git commit -m "fix(writer): prevent checkbox double-toggling and universal React _valueTracker reset"
 ```
 
 ---
 
-### Task 5: Custom Comboboxes, Portals, Search Typeahead & Cascading Sequence
+### Task 5: Custom Comboboxes, Portals, Search Typeahead, Cascading Sequence & Safe Close
 
 **Files:**
 - Modify: `jobright_extension/core/field-writer.js:530-615`
 - Test: `tests/verified-combobox-writer.test.mjs`
 
 **Interfaces:**
-- Consumes: Field representing custom combobox (`[role="combobox"]`, `[aria-haspopup="listbox"]`, Radix, Select2) and target value.
-- Produces: Opens menu via pointerdown/click/ArrowDown, searches body portals/shadow DOMs, falls back to typeahead typing with 300–500ms settling wait, selects option, and closes menu.
+- Consumes: Fields representing custom comboboxes (`[role="combobox"]`, `[aria-haspopup="listbox"]`, Radix, Select2) and target values.
+- Produces: Opens menu via pointerdown/click/ArrowDown, searches body portals/shadow DOMs, falls back to typeahead typing with 300–500ms settling wait, executes cascading fields (Country -> State/Province -> City) sequentially with option settling, selects options, and safely closes menus without accidentally closing employer modal dialogs.
 
 - [ ] **Step 1: Write the failing test in `tests/verified-combobox-writer.test.mjs`**
 
@@ -241,6 +255,14 @@ test('fillCombo searches document.body portal listbox when opened via pointerdow
 test('fillCombo uses type-to-filter fallback when initial open shows no matching option', async () => {
   // Combobox requires typing search query to render asynchronous filtered results
 });
+
+test('cascading dropdowns populate sequentially (Country -> State -> City) with option settling wait', async () => {
+  // Dependent dropdowns where State options only populate after Country is selected
+});
+
+test('closeCombo only dispatches Escape if listbox is still open, never closing employer modal', async () => {
+  // Dialog containing a combobox: if already closed, Escape is NOT sent
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -248,12 +270,13 @@ test('fillCombo uses type-to-filter fallback when initial open shows no matching
 Run: `node --test tests/verified-combobox-writer.test.mjs`
 Expected: FAIL
 
-- [ ] **Step 3: Implement portal discovery & typeahead in `jobright_extension/core/field-writer.js`**
+- [ ] **Step 3: Implement portal discovery, typeahead, cascading sequence & safe close in `jobright_extension/core/field-writer.js`**
 
 1. In `comboTrigger(el)` and `fillCombo`: dispatch `pointerdown` + `mousedown` + `click` (with `ArrowDown` keydown fallback).
 2. Expand `getListboxRoots(el)` to query `document.body` for `[data-radix-popper-content-wrapper]`, `[data-floating-ui-portal]`, `.select2-dropdown`, `.k-animation-container`, and open shadow roots.
 3. If `choose({ options }, desired)` finds no immediate match, detect `comboSearchInput(el, roots)`, type desired value via `setNativeValue`, await 350ms, and re-query options.
-4. Always close menu with `closeCombo(el)` and blur before returning.
+4. Support cascading sequence: Sort fill plans so `country` precedes `state`/`province`, which precedes `city`. When filling dependent location fields, wait up to 400ms for options to settle before matching.
+5. In `closeCombo(el)`: Inspect whether the listbox or popup is still visibly open or `el.getAttribute('aria-expanded') === 'true'`. Only dispatch `Escape` key event if the combobox is STILL open, preventing accidental closure of employer application modals. Blur `el` before returning.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -264,7 +287,7 @@ Expected: PASS
 
 ```bash
 git add jobright_extension/core/field-writer.js tests/verified-combobox-writer.test.mjs
-git commit -m "feat(writer): support body portal listboxes, type-to-filter fallback and clean menu closing"
+git commit -m "feat(writer): support body portal listboxes, type-to-filter fallback, cascading sequence, and safe modal close"
 ```
 
 ---
@@ -322,7 +345,7 @@ git commit -m "feat(mapping): add marketing blocklist and auto-check scoped lega
 
 ---
 
-### Task 7: Debounced Multi-Step Transition Observer & Visible Field Tracking
+### Task 7: Debounced Multi-Step Transition Observer, Visible Field Tracking & Multi-Frame Aggregation
 
 **Files:**
 - Modify: `jobright_extension/core/application.js:1290-1360`, `jobright_extension/panel.js:1020-1040`
@@ -330,7 +353,7 @@ git commit -m "feat(mapping): add marketing blocklist and auto-check scoped lega
 
 **Interfaces:**
 - Consumes: DOM mutations and SPA route changes on multi-step wizard applications.
-- Produces: Reactive execution of autofill on newly mounted, visible fields for Step 2/3/etc. with in-flight fill lock and `allFrames: true` iframe discovery.
+- Produces: Reactive execution of autofill on newly mounted, visible fields for Step 2/3/etc. (including visually-hidden native checkboxes/radios styled via labels) with in-flight fill lock, and multi-frame result aggregation across `allFrames: true` execution in `panel.js`.
 
 - [ ] **Step 1: Write the failing test in `tests/autofill-engine.test.mjs`**
 
@@ -339,6 +362,16 @@ test('step transition observer detects visible fields on SPA route change and tr
   // Simulates multi-step form step advancement and location.href diff
   // Verifies only newly mounted visible fields are processed
 });
+
+test('visible(el) treats sr-only or visually-hidden native checkboxes and radios as visible if associated label or wrapper has rects', () => {
+  // Native input with 0x0 rect or display:none but visible <label>
+  // Verifies field is not skipped as hidden
+});
+
+test('panel.js aggregateAutofillResults merges results across all returned frame outputs', () => {
+  // Array of frame execution outputs from chrome.scripting.executeScript({ allFrames: true })
+  // Verifies filled fields, unverified, and errors from all frames are aggregated cleanly
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -346,14 +379,17 @@ test('step transition observer detects visible fields on SPA route change and tr
 Run: `node --test tests/autofill-engine.test.mjs`
 Expected: FAIL
 
-- [ ] **Step 3: Implement debounced observer in `jobright_extension/core/application.js` & `panel.js`**
+- [ ] **Step 3: Implement debounced observer, label visibility & multi-frame aggregation in `jobright_extension/core/application.js` & `panel.js`**
 
-1. In `core/application.js:observeStepTransitions`:
+1. In `core/application.js:observeStepTransitions` and visibility check:
    - Debounce `MutationObserver` 350ms on `document.body`.
    - Track `lastHref !== location.href` alongside `popstate` and `hashchange`.
-   - Maintain `seenElements = new WeakSet()` and only add elements when `visible(el)` (`getClientRects().length > 0`).
+   - For `visible(el)`: Check `el.getClientRects().length > 0`. If `el` is a checkbox or radio (`el.type === 'checkbox' || el.type === 'radio' || el.getAttribute('role') === 'checkbox' || el.getAttribute('role') === 'radio'`) and has no client rects, check its associated `<label>` (`el.labels`, `label[for="..."]`, or closest `label`/wrapper container). If that label/wrapper is visible, treat the field as visible.
+   - Maintain `seenElements = new WeakSet()` and only add elements when `visible(el)`.
    - Use in-flight fill mutex to prevent overlapping fill runs.
-2. In `jobright_extension/panel.js:fillForm`: Ensure `chrome.scripting.executeScript` passes `allFrames: true`.
+2. In `jobright_extension/panel.js:fillForm`:
+   - Pass `allFrames: true` in `chrome.scripting.executeScript`.
+   - Aggregate results across all returned frame injection objects: merge `filled` arrays, `unverified` arrays, `warnings`, and overall status, instead of reading only `results[0].result`.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -364,7 +400,7 @@ Expected: PASS
 
 ```bash
 git add jobright_extension/core/application.js jobright_extension/panel.js tests/autofill-engine.test.mjs
-git commit -m "feat(application): debounced multi-step transition observer with visible field filtering and iframe support"
+git commit -m "feat(application): debounced multi-step transition observer with label visibility and multi-frame result aggregation"
 ```
 
 ---
