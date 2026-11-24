@@ -4419,8 +4419,74 @@
   const COMBO_SELECTOR = '[role="combobox"], [aria-haspopup="listbox"], input[list], .select2-selection, .ng-select, kendo-dropdownlist, kendo-multiselect, button[class*="select-trigger" i], button[class*="selectTrigger" i], button[data-testid*="select" i], button[data-testid*="combobox" i], [data-slot="select-trigger"], [data-automation-id*="prompt" i], [data-automation-id*="select" i], [id^="headlessui-listbox-button"]';
   const CHECK_SELECTOR = 'input[type="checkbox"], [role="checkbox"], [role="switch"], [data-slot="checkbox"], [data-slot="switch"]';
   const CONTROL_SELECTOR = 'input, textarea, select, ' + CHECK_SELECTOR + ', [contenteditable=""], [contenteditable="true"], iframe, ' + COMBO_SELECTOR;
-  const available = el => !el.disabled && !el.readOnly && el.getAttribute('aria-disabled') !== 'true' && el.getAttribute('aria-hidden') !== 'true';
-  const visible = el => available(el) && !!el.getClientRects().length && el.ownerDocument.defaultView.getComputedStyle(el).visibility !== 'hidden';
+  const isCheckOrRadio = el => {
+    if (!el) return false;
+    const type = el.type;
+    if (type === 'checkbox' || type === 'radio') return true;
+    const role = el.getAttribute?.('role');
+    return role === 'checkbox' || role === 'radio';
+  };
+
+  const hasRects = el => {
+    if (!el || typeof el.getClientRects !== 'function') return false;
+    const rects = el.getClientRects();
+    if (!rects || !rects.length) return false;
+    for (let i = 0; i < rects.length; i++) {
+      const r = rects[i];
+      if (r && (r.width > 0 || r.height > 0)) return true;
+    }
+    const first = rects[0];
+    if (first && first.width === undefined && first.height === undefined) return true;
+    return false;
+  };
+
+  const isNotHidden = el => {
+    if (!el) return false;
+    const win = el.ownerDocument?.defaultView || (typeof window !== 'undefined' ? window : globalThis);
+    if (!win || !win.getComputedStyle) return true;
+    try {
+      const s = win.getComputedStyle(el);
+      return s.visibility !== 'hidden' && s.display !== 'none';
+    } catch {
+      return true;
+    }
+  };
+
+  const available = el => Boolean(el && !el.disabled && !el.readOnly && el.getAttribute?.('aria-disabled') !== 'true');
+
+  const visible = el => {
+    if (!available(el)) return false;
+    if (hasRects(el)) {
+      return el.getAttribute?.('aria-hidden') !== 'true' && isNotHidden(el);
+    }
+    if (isCheckOrRadio(el)) {
+      const candidates = [];
+      if (el.labels) {
+        try { candidates.push(...el.labels); } catch {}
+      }
+      if (el.id) {
+        try {
+          const esc = globalThis.CSS?.escape ? CSS.escape(el.id) : el.id.replace(/["\\]/g, '\\$&');
+          const doc = el.getRootNode?.()?.querySelector ? el.getRootNode() : (el.ownerDocument || document);
+          const forLabel = doc.querySelector?.(`label[for="${esc}"]`);
+          if (forLabel) candidates.push(forLabel);
+        } catch {}
+      }
+      const parentLabel = el.closest?.('label');
+      if (parentLabel) candidates.push(parentLabel);
+      const wrapper = el.closest?.('.custom-checkbox, .custom-radio, .checkbox, .radio, [class*="checkbox" i], [class*="radio" i], [class*="control" i]');
+      if (wrapper) candidates.push(wrapper);
+
+      for (const target of candidates) {
+        if (!target) continue;
+        if (hasRects(target) && isNotHidden(target)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
   const visibleChoice = el => available(el) && (visible(el) || [...(el.labels || [])].some(visible));
   const multiComboSelector = '[aria-multiselectable="true"], [multiple], [data-multiple="true"], .ng-select-multiple, .select2-selection--multiple, kendo-multiselect';
 
@@ -4843,7 +4909,7 @@
         try {
           const currentFields = discoverFields(scope);
           const newFields = detectNewFields(prevFields, currentFields);
-          if (newFields.length > 0 || currentFields.length !== prevFields.length) {
+          if (newFields.length > 0 || currentFields.length !== prevFields.length || triggerType === 'route_change') {
             const oldFields = prevFields;
             prevFields = currentFields;
             callback?.({ newFields, allFields: currentFields, oldFields, triggerType });
@@ -4851,7 +4917,7 @@
         } catch (err) {
           console.error('[NextkinForms] Step transition error:', err);
         }
-      }, 150);
+      }, 350);
     };
 
     const clickHandler = event => {
@@ -4866,6 +4932,22 @@
 
     const doc = scope?.nodeType === 9 ? scope : (scope?.ownerDocument || document);
     doc.addEventListener('click', clickHandler, true);
+
+    const win = doc?.defaultView || (typeof window !== 'undefined' ? window : globalThis);
+    let lastHref = win?.location ? win.location.href : (typeof location !== 'undefined' ? location.href : '');
+
+    const routeHandler = () => {
+      const currentHref = win?.location ? win.location.href : (typeof location !== 'undefined' ? location.href : '');
+      if (currentHref && currentHref !== lastHref) {
+        lastHref = currentHref;
+        check('route_change');
+      }
+    };
+
+    if (win && typeof win.addEventListener === 'function') {
+      win.addEventListener('popstate', routeHandler);
+      win.addEventListener('hashchange', routeHandler);
+    }
 
     let observer = null;
     const targetNode = scope.body || (scope.nodeType === 1 ? scope : doc.body);
@@ -4895,6 +4977,10 @@
       disconnect() {
         if (timer) clearTimeout(timer);
         doc.removeEventListener('click', clickHandler, true);
+        if (win && typeof win.removeEventListener === 'function') {
+          win.removeEventListener('popstate', routeHandler);
+          win.removeEventListener('hashchange', routeHandler);
+        }
         observer?.disconnect();
       },
       triggerCheck() {
@@ -4914,6 +5000,8 @@
     isResumeInput,
     scopeToApplication,
     discoverUniversal: discoverFields,
+    visible: visibleChoice,
+    visibleChoice,
   };
 })(globalThis);
 
@@ -4933,6 +5021,8 @@
   const reviewField = /\b(?:agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare|signature|captcha|password|otp)\b/i;
   const fileEvidence = new WeakMap();
   const submitting = new WeakSet();
+  const seenElements = new WeakSet();
+  let isFilling = false;
   let wizard;
   const answerKey = field => field.label.normalize('NFKC').toLowerCase().replace(/[?*:.!]+$/g, '').trim().replace(/\s+/g, ' ');
 
@@ -5679,39 +5769,64 @@
   }
 
   async function fill(expectedUrl, candidate, resume, continuation = false, newFields, saved = null, aiAnswers = null) {
-    // Older callers pass `saved` and `aiAnswers` as the fourth and fifth arguments.
-    // Accept both shapes so an extension or a test bundle built at either version works.
-    if (typeof continuation !== 'boolean') {
-      const legacySaved = continuation;
-      const legacyAi = newFields;
-      continuation = false;
-      newFields = null;
-      saved = legacySaved;
-      aiAnswers = legacyAi;
+    if (isFilling) {
+      let attempts = 0;
+      while (isFilling && attempts < 30) {
+        await new Promise(r => setTimeout(r, 100));
+        attempts++;
+      }
+      if (isFilling) {
+        return { filled: [], unfilled: [], questions: [], total: 0, error: 'Autofill is already in progress.' };
+      }
     }
+    isFilling = true;
+    try {
+      // Older callers pass `saved` and `aiAnswers` as the fourth and fifth arguments.
+      // Accept both shapes so an extension or a test bundle built at either version works.
+      if (typeof continuation !== 'boolean') {
+        const legacySaved = continuation;
+        const legacyAi = newFields;
+        continuation = false;
+        newFields = null;
+        saved = legacySaved;
+        aiAnswers = legacyAi;
+      }
 
-    const manager = getOrCreateManager(candidate, expectedUrl);
-    manager.transition(ApplicationState.FILLING, { url: expectedUrl, continuation });
+      const manager = getOrCreateManager(candidate, expectedUrl);
+      manager.transition(ApplicationState.FILLING, { url: expectedUrl, continuation });
 
-    if (location.href !== expectedUrl) {
-      manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'The page changed. Open the application form and try again.' });
-      throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'The page changed. Open the application form and try again.');
-    }
-    const page = inspect();
-    if (!page.hasForm && (!continuation || !page.fields.length)) {
-      manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'Open the job application form before using autofill.' });
-      throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'Open the job application form before using autofill.');
-    }
-    const facts = candidate?.provenance_status === 'confirmed' ? candidate.confirmed_facts : candidate;
-    if (!facts || !Object.values(facts).some(value =>
-      typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string' && value.trim()
-    )) {
-      manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'Save your candidate details in My Applications and Resume first.' });
-      return { filled: [], unfilled: [], questions: [], total: page.fields.length, error: 'Save your candidate details in My Applications and Resume first.' };
-    }
-    const sourceFields = newFields ? page.fields.filter(field => newFields.some(next =>
-      next.element === field.element && next.label === field.label)) : page.fields;
-    const plans = mapping.planFill(sourceFields, facts);
+      if (location.href !== expectedUrl) {
+        manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'The page changed. Open the application form and try again.' });
+        throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'The page changed. Open the application form and try again.');
+      }
+      const page = inspect();
+      if (!page.hasForm && (!continuation || !page.fields.length)) {
+        manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'Open the job application form before using autofill.' });
+        throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'Open the job application form before using autofill.');
+      }
+      const facts = candidate?.provenance_status === 'confirmed' ? candidate.confirmed_facts : candidate;
+      if (!facts || !Object.values(facts).some(value =>
+        typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string' && value.trim()
+      )) {
+        manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'Save your candidate details in My Applications and Resume first.' });
+        return { filled: [], unfilled: [], questions: [], total: page.fields.length, error: 'Save your candidate details in My Applications and Resume first.' };
+      }
+      const baseFields = newFields ? page.fields.filter(field => newFields.some(next =>
+        next.element === field.element && next.label === field.label)) : page.fields;
+      const sourceFields = continuation
+        ? baseFields.filter(field => !field.element || !seenElements.has(field.element))
+        : baseFields;
+      for (const field of sourceFields) {
+        if (field.element && typeof field.element === 'object') {
+          seenElements.add(field.element);
+        }
+        if (Array.isArray(field.elements)) {
+          for (const el of field.elements) {
+            if (el && typeof el === 'object') seenElements.add(el);
+          }
+        }
+      }
+      const plans = mapping.planFill(sourceFields, facts);
     const keys = plans.map(plan => answerKey(plan.field));
     const values = mapping.buildValues(facts);
 
@@ -6206,7 +6321,10 @@
       });
     }
 
-    return { filled, unfilled, questions, total: sourceFields.length + Number(!!input) };
+      return { filled, unfilled, questions, total: sourceFields.length + Number(!!input) };
+    } finally {
+      isFilling = false;
+    }
   }
 
   async function startAutofill(expectedUrl, candidate, resume, resumeDocumentId, continuation = false, saved = null, aiAnswers = null) {
@@ -6242,6 +6360,14 @@
       const url = location.href;
       const fresh = await send('load_application_profile', { candidateId: candidate.id });
       if (fresh?.id === candidate.id && wizard === currentWizard && location.href === url) {
+        if (isFilling) {
+          let attempts = 0;
+          while (isFilling && attempts < 30) {
+            await new Promise(r => setTimeout(r, 100));
+            attempts++;
+          }
+          if (isFilling) return;
+        }
         await fill(url, fresh, resume, true, fields, globalThis.__nextkinSavedAnswers).catch(() => {});
       }
     });

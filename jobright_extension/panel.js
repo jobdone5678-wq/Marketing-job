@@ -1023,9 +1023,123 @@ function armOutsideForm(tab, frame, embeddedFrame, candidateId, discover = true)
   }, () => { if (armedOutsideForm === scope) armedOutsideForm = null; });
 }
 
+function aggregateAutofillResults(results) {
+  if (!Array.isArray(results) || !results.length) {
+    throw new Error('Could not fill this form.');
+  }
+
+  let firstError = null;
+  const validOutputs = [];
+
+  for (const item of results) {
+    const res = (item && typeof item === 'object' && 'result' in item) ? item.result : item;
+    if (res && typeof res === 'object') {
+      if (res.error) {
+        if (!firstError && typeof res.error === 'string') {
+          firstError = res.error;
+        }
+      } else {
+        validOutputs.push(res);
+      }
+    }
+  }
+
+  if (!validOutputs.length) {
+    throw new Error(firstError || 'Could not fill this form.');
+  }
+
+  const filledMap = new Map();
+  const unfilledMap = new Map();
+  const questionsMap = new Map();
+  const warnings = [];
+  const unverified = [];
+  let sumOfTotals = 0;
+
+  for (const output of validOutputs) {
+    if (typeof output.total === 'number') {
+      sumOfTotals += output.total;
+    }
+
+    if (Array.isArray(output.filled)) {
+      for (const item of output.filled) {
+        if (!item) continue;
+        const key = item.key || item.id || (item.label + ':' + item.value);
+        if (!filledMap.has(key)) {
+          filledMap.set(key, item);
+        }
+      }
+    }
+
+    if (Array.isArray(output.unfilled)) {
+      for (const item of output.unfilled) {
+        if (!item) continue;
+        const key = item.key || item.id || item.label;
+        if (!unfilledMap.has(key)) {
+          unfilledMap.set(key, item);
+        }
+      }
+    }
+
+    if (Array.isArray(output.questions)) {
+      for (const item of output.questions) {
+        if (!item) continue;
+        const key = item.key || item.id || item.label;
+        if (!questionsMap.has(key)) {
+          questionsMap.set(key, item);
+        }
+      }
+    }
+
+    if (Array.isArray(output.warnings)) {
+      for (const w of output.warnings) {
+        if (w && !warnings.includes(w)) warnings.push(w);
+      }
+    }
+
+    if (Array.isArray(output.unverified)) {
+      for (const u of output.unverified) {
+        if (u && !unverified.includes(u)) unverified.push(u);
+      }
+    }
+  }
+
+  const filled = Array.from(filledMap.values());
+
+  const filledKeys = new Set();
+  for (const item of filled) {
+    if (item.key) filledKeys.add(item.key);
+    if (item.id) filledKeys.add(item.id);
+    if (item.label) filledKeys.add(item.label);
+  }
+
+  const unfilled = [];
+  for (const [key, item] of unfilledMap.entries()) {
+    const itemKey = item.key || item.id || item.label;
+    if (
+      !filledKeys.has(key) &&
+      !filledKeys.has(itemKey) &&
+      !filled.some(f => (f.key && f.key === item.key) || (f.id && f.id === item.id) || (f.label && f.label === item.label))
+    ) {
+      unfilled.push(item);
+    }
+  }
+
+  const questions = Array.from(questionsMap.values());
+  const total = Math.max(sumOfTotals, filled.length + unfilled.length);
+
+  return {
+    filled,
+    unfilled,
+    questions,
+    warnings,
+    unverified,
+    total,
+  };
+}
+
 async function fillForm(tab, frame, profile, file, documentId, saved = null, aiAnswers = null, expectedJobKey = null) {
   const scopedProfile = buildScopedProfile(profile);
-  const [filled] = await chrome.scripting.executeScript({
+  const injectionResults = await chrome.scripting.executeScript({
     target: formTarget(tab, frame),
     func: async (url, profile, resume, documentId, reusable, drafts, jobKey) => {
       try {
@@ -1038,8 +1152,7 @@ async function fillForm(tab, frame, profile, file, documentId, saved = null, aiA
     },
     args: [frame.result.url, scopedProfile, file, documentId, saved, aiAnswers, expectedJobKey],
   });
-  if (!filled?.result || filled.result.error) throw new Error(filled?.result?.error || 'Could not fill this form.');
-  return filled.result;
+  return aggregateAutofillResults(injectionResults);
 }
 
 $('autofill').addEventListener('click', async () => {
@@ -1400,3 +1513,10 @@ setInterval(() => {
   if (document.visibilityState === 'visible') scheduleRefresh(0);
 }, 6000);
 scheduleRefresh(0);
+
+if (typeof globalThis !== 'undefined') {
+  globalThis.aggregateAutofillResults = aggregateAutofillResults;
+}
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports.aggregateAutofillResults = aggregateAutofillResults;
+}

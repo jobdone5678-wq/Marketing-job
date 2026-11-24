@@ -151,27 +151,39 @@ class MockNode {
     if (tag && this.tagName.toLowerCase() !== tag.toLowerCase()) return false;
     if (!sel) return true;
 
+    // ID check
+    if (sel.startsWith('#')) {
+      const id = sel.slice(1).split(/[\.\[#]/)[0];
+      if (this.id !== id) return false;
+      sel = sel.slice(1 + id.length);
+      if (!sel) return true;
+    }
+
     // Class check
     if (sel.startsWith('.')) {
       const cls = sel.slice(1).split(/[\.\[]/)[0].toLowerCase();
       const hasCls = (this.getAttribute('class') || '').split(/\s+/).some(c => c.toLowerCase() === cls);
       if (!hasCls) return false;
+      sel = sel.slice(1 + cls.length);
+      if (!sel) return true;
     }
 
     // Attribute check
-    const attrMatch = sel.match(/\[([a-z0-9_-]+)(?:([*^$]?=)(?:"|')?([^"'\]]+)(?:"|')?)?\]/i);
+    const attrMatch = sel.match(/\[([a-z0-9_-]+)(?:([*^$]?=)(?:"|')?([^"'\]]*)(?:"|')?)?\]/i);
     if (attrMatch) {
       const [, attr, op, val] = attrMatch;
       const attrVal = this.getAttribute(attr);
       if (attrVal === null) return false;
       if (!op) return true;
-      if (op === '=') return attrVal.toLowerCase() === val.toLowerCase();
-      if (op === '*=') return attrVal.toLowerCase().includes(val.toLowerCase());
-      if (op === '^=') return attrVal.toLowerCase().startsWith(val.toLowerCase());
-      if (op === '$=') return attrVal.toLowerCase().endsWith(val.toLowerCase());
+      if (op === '=') return (attrVal || '').toLowerCase() === (val || '').toLowerCase();
+      if (op === '*=') return (attrVal || '').toLowerCase().includes((val || '').toLowerCase());
+      if (op === '^=') return (attrVal || '').toLowerCase().startsWith((val || '').toLowerCase());
+      if (op === '$=') return (attrVal || '').toLowerCase().endsWith((val || '').toLowerCase());
+    } else if (sel.startsWith('[')) {
+      return false;
     }
 
-    return true;
+    return !sel;
   }
 
   matches(selector) {
@@ -243,6 +255,28 @@ globalThis.document = mockDoc;
 mockDoc.body = new MockNode('BODY');
 mockDoc.appendChild(mockDoc.body);
 globalThis.getComputedStyle = () => ({ display: 'block', visibility: 'visible', opacity: '1' });
+
+const windowListeners = new Map();
+if (!globalThis.addEventListener) {
+  globalThis.addEventListener = (type, fn) => {
+    if (!windowListeners.has(type)) windowListeners.set(type, []);
+    windowListeners.get(type).push(fn);
+  };
+  globalThis.removeEventListener = (type, fn) => {
+    if (windowListeners.has(type)) {
+      windowListeners.set(type, windowListeners.get(type).filter(f => f !== fn));
+    }
+  };
+  globalThis.dispatchEvent = evt => {
+    const handlers = windowListeners.get(evt.type) || [];
+    for (const h of handlers) h(evt);
+    return true;
+  };
+}
+if (!globalThis.location) {
+  globalThis.location = { href: 'https://example.com/apply' };
+}
+mockDoc.defaultView.location = globalThis.location;
 
 // Load core files
 await import('../jobright_extension/core/field-mapping.js');
@@ -895,5 +929,204 @@ test('setCheckbox resets React _valueTracker with String(!desired)', () => {
   assert.equal(input.checked, false);
   assert.equal(trackerVal, 'true', 'Expected tracker value to be reset to "true" when desired is false');
 });
+
+test('Part 8: Visible Field Tracking - visually hidden native checkboxes and radios with visible label or wrapper', () => {
+  // 1. Visually hidden checkbox with associated label[for] having rects
+  const hiddenCb = new MockInputElement();
+  hiddenCb.type = 'checkbox';
+  hiddenCb.id = 'opt-in-cb';
+  hiddenCb.getClientRects = () => []; // visually hidden
+
+  const cbLabel = new MockNode('LABEL');
+  cbLabel.setAttribute('for', 'opt-in-cb');
+  cbLabel.getClientRects = () => [{ width: 120, height: 24 }];
+
+  mockDoc.body.appendChild(hiddenCb);
+  mockDoc.body.appendChild(cbLabel);
+
+  assert.ok(discovery.visible, 'discovery.visible must be exposed on NextkinForms');
+  assert.equal(discovery.visible(hiddenCb), true, 'Hidden checkbox with visible label[for] should be considered visible');
+
+  // 2. Visually hidden radio with 0x0 rects wrapped inside custom-radio container
+  const radioWrap = new MockNode('DIV');
+  radioWrap.setAttribute('class', 'custom-radio');
+  radioWrap.getClientRects = () => [{ width: 24, height: 24 }];
+
+  const zeroRadio = new MockInputElement();
+  zeroRadio.type = 'radio';
+  zeroRadio.getClientRects = () => [{ width: 0, height: 0 }]; // 0x0 rects
+  radioWrap.appendChild(zeroRadio);
+  mockDoc.body.appendChild(radioWrap);
+
+  assert.equal(discovery.visible(zeroRadio), true, '0x0 radio inside .custom-radio wrapper should be considered visible');
+
+  // 3. Hidden text input wrapped in a label must NOT be treated as visible
+  const hiddenText = new MockInputElement();
+  hiddenText.type = 'text';
+  hiddenText.getClientRects = () => [];
+  const textLabel = new MockNode('LABEL');
+  textLabel.getClientRects = () => [{ width: 100, height: 20 }];
+  textLabel.appendChild(hiddenText);
+  mockDoc.body.appendChild(textLabel);
+
+  assert.equal(discovery.visible(hiddenText), false, 'Visually hidden text input should not be considered visible');
+
+  // 4. Disabled checkbox with visible label must NOT be treated as visible
+  const disabledCb = new MockInputElement();
+  disabledCb.type = 'checkbox';
+  disabledCb.disabled = true;
+  disabledCb.id = 'disabled-cb';
+  disabledCb.getClientRects = () => [];
+  const disLabel = new MockNode('LABEL');
+  disLabel.setAttribute('for', 'disabled-cb');
+  disLabel.getClientRects = () => [{ width: 100, height: 20 }];
+  mockDoc.body.appendChild(disabledCb);
+  mockDoc.body.appendChild(disLabel);
+
+  assert.equal(discovery.visible(disabledCb), false, 'Disabled checkbox must not be considered visible');
+});
+
+test('Part 9: Multi-Frame Result Aggregation in panel.js - aggregateAutofillResults', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { runInNewContext } = await import('node:vm');
+  const panelSource = readFileSync(new URL('../jobright_extension/panel.js', import.meta.url), 'utf8');
+  assert.ok(panelSource.includes('function aggregateAutofillResults('), 'panel.js must define aggregateAutofillResults');
+
+  const start = panelSource.indexOf('function aggregateAutofillResults(');
+  let depth = 0;
+  let end = -1;
+  for (let i = start; i < panelSource.length; i++) {
+    if (panelSource[i] === '{') depth++;
+    else if (panelSource[i] === '}') {
+      depth--;
+      if (depth === 0) { end = i + 1; break; }
+    }
+  }
+  const fnCode = panelSource.slice(start, end);
+  const sandbox = {};
+  runInNewContext(fnCode + '\n;this.aggregateAutofillResults = aggregateAutofillResults;', sandbox);
+  const aggregate = sandbox.aggregateAutofillResults;
+
+  // 1. Aggregates results across multiple frames, ignores errored frames, deduplicates filled & unfilled
+  const multiFrameResults = [
+    {
+      frameId: 0,
+      documentId: 'doc-top',
+      result: {
+        filled: [
+          { key: 'first_name', label: 'First Name', value: 'Alex' },
+          { key: 'email', label: 'Email', value: 'alex@example.com' }
+        ],
+        unfilled: [
+          { key: 'phone', label: 'Phone', kind: 'text' },
+          { key: 'resume', label: 'Resume', kind: 'file' }
+        ],
+        questions: [{ key: 'q1', label: 'Years of experience?' }],
+        warnings: ['Warning 1'],
+        unverified: ['Unverified 1'],
+        total: 4
+      }
+    },
+    {
+      frameId: 1,
+      documentId: 'doc-iframe',
+      result: {
+        filled: [
+          { key: 'first_name', label: 'First Name', value: 'Alex' },
+          { key: 'resume', label: 'Resume', value: 'Resume.pdf' },
+          { key: 'portfolio', label: 'Portfolio URL', value: 'https://alex.dev' }
+        ],
+        unfilled: [
+          { key: 'github', label: 'GitHub URL', kind: 'text' }
+        ],
+        questions: [{ key: 'q1', label: 'Years of experience?' }, { key: 'q2', label: 'Target salary?' }],
+        warnings: ['Warning 2'],
+        unverified: ['Unverified 2'],
+        total: 3
+      }
+    },
+    {
+      frameId: 2,
+      documentId: 'doc-ad-frame',
+      result: {
+        error: 'No application form found on frame'
+      }
+    }
+  ];
+
+  const aggregated = aggregate(multiFrameResults);
+  assert.ok(aggregated);
+
+  // Filled deduplication
+  assert.equal(aggregated.filled.length, 4); // first_name, email, resume, portfolio
+  assert.deepEqual(Array.from(aggregated.filled.map(f => f.key)), ['first_name', 'email', 'resume', 'portfolio']);
+
+  // Unfilled deduplication: 'resume' was in frame 0 unfilled, but filled in frame 1, so must NOT be in unfilled
+  assert.equal(aggregated.unfilled.length, 2); // phone, github
+  assert.deepEqual(Array.from(aggregated.unfilled.map(u => u.key)), ['phone', 'github']);
+
+  // Questions deduplication
+  assert.equal(aggregated.questions.length, 2); // q1, q2
+  assert.deepEqual(Array.from(aggregated.questions.map(q => q.key)), ['q1', 'q2']);
+
+  // Warnings and unverified aggregation
+  assert.deepEqual(Array.from(aggregated.warnings), ['Warning 1', 'Warning 2']);
+  assert.deepEqual(Array.from(aggregated.unverified).sort(), ['Unverified 1', 'Unverified 2']);
+
+  // Total
+  assert.ok(aggregated.total >= aggregated.filled.length + aggregated.unfilled.length);
+
+  // 2. Throws error if all frames failed
+  const errorFrames = [
+    { frameId: 0, result: { error: 'Form not found on page' } },
+    { frameId: 1, result: { error: 'Frame timed out' } }
+  ];
+  assert.throws(() => aggregate(errorFrames), /Form not found on page/);
+
+  // 3. Throws fallback error if empty or no valid results
+  assert.throws(() => aggregate([]), /Could not fill this form\./);
+});
+
+test('Part 10: Multi-Step Navigation - observeStepTransitions handles SPA route changes with 350ms debounce', async () => {
+  const defaultHref = 'https://portal.jobs.com/apply/step-1';
+  globalThis.location = { href: defaultHref };
+  mockDoc.defaultView.location = globalThis.location;
+
+  const input1 = new MockInputElement();
+  input1.id = 'step1-field';
+  input1.name = 'step1_name';
+  mockDoc.body.appendChild(input1);
+
+  let transitionCalls = 0;
+  let lastReport = null;
+
+  const observer = discovery.observeStepTransitions(mockDoc, report => {
+    transitionCalls++;
+    lastReport = report;
+  });
+
+  // Step 2 route change: update location.href and dispatch hashchange
+  globalThis.location.href = 'https://portal.jobs.com/apply/step-2';
+  const input2 = new MockInputElement();
+  input2.id = 'step2-field';
+  input2.name = 'step2_name';
+  mockDoc.body.appendChild(input2);
+
+  globalThis.dispatchEvent(new MockEvent('hashchange'));
+
+  // At 200ms: Debounce is 350ms (up from 150ms). At 200ms, it must NOT have fired yet.
+  await new Promise(r => setTimeout(r, 200));
+  assert.equal(transitionCalls, 0, 'Callback should not fire at 200ms because debounce is 350ms');
+
+  // At 450ms: Debounce has elapsed, callback should have fired
+  await new Promise(r => setTimeout(r, 250));
+  assert.equal(transitionCalls, 1, 'Callback should fire after 350ms debounce elapsed');
+  assert.ok(lastReport);
+  assert.equal(lastReport.triggerType, 'route_change');
+  assert.ok(lastReport.newFields.some(f => f.element === input2 || f.key.includes('step2-field')));
+
+  observer.disconnect();
+});
+
 
 

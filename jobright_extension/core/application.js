@@ -12,6 +12,8 @@
   const reviewField = /\b(?:agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare|signature|captcha|password|otp)\b/i;
   const fileEvidence = new WeakMap();
   const submitting = new WeakSet();
+  const seenElements = new WeakSet();
+  let isFilling = false;
   let wizard;
   const answerKey = field => field.label.normalize('NFKC').toLowerCase().replace(/[?*:.!]+$/g, '').trim().replace(/\s+/g, ' ');
 
@@ -758,39 +760,64 @@
   }
 
   async function fill(expectedUrl, candidate, resume, continuation = false, newFields, saved = null, aiAnswers = null) {
-    // Older callers pass `saved` and `aiAnswers` as the fourth and fifth arguments.
-    // Accept both shapes so an extension or a test bundle built at either version works.
-    if (typeof continuation !== 'boolean') {
-      const legacySaved = continuation;
-      const legacyAi = newFields;
-      continuation = false;
-      newFields = null;
-      saved = legacySaved;
-      aiAnswers = legacyAi;
+    if (isFilling) {
+      let attempts = 0;
+      while (isFilling && attempts < 30) {
+        await new Promise(r => setTimeout(r, 100));
+        attempts++;
+      }
+      if (isFilling) {
+        return { filled: [], unfilled: [], questions: [], total: 0, error: 'Autofill is already in progress.' };
+      }
     }
+    isFilling = true;
+    try {
+      // Older callers pass `saved` and `aiAnswers` as the fourth and fifth arguments.
+      // Accept both shapes so an extension or a test bundle built at either version works.
+      if (typeof continuation !== 'boolean') {
+        const legacySaved = continuation;
+        const legacyAi = newFields;
+        continuation = false;
+        newFields = null;
+        saved = legacySaved;
+        aiAnswers = legacyAi;
+      }
 
-    const manager = getOrCreateManager(candidate, expectedUrl);
-    manager.transition(ApplicationState.FILLING, { url: expectedUrl, continuation });
+      const manager = getOrCreateManager(candidate, expectedUrl);
+      manager.transition(ApplicationState.FILLING, { url: expectedUrl, continuation });
 
-    if (location.href !== expectedUrl) {
-      manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'The page changed. Open the application form and try again.' });
-      throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'The page changed. Open the application form and try again.');
-    }
-    const page = inspect();
-    if (!page.hasForm && (!continuation || !page.fields.length)) {
-      manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'Open the job application form before using autofill.' });
-      throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'Open the job application form before using autofill.');
-    }
-    const facts = candidate?.provenance_status === 'confirmed' ? candidate.confirmed_facts : candidate;
-    if (!facts || !Object.values(facts).some(value =>
-      typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string' && value.trim()
-    )) {
-      manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'Save your candidate details in My Applications and Resume first.' });
-      return { filled: [], unfilled: [], questions: [], total: page.fields.length, error: 'Save your candidate details in My Applications and Resume first.' };
-    }
-    const sourceFields = newFields ? page.fields.filter(field => newFields.some(next =>
-      next.element === field.element && next.label === field.label)) : page.fields;
-    const plans = mapping.planFill(sourceFields, facts);
+      if (location.href !== expectedUrl) {
+        manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'The page changed. Open the application form and try again.' });
+        throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'The page changed. Open the application form and try again.');
+      }
+      const page = inspect();
+      if (!page.hasForm && (!continuation || !page.fields.length)) {
+        manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'Open the job application form before using autofill.' });
+        throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'Open the job application form before using autofill.');
+      }
+      const facts = candidate?.provenance_status === 'confirmed' ? candidate.confirmed_facts : candidate;
+      if (!facts || !Object.values(facts).some(value =>
+        typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string' && value.trim()
+      )) {
+        manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'Save your candidate details in My Applications and Resume first.' });
+        return { filled: [], unfilled: [], questions: [], total: page.fields.length, error: 'Save your candidate details in My Applications and Resume first.' };
+      }
+      const baseFields = newFields ? page.fields.filter(field => newFields.some(next =>
+        next.element === field.element && next.label === field.label)) : page.fields;
+      const sourceFields = continuation
+        ? baseFields.filter(field => !field.element || !seenElements.has(field.element))
+        : baseFields;
+      for (const field of sourceFields) {
+        if (field.element && typeof field.element === 'object') {
+          seenElements.add(field.element);
+        }
+        if (Array.isArray(field.elements)) {
+          for (const el of field.elements) {
+            if (el && typeof el === 'object') seenElements.add(el);
+          }
+        }
+      }
+      const plans = mapping.planFill(sourceFields, facts);
     const keys = plans.map(plan => answerKey(plan.field));
     const values = mapping.buildValues(facts);
 
@@ -1285,7 +1312,10 @@
       });
     }
 
-    return { filled, unfilled, questions, total: sourceFields.length + Number(!!input) };
+      return { filled, unfilled, questions, total: sourceFields.length + Number(!!input) };
+    } finally {
+      isFilling = false;
+    }
   }
 
   async function startAutofill(expectedUrl, candidate, resume, resumeDocumentId, continuation = false, saved = null, aiAnswers = null) {
@@ -1321,6 +1351,14 @@
       const url = location.href;
       const fresh = await send('load_application_profile', { candidateId: candidate.id });
       if (fresh?.id === candidate.id && wizard === currentWizard && location.href === url) {
+        if (isFilling) {
+          let attempts = 0;
+          while (isFilling && attempts < 30) {
+            await new Promise(r => setTimeout(r, 100));
+            attempts++;
+          }
+          if (isFilling) return;
+        }
         await fill(url, fresh, resume, true, fields, globalThis.__nextkinSavedAnswers).catch(() => {});
       }
     });
