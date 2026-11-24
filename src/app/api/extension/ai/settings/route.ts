@@ -54,151 +54,177 @@ const updateSettingsSchema = z.object({
 });
 
 export async function GET(request: Request, options?: SettingsRouteOptions) {
-  const userId = await resolveAuthUserId(request, options?.db);
-  if (!userId) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const config = await getUserAiProviderConfig(userId, options?.db);
-  const secret = await getUserAiProviderSecret(userId, options?.db);
-
-  let maskedApiKey: string | null = null;
-  let hasApiKey = false;
-
-  if (secret && secret.encrypted_api_key) {
-    hasApiKey = true;
-    try {
-      const plain = decryptSecret(
-        {
-          encrypted: secret.encrypted_api_key,
-          iv: secret.iv,
-          authTag: secret.auth_tag,
-        },
-        userId,
-        secret.key_origin,
-      );
-      maskedApiKey = maskApiKey(plain);
-    } catch {
-      maskedApiKey = '••••••••';
+  try {
+    const userId = await resolveAuthUserId(request, options?.db);
+    if (!userId) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
-  }
 
-  return Response.json({
-    mode: config?.mode || 'server',
-    provider: config?.provider || 'server',
-    baseUrl: config?.base_url || null,
-    modelId: config?.model_id || null,
-    routing: config?.routing || 'server',
-    credentialSource: config?.credential_source || 'server',
-    configVersion: config?.config_version || 1,
-    hasApiKey,
-    maskedApiKey,
-  });
+    const config = await getUserAiProviderConfig(userId, options?.db);
+    const secret = await getUserAiProviderSecret(userId, options?.db);
+
+    let maskedApiKey: string | null = null;
+    let hasApiKey = false;
+
+    if (secret && secret.encrypted_api_key) {
+      hasApiKey = true;
+      try {
+        const plain = decryptSecret(
+          {
+            encrypted: secret.encrypted_api_key,
+            iv: secret.iv,
+            authTag: secret.auth_tag,
+          },
+          userId,
+          secret.key_origin,
+        );
+        maskedApiKey = maskApiKey(plain);
+      } catch {
+        maskedApiKey = '••••••••';
+      }
+    }
+
+    return Response.json({
+      mode: config?.mode || 'server',
+      provider: config?.provider || 'server',
+      baseUrl: config?.base_url || null,
+      modelId: config?.model_id || null,
+      routing: config?.routing || 'server',
+      credentialSource: config?.credential_source || 'server',
+      configVersion: config?.config_version || 1,
+      hasApiKey,
+      maskedApiKey,
+    });
+  } catch (err: any) {
+    console.error('GET /api/extension/ai/settings error:', err);
+    return Response.json({ ok: false, error: err?.message || 'Failed to fetch AI settings' }, { status: 500 });
+  }
 }
 
 export async function PUT(request: Request, options?: SettingsRouteOptions) {
-  const userId = await resolveAuthUserId(request, options?.db);
-  if (!userId) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let body: any;
   try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: 'Invalid JSON request body' }, { status: 400 });
-  }
+    const userId = await resolveAuthUserId(request, options?.db);
+    if (!userId) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-  const parseResult = updateSettingsSchema.safeParse(body);
-  if (!parseResult.success) {
-    return Response.json(
-      { error: 'Invalid settings payload', issues: parseResult.error.issues },
-      { status: 400 },
-    );
-  }
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return Response.json({ error: 'Invalid JSON request body' }, { status: 400 });
+    }
 
-  const input = parseResult.data;
-  const baseUrl = input.baseUrl !== undefined ? input.baseUrl : input.base_url;
-  const modelId = input.modelId !== undefined ? input.modelId : input.model_id;
-  const clientVersion = input.configVersion ?? input.config_version;
-  const incomingApiKey = input.apiKey !== undefined ? input.apiKey : input.api_key;
-
-  const existing = await getUserAiProviderConfig(userId, options?.db);
-  const currentVersion = existing ? existing.config_version : 1;
-
-  // Optimistic locking validation
-  if (existing) {
-    if (clientVersion !== undefined && clientVersion !== currentVersion) {
+    const parseResult = updateSettingsSchema.safeParse(body);
+    if (!parseResult.success) {
       return Response.json(
-        {
-          ok: false,
-          error: 'Optimistic locking failure: config_version mismatch',
-          currentVersion,
-        },
-        { status: 409 },
+        { error: 'Invalid settings payload', issues: parseResult.error.issues },
+        { status: 400 },
       );
     }
-  }
 
-  const nextVersion = existing ? currentVersion + 1 : (clientVersion ? clientVersion + 1 : 1);
+    const input = parseResult.data;
+    const baseUrl = input.baseUrl !== undefined ? input.baseUrl : input.base_url;
+    const modelId = input.modelId !== undefined ? input.modelId : input.model_id;
+    const clientVersion = input.configVersion ?? input.config_version;
+    const incomingApiKey = input.apiKey !== undefined ? input.apiKey : input.api_key;
 
-  // API Key handling: retain existing if omitted or masked
-  const isNewKey =
-    typeof incomingApiKey === 'string' &&
-    incomingApiKey.trim() !== '' &&
-    !incomingApiKey.includes('••••');
+    const existing = await getUserAiProviderConfig(userId, options?.db);
+    const currentVersion = existing ? existing.config_version : 1;
 
-  if (isNewKey) {
-    const targetBaseUrl = baseUrl || existing?.base_url || 'https://api.openai.com';
-    const origin = getOriginFromBaseUrl(targetBaseUrl);
-    const payload = encryptSecret(incomingApiKey.trim(), userId, origin);
+    // Optimistic locking validation
+    if (existing) {
+      if (clientVersion !== undefined && clientVersion !== currentVersion) {
+        return Response.json(
+          {
+            ok: false,
+            error: 'Optimistic locking failure: config_version mismatch',
+            currentVersion,
+          },
+          { status: 409 },
+        );
+      }
+    }
 
-    await saveUserAiProviderSecret(
+    const nextVersion = existing ? currentVersion + 1 : (clientVersion ? clientVersion + 1 : 1);
+
+    // API Key handling: retain existing if omitted or masked
+    const isNewKey =
+      typeof incomingApiKey === 'string' &&
+      incomingApiKey.trim() !== '' &&
+      !incomingApiKey.includes('••••');
+
+    if (isNewKey) {
+      const targetBaseUrl = baseUrl || existing?.base_url || 'https://api.openai.com';
+      const origin = getOriginFromBaseUrl(targetBaseUrl);
+      const payload = encryptSecret(incomingApiKey.trim(), userId, origin);
+
+      await saveUserAiProviderSecret(
+        {
+          user_id: userId,
+          encrypted_api_key: payload.encrypted,
+          iv: payload.iv,
+          auth_tag: payload.authTag,
+          key_origin: origin,
+          encryption_version: 1,
+        },
+        options?.db,
+      );
+    } else if (incomingApiKey === null || incomingApiKey === '') {
+      await deleteUserAiProviderSecret(userId, options?.db);
+    }
+
+    const targetMode = input.mode || existing?.mode || 'server';
+    const targetRouting =
+      input.routing ||
+      (targetMode === 'portal_byok'
+        ? 'proxy'
+        : targetMode === 'extension_byok' || targetMode === 'local'
+        ? 'direct'
+        : existing?.routing || 'server');
+
+    const targetCredSource =
+      input.credentialSource ||
+      input.credential_source ||
+      (targetMode === 'portal_byok'
+        ? 'portal'
+        : targetMode === 'extension_byok'
+        ? 'extension'
+        : targetMode === 'local'
+        ? 'local'
+        : existing?.credential_source || 'server');
+
+    // Update configuration metadata
+    const updatedConfig = await saveUserAiProviderConfig(
       {
         user_id: userId,
-        encrypted_api_key: payload.encrypted,
-        iv: payload.iv,
-        auth_tag: payload.authTag,
-        key_origin: origin,
-        encryption_version: 1,
+        mode: targetMode,
+        provider: input.provider || existing?.provider || 'server',
+        base_url: baseUrl !== undefined ? baseUrl : (existing?.base_url ?? null),
+        model_id: modelId !== undefined ? modelId : (existing?.model_id ?? null),
+        routing: targetRouting,
+        credential_source: targetCredSource,
+        config_version: nextVersion,
       },
       options?.db,
     );
-  } else if (incomingApiKey === null || incomingApiKey === '') {
-    await deleteUserAiProviderSecret(userId, options?.db);
+
+    const secretRecord = await getUserAiProviderSecret(userId, options?.db);
+    const hasApiKey = Boolean(secretRecord?.encrypted_api_key);
+
+    return Response.json({
+      ok: true,
+      configVersion: updatedConfig.config_version,
+      mode: updatedConfig.mode,
+      provider: updatedConfig.provider,
+      baseUrl: updatedConfig.base_url,
+      modelId: updatedConfig.model_id,
+      routing: updatedConfig.routing,
+      credentialSource: updatedConfig.credential_source,
+      hasApiKey,
+    });
+  } catch (err: any) {
+    console.error('PUT /api/extension/ai/settings error:', err);
+    return Response.json({ ok: false, error: err?.message || 'Failed to save AI settings' }, { status: 500 });
   }
-
-  // Update configuration metadata
-  const updatedConfig = await saveUserAiProviderConfig(
-    {
-      user_id: userId,
-      mode: input.mode || existing?.mode || 'server',
-      provider: input.provider || existing?.provider || 'server',
-      base_url: baseUrl !== undefined ? baseUrl : (existing?.base_url ?? null),
-      model_id: modelId !== undefined ? modelId : (existing?.model_id ?? null),
-      routing: input.routing || existing?.routing || 'server',
-      credential_source:
-        input.credentialSource ||
-        input.credential_source ||
-        existing?.credential_source ||
-        'server',
-      config_version: nextVersion,
-    },
-    options?.db,
-  );
-
-  const secretRecord = await getUserAiProviderSecret(userId, options?.db);
-  const hasApiKey = Boolean(secretRecord?.encrypted_api_key);
-
-  return Response.json({
-    ok: true,
-    configVersion: updatedConfig.config_version,
-    mode: updatedConfig.mode,
-    provider: updatedConfig.provider,
-    baseUrl: updatedConfig.base_url,
-    modelId: updatedConfig.model_id,
-    routing: updatedConfig.routing,
-    credentialSource: updatedConfig.credential_source,
-    hasApiKey,
-  });
 }

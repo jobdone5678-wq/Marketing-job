@@ -58,14 +58,41 @@ export async function getUserAiProviderSecret(
 ): Promise<UserAiProviderSecret | null> {
   const client = db ?? (await getProductionDb());
   if (typeof client.query === 'function') {
-    const res = await client.query(
-      `SELECT * FROM private.user_ai_provider_secrets WHERE user_id = $1 LIMIT 1`,
-      [userId],
-    );
-    return res.rows[0] || null;
+    try {
+      const res = await client.query(
+        `SELECT * FROM private.user_ai_provider_secrets WHERE user_id = $1 LIMIT 1`,
+        [userId],
+      );
+      return res.rows[0] || null;
+    } catch {
+      try {
+        const res = await client.query(
+          `SELECT * FROM public.user_ai_provider_secrets WHERE user_id = $1 LIMIT 1`,
+          [userId],
+        );
+        return res.rows[0] || null;
+      } catch {
+        return null;
+      }
+    }
+  }
+  if (typeof client.schema === 'function') {
+    try {
+      const { data, error } = await client
+        .schema('private')
+        .from('user_ai_provider_secrets')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (!error) return data || null;
+      if (error && error.code !== 'PGRST106' && error.code !== 'PGRST116') {
+        throw error;
+      }
+    } catch (err: any) {
+      if (err?.code !== 'PGRST106') throw err;
+    }
   }
   const { data, error } = await client
-    .schema('private')
     .from('user_ai_provider_secrets')
     .select('*')
     .eq('user_id', userId)
@@ -131,8 +158,32 @@ export async function saveUserAiProviderSecret(
   const client = db ?? (await getProductionDb());
   const now = new Date().toISOString();
   if (typeof client.query === 'function') {
+    try {
+      await client.query(
+        `INSERT INTO private.user_ai_provider_secrets (
+          user_id, encrypted_api_key, iv, auth_tag, key_origin, encryption_version, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (user_id) DO UPDATE SET
+          encrypted_api_key = EXCLUDED.encrypted_api_key,
+          iv = EXCLUDED.iv,
+          auth_tag = EXCLUDED.auth_tag,
+          key_origin = EXCLUDED.key_origin,
+          encryption_version = EXCLUDED.encryption_version,
+          updated_at = EXCLUDED.updated_at`,
+        [
+          secret.user_id,
+          secret.encrypted_api_key,
+          secret.iv,
+          secret.auth_tag,
+          secret.key_origin,
+          secret.encryption_version || 1,
+          now,
+        ],
+      );
+      return;
+    } catch {}
     await client.query(
-      `INSERT INTO private.user_ai_provider_secrets (
+      `INSERT INTO public.user_ai_provider_secrets (
         user_id, encrypted_api_key, iv, auth_tag, key_origin, encryption_version, updated_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7)
       ON CONFLICT (user_id) DO UPDATE SET
@@ -155,8 +206,23 @@ export async function saveUserAiProviderSecret(
     return;
   }
 
+  if (typeof client.schema === 'function') {
+    try {
+      const { error } = await client
+        .schema('private')
+        .from('user_ai_provider_secrets')
+        .upsert({
+          ...secret,
+          updated_at: now,
+        });
+      if (!error) return;
+      if (error.code !== 'PGRST106') throw error;
+    } catch (err: any) {
+      if (err?.code !== 'PGRST106') throw err;
+    }
+  }
+
   const { error } = await client
-    .schema('private')
     .from('user_ai_provider_secrets')
     .upsert({
       ...secret,
@@ -171,14 +237,32 @@ export async function deleteUserAiProviderSecret(
 ): Promise<void> {
   const client = db ?? (await getProductionDb());
   if (typeof client.query === 'function') {
+    try {
+      await client.query(
+        `DELETE FROM private.user_ai_provider_secrets WHERE user_id = $1`,
+        [userId],
+      );
+    } catch {}
     await client.query(
-      `DELETE FROM private.user_ai_provider_secrets WHERE user_id = $1`,
+      `DELETE FROM public.user_ai_provider_secrets WHERE user_id = $1`,
       [userId],
     );
     return;
   }
+  if (typeof client.schema === 'function') {
+    try {
+      const { error } = await client
+        .schema('private')
+        .from('user_ai_provider_secrets')
+        .delete()
+        .eq('user_id', userId);
+      if (!error) return;
+      if (error.code !== 'PGRST106') throw error;
+    } catch (err: any) {
+      if (err?.code !== 'PGRST106') throw err;
+    }
+  }
   const { error } = await client
-    .schema('private')
     .from('user_ai_provider_secrets')
     .delete()
     .eq('user_id', userId);

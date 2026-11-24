@@ -110,7 +110,9 @@ export async function resolveProviderClient(
   const isPortalMode =
     config &&
     (config.mode === 'portal' ||
+      config.mode === 'portal_byok' ||
       config.routing === 'portal' ||
+      config.routing === 'proxy' ||
       config.credential_source === 'portal');
 
   if (isPortalMode) {

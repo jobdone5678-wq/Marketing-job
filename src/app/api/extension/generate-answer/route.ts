@@ -191,13 +191,36 @@ export async function POST(request: Request) {
       return { ok: true, answer: String(candSummary).trim(), stored: true };
     }
 
-    const apiKey = process.env.OPENAI_API_KEY?.trim();
+    let apiKey = process.env.OPENAI_API_KEY?.trim() || '';
+    let baseUrl = process.env.OPENAI_BASE_URL || 'https://api.xkiro.com/v1/';
+    let model = process.env.OPENAI_MODEL || 'mistralai/mistral-large-2512';
+
+    // Check if user has configured a custom BYOK provider
+    try {
+      const { getUserAiProviderConfig, getUserAiProviderSecret } = await import('@/lib/ai/ai-provider-data');
+      const { decryptSecret } = await import('@/lib/ai/encryption');
+      const userConfig = await getUserAiProviderConfig(actor.id);
+      if (userConfig && (userConfig.mode === 'portal_byok' || userConfig.routing === 'proxy')) {
+        const userSecret = await getUserAiProviderSecret(actor.id);
+        if (userSecret?.encrypted_api_key) {
+          apiKey = decryptSecret(
+            {
+              encrypted: userSecret.encrypted_api_key,
+              iv: userSecret.iv,
+              authTag: userSecret.auth_tag,
+            },
+            actor.id,
+            userSecret.key_origin
+          );
+          if (userConfig.base_url) baseUrl = userConfig.base_url;
+          if (userConfig.model_id) model = userConfig.model_id;
+        }
+      }
+    } catch {}
+
     if (!apiKey) {
       throw new CaptureError('AI generation service is not configured.', 503);
     }
-
-    const baseUrl = process.env.OPENAI_BASE_URL || 'https://api.xkiro.com/v1/';
-    const model = process.env.OPENAI_MODEL || 'mistralai/mistral-large-2512';
     const rawSnippet = candidate.raw_text || confirmedFacts.raw_text || '';
     const resumeContext =
       typeof rawSnippet === 'string' && rawSnippet
