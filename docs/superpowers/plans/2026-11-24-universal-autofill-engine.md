@@ -302,7 +302,7 @@ git commit -m "feat(writer): support body portal listboxes, type-to-filter fallb
 - Consumes: Form field candidate plans for checkboxes.
 - Produces: Auto-checks mandatory legal/privacy terms while rejecting marketing/SMS/promotional checkboxes.
 
-- [ ] **Step 1: Write the failing test in `tests/manual-fields-autofill.test.mjs`**
+- [x] **Step 1: Write the failing test in `tests/manual-fields-autofill.test.mjs`**
 
 ```javascript
 test('planFill auto-checks privacy/terms legal acknowledgement checkboxes', () => {
@@ -319,24 +319,24 @@ test('planFill rejects marketing, SMS, and promotional checkboxes from auto-chec
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node --test tests/manual-fields-autofill.test.mjs`
 Expected: FAIL
 
-- [ ] **Step 3: Implement marketing blocklist in `jobright_extension/core/field-mapping.js`**
+- [x] **Step 3: Implement marketing blocklist in `jobright_extension/core/field-mapping.js`**
 
 Add marketing exclusion regex:
 `const MARKETING_REGEX = /(marketing|promotional|newsletter|sms|text message|job alert|future opportunit|talent network|third[- ]?party|partner)/i;`
 If `MARKETING_REGEX.test(label || hint)`, keep `status: 'manual'` or `'needs_review'`.
 If non-marketing and matches `/(agree|consent|terms|privacy|arbitration|acknowledg|certify|declare|confirm.*(?:terms|agreement|policy))/i`, set `factKey: 'consent'`, `status: 'supported'`, `value: true`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `node --test tests/manual-fields-autofill.test.mjs`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add jobright_extension/core/field-mapping.js tests/manual-fields-autofill.test.mjs
