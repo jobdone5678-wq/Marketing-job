@@ -244,7 +244,7 @@ git commit -m "fix(writer): prevent checkbox double-toggling and universal React
 - Consumes: Fields representing custom comboboxes (`[role="combobox"]`, `[aria-haspopup="listbox"]`, Radix, Select2) and target values.
 - Produces: Opens menu via pointerdown/click/ArrowDown, searches body portals/shadow DOMs, falls back to typeahead typing with 300–500ms settling wait, executes cascading fields (Country -> State/Province -> City) sequentially with option settling, selects options, and safely closes menus without accidentally closing employer modal dialogs.
 
-- [ ] **Step 1: Write the failing test in `tests/verified-combobox-writer.test.mjs`**
+- [x] **Step 1: Write the failing test in `tests/verified-combobox-writer.test.mjs`**
 
 ```javascript
 test('fillCombo searches document.body portal listbox when opened via pointerdown and selects option', async () => {
@@ -265,12 +265,12 @@ test('closeCombo only dispatches Escape if listbox is still open, never closing 
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node --test tests/verified-combobox-writer.test.mjs`
 Expected: FAIL
 
-- [ ] **Step 3: Implement portal discovery, typeahead, cascading sequence & safe close in `jobright_extension/core/field-writer.js`**
+- [x] **Step 3: Implement portal discovery, typeahead, cascading sequence & safe close in `jobright_extension/core/field-writer.js`**
 
 1. In `comboTrigger(el)` and `fillCombo`: dispatch `pointerdown` + `mousedown` + `click` (with `ArrowDown` keydown fallback).
 2. Expand `getListboxRoots(el)` to query `document.body` for `[data-radix-popper-content-wrapper]`, `[data-floating-ui-portal]`, `.select2-dropdown`, `.k-animation-container`, and open shadow roots.
@@ -278,12 +278,12 @@ Expected: FAIL
 4. Support cascading sequence: Sort fill plans so `country` precedes `state`/`province`, which precedes `city`. When filling dependent location fields, wait up to 400ms for options to settle before matching.
 5. In `closeCombo(el)`: Inspect whether the listbox or popup is still visibly open or `el.getAttribute('aria-expanded') === 'true'`. Only dispatch `Escape` key event if the combobox is STILL open, preventing accidental closure of employer application modals. Blur `el` before returning.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `node --test tests/verified-combobox-writer.test.mjs`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add jobright_extension/core/field-writer.js tests/verified-combobox-writer.test.mjs
