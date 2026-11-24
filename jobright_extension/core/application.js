@@ -1386,12 +1386,27 @@
     const timer = setTimeout(() => observer.disconnect(), 15000);
   }
 
+  async function rescanConditionalQuestions(expectedUrl, candidate, resume, maxPasses = 3) {
+    const page = inspect();
+    if (!page.hasForm) return null;
+    let passes = 0;
+    while (passes < maxPasses) {
+      passes++;
+      const { fields } = inspect();
+      const unfilled = fields.filter(f => !f.excluded && f.kind !== 'inaccessible' && !writer.read(f));
+      if (!unfilled.length) break;
+      await fill(expectedUrl, candidate, resume, true, unfilled, globalThis.__nextkinSavedAnswers).catch(() => {});
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+
   globalThis.NextkinApplication = {
     scan() {
       const { job, hasForm } = inspect();
       return { job, hasForm, url: location.href };
     },
     fill,
+    rescanConditionalQuestions,
     savedAnswers,
     hasAnswers,
     startAutofill,

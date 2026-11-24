@@ -1328,6 +1328,10 @@ const pendingSteps = new Map();
 
 if (typeof chrome !== 'undefined' && chrome.runtime?.onConnect?.addListener) {
   chrome.runtime.onConnect.addListener(port => {
+    if (port.sender?.id && port.sender.id !== chrome.runtime.id) {
+      port.disconnect();
+      return;
+    }
     if (port.name === 'nextkin_side_panel') {
       connectedPanels.add(port);
       // Broadcast to tabs that side panel is now open
@@ -1352,6 +1356,28 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onConnect?.addListener) {
 
 if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) {
   chrome.runtime.onMessage.addListener((message, sender, reply) => {
+    if (sender?.id && sender.id !== chrome.runtime.id) {
+      return false;
+    }
+    if (message?.type === 'NEXTKIN_CHECK_CONNECTION') {
+      void (async () => {
+        try {
+          const session = await chrome.storage.session.get(['token', 'origin', 'accountId']).catch(() => ({}));
+          const local = await chrome.storage.local.get(['user', 'origin']).catch(() => ({}));
+          const accountId = session?.accountId || local?.user?.id;
+          const connected = Boolean(
+            session?.token &&
+            session?.origin === message.origin &&
+            accountId &&
+            (!session.accountId || session.accountId === local?.user?.id)
+          );
+          reply({ connected });
+        } catch {
+          reply({ connected: false });
+        }
+      })();
+      return true;
+    }
     if (message?.type === 'queue-submission' && message.payload) {
       void (async () => {
         try {

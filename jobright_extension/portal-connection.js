@@ -30,9 +30,9 @@
     if (activePairPromise) return activePairPromise;
     activePairPromise = (async () => {
       try {
-        if (typeof chrome !== 'undefined' && chrome.storage?.session?.get) {
-          const session = await chrome.storage.session.get(['token', 'origin', 'accountId']).catch(() => ({}));
-          const local = await chrome.storage.local?.get?.(['user', 'origin'])?.catch?.(() => ({}));
+        if (typeof chrome !== 'undefined') {
+          const session = await chrome.storage?.session?.get?.(['token', 'origin', 'accountId'])?.catch?.(() => ({}));
+          const local = await chrome.storage?.local?.get?.(['user', 'origin'])?.catch?.(() => ({}));
           const accountId = session?.accountId || local?.user?.id;
           if (session?.token && session?.origin === location.origin && accountId && (!session.accountId || session.accountId === local?.user?.id)) {
             return true;
@@ -83,7 +83,7 @@
 
     try {
       if (typeof chrome !== 'undefined' && chrome.storage?.local?.get) {
-        const current = await chrome.storage.local.get(['user', 'origin']);
+        const current = await chrome.storage.local.get(['user', 'origin']).catch(() => ({}));
         const accountChanged = current?.user?.id && current.user.id !== user.id;
         await chrome.storage.local.set({
           origin: location.origin,
@@ -92,6 +92,9 @@
         }).catch(() => {});
         await chrome.storage.local.remove('token').catch(() => {});
       }
+    } catch {}
+
+    try {
       if (typeof chrome !== 'undefined' && chrome.storage?.session?.set) {
         await chrome.storage.session.set({
           origin: location.origin,
