@@ -81,7 +81,7 @@ git commit -m "feat(api): project candidate EEOC columns and merge row facts in 
 - Consumes: Candidate object returned by `/api/extension/candidates`.
 - Produces: `scopedProfile` object passed to `NextkinApplication.startAutofill` via `chrome.scripting.executeScript`.
 
-- [ ] **Step 1: Write the failing test in `tests/panel-scoped-profile.test.mjs`**
+- [x] **Step 1: Write the failing test in `tests/panel-scoped-profile.test.mjs`**
 
 ```javascript
 test('buildScopedProfile preserves provenance_status and extended demographics/skills keys', () => {
@@ -100,21 +100,21 @@ test('buildScopedProfile preserves provenance_status and extended demographics/s
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node --test tests/panel-scoped-profile.test.mjs`
 Expected: FAIL with `scoped.provenance_status undefined`
 
-- [ ] **Step 3: Update `buildScopedProfile` in `jobright_extension/panel.js`**
+- [x] **Step 3: Update `buildScopedProfile` in `jobright_extension/panel.js`**
 
 Add `provenance_status: candidate.provenance_status || 'confirmed'` to the returned object. Add `'race_ethnicity', 'primary_skills', 'skills', 'current_job_title', 'experience_years', 'total_experience_years'` to `allowedKeys`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `node --test tests/panel-scoped-profile.test.mjs`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add jobright_extension/panel.js tests/panel-scoped-profile.test.mjs
