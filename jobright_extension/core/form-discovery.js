@@ -285,12 +285,39 @@
     for (const fileInput of fileInputs) {
       if (isResumeInput(fileInput, label(fileInput))) {
         let curr = fileInput;
+        let matchedContainer = null;
         while (curr && curr !== rootNode) {
           if (curr.closest) {
             const form = curr.closest('form');
-            if (form && form !== rootNode) return form;
-            const container = curr.closest('[class*="application-form" i], [class*="apply-form" i], [data-automation-id*="application" i], main, [role="main"]');
-            if (container && container !== rootNode) return container;
+            if (form && form !== rootNode) {
+              // Ensure the form is not just a lone file-upload widget when an outer form/container exists
+              const otherControls = form.querySelectorAll ? form.querySelectorAll('input:not([type="file"]):not([type="hidden"]), select, textarea, [role="combobox"]') : [];
+              if (otherControls.length >= 1) return form;
+              let outerForm = form.parentElement ? form.parentElement.closest('form') : null;
+              if (outerForm && outerForm !== rootNode) return outerForm;
+              return form;
+            }
+            const container = curr.closest('[class*="application-form" i], [class*="apply-form" i], [data-automation-id*="application" i], main, [role="main"], #form');
+            if (container && container !== rootNode) {
+              const cls = typeof container.className === 'string' ? container.className : (container.getAttribute?.('class') || '');
+              const isLeafWrapper = /(?:-input|-field|-entry|-group|-item|-row|-slot|-wrapper|-dropzone)\b/i.test(cls);
+              const otherControls = container.querySelectorAll ? container.querySelectorAll('input:not([type="file"]):not([type="hidden"]), select, textarea, [role="combobox"]') : [];
+              if (!isLeafWrapper || otherControls.length >= 1) {
+                matchedContainer = container;
+                // Climb up to the outermost application container within rootNode
+                let parent = container.parentElement;
+                while (parent && parent !== rootNode) {
+                  if (parent.matches?.('[class*="application-form" i], [class*="apply-form" i], [data-automation-id*="application" i], main, [role="main"], #form')) {
+                    const pCls = typeof parent.className === 'string' ? parent.className : (parent.getAttribute?.('class') || '');
+                    if (!/(?:-input|-field|-entry|-group|-item|-row|-slot|-wrapper|-dropzone)\b/i.test(pCls)) {
+                      matchedContainer = parent;
+                    }
+                  }
+                  parent = parent.parentElement;
+                }
+                return matchedContainer;
+              }
+            }
           }
           curr = curr.getRootNode?.()?.host || curr.parentElement;
         }
