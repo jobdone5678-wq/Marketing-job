@@ -9,6 +9,8 @@ class MockEvent {
     this.cancelable = !!init.cancelable;
     this.composed = !!init.composed;
     this.defaultPrevented = false;
+    this.isTrusted = init.isTrusted !== undefined ? Boolean(init.isTrusted) : false;
+    this.target = null;
   }
   preventDefault() { this.defaultPrevented = true; }
 }
@@ -84,6 +86,19 @@ class MockNode {
   set name(v) { this.setAttribute('name', v); }
   get type() { return this.getAttribute('type') || ''; }
   set type(v) { this.setAttribute('type', v); }
+  get htmlFor() { return this.getAttribute('for') || ''; }
+  set htmlFor(v) { this.setAttribute('for', v); }
+
+  get control() {
+    if (this._control) return this._control;
+    const forId = this.htmlFor || this.getAttribute('for');
+    if (forId) {
+      const doc = this.ownerDocument;
+      return doc?.getElementById?.(forId) || null;
+    }
+    return this.querySelector('input, select, textarea, [role="radio"], [role="checkbox"]');
+  }
+  set control(v) { this._control = v; }
 
   get clientRects() { return [{ width: 100, height: 20 }]; }
   getClientRects() { return this.clientRects; }
@@ -100,6 +115,7 @@ class MockNode {
   }
 
   dispatchEvent(evt) {
+    if (!evt.target) evt.target = this;
     this.eventLog.push(evt.type);
     const handlers = this.listeners.get(evt.type) || [];
     for (const h of handlers) h(evt);
@@ -225,10 +241,31 @@ class MockNode {
 class MockInputElement extends MockNode {
   constructor(attrs = {}) {
     super('INPUT', attrs);
-    this._checked = false;
+    this._checked = attrs.checked === true || attrs.checked === 'true';
+    this._defaultChecked = attrs.defaultChecked !== undefined
+      ? Boolean(attrs.defaultChecked)
+      : (attrs.checked === true || attrs.checked === 'true');
   }
   get checked() { return this._checked; }
-  set checked(v) { this._checked = Boolean(v); }
+  set checked(v) {
+    this._checked = Boolean(v);
+    if (this._checked && (this.type === 'radio' || this.getAttribute('type') === 'radio')) {
+      const name = this.name || this.getAttribute('name');
+      if (name) {
+        const root = this.getRootNode ? this.getRootNode() : null;
+        if (root && root.querySelectorAll) {
+          const others = root.querySelectorAll(`input[name="${name}"]`);
+          for (const other of others) {
+            if (other !== this && other instanceof MockInputElement) {
+              other._checked = false;
+            }
+          }
+        }
+      }
+    }
+  }
+  get defaultChecked() { return this._defaultChecked; }
+  set defaultChecked(v) { this._defaultChecked = Boolean(v); }
 }
 
 Object.defineProperty(MockInputElement.prototype, 'value', {
@@ -279,8 +316,15 @@ globalThis.HTMLTextAreaElement = MockTextAreaElement;
 const mockDoc = new MockNode('#document');
 mockDoc.defaultView = globalThis;
 mockDoc.getElementById = id => {
-  const all = mockDoc.querySelectorAll('*');
-  return all.find(n => n.id === id) || null;
+  const walk = node => {
+    if (node.id === id) return node;
+    for (const child of node.children) {
+      const found = walk(child);
+      if (found) return found;
+    }
+    return null;
+  };
+  return walk(mockDoc);
 };
 globalThis.document = mockDoc;
 mockDoc.body = new MockNode('BODY');
@@ -554,4 +598,138 @@ test('4. Returns a structured verification report { filled: [...], unverified: [
   assert.equal(report[0].writtenValue, 'Elena');
   const mapped = report.map(r => r.writtenValue);
   assert.deepEqual(mapped, ['Elena']);
+});
+
+test('writer overwrites untouched initial default radio (e.g. pre-checked "No") with confirmed candidate fact', async () => {
+  // Radio group with "No" defaultChecked: true, but candidate fact is "Yes"
+  // Writer must update radio to "Yes" because it was untouched by user
+  const form = new MockNode('FORM');
+  mockDoc.body.appendChild(form);
+
+  const radioYes = new MockInputElement({ type: 'radio', name: 'sponsorship', value: 'Yes' });
+  radioYes.id = 'sponsorship-yes';
+  radioYes.checked = false;
+  radioYes.defaultChecked = false;
+
+  const radioNo = new MockInputElement({ type: 'radio', name: 'sponsorship', value: 'No', checked: 'true' });
+  radioNo.id = 'sponsorship-no';
+  radioNo.checked = true;
+  radioNo.defaultChecked = true;
+
+  form.appendChild(radioYes);
+  form.appendChild(radioNo);
+
+  const field = {
+    key: 'field:sponsorship',
+    label: 'Will you now or in the future require sponsorship?',
+    kind: 'radio',
+    element: radioNo,
+    options: [
+      { element: radioYes, label: 'Yes', value: 'Yes' },
+      { element: radioNo, label: 'No', value: 'No' }
+    ]
+  };
+
+  const plan = {
+    field,
+    value: 'Yes',
+    factKey: 'requires_sponsorship',
+    status: 'supported'
+  };
+
+  const report = await writer.applyFill([plan], { isCurrent: () => true });
+
+  assert.equal(radioYes.checked, true, 'Radio Yes must be checked');
+  assert.equal(radioNo.checked, false, 'Radio No must be unchecked');
+  assert.equal(report.filled.length, 1, 'Field must be in filled');
+  assert.equal(report.filled[0].writtenValue, 'Yes');
+});
+
+test('writer strictly preserves field if modified by an isTrusted user event', async () => {
+  // Input received an isTrusted input event
+  // Writer must preserve the user-edited value
+  const input = new MockInputElement({ type: 'text', name: 'first_name' });
+  input.id = 'first-name';
+  mockDoc.body.appendChild(input);
+
+  // User manually edits the field
+  input.value = 'Samantha';
+  input.dispatchEvent(new MockEvent('input', { bubbles: true, isTrusted: true }));
+
+  const plan = {
+    field: {
+      key: 'field:first_name',
+      label: 'First Name',
+      kind: 'text',
+      element: input
+    },
+    value: 'Elena',
+    factKey: 'first_name',
+    status: 'supported'
+  };
+
+  const report = await writer.applyFill([plan], { isCurrent: () => true });
+
+  assert.ok(writer.userEditedElements?.has(input), 'Input must be tracked in userEditedElements');
+  assert.equal(input.value, 'Samantha', 'Manually entered value must be preserved');
+  assert.equal(report.filled.length, 1, 'Preserved field must be in filled');
+  assert.equal(report.filled[0].writtenValue, 'Samantha');
+});
+
+test('writer tracks isTrusted clicks on <label> or sibling radio across the entire radio group', async () => {
+  // Radio group where Option B's label received an isTrusted click
+  // Writer must recognize the entire radio group as user-edited and preserve it
+  const form = new MockNode('FORM');
+  mockDoc.body.appendChild(form);
+
+  const radioA = new MockInputElement({ type: 'radio', name: 'work_auth', value: 'Authorized' });
+  radioA.id = 'auth-yes';
+  radioA.checked = true;
+  radioA.defaultChecked = true;
+
+  const radioB = new MockInputElement({ type: 'radio', name: 'work_auth', value: 'Not Authorized' });
+  radioB.id = 'auth-no';
+  radioB.checked = false;
+  radioB.defaultChecked = false;
+
+  const labelB = new MockNode('LABEL');
+  labelB.htmlFor = 'auth-no';
+  labelB.textContent = 'Not Authorized';
+
+  form.appendChild(radioA);
+  form.appendChild(radioB);
+  form.appendChild(labelB);
+
+  // Candidate manually clicks Option B's label
+  radioA.checked = false;
+  radioB.checked = true;
+  labelB.dispatchEvent(new MockMouseEvent('click', { bubbles: true, isTrusted: true }));
+
+  const field = {
+    key: 'field:work_auth',
+    label: 'Are you authorized to work in the US?',
+    kind: 'radio',
+    element: radioB,
+    options: [
+      { element: radioA, label: 'Authorized', value: 'Authorized' },
+      { element: radioB, label: 'Not Authorized', value: 'Not Authorized' }
+    ]
+  };
+
+  // Profile fact says "Authorized" (Option A), but candidate manually chose Option B
+  const plan = {
+    field,
+    value: 'Authorized',
+    factKey: 'work_authorized',
+    status: 'supported'
+  };
+
+  const report = await writer.applyFill([plan], { isCurrent: () => true });
+
+  assert.ok(writer.userEditedElements?.has(radioA), 'Radio A in same group must be tracked in userEditedElements');
+  assert.ok(writer.userEditedElements?.has(radioB), 'Radio B in same group must be tracked in userEditedElements');
+  assert.equal(radioB.checked, true, 'User selected Option B must remain checked');
+  assert.equal(radioA.checked, false, 'Option A must not overwrite user choice');
+  assert.equal(report.filled.length, 1, 'Preserved field must be in filled');
+  assert.equal(report.filled[0].writtenValue, 'Not Authorized');
 });

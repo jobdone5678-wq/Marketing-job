@@ -368,6 +368,16 @@
       } catch {}
     }
 
+    // Ensure sibling radios in the same group are unchecked
+    if (el.tagName === 'INPUT' && (el.type === 'radio' || el.getAttribute?.('type') === 'radio')) {
+      const siblings = getRadioGroupElements(el);
+      for (const sib of siblings) {
+        if (sib !== el && sib.tagName === 'INPUT' && (sib.type === 'radio' || sib.getAttribute?.('type') === 'radio')) {
+          sib.checked = false;
+        }
+      }
+    }
+
     return el.tagName === 'INPUT' && el.type === 'radio' ? el.checked : true;
   }
 
@@ -676,34 +686,195 @@
     return false;
   }
 
-  // Preserved values store across wizard step transitions
-  const preservedStore = new Map();
+  // Dual-layer edit tracking & durable field store across wizard step transitions
+  const userEditedElements = new WeakSet();
+  const durableFieldStore = new Map();
+  const preservedStore = durableFieldStore;
+
+  function getRadioGroupElements(control) {
+    if (!control) return [];
+    const isRadio = (control.tagName === 'INPUT' && (control.type === 'radio' || control.getAttribute?.('type') === 'radio')) ||
+                    control.getAttribute?.('role') === 'radio';
+    if (!isRadio) return [];
+
+    const group = new Set([control]);
+    const name = control.name || control.getAttribute?.('name');
+    const doc = control.ownerDocument || globalThis.document;
+
+    if (name && doc) {
+      const scope = control.form || (control.getRootNode ? control.getRootNode() : null) || doc;
+      if (scope.querySelectorAll) {
+        try {
+          const matches = scope.querySelectorAll(`input[name="${safeCssEscape(name)}"], [role="radio"][name="${safeCssEscape(name)}"]`);
+          for (const m of matches) {
+            if ((m.tagName === 'INPUT' && (m.type === 'radio' || m.getAttribute?.('type') === 'radio')) || m.getAttribute?.('role') === 'radio') {
+              group.add(m);
+            }
+          }
+        } catch {}
+      }
+    }
+
+    const radiogroup = control.closest?.('[role="radiogroup"], fieldset');
+    if (radiogroup && radiogroup.querySelectorAll) {
+      try {
+        const matches = radiogroup.querySelectorAll('input[type="radio"], [role="radio"]');
+        for (const m of matches) {
+          group.add(m);
+        }
+      } catch {}
+    }
+
+    return Array.from(group);
+  }
+
+  function resolveTargetControl(node) {
+    if (!node) return null;
+    const label = node.tagName === 'LABEL' ? node : node.closest?.('label');
+    if (label) {
+      if (label.control) return label.control;
+      const forId = label.htmlFor || label.getAttribute?.('for');
+      if (forId) {
+        const doc = label.ownerDocument || globalThis.document;
+        const ctrl = doc?.getElementById?.(forId) || doc?.querySelector?.(`[id="${safeCssEscape(forId)}"]`);
+        if (ctrl) return ctrl;
+      }
+      const inner = label.querySelector?.('input, select, textarea, [role="radio"], [role="checkbox"], [role="combobox"], [role="switch"]');
+      if (inner) return inner;
+    }
+    return node.closest?.('input, select, textarea, [role="radio"], [role="checkbox"], [role="combobox"], [role="switch"]') || node;
+  }
+
+  function handleUserInteraction(evt) {
+    if (!evt || (!evt.isTrusted && !evt._isTrusted)) return;
+    const target = evt.target;
+    if (!target) return;
+
+    const control = resolveTargetControl(target);
+    if (!control) return;
+
+    userEditedElements.add(control);
+    if (target !== control) {
+      userEditedElements.add(target);
+    }
+
+    const isRadio = (control.tagName === 'INPUT' && (control.type === 'radio' || control.getAttribute?.('type') === 'radio')) ||
+                    control.getAttribute?.('role') === 'radio';
+    if (isRadio) {
+      const groupRadios = getRadioGroupElements(control);
+      for (const r of groupRadios) {
+        userEditedElements.add(r);
+      }
+    }
+  }
+
+  function installUserEditTracking(doc = root.document || globalThis.document) {
+    if (!doc || typeof doc.addEventListener !== 'function') return;
+    const events = ['change', 'input', 'click', 'keydown'];
+    for (const eventName of events) {
+      try {
+        doc.addEventListener(eventName, handleUserInteraction, true);
+      } catch {}
+    }
+  }
+
+  if (typeof root.document !== 'undefined') {
+    installUserEditTracking(root.document);
+  } else if (typeof globalThis.document !== 'undefined') {
+    installUserEditTracking(globalThis.document);
+  }
+
+  function isFieldUserEdited(field) {
+    if (!field) return false;
+    const stored = (field.key && durableFieldStore.get(field.key)) ||
+                   (field.label && durableFieldStore.get('label:' + normalize(field.label)));
+    if (stored && typeof stored === 'object' && stored.userEdited) {
+      return true;
+    }
+    if (field.element && userEditedElements.has(field.element)) {
+      return true;
+    }
+    if (Array.isArray(field.options)) {
+      for (const opt of field.options) {
+        if (opt.element && userEditedElements.has(opt.element)) return true;
+      }
+    }
+    if (field.element) {
+      const radios = getRadioGroupElements(field.element);
+      for (const r of radios) {
+        if (userEditedElements.has(r)) return true;
+      }
+    }
+    return false;
+  }
+
+  function isFieldUnfilled(field, domVal) {
+    if (!field) return true;
+    if (domVal == null) return true;
+    if (Array.isArray(domVal)) return domVal.length === 0;
+    if (typeof domVal === 'string') {
+      const trimmed = domVal.trim();
+      if (!trimmed) return true;
+      if (placeholder.test(trimmed) || /^(?:(?:please\s+)?(?:select|choose)|--|placeholder)/i.test(trimmed)) return true;
+    }
+
+    const el = field.element;
+    if (el?.tagName === 'SELECT' || field.kind === 'select') {
+      if (el?.selectedIndex != null && el.selectedIndex <= 0) {
+        const opt = el.options?.[el.selectedIndex];
+        const optVal = (opt?.value || opt?.text || '').trim();
+        if (!optVal || placeholder.test(optVal) || /select|choose|--|placeholder/i.test(optVal)) {
+          return true;
+        }
+      }
+    }
+
+    if (field.kind === 'radio' || field.kind === 'choice') {
+      if (!isFieldUserEdited(field)) {
+        const checkedOpt = (field.options || []).find(opt => checked(opt.element) || selected(opt.element));
+        if (!checkedOpt) return true;
+        const optEl = checkedOpt.element;
+        const isDefaultChecked = Boolean(
+          optEl?.defaultChecked ||
+          optEl?.hasAttribute?.('checked') ||
+          optEl?.getAttribute?.('data-default-checked') === 'true'
+        );
+        if (isDefaultChecked) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
 
   function recordPreservedValues(fields) {
-    if (!Array.isArray(fields)) return preservedStore;
+    if (!Array.isArray(fields)) return durableFieldStore;
     for (const f of fields) {
       if (!f?.element?.isConnected) continue;
       const val = read(f);
       const hasVal = Array.isArray(val) ? val.length > 0 : (typeof val === 'boolean' ? true : Boolean(val));
       if (hasVal) {
-        if (f.key) preservedStore.set(f.key, val);
-        if (f.label) preservedStore.set('label:' + normalize(f.label), val);
+        const record = { value: val, userEdited: isFieldUserEdited(f) };
+        if (f.key) durableFieldStore.set(f.key, record);
+        if (f.label) durableFieldStore.set('label:' + normalize(f.label), record);
       }
     }
-    return preservedStore;
+    return durableFieldStore;
   }
 
   function getPreservedValue(field) {
     if (!field) return undefined;
-    if (field.key && preservedStore.has(field.key)) return preservedStore.get(field.key);
-    if (field.label && preservedStore.has('label:' + normalize(field.label))) {
-      return preservedStore.get('label:' + normalize(field.label));
+    const entry = (field.key && durableFieldStore.get(field.key)) ||
+                  (field.label && durableFieldStore.get('label:' + normalize(field.label)));
+    if (entry !== undefined) {
+      return entry && typeof entry === 'object' && 'value' in entry ? entry.value : entry;
     }
     return undefined;
   }
 
   function clearPreservedValues() {
-    preservedStore.clear();
+    durableFieldStore.clear();
   }
 
   function advanceStep(scope = document) {
@@ -1149,13 +1320,21 @@
       const hasAnswer = !isCountryCodeOnly && (Array.isArray(previous) ? previous.length > 0 : (typeof previous === 'boolean' ? previous : Boolean(previous && String(previous).trim().length > 0)));
       let write;
       const isProfileFact = Boolean(plan.factKey && !plan.ai);
-      if (hasAnswer && !plan.overwriteExisting) {
+      const userEdited = isFieldUserEdited(field);
+      const unfilled = isFieldUnfilled(field, previous);
+
+      if (hasAnswer && userEdited) {
         write = { expected: previous, preserved: true };
-      } else if (hasAnswer && !isProfileFact) {
+      } else if (hasAnswer && !unfilled && !plan.overwriteExisting && !isProfileFact) {
         const option = field.options?.length ? choose(field, value) : null;
         if (equals(previous, option?.label ?? value)) write = { expected: previous };
-      } else if (hasAnswer && isProfileFact && equals(previous, value)) {
-        write = { expected: previous };
+        else write = { expected: previous, preserved: true };
+      } else if (hasAnswer && !unfilled && !plan.overwriteExisting && isProfileFact) {
+        if (equals(previous, value)) {
+          write = { expected: previous };
+        } else {
+          write = { expected: previous, preserved: true };
+        }
       } else if (field.kind === 'resume-file') {
         const attachRes = await attachResumeFile(currentEl);
         if (attachRes) {
@@ -1224,6 +1403,12 @@
     advanceStep,
     ensureConnectedElement,
     waitForFieldReady,
-    waitForVerification
+    waitForVerification,
+    userEditedElements,
+    durableFieldStore,
+    preservedStore: durableFieldStore,
+    isFieldUnfilled,
+    isFieldUserEdited,
+    installUserEditTracking
   };
 })(globalThis);
