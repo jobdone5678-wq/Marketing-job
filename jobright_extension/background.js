@@ -427,7 +427,6 @@ async function deliverReceipt(item, allowQueueUpdates) {
         status: 'DELIVERED',
         itemId: item.id,
       });
-      void notifyOutsideApplicationSaved(item.workspace, item.body).catch(() => {});
       return { success: true, status: response.status };
     } else {
       if (allowQueueUpdates) await moveSubmission(item, DEAD_LETTER_KEY, 'SERVER_REJECTED');
