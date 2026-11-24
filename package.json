@@ -19,7 +19,8 @@
     "test:db": "node scripts/testing/verify-candidate-writes.mjs",
     "legacy:report": "tsx --conditions=react-server scripts/tools/legacy-review-report.ts",
     "jobs:sync": "tsx --conditions=react-server scripts/workers/sync-public-jobs.ts",
-    "pack:extension": "node scripts/pack-extension.mjs"
+    "bundle:extension-ai": "node scripts/bundle-extension-ai.mjs",
+    "pack:extension": "node scripts/bundle-extension-ai.mjs && node scripts/pack-extension.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
