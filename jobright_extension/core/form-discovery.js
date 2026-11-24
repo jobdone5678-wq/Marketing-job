@@ -221,7 +221,9 @@
         let curr = fileInput;
         while (curr && curr !== rootNode) {
           if (curr.closest) {
-            const container = curr.closest('form, [class*="application-form" i], [class*="apply-form" i], [data-automation-id*="application" i], main, [role="main"]');
+            const form = curr.closest('form');
+            if (form && form !== rootNode) return form;
+            const container = curr.closest('[class*="application-form" i], [class*="apply-form" i], [data-automation-id*="application" i], main, [role="main"]');
             if (container && container !== rootNode) return container;
           }
           curr = curr.getRootNode?.()?.host || curr.parentElement;

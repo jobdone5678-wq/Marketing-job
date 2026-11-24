@@ -372,3 +372,45 @@ test('4. On a form without a file input (Step 2 of a multi-step wizard), scoping
   assert.ok(fields.some(f => f.label === 'Earliest Start Date'), 'Should include Earliest Start Date');
   assert.ok(!fields.some(f => f.element.name === 'q'), 'Should NOT include search input');
 });
+
+test('5. An application with an enclosing <form> and an inner <div class="application-form"> scopes to the enclosing form and does not truncate outer fields', () => {
+  mockDocument.body.children = [];
+
+  // Enclosing form (like Lever's <form id="application-form">)
+  const outerForm = createElement('FORM', { id: 'application-form' });
+
+  // Inner div with class "application-form" wrapping only resume and basic contact
+  const innerDiv = createElement('DIV', { class: 'section page-centered application-form' });
+  const resumeInput = createElement('INPUT', { type: 'file', name: 'resume', id: 'resume-upload-input' });
+  const resumeLabel = createElement('LABEL', { for: 'resume-upload-input' }, 'Attach Resume/CV');
+  const nameInput = createElement('INPUT', { type: 'text', name: 'name', id: 'name-input' });
+  const nameLabel = createElement('LABEL', { for: 'name-input' }, 'Full Name');
+  innerDiv.appendChild(resumeLabel);
+  innerDiv.appendChild(resumeInput);
+  innerDiv.appendChild(nameLabel);
+  innerDiv.appendChild(nameInput);
+  outerForm.appendChild(innerDiv);
+
+  // Outer div / section outside the inner div, but inside the outer form (e.g. LinkedIn, GitHub, Questions)
+  const customSection = createElement('DIV', { class: 'section custom-questions' });
+  const linkedInInput = createElement('INPUT', { type: 'text', name: 'urls[LinkedIn]', id: 'linkedin-input' });
+  const linkedInLabel = createElement('LABEL', { for: 'linkedin-input' }, 'LinkedIn Profile');
+  const githubInput = createElement('INPUT', { type: 'text', name: 'urls[GitHub]', id: 'github-input' });
+  const githubLabel = createElement('LABEL', { for: 'github-input' }, 'GitHub Profile');
+  customSection.appendChild(linkedInLabel);
+  customSection.appendChild(linkedInInput);
+  customSection.appendChild(githubLabel);
+  customSection.appendChild(githubInput);
+  outerForm.appendChild(customSection);
+
+  mockDocument.body.appendChild(outerForm);
+
+  const scopedContainer = globalThis.NextkinForms.scopeToApplication(mockDocument);
+  assert.equal(scopedContainer, outerForm, 'scopeToApplication should return the enclosing <form>, not the inner <div>');
+
+  const fields = globalThis.NextkinForms.discoverFields(mockDocument);
+  const fieldNames = fields.map(f => f.element.name || f.element.id);
+  assert.ok(fieldNames.includes('name') || fieldNames.includes('name-input'), 'Should discover name');
+  assert.ok(fieldNames.includes('urls[LinkedIn]') || fieldNames.includes('linkedin-input'), 'Should discover LinkedIn URL');
+  assert.ok(fieldNames.includes('urls[GitHub]') || fieldNames.includes('github-input'), 'Should discover GitHub URL');
+});
