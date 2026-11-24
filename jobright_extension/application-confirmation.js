@@ -73,19 +73,34 @@
     }
   } catch {}
 
+  const submitButtonRegex = /\b(?:submit|apply|send application|complete application|review application|continue|finish|next)\b/i;
+
+  function markSubmissionAttempt() {
+    submissionAttempted = true;
+    try { sessionStorage?.setItem('nextkin_submission_attempted', 'true'); } catch {}
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({ type: 'NEXTKIN_SET_SUBMISSION_ATTEMPT' }).catch(() => {});
+      }
+    } catch {}
+    try {
+      if (typeof globalThis.NextkinJobCapture?.snapshot === 'function') {
+        globalThis.NextkinJobCapture.snapshot();
+      }
+    } catch {}
+  }
+
   if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
     document.addEventListener('submit', () => {
-      submissionAttempted = true;
-      try { sessionStorage?.setItem('nextkin_submission_attempted', 'true'); } catch {}
+      markSubmissionAttempt();
     }, true);
 
     document.addEventListener('click', event => {
       const btn = event.target?.closest?.('button, input[type="submit"], [role="button"]');
       if (!btn) return;
       const txt = (btn.innerText || btn.value || '').trim();
-      if (/\b(?:submit|apply|send application|complete application)\b/i.test(txt)) {
-        submissionAttempted = true;
-        try { sessionStorage?.setItem('nextkin_submission_attempted', 'true'); } catch {}
+      if (submitButtonRegex.test(txt)) {
+        markSubmissionAttempt();
       }
     }, true);
   }

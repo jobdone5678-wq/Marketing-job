@@ -123,6 +123,9 @@ function createSandbox({
       if (!listeners.has(type)) listeners.set(type, []);
       listeners.get(type).push(fn);
     },
+    dispatchEvent: evt => {
+      for (const fn of listeners.get(evt.type) || []) fn(evt);
+    },
     querySelector: sel => rootBody.querySelector(sel),
     querySelectorAll: sel => rootBody.querySelectorAll(sel),
     createTreeWalker: (rootNode) => {
@@ -370,4 +373,37 @@ test('ATS Confirmation: Ambiguous outcome on page change triggers PENDING_VERIFI
   assert.equal(env.messages.length, 1);
   assert.equal(env.messages[0].status, 'PENDING_VERIFICATION');
   assert.equal(env.messages[0].evidence, 'Pending verification on page navigation');
+});
+
+test('ATS Confirmation: Form submit and multi-step button clicks propagate NEXTKIN_SET_SUBMISSION_ATTEMPT', () => {
+  const env = createSandbox({
+    url: 'https://jobs.lever.co/employ/a4ec1fd5-d606-4995-a745-5a8b7848937c'
+  });
+  env.run();
+
+  const continueBtn = new env.MockElement('BUTTON', {}, 'Continue');
+  env.sandbox.document.dispatchEvent({ type: 'click', target: continueBtn });
+
+  const attemptMessages = env.messages.filter(m => m.type === 'NEXTKIN_SET_SUBMISSION_ATTEMPT');
+  assert.equal(attemptMessages.length, 1, 'Clicking continue button must propagate NEXTKIN_SET_SUBMISSION_ATTEMPT');
+  assert.equal(env.sandbox.sessionStorage.getItem('nextkin_submission_attempted'), 'true');
+});
+
+test('ATS Confirmation: Lever confirmation heading is detected and reported even without URL-only trigger', () => {
+  const env = createSandbox({
+    url: 'https://jobs.lever.co/employ/a4ec1fd5-d606-4995-a745-5a8b7848937c',
+    title: 'Mid-Market Account Executive'
+  });
+
+  const heading = new env.MockElement('H3', {}, 'Application submitted!');
+  const returnBtn = new env.MockElement('BUTTON', {}, 'RETURN TO THE MAIN PAGE');
+  env.sandbox.document.body.appendChild(heading);
+  env.sandbox.document.body.appendChild(returnBtn);
+
+  const messages = env.run();
+  const confirmationMsg = messages.find(m => m.type === 'application-confirmation');
+  assert.ok(confirmationMsg, 'Lever confirmation must be reported');
+  assert.equal(confirmationMsg.status, 'SUBMITTED');
+  assert.equal(confirmationMsg.atsProvider, 'lever');
+  assert.equal(confirmationMsg.requisitionId, 'a4ec1fd5-d606-4995-a745-5a8b7848937c');
 });

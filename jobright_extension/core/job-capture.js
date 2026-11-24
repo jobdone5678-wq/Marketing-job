@@ -228,9 +228,13 @@
       const btn = event.target?.closest?.('button, input[type="submit"], [role="button"]');
       if (!btn) return;
       const txt = (btn.innerText || btn.value || '').trim();
-      if (/\b(?:submit|apply|send application|complete application)\b/i.test(txt)) {
+      if (/\b(?:submit|apply|send application|complete application|review application|continue|finish|next)\b/i.test(txt)) {
         snapshotJobMetadata();
       }
+    }, true);
+
+    document.addEventListener('submit', () => {
+      snapshotJobMetadata();
     }, true);
   }
 
