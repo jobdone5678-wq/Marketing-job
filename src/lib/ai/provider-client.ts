@@ -15,6 +15,7 @@ export interface ChatMessage {
 
 export interface GenerateCompletionOptions {
   responseFormat?: 'json_object' | 'text';
+  schemaName?: 'plan' | 'choose';
   temperature?: number;
   maxTokens?: number;
   timeoutMs?: number;

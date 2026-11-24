@@ -23,10 +23,13 @@
     "pack:extension": "node scripts/bundle-extension-ai.mjs && node scripts/pack-extension.mjs"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.122",
+    "@ai-sdk/openai-compatible": "^3.0.94",
     "@base-ui/react": "^1.8.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
     "@types/dompurify": "^3.0.5",
+    "ai": "^7.0.181",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "dompurify": "^3.4.17",
