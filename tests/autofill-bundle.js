@@ -98,12 +98,16 @@
       name: 'Ashby',
       matches: hostIs(/(^|\.)ashbyhq\.com$/i),
       hint: el => {
-        const name = el.getAttribute('name') || '';
-        if (name === '_systemfield_name') return 'full_name';
-        if (name === '_systemfield_email') return 'email';
-        if (name === '_systemfield_location') return 'current_location';
-        if (name === '_systemfield_phone') return 'phone';
-        if (/urls\[([^\]]+)\]/i.test(name)) {
+        const name = el.getAttribute('name') || el.id || '';
+        const path = el.getAttribute('data-field-path') ||
+          el.closest?.('[data-field-path]')?.getAttribute('data-field-path') ||
+          el.closest?.('.ashby-application-form-field-entry')?.querySelector('label')?.getAttribute('for') || '';
+        const identifier = name || path;
+        if (identifier === '_systemfield_name') return 'full_name';
+        if (identifier === '_systemfield_email') return 'email';
+        if (identifier === '_systemfield_location') return 'current_location';
+        if (identifier === '_systemfield_phone') return 'phone';
+        if (/urls\[([^\]]+)\]/i.test(name || identifier)) {
           const key = RegExp.$1.toLowerCase();
           if (/linkedin/.test(key)) return 'linkedin_url';
           if (/github/.test(key)) return 'github_url';
@@ -1662,9 +1666,13 @@
       const btn = event.target?.closest?.('button, input[type="submit"], [role="button"]');
       if (!btn) return;
       const txt = (btn.innerText || btn.value || '').trim();
-      if (/\b(?:submit|apply|send application|complete application)\b/i.test(txt)) {
+      if (/\b(?:submit|apply|send application|complete application|review application|continue|finish|next)\b/i.test(txt)) {
         snapshotJobMetadata();
       }
+    }, true);
+
+    document.addEventListener('submit', () => {
+      snapshotJobMetadata();
     }, true);
   }
 
@@ -2047,6 +2055,21 @@
     const acceptable = new Set([d, ...(code ? [code] : []), ...(equivalent ? [equivalent[0], ...equivalent[1]] : [])]);
     const matches = opts.filter(o => acceptable.has(norm(optionText(o))) || acceptable.has(norm(o.value)));
     if (matches.length === 1) return matches[0];
+
+    // Location matching: City, State (handles abbreviation or full state name)
+    const locParts = String(desired).split(/[,\s]+/).map(p => p.trim().toLowerCase()).filter(Boolean);
+    if (locParts.length >= 2) {
+      const city = locParts[0];
+      const stateToken = locParts[1];
+      const stateFullName = Object.keys(US_STATES).find(k => US_STATES[k] === stateToken || k === stateToken);
+      if (stateFullName) {
+        const locMatches = opts.filter(o => {
+          const t = norm(optionText(o));
+          return t.includes(city) && (t.includes(stateToken) || t.includes(stateFullName));
+        });
+        if (locMatches.length >= 1) return locMatches[0];
+      }
+    }
     const bool = normalizeBoolean(desired);
     if (bool !== null) {
       const bOpt = pickBooleanOption(opts, bool);
@@ -2895,6 +2918,8 @@
     '[data-automation-id*="selectList" i]',
     '[class*="select__menu" i]',
     '[class*="-menu" i]',
+    '[class*="autocomplete-popup" i]',
+    '[class*="floatingContainer" i]',
     '.dialog-content'
   ].join(', ');
 
@@ -3044,7 +3069,7 @@
     return null;
   }
 
-  function setNativeValue(element, value) {
+  function setNativeValue(element, value, shouldBlur = true) {
     if (!element) return false;
     const view = element.ownerDocument?.defaultView || globalThis;
     const strVal = value == null ? '' : String(value);
@@ -3074,9 +3099,11 @@
     try {
       element.dispatchEvent(new Evt('change', { bubbles: true }));
     } catch {}
-    try {
-      element.dispatchEvent(new FocusEvt('blur', { bubbles: true, composed: true }));
-    } catch {}
+    if (shouldBlur) {
+      try {
+        element.dispatchEvent(new FocusEvt('blur', { bubbles: true, composed: true }));
+      } catch {}
+    }
 
     return true;
   }
@@ -3308,7 +3335,7 @@
     const roots = ids.map(id => el.getRootNode?.().getElementById?.(id) || doc.getElementById?.(id)).filter(r => r && isVisible(r));
 
     // Discover portals in document.body
-    const portalSelector = '[data-radix-popper-content-wrapper], [data-floating-ui-portal], .select2-dropdown, .k-animation-container';
+    const portalSelector = '[data-radix-popper-content-wrapper], [data-floating-ui-portal], .select2-dropdown, .k-animation-container, [class*="autocomplete-popup" i], [class*="floatingContainer" i]';
     const bodyPortals = doc.body?.querySelectorAll ? Array.from(doc.body.querySelectorAll(portalSelector)).filter(isVisible) : [];
 
     // Query open shadow roots
@@ -3521,7 +3548,7 @@
     }
 
     // Match candidate value against option text
-    let option = choose({ options }, desired);
+    let option = choose({ ...field, options }, desired);
 
     // If no immediate match, allow options up to 400ms to settle/populate (cascading parent just selected)
     if (!option) {
@@ -3529,7 +3556,7 @@
       while (Date.now() - settleStart < 400 && isCurrent()) {
         await wait(30);
         options = comboOptions(el);
-        option = choose({ options }, desired);
+        option = choose({ ...field, options }, desired);
         if (option) break;
       }
     }
@@ -3554,14 +3581,22 @@
     const query = typeof desired === 'boolean' ? (desired ? 'Yes' : 'No') : String(desired);
     if (search && !search.readOnly && isCurrent()) {
       search.focus?.();
-      setNativeValue(search, query);
+      setNativeValue(search, query, false);
+      const view = search.ownerDocument?.defaultView || globalThis;
+      const KeyEvt = view.KeyboardEvent || globalThis.KeyboardEvent;
+      if (KeyEvt) {
+        try {
+          search.dispatchEvent(new KeyEvt('keydown', { key: query.slice(-1) || 'a', bubbles: true }));
+          search.dispatchEvent(new KeyEvt('keyup', { key: query.slice(-1) || 'a', bubbles: true }));
+        } catch {}
+      }
       typed = true;
       const searchStart = Date.now();
-      // await filtered options asynchronously (up to 850ms, allowing settling)
-      while (Date.now() - searchStart < 850 && isCurrent()) {
+      // await filtered options asynchronously (up to 1200ms, allowing settling)
+      while (Date.now() - searchStart < 1200 && isCurrent()) {
         await wait(30);
         options = comboOptions(el);
-        option = choose({ options }, desired);
+        option = choose({ ...field, options }, desired);
         if (option) break;
       }
     }
@@ -4704,12 +4739,39 @@
     for (const fileInput of fileInputs) {
       if (isResumeInput(fileInput, label(fileInput))) {
         let curr = fileInput;
+        let matchedContainer = null;
         while (curr && curr !== rootNode) {
           if (curr.closest) {
             const form = curr.closest('form');
-            if (form && form !== rootNode) return form;
-            const container = curr.closest('[class*="application-form" i], [class*="apply-form" i], [data-automation-id*="application" i], main, [role="main"]');
-            if (container && container !== rootNode) return container;
+            if (form && form !== rootNode) {
+              // Ensure the form is not just a lone file-upload widget when an outer form/container exists
+              const otherControls = form.querySelectorAll ? form.querySelectorAll('input:not([type="file"]):not([type="hidden"]), select, textarea, [role="combobox"]') : [];
+              if (otherControls.length >= 1) return form;
+              let outerForm = form.parentElement ? form.parentElement.closest('form') : null;
+              if (outerForm && outerForm !== rootNode) return outerForm;
+              return form;
+            }
+            const container = curr.closest('[class*="application-form" i], [class*="apply-form" i], [data-automation-id*="application" i], main, [role="main"], #form');
+            if (container && container !== rootNode) {
+              const cls = typeof container.className === 'string' ? container.className : (container.getAttribute?.('class') || '');
+              const isLeafWrapper = /(?:-input|-field|-entry|-group|-item|-row|-slot|-wrapper|-dropzone)\b/i.test(cls);
+              const otherControls = container.querySelectorAll ? container.querySelectorAll('input:not([type="file"]):not([type="hidden"]), select, textarea, [role="combobox"]') : [];
+              if (!isLeafWrapper || otherControls.length >= 1) {
+                matchedContainer = container;
+                // Climb up to the outermost application container within rootNode
+                let parent = container.parentElement;
+                while (parent && parent !== rootNode) {
+                  if (parent.matches?.('[class*="application-form" i], [class*="apply-form" i], [data-automation-id*="application" i], main, [role="main"], #form')) {
+                    const pCls = typeof parent.className === 'string' ? parent.className : (parent.getAttribute?.('class') || '');
+                    if (!/(?:-input|-field|-entry|-group|-item|-row|-slot|-wrapper|-dropzone)\b/i.test(pCls)) {
+                      matchedContainer = parent;
+                    }
+                  }
+                  parent = parent.parentElement;
+                }
+                return matchedContainer;
+              }
+            }
           }
           curr = curr.getRootNode?.()?.host || curr.parentElement;
         }

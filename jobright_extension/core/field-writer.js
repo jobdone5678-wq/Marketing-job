@@ -681,7 +681,7 @@
     }
 
     // Match candidate value against option text
-    let option = choose({ options }, desired);
+    let option = choose({ ...field, options }, desired);
 
     // If no immediate match, allow options up to 400ms to settle/populate (cascading parent just selected)
     if (!option) {
@@ -689,7 +689,7 @@
       while (Date.now() - settleStart < 400 && isCurrent()) {
         await wait(30);
         options = comboOptions(el);
-        option = choose({ options }, desired);
+        option = choose({ ...field, options }, desired);
         if (option) break;
       }
     }
@@ -729,7 +729,7 @@
       while (Date.now() - searchStart < 1200 && isCurrent()) {
         await wait(30);
         options = comboOptions(el);
-        option = choose({ options }, desired);
+        option = choose({ ...field, options }, desired);
         if (option) break;
       }
     }
