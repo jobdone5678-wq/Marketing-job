@@ -67,6 +67,7 @@ import type {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AiProviderSettings } from '@/components/ai-provider-settings';
 
 const LANGUAGE_FLAG_MAP: Record<string, string> = {
   English: 'gb',
@@ -114,7 +115,7 @@ const REMOTE_REGIONS = [
 
 export function ProfileView() {
   const [profile, setProfile] = useState<CandidateProfileState>(DEFAULT_PROFILE);
-  const [activeTab, setActiveTab] = useState<'profile' | 'skills' | 'experience' | 'screening'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'skills' | 'experience' | 'screening' | 'ai'>('profile');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [saveMessage, setSaveMessage] = useState<string>('All changes saved');
 
@@ -541,6 +542,7 @@ export function ProfileView() {
             { id: 'skills', label: 'Skills', icon: Tags, attention: tabAttention.skills },
             { id: 'experience', label: 'Experience', icon: Briefcase, attention: tabAttention.experience },
             { id: 'screening', label: 'Screening answers', icon: ClipboardList, attention: tabAttention.screening },
+            { id: 'ai', label: 'AI Settings', icon: Sparkles, attention: false },
           ].map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -2606,6 +2608,15 @@ export function ProfileView() {
               Save Screening Answers
             </Button>
           </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 5: AI PROVIDER SETTINGS */}
+      {/* ========================================================================= */}
+      {activeTab === 'ai' && (
+        <div className="space-y-6 pt-1">
+          <AiProviderSettings />
         </div>
       )}
     </div>

@@ -15,12 +15,12 @@ export interface TestConnectionRouteOptions {
 }
 
 const testConnectionSchema = z.object({
-  baseUrl: z.string().url().max(2000).optional(),
-  base_url: z.string().url().max(2000).optional(),
-  apiKey: z.string().max(2000).optional(),
-  api_key: z.string().max(2000).optional(),
-  modelId: z.string().max(200).optional(),
-  model_id: z.string().max(200).optional(),
+  baseUrl: z.union([z.string().url().max(2000), z.literal('')]).nullable().optional(),
+  base_url: z.union([z.string().url().max(2000), z.literal('')]).nullable().optional(),
+  apiKey: z.string().max(2000).nullable().optional(),
+  api_key: z.string().max(2000).nullable().optional(),
+  modelId: z.string().max(200).nullable().optional(),
+  model_id: z.string().max(200).nullable().optional(),
   provider: z.string().max(100).optional(),
 });
 
@@ -47,16 +47,16 @@ export async function POST(request: Request, options?: TestConnectionRouteOption
     }
 
     const input = parseResult.data;
-    let targetUrl = input.baseUrl || input.base_url;
+    let targetUrl = (input.baseUrl || input.base_url || '').trim() || undefined;
 
     if (!targetUrl) {
       const existing = await getUserAiProviderConfig(userId, options?.db);
-      targetUrl = existing?.base_url || undefined;
+      targetUrl = (existing?.base_url || '').trim() || (process.env.OPENAI_BASE_URL || '').trim() || undefined;
     }
 
     if (!targetUrl) {
       return Response.json(
-        { ok: false, error: 'baseUrl is required for connection testing' },
+        { ok: false, error: 'A valid Base URL is required to test the connection (e.g. https://openrouter.ai/api/v1)' },
         { status: 400 },
       );
     }

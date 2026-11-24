@@ -1561,6 +1561,8 @@ $('dismiss-tracking-btn')?.addEventListener('click', async () => {
 
 // AI Provider Settings Controller (syncs with /api/extension/ai/settings and /api/extension/ai/test-connection)
 let aiSettingsConfigVersion = 1;
+let aiSettingsLoaded = false;
+let aiSettingsDirty = false;
 
 const AI_PROVIDER_DEFAULTS = {
   server: { baseUrl: '', modelId: '' },
@@ -1574,8 +1576,14 @@ const AI_PROVIDER_DEFAULTS = {
   custom: { baseUrl: '', modelId: '' },
 };
 
-async function loadAiSettings() {
+async function loadAiSettings(force = false) {
   if (!connection) return;
+  // Never overwrite user inputs if user has modified fields or if already loaded and not forced
+  if (!force && (aiSettingsDirty || aiSettingsLoaded)) return;
+  const activeEl = document.activeElement;
+  if (!force && activeEl && (activeEl.id?.startsWith('ai-') || activeEl.closest?.('.ai-settings-content'))) {
+    return;
+  }
   try {
     const data = await api('ai/settings', {}, connection);
     if (!data) return;
@@ -1584,13 +1592,41 @@ async function loadAiSettings() {
     if ($('ai-provider-select')) $('ai-provider-select').value = data.provider || 'server';
     if ($('ai-base-url')) $('ai-base-url').value = data.baseUrl || '';
     if ($('ai-model-id')) $('ai-model-id').value = data.modelId || '';
-    if ($('ai-api-key') && data.maskedApiKey) {
-      $('ai-api-key').placeholder = data.maskedApiKey;
+    if ($('ai-api-key')) {
+      $('ai-api-key').placeholder = data.maskedApiKey || (data.hasApiKey ? '••••••••' : 'sk-...');
     }
+    aiSettingsLoaded = true;
+    aiSettingsDirty = false;
   } catch {}
 }
 
+$('ai-mode-select')?.addEventListener('change', (e) => {
+  aiSettingsDirty = true;
+  const mode = e.target.value;
+  const provEl = $('ai-provider-select');
+  if (mode === 'server') {
+    if (provEl) provEl.value = 'server';
+    if ($('ai-base-url')) $('ai-base-url').value = '';
+    if ($('ai-model-id')) $('ai-model-id').value = '';
+  } else if (mode === 'portal_byok' || mode === 'extension_byok') {
+    if (provEl && (provEl.value === 'server' || provEl.value === 'ollama' || provEl.value === 'lm_studio')) {
+      provEl.value = 'openrouter';
+      const defaults = AI_PROVIDER_DEFAULTS.openrouter;
+      if (defaults.baseUrl && $('ai-base-url')) $('ai-base-url').value = defaults.baseUrl;
+      if (defaults.modelId && $('ai-model-id')) $('ai-model-id').value = defaults.modelId;
+    }
+  } else if (mode === 'local') {
+    if (provEl && provEl.value !== 'ollama' && provEl.value !== 'lm_studio') {
+      provEl.value = 'ollama';
+      const defaults = AI_PROVIDER_DEFAULTS.ollama;
+      if (defaults.baseUrl && $('ai-base-url')) $('ai-base-url').value = defaults.baseUrl;
+      if (defaults.modelId && $('ai-model-id')) $('ai-model-id').value = defaults.modelId;
+    }
+  }
+});
+
 $('ai-provider-select')?.addEventListener('change', (e) => {
+  aiSettingsDirty = true;
   const prov = e.target.value;
   const defaults = AI_PROVIDER_DEFAULTS[prov];
   if (defaults) {
@@ -1600,12 +1636,20 @@ $('ai-provider-select')?.addEventListener('change', (e) => {
       if ($('ai-mode-select')) $('ai-mode-select').value = 'local';
     } else if (prov === 'server') {
       if ($('ai-mode-select')) $('ai-mode-select').value = 'server';
+      if ($('ai-base-url')) $('ai-base-url').value = '';
+      if ($('ai-model-id')) $('ai-model-id').value = '';
     } else {
       if ($('ai-mode-select') && ($('ai-mode-select').value === 'server' || $('ai-mode-select').value === 'local')) {
         $('ai-mode-select').value = 'portal_byok';
       }
     }
   }
+});
+
+['ai-base-url', 'ai-api-key', 'ai-model-id'].forEach((id) => {
+  $(id)?.addEventListener('input', () => {
+    aiSettingsDirty = true;
+  });
 });
 
 $('ai-save-settings')?.addEventListener('click', async () => {
@@ -1618,9 +1662,16 @@ $('ai-save-settings')?.addEventListener('click', async () => {
   }
   const mode = $('ai-mode-select')?.value || 'server';
   const provider = $('ai-provider-select')?.value || 'server';
-  const baseUrl = $('ai-base-url')?.value?.trim() || null;
-  const modelId = $('ai-model-id')?.value?.trim() || null;
+  let baseUrl = $('ai-base-url')?.value?.trim() || null;
+  let modelId = $('ai-model-id')?.value?.trim() || null;
   const keyInput = $('ai-api-key')?.value?.trim() || '';
+
+  if (!baseUrl && AI_PROVIDER_DEFAULTS[provider]?.baseUrl) {
+    baseUrl = AI_PROVIDER_DEFAULTS[provider].baseUrl;
+  }
+  if (!modelId && AI_PROVIDER_DEFAULTS[provider]?.modelId) {
+    modelId = AI_PROVIDER_DEFAULTS[provider].modelId;
+  }
 
   const payload = {
     mode,
@@ -1638,11 +1689,16 @@ $('ai-save-settings')?.addEventListener('click', async () => {
       body: JSON.stringify(payload),
     }, connection);
     aiSettingsConfigVersion = res.configVersion || aiSettingsConfigVersion + 1;
+    aiSettingsDirty = false;
+    aiSettingsLoaded = true;
     if (statusEl) {
       statusEl.textContent = '✓ AI settings saved.';
       statusEl.style.color = '#10b981';
     }
-    if ($('ai-api-key')) $('ai-api-key').value = '';
+    if ($('ai-api-key')) {
+      $('ai-api-key').value = '';
+      if (keyInput) $('ai-api-key').placeholder = '••••••••';
+    }
     try {
       if (typeof chrome !== 'undefined' && chrome.storage?.session) {
         await chrome.storage.session.set({
@@ -1670,15 +1726,29 @@ $('ai-test-connection')?.addEventListener('click', async () => {
     statusEl.textContent = 'Testing connection…';
     statusEl.style.color = 'inherit';
   }
-  const baseUrl = $('ai-base-url')?.value?.trim() || '';
+  const provider = $('ai-provider-select')?.value || 'server';
+  let baseUrl = $('ai-base-url')?.value?.trim() || '';
+  if (!baseUrl && AI_PROVIDER_DEFAULTS[provider]?.baseUrl) {
+    baseUrl = AI_PROVIDER_DEFAULTS[provider].baseUrl;
+    if ($('ai-base-url')) $('ai-base-url').value = baseUrl;
+  }
   const apiKey = $('ai-api-key')?.value?.trim() || '';
-  const modelId = $('ai-model-id')?.value?.trim() || '';
+  let modelId = $('ai-model-id')?.value?.trim() || '';
+  if (!modelId && AI_PROVIDER_DEFAULTS[provider]?.modelId) {
+    modelId = AI_PROVIDER_DEFAULTS[provider].modelId;
+    if ($('ai-model-id')) $('ai-model-id').value = modelId;
+  }
 
   try {
     const res = await api('ai/test-connection', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ baseUrl, apiKey: apiKey || undefined, modelId }),
+      body: JSON.stringify({
+        baseUrl: baseUrl || undefined,
+        apiKey: apiKey || undefined,
+        modelId: modelId || undefined,
+        provider,
+      }),
     }, connection);
     if (statusEl) {
       statusEl.textContent = `✓ Connected successfully (${res.latencyMs ?? 0}ms)`;
