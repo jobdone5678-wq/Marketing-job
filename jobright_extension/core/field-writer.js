@@ -51,6 +51,8 @@
     '[data-automation-id*="selectList" i]',
     '[class*="select__menu" i]',
     '[class*="-menu" i]',
+    '[class*="autocomplete-popup" i]',
+    '[class*="floatingContainer" i]',
     '.dialog-content'
   ].join(', ');
 
@@ -200,7 +202,7 @@
     return null;
   }
 
-  function setNativeValue(element, value) {
+  function setNativeValue(element, value, shouldBlur = true) {
     if (!element) return false;
     const view = element.ownerDocument?.defaultView || globalThis;
     const strVal = value == null ? '' : String(value);
@@ -230,9 +232,11 @@
     try {
       element.dispatchEvent(new Evt('change', { bubbles: true }));
     } catch {}
-    try {
-      element.dispatchEvent(new FocusEvt('blur', { bubbles: true, composed: true }));
-    } catch {}
+    if (shouldBlur) {
+      try {
+        element.dispatchEvent(new FocusEvt('blur', { bubbles: true, composed: true }));
+      } catch {}
+    }
 
     return true;
   }
@@ -464,7 +468,7 @@
     const roots = ids.map(id => el.getRootNode?.().getElementById?.(id) || doc.getElementById?.(id)).filter(r => r && isVisible(r));
 
     // Discover portals in document.body
-    const portalSelector = '[data-radix-popper-content-wrapper], [data-floating-ui-portal], .select2-dropdown, .k-animation-container';
+    const portalSelector = '[data-radix-popper-content-wrapper], [data-floating-ui-portal], .select2-dropdown, .k-animation-container, [class*="autocomplete-popup" i], [class*="floatingContainer" i]';
     const bodyPortals = doc.body?.querySelectorAll ? Array.from(doc.body.querySelectorAll(portalSelector)).filter(isVisible) : [];
 
     // Query open shadow roots
@@ -710,11 +714,19 @@
     const query = typeof desired === 'boolean' ? (desired ? 'Yes' : 'No') : String(desired);
     if (search && !search.readOnly && isCurrent()) {
       search.focus?.();
-      setNativeValue(search, query);
+      setNativeValue(search, query, false);
+      const view = search.ownerDocument?.defaultView || globalThis;
+      const KeyEvt = view.KeyboardEvent || globalThis.KeyboardEvent;
+      if (KeyEvt) {
+        try {
+          search.dispatchEvent(new KeyEvt('keydown', { key: query.slice(-1) || 'a', bubbles: true }));
+          search.dispatchEvent(new KeyEvt('keyup', { key: query.slice(-1) || 'a', bubbles: true }));
+        } catch {}
+      }
       typed = true;
       const searchStart = Date.now();
-      // await filtered options asynchronously (up to 850ms, allowing settling)
-      while (Date.now() - searchStart < 850 && isCurrent()) {
+      // await filtered options asynchronously (up to 1200ms, allowing settling)
+      while (Date.now() - searchStart < 1200 && isCurrent()) {
         await wait(30);
         options = comboOptions(el);
         option = choose({ options }, desired);

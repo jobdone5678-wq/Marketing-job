@@ -372,6 +372,19 @@
     const acceptable = new Set([d, ...(code ? [code] : []), ...(equivalent ? [equivalent[0], ...equivalent[1]] : [])]);
     const matches = opts.filter(o => acceptable.has(norm(optionText(o))) || acceptable.has(norm(o.value)));
     if (matches.length === 1) return matches[0];
+
+    // Location matching: City, State (handles abbreviation or full state name)
+    const locParts = String(desired).split(/[,\s]+/).map(p => p.trim().toLowerCase()).filter(Boolean);
+    if (locParts.length >= 2) {
+      const city = locParts[0];
+      const stateToken = locParts[1];
+      const stateFullName = Object.keys(US_STATES).find(k => US_STATES[k] === stateToken || k === stateToken) || stateToken;
+      const locMatches = opts.filter(o => {
+        const t = norm(optionText(o));
+        return t.includes(city) && (t.includes(stateToken) || t.includes(stateFullName));
+      });
+      if (locMatches.length >= 1) return locMatches[0];
+    }
     const bool = normalizeBoolean(desired);
     if (bool !== null) {
       const bOpt = pickBooleanOption(opts, bool);
