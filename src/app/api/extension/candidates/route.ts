@@ -12,6 +12,7 @@ const autofillKeys = [
   'zip_code', 'postal_code', 'country', 'github_url', 'twitter_url', 'website', 'portfolio_url', 'other_url',
   'current_company', 'headline', 'summary', 'bio', 'availability', 'how_heard',
   'school', 'languages', 'employment_history', 'education_history', 'saved_answers',
+  'gender', 'race', 'race_ethnicity', 'veteran', 'veteran_status', 'disability', 'disability_status', 'work_authorization',
 ];
 
 export async function OPTIONS(request: Request) {
@@ -49,6 +50,14 @@ const CANDIDATE_FIELDS = `
         available_to_join,
         current_salary,
         expected_salary,
+        gender,
+        race,
+        race_ethnicity,
+        veteran,
+        veteran_status,
+        disability,
+        disability_status,
+        work_authorization,
         confirmed_facts,
         resume_url,
         employment_history,
@@ -177,9 +186,36 @@ export async function GET(request: Request) {
 
     if (savedOnly) {
       const saved = candidates.flatMap(candidate => {
-        const facts = (candidate.confirmed_facts || {}) as Record<string, unknown>;
-        if (candidate.provenance_status !== 'confirmed' || facts.notes === unsavedResumeNote ||
-            typeof facts.full_name !== 'string' || !facts.full_name.trim()) return [];
+        const rawFacts = (candidate.confirmed_facts || {}) as Record<string, unknown>;
+        const demographics = (rawFacts.demographics || {}) as Record<string, unknown>;
+
+        const fullName = (typeof rawFacts.full_name === 'string' && rawFacts.full_name.trim())
+          ? rawFacts.full_name.trim()
+          : (typeof candidate.full_name === 'string' && candidate.full_name.trim() ? candidate.full_name.trim() : '');
+
+        if (candidate.provenance_status !== 'confirmed' || rawFacts.notes === unsavedResumeNote || !fullName) return [];
+
+        const gender = (candidate as any).gender || rawFacts.gender || demographics.gender || undefined;
+        const race = (candidate as any).race || rawFacts.race || (candidate as any).race_ethnicity || rawFacts.race_ethnicity || demographics.raceEthnicity || undefined;
+        const raceEthnicity = (candidate as any).race_ethnicity || rawFacts.race_ethnicity || (candidate as any).race || rawFacts.race || demographics.raceEthnicity || undefined;
+        const veteran = (candidate as any).veteran || rawFacts.veteran || (candidate as any).veteran_status || rawFacts.veteran_status || demographics.veteranStatus || undefined;
+        const veteranStatus = (candidate as any).veteran_status || rawFacts.veteran_status || (candidate as any).veteran || rawFacts.veteran || demographics.veteranStatus || undefined;
+        const disability = (candidate as any).disability || rawFacts.disability || (candidate as any).disability_status || rawFacts.disability_status || demographics.disabilityStatus || undefined;
+        const disabilityStatus = (candidate as any).disability_status || rawFacts.disability_status || (candidate as any).disability || rawFacts.disability || demographics.disabilityStatus || undefined;
+        const workAuth = (candidate as any).work_authorization || rawFacts.work_authorization || candidate.visa_status || (rawFacts as any).visa_status || undefined;
+
+        const facts: Record<string, unknown> = {
+          ...rawFacts,
+          full_name: fullName,
+          ...(gender ? { gender } : {}),
+          ...(race ? { race } : {}),
+          ...(raceEthnicity ? { race_ethnicity: raceEthnicity } : {}),
+          ...(veteran ? { veteran } : {}),
+          ...(veteranStatus ? { veteran_status: veteranStatus } : {}),
+          ...(disability ? { disability } : {}),
+          ...(disabilityStatus ? { disability_status: disabilityStatus } : {}),
+          ...(workAuth ? { work_authorization: workAuth } : {}),
+        };
 
         const fields = Object.fromEntries(autofillKeys.filter(key => Object.hasOwn(facts, key))
           .map(key => [key, facts[key]]));
@@ -191,7 +227,7 @@ export async function GET(request: Request) {
           ...fields,
           id: candidate.id,
           version: candidate.version,
-          provenance_status: 'confirmed',
+          provenance_status: candidate.provenance_status || 'confirmed',
           has_original_resume: /^data:application\/(?:pdf|vnd\.openxmlformats-officedocument\.wordprocessingml\.document);base64,/i
             .test(candidate.resume_url || ''),
           confirmed_facts: fields,
