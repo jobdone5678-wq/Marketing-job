@@ -135,6 +135,14 @@ class MockNode {
   }
 
   focus() { this.eventLog.push('focus'); }
+  blur() { this.eventLog.push('blur'); }
+
+  remove() {
+    if (this.parentElement) {
+      this.parentElement.children = this.parentElement.children.filter(c => c !== this);
+      this.parentElement = null;
+    }
+  }
 
   getRootNode() {
     let curr = this;
@@ -732,4 +740,238 @@ test('writer tracks isTrusted clicks on <label> or sibling radio across the enti
   assert.equal(radioA.checked, false, 'Option A must not overwrite user choice');
   assert.equal(report.filled.length, 1, 'Preserved field must be in filled');
   assert.equal(report.filled[0].writtenValue, 'Not Authorized');
+});
+
+test('fillCombo searches document.body portal listbox when opened via pointerdown and selects option', async () => {
+  const combo = new MockNode('DIV', {
+    role: 'combobox',
+    'aria-haspopup': 'listbox',
+    'aria-expanded': 'false'
+  });
+  const trigger = new MockNode('BUTTON', { 'data-slot': 'select-trigger' });
+  const display = new MockNode('SPAN', { 'data-slot': 'select-value' });
+  combo.appendChild(trigger);
+  combo.appendChild(display);
+  mockDoc.body.appendChild(combo);
+
+  const portal = new MockNode('DIV', { 'data-radix-popper-content-wrapper': '' });
+  const opt1 = new MockNode('DIV', { role: 'option', 'data-value': 'us' }, 'United States');
+  const opt2 = new MockNode('DIV', { role: 'option', 'data-value': 'ca' }, 'Canada');
+  portal.appendChild(opt1);
+  portal.appendChild(opt2);
+
+  trigger.addEventListener('click', () => {
+    combo.setAttribute('aria-expanded', 'true');
+    mockDoc.body.appendChild(portal);
+  });
+
+  opt1.addEventListener('click', () => {
+    display.textContent = 'United States';
+    opt1.setAttribute('aria-selected', 'true');
+    combo.setAttribute('aria-expanded', 'false');
+    portal.remove();
+  });
+
+  const field = {
+    key: 'field:country',
+    label: 'Country',
+    kind: 'combobox',
+    element: combo
+  };
+
+  const res = await writer.fillCombo(field, 'United States', () => true);
+  assert.ok(res, 'fillCombo must succeed');
+  assert.equal(res.expected, 'United States');
+  assert.ok(trigger.eventLog.includes('click') || trigger.eventLog.includes('pointerdown'), 'Trigger opened via pointer/click');
+  assert.ok(opt1.eventLog.includes('click'), 'Portal option must be clicked');
+  assert.equal(display.textContent, 'United States');
+  assert.equal(portal.parentElement, null, 'Portal popover must be closed');
+});
+
+test('fillCombo uses type-to-filter fallback when initial open shows no matching option', async () => {
+  const combo = new MockNode('DIV', {
+    role: 'combobox',
+    'aria-haspopup': 'listbox',
+    'aria-expanded': 'false'
+  });
+  const trigger = new MockNode('BUTTON', { 'data-slot': 'select-trigger' });
+  const display = new MockNode('SPAN', { 'data-slot': 'select-value' });
+  combo.appendChild(trigger);
+  combo.appendChild(display);
+  mockDoc.body.appendChild(combo);
+
+  const listbox = new MockNode('DIV', { role: 'listbox' });
+  const searchInput = new MockInputElement({ type: 'text', role: 'searchbox', class: 'select2-search__field' });
+  listbox.appendChild(searchInput);
+
+  const opt1 = new MockNode('DIV', { role: 'option', 'data-value': 'design' }, 'Product Design');
+  const opt2 = new MockNode('DIV', { role: 'option', 'data-value': 'mkt' }, 'Marketing');
+  listbox.appendChild(opt1);
+  listbox.appendChild(opt2);
+
+  let searchTypedValue = '';
+  const optSWE = new MockNode('DIV', { role: 'option', 'data-value': 'swe' }, 'Software Engineer');
+
+  searchInput.addEventListener('input', () => {
+    searchTypedValue = searchInput.value;
+    if (searchInput.value.toLowerCase().includes('software')) {
+      // Async typeahead settling
+      setTimeout(() => {
+        listbox.appendChild(optSWE);
+      }, 50);
+    }
+  });
+
+  optSWE.addEventListener('click', () => {
+    display.textContent = 'Software Engineer';
+    optSWE.setAttribute('aria-selected', 'true');
+    combo.setAttribute('aria-expanded', 'false');
+    listbox.remove();
+  });
+
+  trigger.addEventListener('click', () => {
+    combo.setAttribute('aria-expanded', 'true');
+    mockDoc.body.appendChild(listbox);
+  });
+
+  const field = {
+    key: 'field:job_title',
+    label: 'Job Title',
+    kind: 'combobox',
+    element: combo
+  };
+
+  const res = await writer.fillCombo(field, 'Software Engineer', () => true);
+  assert.ok(res, 'fillCombo must succeed with type-to-filter fallback');
+  assert.equal(res.expected, 'Software Engineer');
+  assert.equal(searchTypedValue, 'Software Engineer', 'Search input must receive query');
+  assert.ok(optSWE.eventLog.includes('click'), 'Filtered option must be clicked');
+  assert.equal(display.textContent, 'Software Engineer');
+});
+
+test('cascading dropdowns populate sequentially (Country -> State -> City) with option settling wait', async () => {
+  // Country combobox
+  const countryCombo = new MockNode('DIV', { role: 'combobox', 'aria-haspopup': 'listbox', 'aria-expanded': 'false' });
+  const countryTrigger = new MockNode('BUTTON', { 'data-slot': 'select-trigger' });
+  const countryDisplay = new MockNode('SPAN', { 'data-slot': 'select-value' });
+  countryCombo.appendChild(countryTrigger);
+  countryCombo.appendChild(countryDisplay);
+  mockDoc.body.appendChild(countryCombo);
+
+  const countryListbox = new MockNode('DIV', { role: 'listbox' });
+  const countryOptUS = new MockNode('DIV', { role: 'option', 'data-value': 'us' }, 'United States');
+  countryListbox.appendChild(countryOptUS);
+
+  // State combobox (initially empty options)
+  const stateCombo = new MockNode('DIV', { role: 'combobox', 'aria-haspopup': 'listbox', 'aria-expanded': 'false' });
+  const stateTrigger = new MockNode('BUTTON', { 'data-slot': 'select-trigger' });
+  const stateDisplay = new MockNode('SPAN', { 'data-slot': 'select-value' });
+  stateCombo.appendChild(stateTrigger);
+  stateCombo.appendChild(stateDisplay);
+  mockDoc.body.appendChild(stateCombo);
+
+  const stateListbox = new MockNode('DIV', { role: 'listbox' });
+  const stateOptCA = new MockNode('DIV', { role: 'option', 'data-value': 'ca' }, 'California');
+
+  let countryFilledFirst = false;
+  let countrySelectedTime = 0;
+  let stateOptionsPopulatedTime = 0;
+
+  countryTrigger.addEventListener('click', () => {
+    countryCombo.setAttribute('aria-expanded', 'true');
+    mockDoc.body.appendChild(countryListbox);
+  });
+
+  countryOptUS.addEventListener('click', () => {
+    countryDisplay.textContent = 'United States';
+    countryOptUS.setAttribute('aria-selected', 'true');
+    countryCombo.setAttribute('aria-expanded', 'false');
+    countryListbox.remove();
+    countryFilledFirst = true;
+    countrySelectedTime = Date.now();
+
+    // Dependent state options populate asynchronously after country selection
+    setTimeout(() => {
+      stateListbox.appendChild(stateOptCA);
+      stateOptionsPopulatedTime = Date.now();
+    }, 60);
+  });
+
+  stateTrigger.addEventListener('click', () => {
+    stateCombo.setAttribute('aria-expanded', 'true');
+    mockDoc.body.appendChild(stateListbox);
+  });
+
+  stateOptCA.addEventListener('click', () => {
+    stateDisplay.textContent = 'California';
+    stateOptCA.setAttribute('aria-selected', 'true');
+    stateCombo.setAttribute('aria-expanded', 'false');
+    stateListbox.remove();
+  });
+
+  const stateField = {
+    key: 'field:state',
+    label: 'State / Province',
+    kind: 'combobox',
+    element: stateCombo
+  };
+
+  const countryField = {
+    key: 'field:country',
+    label: 'Country',
+    kind: 'combobox',
+    element: countryCombo
+  };
+
+  // State is placed before Country in input array to test cascading reordering
+  const plans = [
+    { field: stateField, value: 'California', status: 'supported' },
+    { field: countryField, value: 'United States', status: 'supported' }
+  ];
+
+  const report = await writer.applyFill(plans, { isCurrent: () => true });
+
+  assert.equal(countryFilledFirst, true, 'Country must be filled before State');
+  assert.ok(stateOptionsPopulatedTime >= countrySelectedTime, 'State options populated after country selection');
+  assert.ok(report.filled.some(r => r.field.key === 'field:country'), 'Country must be in filled');
+  assert.ok(report.filled.some(r => r.field.key === 'field:state'), 'State must be in filled after settling');
+  assert.equal(countryDisplay.textContent, 'United States');
+  assert.equal(stateDisplay.textContent, 'California');
+});
+
+test('closeCombo only dispatches Escape if listbox is still open, never closing employer modal', () => {
+  const modal = new MockNode('DIV', { class: 'modal-dialog', role: 'dialog' });
+  mockDoc.body.appendChild(modal);
+
+  let modalEscapeReceived = false;
+  modal.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') modalEscapeReceived = true;
+  });
+
+  // Case 1: Closed combobox (aria-expanded="false", listbox already closed)
+  const closedCombo = new MockNode('DIV', { role: 'combobox', 'aria-expanded': 'false' });
+  modal.appendChild(closedCombo);
+
+  let closedComboEscape = false;
+  closedCombo.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closedComboEscape = true;
+  });
+
+  writer.closeCombo(closedCombo);
+
+  assert.equal(closedComboEscape, false, 'Must NOT dispatch Escape when combobox is already closed');
+  assert.equal(modalEscapeReceived, false, 'Employer modal dialog must NEVER receive Escape from closed combobox');
+
+  // Case 2: Open combobox (aria-expanded="true")
+  const openCombo = new MockNode('DIV', { role: 'combobox', 'aria-expanded': 'true' });
+  modal.appendChild(openCombo);
+
+  let openComboEscape = false;
+  openCombo.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') openComboEscape = true;
+  });
+
+  writer.closeCombo(openCombo);
+
+  assert.equal(openComboEscape, true, 'MUST dispatch Escape when combobox is still open');
 });

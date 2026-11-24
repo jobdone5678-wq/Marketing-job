@@ -38,6 +38,9 @@
     '[role="listbox"]',
     '[data-radix-popper-content-wrapper]',
     '[data-radix-select-viewport]',
+    '[data-floating-ui-portal]',
+    '.select2-dropdown',
+    '.k-animation-container',
     '[id^="headlessui-listbox-options"]',
     '.select2-results',
     '.ng-dropdown-panel',
@@ -444,34 +447,88 @@
   }
 
   function getListboxRoots(el) {
+    if (!el) return [];
     const control = comboInput(el) || el;
-    const ids = [el, control].flatMap(node => [node.getAttribute('aria-controls'), node.getAttribute('aria-owns')])
+    const ids = [el, control].flatMap(node => [node?.getAttribute?.('aria-controls'), node?.getAttribute?.('aria-owns')])
       .filter(Boolean).flatMap(idStr => idStr.split(/\s+/));
-    const doc = el.ownerDocument;
-    const roots = ids.map(id => el.getRootNode?.().getElementById?.(id) || doc.getElementById(id)).filter(Boolean);
-    const isVisible = node => !!node.getClientRects().length && doc.defaultView.getComputedStyle(node).visibility !== 'hidden';
+    const doc = el.ownerDocument || globalThis.document;
+    const view = doc?.defaultView || globalThis;
+    const isVisible = node => {
+      if (!node) return false;
+      if (node.getClientRects && !node.getClientRects().length) return false;
+      const style = view.getComputedStyle?.(node);
+      if (!style) return true;
+      return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+    };
+
+    const roots = ids.map(id => el.getRootNode?.().getElementById?.(id) || doc.getElementById?.(id)).filter(r => r && isVisible(r));
+
+    // Discover portals in document.body
+    const portalSelector = '[data-radix-popper-content-wrapper], [data-floating-ui-portal], .select2-dropdown, .k-animation-container';
+    const bodyPortals = doc.body?.querySelectorAll ? Array.from(doc.body.querySelectorAll(portalSelector)).filter(isVisible) : [];
+
+    // Query open shadow roots
+    const shadowRoots = [];
+    const collectShadowRoots = (rootNode) => {
+      if (!rootNode) return;
+      const stack = [rootNode];
+      while (stack.length) {
+        const curr = stack.pop();
+        if (curr?.shadowRoot) {
+          shadowRoots.push(curr.shadowRoot);
+          stack.push(curr.shadowRoot);
+        }
+        if (curr?.children) {
+          for (let i = 0; i < curr.children.length; i++) {
+            stack.push(curr.children[i]);
+          }
+        }
+      }
+    };
+    if (doc.body) collectShadowRoots(doc.body);
+
+    const shadowPortals = shadowRoots.flatMap(sr => [
+      ...(sr.querySelectorAll?.(portalSelector) || []),
+      ...(sr.querySelectorAll?.(listboxSelector) || [])
+    ]).filter(isVisible);
+
+    if (bodyPortals.length || shadowPortals.length) {
+      roots.push(...bodyPortals, ...shadowPortals);
+    }
+
     if (!roots.length) {
-      const menus = [...new Set([...(el.getRootNode?.()?.querySelectorAll?.(listboxSelector) || []), ...doc.querySelectorAll(listboxSelector)])].filter(isVisible);
+      const menus = [...new Set([...(el.getRootNode?.()?.querySelectorAll?.(listboxSelector) || []), ...(doc.querySelectorAll ? doc.querySelectorAll(listboxSelector) : [])])].filter(isVisible);
       const fieldContainer = el.closest?.('.select, .select__container, .select-shell, [class*="select__container"], [class*="form-group"], [class*="field-container"], [class*="application-question"]');
       const nearby = menus.filter(menu => (el.contains?.(menu)) || (el.parentElement?.contains?.(menu)) || (fieldContainer?.contains?.(menu)));
       if (nearby.length >= 1) roots.push(...nearby);
       else if (menus.length === 1) roots.push(menus[0]);
       else if (menus.length > 1) roots.push(menus[menus.length - 1]);
     }
-    return roots;
+    return [...new Set(roots)];
   }
 
   function comboOptions(el) {
     const roots = getListboxRoots(el);
-    const doc = el.ownerDocument;
-    const isVisible = node => !!node.getClientRects().length && doc.defaultView.getComputedStyle(node).visibility !== 'hidden';
+    const doc = el.ownerDocument || globalThis.document;
+    const view = doc?.defaultView || globalThis;
+    const isVisible = node => {
+      if (!node) return false;
+      if (node.getClientRects && !node.getClientRects().length) return false;
+      const style = view.getComputedStyle?.(node);
+      if (!style) return true;
+      return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+    };
     if (!roots.length) return [];
 
-    const candidateNodes = roots.flatMap(menu => [...menu.querySelectorAll(optionSelector)]);
+    const candidateNodes = roots.flatMap(menu => {
+      const opts = menu.querySelectorAll ? [...menu.querySelectorAll(optionSelector)] : [];
+      if (menu.matches && menu.matches(optionSelector)) opts.unshift(menu);
+      return opts;
+    });
 
     return [...new Set(candidateNodes)]
       .filter(option => isVisible(option) && !option.disabled && option.getAttribute('aria-disabled') !== 'true' &&
-        !option.matches('.disabled, .ng-option-disabled, .select2-results__option--disabled, [aria-disabled="true"]'))
+        !option.matches?.('.disabled, .ng-option-disabled, .select2-results__option--disabled, [aria-disabled="true"]'))
       .map(element => ({
         element,
         label: (element.getAttribute('aria-label') || element.getAttribute('data-label') || element.textContent).trim(),
@@ -505,14 +562,56 @@
     return null;
   }
 
-  function closeCombo(el) {
+  function isComboOpen(el) {
+    if (!el) return false;
+    const trigger = comboTrigger(el);
+    const input = comboInput(el);
+    for (const node of [el, trigger, input]) {
+      if (node?.getAttribute?.('aria-expanded') === 'true') return true;
+    }
+
+    const roots = getListboxRoots(el);
+    const doc = el.ownerDocument || globalThis.document;
+    const view = doc?.defaultView || globalThis;
+    for (const root of roots) {
+      if (!root || !root.isConnected) continue;
+      if (root.tagName === 'BODY' || root.tagName === 'HTML' || (root.matches && root.matches('.modal, .modal-dialog, .dialog-content, [role="dialog"]'))) continue;
+      if (root.getClientRects && root.getClientRects().length > 0) {
+        const style = view.getComputedStyle ? view.getComputedStyle(root) : null;
+        if (!style || (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0')) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function closeCombo(el, force = false) {
+    if (!el) return;
     const view = el.ownerDocument?.defaultView || globalThis;
-    const { KeyboardEvent } = view;
-    const targets = [comboSearchInput(el), comboInput(el), comboTrigger(el), el, el.ownerDocument?.activeElement].filter(Boolean);
-    for (const target of targets) {
+    const doc = el.ownerDocument || globalThis.document;
+    const search = comboSearchInput(el, getListboxRoots(el));
+    const input = comboInput(el);
+    const trigger = comboTrigger(el);
+
+    if (force || isComboOpen(el)) {
+      const KeyEvt = view.KeyboardEvent || globalThis.KeyboardEvent;
+      const targets = [search, input, trigger, el, doc?.activeElement].filter(Boolean);
+      for (const target of targets) {
+        try {
+          target.dispatchEvent(new KeyEvt('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true, composed: true, cancelable: true }));
+          target.dispatchEvent(new KeyEvt('keyup', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true, composed: true, cancelable: true }));
+        } catch {}
+      }
+    }
+
+    // Always blur cleanly
+    const FocusEvt = view.FocusEvent || view.Event || globalThis.FocusEvent || globalThis.Event;
+    const blurTargets = [search, input, trigger, el].filter(Boolean);
+    for (const target of blurTargets) {
       try {
-        target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true, composed: true, cancelable: true }));
-        target.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true, composed: true, cancelable: true }));
+        target.blur?.();
+        target.dispatchEvent(new FocusEvt('blur', { bubbles: true, composed: true }));
       } catch {}
     }
   }
@@ -560,10 +659,37 @@
         options = comboOptions(el);
         if (options.length) break;
       }
+      // ArrowDown fallback if options still not open
+      if (!options.length && isCurrent()) {
+        try {
+          const view = el.ownerDocument?.defaultView || globalThis;
+          const KeyEvt = view.KeyboardEvent || globalThis.KeyboardEvent;
+          (trigger || el).dispatchEvent(new KeyEvt('keydown', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
+          (trigger || el).dispatchEvent(new KeyEvt('keyup', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
+        } catch {}
+        const arrowStart = Date.now();
+        while (Date.now() - arrowStart < 250 && isCurrent()) {
+          await wait(30);
+          options = comboOptions(el);
+          if (options.length) break;
+        }
+      }
     }
 
     // Match candidate value against option text
     let option = choose({ options }, desired);
+
+    // If no immediate match, allow options up to 400ms to settle/populate (cascading parent just selected)
+    if (!option) {
+      const settleStart = Date.now();
+      while (Date.now() - settleStart < 400 && isCurrent()) {
+        await wait(30);
+        options = comboOptions(el);
+        option = choose({ options }, desired);
+        if (option) break;
+      }
+    }
+
     if (option) {
       const ok = click(option.element);
       try {
@@ -577,17 +703,18 @@
       return ok ? { expected: option.label, option: option.element, typed: false, verified: Boolean(isSel) } : null;
     }
 
-    // Type into combobox search input if present
+    // Type into combobox search input if present (Typeahead search fallback)
     const roots = getListboxRoots(el);
     const search = comboSearchInput(el, roots);
     let typed = false;
     const query = typeof desired === 'boolean' ? (desired ? 'Yes' : 'No') : String(desired);
     if (search && !search.readOnly && isCurrent()) {
+      search.focus?.();
       setNativeValue(search, query);
       typed = true;
       const searchStart = Date.now();
-      // await filtered options asynchronously (up to 800ms for network search)
-      while (Date.now() - searchStart < 800 && isCurrent()) {
+      // await filtered options asynchronously (up to 850ms, allowing settling)
+      while (Date.now() - searchStart < 850 && isCurrent()) {
         await wait(30);
         options = comboOptions(el);
         option = choose({ options }, desired);
@@ -612,7 +739,7 @@
     if (typed && search && normalize(search.value) === normalize(query)) {
       setNativeValue(search, '');
     }
-    closeCombo(el);
+    closeCombo(el, typed);
     return null;
   }
 
@@ -1279,10 +1406,44 @@
     return { filled, unverified, manual, unmapped };
   }
 
+  function sortCascadingPlans(plans) {
+    if (!Array.isArray(plans) || plans.length <= 1) return plans;
+
+    const getRank = plan => {
+      const f = plan?.field || {};
+      const str = `${plan?.factKey || ''} ${f.key || ''} ${f.label || ''} ${f.name || ''}`.toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+      if (/\bcountry\b/.test(str)) return 1;
+      if (/\b(state|province|region)\b/.test(str)) return 2;
+      if (/\bcity\b/.test(str)) return 3;
+      return 0;
+    };
+
+    const cascadeIndices = [];
+    const cascadePlans = [];
+    for (let i = 0; i < plans.length; i++) {
+      const rank = getRank(plans[i]);
+      if (rank > 0) {
+        cascadeIndices.push(i);
+        cascadePlans.push({ plan: plans[i], rank });
+      }
+    }
+
+    if (cascadePlans.length <= 1) return plans;
+
+    cascadePlans.sort((a, b) => a.rank - b.rank);
+
+    const result = [...plans];
+    for (let i = 0; i < cascadeIndices.length; i++) {
+      result[cascadeIndices[i]] = cascadePlans[i].plan;
+    }
+    return result;
+  }
+
   async function applyFill(plans, session = {}) {
     const ctx = typeof session?.isCurrent === 'function' ? session : { isCurrent: () => true, ...session };
+    const sortedPlans = sortCascadingPlans(plans);
 
-    for (const plan of plans) {
+    for (const plan of sortedPlans) {
       const { field, value } = plan;
       if (plan.status !== 'supported' || !ctx.isCurrent() || field.excluded) continue;
 
@@ -1393,6 +1554,7 @@
     setChoice,
     fillCombo,
     fillCombobox: fillCombo,
+    closeCombo,
     recordPreservedValues,
     getPreservedValue,
     clearPreservedValues,
