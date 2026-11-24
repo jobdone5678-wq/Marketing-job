@@ -1,7 +1,7 @@
 # Universal Autofill Engine Hardening Design
 
 > **Date:** 2026-11-24  
-> **Status:** Final Design for Approval  
+> **Status:** Approved  
 > **Target:** `jobright_extension/` (Manifest V3) & `src/app/api/extension/`
 
 ---
@@ -37,8 +37,8 @@ The objective is to guarantee seamless, reliable autofill across text inputs, ch
 ---
 
 ## 3. Constraints
-- **Chrome Extension Manifest V3:** All DOM interactions execute within isolated content script contexts via `chrome.scripting.executeScript` or injected content scripts without eval or remote code execution.
-- **Reactive Framework Safety:** Must cooperate with React 17/18/19, Vue, Angular, and legacy jQuery form trackers without breaking internal framework state.
+- **Chrome Extension Manifest V3:** All DOM interactions execute within isolated content script contexts via `chrome.scripting.executeScript` (with `allFrames: true`) or injected content scripts without eval or remote code execution.
+- **Reactive Framework Safety:** Must cooperate with React 17/18/19, Vue, Angular, and legacy jQuery form trackers without breaking internal framework state (including resetting `_valueTracker` before synthetic dispatch).
 - **Data Integrity:** Consequential candidate disclosures (DOB, citizenship, legal consent) must follow verified candidate profile facts or explicit candidate decisions.
 
 ---
@@ -47,13 +47,13 @@ The objective is to guarantee seamless, reliable autofill across text inputs, ch
 
 ### Approach 1: Unified Semantic Engine & Reactive Event Pipeline *(Selected)*
 - **Data Projection:** Unify SQL column selection and `confirmed_facts` in `api/extension/candidates/route.ts` and `panel.js:buildScopedProfile`.
-- **Writer Intelligence:** Refine `hasAnswer` in `field-writer.js` to recognize blank/placeholder defaults as unfilled while using a `WeakSet` + semantic identity map and an `isTrusted` event listener to protect candidate manual edits.
+- **Writer Intelligence:** Refine `hasAnswer` in `field-writer.js` to recognize blank/placeholder defaults and untouched initial DOM defaults (`el.defaultChecked` without user interaction) as overridable, while using a `WeakSet` + semantic identity map and an `isTrusted` event listener (tracking both native inputs and custom ARIA controls) to protect candidate manual edits.
 - **Control Handlers:**
   - Checkboxes: State-guarded single toggle (verify `el.checked !== desired` before clicking or setter).
   - Radios: Pointer/click on both radio input and associated label/pill button containers with EEOC/Yes-No semantic option matching.
-  - Custom Comboboxes: `pointerdown` + `mousedown` + `click` + `ArrowDown` trigger open, search `document.body` portals and open Shadow DOMs, handle cascading fields sequentially, and close/blur menus before proceeding.
-  - Consent Checkboxes: Scoped pattern matching (`agree|consent|terms|privacy|arbitration|acknowledg`).
-- **Step Transitions:** Reactive step autofill (candidate navigates steps; debounced MutationObserver 350ms + SPA route detection auto-fills newly mounted fields).
+  - Custom Comboboxes: `pointerdown` + `mousedown` + `click` + `ArrowDown` trigger open, search `document.body` portals and open Shadow DOMs, type-to-filter fallback with 300–500ms option settling, handle cascading fields sequentially, and close/blur menus before proceeding.
+  - Consent Checkboxes: Pre-filtered with a marketing blocklist before matching scoped legal/terms patterns.
+- **Step Transitions:** Reactive step autofill (candidate navigates steps; debounced MutationObserver 350ms tracking `location.href` diffs + `popstate`/`hashchange` and `allFrames: true` auto-fills newly mounted, visible fields).
 - **Trade-offs:** Cleanest architectural solution, portal-agnostic, zero UI jitter, highly resilient.
 
 ### Approach 2: Aggressive DOM Probing & Event Simulation *(Rejected)*
@@ -81,14 +81,14 @@ The objective is to guarantee seamless, reliable autofill across text inputs, ch
 
 ### 5.2 Area B: Field Writer & Default Value Intelligence (`core/field-writer.js`)
 1. **Smart `hasAnswer` & Dual-Layer User Edit Tracking**:
-   - Install a window-level `isTrusted` change/input event listener to record elements manually edited by the candidate in `userEditedElements = new WeakSet()`.
+   - Install a window-level `isTrusted` listener capturing `change`, `input`, and `click`/`keydown` on both native inputs and custom ARIA controls (`[role="combobox"]`, `[role="radio"]`, `[role="checkbox"]`, `[role="switch"]`), recording modified nodes in `userEditedElements = new WeakSet()`.
    - Maintain a durable semantic map `durableFieldStore = new Map()` keyed by normalized field key/label (`preservedStore`) storing `{ value, userEdited: boolean }` so candidate edits survive SPA component unmounting/remounting across step navigation.
    - Evaluate `isFieldUnfilled(field, domVal)`:
      - Text/Textarea: Empty string, whitespace, or matches default placeholder regex (`placeholder.test(val)`).
      - Native `<select>`: `selectedIndex <= 0` with empty value or matching placeholder pattern (`/select|choose|--/i`).
-     - Radios: No radio in the group is checked, OR the checked radio has value `""`/`null`.
-     - Checkboxes: Default unchecked state, or matches unselected state.
-   - Guard condition: If an element was modified by an `isTrusted` user event or is marked `userEdited` in `durableFieldStore`, preserve it. If it holds an unfilled/default portal state, allow candidate profile fact overwrite.
+     - Radios: Untouched initial DOM defaults (`el.defaultChecked` with no recorded `isTrusted` interaction) and unselected groups are considered overridable by confirmed candidate facts.
+     - Checkboxes: Default unchecked state, or unselected state without user interaction.
+   - Guard condition: If an element was modified by an `isTrusted` user event or is marked `userEdited` in `durableFieldStore`, preserve it. If it holds an unfilled or default portal state, allow candidate profile fact overwrite.
 2. **Checkbox Toggling Without Double-Toggle Bug**:
    - Determine target state `desired = Boolean(value)`.
    - Read current state `current = checked(el)`.
@@ -96,8 +96,10 @@ The objective is to guarantee seamless, reliable autofill across text inputs, ch
    - If `current !== desired`:
      - Apply single click on `findClickableTarget(el) || el`.
      - Check `checked(el) === desired`.
-     - If not toggled (e.g. React controlled component ignoring synthetic click): use native property descriptor `desc.set.call(el, desired)` + dispatch `input` and `change` events.
+     - If not toggled (e.g. React controlled component ignoring synthetic click): reset `el._valueTracker?.setValue?.(prev)` and use native property descriptor `desc.set.call(el, desired)` + dispatch `input` and `change` events.
      - Re-verify `checked(el) === desired`.
+3. **React `_valueTracker` Reset**:
+   - Prior to dispatching synthetic `input` or `change` on React-controlled inputs, textareas, and checkboxes, reset `el._valueTracker?.setValue?.(previousValue)` ensuring React does not swallow the programmatic update.
 
 ### 5.3 Area C: Custom Dropdowns, Comboboxes & Cascading Sequence
 1. **Opening Trigger**:
@@ -105,30 +107,40 @@ The objective is to guarantee seamless, reliable autofill across text inputs, ch
    - If unopened after 150ms, dispatch `KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40 })`.
 2. **Portal & Shadow DOM Search**:
    - Locate options across `document.body` (outside the parent form), `[data-radix-popper-content-wrapper]`, `[data-floating-ui-portal]`, `.select2-dropdown`, `.k-animation-container`, and open shadow roots.
-3. **Sequential Cascading Wait**:
+3. **Type-to-Filter Fallback**:
+   - If opening the menu does not reveal a matching option immediately:
+     - Detect embedded `<input>` / `[contenteditable]` within or attached to the combobox.
+     - Type target query via `setNativeValue(input, query)`.
+     - Await 300–500ms for asynchronous/virtualized options to settle.
+     - Select matching option element.
+4. **Sequential Cascading Wait**:
    - Identify dependent fields (Country -> State/Province -> City).
    - After selecting Country, await child field `waitForFieldReady(childField, ctx, 1200)` allowing asynchronous option population.
-4. **Clean Closure**:
+5. **Clean Closure**:
    - Dispatch `Escape` or `blur` on the active combobox before initiating the next control fill so open floating popovers do not steal subsequent pointer clicks.
 
 ### 5.4 Area D: Scoped Consent & Acknowledgement Checkboxes (`core/field-mapping.js` & `core/application.js`)
-1. **Consent Pattern Filter**:
-   - In `field-mapping.js`, strictly scope auto-checked checkboxes to mandatory legal/terms acknowledgements:
+1. **Marketing Blocklist & Consent Filter**:
+   - Run an exclusion blocklist first:
+     Reject any checkbox whose label/hint matches:
+     `/(marketing|promotional|newsletter|sms|text message|job alert|future opportunit|talent network|third[- ]?party|partner)/i`
+   - Only for non-blocked checkboxes matching mandatory legal/terms acknowledgements:
      `/(agree|consent|terms|privacy|arbitration|acknowledg|certify|declare|confirm.*(?:terms|agreement|policy))/i`
-   - Map matching fields with `factKey: 'consent'`, `status: 'supported'`, `value: true`.
-   - Discretionary or promotional checkboxes (marketing SMS, job notification emails, third-party newsletters) remain `status: 'needs_review'` or `status: 'manual'` and are never auto-checked.
+     Map matching fields with `factKey: 'consent'`, `status: 'supported'`, `value: true`.
+   - Discretionary or promotional checkboxes remain `status: 'needs_review'` or `status: 'manual'` and are never auto-checked.
 
-### 5.5 Area E: Debounced Multi-Step & SPA Page-by-Page Transitions (`core/application.js`)
+### 5.5 Area E: Debounced Multi-Step, Conditional Fields & SPA Navigation (`core/application.js`)
 1. **Reactive Step Autofill Model**:
    - Candidate clicks "Next" / "Continue" at their own pace; the extension does NOT auto-click navigation buttons.
-2. **Observer & Route Tracking**:
-   - Active only during an explicit autofill session (armed when candidate clicks "Autofill" in side panel; tears down upon final submission, portal unload, or a 5-minute inactivity timeout).
-   - Attach a MutationObserver to `document.body` with a 350ms debounce window.
-   - Monitor `popstate`, `pushState`, and `replaceState` for SPA route updates.
-3. **In-Flight Lock & Seen-Field Tracking**:
+2. **MV3-Safe SPA Route & DOM Mutation Tracking**:
+   - Do NOT monkey-patch `pushState`/`replaceState` (fails across MV3 isolated worlds).
+   - Track `lastHref !== location.href` inside a 350ms debounced `MutationObserver` on `document.body`, alongside `popstate` and `hashchange` event listeners.
+   - Service worker forwards `chrome.webNavigation.onHistoryStateUpdated` to active tabs.
+3. **Conditional Fields & In-Flight Lock**:
    - Maintain `seenElements = new WeakSet()` and an in-flight fill lock.
-   - When a step transition mounts new form elements, filter against `seenElements` and `durableFieldStore`.
-   - Auto-execute autofill on newly mounted fields for Step 2/3/etc. seamlessly using the session's active profile facts.
+   - Only add elements to `seenElements` once they are **visible and interactable** (`getClientRects().length > 0` and not hidden). Conditionally revealed fields (e.g., questions appearing after selecting "Yes") are evaluated and filled as soon as they become visible.
+4. **Iframe & Frame Contexts**:
+   - Ensure script execution and messaging pass `allFrames: true` so application forms embedded in third-party iframes (e.g. Greenhouse/Ashby boards on employer sites) are discovered and filled.
 
 ### 5.6 Area F: Readback Verification & Diagnostics
 - Verify writes 50ms post-fill using `read(field)`.
@@ -144,13 +156,14 @@ The objective is to guarantee seamless, reliable autofill across text inputs, ch
 
 ---
 
-## 6. Sizing & Builder Check Decisions
+## 6. Sizing & Builder Decisions Summary
 
 ### Work Sizing: **Project**
 Touches API routes, extension panel, DOM discovery, field mapping, field writer, and multi-step lifecycle across Manifest V3 boundaries.
 
-### Decisions Made for Builder Review
-1. **Reactive Step Model (Area E):** The candidate retains complete control over intermediate wizard advancement. The extension reactively observes step mutations and route changes, immediately auto-filling the newly rendered fields on each page.
-2. **Strict Consent Scoping (Area D):** Auto-checking is strictly restricted to legal, privacy, and terms acknowledgements via regex; promotional/optional checkboxes are never auto-checked.
-3. **Session Lifecycle (Area E):** The multi-step observer is activated upon initial autofill, retains profile facts in content session memory, and unbinds upon submission, tab navigation, or a 5-minute timeout.
-4. **Dual-Layer Persistence (Area B):** Uses `WeakSet<Element>` for fast loop prevention plus a durable semantic map (`durableFieldStore` / `preservedStore`) keyed by normalized field identifiers so candidate manual edits are remembered even if React/Angular destroys and remounts DOM nodes upon back/forward navigation.
+### Consolidated Decisions
+1. **MV3 Route Detection:** Uses `location.href` diffs in debounced MutationObserver + `popstate`/`hashchange` + `webNavigation.onHistoryStateUpdated` instead of isolated world monkey-patching.
+2. **Overridable Untouched Radios:** `defaultChecked` controls without `isTrusted` interaction can be overwritten by candidate profile facts; custom ARIA widget edits are captured via `click`/`keydown`.
+3. **Marketing Exclusion Blocklist:** Strict regex blocklist prevents promotional/marketing auto-checks.
+4. **Type-to-Filter & `_valueTracker`:** Comboboxes support typeahead search with 300–500ms debounce; React `_valueTracker` reset ensures synthetic events are recognized.
+5. **Visible-Only Seen Tracking & `allFrames: true`:** Elements are only marked seen when visible, ensuring conditionally revealed inputs are processed; iframe application forms are fully supported.
