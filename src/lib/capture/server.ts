@@ -187,7 +187,9 @@ export function cors(request: Request, response: Response) {
         isAllowed = true;
       } else if (
         u.protocol === 'https:' &&
-        (u.hostname === 'nextkinhr.com' || u.hostname.endsWith('.nextkinhr.com'))
+        (u.hostname === 'nextkinhr.com' ||
+          u.hostname.endsWith('.nextkinhr.com') ||
+          u.hostname.endsWith('.vercel.app'))
       ) {
         isAllowed = true;
       }

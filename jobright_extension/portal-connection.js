@@ -2,6 +2,7 @@
   const TRUSTED_ORIGIN_PATTERNS = [
     /^https:\/\/(?:[a-zA-Z0-9-]+\.)*nextkinhr\.com(?::\d+)?$/,
     /^https:\/\/(?:[a-zA-Z0-9-]+\.)*jobright-internal\.com(?::\d+)?$/,
+    /^https:\/\/(?:[a-zA-Z0-9-]+\.)*vercel\.app$/,
     /^http:\/\/(?:localhost|127\.0\.0\.1):3000$/,
   ];
 
