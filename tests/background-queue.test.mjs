@@ -596,3 +596,34 @@ test('Background Queue: an offline intent receipt is saved and resolves its atte
   assert.deepEqual(requests, [workspace + '/api/extension/intents/' + intentId, workspace + '/api/extension/events']);
   assert.equal((await worker.getSubmissionQueue()).length, 0);
 });
+
+test('Background Queue: Manual attestation routes to /api/extension/auto-submit', async () => {
+  let requestedUrl = '';
+  const worker = createMockWorker(async (url) => {
+    requestedUrl = url;
+    return new Response(JSON.stringify({ success: true, submission: { id: 'sub-1' } }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  });
+
+  const item = {
+    ...owner,
+    id: 'manual-sub-1',
+    token: 'valid-token',
+    body: {
+      candidateId: 'ebcbee30-b259-4c55-b40f-97d9006914e9',
+      eventKey: 'b27a3c3e-e6c1-4b15-9988-cb94660eb5a1',
+      companyName: 'Employ',
+      jobTitle: 'Mid-Market Account Executive',
+      jobUrl: 'https://jobs.lever.co/employ/a4ec1fd5-d606-4995-a745-5a8b7848937c',
+      manualAttestation: true,
+    },
+  };
+
+  await worker.enqueueSubmission(item);
+  await worker.processSubmissionQueue();
+
+  assert.match(requestedUrl, /\/api\/extension\/auto-submit$/);
+  assert.equal((await worker.getSubmissionQueue()).length, 0, 'Item should be dequeued on 200 OK');
+});

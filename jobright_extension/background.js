@@ -32,7 +32,7 @@ const bodyFields = new Set([
   'observedAt', 'jobUrl', 'confirmationUrl', 'companyName', 'jobTitle', 'jobLocation',
   'company', 'title', 'location', 'portalSource', 'externalId', 'department',
   'employmentType', 'jobDescription', 'evidence', 'captureMethod', 'atsDetected',
-  'answers', 'appliedResume',
+  'answers', 'appliedResume', 'manualAttestation', 'matchScore', 'matchedSkills', 'missingSkills', 'notes',
 ]);
 
 function redactReceipt(value, token) {
@@ -360,8 +360,11 @@ async function deliverReceipt(item, allowQueueUpdates) {
   const now = Date.now();
   const connection = await getQueueConnection();
   if (!matchesQueueAccount(item, connection)) return { success: false, error: 'ACCOUNT_REQUIRED' };
-  const intentId = item.body.intentId;
-  const route = intentId ? '/api/extension/events' : '/api/webhooks/application-submitted';
+  const intentId = item.body?.intentId;
+  const isManual = Boolean(item.body?.manualAttestation);
+  const route = intentId
+    ? '/api/extension/events'
+    : (isManual ? '/api/extension/auto-submit' : '/api/webhooks/application-submitted');
   if (intentId && !Number.isInteger(item.body.attempt)) {
     if (!intentIdPattern.test(intentId)) {
       if (allowQueueUpdates) await moveSubmission(item, DEAD_LETTER_KEY, 'VALIDATION_FAILED');
@@ -424,6 +427,7 @@ async function deliverReceipt(item, allowQueueUpdates) {
         status: 'DELIVERED',
         itemId: item.id,
       });
+      void notifyOutsideApplicationSaved(item.workspace, item.body).catch(() => {});
       return { success: true, status: response.status };
     } else {
       if (allowQueueUpdates) await moveSubmission(item, DEAD_LETTER_KEY, 'SERVER_REJECTED');
