@@ -436,9 +436,10 @@ test('E2E ATS Fixture: 1. Greenhouse Universal Application Form', () => {
   assert.equal(customQPlan?.value, 'Node test runner and Playwright');
   assert.equal(customQPlan?.source, 'answer_bank');
 
-  // Consent checkbox remains manual
+  // Consent checkbox auto-checked for legal/recruitment data processing terms
   const consentPlan = findPlan(plans, 'consent');
-  assert.equal(consentPlan?.status, 'manual');
+  assert.equal(consentPlan?.status, 'supported');
+  assert.equal(consentPlan?.value, true);
 
   // Strict URL Uniqueness verification
   const supportedUrls = plans.filter((p) => p.status === 'supported' && typeof p.value === 'string' && p.value.startsWith('http')).map((p) => p.value);
@@ -671,8 +672,9 @@ test('E2E Safety Invariants: Feature Flag NEXT_PUBLIC_ENABLE_UNIVERSAL_AUTOFILL_
   const supportedUrls = plans.filter((p) => p.status === 'supported' && typeof p.value === 'string' && p.value.startsWith('http')).map((p) => p.value);
   assert.equal(supportedUrls.length, new Set(supportedUrls).size, 'No duplicate URLs slotted even with flag disabled');
 
-  // 4. Consent fields remain manual
-  assert.equal(planMap.consent.status, 'manual');
+  // 4. Consent fields auto-checked for standard legal acknowledgement
+  assert.equal(planMap.consent.status, 'supported');
+  assert.equal(planMap.consent.value, true);
 });
 
 test('E2E Form Disappearance and Confirmation Flow', () => {

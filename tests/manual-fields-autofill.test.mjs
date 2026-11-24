@@ -86,7 +86,7 @@ test('Autofill uses manual profile details: gender, veteran, work auth, linkedin
       'Yes, I have a disability',
       'I do not wish to answer'
     ] },
-    { label: 'What is your work authorization status?', kind: 'choice', options: [
+    { label: 'Work authorization status', kind: 'choice', options: [
       'US Citizen',
       'Permanent Resident (Green Card)',
       'H-1B',
@@ -94,7 +94,7 @@ test('Autofill uses manual profile details: gender, veteran, work auth, linkedin
       'Requires Sponsorship'
     ] },
     { label: 'Are you legally authorized to work in the United States?', kind: 'choice', options: ['Yes', 'No'] },
-    { label: 'Will you now or in the future require visa sponsorship?', kind: 'choice', options: ['Yes', 'No'] }
+    { label: 'Will you require visa sponsorship now or in the future?', kind: 'choice', options: ['Yes', 'No'] }
   ];
 
   const plan = mapping.planFill(fields, candidateJane);
@@ -114,7 +114,7 @@ test('Autofill uses manual profile details: gender, veteran, work auth, linkedin
   const disabilityPlan = plan.find(p => p.field.label === 'Disability Status');
   assert.strictEqual(disabilityPlan.value, 'No, I do not have a disability');
 
-  const visaPlan = plan.find(p => p.field.label.includes('work authorization status'));
+  const visaPlan = plan.find(p => p.field.label.toLowerCase().includes('work authorization status'));
   assert.strictEqual(visaPlan.value, 'H-1B');
 
   const authPlan = plan.find(p => p.field.label.includes('legally authorized'));

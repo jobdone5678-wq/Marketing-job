@@ -123,9 +123,7 @@
       'employer sponsorship',
       'will you now or in the future require sponsorship for employment visa status',
       'will you now or in the future require sponsorship',
-      'will you now or in the future require visa sponsorship',
       'do you now or in the future require sponsorship for employment visa status',
-      'do you now or in the future require visa sponsorship',
       'will you require visa sponsorship',
       'will you require visa sponsorship now or in the future',
       'do you require visa sponsorship',
@@ -596,9 +594,9 @@
     const options = field?.options || [];
 
     const nl = norm(rawLabel);
-    const cleanLabel = nl.replace(/^(?:(?:what is your|what's your|whats your|what is|please|your|provide|enter|share|paste|input|select|choose)\s+)+/, '');
+    const cleanLabel = nl.replace(/^(?:(?:please|your|provide|enter|share|paste|input|select|choose)\s+)+/, '');
     let nh = norm(rawHint);
-    const cleanHint = nh.replace(/^(?:(?:what is your|what's your|whats your|what is|please|your|provide|enter|share|paste|input|select|choose)\s+)+/, '');
+    const cleanHint = nh.replace(/^(?:(?:please|your|provide|enter|share|paste|input|select|choose)\s+)+/, '');
 
     const hasBooleanOptions = Boolean(
       (options && options.length > 0 && pickBooleanOption(options, true) && pickBooleanOption(options, false)) ||
@@ -820,11 +818,12 @@
       }
       // Legal acknowledgements and signatures:
       const MARKETING_REGEX = /(marketing|promotional|newsletter|sms|text message|job alert|future opportunit|talent network|third[- ]?party|partner)/i;
+      const LEGAL_CONSENT_REGEX = /\b(agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare|confirm.*(?:terms|agreement|policy)|read the above|understand)\b/i;
       if (field.kind === 'checkbox') {
         const consentText = [nl, nh, field.label, field.hint].filter(Boolean).join(' ');
-        if (MARKETING_REGEX.test(consentText) || MARKETING_REGEX.test(nl || nh || field.label || field.hint)) {
+        if (MARKETING_REGEX.test(consentText)) {
           return { field, factKey: 'consent', status: 'manual', reason: 'Promotional and marketing opt-ins are not auto-checked.' };
-        } else if (/\b(agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare|confirm.*(?:terms|agreement|policy)|read the above|understand)\b/i.test(consentText) || /\b(agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare|confirm.*(?:terms|agreement|policy)|read the above|understand)\b/i.test(nl || nh || field.label || field.hint)) {
+        } else if (LEGAL_CONSENT_REGEX.test(consentText)) {
           return { field, factKey: 'consent', value: true, status: 'supported', reason: 'Standard legal terms and privacy acknowledgement.' };
         }
       }
