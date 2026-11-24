@@ -24,12 +24,56 @@
 
   const onConnectionPage = () => location.pathname.replace(/\/$/, '') === '/auth/jobseeker/connected';
 
+  let activePairPromise = null;
+  async function checkAndAutoPair() {
+    if (!isTrustedOrigin(location.origin) || typeof fetch !== 'function') return false;
+    if (activePairPromise) return activePairPromise;
+    activePairPromise = (async () => {
+      try {
+        if (typeof chrome !== 'undefined' && chrome.storage?.session?.get) {
+          const session = await chrome.storage.session.get(['token', 'origin', 'accountId']).catch(() => ({}));
+          const local = await chrome.storage.local?.get?.(['user', 'origin'])?.catch?.(() => ({}));
+          const accountId = session?.accountId || local?.user?.id;
+          if (session?.token && session?.origin === location.origin && accountId && (!session.accountId || session.accountId === local?.user?.id)) {
+            return true;
+          }
+        }
+
+        const pairUrl = (location.origin ? location.origin.replace(/\/$/, '') : '') + '/api/extension/quick-pair';
+        const res = await fetch(pairUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source: 'portal_auto_sync' }),
+          credentials: 'include',
+        }).catch(() => null);
+
+        if (!res || !res.ok) return false;
+        const data = await res.json().catch(() => null);
+        if (data?.success && data?.token && data?.user) {
+          await saveConnection(data.token, data.user, true);
+          return true;
+        }
+        return false;
+      } catch {
+        return false;
+      } finally {
+        activePairPromise = null;
+      }
+    })();
+    return activePairPromise;
+  }
+
+  // On trusted workspace pages, automatically check if the user is logged in and sync pairing
+  if (isTrustedOrigin(location.origin)) {
+    void checkAndAutoPair().catch(() => {});
+  }
+
   function reportAuthRequired(reason) {
     window.postMessage({ type: 'NEXTKIN_AUTH_REQUIRED', reason }, location.origin);
   }
 
-  async function saveConnection(token, user) {
-    if (!onConnectionPage() || !isTrustedOrigin(location.origin)) return;
+  async function saveConnection(token, user, fromInternalSync = false) {
+    if ((!fromInternalSync && !onConnectionPage()) || !isTrustedOrigin(location.origin)) return;
 
     if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{20,128}$/.test(token) ||
       typeof user?.id !== 'string' || user.role !== 'candidate') {
@@ -52,6 +96,7 @@
         await chrome.storage.session.set({
           origin: location.origin,
           token,
+          accountId: user.id,
         }).catch(() => {});
       }
     } catch {}
@@ -65,8 +110,16 @@
     if (saved === false) reportAuthRequired('Could not save the extension connection.');
   }
 
-  chrome.runtime.onMessage.addListener((message, sender) => {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (sender.id === chrome.runtime.id) {
+      if (message?.type === 'NEXTKIN_TRIGGER_PAIR') {
+        checkAndAutoPair().then(paired => {
+          try { sendResponse({ paired }); } catch {}
+        }).catch(() => {
+          try { sendResponse({ paired: false }); } catch {}
+        });
+        return true;
+      }
       if (message?.type === 'NEXTKIN_OUTSIDE_APPLICATION_SAVED' || message?.type === 'NEXTKIN_APPLICATION_SUBMITTED') {
         if (isTrustedOrigin(location.origin)) {
           window.postMessage({ type: message.type, payload: message.payload || message.data }, location.origin);

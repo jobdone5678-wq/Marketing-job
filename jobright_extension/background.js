@@ -1252,8 +1252,7 @@ function trustedWorkspacePage(sender, origin) {
 }
 
 function trustedPairingPage(sender, origin) {
-  return trustedWorkspacePage(sender, origin) &&
-    new URL(sender.url).pathname.replace(/\/$/, '') === '/auth/jobseeker/connected';
+  return trustedWorkspacePage(sender, origin);
 }
 
 async function disconnectQueueConnection(expected) {

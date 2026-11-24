@@ -387,7 +387,33 @@ async function refresh() {
     getStoredCredentials(),
   ]);
   if (number !== refreshNumber || busy) return;
-  const session = workspaceUrl(storage.origin) && storage.token && storage.user?.id ? storage : null;
+  let session = workspaceUrl(storage.origin) && storage.token && storage.user?.id ? storage : null;
+  if (!session) {
+    try {
+      let targetTab = (tab?.url && workspaceUrl(tab.url)) ? tab : null;
+      if (!targetTab) {
+        const allTabs = await chrome.tabs.query({ currentWindow: true }).catch(() => []);
+        targetTab = allTabs.find(t => t?.url && workspaceUrl(t.url)) || null;
+      }
+      if (targetTab?.id) {
+        try {
+          await chrome.tabs.sendMessage(targetTab.id, { type: 'NEXTKIN_TRIGGER_PAIR' });
+        } catch {
+          if (typeof chrome.scripting?.executeScript === 'function') {
+            await chrome.scripting.executeScript({
+              target: { tabId: targetTab.id },
+              files: ['portal-connection.js'],
+            }).catch(() => {});
+            await new Promise(r => setTimeout(r, 200));
+          }
+        }
+        const updatedStorage = await getStoredCredentials();
+        if (workspaceUrl(updatedStorage.origin) && updatedStorage.token && updatedStorage.user?.id) {
+          session = updatedStorage;
+        }
+      }
+    } catch {}
+  }
   const pageKey = [tab?.id, tab?.url, session?.origin, session?.user.id].join('|');
   const pageChanged = pageKey !== resultsPage;
   if (pageChanged) {
@@ -735,6 +761,31 @@ $('onboarding-connect')?.addEventListener('click', async () => {
   try {
     const stored = await chrome.storage.local.get('origin');
     const origin = apiOrigin(workspaceUrl(currentTab?.url) || workspaceUrl(stored.origin) || portalOrigin);
+
+    let targetTab = (currentTab?.url && workspaceUrl(currentTab.url)) ? currentTab : null;
+    if (!targetTab) {
+      const allTabs = await chrome.tabs.query({ currentWindow: true }).catch(() => []);
+      targetTab = allTabs.find(t => t?.url && workspaceUrl(t.url)) || null;
+    }
+    if (targetTab?.id) {
+      try {
+        await chrome.tabs.sendMessage(targetTab.id, { type: 'NEXTKIN_TRIGGER_PAIR' });
+      } catch {
+        if (typeof chrome.scripting?.executeScript === 'function') {
+          await chrome.scripting.executeScript({
+            target: { tabId: targetTab.id },
+            files: ['portal-connection.js'],
+          }).catch(() => {});
+          await new Promise(r => setTimeout(r, 200));
+        }
+      }
+      const fresh = await getStoredCredentials();
+      if (fresh.token && fresh.user?.id) {
+        scheduleRefresh(0);
+        return;
+      }
+    }
+
     await chrome.tabs.create({ url: new URL('/auth/jobseeker', origin).href });
   } catch (error) {
     notice('notice', 'Could not open NextKinHR: ' + error.message, true);

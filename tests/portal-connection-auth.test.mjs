@@ -9,6 +9,7 @@ function setupEnvironment({
   url = 'https://www.nextkinhr.com/auth/jobseeker/connected',
   localStorage = {},
   sessionStorage = {},
+  fetch = undefined,
 } = {}) {
   const location = new URL(url);
   const notifications = [];
@@ -79,6 +80,8 @@ function setupEnvironment({
     window,
     console,
     chrome,
+    URL,
+    ...(fetch ? { fetch } : {}),
   });
 
   const postWindowMessage = (data, { origin = location.origin, source = window } = {}) => {
@@ -87,9 +90,9 @@ function setupEnvironment({
     }
   };
 
-  const sendExtensionMessage = (message, sender = { id: 'test-extension-id' }) => {
+  const sendExtensionMessage = (message, sender = { id: 'test-extension-id' }, sendResponse = () => {}) => {
     if (extensionMessageListener) {
-      extensionMessageListener(message, sender);
+      return extensionMessageListener(message, sender, sendResponse);
     }
   };
 
@@ -308,5 +311,90 @@ test('JobseekerAuth: active user session routes directly to /auth/jobseeker/conn
 
   await checkExistingSession(mockSupabase, mockRouter);
   assert.equal(redirectedPath, '/auth/jobseeker/connected');
+});
+
+test('AutoPair: automatically syncs credentials when user is logged in on candidate dashboard / profile', async () => {
+  const fakeToken = 'auto-paired-token-candidate-xyz123';
+  const fakeUser = { id: 'cand-auto-1', name: 'Bhargav Reddy', email: 'bhargav@example.com', role: 'candidate' };
+
+  let quickPairCalled = false;
+  const mockFetch = async (input, init) => {
+    if (String(input).includes('/api/extension/quick-pair')) {
+      quickPairCalled = true;
+      return {
+        ok: true,
+        json: async () => ({ success: true, token: fakeToken, user: fakeUser }),
+      };
+    }
+    return { ok: false, status: 404 };
+  };
+
+  const env = setupEnvironment({
+    url: 'http://localhost:3000/dashboard/candidates',
+    fetch: mockFetch,
+  });
+
+  // Give microtasks time to resolve auto-pair promise
+  await new Promise(r => setImmediate(r));
+  await new Promise(r => setImmediate(r));
+
+  assert.equal(quickPairCalled, true, 'Quick-pair endpoint should be called');
+  assert.equal(env.sessionStorage.token, fakeToken, 'Token should be saved in session storage');
+  assert.equal(env.sessionStorage.origin, 'http://localhost:3000');
+  assert.equal(env.localStorage.user.id, 'cand-auto-1');
+  assert.equal(env.localStorage.user.name, 'Bhargav Reddy');
+
+  const saveMsg = env.runtimeMessages.find(m => m.type === 'NEXTKIN_SAVE_CONNECTION');
+  assert.ok(saveMsg, 'NEXTKIN_SAVE_CONNECTION should be dispatched to background');
+  assert.equal(saveMsg.token, fakeToken);
+  assert.equal(saveMsg.user.id, 'cand-auto-1');
+});
+
+test('AutoPair: NEXTKIN_TRIGGER_PAIR message triggers pairing and replies with status', async () => {
+  const fakeToken = 'trigger-paired-token-candidate-987';
+  const fakeUser = { id: 'cand-trig-2', name: 'Trigger User', email: 'trig@example.com', role: 'candidate' };
+
+  const mockFetch = async () => ({
+    ok: true,
+    json: async () => ({ success: true, token: fakeToken, user: fakeUser }),
+  });
+
+  const env = setupEnvironment({
+    url: 'http://localhost:3000/dashboard/candidates',
+    fetch: mockFetch,
+  });
+
+  let responseData = null;
+  env.sendExtensionMessage({ type: 'NEXTKIN_TRIGGER_PAIR' }, { id: 'test-extension-id' }, res => {
+    responseData = res;
+  });
+
+  await new Promise(r => setImmediate(r));
+  await new Promise(r => setImmediate(r));
+
+  assert.equal(responseData?.paired, true);
+  assert.equal(env.sessionStorage.token, fakeToken);
+  assert.equal(env.localStorage.user.id, 'cand-trig-2');
+});
+
+test('AutoPair: skips pairing gracefully if user is not logged in (401 response)', async () => {
+  const mockFetch = async () => ({
+    ok: false,
+    status: 401,
+    json: async () => ({ error: 'Not logged in' }),
+  });
+
+  const env = setupEnvironment({
+    url: 'http://localhost:3000/dashboard/candidates',
+    fetch: mockFetch,
+  });
+
+  await new Promise(r => setImmediate(r));
+  await new Promise(r => setImmediate(r));
+
+  assert.equal(env.sessionStorage.token, undefined);
+  assert.equal(env.localStorage.user, undefined);
+  const saveMsg = env.runtimeMessages.find(m => m.type === 'NEXTKIN_SAVE_CONNECTION');
+  assert.equal(saveMsg, undefined);
 });
 
