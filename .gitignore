@@ -71,4 +71,5 @@ browser-extension/
 /extension/.wxt/
 /extension/node_modules/
 /tests/extension-test-summary.json
+/scratch/
 

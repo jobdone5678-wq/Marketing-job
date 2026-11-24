@@ -1850,7 +1850,12 @@
     availability: ['availability', 'start date', 'earliest start date', 'when can you start', 'notice period', 'available to start', 'available for a full-time', 'full-time internship', 'available for internship', 'summer internship', 'available for full-time', 'availability date', 'earliest possible start date'],
     salary_expectation: ['salary', 'expected salary', 'desired salary', 'compensation expectation', 'desired compensation', 'salary expectations', 'compensation', 'target salary', 'pay expectation', 'minimum salary', 'hourly rate expectation'],
     how_heard: ['how did you hear about us', 'how did you hear about this role', 'how did you hear about this opportunity', 'how did you find this job', 'referral source', 'source', 'application source', 'where did you hear about us', 'how did you hear'],
-    highest_education: ['highest education', 'highest degree', 'highest level of education', 'degree', 'degree level', 'education level', 'level of education'],
+    highest_education: [
+      'highest education', 'highest degree', 'highest level of education', 'degree', 'degree level', 'education level', 'level of education',
+      'do you have a bachelor', 'do you have a master', 'do you have a degree', 'do you have a college degree', 'do you have a university degree',
+      'bachelor s degree', 'bachelors degree', 'bachelor degree', 'master s degree', 'masters degree', 'master degree',
+      'do you possess a bachelor', 'do you possess a degree', 'have you completed a bachelor', 'have you completed a degree'
+    ],
     school: ['school', 'university', 'college', 'institution', 'educational institution'],
     graduation_year: ['graduation year', 'year of graduation', 'year graduated'],
     preferred_work_type: ['preferred work type', 'work arrangement', 'preferred work arrangement'],
