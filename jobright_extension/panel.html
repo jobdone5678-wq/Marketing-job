@@ -130,6 +130,51 @@
             <ul id="unmatched-points"></ul>
           </div>
         </details>
+        <details id="ai-settings-panel">
+          <summary>AI Provider Settings</summary>
+          <div class="ai-settings-content" style="padding:8px 0;display:flex;flex-direction:column;gap:8px;">
+            <div class="ai-setting-row">
+              <label for="ai-mode-select" style="font-size:12px;display:block;margin-bottom:2px;">Execution Mode</label>
+              <select id="ai-mode-select" style="width:100%;">
+                <option value="server">Server Managed (Default)</option>
+                <option value="portal_byok">Portal Encrypted BYOK</option>
+                <option value="extension_byok">Extension Direct BYOK</option>
+                <option value="local">Local Offline (Ollama / LM Studio)</option>
+              </select>
+            </div>
+            <div id="ai-provider-group" class="ai-setting-row">
+              <label for="ai-provider-select" style="font-size:12px;display:block;margin-bottom:2px;">Provider</label>
+              <select id="ai-provider-select" style="width:100%;">
+                <option value="server">NextKinHR Gateway</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="deepseek">DeepSeek</option>
+                <option value="openai">OpenAI</option>
+                <option value="groq">Groq</option>
+                <option value="mistral">Mistral AI</option>
+                <option value="ollama">Ollama (Local)</option>
+                <option value="lm_studio">LM Studio (Local)</option>
+                <option value="custom">Custom Endpoint</option>
+              </select>
+            </div>
+            <div id="ai-base-url-group" class="ai-setting-row">
+              <label for="ai-base-url" style="font-size:12px;display:block;margin-bottom:2px;">Base URL</label>
+              <input id="ai-base-url" type="url" placeholder="https://api.openai.com/v1" style="width:100%;">
+            </div>
+            <div id="ai-api-key-group" class="ai-setting-row">
+              <label for="ai-api-key" style="font-size:12px;display:block;margin-bottom:2px;">API Key</label>
+              <input id="ai-api-key" type="password" placeholder="sk-..." style="width:100%;">
+            </div>
+            <div id="ai-model-id-group" class="ai-setting-row">
+              <label for="ai-model-id" style="font-size:12px;display:block;margin-bottom:2px;">Model ID</label>
+              <input id="ai-model-id" type="text" placeholder="deepseek/deepseek-chat" style="width:100%;">
+            </div>
+            <div class="ai-settings-actions" style="display:flex;gap:8px;margin-top:6px;">
+              <button id="ai-save-settings" class="small-button primary" type="button">Save AI Settings</button>
+              <button id="ai-test-connection" class="small-button" type="button">Test Connection</button>
+            </div>
+            <p id="ai-connection-status" role="status" hidden style="margin-top:6px;font-size:12px;"></p>
+          </div>
+        </details>
         <details id="profile-panel" hidden>
           <summary>Your Autofill Information</summary>
           <dl id="profile-facts"></dl>

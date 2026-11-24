@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { CandidateForm } from '@/components/candidate-form';
+import { AiProviderSettings } from '@/components/ai-provider-settings';
 import { getCandidateById } from '@/lib/candidates';
 import type { Candidate } from '@/types/database';
 import { WorkspaceSkeleton } from '@/components/workspace-ui';
@@ -46,5 +47,12 @@ export default function EditCandidatePage() {
 
   if (!candidate) return null;
 
-  return <CandidateForm initialCandidate={candidate} backUrl="/dashboard/candidates" />;
+  return (
+    <div className="space-y-8 pb-12">
+      <CandidateForm initialCandidate={candidate} backUrl="/dashboard/candidates" />
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <AiProviderSettings candidateId={candidate.id} />
+      </div>
+    </div>
+  );
 }

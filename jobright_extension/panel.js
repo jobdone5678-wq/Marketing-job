@@ -175,6 +175,7 @@ function renderAccount() {
     onboardingView.hidden = connected;
     authenticatedView.hidden = !connected;
   }
+  if (connected) void loadAiSettings();
   const name = candidate?.full_name || connection?.user?.name;
   setLine('connection', connected ? 'NextKinHR Connected' : 'Connect to NextKinHR', connected);
   setLine('candidate', name ? 'Candidate: ' + name : 'Candidate profile', !!name);
@@ -1555,6 +1556,139 @@ $('dismiss-tracking-btn')?.addEventListener('click', async () => {
   } finally {
     $('dismiss-tracking-btn').disabled = false;
     void renderTrackingStatus();
+  }
+});
+
+// AI Provider Settings Controller (syncs with /api/extension/ai/settings and /api/extension/ai/test-connection)
+let aiSettingsConfigVersion = 1;
+
+const AI_PROVIDER_DEFAULTS = {
+  server: { baseUrl: '', modelId: '' },
+  openrouter: { baseUrl: 'https://openrouter.ai/api/v1', modelId: 'deepseek/deepseek-chat' },
+  deepseek: { baseUrl: 'https://api.deepseek.com/v1', modelId: 'deepseek-chat' },
+  openai: { baseUrl: 'https://api.openai.com/v1', modelId: 'gpt-4o-mini' },
+  groq: { baseUrl: 'https://api.groq.com/openai/v1', modelId: 'llama-3.3-70b-versatile' },
+  mistral: { baseUrl: 'https://api.mistral.ai/v1', modelId: 'mistral-small-latest' },
+  ollama: { baseUrl: 'http://localhost:11434/v1', modelId: 'llama3.2:latest' },
+  lm_studio: { baseUrl: 'http://localhost:1234/v1', modelId: 'local-model' },
+  custom: { baseUrl: '', modelId: '' },
+};
+
+async function loadAiSettings() {
+  if (!connection) return;
+  try {
+    const data = await api('ai/settings', {}, connection);
+    if (!data) return;
+    aiSettingsConfigVersion = data.configVersion || 1;
+    if ($('ai-mode-select')) $('ai-mode-select').value = data.mode || 'server';
+    if ($('ai-provider-select')) $('ai-provider-select').value = data.provider || 'server';
+    if ($('ai-base-url')) $('ai-base-url').value = data.baseUrl || '';
+    if ($('ai-model-id')) $('ai-model-id').value = data.modelId || '';
+    if ($('ai-api-key') && data.maskedApiKey) {
+      $('ai-api-key').placeholder = data.maskedApiKey;
+    }
+  } catch {}
+}
+
+$('ai-provider-select')?.addEventListener('change', (e) => {
+  const prov = e.target.value;
+  const defaults = AI_PROVIDER_DEFAULTS[prov];
+  if (defaults) {
+    if (defaults.baseUrl && $('ai-base-url')) $('ai-base-url').value = defaults.baseUrl;
+    if (defaults.modelId && $('ai-model-id')) $('ai-model-id').value = defaults.modelId;
+    if (prov === 'ollama' || prov === 'lm_studio') {
+      if ($('ai-mode-select')) $('ai-mode-select').value = 'local';
+    } else if (prov === 'server') {
+      if ($('ai-mode-select')) $('ai-mode-select').value = 'server';
+    } else {
+      if ($('ai-mode-select') && ($('ai-mode-select').value === 'server' || $('ai-mode-select').value === 'local')) {
+        $('ai-mode-select').value = 'portal_byok';
+      }
+    }
+  }
+});
+
+$('ai-save-settings')?.addEventListener('click', async () => {
+  if (!connection) return;
+  const statusEl = $('ai-connection-status');
+  if (statusEl) {
+    statusEl.hidden = false;
+    statusEl.textContent = 'Saving AI settings…';
+    statusEl.style.color = 'inherit';
+  }
+  const mode = $('ai-mode-select')?.value || 'server';
+  const provider = $('ai-provider-select')?.value || 'server';
+  const baseUrl = $('ai-base-url')?.value?.trim() || null;
+  const modelId = $('ai-model-id')?.value?.trim() || null;
+  const keyInput = $('ai-api-key')?.value?.trim() || '';
+
+  const payload = {
+    mode,
+    provider,
+    baseUrl,
+    modelId,
+    configVersion: aiSettingsConfigVersion,
+  };
+  if (keyInput) payload.apiKey = keyInput;
+
+  try {
+    const res = await api('ai/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }, connection);
+    aiSettingsConfigVersion = res.configVersion || aiSettingsConfigVersion + 1;
+    if (statusEl) {
+      statusEl.textContent = '✓ AI settings saved.';
+      statusEl.style.color = '#10b981';
+    }
+    if ($('ai-api-key')) $('ai-api-key').value = '';
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+        await chrome.storage.session.set({
+          ai_provider_mode: mode,
+          ai_provider_type: provider,
+          ai_base_url: baseUrl,
+          ai_model_id: modelId,
+          ...(keyInput ? { ai_api_key: keyInput } : {}),
+        });
+      }
+    } catch {}
+  } catch (err) {
+    if (statusEl) {
+      statusEl.textContent = 'Error: ' + err.message;
+      statusEl.style.color = '#ef4444';
+    }
+  }
+});
+
+$('ai-test-connection')?.addEventListener('click', async () => {
+  if (!connection) return;
+  const statusEl = $('ai-connection-status');
+  if (statusEl) {
+    statusEl.hidden = false;
+    statusEl.textContent = 'Testing connection…';
+    statusEl.style.color = 'inherit';
+  }
+  const baseUrl = $('ai-base-url')?.value?.trim() || '';
+  const apiKey = $('ai-api-key')?.value?.trim() || '';
+  const modelId = $('ai-model-id')?.value?.trim() || '';
+
+  try {
+    const res = await api('ai/test-connection', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ baseUrl, apiKey: apiKey || undefined, modelId }),
+    }, connection);
+    if (statusEl) {
+      statusEl.textContent = `✓ Connected successfully (${res.latencyMs ?? 0}ms)`;
+      statusEl.style.color = '#10b981';
+    }
+  } catch (err) {
+    if (statusEl) {
+      statusEl.textContent = 'Failed: ' + err.message;
+      statusEl.style.color = '#ef4444';
+    }
   }
 });
 
