@@ -39,7 +39,7 @@
 - Consumes: Database `candidates` table records and `confirmed_facts` JSON.
 - Produces: Sanitized candidate array in `/api/extension/candidates` where `savedOnly=true` includes all EEOC/demographic columns, preserves `provenance_status: 'confirmed'`, and accepts candidates with valid `candidate.full_name`.
 
-- [ ] **Step 1: Write the failing test in `tests/candidates-endpoint-autofill.test.mjs`**
+- [x] **Step 1: Write the failing test in `tests/candidates-endpoint-autofill.test.mjs`**
 
 ```javascript
 test('GET /api/extension/candidates with savedOnly=true projects EEOC columns and merges row with confirmed_facts', async () => {
@@ -48,21 +48,21 @@ test('GET /api/extension/candidates with savedOnly=true projects EEOC columns an
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node --experimental-strip-types --test tests/candidates-endpoint-autofill.test.mjs`
 Expected: FAIL (missing columns or rejected candidate facts)
 
-- [ ] **Step 3: Implement candidate projection in `src/app/api/extension/candidates/route.ts`**
+- [x] **Step 3: Implement candidate projection in `src/app/api/extension/candidates/route.ts`**
 
 Update `CANDIDATE_FIELDS` to include `gender, race, race_ethnicity, veteran, veteran_status, disability, disability_status, work_authorization`. In `savedOnly` branch, merge row columns with `confirmed_facts`, check `facts.full_name || candidate.full_name`, and return merged facts with `provenance_status: 'confirmed'`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `node --experimental-strip-types --test tests/candidates-endpoint-autofill.test.mjs`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/app/api/extension/candidates/route.ts tests/candidates-endpoint-autofill.test.mjs
