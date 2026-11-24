@@ -355,7 +355,7 @@ git commit -m "feat(mapping): add marketing blocklist and auto-check scoped lega
 - Consumes: DOM mutations and SPA route changes on multi-step wizard applications.
 - Produces: Reactive execution of autofill on newly mounted, visible fields for Step 2/3/etc. (including visually-hidden native checkboxes/radios styled via labels) with in-flight fill lock, and multi-frame result aggregation across `allFrames: true` execution in `panel.js`.
 
-- [ ] **Step 1: Write the failing test in `tests/autofill-engine.test.mjs`**
+- [x] **Step 1: Write the failing test in `tests/autofill-engine.test.mjs`**
 
 ```javascript
 test('step transition observer detects visible fields on SPA route change and triggers fill', async () => {
@@ -374,12 +374,12 @@ test('panel.js aggregateAutofillResults merges results across all returned frame
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node --test tests/autofill-engine.test.mjs`
 Expected: FAIL
 
-- [ ] **Step 3: Implement debounced observer, label visibility & multi-frame aggregation in `jobright_extension/core/application.js` & `panel.js`**
+- [x] **Step 3: Implement debounced observer, label visibility & multi-frame aggregation in `jobright_extension/core/application.js` & `panel.js`**
 
 1. In `core/application.js:observeStepTransitions` and visibility check:
    - Debounce `MutationObserver` 350ms on `document.body`.
@@ -391,12 +391,12 @@ Expected: FAIL
    - Pass `allFrames: true` in `chrome.scripting.executeScript`.
    - Aggregate results across all returned frame injection objects: merge `filled` arrays, `unverified` arrays, `warnings`, and overall status, instead of reading only `results[0].result`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `node --test tests/autofill-engine.test.mjs`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add jobright_extension/core/application.js jobright_extension/panel.js tests/autofill-engine.test.mjs
