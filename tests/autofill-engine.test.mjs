@@ -755,3 +755,145 @@ test('Part 7: Complex ATS & Workday Field Mapping Matrix (Relocation, Phone Coun
   assert.notEqual(plans[4].value, 'Austin, TX');
 });
 
+test('setCheckbox toggles an unchecked React controlled checkbox to true without double-toggling', () => {
+  // Direct controlled React checkbox: click handler flips checked state
+  const input = new MockInputElement();
+  input.type = 'checkbox';
+  input.checked = false;
+  let clickCount = 0;
+  input.addEventListener('click', () => {
+    clickCount++;
+    input.checked = !input.checked;
+  });
+  mockDoc.body.appendChild(input);
+
+  const ok = writer.setCheckbox(input, true);
+  assert.equal(ok, true);
+  assert.equal(input.checked, true);
+  assert.equal(clickCount, 1, 'Expected exactly one click pass without double-toggling');
+
+  // Label-wrapped / associated controlled checkbox
+  const label = new MockNode('LABEL');
+  label.setAttribute('for', 'react-controlled-cb');
+  const input2 = new MockInputElement();
+  input2.id = 'react-controlled-cb';
+  input2.type = 'checkbox';
+  input2.checked = false;
+  input2.getClientRects = () => []; // hidden input, label is target
+
+  let labelClicks = 0;
+  let inputClicks = 0;
+  label.addEventListener('click', () => {
+    labelClicks++;
+    input2.checked = !input2.checked;
+  });
+  input2.addEventListener('click', () => {
+    inputClicks++;
+    input2.checked = !input2.checked;
+  });
+  mockDoc.body.appendChild(input2);
+  mockDoc.body.appendChild(label);
+
+  const ok2 = writer.setCheckbox(input2, true);
+  assert.equal(ok2, true);
+  assert.equal(input2.checked, true);
+  assert.equal(labelClicks, 1, 'Target label should receive one click');
+  assert.equal(inputClicks, 0, 'Input element should not receive an extraneous secondary click');
+
+  // Label target where click does not synchronously flip checked
+  // In old code, this triggered a redundant secondary el.click() on input
+  const label3 = new MockNode('LABEL');
+  label3.setAttribute('for', 'react-async-cb');
+  const input3 = new MockInputElement();
+  input3.id = 'react-async-cb';
+  input3.type = 'checkbox';
+  input3.checked = false;
+  input3.getClientRects = () => []; // hidden input, label is target
+
+  let input3Clicks = 0;
+  input3.addEventListener('click', () => {
+    input3Clicks++;
+    input3.checked = !input3.checked;
+  });
+  mockDoc.body.appendChild(input3);
+  mockDoc.body.appendChild(label3);
+
+  const ok3 = writer.setCheckbox(input3, true);
+  assert.equal(ok3, true);
+  assert.equal(input3.checked, true);
+  assert.equal(input3Clicks, 0, 'Input element should not receive secondary click when label target did not toggle');
+});
+
+test('setNativeValue resets React _valueTracker on text input, textarea, and select controls', () => {
+  // 1. Text input
+  const input = new MockInputElement();
+  input.type = 'text';
+  input.value = 'old';
+  let inputTrackerVal = null;
+  input._valueTracker = {
+    setValue(v) {
+      inputTrackerVal = v;
+    }
+  };
+  mockDoc.body.appendChild(input);
+  writer.setNativeValue(input, 'new');
+  assert.equal(input.value, 'new');
+  assert.equal(inputTrackerVal, 'old', 'Expected input _valueTracker.setValue to receive prevValue "old"');
+
+  // 2. Textarea
+  const textarea = new MockNode('TEXTAREA');
+  textarea.value = 'old';
+  let textareaTrackerVal = null;
+  textarea._valueTracker = {
+    setValue(v) {
+      textareaTrackerVal = v;
+    }
+  };
+  mockDoc.body.appendChild(textarea);
+  writer.setNativeValue(textarea, 'new');
+  assert.equal(textarea.value, 'new');
+  assert.equal(textareaTrackerVal, 'old', 'Expected textarea _valueTracker.setValue to receive prevValue "old"');
+
+  // 3. Select
+  const select = new MockSelectElement();
+  select.value = 'old';
+  let selectTrackerVal = null;
+  select._valueTracker = {
+    setValue(v) {
+      selectTrackerVal = v;
+    }
+  };
+  mockDoc.body.appendChild(select);
+  writer.setNativeValue(select, 'new');
+  assert.equal(select.value, 'new');
+  assert.equal(selectTrackerVal, 'old', 'Expected select _valueTracker.setValue to receive prevValue "old"');
+});
+
+test('setCheckbox resets React _valueTracker with String(!desired)', () => {
+  const input = new MockInputElement();
+  input.type = 'checkbox';
+  input.checked = false;
+  let trackerVal = null;
+  input._valueTracker = {
+    setValue(v) {
+      trackerVal = v;
+    }
+  };
+  mockDoc.body.appendChild(input);
+
+  // Click does not toggle (MockInputElement has no click handler to flip checked)
+  // Fallback descriptor setter should be invoked and reset _valueTracker with String(!true) => 'false'
+  const ok = writer.setCheckbox(input, true);
+  assert.equal(ok, true);
+  assert.equal(input.checked, true);
+  assert.equal(trackerVal, 'false', 'Expected tracker value to be reset to "false" when desired is true');
+
+  // Now test toggling from true to false
+  trackerVal = null;
+  const ok2 = writer.setCheckbox(input, false);
+  assert.equal(ok2, true);
+  assert.equal(input.checked, false);
+  assert.equal(trackerVal, 'true', 'Expected tracker value to be reset to "true" when desired is false');
+});
+
+

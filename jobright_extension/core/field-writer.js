@@ -205,6 +205,7 @@
     if (element.isContentEditable) {
       element.textContent = strVal;
     } else {
+      const prevValue = element.value;
       const desc = getNativePropertyDescriptor(element, 'value');
       if (desc?.set) {
         desc.set.call(element, strVal);
@@ -213,7 +214,7 @@
       }
       if (element._valueTracker) {
         try {
-          element._valueTracker.setValue?.('');
+          element._valueTracker.setValue?.(prevValue ?? '');
         } catch {}
       }
     }
@@ -238,19 +239,15 @@
   }
 
   function setCheckbox(el, targetChecked) {
-    if (!el?.isConnected || el.disabled || el.getAttribute('aria-disabled') === 'true') return false;
-    const boolVal = Boolean(targetChecked);
+    if (!el?.isConnected || el.disabled || el.getAttribute?.('aria-disabled') === 'true') return false;
+    const desired = Boolean(targetChecked);
     const view = el.ownerDocument?.defaultView || globalThis;
-    const target = findClickableTarget(el) || el;
 
-    if (checked(el) === boolVal) {
+    if (checked(el) === desired) {
       return true;
     }
-    if (el.tagName !== 'INPUT') {
-      try { click(target); } catch {}
-      return checked(el) === boolVal;
-    }
 
+    const target = findClickableTarget(el) || el;
     const PointerEvt = view.PointerEvent || view.MouseEvent;
     const MouseEvt = view.MouseEvent;
     const downInit = { bubbles: true, composed: true, cancelable: true, view, button: 0, buttons: 1, detail: 1 };
@@ -267,40 +264,39 @@
       try { target.click(); } catch {}
     }
 
-    // If native checkbox and not matching targetChecked, try direct el.click() if target wasn't el
-    if (el.tagName === 'INPUT' && el.type === 'checkbox' && el.checked !== boolVal) {
-      if (target !== el) {
-        try {
-          el.dispatchEvent(new PointerEvt('pointerdown', { ...downInit, pointerType: 'mouse', isPrimary: true }));
-          el.dispatchEvent(new MouseEvt('mousedown', downInit));
-          el.dispatchEvent(new PointerEvt('pointerup', { ...upInit, pointerType: 'mouse', isPrimary: true }));
-          el.dispatchEvent(new MouseEvt('mouseup', upInit));
-          el.click();
-        } catch {
-          try { el.click(); } catch {}
-        }
-      }
+    if (checked(el) === desired) {
+      return true;
     }
 
-    // If still not matching, force with descriptor & React tracker
-    if (el.tagName === 'INPUT' && el.type === 'checkbox' && el.checked !== boolVal) {
+    // If still not toggled (e.g. React controlled component ignoring synthetic click):
+    if (el._valueTracker) {
       try {
-        const proto = view.HTMLInputElement?.prototype || HTMLInputElement.prototype;
-        const desc = Object.getOwnPropertyDescriptor(proto, 'checked') || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(proto), 'checked');
-        if (desc?.set) desc.set.call(el, boolVal);
-        else el.checked = boolVal;
-        el._valueTracker?.setValue?.('');
-      } catch {
-        el.checked = boolVal;
-      }
-      try {
-        const Evt = view.Event;
-        el.dispatchEvent(new Evt('input', { bubbles: true, composed: true }));
-        el.dispatchEvent(new Evt('change', { bubbles: true }));
+        el._valueTracker.setValue?.(String(!desired));
       } catch {}
     }
 
-    return checked(el) === boolVal;
+    const desc = getNativePropertyDescriptor(el, 'checked');
+    try {
+      if (desc?.set) {
+        desc.set.call(el, desired);
+      } else if (el.tagName === 'INPUT' || 'checked' in el) {
+        el.checked = desired;
+      }
+    } catch {
+      if (el.tagName === 'INPUT' || 'checked' in el) {
+        el.checked = desired;
+      }
+    }
+
+    const Evt = view.Event || globalThis.Event;
+    try {
+      el.dispatchEvent(new Evt('input', { bubbles: true, composed: true }));
+    } catch {}
+    try {
+      el.dispatchEvent(new Evt('change', { bubbles: true }));
+    } catch {}
+
+    return checked(el) === desired;
   }
 
   function setRadio(option) {
@@ -357,7 +353,7 @@
         const desc = Object.getOwnPropertyDescriptor(proto, 'checked') || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(proto), 'checked');
         if (desc?.set) desc.set.call(el, true);
         else el.checked = true;
-        el._valueTracker?.setValue?.('');
+        el._valueTracker?.setValue?.('false');
       } catch {
         el.checked = true;
       }
