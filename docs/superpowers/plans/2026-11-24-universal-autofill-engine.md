@@ -415,17 +415,17 @@ git commit -m "feat(application): debounced multi-step transition observer with 
 - Consumes: All 8 tasks.
 - Produces: Passing test suite across all 256+ tests and clean extension zip.
 
-- [ ] **Step 1: Run full test suite**
+- [x] **Step 1: Run full test suite**
 
 Run: `npm test`
 Expected: PASS (all tests pass, 0 failures)
 
-- [ ] **Step 2: Package the extension**
+- [x] **Step 2: Package the extension**
 
 Run: `node scripts/pack-extension.mjs`
 Expected: Creates `dist/jobright_extension-v3.3.19.zip` cleanly.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add -A
