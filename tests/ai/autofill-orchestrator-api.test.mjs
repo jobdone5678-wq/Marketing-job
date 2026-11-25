@@ -5,11 +5,11 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import {
-  executePlan,
-  executeChoose,
+  executePlan as planOnServer,
+  executeChoose as chooseOnServer,
   checkFeatureFlag,
   isVercelAiSdkEnabled,
-  resolveProviderClient,
+  resolveProviderClient as resolveOnServer,
   OrchestratorError,
 } from '../../src/lib/ai/autofill-orchestrator.ts';
 import { encryptSecret } from '../../src/lib/ai/encryption.ts';
@@ -22,6 +22,10 @@ const USER_OWNER = '11111111-1111-4000-8000-111111111111';
 const USER_OTHER = '22222222-2222-4000-8000-222222222222';
 const CANDIDATE_OWNED = 'aaaaaaaa-aaaa-4000-8000-aaaaaaaaaaaa';
 const CANDIDATE_OTHER = 'bbbbbbbb-bbbb-4000-8000-bbbbbbbbbbbb';
+const dnsLookup = async () => [{ address: '8.8.8.8', family: 4 }];
+const executePlan = (request, actor, options) => planOnServer(request, actor, { dnsLookup, ...options });
+const executeChoose = (request, actor, options) => chooseOnServer(request, actor, { dnsLookup, ...options });
+const resolveProviderClient = (actor, options) => resolveOnServer(actor, { dnsLookup, ...options });
 
 function loadRouteModule(relPath, dependencies) {
   const fileUrl = new URL(`../../${relPath}.ts`, import.meta.url);
@@ -71,7 +75,7 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
             if (table === 'candidates') {
               const c = candidates[filters.id];
               if (c && (!filters.user_id || c.user_id === filters.user_id)) {
-                return { data: c, error: null };
+                return { data: { provenance_status: 'confirmed', ...c }, error: null };
               }
               return { data: null, error: null };
             }

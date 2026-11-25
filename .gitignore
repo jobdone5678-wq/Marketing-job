@@ -70,6 +70,7 @@ browser-extension/
 /extension/.output/
 /extension/.wxt/
 /extension/node_modules/
+/design-system/node_modules/
 /tests/extension-test-summary.json
 /scratch/
 

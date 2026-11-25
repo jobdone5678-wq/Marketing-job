@@ -1,0 +1,71 @@
+{
+  "name": "freehire-design-system",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Design system for freehire's web frontend — tokens, primitives, Storybook, docs.",
+  "packageManager": "pnpm@11.7.0",
+  "exports": {
+    "./dist/*": "./dist/*",
+    "./tokens/*": "./tokens/*",
+    ".": {
+      "types": "./src/index.ts",
+      "svelte": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "build": "pnpm tokens:build",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
+    "lint": "oxlint --deny-warnings && eslint .",
+    "lint:fix": "oxlint --fix && eslint . --fix",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "tokens:build": "node scripts/build-tokens.mjs",
+    "validate:docs": "node scripts/validate-docs.mjs",
+    "check:tokens": "node scripts/check-token-coverage.mjs",
+    "check:adoption": "node scripts/check-adoption.mjs",
+    "check:dist": "pnpm build && git diff --exit-code -- dist",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@storybook/addon-themes": "10.6.5",
+    "@storybook/svelte": "10.6.5",
+    "@storybook/svelte-vite": "10.6.5",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@tailwindcss/vite": "^4.3.5",
+    "@testing-library/svelte": "^5.4.2",
+    "eslint": "^10.15.0",
+    "eslint-plugin-oxlint": "^1.94.0",
+    "eslint-plugin-svelte": "^3.24.1",
+    "flag-icons": "^7.6.0",
+    "globals": "^17.14.0",
+    "jsdom": "^31.0.1",
+    "oxfmt": "0.79.0",
+    "oxlint": "^1.94.0",
+    "storybook": "10.6.7",
+    "style-dictionary": "^5.8.0",
+    "svelte": "^5.57.3",
+    "svelte-check": "^4.7.8",
+    "svelte-eslint-parser": "^1.10.1",
+    "tailwindcss": "^4.3.5",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.73.0",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  },
+  "peerDependencies": {
+    "svelte": "^5",
+    "tailwindcss": "^4"
+  },
+  "dependencies": {
+    "@lucide/svelte": "^1.73.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.7.0",
+    "tailwind-variants": "^4.0.2"
+  }
+}

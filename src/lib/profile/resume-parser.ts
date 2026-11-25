@@ -511,12 +511,6 @@ export async function parseResumeFile(
       countries: [],
       openToRelocation: false,
     },
-    demographics: {
-      gender: '',
-      raceEthnicity: '',
-      veteranStatus: '',
-      disabilityStatus: '',
-    },
     skills: finalSkills,
     excludedSkills: [],
     excludedSources: [],

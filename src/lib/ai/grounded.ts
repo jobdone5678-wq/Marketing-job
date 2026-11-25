@@ -577,14 +577,6 @@ export function validateGroundedAnswer(
     expected_salary: 'profile.compensation.expected_salary',
     salary_expectation: 'profile.compensation.expected_salary',
     current_salary: 'profile.compensation.current_salary',
-    gender: 'profile.demographics.gender',
-    pronouns: 'profile.demographics.pronouns',
-    race: 'profile.demographics.race',
-    race_ethnicity: 'profile.demographics.race',
-    veteran: 'profile.demographics.veteran',
-    veteran_status: 'profile.demographics.veteran',
-    disability: 'profile.demographics.disability',
-    disability_status: 'profile.demographics.disability',
   };
 
   const matchedFactId = fieldMapping[canonical] || fieldMapping[category];

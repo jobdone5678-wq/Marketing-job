@@ -8,7 +8,9 @@ import { z } from 'zod';
 import * as aiPkg from 'ai';
 import * as openaiCompatiblePkg from '@ai-sdk/openai-compatible';
 import { approvedSavedAnswers } from '../src/lib/extension-answers/saved-answers.ts';
-import { isUrlField } from '../jobright_extension/core/field-mapping.js';
+import * as fieldSafety from '../extension/lib/autofillSafety.ts';
+import { isUnreviewedResume } from '../src/lib/candidate/confirmed-facts.ts';
+import { cors } from '../src/lib/http/cors.ts';
 
 const candidateId = '075cec76-7467-4bc9-be0d-14ed732690ff';
 const otherId = '18ec672b-4cb9-4c3a-a027-f71fec96a6ad';
@@ -50,6 +52,7 @@ function fixture({
     user_id: 'owner',
     full_name: 'Own Candidate',
     updated_at: '2026-01-01T00:00:00.000Z',
+    provenance_status: 'confirmed',
     confirmed_facts: {},
   };
   const candidates = [candidate, { id: otherId, user_id: 'other', full_name: 'Other Candidate' }];
@@ -130,6 +133,7 @@ function fixture({
     {
       'node:crypto': { createHash },
       '@/lib/db/admin': admin,
+      '@/lib/http/cors': { cors },
       zod: { z },
     },
     globals
@@ -150,23 +154,24 @@ function fixture({
     '@/lib/db/admin': admin,
     '@/lib/extension-answers/candidate-context': candidateContext,
     '@/lib/extension-answers/saved-answers': { approvedSavedAnswers },
-    '../../../../../jobright_extension/core/field-mapping.js': { isUrlField },
+    '@/lib/ai/autofill-field-safety': fieldSafety,
+    '@/lib/candidate/confirmed-facts': { isUnreviewedResume },
+    '@/lib/ai/ssrf-guard': { createSafeAgent: async (validatedUrl) => ({ validatedUrl }) },
+    '@/lib/ai/ssrf-fetch-adapter': { createSsrfSafeFetch: () => providerFetch },
     '@/lib/rate-limit': { checkRateLimit: () => ({ allowed: true }) },
     zod: { z },
     ai: aiPkg,
     '@ai-sdk/openai-compatible': openaiCompatiblePkg,
   };
-  if (aiProviderData) deps['@/lib/ai/ai-provider-data'] = aiProviderData;
-  if (encryption) deps['@/lib/ai/encryption'] = encryption;
+  deps['@/lib/ai/ai-provider-data'] = aiProviderData ?? { getUserAiProviderConfig: async () => null };
+  deps['@/lib/ai/encryption'] = encryption ?? {};
 
-  const route = loadSource('app/api/extension/generate-answer/route', deps, {
-    ...globals,
-    fetch: async (url, request) => {
+  async function providerFetch(url, request) {
       providerRequests.push({ url: String(url), headers: request?.headers });
       providerCalls.push(JSON.parse(request.body));
       return Response.json({ choices: [{ message: { content: upstreamContent } }] });
-    },
-  });
+  }
+  const route = loadSource('app/api/extension/generate-answer/route', deps, globals);
   const call = (method, token, body = {}) =>
     route[method](
       new Request('http://localhost.test', {

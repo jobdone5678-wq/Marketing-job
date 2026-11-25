@@ -4,20 +4,18 @@ import { z } from 'zod';
 import type { Candidate } from '@/types/database';
 import { textFields, booleanFields } from '@/lib/ai/schemas';
 import { approvedSavedAnswers } from '@/lib/extension-answers/saved-answers';
+import { isUnreviewedResume, UNSAVED_RESUME_NOTE } from '@/lib/candidate/confirmed-facts';
 
-const unsavedResumeNote = 'Profile created from an uploaded resume. Review the extracted facts and edit anything that is wrong.';
 const autofillKeys = [
   ...textFields, ...booleanFields, 'employment_types',
   'first_name', 'last_name', 'preferred_first_name', 'preferred_name',
   'zip_code', 'postal_code', 'country', 'github_url', 'twitter_url', 'website', 'portfolio_url', 'other_url',
   'current_company', 'headline', 'summary', 'bio', 'availability', 'salary_expectation', 'how_heard',
   'school', 'languages', 'employment_history', 'education_history', 'saved_answers',
-  'gender', 'race', 'race_ethnicity', 'veteran', 'veteran_status', 'disability', 'disability_status',
-  'pronouns', 'demographics', 'work_authorization',
+  'work_authorization',
   // Explicitly confirmed facts consumed by the autofill mapper. Without these in the savedOnly
   // projection the side panel and the wizard continuation silently drop them.
   'intended_work_country',
-  'community_memberships', 'protected_veteran', 'military_service', 'current_military_service',
   'preferred_work_location', 'preferred_office_location', 'relocation_destinations',
   'salary_currency', 'salary_period', 'compensation_type',
 ];
@@ -57,13 +55,6 @@ const CANDIDATE_FIELDS = `
         available_to_join,
         current_salary,
         expected_salary,
-        gender,
-        race,
-        race_ethnicity,
-        veteran,
-        veteran_status,
-        disability,
-        disability_status,
         work_authorization,
         confirmed_facts,
         resume_url,
@@ -118,7 +109,7 @@ async function profileFromResumeUpload(profileId: string): Promise<string | null
   const payload = {
     ...fields,
     is_active_bench: true,
-    notes: unsavedResumeNote,
+    notes: UNSAVED_RESUME_NOTE,
     employment_history: extracted.employmentHistory || [],
     education_history: extracted.educationHistory || [],
     evidence: extracted.evidence || [],
@@ -194,33 +185,18 @@ export async function GET(request: Request) {
     if (savedOnly) {
       const saved = candidates.flatMap(candidate => {
         const rawFacts = (candidate.confirmed_facts || {}) as Record<string, unknown>;
-        const demographics = (rawFacts.demographics || {}) as Record<string, unknown>;
 
         const fullName = (typeof rawFacts.full_name === 'string' && rawFacts.full_name.trim())
           ? rawFacts.full_name.trim()
           : (typeof candidate.full_name === 'string' && candidate.full_name.trim() ? candidate.full_name.trim() : '');
 
-        if (candidate.provenance_status !== 'confirmed' || rawFacts.notes === unsavedResumeNote || !fullName) return [];
+        if (candidate.provenance_status !== 'confirmed' || isUnreviewedResume(rawFacts) || !fullName) return [];
 
-        const gender = (candidate as any).gender || rawFacts.gender || demographics.gender || undefined;
-        const race = (candidate as any).race || rawFacts.race || (candidate as any).race_ethnicity || rawFacts.race_ethnicity || demographics.raceEthnicity || undefined;
-        const raceEthnicity = (candidate as any).race_ethnicity || rawFacts.race_ethnicity || (candidate as any).race || rawFacts.race || demographics.raceEthnicity || undefined;
-        const veteran = (candidate as any).veteran || rawFacts.veteran || (candidate as any).veteran_status || rawFacts.veteran_status || demographics.veteranStatus || undefined;
-        const veteranStatus = (candidate as any).veteran_status || rawFacts.veteran_status || (candidate as any).veteran || rawFacts.veteran || demographics.veteranStatus || undefined;
-        const disability = (candidate as any).disability || rawFacts.disability || (candidate as any).disability_status || rawFacts.disability_status || demographics.disabilityStatus || undefined;
-        const disabilityStatus = (candidate as any).disability_status || rawFacts.disability_status || (candidate as any).disability || rawFacts.disability || demographics.disabilityStatus || undefined;
         const workAuth = (candidate as any).work_authorization || rawFacts.work_authorization || candidate.visa_status || (rawFacts as any).visa_status || undefined;
 
         const facts: Record<string, unknown> = {
           ...rawFacts,
           full_name: fullName,
-          ...(gender ? { gender } : {}),
-          ...(race ? { race } : {}),
-          ...(raceEthnicity ? { race_ethnicity: raceEthnicity } : {}),
-          ...(veteran ? { veteran } : {}),
-          ...(veteranStatus ? { veteran_status: veteranStatus } : {}),
-          ...(disability ? { disability } : {}),
-          ...(disabilityStatus ? { disability_status: disabilityStatus } : {}),
           ...(workAuth ? { work_authorization: workAuth } : {}),
         };
 
@@ -244,20 +220,12 @@ export async function GET(request: Request) {
     }
 
     const resolvedCandidates = (candidates || []).map((c: any) => {
-      const { saved_answers, ...facts } = (c.confirmed_facts || {}) as Record<string, any>;
+      const { saved_answers, demographics: _demo, gender: _g, race: _r, race_ethnicity: _re, veteran: _v, veteran_status: _vs, disability: _d, disability_status: _ds, ...facts } = (c.confirmed_facts || {}) as Record<string, any>;
       const answers = approvedSavedAnswers(saved_answers);
       if (Object.keys(answers).length) facts.saved_answers = answers;
       return {
         ...c,
         confirmed_facts: facts,
-        gender: c.gender || facts.gender || facts.demographics?.gender || null,
-        race: c.race || facts.race || facts.race_ethnicity || facts.demographics?.raceEthnicity || null,
-        race_ethnicity: c.race_ethnicity || facts.race_ethnicity || c.race || facts.race || facts.demographics?.raceEthnicity || null,
-        veteran: c.veteran || facts.veteran || facts.veteran_status || facts.demographics?.veteranStatus || null,
-        veteran_status: c.veteran_status || facts.veteran_status || facts.veteran || facts.demographics?.veteranStatus || null,
-        disability: c.disability || facts.disability || facts.disability_status || facts.demographics?.disabilityStatus || null,
-        disability_status:
-          c.disability_status || facts.disability_status || facts.disability || facts.demographics?.disabilityStatus || null,
         headline: c.headline || facts.headline || null,
         summary: c.summary || facts.summary || null,
         work_authorization:

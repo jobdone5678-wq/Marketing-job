@@ -38,12 +38,6 @@ export const DEFAULT_PROFILE: CandidateProfileState = {
     openToRelocation: false,
     timezone: 'UTC',
   },
-  demographics: {
-    gender: '',
-    raceEthnicity: '',
-    veteranStatus: '',
-    disabilityStatus: '',
-  },
   skills: [],
   excludedSkills: [],
   excludedSources: [],
@@ -119,12 +113,6 @@ export function loadLocalProfile(): CandidateProfileState {
         countries: Array.isArray(parsed.location?.countries) ? parsed.location.countries : [],
         openToRelocation: Boolean(parsed.location?.openToRelocation),
         timezone: parsed.location?.timezone || 'UTC',
-      },
-      demographics: {
-        gender: parsed.demographics?.gender || parsed.gender || '',
-        raceEthnicity: parsed.demographics?.raceEthnicity || parsed.race || parsed.race_ethnicity || '',
-        veteranStatus: parsed.demographics?.veteranStatus || parsed.veteran || parsed.veteran_status || '',
-        disabilityStatus: parsed.demographics?.disabilityStatus || parsed.disability || parsed.disability_status || '',
       },
       languages: Array.isArray(parsed.languages) ? parsed.languages : [],
       certifications: Array.isArray(parsed.certifications) ? parsed.certifications : [],
@@ -205,12 +193,6 @@ export async function fetchRemoteProfile(): Promise<CandidateProfileState | null
         countries: Array.isArray(facts.location?.countries) ? facts.location.countries : [],
         openToRelocation: c.open_to_relocation ?? facts.location?.openToRelocation ?? false,
         timezone: facts.location?.timezone || 'UTC',
-      },
-      demographics: {
-        gender: c.gender || facts.gender || facts.demographics?.gender || '',
-        raceEthnicity: c.race || facts.race_ethnicity || facts.race || facts.demographics?.raceEthnicity || '',
-        veteranStatus: c.veteran || facts.veteran_status || facts.veteran || facts.demographics?.veteranStatus || '',
-        disabilityStatus: c.disability || facts.disability_status || facts.disability || facts.demographics?.disabilityStatus || '',
       },
       skills: c.primary_skills
         ? c.primary_skills.split(/,\s*/).map((s: string) => s.trim()).filter(Boolean)
@@ -312,7 +294,6 @@ export async function persistProfileToServer(
       phone: profile.contacts.phone || null,
       headline: profile.headline || null,
       summary: profile.summary || null,
-      demographics: profile.demographics,
       skills: profile.skills,
       filename: profile.cv?.filename || null,
       raw_text: profile.cv?.rawText || null,

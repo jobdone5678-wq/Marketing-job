@@ -1,5 +1,6 @@
 import { extensionProfile, cors } from '@/lib/capture/server';
 import { database, checkDb, CaptureError } from '@/lib/db/admin';
+import { syncLegacyResumeSaveToV1Tables } from '@/lib/v1/legacy-sync';
 import { createServerClient } from '@supabase/ssr';
 import { cookies as getNextCookies } from 'next/headers';
 
@@ -232,16 +233,7 @@ export async function POST(request: Request) {
     const noticePeriod = screening.notice_period_days || body.notice_period || null;
     const expectedSalary = screening.desired_salary_amount || body.expected_salary || null;
 
-    // Demographics (from Tab 1 Demographics card or legacy screening country_specific_answers)
-    const demographics = (body.demographics || {}) as Record<string, any>;
-    const usAnswers = (countryAnswers.us || {}) as Record<string, any>;
-    const gender = demographics.gender || usAnswers.gender || body.gender || null;
-    const race = demographics.raceEthnicity || usAnswers.race_ethnicity || body.race || body.race_ethnicity || null;
-    const veteran = countryAnswers.us_veteran === 'Not stated' ? null
-      : demographics.veteranStatus || countryAnswers.us_veteran || usAnswers.veteran_status || body.veteran || body.veteran_status || null;
-    const disability = countryAnswers.us_disability === 'Not stated' ? null
-      : demographics.disabilityStatus || countryAnswers.us_disability || usAnswers.disability_status || body.disability || body.disability_status || null;
-
+    // EEO/demographic fields are intentionally omitted from autofill profiles.
     const autofillFacts = confirmedAutofillFacts(body.confirmed_facts);
     const mergedFacts = {
       ...existingFacts,
@@ -275,19 +267,6 @@ export async function POST(request: Request) {
       open_to_relocation: openToRelocation,
       visa_status: visaStatus,
       work_authorization: workAuthorization,
-      demographics: {
-        gender,
-        raceEthnicity: race,
-        veteranStatus: veteran,
-        disabilityStatus: disability,
-      },
-      gender,
-      race,
-      race_ethnicity: race,
-      veteran,
-      veteran_status: veteran,
-      disability,
-      disability_status: disability,
       notice_period: noticePeriod,
       availability: noticePeriod,
       expected_salary: expectedSalary,
@@ -314,6 +293,9 @@ export async function POST(request: Request) {
     };
     // An explicitly cleared fact must not be resurrected from the previously stored profile.
     const mutableFacts = mergedFacts as Record<string, unknown>;
+    for (const key of ['demographics', 'gender', 'race', 'race_ethnicity', 'veteran', 'veteran_status', 'disability', 'disability_status']) {
+      delete mutableFacts[key];
+    }
     for (const key of AUTOFILL_FACT_KEYS) {
       if (autofillFacts[key] === '') delete mutableFacts[key];
     }
@@ -338,10 +320,6 @@ export async function POST(request: Request) {
         expected_salary: expectedSalary ? String(expectedSalary) : undefined,
         employment_history: workHistory.length ? workHistory : undefined,
         education_history: education.length ? education : undefined,
-        gender: (mergedFacts.gender as string) || undefined,
-        race: (mergedFacts.race as string) || (mergedFacts.race_ethnicity as string) || undefined,
-        veteran: (mergedFacts.veteran as string) || (mergedFacts.veteran_status as string) || undefined,
-        disability: (mergedFacts.disability as string) || (mergedFacts.disability_status as string) || undefined,
         highest_qualification: (mergedFacts.highest_qualification as string) || undefined,
         university_name: (mergedFacts.university_name as string) || undefined,
         graduation_year: (mergedFacts.graduation_year as string) || undefined,
@@ -385,10 +363,6 @@ export async function POST(request: Request) {
           expected_salary: expectedSalary ? String(expectedSalary) : undefined,
           employment_history: workHistory.length ? workHistory : undefined,
           education_history: education.length ? education : undefined,
-          gender: (mergedFacts.gender as string) || undefined,
-          race: (mergedFacts.race as string) || (mergedFacts.race_ethnicity as string) || undefined,
-          veteran: (mergedFacts.veteran as string) || (mergedFacts.veteran_status as string) || undefined,
-          disability: (mergedFacts.disability as string) || (mergedFacts.disability_status as string) || undefined,
           confirmed_facts: mergedFacts,
           provenance_status: 'confirmed',
           is_active_bench: false,
@@ -401,6 +375,8 @@ export async function POST(request: Request) {
       checkDb(error);
       savedCandidate = data;
     }
+
+    await syncLegacyResumeSaveToV1Tables(user.id, body);
 
     return cors(
       request,

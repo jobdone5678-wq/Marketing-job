@@ -21,58 +21,6 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-const GENDER_OPTIONS = [
-  { value: '', label: 'Select Gender' },
-  { value: 'Male', label: 'Male' },
-  { value: 'Female', label: 'Female' },
-  { value: 'Non-Binary', label: 'Non-Binary' },
-  { value: 'Prefer not to say', label: 'Prefer not to say / Decline to self-identify' },
-];
-
-const RACE_OPTIONS = [
-  { value: '', label: 'Select Race / Ethnicity' },
-  { value: 'Hispanic or Latino', label: 'Hispanic or Latino' },
-  { value: 'White (Not Hispanic or Latino)', label: 'White (Not Hispanic or Latino)' },
-  {
-    value: 'Black or African American (Not Hispanic or Latino)',
-    label: 'Black or African American (Not Hispanic or Latino)',
-  },
-  {
-    value: 'Native Hawaiian or Other Pacific Islander (Not Hispanic or Latino)',
-    label: 'Native Hawaiian or Other Pacific Islander (Not Hispanic or Latino)',
-  },
-  { value: 'Asian (Not Hispanic or Latino)', label: 'Asian (Not Hispanic or Latino)' },
-  {
-    value: 'American Indian or Alaska Native (Not Hispanic or Latino)',
-    label: 'American Indian or Alaska Native (Not Hispanic or Latino)',
-  },
-  {
-    value: 'Two or More Races (Not Hispanic or Latino)',
-    label: 'Two or More Races (Not Hispanic or Latino)',
-  },
-  { value: 'Decline to self-identify', label: 'Decline to self-identify' },
-];
-
-const VETERAN_OPTIONS = [
-  { value: '', label: 'Select Veteran Status' },
-  { value: 'I am not a protected veteran', label: 'I am not a protected veteran' },
-  {
-    value: 'I identify as one or more classifications of protected veteran',
-    label: 'I identify as one or more classifications of protected veteran',
-  },
-  {
-    value: 'I do not wish to self-identify',
-    label: 'I do not wish to self-identify / Prefer not to say',
-  },
-];
-
-const DISABILITY_OPTIONS = [
-  { value: '', label: 'Select Disability Status' },
-  { value: 'No, I do not have a disability', label: 'No, I do not have a disability' },
-  { value: 'Yes, I have a disability', label: 'Yes, I have a disability' },
-  { value: 'I do not wish to answer', label: 'I do not wish to answer / Prefer not to say' },
-];
-
 const VISA_OPTIONS = [
   { value: '', label: 'Select Work Authorization / Visa Status' },
   { value: 'US Citizen', label: 'US Citizen' },
@@ -106,42 +54,6 @@ export function CandidateForm({
     ...emptyCandidateFields(),
     ...(initialCandidate?.confirmed_facts || {}),
     ...initialCandidate,
-    gender:
-      initialCandidate?.gender ||
-      (initialCandidate?.confirmed_facts as Record<string, unknown>)?.gender ||
-      '',
-    race:
-      initialCandidate?.race ||
-      (initialCandidate?.confirmed_facts as Record<string, unknown>)?.race ||
-      initialCandidate?.race_ethnicity ||
-      '',
-    race_ethnicity:
-      initialCandidate?.race_ethnicity ||
-      (initialCandidate?.confirmed_facts as Record<string, unknown>)?.race_ethnicity ||
-      initialCandidate?.race ||
-      '',
-    veteran_status:
-      initialCandidate?.veteran_status ||
-      initialCandidate?.veteran ||
-      (initialCandidate?.confirmed_facts as Record<string, unknown>)?.veteran_status ||
-      (initialCandidate?.confirmed_facts as Record<string, unknown>)?.veteran ||
-      '',
-    veteran:
-      initialCandidate?.veteran ||
-      initialCandidate?.veteran_status ||
-      (initialCandidate?.confirmed_facts as Record<string, unknown>)?.veteran ||
-      '',
-    disability_status:
-      initialCandidate?.disability_status ||
-      initialCandidate?.disability ||
-      (initialCandidate?.confirmed_facts as Record<string, unknown>)?.disability_status ||
-      (initialCandidate?.confirmed_facts as Record<string, unknown>)?.disability ||
-      '',
-    disability:
-      initialCandidate?.disability ||
-      initialCandidate?.disability_status ||
-      (initialCandidate?.confirmed_facts as Record<string, unknown>)?.disability ||
-      '',
     work_authorization:
       initialCandidate?.work_authorization ||
       (initialCandidate?.confirmed_facts as Record<string, unknown>)?.work_authorization ||
@@ -202,39 +114,6 @@ export function CandidateForm({
             ...emptyCandidateFields(),
             ...(c.confirmed_facts || {}),
             ...c,
-            gender: c.gender || (c.confirmed_facts as Record<string, unknown>)?.gender || '',
-            race:
-              c.race ||
-              (c.confirmed_facts as Record<string, unknown>)?.race ||
-              c.race_ethnicity ||
-              '',
-            race_ethnicity:
-              c.race_ethnicity ||
-              (c.confirmed_facts as Record<string, unknown>)?.race_ethnicity ||
-              c.race ||
-              '',
-            veteran_status:
-              c.veteran_status ||
-              c.veteran ||
-              (c.confirmed_facts as Record<string, unknown>)?.veteran_status ||
-              (c.confirmed_facts as Record<string, unknown>)?.veteran ||
-              '',
-            veteran:
-              c.veteran ||
-              c.veteran_status ||
-              (c.confirmed_facts as Record<string, unknown>)?.veteran ||
-              '',
-            disability_status:
-              c.disability_status ||
-              c.disability ||
-              (c.confirmed_facts as Record<string, unknown>)?.disability_status ||
-              (c.confirmed_facts as Record<string, unknown>)?.disability ||
-              '',
-            disability:
-              c.disability ||
-              c.disability_status ||
-              (c.confirmed_facts as Record<string, unknown>)?.disability ||
-              '',
             work_authorization:
               c.work_authorization ||
               (c.confirmed_facts as Record<string, unknown>)?.work_authorization ||
@@ -254,23 +133,6 @@ export function CandidateForm({
       return {
         ...previous,
         ...draft,
-        // If manual fields were already provided, preserve them unless draft has a value
-        gender: draft.gender || previous.gender || '',
-        race: draft.race || draft.race_ethnicity || previous.race || previous.race_ethnicity || '',
-        race_ethnicity:
-          draft.race_ethnicity || draft.race || previous.race_ethnicity || previous.race || '',
-        veteran_status:
-          draft.veteran_status ||
-          draft.veteran ||
-          previous.veteran_status ||
-          previous.veteran ||
-          '',
-        disability_status:
-          draft.disability_status ||
-          draft.disability ||
-          previous.disability_status ||
-          previous.disability ||
-          '',
         work_authorization:
           draft.work_authorization ||
           draft.visa_status ||
@@ -327,14 +189,8 @@ export function CandidateForm({
       // Prepare normalized payload
       const preparedFields = {
         ...fields,
-        race: fields.race || fields.race_ethnicity || null,
-        race_ethnicity: fields.race_ethnicity || fields.race || null,
         work_authorization: fields.work_authorization || fields.visa_status || null,
         visa_status: fields.visa_status || fields.work_authorization || null,
-        veteran: fields.veteran_status || fields.veteran || null,
-        veteran_status: fields.veteran_status || fields.veteran || null,
-        disability: fields.disability_status || fields.disability || null,
-        disability_status: fields.disability_status || fields.disability || null,
       };
 
       const payload = candidatePayload(preparedFields);
@@ -388,13 +244,6 @@ export function CandidateForm({
             location: loc,
             current_location: loc,
             full_address: candidate.full_address || addr,
-            gender: candidate.gender || fields.gender || '',
-            race: candidate.race || fields.race || fields.race_ethnicity || '',
-            race_ethnicity: candidate.race_ethnicity || fields.race_ethnicity || fields.race || '',
-            veteran: candidate.veteran || fields.veteran_status || fields.veteran || '',
-            veteran_status: candidate.veteran_status || fields.veteran_status || '',
-            disability: candidate.disability || fields.disability_status || fields.disability || '',
-            disability_status: candidate.disability_status || fields.disability_status || '',
             visa_status: candidate.visa_status || fields.visa_status || '',
             work_authorization:
               candidate.work_authorization ||
@@ -447,13 +296,6 @@ export function CandidateForm({
               current_state: candidate.current_state || fields.current_state,
               location: loc,
               current_location: loc,
-              gender: candidate.gender || fields.gender,
-              race: candidate.race || fields.race || fields.race_ethnicity,
-              race_ethnicity: candidate.race_ethnicity || fields.race_ethnicity || fields.race,
-              veteran: candidate.veteran || fields.veteran_status || fields.veteran,
-              veteran_status: candidate.veteran_status || fields.veteran_status,
-              disability: candidate.disability || fields.disability_status || fields.disability,
-              disability_status: candidate.disability_status || fields.disability_status,
               visa_status: candidate.visa_status || fields.visa_status,
               work_authorization:
                 candidate.work_authorization || fields.work_authorization || fields.visa_status,
@@ -775,119 +617,6 @@ export function CandidateForm({
                 className="h-9 text-[13px]"
               />
             </label>
-          </div>
-        </div>
-
-        {/* Section 2: Demographics & Common Job Portal Questions (Autofill) */}
-        <div className="border-border/80 bg-card space-y-4 rounded-[16px] border p-5 sm:p-6">
-          <div className="border-border/60 border-b pb-2">
-            <h2 className="text-muted-foreground text-[13px] font-medium">
-              Demographics & Common Job Portal Questions
-            </h2>
-            <p className="text-muted-foreground mt-0.5 text-[11px]">
-              These questions (Gender, Race / Ethnicity, Veteran status, Disability) are asked in
-              almost every job portal. First-time resumes never list them, so save them here to
-              empower automatic 1-click autofill.
-            </p>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
-            {/* Gender */}
-            <div className="space-y-1.5">
-              <label className="text-foreground block text-[13px] font-medium">Gender Identity</label>
-              <select
-                aria-label="Gender"
-                value={typeof fields.gender === 'string' ? fields.gender : ''}
-                onChange={(e) => setField('gender', e.target.value || null)}
-                className="border-border/70 bg-background text-foreground focus-visible:ring-primary/20 focus-visible:border-primary h-9.5 w-full cursor-pointer rounded-[12px] border px-3 py-1.5 text-[13px] focus-visible:ring-2 focus-visible:outline-none"
-              >
-                {GENDER_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Race / Ethnicity */}
-            <div className="space-y-1.5">
-              <label className="text-foreground block text-[13px] font-medium">Race / Ethnicity</label>
-              <select
-                aria-label="Race / Ethnicity"
-                value={
-                  typeof fields.race === 'string'
-                    ? fields.race
-                    : typeof fields.race_ethnicity === 'string'
-                      ? fields.race_ethnicity
-                      : ''
-                }
-                onChange={(e) => {
-                  setField('race', e.target.value || null);
-                  setField('race_ethnicity', e.target.value || null);
-                }}
-                className="border-border/70 bg-background text-foreground focus-visible:ring-primary/20 focus-visible:border-primary h-9.5 w-full cursor-pointer rounded-[12px] border px-3 py-1.5 text-[13px] focus-visible:ring-2 focus-visible:outline-none"
-              >
-                {RACE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Veteran Details */}
-            <div className="space-y-1.5">
-              <label className="text-foreground block text-[13px] font-medium">
-                Veteran Status (Military)
-              </label>
-              <select
-                aria-label="Veteran Status"
-                value={
-                  typeof fields.veteran_status === 'string'
-                    ? fields.veteran_status
-                    : typeof fields.veteran === 'string'
-                      ? fields.veteran
-                      : ''
-                }
-                onChange={(e) => {
-                  setField('veteran_status', e.target.value || null);
-                  setField('veteran', e.target.value || null);
-                }}
-                className="border-border/70 bg-background text-foreground focus-visible:ring-primary/20 focus-visible:border-primary h-9.5 w-full cursor-pointer rounded-[12px] border px-3 py-1.5 text-[13px] focus-visible:ring-2 focus-visible:outline-none"
-              >
-                {VETERAN_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Disability Details */}
-            <div className="space-y-1.5">
-              <label className="text-foreground block text-[13px] font-medium">Disability Status</label>
-              <select
-                aria-label="Disability Status"
-                value={
-                  typeof fields.disability_status === 'string'
-                    ? fields.disability_status
-                    : typeof fields.disability === 'string'
-                      ? fields.disability
-                      : ''
-                }
-                onChange={(e) => {
-                  setField('disability_status', e.target.value || null);
-                  setField('disability', e.target.value || null);
-                }}
-                className="border-border/70 bg-background text-foreground focus-visible:ring-primary/20 focus-visible:border-primary h-9.5 w-full cursor-pointer rounded-[12px] border px-3 py-1.5 text-[13px] focus-visible:ring-2 focus-visible:outline-none"
-              >
-                {DISABILITY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
           </div>
         </div>
 

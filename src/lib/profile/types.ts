@@ -57,16 +57,6 @@ export interface CandidateLocation {
   timezone: string;
 }
 
-export interface CandidateDemographics {
-  gender: string;
-  raceEthnicity: string;
-  veteranStatus: string;
-  disabilityStatus: string;
-  race_ethnicity?: string;
-  veteran_status?: string;
-  disability_status?: string;
-}
-
 export interface CandidateProfileState {
   photoUrl: string | null;
   cv: {
@@ -84,7 +74,6 @@ export interface CandidateProfileState {
   jobLanguages: string[];
   contacts: CandidateContacts;
   location: CandidateLocation;
-  demographics: CandidateDemographics;
   skills: string[];
   excludedSkills: string[];
   excludedSources: string[];

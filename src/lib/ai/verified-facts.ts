@@ -22,7 +22,6 @@ export type FactCategory =
   | 'certification'
   | 'skill'
   | 'compensation'
-  | 'demographics'
   | 'answer_bank';
 
 export interface VerifiedFact {
@@ -55,14 +54,6 @@ export interface CandidateInput {
   authorized_in_usa?: boolean | null;
   need_sponsorship_now?: boolean | null;
   need_sponsorship_future?: boolean | null;
-
-  gender?: string | null;
-  race?: string | null;
-  race_ethnicity?: string | null;
-  veteran?: string | null;
-  veteran_status?: string | null;
-  disability?: string | null;
-  disability_status?: string | null;
 
   current_employer?: string | null;
   current_job_title?: string | null;
@@ -207,11 +198,6 @@ export function buildVerifiedFacts(
   const cf = (candidate.confirmed_facts && typeof candidate.confirmed_facts === 'object')
     ? (candidate.confirmed_facts as Record<string, unknown>)
     : {};
-  const demo = (cf.demographics && typeof cf.demographics === 'object')
-    ? (cf.demographics as Record<string, unknown>)
-    : ((candidate.demographics && typeof candidate.demographics === 'object')
-      ? (candidate.demographics as Record<string, unknown>)
-      : {});
 
   const pickVal = (...keys: string[]): unknown => {
     for (const k of keys) {
@@ -219,8 +205,6 @@ export function buildVerifiedFacts(
       if (top !== undefined && top !== null && top !== '') return top;
       const fromCf = cf[k];
       if (fromCf !== undefined && fromCf !== null && fromCf !== '') return fromCf;
-      const fromDemo = demo[k];
-      if (fromDemo !== undefined && fromDemo !== null && fromDemo !== '') return fromDemo;
     }
     return undefined;
   };
@@ -312,7 +296,7 @@ export function buildVerifiedFacts(
     addFact('profile.work_auth.need_sponsorship_future', 'boolean', sponFuture, 'work_auth', 'profile', 'need_sponsorship_future');
   }
 
-  // Compensation & Demographics
+  // Compensation (EEO/demographic fields are intentionally omitted from autofill profiles)
   const expectedSalRaw = pickVal('expected_salary', 'salary_expectation');
   if (isNonEmptyString(expectedSalRaw) || typeof expectedSalRaw === 'number') {
     addFact('profile.compensation.expected_salary', 'string', String(expectedSalRaw).trim(), 'compensation', 'profile', 'expected_salary');
@@ -320,27 +304,6 @@ export function buildVerifiedFacts(
   const currentSalRaw = pickVal('current_salary');
   if (isNonEmptyString(currentSalRaw) || typeof currentSalRaw === 'number') {
     addFact('profile.compensation.current_salary', 'string', String(currentSalRaw).trim(), 'compensation', 'profile', 'current_salary');
-  }
-
-  const genderRaw = pickVal('gender');
-  if (isNonEmptyString(genderRaw)) {
-    addFact('profile.demographics.gender', 'string', genderRaw.trim(), 'demographics', 'profile', 'gender');
-  }
-  const pronounsRaw = pickVal('pronouns');
-  if (isNonEmptyString(pronounsRaw)) {
-    addFact('profile.demographics.pronouns', 'string', pronounsRaw.trim(), 'demographics', 'profile', 'pronouns');
-  }
-  const raceRaw = pickVal('race', 'race_ethnicity', 'raceEthnicity');
-  if (isNonEmptyString(raceRaw)) {
-    addFact('profile.demographics.race', 'string', raceRaw.trim(), 'demographics', 'profile', 'race');
-  }
-  const veteranRaw = pickVal('veteran', 'veteran_status', 'veteranStatus');
-  if (isNonEmptyString(veteranRaw)) {
-    addFact('profile.demographics.veteran', 'string', veteranRaw.trim(), 'demographics', 'profile', 'veteran');
-  }
-  const disabilityRaw = pickVal('disability', 'disability_status', 'disabilityStatus');
-  if (isNonEmptyString(disabilityRaw)) {
-    addFact('profile.demographics.disability', 'string', disabilityRaw.trim(), 'demographics', 'profile', 'disability');
   }
 
   // Preferences & Relocation

@@ -25,7 +25,7 @@ export interface UserAiProviderSecret {
 }
 
 async function getProductionDb() {
-  const { database } = await import('../db/admin.ts');
+  const { database } = await import('../db/admin');
   return database();
 }
 
@@ -271,15 +271,15 @@ export async function deleteUserAiProviderSecret(
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export async function resolveAuthUserId(request: Request, db?: any): Promise<string | null> {
+export async function resolveAuthUserId(
+  request: Request, db?: any, { bearerOnly = false } = {},
+): Promise<string | null> {
   const authHeader = request.headers.get('authorization') || '';
   if (authHeader.startsWith('Bearer ')) {
     const token = authHeader.slice(7).trim();
     if (!token) return null;
 
-    if (UUID_REGEX.test(token)) {
-      return token;
-    }
+    if (UUID_REGEX.test(token)) return db ? token : null;
 
     const tokenHash = createHash('sha256').update(token).digest('hex');
     const client = db ?? (await getProductionDb());
@@ -317,9 +317,10 @@ export async function resolveAuthUserId(request: Request, db?: any): Promise<str
     }
   }
 
-  // Check cookie session via createClient from ../server.ts
+  if (bearerOnly) return null;
+  // Check the portal session when the caller hasn't requested bearer authentication.
   try {
-    const { createClient } = await import('../server.ts');
+    const { createClient } = await import('../server');
     const supabase = await createClient();
     const { data: { user }, error } = await supabase.auth.getUser();
     if (!error && user?.id) {

@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import type { User } from '@supabase/supabase-js';
 import type { UserProfile } from '@/types/database';
 import { ensureSessionProfile, readSessionProfile } from '@/lib/auth/session-profile';
+import { extensionConnectNext } from '@/lib/auth/extension-connect';
 import {
   ArrowRightIcon,
   PhoneIcon,
@@ -19,6 +20,17 @@ import {
   ArrowLeftIcon,
   ShieldCheckIcon,
 } from 'lucide-react';
+
+function signInDestination() {
+  const next = new URLSearchParams(window.location.search).get('next');
+  return extensionConnectNext(next) ?? '/dashboard';
+}
+
+function authCallbackUrl() {
+  const callback = new URL('/auth/callback', window.location.origin);
+  callback.searchParams.set('next', signInDestination());
+  return callback.href;
+}
 
 export function SignupForm() {
   const router = useRouter();
@@ -137,11 +149,6 @@ export function SignupForm() {
     setLoading(true);
 
     try {
-      const redirectUrl =
-        typeof window !== 'undefined'
-          ? `${window.location.origin}/auth/callback?next=/dashboard`
-          : '';
-
       const { error } = await supabase.auth.signInWithOtp({
         email: cleanEmail,
         options: {
@@ -149,7 +156,7 @@ export function SignupForm() {
           data: {
             full_name: derivedName,
           },
-          emailRedirectTo: redirectUrl,
+          emailRedirectTo: authCallbackUrl(),
         },
       });
 
@@ -251,8 +258,13 @@ export function SignupForm() {
         setProfileLoading(false);
 
         if (prof.status === 'active') {
-          setSuccessMsg('Verification successful! Opening dashboard...');
-          router.push('/dashboard');
+          const destination = signInDestination();
+          if (destination === '/dashboard') {
+            setSuccessMsg('Verification successful! Opening dashboard...');
+            router.push(destination);
+          } else {
+            window.location.assign(destination);
+          }
         } else {
           setErrorMsg(
             `Your account is ${prof.status}. Please contact an administrator before accessing the portal.`
@@ -275,16 +287,11 @@ export function SignupForm() {
     setLoading(true);
 
     try {
-      const redirectUrl =
-        typeof window !== 'undefined'
-          ? `${window.location.origin}/auth/callback?next=/dashboard`
-          : '';
-
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
           shouldCreateUser: true,
-          emailRedirectTo: redirectUrl,
+          emailRedirectTo: authCallbackUrl(),
         },
       });
 
@@ -310,10 +317,9 @@ export function SignupForm() {
     try {
       // OAuth needs a full browser navigation so the server can set PKCE and
       // registration cookies before redirecting to Google.
-      window.location.assign(
-        new URL(`/auth/google?next=${encodeURIComponent('/dashboard')}`, window.location.origin)
-          .href
-      );
+      const google = new URL('/auth/google', window.location.origin);
+      google.searchParams.set('next', signInDestination());
+      window.location.assign(google.href);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to initiate Google login.';
       setErrorMsg(message);

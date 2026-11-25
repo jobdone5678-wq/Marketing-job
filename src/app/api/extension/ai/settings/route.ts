@@ -6,8 +6,9 @@ import {
   saveUserAiProviderSecret,
   deleteUserAiProviderSecret,
   resolveAuthUserId,
-} from '../../../../../lib/ai/ai-provider-data.ts';
-import { encryptSecret, decryptSecret } from '../../../../../lib/ai/encryption.ts';
+} from '../../../../../lib/ai/ai-provider-data';
+import { encryptSecret, decryptSecret } from '../../../../../lib/ai/encryption';
+import { cors } from '@/lib/http/cors';
 
 export const runtime = 'nodejs';
 
@@ -35,6 +36,7 @@ export function getOriginFromBaseUrl(baseUrl: string): string {
 
 export interface SettingsRouteOptions {
   db?: any;
+  params?: Promise<Record<string, never>>;
 }
 
 const updateSettingsSchema = z.object({
@@ -53,9 +55,27 @@ const updateSettingsSchema = z.object({
   api_key: z.string().max(2000).nullable().optional(),
 });
 
-export async function GET(request: Request, options?: SettingsRouteOptions) {
+const corsOptions = { methods: 'GET, PUT, OPTIONS', credentials: false };
+
+export function OPTIONS(request: Request) {
+  return cors(request, new Response(null, { status: 204 }), corsOptions);
+}
+
+function settingsUser(request: Request, options?: SettingsRouteOptions) {
+  const origin = request.headers.get('origin');
+  const bearerOnly = request.headers.has('authorization') ||
+    (origin !== null && origin !== new URL(request.url).origin);
+  return resolveAuthUserId(request, options?.db, { bearerOnly });
+}
+
+function settingsResponse(request: Request, response: Response) {
+  response.headers.set('Cache-Control', 'no-store');
+  return cors(request, response, corsOptions);
+}
+
+async function readSettings(request: Request, options?: SettingsRouteOptions) {
   try {
-    const userId = await resolveAuthUserId(request, options?.db);
+    const userId = await settingsUser(request, options);
     if (!userId) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -101,9 +121,9 @@ export async function GET(request: Request, options?: SettingsRouteOptions) {
   }
 }
 
-export async function PUT(request: Request, options?: SettingsRouteOptions) {
+async function updateSettings(request: Request, options?: SettingsRouteOptions) {
   try {
-    const userId = await resolveAuthUserId(request, options?.db);
+    const userId = await settingsUser(request, options);
     if (!userId) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -196,7 +216,7 @@ export async function PUT(request: Request, options?: SettingsRouteOptions) {
         ? 'proxy'
         : targetMode === 'extension_byok' || targetMode === 'local'
         ? 'direct'
-        : existing?.routing || 'server');
+        : input.mode === 'server' ? 'server' : existing?.routing || 'server');
 
     const targetCredSource =
       input.credentialSource ||
@@ -207,7 +227,7 @@ export async function PUT(request: Request, options?: SettingsRouteOptions) {
         ? 'extension'
         : targetMode === 'local'
         ? 'local'
-        : existing?.credential_source || 'server');
+        : input.mode === 'server' ? 'server' : existing?.credential_source || 'server');
 
     // Update configuration metadata
     const updatedConfig = await saveUserAiProviderConfig(
@@ -242,4 +262,12 @@ export async function PUT(request: Request, options?: SettingsRouteOptions) {
     console.error('PUT /api/extension/ai/settings error:', err);
     return Response.json({ ok: false, error: err?.message || 'Failed to save AI settings' }, { status: 500 });
   }
+}
+
+export async function GET(request: Request, options?: SettingsRouteOptions) {
+  return settingsResponse(request, await readSettings(request, options));
+}
+
+export async function PUT(request: Request, options?: SettingsRouteOptions) {
+  return settingsResponse(request, await updateSettings(request, options));
 }

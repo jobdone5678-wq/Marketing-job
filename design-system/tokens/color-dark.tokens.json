@@ -1,0 +1,129 @@
+{
+  "$description": "Dark-mode color overrides. Same token paths as color.tokens.json; SD merges these into the .dark output. Values ported from web/src/app.css .dark block.",
+  "$type": "color",
+  "background": {
+    "$value": "oklch(0.16 0.006 110)"
+  },
+  "foreground": {
+    "$value": "oklch(0.985 0 0)"
+  },
+  "card": {
+    "$value": "oklch(0.155 0 0)"
+  },
+  "card-foreground": {
+    "$value": "oklch(0.985 0 0)"
+  },
+  "popover": {
+    "$value": "oklch(0.21 0 0)"
+  },
+  "popover-foreground": {
+    "$value": "oklch(0.985 0 0)"
+  },
+  "primary": {
+    "$value": "oklch(0.985 0 0)"
+  },
+  "primary-foreground": {
+    "$value": "oklch(0.155 0 0)"
+  },
+  "secondary": {
+    "$value": "oklch(0.31 0 0)"
+  },
+  "secondary-foreground": {
+    "$value": "oklch(0.985 0 0)"
+  },
+  "muted": {
+    "$value": "oklch(0.24 0 0)"
+  },
+  "muted-foreground": {
+    "$value": "oklch(0.72 0 0)"
+  },
+  "accent": {
+    "$value": "oklch(0.27 0 0)"
+  },
+  "accent-foreground": {
+    "$value": "oklch(0.985 0 0)"
+  },
+  "destructive": {
+    "$value": "oklch(0.704 0.191 22.216)"
+  },
+  "destructive-foreground": {
+    "$value": "oklch(0.16 0 0)"
+  },
+  "destructive-strong": {
+    "$value": "oklch(0.704 0.191 22.216)",
+    "$description": "Same as the action color: on the dark background it already clears 4.5:1."
+  },
+  "border": {
+    "$value": "oklch(1 0 0 / 8%)"
+  },
+  "input": {
+    "$value": "oklch(1 0 0 / 35%)"
+  },
+  "ring": {
+    "$value": "{brand-ring}"
+  },
+  "brand": {
+    "$value": "oklch(0.72 0.095 121)",
+    "$description": "Oats green on dark — calmer olive (not neon) with dark ink."
+  },
+  "brand-foreground": {
+    "$value": "oklch(0.18 0.02 120)"
+  },
+  "brand-strong": {
+    "$value": "oklch(0.79 0.1 118)"
+  },
+  "brand-muted": {
+    "$value": "oklch(0.31 0.045 118)"
+  },
+  "brand-ring": {
+    "$value": "oklch(0.6 0.09 118)"
+  },
+  "warning": {
+    "$value": "oklch(0.828 0.189 84.429)",
+    "$description": "Caution fill. The solid block that marks something as needing attention."
+  },
+  "warning-foreground": {
+    "$value": "oklch(0.279 0.077 45.635)",
+    "$description": "Text on the caution fill."
+  },
+  "warning-strong": {
+    "$value": "oklch(0.828 0.189 84.429)",
+    "$description": "Caution text and borders on the page background, where the fill is not legible."
+  },
+  "warning-muted": {
+    "$value": "oklch(0.279 0.077 45.635)",
+    "$description": "Soft caution tint. A background that carries the meaning without the weight."
+  },
+  "success": {
+    "$value": "oklch(0.72 0.16 155)",
+    "$description": "Success fill: a gain, a pass, a connected state. The solid block."
+  },
+  "success-foreground": {
+    "$value": "oklch(0.2 0.05 155)",
+    "$description": "Text on the success fill."
+  },
+  "success-strong": {
+    "$value": "oklch(0.8 0.15 155)",
+    "$description": "Success text and borders on the page background and on the success tint."
+  },
+  "success-muted": {
+    "$value": "oklch(0.3 0.06 155)",
+    "$description": "Soft success tint behind success-strong text."
+  },
+  "chart-1": {
+    "$value": "#3987e5",
+    "$description": "Chart series, categorical slots 1-5 in fixed order (blue, orange, aqua, yellow, magenta), never cycled. Validated as a set for colour-vision deficiency and contrast against the dark surface, where all five clear 3:1."
+  },
+  "chart-2": {
+    "$value": "#d95926"
+  },
+  "chart-3": {
+    "$value": "#199e70"
+  },
+  "chart-4": {
+    "$value": "#c98500"
+  },
+  "chart-5": {
+    "$value": "#d55181"
+  }
+}

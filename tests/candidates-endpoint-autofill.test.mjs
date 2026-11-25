@@ -6,6 +6,7 @@ import ts from 'typescript';
 import { z } from 'zod';
 import { textFields, booleanFields } from '../src/lib/ai/schemas.ts';
 import { approvedSavedAnswers } from '../src/lib/extension-answers/saved-answers.ts';
+import * as confirmedFacts from '../src/lib/candidate/confirmed-facts.ts';
 
 function loadSource(path, dependencies) {
   const file = new URL('../src/' + path + '.ts', import.meta.url);
@@ -13,7 +14,7 @@ function loadSource(path, dependencies) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   const exports = {};
-  runInNewContext(code, { exports, URL, Response, Buffer, crypto, console, require: name => dependencies[name] });
+  runInNewContext(code, { exports, URL, Response, Buffer, crypto, console, require: name => name === '@/lib/candidate/confirmed-facts' ? confirmedFacts : dependencies[name] });
   return exports;
 }
 

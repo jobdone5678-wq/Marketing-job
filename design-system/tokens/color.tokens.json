@@ -1,0 +1,152 @@
+{
+  "$description": "Semantic color tokens. Light-mode values; dark overrides in color-dark.tokens.json. Ported from web/src/app.css :root block — do not drop or rename without reason.",
+  "$type": "color",
+  "background": {
+    "$value": "oklch(0.997 0.003 130)",
+    "$description": "Page background. One fill for the whole canvas; separation comes from spacing and thin borders."
+  },
+  "foreground": {
+    "$value": "oklch(0.13 0 0)",
+    "$description": "Default text color."
+  },
+  "card": {
+    "$value": "oklch(1 0 0)",
+    "$description": "Card surface fill."
+  },
+  "card-foreground": {
+    "$value": "oklch(0.13 0 0)",
+    "$description": "Text on card surface."
+  },
+  "popover": {
+    "$value": "oklch(1 0 0)",
+    "$description": "Popover/dropdown surface fill."
+  },
+  "popover-foreground": {
+    "$value": "oklch(0.13 0 0)",
+    "$description": "Text on popover surface."
+  },
+  "primary": {
+    "$value": "oklch(0.13 0 0)",
+    "$description": "Primary action color (high-contrast neutral)."
+  },
+  "primary-foreground": {
+    "$value": "oklch(1 0 0)",
+    "$description": "Text/icon on primary surface."
+  },
+  "secondary": {
+    "$value": "oklch(0.955 0 0)",
+    "$description": "Secondary surface fill."
+  },
+  "secondary-foreground": {
+    "$value": "oklch(0.13 0 0)",
+    "$description": "Text on secondary surface."
+  },
+  "muted": {
+    "$value": "oklch(0.955 0 0)",
+    "$description": "Muted surface fill (same as secondary in light)."
+  },
+  "muted-foreground": {
+    "$value": "oklch(0.43 0 0)",
+    "$description": "Low-emphasis text (captions, placeholders)."
+  },
+  "accent": {
+    "$value": "oklch(0.93 0 0)",
+    "$description": "Accent surface fill (hover states, highlights)."
+  },
+  "accent-foreground": {
+    "$value": "oklch(0.13 0 0)",
+    "$description": "Text on accent surface."
+  },
+  "destructive": {
+    "$value": "oklch(0.577 0.245 27.325)",
+    "$description": "Destructive action color (delete, remove, error)."
+  },
+  "destructive-foreground": {
+    "$value": "oklch(0.985 0 0)",
+    "$description": "Text/icon on a filled destructive surface."
+  },
+  "destructive-strong": {
+    "$value": "oklch(0.52 0.22 27.325)",
+    "$description": "Destructive text on the page background or a destructive tint, where the action color falls short of 4.5:1."
+  },
+  "border": {
+    "$value": "oklch(0.92 0 0)",
+    "$description": "Default border color."
+  },
+  "input": {
+    "$value": "oklch(0.66 0 0)",
+    "$description": "Input border/fill color. Dark enough (3.1:1 on the page and on cards) that a field's edge identifies it as a control (WCAG 1.4.11); at 0.93 it measured 1.2:1 and empty fields vanished into the page."
+  },
+  "ring": {
+    "$value": "{brand}",
+    "$description": "Focus ring color: the brand fill, which clears 3:1 against every light surface (WCAG 1.4.11). brand-ring is too pale for a focus indicator on the page background (1.9:1)."
+  },
+  "brand": {
+    "$value": "#5b6f00",
+    "$description": "Brand CTA fill — oats green, dark olive (Granola palette)."
+  },
+  "brand-foreground": {
+    "$value": "#f3f6e2",
+    "$description": "Text/icon on brand surface."
+  },
+  "brand-strong": {
+    "$value": "#4c5c00",
+    "$description": "Darker brand tone for readable text/links."
+  },
+  "brand-muted": {
+    "$value": "#e5eacd",
+    "$description": "Soft brand tint for chips/badges."
+  },
+  "brand-ring": {
+    "$value": "#b2c248",
+    "$description": "Focus outline color on brand surfaces."
+  },
+  "warning": {
+    "$value": "oklch(0.769 0.188 70.08)",
+    "$description": "Caution fill. The solid block that marks something as needing attention."
+  },
+  "warning-foreground": {
+    "$value": "oklch(0.279 0.077 45.635)",
+    "$description": "Text on the caution fill."
+  },
+  "warning-strong": {
+    "$value": "oklch(0.555 0.163 48.998)",
+    "$description": "Caution text and borders on the page background, where the fill is not legible."
+  },
+  "warning-muted": {
+    "$value": "oklch(0.962 0.059 95.617)",
+    "$description": "Soft caution tint. A background that carries the meaning without the weight."
+  },
+  "success": {
+    "$value": "oklch(0.62 0.15 155)",
+    "$description": "Success fill: a gain, a pass, a connected state. The solid block."
+  },
+  "success-foreground": {
+    "$value": "oklch(0.25 0.06 155)",
+    "$description": "Text on the success fill (4.6:1)."
+  },
+  "success-strong": {
+    "$value": "oklch(0.48 0.13 155)",
+    "$description": "Success text and borders on the page (6.0:1) and on the success tint (5.3:1)."
+  },
+  "success-muted": {
+    "$value": "oklch(0.95 0.05 155)",
+    "$description": "Soft success tint behind success-strong text."
+  },
+  "chart-1": {
+    "$value": "#2a78d6",
+    "$description": "Chart series, categorical slots 1-5 in fixed order (blue, orange, aqua, yellow, magenta), never cycled. Validated as a set for colour-vision deficiency and contrast against the light surface; slots 3-5 fall under 3:1 on light, so a chart using them carries a legend and a table of its figures."
+  },
+  "chart-2": {
+    "$value": "#eb6834"
+  },
+  "chart-3": {
+    "$value": "#1baf7a"
+  },
+  "chart-4": {
+    "$value": "#eda100"
+  },
+  "chart-5": {
+    "$value": "#e87ba4"
+  }
+}

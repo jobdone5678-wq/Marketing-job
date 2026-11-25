@@ -9,14 +9,17 @@
  * - Executes FreeHire planFormBatch and chooseComboboxOption with typed grounding validation
  */
 
-import { decryptSecret } from './encryption.ts';
-import { createSafeAgent, type DnsLookupFn } from './ssrf-guard.ts';
-import { createSsrfSafeFetch } from './ssrf-fetch-adapter.ts';
-import { ProviderClient, ProviderError, type TokenUsageTelemetry } from './provider-client.ts';
-import { ServerVercelProviderClient } from './server-provider-client.ts';
-import { buildVerifiedFacts } from './verified-facts.ts';
-import { planFormBatch, type Field, type Fill, type FormContext, type PlanResult } from './planner.ts';
-import { chooseComboboxOption, type ChooseResult } from './chooser.ts';
+import { decryptSecret } from './encryption';
+import { createSafeAgent, type DnsLookupFn } from './ssrf-guard';
+import { createSsrfSafeFetch } from './ssrf-fetch-adapter';
+import { ProviderClient, ProviderError, type TokenUsageTelemetry } from './provider-client';
+import { ServerVercelProviderClient } from './server-provider-client';
+import { buildVerifiedFacts } from './verified-facts';
+import { planFormBatch, type Field, type Fill, type FormContext, type PlanResult } from './planner';
+import { chooseComboboxOption } from './chooser';
+import { isPrivateAutofillField } from './autofill-field-safety';
+import { isUnreviewedResume } from '../candidate/confirmed-facts';
+import { getUserAiProviderSecret } from './ai-provider-data';
 
 export class OrchestratorError extends Error {
   readonly status: number;
@@ -123,11 +126,21 @@ export async function resolveProviderClient(
   const db = await getDb(options);
 
   // 1. Query user configuration
-  const { data: config } = await db
+  const { data: config, error: configError } = await db
     .from('user_ai_provider_configs')
     .select('*')
     .eq('user_id', actorId)
     .maybeSingle();
+  if (configError) {
+    throw new OrchestratorError('Could not load AI provider settings', 503, 'CONFIG_UNAVAILABLE');
+  }
+  if (config?.mode === 'extension_byok' || config?.mode === 'local') {
+    throw new OrchestratorError(
+      'Select Server or Portal API key to use NextKinHR AI autofill.',
+      422,
+      'DIRECT_PROVIDER_MODE',
+    );
+  }
 
   const isPortalMode =
     config &&
@@ -139,11 +152,7 @@ export async function resolveProviderClient(
 
   if (isPortalMode) {
     // 2. Portal BYOK mode
-    const { data: secret } = await db
-      .from('user_ai_provider_secrets')
-      .select('*')
-      .eq('user_id', actorId)
-      .maybeSingle();
+    const secret = await getUserAiProviderSecret(actorId, db);
 
     if (!secret || !secret.encrypted_api_key || !secret.iv || !secret.auth_tag) {
       throw new OrchestratorError(
@@ -155,6 +164,8 @@ export async function resolveProviderClient(
 
     let apiKey: string;
     try {
+      const destination = new URL(config.base_url || secret.key_origin);
+      if (destination.origin !== new URL(secret.key_origin).origin) throw new Error('Provider origin changed');
       apiKey = decryptSecret(
         {
           encrypted: secret.encrypted_api_key,
@@ -266,12 +277,16 @@ export async function executePlan(
       'NOT_FOUND'
     );
   }
+  if (candidate.provenance_status !== 'confirmed' || isUnreviewedResume(candidate.confirmed_facts ?? {})) {
+    throw new OrchestratorError('Save a confirmed candidate profile before using AI autofill.', 422);
+  }
 
   const client = await resolveProviderClient(actorId, options);
   const facts = buildVerifiedFacts(candidate, req.answerBank);
 
   try {
-    const planResult = await planFormBatch(req.fields || [], facts, client, req.context);
+    const fields = (req.fields || []).filter((field) => field && !isPrivateAutofillField(field));
+    const planResult = await planFormBatch(fields, facts, client, req.context);
     return {
       ok: true,
       plan: planResult,
@@ -314,6 +329,9 @@ export async function executeChoose(
   if (!req.question || !Array.isArray(req.options)) {
     throw new OrchestratorError('question and options array are required', 400, 'BAD_REQUEST');
   }
+  if (isPrivateAutofillField(req.question)) {
+    throw new OrchestratorError('This question requires manual review.', 422);
+  }
 
   const db = await getDb(options);
   const { data: candidate, error } = await db
@@ -329,6 +347,9 @@ export async function executeChoose(
       404,
       'NOT_FOUND'
     );
+  }
+  if (candidate.provenance_status !== 'confirmed' || isUnreviewedResume(candidate.confirmed_facts ?? {})) {
+    throw new OrchestratorError('Save a confirmed candidate profile before using AI autofill.', 422);
   }
 
   const client = await resolveProviderClient(actorId, options);

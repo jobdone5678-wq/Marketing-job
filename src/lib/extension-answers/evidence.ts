@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isUrlField } from '../../../jobright_extension_v3_4_2/jobright_extension/core/field-mapping.js';
+import { isUrlField } from '@/lib/ai/autofill-field-safety';
 export const questionSchema = z
   .object({
     id: z.string().min(1).max(200),

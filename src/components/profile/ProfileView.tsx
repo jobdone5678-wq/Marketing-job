@@ -330,15 +330,6 @@ export function ProfileView() {
           cv: parsed.cv,
           headline: parsed.headline || prev.headline || '',
           summary: parsed.summary || prev.summary || '',
-          demographics: {
-            gender: parsed.demographics?.gender || prev.demographics?.gender || '',
-            raceEthnicity: parsed.demographics?.raceEthnicity || parsed.demographics?.race_ethnicity || prev.demographics?.raceEthnicity || '',
-            veteranStatus: parsed.demographics?.veteranStatus || parsed.demographics?.veteran_status || prev.demographics?.veteranStatus || '',
-            disabilityStatus: parsed.demographics?.disabilityStatus || parsed.demographics?.disability_status || prev.demographics?.disabilityStatus || '',
-            race_ethnicity: parsed.demographics?.raceEthnicity || parsed.demographics?.race_ethnicity || prev.demographics?.raceEthnicity || '',
-            veteran_status: parsed.demographics?.veteranStatus || parsed.demographics?.veteran_status || prev.demographics?.veteranStatus || '',
-            disability_status: parsed.demographics?.disabilityStatus || parsed.demographics?.disability_status || prev.demographics?.disabilityStatus || '',
-          },
           roles: parsed.roles.length > 0 ? parsed.roles : prev.roles,
           seniorities: parsed.seniorities.length > 0 ? parsed.seniorities : prev.seniorities,
           jobLanguages: parsed.jobLanguages.length > 0 ? parsed.jobLanguages : prev.jobLanguages,
@@ -1318,118 +1309,6 @@ export function ProfileView() {
             </div>
           </section>
 
-          {/* Demographics & Equal Employment Opportunity (EEO) */}
-          <section className="space-y-4 rounded-xl border border-neutral-200/80 bg-white p-5 shadow-xs dark:border-neutral-800 dark:bg-neutral-900">
-            <div>
-              <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-                Demographics & Equal Employment Opportunity (EEO)
-              </h2>
-              <p className="text-xs text-neutral-500">
-                Configured here as your single source of truth for job application autofill across Greenhouse, Lever, Workday, Ashby, and ATS portals.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {/* Gender */}
-              <div className="flex flex-col gap-1 text-xs">
-                <span className="font-medium text-neutral-600 dark:text-neutral-400">Gender</span>
-                <select
-                  value={profile.demographics?.gender || ''}
-                  onChange={(e) =>
-                    updateProfile((p) => ({
-                      ...p,
-                      demographics: {
-                        ...p.demographics,
-                        gender: e.target.value,
-                      },
-                    }))
-                  }
-                  className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-xs text-neutral-900 shadow-2xs dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-                >
-                  <option value="">Decline to self-identify / Prefer not to say</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Non-Binary">Non-Binary</option>
-                  <option value="Prefer not to say">Prefer not to say</option>
-                </select>
-              </div>
-
-              {/* Race / Ethnicity */}
-              <div className="flex flex-col gap-1 text-xs">
-                <span className="font-medium text-neutral-600 dark:text-neutral-400">Race / Ethnicity</span>
-                <select
-                  value={profile.demographics?.raceEthnicity || profile.demographics?.race_ethnicity || ''}
-                  onChange={(e) =>
-                    updateProfile((p) => ({
-                      ...p,
-                      demographics: {
-                        ...p.demographics,
-                        raceEthnicity: e.target.value,
-                        race_ethnicity: e.target.value,
-                      },
-                    }))
-                  }
-                  className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-xs text-neutral-900 shadow-2xs dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-                >
-                  <option value="">Decline to self-identify</option>
-                  <option value="White">White</option>
-                  <option value="Black or African American">Black or African American</option>
-                  <option value="Hispanic or Latino">Hispanic or Latino</option>
-                  <option value="Asian">Asian</option>
-                  <option value="Native American or Alaska Native">Native American or Alaska Native</option>
-                  <option value="Native Hawaiian or Other Pacific Islander">Native Hawaiian or Other Pacific Islander</option>
-                  <option value="Two or More Races">Two or More Races</option>
-                </select>
-              </div>
-
-              {/* Veteran Status */}
-              <div className="flex flex-col gap-1 text-xs">
-                <span className="font-medium text-neutral-600 dark:text-neutral-400">Veteran Status</span>
-                <select
-                  value={profile.demographics?.veteranStatus || profile.demographics?.veteran_status || ''}
-                  onChange={(e) =>
-                    updateProfile((p) => ({
-                      ...p,
-                      demographics: {
-                        ...p.demographics,
-                        veteranStatus: e.target.value,
-                        veteran_status: e.target.value,
-                      },
-                    }))
-                  }
-                  className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-xs text-neutral-900 shadow-2xs dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-                >
-                  <option value="">Decline to self-identify</option>
-                  <option value="I am not a veteran">I am not a veteran</option>
-                  <option value="I am a protected veteran">I am a protected veteran</option>
-                  <option value="I am a veteran, but not a protected veteran">I am a veteran, but not a protected veteran</option>
-                </select>
-              </div>
-
-              {/* Disability Status */}
-              <div className="flex flex-col gap-1 text-xs">
-                <span className="font-medium text-neutral-600 dark:text-neutral-400">Disability Status</span>
-                <select
-                  value={profile.demographics?.disabilityStatus || profile.demographics?.disability_status || ''}
-                  onChange={(e) =>
-                    updateProfile((p) => ({
-                      ...p,
-                      demographics: {
-                        ...p.demographics,
-                        disabilityStatus: e.target.value,
-                        disability_status: e.target.value,
-                      },
-                    }))
-                  }
-                  className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-xs text-neutral-900 shadow-2xs dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-                >
-                  <option value="">I do not wish to answer</option>
-                  <option value="No, I do not have a disability">No, I do not have a disability</option>
-                  <option value="Yes, I have a disability (or previously had a disability)">Yes, I have a disability (or previously had a disability)</option>
-                </select>
-              </div>
-            </div>
-          </section>
         </div>
       )}
 

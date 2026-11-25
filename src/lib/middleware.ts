@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { profileAccess } from '@/lib/auth/profile-access';
+import { extensionConnectNext } from '@/lib/auth/extension-connect';
 
 const middlewareProfileCache = new Map<
   string,
@@ -89,6 +90,14 @@ export async function updateSession(request: NextRequest) {
     profileAccess(profile) &&
     !request.nextUrl.searchParams.has('error')
   ) {
+    const next = extensionConnectNext(request.nextUrl.searchParams.get('next'));
+    if (next) {
+      const response = NextResponse.redirect(new URL(next, request.url), {
+        headers: { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' },
+      });
+      supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
+      return response;
+    }
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard';
     return NextResponse.redirect(url);

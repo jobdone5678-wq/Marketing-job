@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
+import dns from 'node:dns/promises';
 import {
   encryptSecret,
   decryptSecret,
@@ -9,6 +10,7 @@ import {
 } from '../../src/lib/ai/encryption.ts';
 import {
   GET as getSettings,
+  OPTIONS as settingsPreflight,
   PUT as putSettings,
   maskApiKey,
 } from '../../src/app/api/extension/ai/settings/route.ts';
@@ -24,6 +26,18 @@ process.env.AI_PROVIDER_ENCRYPTION_KEY = TEST_KEY;
 
 const USER_1 = '11111111-1111-4000-8000-111111111111';
 const USER_2 = '22222222-2222-4000-8000-222222222222';
+
+test('settings advertises an extension PUT and rejects a bare profile UUID in production', async () => {
+  const url = 'http://localhost/api/extension/ai/settings';
+  const origin = 'chrome-extension://ebhfafmnihndlaoibgjnfjhkjlnaencj';
+  const response = settingsPreflight(new Request(url, { method: 'OPTIONS', headers: { Origin: origin } }));
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get('access-control-allow-origin'), origin);
+  assert.match(response.headers.get('access-control-allow-methods'), /\bPUT\b/);
+  assert.equal((await getSettings(new Request(url, {
+    headers: { Origin: origin, Authorization: `Bearer ${USER_1}` },
+  }))).status, 401);
+});
 
 async function createTestDb() {
   const db = new PGlite();
@@ -312,7 +326,8 @@ test('AI Settings Sync & Test Connection Endpoints', async (t) => {
     }
   });
 
-  await t.test('POST /api/extension/ai/test-connection succeeds when provider responds with 200', async () => {
+  await t.test('POST /api/extension/ai/test-connection succeeds when provider responds with 200', async (testCase) => {
+    testCase.mock.method(dns, 'lookup', async () => [{ address: '8.8.8.8', family: 4 }]);
     const mockFetch = async (url, options) => {
       return new Response(JSON.stringify({ data: [{ id: 'deepseek-chat' }] }), {
         status: 200,
@@ -339,7 +354,8 @@ test('AI Settings Sync & Test Connection Endpoints', async (t) => {
     assert.equal(body.message, 'Connection successful');
   });
 
-  await t.test('POST /api/extension/ai/test-connection returns 401 when provider rejects credentials', async () => {
+  await t.test('POST /api/extension/ai/test-connection returns 401 when provider rejects credentials', async (testCase) => {
+    testCase.mock.method(dns, 'lookup', async () => [{ address: '8.8.8.8', family: 4 }]);
     const mockFetch = async () => {
       return new Response(JSON.stringify({ error: { message: 'Invalid API key' } }), {
         status: 401,
@@ -365,7 +381,8 @@ test('AI Settings Sync & Test Connection Endpoints', async (t) => {
     assert.equal(body.ok, false);
   });
 
-  await t.test('POST /api/extension/ai/test-connection rejects image generation models with HTTP 422', async () => {
+  await t.test('POST /api/extension/ai/test-connection rejects image generation models with HTTP 422', async (testCase) => {
+    testCase.mock.method(dns, 'lookup', async () => [{ address: '8.8.8.8', family: 4 }]);
     const mockFetch = async () => {
       return new Response(JSON.stringify({ data: [{ id: 'recraft/recraft-v4.1-flash-v2:free' }] }), {
         status: 200,
