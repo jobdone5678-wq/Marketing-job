@@ -11,7 +11,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { z } from 'zod';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { generateText } from 'ai';
-import { isUrlField } from '../../../../../jobright_extension/core/field-mapping.js';
+import { isUrlField } from '../../../../../jobright_extension_v3_4_2/jobright_extension/core/field-mapping.js';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
