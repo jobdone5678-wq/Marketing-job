@@ -505,8 +505,57 @@ export function validateGroundedAnswer(
   }
 
   // =========================================================================
-  // 6. Structured Profile Facts (Location, Contact, Personal)
+  // 6. Structured Profile Facts (Location, Contact, Personal, Compensation, Demographics)
   // =========================================================================
+  if (canonical === 'first_name') {
+    const firstFact = facts.get('profile.first_name');
+    const nameFact = facts.get('profile.name');
+    const expectedFirst = firstFact
+      ? normalize(firstFact.value)
+      : (nameFact ? normalize(String(nameFact.value).trim().split(/\s+/)[0]) : '');
+    if (expectedFirst && (expectedFirst === normAns || expectedFirst.includes(normAns) || normAns.includes(expectedFirst))) {
+      return validResult([firstFact ? firstFact.id : nameFact!.id], 'verified');
+    }
+    if (!firstFact && !nameFact) return unresolvedResult('Missing verified first name fact');
+    return unresolvedResult(`Answer '${answer}' does not match verified first name`, [firstFact ? firstFact.id : nameFact!.id]);
+  }
+
+  if (canonical === 'last_name') {
+    const lastFact = facts.get('profile.last_name');
+    const nameFact = facts.get('profile.name');
+    const expectedLast = lastFact
+      ? normalize(lastFact.value)
+      : (nameFact ? normalize(String(nameFact.value).trim().split(/\s+/).slice(1).join(' ')) : '');
+    if (expectedLast && (expectedLast === normAns || expectedLast.includes(normAns) || normAns.includes(expectedLast))) {
+      return validResult([lastFact ? lastFact.id : nameFact!.id], 'verified');
+    }
+    if (!lastFact && !nameFact) return unresolvedResult('Missing verified last name fact');
+    return unresolvedResult(`Answer '${answer}' does not match verified last name`, [lastFact ? lastFact.id : nameFact!.id]);
+  }
+
+  if (canonical === 'preferred_name') {
+    const prefFact = facts.get('profile.preferred_name') || facts.get('profile.first_name') || facts.get('profile.name');
+    if (!prefFact) return unresolvedResult('Missing verified preferred name fact');
+    const factNorm = normalize(prefFact.value);
+    if (factNorm === normAns || factNorm.includes(normAns) || normAns.includes(factNorm)) {
+      return validResult([prefFact.id], 'verified');
+    }
+    return unresolvedResult(`Answer '${answer}' does not match verified preferred name '${prefFact.value}'`, [prefFact.id]);
+  }
+
+  if (canonical === 'city_state') {
+    const cityFact = facts.get('profile.location.city');
+    const stateFact = facts.get('profile.location.state');
+    const evidenceIds = [cityFact?.id, stateFact?.id].filter(Boolean) as string[];
+    if (!evidenceIds.length) return unresolvedResult('Missing verified location facts');
+    const cityNorm = cityFact ? normalize(cityFact.value) : '';
+    const stateNorm = stateFact ? normalize(stateFact.value) : '';
+    if ((cityNorm && normAns.includes(cityNorm)) || (stateNorm && normAns.includes(stateNorm))) {
+      return validResult(evidenceIds, 'verified');
+    }
+    return unresolvedResult(`Answer '${answer}' does not match verified city/state`, evidenceIds);
+  }
+
   const fieldMapping: Record<string, string> = {
     current_city: 'profile.location.city',
     city: 'profile.location.city',
@@ -525,6 +574,17 @@ export function validateGroundedAnswer(
     website: 'profile.contact.website',
     current_employer: 'profile.experience.current_employer',
     current_job_title: 'profile.experience.current_title',
+    expected_salary: 'profile.compensation.expected_salary',
+    salary_expectation: 'profile.compensation.expected_salary',
+    current_salary: 'profile.compensation.current_salary',
+    gender: 'profile.demographics.gender',
+    pronouns: 'profile.demographics.pronouns',
+    race: 'profile.demographics.race',
+    race_ethnicity: 'profile.demographics.race',
+    veteran: 'profile.demographics.veteran',
+    veteran_status: 'profile.demographics.veteran',
+    disability: 'profile.demographics.disability',
+    disability_status: 'profile.demographics.disability',
   };
 
   const matchedFactId = fieldMapping[canonical] || fieldMapping[category];
@@ -537,6 +597,13 @@ export function validateGroundedAnswer(
     const factNorm = normalize(fact.value);
     if (factNorm === normAns || factNorm.includes(normAns) || normAns.includes(factNorm)) {
       return validResult([fact.id], 'verified');
+    }
+    if (matchedFactId.startsWith('profile.compensation.')) {
+      const factDigits = String(fact.value).replace(/[^0-9.]/g, '');
+      const ansDigits = String(answer).replace(/[^0-9.]/g, '');
+      if (factDigits && ansDigits && factDigits === ansDigits) {
+        return validResult([fact.id], 'verified');
+      }
     }
 
     return unresolvedResult(`Answer '${answer}' does not match verified fact '${fact.value}'`, [fact.id]);

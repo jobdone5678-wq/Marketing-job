@@ -1705,7 +1705,7 @@
     'authorized_in_usa', 'needs_sponsorship', 'open_to_relocation', 'visa_status', 'work_authorization',
     'intended_work_country',
     'end_client', 'point_of_contact', 'pay_rate', 'vendor_email', 'personal_email', 'contract_type',
-    'summary', 'bio', 'gender', 'race', 'veteran', 'veteran_status', 'disability', 'disability_status', 'availability', 'salary_expectation',
+    'summary', 'bio', 'gender', 'race', 'veteran', 'veteran_status', 'disability', 'disability_status', 'pronouns', 'availability', 'salary_expectation',
     'how_heard', 'highest_education', 'school', 'graduation_year', 'preferred_work_type', 'current_salary', 'e_signature', 'consent'
   ]);
 
@@ -1731,7 +1731,7 @@
   const NON_BOOLEAN_FACTS = new Set([
     'country', 'first_name', 'preferred_first_name', 'last_name', 'full_name', 'email', 'phone',
     'current_city', 'current_state', 'current_location', 'current_employer',
-    'current_title', 'headline', 'zip_code', 'full_address', 'salary_expectation',
+    'current_title', 'headline', 'zip_code', 'full_address', 'salary_expectation', 'pronouns',
     'summary', 'bio', 'website', 'linkedin_url', 'github_url', 'total_experience_years',
     'primary_skills', 'school', 'graduation_year', 'end_client', 'point_of_contact', 'pay_rate',
     'vendor_email', 'personal_email', 'contract_type', 'current_salary'
@@ -1739,17 +1739,17 @@
 
   // Field labels seen across job boards, ATS platforms and bespoke career sites.
   const aliases = {
-    first_name: ['first name', 'given name', 'forename', 'fname', 'first and middle name', 'first/given name', 'middle and first name'],
+    first_name: ['first name', 'legal first name', 'given name', 'legal given name', 'forename', 'fname', 'first and middle name', 'first/given name', 'middle and first name'],
     preferred_first_name: ['preferred name', 'preferred first name', 'preferred given name', 'nickname', 'chosen name', 'preferred'],
-    last_name: ['last name', 'family name', 'surname', 'lname', 'last/family name'],
-    full_name: ['full name', 'applicant name', 'candidate name', 'your name', 'legal name', 'full legal name', 'applicant full name', 'name of applicant', 'your full name', 'preferred full name'],
+    last_name: ['last name', 'legal last name', 'family name', 'legal family name', 'surname', 'legal surname', 'lname', 'last/family name'],
+    full_name: ['full name', 'applicant name', 'candidate name', 'your name', 'legal name', 'full legal name', 'applicant full name', 'name of applicant', 'your full name', 'preferred full name', 'preferred first name & last name', 'preferred first name and last name', 'preferred first and last name'],
     e_signature: ['e signature', 'signature', 'sign here', 'certify by entering your name', 'by entering your name into the field below', 'typed signature', 'electronic signature'],
     email: ['email', 'email address', 'e mail', 'email id', 'work email', 'personal email', 'contact email', 'business email', 'primary email'],
     phone: ['phone', 'phone number', 'mobile', 'mobile phone', 'tel', 'cell phone', 'contact number', 'contact phone', 'telephone', 'telephone number', 'best phone number', 'primary phone', 'work phone', 'mobile number', 'phone or cell'],
     current_city: ['city', 'current city', 'town', 'municipality', 'present city', 'where do you live', 'city of residence', 'address level2', 'which city do you live in', 'city you currently reside in'],
-    current_location: ['location', 'current location', 'present location', 'city and state', 'city state', 'city, state', 'city and country', 'city & state', 'where are you currently located', 'where are you based', 'where do you currently reside', 'current residence location', 'location of residence', 'your current location', 'based in', 'location city state'],
+    current_location: ['location', 'current location', 'present location', 'city and state', 'city state', 'city, state', 'city and state/province', 'city and state province', 'city and country', 'city & state', 'where are you currently located', 'where are you based', 'where do you currently reside', 'current residence location', 'location of residence', 'your current location', 'based in', 'location city state'],
     current_state: ['state', 'province', 'region', 'current state', 'address level1', 'state province', 'state/province', 'which state', 'current state province', 'state of residence'],
-    zip_code: ['zip', 'zip code', 'postal code', 'postcode', 'zip postal code', 'zipcode', 'postal code number'],
+    zip_code: ['zip', 'zip code', 'postal code', 'postcode', 'zip postal code', 'zip or postal code', 'current zip', 'current zip code', 'current postal code', 'current zip or postal code', 'zipcode', 'postal code number'],
     country: ['country of residence', 'residence country', 'current country', 'country you live in', 'country', 'country name', 'country region', 'which country'],
     intended_work_country: [
       'which country do you intend to work from',
@@ -1851,12 +1851,13 @@
     contract_type: ['contract type', 'employment type', 'w2', 'c2c', '1099', 'contractor', 'independent contractor', 'w-2', 'c2c contractor', 'type of employment', 'type of contract'],
     summary: ['summary', 'professional summary', 'executive summary', 'profile summary', 'candidate summary', 'about me', 'bio'],
     bio: ['short bio', 'candidate bio', 'professional bio'],
-    gender: ['gender', 'sex', 'gender identity', 'what is your gender', 'how do you identify your gender', 'voluntary self-identification of gender', 'demographic gender', 'please select your gender', 'gender self-identification'],
-    race: ['race', 'ethnicity', 'race and ethnicity', 'racial background', 'ethnic background', 'race ethnicity', 'hispanic or latino', 'demographic race', 'demographics race', 'are you hispanic or latino', 'voluntary self-identification of race', 'what is your race', 'race/ethnicity'],
+    gender: ['gender', 'sex', 'gender identity', 'what is your gender', 'what is your gender identity', 'how do you identify your gender', 'voluntary self-identification of gender', 'demographic gender', 'please select your gender', 'gender self-identification'],
+    pronouns: ['pronouns', 'preferred pronouns', 'what are your pronouns', 'your pronouns', 'pronoun'],
+    race: ['race', 'ethnicity', 'ethnicity(ies)', 'race and ethnicity', 'racial background', 'ethnic background', 'race ethnicity', 'hispanic or latino', 'demographic race', 'demographics race', 'are you hispanic or latino', 'voluntary self-identification of race', 'what is your race', 'which ethnicity(ies) do you identify with', 'which ethnicities do you identify with', 'which ethnicity do you identify with', 'how do you identify your ethnicity', 'race/ethnicity'],
     veteran: ['veteran', 'veteran status', 'military status', 'protected veteran', 'are you a veteran', 'u.s. veteran status', 'voluntary self-identification of veteran', 'veteran classification', 'military service', 'please select your veteran status', 'veteran self-identification'],
     disability: ['disability', 'disability status', 'voluntary self identification of disability', 'do you have a disability', 'physical or mental disability', 'individual with a disability', 'disability self-identification', 'disability disclosure'],
     availability: ['availability', 'start date', 'earliest start date', 'when can you start', 'notice period', 'available to start', 'available for a full-time', 'full-time internship', 'available for internship', 'summer internship', 'available for full-time', 'availability date', 'earliest possible start date'],
-    salary_expectation: ['salary', 'expected salary', 'desired salary', 'compensation expectation', 'desired compensation', 'salary expectations', 'compensation', 'target salary', 'pay expectation', 'minimum salary', 'hourly rate expectation'],
+    salary_expectation: ['salary', 'expected salary', 'desired salary', 'compensation expectation', 'desired compensation', 'salary expectations', 'what are your salary expectations', 'what is your expected salary', 'what is your desired salary', 'what are your compensation expectations', 'compensation', 'target salary', 'pay expectation', 'minimum salary', 'hourly rate expectation'],
     how_heard: ['how did you hear about us', 'how did you hear about this role', 'how did you hear about this opportunity', 'how did you find this job', 'referral source', 'source', 'application source', 'where did you hear about us', 'how did you hear'],
     highest_education: [
       'highest education', 'highest degree', 'highest level of education', 'degree', 'degree level', 'education level', 'level of education',
@@ -2179,12 +2180,14 @@
       : /^1\d{10}$/.test(phoneDigits) ? phoneDigits.slice(1)
       : phoneDigits.length === 10 ? phoneDigits : rawPhone;
 
+    const demographics = facts.demographics || candidate.demographics || candFacts.demographics || {};
     const firstName = facts.first_name || candidate.first_name || candFacts.first_name || names[0] || '';
     const preferredFirst = facts.preferred_first_name || facts.preferred_name || candidate.preferred_first_name || candidate.preferred_name || candFacts.preferred_first_name || candFacts.preferred_name || firstName;
-    const gender = facts.gender || candidate.gender || candFacts.gender || '';
-    const race = facts.race || candidate.race || candFacts.race || facts.race_ethnicity || candidate.race_ethnicity || candFacts.race_ethnicity || '';
-    const veteran = facts.veteran || candidate.veteran || facts.veteran_status || candidate.veteran_status || candFacts.veteran || candFacts.veteran_status || '';
-    const disability = facts.disability || candidate.disability || facts.disability_status || candidate.disability_status || candFacts.disability || candFacts.disability_status || '';
+    const gender = facts.gender || candidate.gender || candFacts.gender || demographics.gender || '';
+    const pronouns = facts.pronouns || candidate.pronouns || candFacts.pronouns || demographics.pronouns || '';
+    const race = facts.race || candidate.race || candFacts.race || facts.race_ethnicity || candidate.race_ethnicity || candFacts.race_ethnicity || demographics.raceEthnicity || demographics.race || '';
+    const veteran = facts.veteran || candidate.veteran || facts.veteran_status || candidate.veteran_status || candFacts.veteran || candFacts.veteran_status || demographics.veteranStatus || demographics.veteran || '';
+    const disability = facts.disability || candidate.disability || facts.disability_status || candidate.disability_status || candFacts.disability || candFacts.disability_status || demographics.disabilityStatus || demographics.disability || '';
     const visaStatus = facts.visa_status || candidate.visa_status || facts.work_authorization || candidate.work_authorization || candFacts.visa_status || candFacts.work_authorization || '';
     const workAuth = facts.work_authorization || candidate.work_authorization || facts.visa_status || candidate.visa_status || candFacts.work_authorization || candFacts.visa_status || '';
     const linkedin = facts.linkedin_url || candidate.linkedin_url || candFacts.linkedin_url || '';
@@ -2262,6 +2265,7 @@
       summary: candidate.summary || candidate.bio || facts.summary || facts.bio || candFacts.summary || candFacts.bio || '',
       bio: candidate.bio || candidate.summary || facts.bio || facts.summary || candFacts.bio || candFacts.summary || '',
       gender: gender,
+      pronouns: pronouns,
       race: race,
       race_ethnicity: race,
       veteran: veteran,
@@ -2269,7 +2273,7 @@
       disability: disability,
       disability_status: disability,
       availability: facts.availability || candidate.availability || candidate.available_to_join || candidate.notice_period || '',
-      salary_expectation: facts.expected_salary || candidate.expected_salary || '',
+      salary_expectation: facts.expected_salary || facts.salary_expectation || candidate.expected_salary || candidate.salary_expectation || candFacts.expected_salary || candFacts.salary_expectation || '',
       how_heard: facts.how_heard || candidate.how_heard || '',
       highest_education: facts.highest_qualification || candidate.highest_qualification || candidate.degree || candidate.highest_education || '',
       school: facts.school || candidate.university_name || candidate.school || candidate.institution || '',
@@ -2297,9 +2301,9 @@
     const options = field?.options || [];
 
     const nl = norm(rawLabel);
-    const cleanLabel = nl.replace(/^(?:(?:please|your|provide|enter|share|paste|input|select|choose)\s+)+/, '');
+    const cleanLabel = nl.replace(/^(?:(?:please|your|provide|enter|share|paste|input|select|choose|specify|indicate|the)\s+)+/, '');
     let nh = norm(rawHint);
-    const cleanHint = nh.replace(/^(?:(?:please|your|provide|enter|share|paste|input|select|choose)\s+)+/, '');
+    const cleanHint = nh.replace(/^(?:(?:please|your|provide|enter|share|paste|input|select|choose|specify|indicate|the)\s+)+/, '');
 
     const hasBooleanOptions = Boolean(
       (options && options.length > 0 && pickBooleanOption(options, true) && pickBooleanOption(options, false)) ||
@@ -2358,7 +2362,14 @@
     if (uniqueKeys.includes('disability') && uniqueKeys.includes('disability_status')) uniqueKeys = uniqueKeys.filter(k => k !== 'disability_status');
     if (uniqueKeys.includes('visa_status') && uniqueKeys.includes('work_authorization')) uniqueKeys = uniqueKeys.filter(k => k !== 'work_authorization');
     if (uniqueKeys.length > 1 && candidatesList[0].length > candidatesList[1].length) uniqueKeys = [candidatesList[0].key];
-    if (uniqueKeys.length !== 1) return null;
+    if (uniqueKeys.length !== 1) {
+      const isEssay = /\b(describe|explain|detail|elaborate|why|tell us|share)\b/i.test(nl);
+      if (!isEssay) {
+        if (isSponsorLabel) return { key: 'needs_sponsorship', exact: true, length: 14 };
+        if (isAuthLabel) return { key: 'authorized_in_usa', exact: true, length: 14 };
+      }
+      return null;
+    }
 
     const best = candidatesList.find(m => m.key === uniqueKeys[0]);
     return { key: uniqueKeys[0], exact: !!best?.exact, length: best?.length || 0 };
@@ -3309,7 +3320,7 @@
       case 'choice': return field.options.find(option => selected(option.element) || checked(option.element))?.label || '';
       case 'combobox': return comboValue(el);
       case 'multi-combobox': {
-        const chips = el.querySelectorAll ? el.querySelectorAll('.ng-value-label, .select2-selection__choice__display, .k-chip-label, [data-slot="multi-select-value"]') : [];
+        const chips = el.querySelectorAll ? el.querySelectorAll('.ng-value-label, .select2-selection__choice__display, .k-chip-label, [data-slot="multi-select-value"], [class*="multi-value__label" i], [class*="multiValue" i]') : [];
         return [...chips].map(chip => chip.textContent.trim()).filter(Boolean);
       }
       case 'resume-file': return el?.files?.[0]?.name || (el?.value ? String(el.value).split(/[/\\]/).pop() : '');
@@ -3487,19 +3498,47 @@
     }
   }
 
-  async function readChoices(field, isCurrent = () => true) {
-    if (field.kind !== 'combobox' || field.options.length) return field.options;
-    const el = field.element;
-    const trigger = comboTrigger(el);
-    if (!isCurrent() || !click(trigger)) return [];
-    try {
-      const start = Date.now();
-      while (Date.now() - start < 300 && isCurrent()) {
-        const options = comboOptions(el);
-        if (options.length) return options;
+  async function openComboOptions(el, trigger, isCurrent = () => true, requireClick = false) {
+    const clickedTrigger = click(trigger);
+    const ctrl = el.closest?.('.select__control, [class*="select__control" i]');
+    const clickedCtrl = ctrl && ctrl !== trigger ? click(ctrl) : false;
+    if (requireClick && !clickedTrigger && !clickedCtrl) return [];
+
+    let options = [];
+    const openStart = Date.now();
+    // await options asynchronously (up to 400ms)
+    while (isCurrent()) {
+      options = comboOptions(el);
+      if (options.length || Date.now() - openStart >= 400) break;
+      await wait(30);
+    }
+    // ArrowDown fallback if options still not open
+    if (!options.length && isCurrent()) {
+      try {
+        const view = el.ownerDocument?.defaultView || globalThis;
+        const KeyEvt = view.KeyboardEvent || globalThis.KeyboardEvent;
+        (trigger || el).dispatchEvent(new KeyEvt('keydown', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
+        (trigger || el).dispatchEvent(new KeyEvt('keyup', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
+      } catch {}
+      const arrowStart = Date.now();
+      while (isCurrent()) {
+        options = comboOptions(el);
+        if (options.length || Date.now() - arrowStart >= 250) break;
         await wait(30);
       }
-      return [];
+    }
+    return options;
+  }
+
+  async function readChoices(field, isCurrent = () => true) {
+    if ((field.kind !== 'combobox' && field.kind !== 'multi-combobox') || field.options.length) return field.options;
+    const el = field.element;
+    const trigger = comboTrigger(el);
+    if (!isCurrent() || !trigger) return [];
+    const existing = comboOptions(el);
+    if (existing.length) return existing;
+    try {
+      return await openComboOptions(el, trigger, isCurrent, true);
     } finally {
       if (isCurrent()) closeCombo(el);
     }
@@ -3520,31 +3559,7 @@
 
     // If options not open, click trigger to open listbox
     if (!options.length && trigger) {
-      click(trigger);
-      const ctrl = el.closest?.('.select__control, [class*="select__control" i]');
-      if (ctrl && ctrl !== trigger) click(ctrl);
-      const openStart = Date.now();
-      // await options asynchronously (up to 400ms)
-      while (Date.now() - openStart < 400 && isCurrent()) {
-        await wait(30);
-        options = comboOptions(el);
-        if (options.length) break;
-      }
-      // ArrowDown fallback if options still not open
-      if (!options.length && isCurrent()) {
-        try {
-          const view = el.ownerDocument?.defaultView || globalThis;
-          const KeyEvt = view.KeyboardEvent || globalThis.KeyboardEvent;
-          (trigger || el).dispatchEvent(new KeyEvt('keydown', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
-          (trigger || el).dispatchEvent(new KeyEvt('keyup', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
-        } catch {}
-        const arrowStart = Date.now();
-        while (Date.now() - arrowStart < 250 && isCurrent()) {
-          await wait(30);
-          options = comboOptions(el);
-          if (options.length) break;
-        }
-      }
+      options = await openComboOptions(el, trigger, isCurrent, false);
     }
 
     // Match candidate value against option text
@@ -3659,9 +3674,14 @@
   }
 
   async function fillMultiCombo(field, values, isCurrent) {
-    if (!Array.isArray(values)) return null;
+    const normalizedValues = Array.isArray(values)
+      ? values
+      : (typeof values === 'string' && values.trim()
+        ? values.split(/[,;\n]+/).map(v => v.trim()).filter(Boolean)
+        : []);
+    if (!normalizedValues.length) return null;
     const selected = [];
-    for (const value of new Set(values.slice(0, 20))) {
+    for (const value of new Set(normalizedValues.slice(0, 20))) {
       if (!isCurrent() || !field.element.isConnected) break;
       const result = await fillCombo(field, value, isCurrent);
       if (result) selected.push(result.expected);
@@ -5843,7 +5863,7 @@
         attempts++;
       }
       if (isFilling) {
-        return { filled: [], unfilled: [], questions: [], total: 0, error: 'Autofill is already in progress.' };
+        return { filled: [], unfilled: [], questions: [], questionMeta: {}, total: 0, error: 'Autofill is already in progress.' };
       }
     }
     isFilling = true;
@@ -5876,7 +5896,7 @@
         typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string' && value.trim()
       )) {
         manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'Save your candidate details in My Applications and Resume first.' });
-        return { filled: [], unfilled: [], questions: [], total: page.fields.length, error: 'Save your candidate details in My Applications and Resume first.' };
+        return { filled: [], unfilled: [], questions: [], questionMeta: {}, total: page.fields.length, error: 'Save your candidate details in My Applications and Resume first.' };
       }
       const baseFields = newFields ? page.fields.filter(field => newFields.some(next =>
         next.element === field.element && next.label === field.label)) : page.fields;
@@ -5916,6 +5936,23 @@
     }
 
     const questions = [];
+    const questionMeta = Object.create(null);
+    const labelPlanCounts = new Map();
+    for (const plan of plans) {
+      if (plan.status !== 'ai' && plan.status !== 'needs_review' && plan.status !== 'unknown') continue;
+      const { field } = plan;
+      const label = (field.label || field.hint || '').trim();
+      const key = answerKey(field);
+      if (mapping.isUrlField?.(field)) continue;
+      if (plan.factKey === 'date_of_birth') continue;
+      if (label.length < 2 || key.length > 300 || manualQuestion.test(label)) continue;
+      const baseQid = key.slice(0, 200);
+      labelPlanCounts.set(baseQid, (labelPlanCounts.get(baseQid) || 0) + 1);
+    }
+    const labelOccurrence = new Map();
+    const assignedQids = new Set();
+    const hasOwn = (obj, k) => Boolean(k) && Object.prototype.hasOwnProperty.call(obj, k);
+
     for (const plan of plans) {
       const { field } = plan;
       const label = (field.label || field.hint || '').trim();
@@ -5923,20 +5960,69 @@
 
       if (plan.status === 'ai' || plan.status === 'needs_review' || plan.status === 'unknown') {
         if (mapping.isUrlField?.(field)) continue;
-        // Missing DOB, citizenship and work-authorization facts must not be
-        // guessed from a resume or replaced with an unrelated generic answer.
-        if (['date_of_birth', 'citizenship_status', 'authorized_in_usa', 'needs_sponsorship', 'visa_status', 'work_authorization'].includes(plan.factKey)) continue;
-        if (label.length < 2 || key.length > 300 || manualQuestion.test(label) || writer.read(field)) continue;
-        const choices = plan.options?.length ? plan.options : (await writer.readChoices(field, () => location.href === expectedUrl))
-          .map(option => option.label);
+        // Missing DOB must not be guessed from a resume or sent to AI.
+        if (plan.factKey === 'date_of_birth') continue;
+        if (label.length < 2 || key.length > 300 || manualQuestion.test(label)) continue;
+
+        const baseQid = key.slice(0, 200);
+        const occ = (labelOccurrence.get(baseQid) || 0) + 1;
+        labelOccurrence.set(baseQid, occ);
+        const isDuplicateLabel = (labelPlanCounts.get(baseQid) || 0) > 1;
+        const qid = !isDuplicateLabel
+          ? baseQid
+          : ([field.id, field.name, `${baseQid}::${occ}`].find(
+              (c) => typeof c === 'string' && c.trim() && !assignedQids.has(c),
+            ) || `${baseQid}::${occ}`);
+        assignedQids.add(qid);
+
+        if (writer.read(field)) continue;
+        const isComboKind = field.kind === 'combobox' || field.kind === 'multi-combobox';
+        const skipComboProbe = aiAnswers && Object.keys(aiAnswers).length === 0 && isComboKind;
+        const choices = plan.options?.length ? plan.options
+          : skipComboProbe ? []
+          : (await writer.readChoices(field, () => location.href === expectedUrl)).map(option => option.label);
         const options = [...new Set(choices.filter(option => option && option.length <= 1000))].slice(0, 200);
 
         // 1. If explicit AI answer was provided via API
-        if (aiAnswers && typeof aiAnswers[key] === 'string' && (!options.length || options.includes(aiAnswers[key]))) {
-          plan.status = 'supported';
-          plan.value = aiAnswers[key];
-          plan.ai = true;
-          continue;
+        const aiReply = aiAnswers
+          ? (
+              (hasOwn(aiAnswers, qid) ? aiAnswers[qid] : undefined) ??
+              (!isDuplicateLabel
+                ? (
+                    (hasOwn(aiAnswers, field.id) ? aiAnswers[field.id] : undefined) ??
+                    (hasOwn(aiAnswers, key) ? aiAnswers[key] : undefined) ??
+                    (hasOwn(aiAnswers, baseQid) ? aiAnswers[baseQid] : undefined)
+                  )
+                : undefined)
+            )
+          : undefined;
+        if (typeof aiReply === 'string') {
+          if (!options.length) {
+            plan.status = 'supported';
+            plan.value = field.kind === 'multi-combobox'
+              ? aiReply.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean)
+              : aiReply;
+            plan.ai = true;
+            continue;
+          }
+          const normalizedReply = aiReply.trim().toLowerCase();
+          const matchedOption = options.find(o => o.trim().toLowerCase() === normalizedReply);
+          if (matchedOption !== undefined) {
+            plan.status = 'supported';
+            plan.value = field.kind === 'multi-combobox' ? [matchedOption] : matchedOption;
+            plan.ai = true;
+            continue;
+          }
+          if (field.kind === 'multi-combobox' || field.kind === 'multi-select' || field.kind === 'checkbox-group') {
+            const parts = aiReply.split(/[,;\n]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+            const matchedList = parts.map(p => options.find(o => o.trim().toLowerCase() === p)).filter(Boolean);
+            if (matchedList.length) {
+              plan.status = 'supported';
+              plan.value = [...new Set(matchedList)];
+              plan.ai = true;
+              continue;
+            }
+          }
         }
 
         // 2. Dynamic resume-grounded answers based strictly on candidate's uploaded resume
@@ -6281,10 +6367,6 @@
           else if (/choose not to disclose|decline to state|prefer not to/i.test(checkLabel)) {
             autoValue = false;
           }
-          // 7. General unknown checkbox: Default to FALSE based on resume
-          else {
-            autoValue = false;
-          }
         }
 
         if (autoValue !== null && autoValue !== undefined) {
@@ -6292,7 +6374,14 @@
           plan.value = autoValue;
           plan.ai = !fromFact;
         } else if (aiAnswers) {
-          questions.push({ id: key.slice(0, 200), label: label.slice(0, 2000), type: field.kind, options });
+          questions.push({ id: qid, label: label.slice(0, 2000), type: field.kind, options });
+          questionMeta[qid] = {
+            fieldId: field.id || field.name || field.key || qid,
+            combo: field.kind === 'combobox' || field.kind === 'multi-combobox',
+            required: Boolean(field.required || field.element?.required || (typeof field.element?.getAttribute === 'function' && field.element.getAttribute('aria-required') === 'true')),
+            planStatus: plan.status,
+            factKey: plan.factKey || null,
+          };
         }
       }
     }
@@ -6388,7 +6477,7 @@
       });
     }
 
-      return { filled, unfilled, questions, total: sourceFields.length + Number(!!input) };
+      return { filled, unfilled, questions, questionMeta, total: sourceFields.length + Number(!!input) };
     } finally {
       isFilling = false;
     }
@@ -6462,12 +6551,27 @@
     const timer = setTimeout(() => observer.disconnect(), 15000);
   }
 
+  async function rescanConditionalQuestions(expectedUrl, candidate, resume, maxPasses = 3) {
+    const page = inspect();
+    if (!page.hasForm) return null;
+    let passes = 0;
+    while (passes < maxPasses) {
+      passes++;
+      const { fields } = inspect();
+      const unfilled = fields.filter(f => !f.excluded && f.kind !== 'inaccessible' && !writer.read(f));
+      if (!unfilled.length) break;
+      await fill(expectedUrl, candidate, resume, true, unfilled, globalThis.__nextkinSavedAnswers).catch(() => {});
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+
   globalThis.NextkinApplication = {
     scan() {
       const { job, hasForm } = inspect();
       return { job, hasForm, url: location.href };
     },
     fill,
+    rescanConditionalQuestions,
     savedAnswers,
     hasAnswers,
     startAutofill,

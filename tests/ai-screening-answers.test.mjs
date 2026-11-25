@@ -346,3 +346,76 @@ test('duplicate-label comboboxes disambiguate qid deterministically across Pass 
     [{ key: 'c2', value: 'Canada' }],
   );
 });
+
+
+test('Wrapbook/Greenhouse labels map deterministically in planFill and multi-combobox supports comma-separated Pass 2 replies', async () => {
+  const { planFill } = await import('../jobright_extension/core/field-mapping.js');
+  const fields = [
+    { key: 'f1', label: 'Legal First Name', kind: 'text' },
+    { key: 'f2', label: 'Legal Last Name', kind: 'text' },
+    { key: 'f3', label: 'Preferred First Name & Last Name', kind: 'text' },
+    { key: 'f4', label: 'Please provide the city and state/province you anticipate working in for the role in which you are applying', kind: 'text' },
+    { key: 'f5', label: 'Please provide your current ZIP or Postal Code to determine appropriate pay band', kind: 'text' },
+    { key: 'f6', label: 'What are your salary expectations?', kind: 'text' },
+    { key: 'f7', label: 'Do you require Wrapbook to sponsor you for a work permit now or in the future?', kind: 'combobox', options: [] },
+    { key: 'f8', label: 'What are your pronouns? (Optional)', kind: 'combobox', options: [] },
+    { key: 'f9', label: 'Which ethnicity(ies) do you identify with? Please select all that apply.', kind: 'multi-combobox', options: [] },
+  ];
+  const fullCand = {
+    ...candidate,
+    full_name: 'Jane Doe',
+    current_city: 'Austin',
+    current_state: 'Texas',
+    zip_code: '78701',
+    expected_salary: '120000',
+    authorized_in_usa: true,
+    need_sponsorship_now: false,
+    need_sponsorship_future: false,
+    pronouns: 'She/Her',
+    race: 'Asian',
+    confirmed_facts: {
+      full_name: 'Jane Doe',
+      current_city: 'Austin',
+      current_state: 'Texas',
+      zip_code: '78701',
+      expected_salary: '120000',
+      authorized_in_usa: true,
+      need_sponsorship_now: false,
+      need_sponsorship_future: false,
+      pronouns: 'She/Her',
+      race: 'Asian',
+    },
+  };
+  const planned = planFill(fields, fullCand);
+  const byKey = Object.fromEntries(planned.map((p) => [p.field.key, p]));
+  assert.equal(byKey.f1.status, 'supported');
+  assert.equal(byKey.f1.value, 'Jane');
+  assert.equal(byKey.f2.status, 'supported');
+  assert.equal(byKey.f2.value, 'Doe');
+  assert.equal(byKey.f3.status, 'supported');
+  assert.equal(byKey.f3.value, 'Jane Doe');
+  assert.equal(byKey.f4.status, 'supported');
+  assert.equal(byKey.f4.value, 'Austin, Texas');
+  assert.equal(byKey.f5.status, 'supported');
+  assert.equal(byKey.f5.value, '78701');
+  assert.equal(byKey.f6.status, 'supported');
+  assert.equal(byKey.f6.value, '120000');
+  assert.equal(byKey.f7.status, 'supported');
+  assert.equal(byKey.f7.factKey, 'needs_sponsorship');
+  assert.equal(byKey.f7.value, false);
+  assert.equal(byKey.f8.status, 'supported');
+  assert.equal(byKey.f8.value, 'She/Her');
+  assert.equal(byKey.f9.status, 'supported');
+  assert.deepEqual([...byKey.f9.value], ['Asian']);
+
+  const { api } = engine(
+    [{ field: { key: 'mc1', label: 'Which communities do you belong to?', kind: 'multi-combobox' }, status: 'unknown' }],
+    () => '',
+    async () => [{ label: 'First-Generation' }, { label: 'Veteran' }],
+  );
+  const res = await api.fill(url, fullCand, null, false, null, null, {
+    'which communities do you belong to': 'First-Generation, Veteran',
+  });
+  assert.equal(res.filled.length, 1);
+  assert.equal(res.filled[0].value, 'First-Generation, Veteran');
+});

@@ -109,8 +109,17 @@ export function inferQuestionDescriptor(field: Field): {
   let canonical = '';
   let category = '';
 
-  if (/\b(first\s*name|last\s*name|full\s*name|legal\s*name|candidate\s*name|your\s*name)\b/.test(norm)) {
+  if (/\bpreferred\b.*\bfirst\b.*\blast\b|\bfull\s*name\b|\blegal\s*name\b|\bcandidate\s*name\b|\byour\s*name\b/.test(norm)) {
     canonical = 'name';
+    category = 'personal';
+  } else if (/\bfirst\s*name\b|\bgiven\s*name\b/.test(norm) && !/\blast\b/.test(norm)) {
+    canonical = 'first_name';
+    category = 'personal';
+  } else if (/\blast\s*name\b|\bfamily\s*name\b|\bsurname\b/.test(norm) && !/\bfirst\b/.test(norm)) {
+    canonical = 'last_name';
+    category = 'personal';
+  } else if (/\bpreferred\s*(?:first\s*)?name\b/.test(norm)) {
+    canonical = 'preferred_name';
     category = 'personal';
   } else if (/\b(email|email\s*address)\b/.test(norm)) {
     canonical = 'email';
@@ -118,6 +127,12 @@ export function inferQuestionDescriptor(field: Field): {
   } else if (/\b(phone|mobile|cell|telephone)\b/.test(norm)) {
     canonical = 'phone';
     category = 'contact';
+  } else if (/\b(zip|postal|postcode|zipcode)\b/.test(norm)) {
+    canonical = 'postal_code';
+    category = 'location';
+  } else if (/\bcity\b/.test(norm) && /\b(state|province|region)\b/.test(norm)) {
+    canonical = 'city_state';
+    category = 'location';
   } else if (/\b(city|current\s*city)\b/.test(norm)) {
     canonical = 'city';
     category = 'location';
@@ -126,9 +141,6 @@ export function inferQuestionDescriptor(field: Field): {
     category = 'location';
   } else if (/\b(country|residence|nation)\b/.test(norm)) {
     canonical = 'country';
-    category = 'location';
-  } else if (/\b(zip|postal|postcode|zipcode)\b/.test(norm)) {
-    canonical = 'postal_code';
     category = 'location';
   } else if (/\b(address|street)\b/.test(norm)) {
     canonical = 'full_address';
@@ -142,6 +154,24 @@ export function inferQuestionDescriptor(field: Field): {
   } else if (/\b(website|portfolio)\b/.test(norm)) {
     canonical = 'website';
     category = 'contact';
+  } else if (/\b(salary|compensation|pay\s*expectation|expected\s*pay)\b/.test(norm)) {
+    canonical = 'expected_salary';
+    category = 'compensation';
+  } else if (/\b(pronouns?)\b/.test(norm)) {
+    canonical = 'pronouns';
+    category = 'demographics';
+  } else if (/\b(gender)\b/.test(norm)) {
+    canonical = 'gender';
+    category = 'demographics';
+  } else if (/\b(race|ethnic|ethnicity)\b/.test(norm)) {
+    canonical = 'race';
+    category = 'demographics';
+  } else if (/\b(veteran)\b/.test(norm)) {
+    canonical = 'veteran';
+    category = 'demographics';
+  } else if (/\b(disability)\b/.test(norm)) {
+    canonical = 'disability';
+    category = 'demographics';
   } else if (/\b(sponsor|visa)\b/.test(norm)) {
     canonical = 'needs_sponsorship';
     category = 'work_auth';

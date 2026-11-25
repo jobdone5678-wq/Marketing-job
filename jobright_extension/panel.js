@@ -1175,7 +1175,7 @@ async function readDeferredComboboxOptions(tab, scope, fieldId, label, matchInde
             : null;
           if (!field) {
             const comboMatches = fields.filter(
-              (f) => f.kind === 'combobox' && norm(f.label || f.hint) === targetNorm,
+              (f) => (f.kind === 'combobox' || f.kind === 'multi-combobox') && norm(f.label || f.hint) === targetNorm,
             );
             field = comboMatches[idx] || comboMatches[0] || null;
           }
@@ -1255,7 +1255,7 @@ async function draftScreening(session, profile, tab, job, questions, scope, reus
       id: meta.fieldId || qid,
       label: q.label,
       type: q.type || 'text',
-      combo: typeof meta.combo === 'boolean' ? meta.combo : q.type === 'combobox',
+      combo: typeof meta.combo === 'boolean' ? meta.combo : (q.type === 'combobox' || q.type === 'multi-combobox'),
       required: Boolean(meta.required),
       ...(Array.isArray(q.options) && q.options.length ? { options: q.options } : {}),
     };
@@ -1331,7 +1331,7 @@ async function draftScreening(session, profile, tab, job, questions, scope, reus
           target = eligible.find((q) => {
             const qid = q.id || q.label;
             if (Object.hasOwn(answers, qid) || processedDeferredQids.has(qid)) return false;
-            const isCombo = Boolean(questionMeta?.[qid]?.combo) || q.type === 'combobox';
+            const isCombo = Boolean(questionMeta?.[qid]?.combo) || q.type === 'combobox' || q.type === 'multi-combobox';
             return isCombo && normalizeQuestionLabel(q.label) === defNorm;
           }) || eligible.find((q) => {
             const qid = q.id || q.label;

@@ -21,6 +21,8 @@ export type FactCategory =
   | 'education'
   | 'certification'
   | 'skill'
+  | 'compensation'
+  | 'demographics'
   | 'answer_bank';
 
 export interface VerifiedFact {
@@ -202,65 +204,143 @@ export function buildVerifiedFacts(
     });
   };
 
+  const cf = (candidate.confirmed_facts && typeof candidate.confirmed_facts === 'object')
+    ? (candidate.confirmed_facts as Record<string, unknown>)
+    : {};
+  const demo = (cf.demographics && typeof cf.demographics === 'object')
+    ? (cf.demographics as Record<string, unknown>)
+    : ((candidate.demographics && typeof candidate.demographics === 'object')
+      ? (candidate.demographics as Record<string, unknown>)
+      : {});
+
+  const pickVal = (...keys: string[]): unknown => {
+    for (const k of keys) {
+      const top = candidate[k];
+      if (top !== undefined && top !== null && top !== '') return top;
+      const fromCf = cf[k];
+      if (fromCf !== undefined && fromCf !== null && fromCf !== '') return fromCf;
+      const fromDemo = demo[k];
+      if (fromDemo !== undefined && fromDemo !== null && fromDemo !== '') return fromDemo;
+    }
+    return undefined;
+  };
+
   // 1. Personal Information
-  if (isNonEmptyString(candidate.full_name)) {
-    addFact('profile.name', 'string', candidate.full_name.trim(), 'personal', 'profile', 'full_name');
+  const fullNameRaw = pickVal('full_name', 'name');
+  if (isNonEmptyString(fullNameRaw)) {
+    addFact('profile.name', 'string', fullNameRaw.trim(), 'personal', 'profile', 'full_name');
+  }
+  const firstNameRaw = pickVal('first_name');
+  if (isNonEmptyString(firstNameRaw)) {
+    addFact('profile.first_name', 'string', firstNameRaw.trim(), 'personal', 'profile', 'first_name');
+  }
+  const lastNameRaw = pickVal('last_name');
+  if (isNonEmptyString(lastNameRaw)) {
+    addFact('profile.last_name', 'string', lastNameRaw.trim(), 'personal', 'profile', 'last_name');
+  }
+  const prefNameRaw = pickVal('preferred_full_name', 'preferred_name', 'preferred_first_name');
+  if (isNonEmptyString(prefNameRaw)) {
+    addFact('profile.preferred_name', 'string', prefNameRaw.trim(), 'personal', 'profile', 'preferred_name');
   }
 
   // 2. Contact Information
-  if (isNonEmptyString(candidate.email)) {
-    addFact('profile.contact.email', 'string', candidate.email.trim(), 'contact', 'profile', 'email');
+  const emailRaw = pickVal('email');
+  if (isNonEmptyString(emailRaw)) {
+    addFact('profile.contact.email', 'string', emailRaw.trim(), 'contact', 'profile', 'email');
   }
-  if (isNonEmptyString(candidate.phone)) {
-    addFact('profile.contact.phone', 'string', candidate.phone.trim(), 'contact', 'profile', 'phone');
+  const phoneRaw = pickVal('phone', 'phone_number');
+  if (isNonEmptyString(phoneRaw)) {
+    addFact('profile.contact.phone', 'string', phoneRaw.trim(), 'contact', 'profile', 'phone');
   }
-  if (isNonEmptyString(candidate.linkedin_url)) {
-    addFact('profile.contact.linkedin', 'string', candidate.linkedin_url.trim(), 'contact', 'profile', 'linkedin_url');
+  const linkedinRaw = pickVal('linkedin_url', 'linkedin');
+  if (isNonEmptyString(linkedinRaw)) {
+    addFact('profile.contact.linkedin', 'string', linkedinRaw.trim(), 'contact', 'profile', 'linkedin_url');
   }
-  if (isNonEmptyString(candidate.github_url)) {
-    addFact('profile.contact.github', 'string', candidate.github_url.trim(), 'contact', 'profile', 'github_url');
+  const githubRaw = pickVal('github_url');
+  if (isNonEmptyString(githubRaw)) {
+    addFact('profile.contact.github', 'string', githubRaw.trim(), 'contact', 'profile', 'github_url');
   }
-  if (isNonEmptyString(candidate.website)) {
-    addFact('profile.contact.website', 'string', candidate.website.trim(), 'contact', 'profile', 'website');
+  const websiteRaw = pickVal('website', 'portfolio_url');
+  if (isNonEmptyString(websiteRaw)) {
+    addFact('profile.contact.website', 'string', websiteRaw.trim(), 'contact', 'profile', 'website');
   }
 
   // 3. Structured Location
-  if (isNonEmptyString(candidate.current_city)) {
-    addFact('profile.location.city', 'string', candidate.current_city.trim(), 'location', 'profile', 'current_city');
+  const rawLocation = pickVal('current_location', 'location');
+  const locParts = isNonEmptyString(rawLocation)
+    ? rawLocation.split(',').map((p) => p.trim()).filter(Boolean)
+    : [];
+  const cityRaw = pickVal('current_city', 'city') ?? (locParts.length >= 2 ? locParts[0] : undefined);
+  if (isNonEmptyString(cityRaw)) {
+    addFact('profile.location.city', 'string', cityRaw.trim(), 'location', 'profile', 'current_city');
   }
-  if (isNonEmptyString(candidate.current_state)) {
-    addFact('profile.location.state', 'string', candidate.current_state.trim(), 'location', 'profile', 'current_state');
+  const stateRaw = pickVal('current_state', 'state') ?? (locParts.length >= 2 ? locParts[1] : undefined);
+  if (isNonEmptyString(stateRaw)) {
+    addFact('profile.location.state', 'string', stateRaw.trim(), 'location', 'profile', 'current_state');
   }
-  const countryVal = candidate.country || candidate.current_country;
+  const countryVal = pickVal('country', 'current_country') ?? (locParts.length >= 3 ? locParts[2] : undefined);
   if (isNonEmptyString(countryVal)) {
     addFact('profile.location.country', 'string', countryVal.trim(), 'location', 'profile', 'country');
   }
-  if (isNonEmptyString(candidate.zip_code)) {
-    addFact('profile.location.zip_code', 'string', candidate.zip_code.trim(), 'location', 'profile', 'zip_code');
+  const zipRaw = pickVal('zip_code', 'postal_code', 'zip');
+  if (isNonEmptyString(zipRaw)) {
+    addFact('profile.location.zip_code', 'string', zipRaw.trim(), 'location', 'profile', 'zip_code');
   }
-  if (isNonEmptyString(candidate.full_address)) {
-    addFact('profile.location.full_address', 'string', candidate.full_address.trim(), 'location', 'profile', 'full_address');
+  const addressRaw = pickVal('full_address', 'street_address', 'address');
+  if (isNonEmptyString(addressRaw)) {
+    addFact('profile.location.full_address', 'string', addressRaw.trim(), 'location', 'profile', 'full_address');
   }
 
   // 4. Work Authorization & Sponsorship
-  const visaStatus = candidate.visa_status || candidate.work_authorization;
+  const visaStatus = pickVal('visa_status', 'work_authorization');
   if (isNonEmptyString(visaStatus)) {
     addFact('profile.work_auth.visa_status', 'string', visaStatus.trim(), 'work_auth', 'profile', 'visa_status');
   }
 
-  const authUsa = parseBoolean(candidate.authorized_in_usa);
+  const authUsa = parseBoolean(pickVal('authorized_in_usa'));
   if (authUsa !== null) {
     addFact('profile.work_auth.authorized_in_usa', 'boolean', authUsa, 'work_auth', 'profile', 'authorized_in_usa');
   }
 
-  const sponNow = parseBoolean(candidate.need_sponsorship_now);
+  const sponNow = parseBoolean(pickVal('need_sponsorship_now'));
   if (sponNow !== null) {
     addFact('profile.work_auth.need_sponsorship_now', 'boolean', sponNow, 'work_auth', 'profile', 'need_sponsorship_now');
   }
 
-  const sponFuture = parseBoolean(candidate.need_sponsorship_future);
+  const sponFuture = parseBoolean(pickVal('need_sponsorship_future'));
   if (sponFuture !== null) {
     addFact('profile.work_auth.need_sponsorship_future', 'boolean', sponFuture, 'work_auth', 'profile', 'need_sponsorship_future');
+  }
+
+  // Compensation & Demographics
+  const expectedSalRaw = pickVal('expected_salary', 'salary_expectation');
+  if (isNonEmptyString(expectedSalRaw) || typeof expectedSalRaw === 'number') {
+    addFact('profile.compensation.expected_salary', 'string', String(expectedSalRaw).trim(), 'compensation', 'profile', 'expected_salary');
+  }
+  const currentSalRaw = pickVal('current_salary');
+  if (isNonEmptyString(currentSalRaw) || typeof currentSalRaw === 'number') {
+    addFact('profile.compensation.current_salary', 'string', String(currentSalRaw).trim(), 'compensation', 'profile', 'current_salary');
+  }
+
+  const genderRaw = pickVal('gender');
+  if (isNonEmptyString(genderRaw)) {
+    addFact('profile.demographics.gender', 'string', genderRaw.trim(), 'demographics', 'profile', 'gender');
+  }
+  const pronounsRaw = pickVal('pronouns');
+  if (isNonEmptyString(pronounsRaw)) {
+    addFact('profile.demographics.pronouns', 'string', pronounsRaw.trim(), 'demographics', 'profile', 'pronouns');
+  }
+  const raceRaw = pickVal('race', 'race_ethnicity', 'raceEthnicity');
+  if (isNonEmptyString(raceRaw)) {
+    addFact('profile.demographics.race', 'string', raceRaw.trim(), 'demographics', 'profile', 'race');
+  }
+  const veteranRaw = pickVal('veteran', 'veteran_status', 'veteranStatus');
+  if (isNonEmptyString(veteranRaw)) {
+    addFact('profile.demographics.veteran', 'string', veteranRaw.trim(), 'demographics', 'profile', 'veteran');
+  }
+  const disabilityRaw = pickVal('disability', 'disability_status', 'disabilityStatus');
+  if (isNonEmptyString(disabilityRaw)) {
+    addFact('profile.demographics.disability', 'string', disabilityRaw.trim(), 'demographics', 'profile', 'disability');
   }
 
   // Preferences & Relocation

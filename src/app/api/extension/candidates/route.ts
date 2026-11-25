@@ -10,9 +10,10 @@ const autofillKeys = [
   ...textFields, ...booleanFields, 'employment_types',
   'first_name', 'last_name', 'preferred_first_name', 'preferred_name',
   'zip_code', 'postal_code', 'country', 'github_url', 'twitter_url', 'website', 'portfolio_url', 'other_url',
-  'current_company', 'headline', 'summary', 'bio', 'availability', 'how_heard',
+  'current_company', 'headline', 'summary', 'bio', 'availability', 'salary_expectation', 'how_heard',
   'school', 'languages', 'employment_history', 'education_history', 'saved_answers',
-  'gender', 'race', 'race_ethnicity', 'veteran', 'veteran_status', 'disability', 'disability_status', 'work_authorization',
+  'gender', 'race', 'race_ethnicity', 'veteran', 'veteran_status', 'disability', 'disability_status',
+  'pronouns', 'demographics', 'work_authorization',
 ];
 
 export async function OPTIONS(request: Request) {

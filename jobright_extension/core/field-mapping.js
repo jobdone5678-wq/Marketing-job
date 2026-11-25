@@ -22,7 +22,7 @@
     'authorized_in_usa', 'needs_sponsorship', 'open_to_relocation', 'visa_status', 'work_authorization',
     'intended_work_country',
     'end_client', 'point_of_contact', 'pay_rate', 'vendor_email', 'personal_email', 'contract_type',
-    'summary', 'bio', 'gender', 'race', 'veteran', 'veteran_status', 'disability', 'disability_status', 'availability', 'salary_expectation',
+    'summary', 'bio', 'gender', 'race', 'veteran', 'veteran_status', 'disability', 'disability_status', 'pronouns', 'availability', 'salary_expectation',
     'how_heard', 'highest_education', 'school', 'graduation_year', 'preferred_work_type', 'current_salary', 'e_signature', 'consent'
   ]);
 
@@ -48,7 +48,7 @@
   const NON_BOOLEAN_FACTS = new Set([
     'country', 'first_name', 'preferred_first_name', 'last_name', 'full_name', 'email', 'phone',
     'current_city', 'current_state', 'current_location', 'current_employer',
-    'current_title', 'headline', 'zip_code', 'full_address', 'salary_expectation',
+    'current_title', 'headline', 'zip_code', 'full_address', 'salary_expectation', 'pronouns',
     'summary', 'bio', 'website', 'linkedin_url', 'github_url', 'total_experience_years',
     'primary_skills', 'school', 'graduation_year', 'end_client', 'point_of_contact', 'pay_rate',
     'vendor_email', 'personal_email', 'contract_type', 'current_salary'
@@ -56,17 +56,17 @@
 
   // Field labels seen across job boards, ATS platforms and bespoke career sites.
   const aliases = {
-    first_name: ['first name', 'given name', 'forename', 'fname', 'first and middle name', 'first/given name', 'middle and first name'],
+    first_name: ['first name', 'legal first name', 'given name', 'legal given name', 'forename', 'fname', 'first and middle name', 'first/given name', 'middle and first name'],
     preferred_first_name: ['preferred name', 'preferred first name', 'preferred given name', 'nickname', 'chosen name', 'preferred'],
-    last_name: ['last name', 'family name', 'surname', 'lname', 'last/family name'],
-    full_name: ['full name', 'applicant name', 'candidate name', 'your name', 'legal name', 'full legal name', 'applicant full name', 'name of applicant', 'your full name', 'preferred full name'],
+    last_name: ['last name', 'legal last name', 'family name', 'legal family name', 'surname', 'legal surname', 'lname', 'last/family name'],
+    full_name: ['full name', 'applicant name', 'candidate name', 'your name', 'legal name', 'full legal name', 'applicant full name', 'name of applicant', 'your full name', 'preferred full name', 'preferred first name & last name', 'preferred first name and last name', 'preferred first and last name'],
     e_signature: ['e signature', 'signature', 'sign here', 'certify by entering your name', 'by entering your name into the field below', 'typed signature', 'electronic signature'],
     email: ['email', 'email address', 'e mail', 'email id', 'work email', 'personal email', 'contact email', 'business email', 'primary email'],
     phone: ['phone', 'phone number', 'mobile', 'mobile phone', 'tel', 'cell phone', 'contact number', 'contact phone', 'telephone', 'telephone number', 'best phone number', 'primary phone', 'work phone', 'mobile number', 'phone or cell'],
     current_city: ['city', 'current city', 'town', 'municipality', 'present city', 'where do you live', 'city of residence', 'address level2', 'which city do you live in', 'city you currently reside in'],
-    current_location: ['location', 'current location', 'present location', 'city and state', 'city state', 'city, state', 'city and country', 'city & state', 'where are you currently located', 'where are you based', 'where do you currently reside', 'current residence location', 'location of residence', 'your current location', 'based in', 'location city state'],
+    current_location: ['location', 'current location', 'present location', 'city and state', 'city state', 'city, state', 'city and state/province', 'city and state province', 'city and country', 'city & state', 'where are you currently located', 'where are you based', 'where do you currently reside', 'current residence location', 'location of residence', 'your current location', 'based in', 'location city state'],
     current_state: ['state', 'province', 'region', 'current state', 'address level1', 'state province', 'state/province', 'which state', 'current state province', 'state of residence'],
-    zip_code: ['zip', 'zip code', 'postal code', 'postcode', 'zip postal code', 'zipcode', 'postal code number'],
+    zip_code: ['zip', 'zip code', 'postal code', 'postcode', 'zip postal code', 'zip or postal code', 'current zip', 'current zip code', 'current postal code', 'current zip or postal code', 'zipcode', 'postal code number'],
     country: ['country of residence', 'residence country', 'current country', 'country you live in', 'country', 'country name', 'country region', 'which country'],
     intended_work_country: [
       'which country do you intend to work from',
@@ -168,12 +168,13 @@
     contract_type: ['contract type', 'employment type', 'w2', 'c2c', '1099', 'contractor', 'independent contractor', 'w-2', 'c2c contractor', 'type of employment', 'type of contract'],
     summary: ['summary', 'professional summary', 'executive summary', 'profile summary', 'candidate summary', 'about me', 'bio'],
     bio: ['short bio', 'candidate bio', 'professional bio'],
-    gender: ['gender', 'sex', 'gender identity', 'what is your gender', 'how do you identify your gender', 'voluntary self-identification of gender', 'demographic gender', 'please select your gender', 'gender self-identification'],
-    race: ['race', 'ethnicity', 'race and ethnicity', 'racial background', 'ethnic background', 'race ethnicity', 'hispanic or latino', 'demographic race', 'demographics race', 'are you hispanic or latino', 'voluntary self-identification of race', 'what is your race', 'race/ethnicity'],
+    gender: ['gender', 'sex', 'gender identity', 'what is your gender', 'what is your gender identity', 'how do you identify your gender', 'voluntary self-identification of gender', 'demographic gender', 'please select your gender', 'gender self-identification'],
+    pronouns: ['pronouns', 'preferred pronouns', 'what are your pronouns', 'your pronouns', 'pronoun'],
+    race: ['race', 'ethnicity', 'ethnicity(ies)', 'race and ethnicity', 'racial background', 'ethnic background', 'race ethnicity', 'hispanic or latino', 'demographic race', 'demographics race', 'are you hispanic or latino', 'voluntary self-identification of race', 'what is your race', 'which ethnicity(ies) do you identify with', 'which ethnicities do you identify with', 'which ethnicity do you identify with', 'how do you identify your ethnicity', 'race/ethnicity'],
     veteran: ['veteran', 'veteran status', 'military status', 'protected veteran', 'are you a veteran', 'u.s. veteran status', 'voluntary self-identification of veteran', 'veteran classification', 'military service', 'please select your veteran status', 'veteran self-identification'],
     disability: ['disability', 'disability status', 'voluntary self identification of disability', 'do you have a disability', 'physical or mental disability', 'individual with a disability', 'disability self-identification', 'disability disclosure'],
     availability: ['availability', 'start date', 'earliest start date', 'when can you start', 'notice period', 'available to start', 'available for a full-time', 'full-time internship', 'available for internship', 'summer internship', 'available for full-time', 'availability date', 'earliest possible start date'],
-    salary_expectation: ['salary', 'expected salary', 'desired salary', 'compensation expectation', 'desired compensation', 'salary expectations', 'compensation', 'target salary', 'pay expectation', 'minimum salary', 'hourly rate expectation'],
+    salary_expectation: ['salary', 'expected salary', 'desired salary', 'compensation expectation', 'desired compensation', 'salary expectations', 'what are your salary expectations', 'what is your expected salary', 'what is your desired salary', 'what are your compensation expectations', 'compensation', 'target salary', 'pay expectation', 'minimum salary', 'hourly rate expectation'],
     how_heard: ['how did you hear about us', 'how did you hear about this role', 'how did you hear about this opportunity', 'how did you find this job', 'referral source', 'source', 'application source', 'where did you hear about us', 'how did you hear'],
     highest_education: [
       'highest education', 'highest degree', 'highest level of education', 'degree', 'degree level', 'education level', 'level of education',
@@ -496,12 +497,14 @@
       : /^1\d{10}$/.test(phoneDigits) ? phoneDigits.slice(1)
       : phoneDigits.length === 10 ? phoneDigits : rawPhone;
 
+    const demographics = facts.demographics || candidate.demographics || candFacts.demographics || {};
     const firstName = facts.first_name || candidate.first_name || candFacts.first_name || names[0] || '';
     const preferredFirst = facts.preferred_first_name || facts.preferred_name || candidate.preferred_first_name || candidate.preferred_name || candFacts.preferred_first_name || candFacts.preferred_name || firstName;
-    const gender = facts.gender || candidate.gender || candFacts.gender || '';
-    const race = facts.race || candidate.race || candFacts.race || facts.race_ethnicity || candidate.race_ethnicity || candFacts.race_ethnicity || '';
-    const veteran = facts.veteran || candidate.veteran || facts.veteran_status || candidate.veteran_status || candFacts.veteran || candFacts.veteran_status || '';
-    const disability = facts.disability || candidate.disability || facts.disability_status || candidate.disability_status || candFacts.disability || candFacts.disability_status || '';
+    const gender = facts.gender || candidate.gender || candFacts.gender || demographics.gender || '';
+    const pronouns = facts.pronouns || candidate.pronouns || candFacts.pronouns || demographics.pronouns || '';
+    const race = facts.race || candidate.race || candFacts.race || facts.race_ethnicity || candidate.race_ethnicity || candFacts.race_ethnicity || demographics.raceEthnicity || demographics.race || '';
+    const veteran = facts.veteran || candidate.veteran || facts.veteran_status || candidate.veteran_status || candFacts.veteran || candFacts.veteran_status || demographics.veteranStatus || demographics.veteran || '';
+    const disability = facts.disability || candidate.disability || facts.disability_status || candidate.disability_status || candFacts.disability || candFacts.disability_status || demographics.disabilityStatus || demographics.disability || '';
     const visaStatus = facts.visa_status || candidate.visa_status || facts.work_authorization || candidate.work_authorization || candFacts.visa_status || candFacts.work_authorization || '';
     const workAuth = facts.work_authorization || candidate.work_authorization || facts.visa_status || candidate.visa_status || candFacts.work_authorization || candFacts.visa_status || '';
     const linkedin = facts.linkedin_url || candidate.linkedin_url || candFacts.linkedin_url || '';
@@ -579,6 +582,7 @@
       summary: candidate.summary || candidate.bio || facts.summary || facts.bio || candFacts.summary || candFacts.bio || '',
       bio: candidate.bio || candidate.summary || facts.bio || facts.summary || candFacts.bio || candFacts.summary || '',
       gender: gender,
+      pronouns: pronouns,
       race: race,
       race_ethnicity: race,
       veteran: veteran,
@@ -586,7 +590,7 @@
       disability: disability,
       disability_status: disability,
       availability: facts.availability || candidate.availability || candidate.available_to_join || candidate.notice_period || '',
-      salary_expectation: facts.expected_salary || candidate.expected_salary || '',
+      salary_expectation: facts.expected_salary || facts.salary_expectation || candidate.expected_salary || candidate.salary_expectation || candFacts.expected_salary || candFacts.salary_expectation || '',
       how_heard: facts.how_heard || candidate.how_heard || '',
       highest_education: facts.highest_qualification || candidate.highest_qualification || candidate.degree || candidate.highest_education || '',
       school: facts.school || candidate.university_name || candidate.school || candidate.institution || '',
@@ -614,9 +618,9 @@
     const options = field?.options || [];
 
     const nl = norm(rawLabel);
-    const cleanLabel = nl.replace(/^(?:(?:please|your|provide|enter|share|paste|input|select|choose)\s+)+/, '');
+    const cleanLabel = nl.replace(/^(?:(?:please|your|provide|enter|share|paste|input|select|choose|specify|indicate|the)\s+)+/, '');
     let nh = norm(rawHint);
-    const cleanHint = nh.replace(/^(?:(?:please|your|provide|enter|share|paste|input|select|choose)\s+)+/, '');
+    const cleanHint = nh.replace(/^(?:(?:please|your|provide|enter|share|paste|input|select|choose|specify|indicate|the)\s+)+/, '');
 
     const hasBooleanOptions = Boolean(
       (options && options.length > 0 && pickBooleanOption(options, true) && pickBooleanOption(options, false)) ||
@@ -675,7 +679,14 @@
     if (uniqueKeys.includes('disability') && uniqueKeys.includes('disability_status')) uniqueKeys = uniqueKeys.filter(k => k !== 'disability_status');
     if (uniqueKeys.includes('visa_status') && uniqueKeys.includes('work_authorization')) uniqueKeys = uniqueKeys.filter(k => k !== 'work_authorization');
     if (uniqueKeys.length > 1 && candidatesList[0].length > candidatesList[1].length) uniqueKeys = [candidatesList[0].key];
-    if (uniqueKeys.length !== 1) return null;
+    if (uniqueKeys.length !== 1) {
+      const isEssay = /\b(describe|explain|detail|elaborate|why|tell us|share)\b/i.test(nl);
+      if (!isEssay) {
+        if (isSponsorLabel) return { key: 'needs_sponsorship', exact: true, length: 14 };
+        if (isAuthLabel) return { key: 'authorized_in_usa', exact: true, length: 14 };
+      }
+      return null;
+    }
 
     const best = candidatesList.find(m => m.key === uniqueKeys[0]);
     return { key: uniqueKeys[0], exact: !!best?.exact, length: best?.length || 0 };

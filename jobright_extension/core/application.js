@@ -880,7 +880,8 @@
         assignedQids.add(qid);
 
         if (writer.read(field)) continue;
-        const skipComboProbe = aiAnswers && Object.keys(aiAnswers).length === 0 && field.kind === 'combobox';
+        const isComboKind = field.kind === 'combobox' || field.kind === 'multi-combobox';
+        const skipComboProbe = aiAnswers && Object.keys(aiAnswers).length === 0 && isComboKind;
         const choices = plan.options?.length ? plan.options
           : skipComboProbe ? []
           : (await writer.readChoices(field, () => location.href === expectedUrl)).map(option => option.label);
@@ -902,7 +903,9 @@
         if (typeof aiReply === 'string') {
           if (!options.length) {
             plan.status = 'supported';
-            plan.value = aiReply;
+            plan.value = field.kind === 'multi-combobox'
+              ? aiReply.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean)
+              : aiReply;
             plan.ai = true;
             continue;
           }
@@ -910,9 +913,19 @@
           const matchedOption = options.find(o => o.trim().toLowerCase() === normalizedReply);
           if (matchedOption !== undefined) {
             plan.status = 'supported';
-            plan.value = matchedOption;
+            plan.value = field.kind === 'multi-combobox' ? [matchedOption] : matchedOption;
             plan.ai = true;
             continue;
+          }
+          if (field.kind === 'multi-combobox' || field.kind === 'multi-select' || field.kind === 'checkbox-group') {
+            const parts = aiReply.split(/[,;\n]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+            const matchedList = parts.map(p => options.find(o => o.trim().toLowerCase() === p)).filter(Boolean);
+            if (matchedList.length) {
+              plan.status = 'supported';
+              plan.value = [...new Set(matchedList)];
+              plan.ai = true;
+              continue;
+            }
           }
         }
 
@@ -1268,7 +1281,7 @@
           questions.push({ id: qid, label: label.slice(0, 2000), type: field.kind, options });
           questionMeta[qid] = {
             fieldId: field.id || field.name || field.key || qid,
-            combo: field.kind === 'combobox',
+            combo: field.kind === 'combobox' || field.kind === 'multi-combobox',
             required: Boolean(field.required || field.element?.required || (typeof field.element?.getAttribute === 'function' && field.element.getAttribute('aria-required') === 'true')),
             planStatus: plan.status,
             factKey: plan.factKey || null,

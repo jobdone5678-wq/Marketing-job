@@ -442,7 +442,7 @@
       case 'choice': return field.options.find(option => selected(option.element) || checked(option.element))?.label || '';
       case 'combobox': return comboValue(el);
       case 'multi-combobox': {
-        const chips = el.querySelectorAll ? el.querySelectorAll('.ng-value-label, .select2-selection__choice__display, .k-chip-label, [data-slot="multi-select-value"]') : [];
+        const chips = el.querySelectorAll ? el.querySelectorAll('.ng-value-label, .select2-selection__choice__display, .k-chip-label, [data-slot="multi-select-value"], [class*="multi-value__label" i], [class*="multiValue" i]') : [];
         return [...chips].map(chip => chip.textContent.trim()).filter(Boolean);
       }
       case 'resume-file': return el?.files?.[0]?.name || (el?.value ? String(el.value).split(/[/\\]/).pop() : '');
@@ -653,7 +653,7 @@
   }
 
   async function readChoices(field, isCurrent = () => true) {
-    if (field.kind !== 'combobox' || field.options.length) return field.options;
+    if ((field.kind !== 'combobox' && field.kind !== 'multi-combobox') || field.options.length) return field.options;
     const el = field.element;
     const trigger = comboTrigger(el);
     if (!isCurrent() || !trigger) return [];
@@ -796,9 +796,14 @@
   }
 
   async function fillMultiCombo(field, values, isCurrent) {
-    if (!Array.isArray(values)) return null;
+    const normalizedValues = Array.isArray(values)
+      ? values
+      : (typeof values === 'string' && values.trim()
+        ? values.split(/[,;\n]+/).map(v => v.trim()).filter(Boolean)
+        : []);
+    if (!normalizedValues.length) return null;
     const selected = [];
-    for (const value of new Set(values.slice(0, 20))) {
+    for (const value of new Set(normalizedValues.slice(0, 20))) {
       if (!isCurrent() || !field.element.isConnected) break;
       const result = await fillCombo(field, value, isCurrent);
       if (result) selected.push(result.expected);

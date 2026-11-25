@@ -34,6 +34,8 @@ try {
     format: 'esm',
     target: ['chrome116', 'es2022'],
     platform: 'browser',
+    minifyWhitespace: true,
+    minifySyntax: true,
     outfile,
     metafile: true,
     sourcemap: false,
