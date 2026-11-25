@@ -5,9 +5,14 @@ import fs from 'node:fs';
 const rootDir = path.resolve('.');
 const outDir = path.join(rootDir, 'jobright_extension/core/ai');
 const outfile = path.join(outDir, 'planner-bundle.js');
+const distDir = path.join(rootDir, 'dist');
+const metafilePath = path.join(distDir, 'planner-bundle.meta.json');
 
 if (!fs.existsSync(outDir)) {
   fs.mkdirSync(outDir, { recursive: true });
+}
+if (!fs.existsSync(distDir)) {
+  fs.mkdirSync(distDir, { recursive: true });
 }
 
 const entryContent = `
@@ -19,7 +24,7 @@ export { ProviderClient, ProviderError } from './src/lib/ai/provider-client.ts';
 `;
 
 try {
-  await esbuild.build({
+  const result = await esbuild.build({
     stdin: {
       contents: entryContent,
       resolveDir: rootDir,
@@ -30,12 +35,15 @@ try {
     target: ['chrome116', 'es2022'],
     platform: 'browser',
     outfile,
+    metafile: true,
     sourcemap: false,
     logLevel: 'info',
   });
 
+  fs.writeFileSync(metafilePath, JSON.stringify(result.metafile, null, 2), 'utf8');
+
   const stat = fs.statSync(outfile);
-  console.log(`Successfully generated ${outfile} (${stat.size} bytes).`);
+  console.log(`Successfully generated ${outfile} (${stat.size} bytes) and metafile ${metafilePath}.`);
 } catch (err) {
   console.error(`Failed to bundle extension AI module: ${err.message}`);
   process.exit(1);

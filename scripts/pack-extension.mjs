@@ -24,7 +24,7 @@ function getFiles(dir, base = '') {
       if (entry.name === '.git' || entry.name === 'node_modules') continue;
       Object.assign(result, getFiles(fullPath, relPath));
     } else {
-      if (entry.name.endsWith('.md') || entry.name.startsWith('.') || entry.name.includes('.env')) continue;
+      if (entry.name.endsWith('.md') || entry.name.endsWith('.meta.json') || entry.name.startsWith('.') || entry.name.includes('.env')) continue;
       result[relPath] = fs.readFileSync(fullPath);
     }
   }

@@ -17,6 +17,7 @@ test('Packager: generates valid zip in dist/ without test or markdown files', as
 
   for (const name of fileNames) {
     assert.ok(!name.endsWith('.md'), `Must not contain markdown file: ${name}`);
+    assert.ok(!name.endsWith('.meta.json'), `Must not contain metafile artifact: ${name}`);
     assert.ok(!name.startsWith('tests/'), `Must not contain test file: ${name}`);
     assert.ok(!name.includes('.git'), `Must not contain git file: ${name}`);
     assert.ok(!name.includes('.env'), `Must not contain env file: ${name}`);
