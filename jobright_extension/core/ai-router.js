@@ -47,7 +47,7 @@ export class AIRouter {
     this.backendUrl = options.backendUrl || '';
     this.token = options.token || null;
     this.clientFactory = options.clientFactory || null;
-    this.fetchFn = options.fetchFn || globalThis.fetch;
+    this.fetchFn = options.fetchFn || ((...args) => globalThis.fetch(...args));
     this.planFn = options.planFn || planFormBatch;
     this.chooseFn = options.chooseFn || chooseComboboxOption;
   }

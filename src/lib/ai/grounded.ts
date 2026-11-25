@@ -571,10 +571,14 @@ export function validateGroundedAnswer(
     }
   }
 
-  if (/\b(preferred\s+location|list\s+preferred\s+locations?)\b/i.test(normQ)) {
+  if (/\b(preferred\s+locations?|list\s+preferred\s+locations?)\b/i.test(normQ)) {
     const prefLocFact = facts.get('profile.preferences.preferred_locations') || facts.get('profile.preferred_locations');
     if (prefLocFact && typeof prefLocFact.value === 'string') {
-      return validResult([prefLocFact.id], 'verified');
+      const normPref = normalize(prefLocFact.value);
+      if (normPref.includes(normAns) || normAns.includes(normPref)) {
+        return validResult([prefLocFact.id], 'verified');
+      }
+      return unresolvedResult(`Preferred location "${answer}" does not match profile "${prefLocFact.value}"`);
     }
   }
 

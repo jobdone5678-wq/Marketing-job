@@ -1,10 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const pathToExtension = path.resolve(__dirname, 'jobright_extension');
+const pathToExtension = path.resolve(process.cwd(), 'jobright_extension');
 
 export default defineConfig({
   testDir: './tests/e2e',
