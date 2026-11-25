@@ -128,4 +128,37 @@ test('Comparative Benchmark Suite: Mock & Fallback Validation', async (t) => {
     assert.equal(redacted.includes('sk-secret-token-1234567890'), false);
     assert.match(redacted, /\[REDACTED\]/);
   });
+
+  await t.test('5. live mode skipped/error paths and formatBenchmarkTable handle non-completed reports safely', async () => {
+    const origEnv = { ...process.env };
+    try {
+      delete process.env.OPENAI_API_KEY;
+      delete process.env.AI_PROVIDER_DEFAULT_API_KEY;
+      delete process.env.OPENAI_BASE_URL;
+      delete process.env.AI_PROVIDER_DEFAULT_BASE_URL;
+
+      // Missing .env path + no env API key -> skipped
+      const skippedReport = await runBenchmarkSuite({
+        mode: 'live',
+        envPath: 'nonexistent.env.does.not.exist',
+      });
+      assert.equal(skippedReport.status, 'skipped');
+      const skippedText = formatBenchmarkTable(skippedReport);
+      assert.match(skippedText, /\[LIVE\] Benchmark skipped/i);
+
+      // SSRF blocked host -> error status, and formatBenchmarkTable does not crash
+      const errorReport = await runBenchmarkSuite({
+        mode: 'live',
+        envPath: 'nonexistent.env.does.not.exist',
+        apiKey: 'sk-test-123',
+        baseUrl: 'http://169.254.169.254/v1',
+      });
+      assert.equal(errorReport.status, 'error');
+      const errorText = formatBenchmarkTable(errorReport);
+      assert.match(errorText, /\[LIVE\] Benchmark error/i);
+      assert.equal(errorText.includes('sk-test-123'), false);
+    } finally {
+      process.env = origEnv;
+    }
+  });
 });

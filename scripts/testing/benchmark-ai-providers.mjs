@@ -984,7 +984,7 @@ async function evaluateClient(clientName, createClientFn, scenarios, options = {
         }
       }
 
-      // Aggregate usage ONLY from reported counts
+      // Aggregate usage ONLY from reported counts (including partial batch records if later batches fail)
       if (planResult?.telemetry?.usage) {
         const u = planResult.telemetry.usage;
         const pTok = typeof u.inputTokens === 'number' ? u.inputTokens : u.promptTokens;
@@ -996,6 +996,20 @@ async function evaluateClient(clientName, createClientFn, scenarios, options = {
         if (typeof pTok === 'number') inputTokens += pTok;
         if (typeof cTok === 'number') outputTokens += cTok;
         if (typeof tTok === 'number') totalTokens += tTok;
+      } else {
+        for (const rec of currentCallRecords) {
+          if (!rec.usage) continue;
+          const u = rec.usage;
+          const pTok = typeof u.inputTokens === 'number' ? u.inputTokens : u.promptTokens;
+          const cTok = typeof u.outputTokens === 'number' ? u.outputTokens : u.completionTokens;
+          const tTok = u.totalTokens;
+          if (typeof pTok === 'number' || typeof cTok === 'number' || typeof tTok === 'number') {
+            reportedUsageCalls++;
+          }
+          if (typeof pTok === 'number') inputTokens += pTok;
+          if (typeof cTok === 'number') outputTokens += cTok;
+          if (typeof tTok === 'number') totalTokens += tTok;
+        }
       }
 
       // Post-grounding evaluation
@@ -1210,8 +1224,11 @@ async function evaluateClient(clientName, createClientFn, scenarios, options = {
  * Formats benchmark results as a readable comparison table (strictly free of PII or API keys).
  */
 export function formatBenchmarkTable(report) {
-  if (report.status === 'skipped') {
-    return `[${report.mode.toUpperCase()}] Benchmark skipped: ${report.reason}`;
+  if (!report || report.status === 'skipped') {
+    return `[${(report?.mode || 'UNKNOWN').toUpperCase()}] Benchmark skipped: ${report?.reason || 'No reason provided'}`;
+  }
+  if (report.status === 'error' || !report.results?.legacy || !report.results?.vercelAiSdk) {
+    return `[${(report?.mode || 'UNKNOWN').toUpperCase()}] Benchmark error: ${report?.reason || 'Unknown benchmark failure'}`;
   }
 
   const legacy = report.results.legacy.metrics;
@@ -1252,6 +1269,7 @@ export async function runBenchmarkSuite(options = {}) {
     const simulateTier1Fallback = Boolean(options.simulateTier1Fallback);
 
     // 1. Legacy ProviderClient benchmark
+    let legacyCalls = 0;
     const legacyMock = options.legacyFetchFn
       ? {
           fetchFn: async (u, init) => {
@@ -1261,7 +1279,6 @@ export async function runBenchmarkSuite(options = {}) {
           getHttpRequestCount: () => legacyCalls,
         }
       : createMockBenchmarkFetch({ simulateTier1Fallback: false, wrapLegacyFences: true });
-    let legacyCalls = 0;
 
     const legacyResult = await evaluateClient(
       'ProviderClient',
@@ -1357,7 +1374,7 @@ export async function runBenchmarkSuite(options = {}) {
 
   let safeAgent;
   try {
-    safeAgent = await createSafeAgent(baseUrl);
+    safeAgent = await createSafeAgent(baseUrl, { allowCustom: Boolean(options.allowCustom) });
   } catch (err) {
     return {
       mode: 'live',
