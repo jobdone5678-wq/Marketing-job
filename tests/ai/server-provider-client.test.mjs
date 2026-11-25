@@ -503,6 +503,29 @@ test('ServerVercelProviderClient: 3-Tier Fallback, Telemetry, and Capability Cac
     assert.equal(resA.usage?.outputTokens, 7);
     assert.equal(resA.usage?.promptTokens, 15);
     assert.equal(resA.usage?.completionTokens, 7);
+    assert.equal(resA.usage?.totalTokens, undefined, 'Omitted total_tokens must not be invented');
+
+    // Case A2: partial usage with only prompt_tokens -> outputTokens & totalTokens remain undefined
+    ServerVercelProviderClient.clearCache();
+    const clientPartialUsage = new ServerVercelProviderClient({
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o-partial',
+      fetchFn: async () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { role: 'assistant', content: JSON.stringify(mockPlan) } }],
+            usage: { prompt_tokens: 19 },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+    });
+    const resPartial = await clientPartialUsage.generateChatCompletion(
+      [{ role: 'user', content: 'Plan' }],
+      { schemaName: 'plan' },
+    );
+    assert.equal(resPartial.usage?.inputTokens, 19);
+    assert.equal(resPartial.usage?.outputTokens, undefined, 'Omitted completion_tokens must not be invented');
+    assert.equal(resPartial.usage?.totalTokens, undefined, 'Omitted total_tokens must not be invented');
 
     // Case B: usage completely omitted -> usage must be undefined, not invented
     ServerVercelProviderClient.clearCache();
@@ -573,5 +596,163 @@ test('ServerVercelProviderClient: 3-Tier Fallback, Telemetry, and Capability Cac
         return true;
       },
     );
+
+    // 200 OK with HTML disguised as text/plain
+    ServerVercelProviderClient.clearCache();
+    const clientHtmlTextPlain = new ServerVercelProviderClient({
+      baseUrl: 'https://api.captive-plain.com/v1',
+      model: 'gpt-4o',
+      fetchFn: async () =>
+        new Response('<!DOCTYPE html><html><body>Login</body></html>', {
+          status: 200,
+          headers: { 'Content-Type': 'text/plain' },
+        }),
+    });
+
+    await assert.rejects(
+      async () => clientHtmlTextPlain.generateChatCompletion([{ role: 'user', content: 'Plan' }], { schemaName: 'plan' }),
+      (err) => {
+        assert.ok(err instanceof ProviderError);
+        assert.equal(err.status, 502);
+        assert.equal(err.code, 'HTML_RESPONSE');
+        return true;
+      },
+    );
+  });
+
+  await t.test('13. 403, 404, 429, and non-unsupported 400 do NOT trigger fallback, and HTTP status beats timeout message heuristic', async () => {
+    for (const [status, code, msg] of [
+      [403, 'FORBIDDEN', 'Forbidden access'],
+      [404, 'NOT_FOUND', 'Model not found'],
+      [429, 'RATE_LIMIT', 'Rate limit exceeded'],
+      [400, 'HTTP_ERROR', 'context_length_exceeded: Upstream request timeout'],
+    ]) {
+      ServerVercelProviderClient.clearCache();
+      let calls = 0;
+      const client = new ServerVercelProviderClient({
+        baseUrl: 'https://api.strict.com/v1',
+        model: 'gpt-4o',
+        fetchFn: async () => {
+          calls++;
+          return new Response(JSON.stringify({ error: { message: msg } }), {
+            status,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        },
+      });
+
+      await assert.rejects(
+        async () => client.generateChatCompletion([{ role: 'user', content: 'Plan' }], { schemaName: 'plan' }),
+        (err) => {
+          assert.ok(err instanceof ProviderError);
+          assert.equal(err.status, status);
+          assert.equal(err.code, code);
+          return true;
+        },
+      );
+      assert.equal(calls, 1, `HTTP ${status} must not trigger fallback`);
+    }
+  });
+
+  await t.test('14. Tier 1 NoObjectGeneratedError and 200 malformed JSON map to 502 SCHEMA_VALIDATION_ERROR / MALFORMED_JSON', async () => {
+    ServerVercelProviderClient.clearCache();
+    const clientBadSchema = new ServerVercelProviderClient({
+      baseUrl: 'https://api.badschema.com/v1',
+      model: 'gpt-4o',
+      fetchFn: async () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { role: 'assistant', content: JSON.stringify({ wrong: true }) } }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+    });
+
+    await assert.rejects(
+      async () => clientBadSchema.generateChatCompletion([{ role: 'user', content: 'Plan' }], { schemaName: 'plan' }),
+      (err) => {
+        assert.ok(err instanceof ProviderError);
+        assert.equal(err.status, 502);
+        assert.equal(err.code, 'SCHEMA_VALIDATION_ERROR');
+        return true;
+      },
+    );
+
+    ServerVercelProviderClient.clearCache();
+    const clientMalformed200 = new ServerVercelProviderClient({
+      baseUrl: 'https://api.malformed200.com/v1',
+      model: 'gpt-4o',
+      fetchFn: async () =>
+        new Response('not-json-at-all{{{', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    });
+
+    await assert.rejects(
+      async () => clientMalformed200.generateChatCompletion([{ role: 'user', content: 'Plan' }], { schemaName: 'plan' }),
+      (err) => {
+        assert.ok(err instanceof ProviderError);
+        assert.equal(err.status, 502);
+        assert.equal(err.code, 'MALFORMED_JSON');
+        return true;
+      },
+    );
+  });
+
+  await t.test('15. Mid-flight caller AbortSignal throws 499 ABORTED and agent wiring enforces redirect blocking & baseUrl normalization', async () => {
+    ServerVercelProviderClient.clearCache();
+    const controller = new AbortController();
+    const clientAbort = new ServerVercelProviderClient({
+      baseUrl: 'http://localhost:11434',
+      model: 'llama3',
+      fetchFn: async (url, init) => {
+        assert.equal(String(url), 'http://localhost:11434/v1/chat/completions');
+        return new Promise((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => {
+            const err = new Error('Aborted');
+            err.name = 'AbortError';
+            reject(err);
+          });
+          setTimeout(() => controller.abort(), 15);
+        });
+      },
+    });
+
+    await assert.rejects(
+      async () =>
+        clientAbort.generateChatCompletion(
+          [{ role: 'user', content: 'Plan' }],
+          { schemaName: 'plan', signal: controller.signal, timeoutMs: 5000 },
+        ),
+      (err) => {
+        assert.ok(err instanceof ProviderError);
+        assert.equal(err.status, 499);
+        assert.equal(err.code, 'ABORTED');
+        return true;
+      },
+    );
+
+    // Agent wiring through createSsrfSafeFetch blocks 302 redirect
+    ServerVercelProviderClient.clearCache();
+    const fakeSafeAgent = { fakeAgent: true };
+    let seenAgent = null;
+    const clientWithAgent = new ServerVercelProviderClient({
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o',
+      agent: fakeSafeAgent,
+      fetchFn: async (_url, init) => {
+        seenAgent = init.agent;
+        return new Response('', { status: 302, headers: { Location: 'http://169.254.169.254/' } });
+      },
+    });
+
+    await assert.rejects(
+      async () => clientWithAgent.generateChatCompletion([{ role: 'user', content: 'Plan' }], { schemaName: 'plan' }),
+      (err) => {
+        assert.ok(err instanceof ProviderError);
+        assert.equal(err.status, 308);
+        assert.equal(err.code, 'REDIRECT_BLOCKED');
+        return true;
+      },
+    );
+    assert.deepEqual(seenAgent, fakeSafeAgent);
   });
 });

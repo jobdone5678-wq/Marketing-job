@@ -1,5 +1,5 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import { generateText, Output } from 'ai';
+import { generateText, NoObjectGeneratedError, Output } from 'ai';
 import { z } from 'zod';
 import {
   ProviderClient,
@@ -44,6 +44,34 @@ export interface ServerChatCompletionResult extends ChatCompletionResult {
 export function normalizeUrl(url: string): string {
   if (!url) return '';
   return url.trim().replace(/\/+$/, '');
+}
+
+/**
+ * Resolves baseURL for @ai-sdk/openai-compatible (which appends /chat/completions)
+ * while maintaining parity with ProviderClient.resolveCompletionsUrl.
+ */
+export function resolveAiSdkBaseUrl(baseUrl: string): string {
+  const trimmed = normalizeUrl(baseUrl);
+  if (trimmed.endsWith('/chat/completions')) {
+    return trimmed.slice(0, -'/chat/completions'.length);
+  }
+  if (trimmed.endsWith('/v1')) {
+    return trimmed;
+  }
+  return `${trimmed}/v1`;
+}
+
+/**
+ * Converts an aborted AbortSignal into the matching ProviderError (TIMEOUT vs ABORTED).
+ */
+function signalAbortToProviderError(signal: AbortSignal): ProviderError {
+  const reason = (signal as any).reason;
+  const isTimeout =
+    reason?.name === 'TimeoutError' || (reason && /timeout/i.test(String(reason)));
+  if (isTimeout) {
+    return new ProviderError('Request timed out', 504, 'TIMEOUT');
+  }
+  return new ProviderError('Request was aborted', 499, 'ABORTED');
 }
 
 /**
@@ -96,44 +124,64 @@ function translateToProviderError(err: any, deadline: number, signal?: AbortSign
     return err.cause;
   }
 
-  // Pre-aborted signal check
+  // Pre-aborted or in-flight caller signal check
   if (signal?.aborted) {
-    const isTimeout =
-      signal.reason?.name === 'TimeoutError' ||
-      (signal.reason && /timeout/i.test(String(signal.reason)));
-    if (isTimeout) {
+    return signalAbortToProviderError(signal);
+  }
+
+  // Explicit abort / timeout error instances (before HTTP status checks)
+  if (err?.name === 'TimeoutError' || err?.cause?.name === 'TimeoutError') {
+    return new ProviderError('Request timed out', 504, 'TIMEOUT');
+  }
+  if (err?.name === 'AbortError' || err?.cause?.name === 'AbortError') {
+    if (Date.now() >= deadline) {
       return new ProviderError('Request timed out', 504, 'TIMEOUT');
     }
     return new ProviderError('Request was aborted', 499, 'ABORTED');
   }
 
-  // Timeout check
-  const isTimeout =
-    Date.now() >= deadline ||
-    err?.name === 'TimeoutError' ||
-    err?.cause?.name === 'TimeoutError' ||
-    /timeout/i.test(err?.message || '') ||
-    /timed out/i.test(err?.message || '');
-
-  if (isTimeout) {
-    return new ProviderError('Request timed out', 504, 'TIMEOUT');
+  // AI SDK NoObjectGeneratedError (JSON parse error or schema validation error on Tier 1 / Tier 2)
+  if (NoObjectGeneratedError.isInstance(err) || err?.name === 'AI_NoObjectGeneratedError') {
+    const rawText = typeof err?.text === 'string' ? err.text : undefined;
+    if (rawText && isHtml(rawText)) {
+      return new ProviderError(
+        'Endpoint returned HTML error page instead of JSON',
+        502,
+        'HTML_RESPONSE',
+        rawText,
+      );
+    }
+    const causeName = err?.cause?.name || '';
+    const causeMsg = String(err?.cause?.message || err?.message || '');
+    if (
+      causeName.includes('JSONParse') ||
+      err?.cause instanceof SyntaxError ||
+      /json/i.test(causeName)
+    ) {
+      return new ProviderError(
+        `Provider returned malformed JSON response: ${causeMsg}`,
+        502,
+        'MALFORMED_JSON',
+        rawText,
+      );
+    }
+    return new ProviderError(
+      `Response failed schema validation: ${causeMsg}`,
+      502,
+      'SCHEMA_VALIDATION_ERROR',
+      rawText,
+    );
   }
 
-  // Abort check
-  if (
-    err?.name === 'AbortError' ||
-    err?.cause?.name === 'AbortError' ||
-    /abort/i.test(err?.message || '')
-  ) {
-    return new ProviderError('Request was aborted', 499, 'ABORTED');
-  }
-
+  // Check HTTP status codes BEFORE message-substring timeout heuristics
   const status = err?.statusCode ?? err?.status ?? err?.cause?.statusCode ?? err?.cause?.status;
   const responseBody =
     typeof err?.responseBody === 'string'
       ? err.responseBody
       : typeof err?.cause?.responseBody === 'string'
       ? err.cause.responseBody
+      : typeof err?.text === 'string'
+      ? err.text
       : undefined;
 
   // HTML response check
@@ -142,6 +190,16 @@ function translateToProviderError(err: any, deadline: number, signal?: AbortSign
       'Endpoint returned HTML error page instead of JSON',
       502,
       'HTML_RESPONSE',
+      responseBody,
+    );
+  }
+
+  // 200 OK with unparseable non-HTML response (e.g. JSONParseError from createJsonResponseHandler)
+  if (status === 200) {
+    return new ProviderError(
+      'Provider returned malformed JSON response',
+      502,
+      'MALFORMED_JSON',
       responseBody,
     );
   }
@@ -165,6 +223,21 @@ function translateToProviderError(err: any, deadline: number, signal?: AbortSign
       'HTTP_ERROR',
       responseBody,
     );
+  }
+
+  // Fallback timeout / abort heuristics for network errors without HTTP status
+  if (
+    Date.now() >= deadline ||
+    /timeout/i.test(err?.message || '') ||
+    /timed out/i.test(err?.message || '')
+  ) {
+    return new ProviderError('Request timed out', 504, 'TIMEOUT');
+  }
+  if (/abort/i.test(err?.message || '')) {
+    return new ProviderError('Request was aborted', 499, 'ABORTED');
+  }
+  if (err?.message && /redirect/i.test(err.message)) {
+    return new ProviderError('Redirects are not permitted', 308, 'REDIRECT_BLOCKED');
   }
 
   return new ProviderError(`Provider request failed: ${err?.message || err}`, 500, 'FETCH_ERROR');
@@ -237,12 +310,15 @@ export class ServerVercelProviderClient extends ProviderClient {
 
   static getCache(): Map<string, CapabilityRecord> {
     const now = Date.now();
+    const copy = new Map<string, CapabilityRecord>();
     ServerVercelProviderClient.capabilityCache.forEach((entry, key) => {
       if (now >= entry.expiresAt) {
         ServerVercelProviderClient.capabilityCache.delete(key);
+      } else {
+        copy.set(key, { ...entry });
       }
     });
-    return new Map(ServerVercelProviderClient.capabilityCache);
+    return copy;
   }
 
   static getCachedCapability(baseUrl: string, model: string): CapabilityRecord | undefined {
@@ -276,9 +352,22 @@ export class ServerVercelProviderClient extends ProviderClient {
       !ServerVercelProviderClient.capabilityCache.has(key) &&
       ServerVercelProviderClient.capabilityCache.size >= ServerVercelProviderClient.MAX_CACHE_ENTRIES
     ) {
-      const oldestKey = ServerVercelProviderClient.capabilityCache.keys().next().value;
-      if (oldestKey) {
-        ServerVercelProviderClient.capabilityCache.delete(oldestKey);
+      // Purge expired entries before evicting oldest active entry
+      const now = Date.now();
+      ServerVercelProviderClient.capabilityCache.forEach((entry, k) => {
+        if (now >= entry.expiresAt) {
+          ServerVercelProviderClient.capabilityCache.delete(k);
+        }
+      });
+
+      if (
+        ServerVercelProviderClient.capabilityCache.size >=
+        ServerVercelProviderClient.MAX_CACHE_ENTRIES
+      ) {
+        const oldestKey = ServerVercelProviderClient.capabilityCache.keys().next().value;
+        if (oldestKey) {
+          ServerVercelProviderClient.capabilityCache.delete(oldestKey);
+        }
       }
     }
 
@@ -344,10 +433,24 @@ export class ServerVercelProviderClient extends ProviderClient {
 
     const baseFetch = this.customFetch || globalThis.fetch;
     return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-      const response = await baseFetch(input, init);
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.toLowerCase().includes('text/html')) {
-        const bodyText = await response.text();
+      let response: Response;
+      try {
+        response = await baseFetch(input, { ...init, redirect: 'error' });
+      } catch (fetchErr: any) {
+        if (fetchErr?.message && /redirect/i.test(fetchErr.message)) {
+          throw new ProviderError('Redirects are not permitted', 308, 'REDIRECT_BLOCKED');
+        }
+        throw fetchErr;
+      }
+      if (response.status >= 300 && response.status < 400) {
+        throw new ProviderError('Redirects are not permitted', 308, 'REDIRECT_BLOCKED');
+      }
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.toLowerCase().includes('text/event-stream')) {
+        return response;
+      }
+      const bodyText = await response.text();
+      if (isHtml(bodyText, contentType)) {
         throw new ProviderError(
           'Endpoint returned HTML error page instead of JSON',
           502,
@@ -355,15 +458,20 @@ export class ServerVercelProviderClient extends ProviderClient {
           bodyText,
         );
       }
-      return response;
+      return new Response(bodyText, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      });
     };
   }
 
   private getModel(supportsStructuredOutputs: boolean = false) {
+    const trimmedKey = this.apiKey?.trim();
     const provider = createOpenAICompatible({
       name: 'custom-provider',
-      baseURL: this.baseUrl,
-      apiKey: this.apiKey,
+      baseURL: resolveAiSdkBaseUrl(this.baseUrl),
+      apiKey: trimmedKey && trimmedKey.length > 0 ? trimmedKey : undefined,
       headers: this.customHeaders,
       fetch: this.getEffectiveFetch(),
       supportsStructuredOutputs,
@@ -385,13 +493,7 @@ export class ServerVercelProviderClient extends ProviderClient {
 
     // Pre-aborted signal check
     if (options?.signal?.aborted) {
-      const isTimeout =
-        options.signal.reason?.name === 'TimeoutError' ||
-        (options.signal.reason && /timeout/i.test(String(options.signal.reason)));
-      if (isTimeout) {
-        throw new ProviderError('Request timed out', 504, 'TIMEOUT');
-      }
-      throw new ProviderError('Request was aborted', 499, 'ABORTED');
+      throw signalAbortToProviderError(options.signal);
     }
 
     if (deadline - Date.now() <= 0) {
@@ -400,13 +502,7 @@ export class ServerVercelProviderClient extends ProviderClient {
 
     const checkDeadline = (): number => {
       if (options?.signal?.aborted) {
-        const isTimeout =
-          options.signal.reason?.name === 'TimeoutError' ||
-          (options.signal.reason && /timeout/i.test(String(options.signal.reason)));
-        if (isTimeout) {
-          throw new ProviderError('Request timed out', 504, 'TIMEOUT');
-        }
-        throw new ProviderError('Request was aborted', 499, 'ABORTED');
+        throw signalAbortToProviderError(options.signal);
       }
       const remaining = deadline - Date.now();
       if (remaining <= 0) {
@@ -422,9 +518,14 @@ export class ServerVercelProviderClient extends ProviderClient {
 
     const recordUsage = (usage: any) => {
       if (!usage) return;
-      const pTokens = usage.inputTokens ?? usage.promptTokens ?? usage.raw?.prompt_tokens;
-      const cTokens = usage.outputTokens ?? usage.completionTokens ?? usage.raw?.completion_tokens;
-      const tTokens = usage.totalTokens ?? usage.raw?.total_tokens;
+      const hasRaw = usage.raw && typeof usage.raw === 'object';
+      const pTokens = hasRaw
+        ? usage.raw.prompt_tokens ?? usage.raw.input_tokens
+        : usage.inputTokens ?? usage.promptTokens;
+      const cTokens = hasRaw
+        ? usage.raw.completion_tokens ?? usage.raw.output_tokens
+        : usage.outputTokens ?? usage.completionTokens;
+      const tTokens = hasRaw ? usage.raw.total_tokens : usage.totalTokens;
 
       if (typeof pTokens === 'number') {
         aggregatedPromptTokens = (aggregatedPromptTokens ?? 0) + pTokens;
