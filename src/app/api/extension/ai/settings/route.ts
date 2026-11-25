@@ -154,6 +154,20 @@ export async function PUT(request: Request, options?: SettingsRouteOptions) {
       incomingApiKey.trim() !== '' &&
       !incomingApiKey.includes('••••');
 
+    const targetMode = input.mode || existing?.mode || 'server';
+    const existingSecret = await getUserAiProviderSecret(userId, options?.db);
+
+    if (
+      targetMode === 'portal_byok' &&
+      !isNewKey &&
+      (incomingApiKey === null || incomingApiKey === '' || !existingSecret?.encrypted_api_key)
+    ) {
+      return Response.json(
+        { ok: false, error: 'An API key is required for Portal Encrypted BYOK mode.' },
+        { status: 400 },
+      );
+    }
+
     if (isNewKey) {
       const targetBaseUrl = baseUrl || existing?.base_url || 'https://api.openai.com';
       const origin = getOriginFromBaseUrl(targetBaseUrl);
@@ -174,7 +188,6 @@ export async function PUT(request: Request, options?: SettingsRouteOptions) {
       await deleteUserAiProviderSecret(userId, options?.db);
     }
 
-    const targetMode = input.mode || existing?.mode || 'server';
     const targetRouting =
       input.routing ||
       (targetMode === 'portal_byok'
