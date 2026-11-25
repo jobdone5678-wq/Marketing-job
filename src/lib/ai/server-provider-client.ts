@@ -11,6 +11,7 @@ import type {
   ChatMessage,
   GenerateCompletionOptions,
   ChatCompletionResult,
+  TokenUsageTelemetry,
 } from './provider-client.ts';
 import {
   PlanContractSchema,
@@ -33,11 +34,7 @@ export interface ServerVercelProviderClientConfig extends ProviderClientConfig {
 export interface ServerChatCompletionResult extends ChatCompletionResult {
   text: string;
   rawJson?: any;
-  usage?: {
-    promptTokens?: number;
-    completionTokens?: number;
-    totalTokens?: number;
-  };
+  usage?: TokenUsageTelemetry;
   durationMs: number;
 }
 
@@ -200,15 +197,7 @@ function formatMessagesForAiSdk(messages: ChatMessage[]) {
   return { system, modelMessages };
 }
 
-export class ServerVercelProviderClient implements ProviderClient {
-  readonly baseUrl: string;
-  readonly apiKey?: string;
-  readonly model: string;
-  readonly agent?: any;
-  readonly defaultTimeoutMs: number;
-  readonly customFetch?: typeof fetch;
-  readonly customHeaders?: Record<string, string>;
-
+export class ServerVercelProviderClient extends ProviderClient {
   private static capabilityCache = new Map<string, CapabilityRecord>();
   public static readonly MAX_CACHE_ENTRIES = 100;
   public static readonly DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -219,15 +208,9 @@ export class ServerVercelProviderClient implements ProviderClient {
     model?: string,
     options?: Partial<ServerVercelProviderClientConfig>,
   ) {
-    if (typeof configOrBaseUrl === 'string') {
-      this.baseUrl = configOrBaseUrl;
-      this.apiKey = apiKey;
-      this.model = model || 'gpt-4o-mini';
-      this.agent = options?.agent;
-      this.defaultTimeoutMs = options?.timeoutMs ?? 20_000;
-      this.customFetch = options?.fetchFn;
-      this.customHeaders = options?.headers;
+    super(configOrBaseUrl, apiKey, model, options);
 
+    if (typeof configOrBaseUrl === 'string') {
       if (typeof options?.supportsStructuredOutputs === 'boolean') {
         this.supportsStructuredOutputs = options.supportsStructuredOutputs;
       }
@@ -235,24 +218,12 @@ export class ServerVercelProviderClient implements ProviderClient {
         this.supportsJsonMode = options.supportsJsonMode;
       }
     } else {
-      this.baseUrl = configOrBaseUrl.baseUrl;
-      this.apiKey = configOrBaseUrl.apiKey;
-      this.model = configOrBaseUrl.model;
-      this.agent = configOrBaseUrl.agent;
-      this.defaultTimeoutMs = configOrBaseUrl.timeoutMs ?? 20_000;
-      this.customFetch = configOrBaseUrl.fetchFn;
-      this.customHeaders = configOrBaseUrl.headers;
-
       if (typeof configOrBaseUrl.supportsStructuredOutputs === 'boolean') {
         this.supportsStructuredOutputs = configOrBaseUrl.supportsStructuredOutputs;
       }
       if (typeof configOrBaseUrl.supportsJsonMode === 'boolean') {
         this.supportsJsonMode = configOrBaseUrl.supportsJsonMode;
       }
-    }
-
-    if (!this.baseUrl) {
-      throw new Error('ServerVercelProviderClient requires a non-empty baseUrl');
     }
   }
 
@@ -266,11 +237,11 @@ export class ServerVercelProviderClient implements ProviderClient {
 
   static getCache(): Map<string, CapabilityRecord> {
     const now = Date.now();
-    for (const [key, entry] of ServerVercelProviderClient.capabilityCache.entries()) {
+    ServerVercelProviderClient.capabilityCache.forEach((entry, key) => {
       if (now >= entry.expiresAt) {
         ServerVercelProviderClient.capabilityCache.delete(key);
       }
-    }
+    });
     return new Map(ServerVercelProviderClient.capabilityCache);
   }
 
@@ -325,12 +296,12 @@ export class ServerVercelProviderClient implements ProviderClient {
     });
   }
 
-  get supportsJsonMode(): boolean {
+  override get supportsJsonMode(): boolean {
     const cap = ServerVercelProviderClient.getCachedCapability(this.baseUrl, this.model);
     return cap ? cap.supportsJsonMode : true;
   }
 
-  set supportsJsonMode(value: boolean) {
+  override set supportsJsonMode(value: boolean) {
     ServerVercelProviderClient.setCachedCapability(this.baseUrl, this.model, {
       supportsJsonMode: value,
     });
@@ -370,7 +341,22 @@ export class ServerVercelProviderClient implements ProviderClient {
             };
       return createSsrfSafeFetch(safeAgentResult, this.customFetch);
     }
-    return this.customFetch;
+
+    const baseFetch = this.customFetch || globalThis.fetch;
+    return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const response = await baseFetch(input, init);
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.toLowerCase().includes('text/html')) {
+        const bodyText = await response.text();
+        throw new ProviderError(
+          'Endpoint returned HTML error page instead of JSON',
+          502,
+          'HTML_RESPONSE',
+          bodyText,
+        );
+      }
+      return response;
+    };
   }
 
   private getModel(supportsStructuredOutputs: boolean = false) {
@@ -436,12 +422,9 @@ export class ServerVercelProviderClient implements ProviderClient {
 
     const recordUsage = (usage: any) => {
       if (!usage) return;
-      const pTokens = usage.promptTokens ?? usage.inputTokens ?? usage.raw?.prompt_tokens;
-      const cTokens = usage.completionTokens ?? usage.outputTokens ?? usage.raw?.completion_tokens;
-      const tTokens =
-        usage.totalTokens ??
-        usage.raw?.total_tokens ??
-        (typeof pTokens === 'number' && typeof cTokens === 'number' ? pTokens + cTokens : undefined);
+      const pTokens = usage.inputTokens ?? usage.promptTokens ?? usage.raw?.prompt_tokens;
+      const cTokens = usage.outputTokens ?? usage.completionTokens ?? usage.raw?.completion_tokens;
+      const tTokens = usage.totalTokens ?? usage.raw?.total_tokens;
 
       if (typeof pTokens === 'number') {
         aggregatedPromptTokens = (aggregatedPromptTokens ?? 0) + pTokens;
@@ -454,13 +437,15 @@ export class ServerVercelProviderClient implements ProviderClient {
       }
     };
 
-    const formatUsage = () => {
+    const formatUsage = (): TokenUsageTelemetry | undefined => {
       if (
         aggregatedPromptTokens !== undefined ||
         aggregatedCompletionTokens !== undefined ||
         aggregatedTotalTokens !== undefined
       ) {
         return {
+          inputTokens: aggregatedPromptTokens,
+          outputTokens: aggregatedCompletionTokens,
           promptTokens: aggregatedPromptTokens,
           completionTokens: aggregatedCompletionTokens,
           totalTokens: aggregatedTotalTokens,
@@ -704,7 +689,3 @@ export class ServerVercelProviderClient implements ProviderClient {
     }
   }
 }
-
-// Runtime prototype linking so `instance instanceof ProviderClient` evaluates to true
-Object.setPrototypeOf(ServerVercelProviderClient.prototype, ProviderClient.prototype);
-Object.setPrototypeOf(ServerVercelProviderClient, ProviderClient);

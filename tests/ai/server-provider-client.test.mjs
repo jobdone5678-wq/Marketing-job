@@ -479,4 +479,99 @@ test('ServerVercelProviderClient: 3-Tier Fallback, Telemetry, and Capability Cac
 
     assert.equal(callCount, 1, '500 error must not trigger fallback');
   });
+
+  await t.test('11. Maps inputTokens/outputTokens and does not invent missing token counts', async () => {
+    ServerVercelProviderClient.clearCache();
+    const mockPlan = { fills: [{ label: 'Name', value: 'Ada', action: 'fill' }] };
+
+    // Case A: usage reported
+    const clientWithUsage = new ServerVercelProviderClient({
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o',
+      fetchFn: async () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { role: 'assistant', content: JSON.stringify(mockPlan) } }],
+            usage: { prompt_tokens: 15, completion_tokens: 7 }, // total_tokens intentionally omitted
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+    });
+
+    const resA = await clientWithUsage.generateChatCompletion([{ role: 'user', content: 'Plan' }], { schemaName: 'plan' });
+    assert.equal(resA.usage?.inputTokens, 15);
+    assert.equal(resA.usage?.outputTokens, 7);
+    assert.equal(resA.usage?.promptTokens, 15);
+    assert.equal(resA.usage?.completionTokens, 7);
+
+    // Case B: usage completely omitted -> usage must be undefined, not invented
+    ServerVercelProviderClient.clearCache();
+    const clientWithoutUsage = new ServerVercelProviderClient({
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o-no-usage',
+      fetchFn: async () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { role: 'assistant', content: JSON.stringify(mockPlan) } }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+    });
+
+    const resB = await clientWithoutUsage.generateChatCompletion([{ role: 'user', content: 'Plan' }], { schemaName: 'plan' });
+    assert.equal(resB.usage, undefined, 'Missing usage must remain undefined');
+  });
+
+  await t.test('12. Tier 2 & Tier 3 enforce schema validation and reject 200 HTML portal pages', async () => {
+    ServerVercelProviderClient.clearCache();
+    ServerVercelProviderClient.setCachedCapability('https://api.tier2fail.com/v1', 'model-x', {
+      supportsStructured: false,
+      supportsJsonMode: true,
+    });
+
+    // Tier 2 returns invalid schema (missing fills array)
+    const clientInvalidTier2 = new ServerVercelProviderClient({
+      baseUrl: 'https://api.tier2fail.com/v1',
+      model: 'model-x',
+      fetchFn: async () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { role: 'assistant', content: JSON.stringify({ wrongKey: 123 }) } }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+    });
+
+    await assert.rejects(
+      async () => clientInvalidTier2.generateChatCompletion([{ role: 'user', content: 'Plan' }], { schemaName: 'plan' }),
+      (err) => {
+        assert.ok(err instanceof ProviderError);
+        assert.equal(err.status, 502);
+        assert.equal(err.code, 'SCHEMA_VALIDATION_ERROR');
+        return true;
+      },
+    );
+
+    // 200 OK with HTML captive portal
+    ServerVercelProviderClient.clearCache();
+    const clientHtml200 = new ServerVercelProviderClient({
+      baseUrl: 'https://api.captive.com/v1',
+      model: 'gpt-4o',
+      fetchFn: async () =>
+        new Response('<html><body>Captive Portal Login</body></html>', {
+          status: 200,
+          headers: { 'Content-Type': 'text/html' },
+        }),
+    });
+
+    await assert.rejects(
+      async () => clientHtml200.generateChatCompletion([{ role: 'user', content: 'Plan' }], { schemaName: 'plan' }),
+      (err) => {
+        assert.ok(err instanceof ProviderError);
+        assert.equal(err.status, 502);
+        assert.equal(err.code, 'HTML_RESPONSE');
+        return true;
+      },
+    );
+  });
 });

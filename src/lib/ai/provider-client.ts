@@ -22,9 +22,19 @@ export interface GenerateCompletionOptions {
   signal?: AbortSignal;
 }
 
+export interface TokenUsageTelemetry {
+  inputTokens?: number;
+  outputTokens?: number;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+}
+
 export interface ChatCompletionResult {
   text: string;
   rawJson?: any;
+  usage?: TokenUsageTelemetry;
+  durationMs?: number;
 }
 
 export class ProviderError extends Error {
@@ -126,7 +136,15 @@ export class ProviderClient {
   readonly customHeaders?: Record<string, string>;
 
   // Capability cache: true until proven unsupported by HTTP 400
-  supportsJsonMode: boolean = true;
+  protected _supportsJsonMode: boolean = true;
+
+  get supportsJsonMode(): boolean {
+    return this._supportsJsonMode;
+  }
+
+  set supportsJsonMode(value: boolean) {
+    this._supportsJsonMode = value;
+  }
 
   constructor(
     configOrBaseUrl: ProviderClientConfig | string,
