@@ -620,19 +620,47 @@
     }
   }
 
+  async function openComboOptions(el, trigger, isCurrent = () => true, requireClick = false) {
+    const clickedTrigger = click(trigger);
+    const ctrl = el.closest?.('.select__control, [class*="select__control" i]');
+    const clickedCtrl = ctrl && ctrl !== trigger ? click(ctrl) : false;
+    if (requireClick && !clickedTrigger && !clickedCtrl) return [];
+
+    let options = [];
+    const openStart = Date.now();
+    // await options asynchronously (up to 400ms)
+    while (isCurrent()) {
+      options = comboOptions(el);
+      if (options.length || Date.now() - openStart >= 400) break;
+      await wait(30);
+    }
+    // ArrowDown fallback if options still not open
+    if (!options.length && isCurrent()) {
+      try {
+        const view = el.ownerDocument?.defaultView || globalThis;
+        const KeyEvt = view.KeyboardEvent || globalThis.KeyboardEvent;
+        (trigger || el).dispatchEvent(new KeyEvt('keydown', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
+        (trigger || el).dispatchEvent(new KeyEvt('keyup', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
+      } catch {}
+      const arrowStart = Date.now();
+      while (isCurrent()) {
+        options = comboOptions(el);
+        if (options.length || Date.now() - arrowStart >= 250) break;
+        await wait(30);
+      }
+    }
+    return options;
+  }
+
   async function readChoices(field, isCurrent = () => true) {
     if (field.kind !== 'combobox' || field.options.length) return field.options;
     const el = field.element;
     const trigger = comboTrigger(el);
-    if (!isCurrent() || !click(trigger)) return [];
+    if (!isCurrent() || !trigger) return [];
+    const existing = comboOptions(el);
+    if (existing.length) return existing;
     try {
-      const start = Date.now();
-      while (Date.now() - start < 300 && isCurrent()) {
-        const options = comboOptions(el);
-        if (options.length) return options;
-        await wait(30);
-      }
-      return [];
+      return await openComboOptions(el, trigger, isCurrent, true);
     } finally {
       if (isCurrent()) closeCombo(el);
     }
@@ -653,31 +681,7 @@
 
     // If options not open, click trigger to open listbox
     if (!options.length && trigger) {
-      click(trigger);
-      const ctrl = el.closest?.('.select__control, [class*="select__control" i]');
-      if (ctrl && ctrl !== trigger) click(ctrl);
-      const openStart = Date.now();
-      // await options asynchronously (up to 400ms)
-      while (Date.now() - openStart < 400 && isCurrent()) {
-        await wait(30);
-        options = comboOptions(el);
-        if (options.length) break;
-      }
-      // ArrowDown fallback if options still not open
-      if (!options.length && isCurrent()) {
-        try {
-          const view = el.ownerDocument?.defaultView || globalThis;
-          const KeyEvt = view.KeyboardEvent || globalThis.KeyboardEvent;
-          (trigger || el).dispatchEvent(new KeyEvt('keydown', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
-          (trigger || el).dispatchEvent(new KeyEvt('keyup', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
-        } catch {}
-        const arrowStart = Date.now();
-        while (Date.now() - arrowStart < 250 && isCurrent()) {
-          await wait(30);
-          options = comboOptions(el);
-          if (options.length) break;
-        }
-      }
+      options = await openComboOptions(el, trigger, isCurrent, false);
     }
 
     // Match candidate value against option text

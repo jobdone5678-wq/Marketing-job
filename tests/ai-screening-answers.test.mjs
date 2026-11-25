@@ -5,7 +5,7 @@ import { runInNewContext } from 'node:vm';
 
 // Loads the real shipped extension source (not the generated test bundle) so the
 // AI-answer path in jobright_extension/core/application.js stays covered.
-function engine(plans, read = () => '') {
+function engine(plans, read = () => '', readChoices = async () => []) {
   const source = readFileSync(new URL('../jobright_extension/core/application.js', import.meta.url), 'utf8');
   const applied = [];
   const sandbox = {
@@ -38,7 +38,7 @@ function engine(plans, read = () => '') {
     },
     NextkinFieldWriter: {
       read,
-      readChoices: async () => [],
+      readChoices,
       applyFill: async received => {
         applied.push(...received.filter(plan => plan.status === 'supported'));
         return received.filter(plan => plan.status === 'supported').map(plan => ({
@@ -136,4 +136,150 @@ test('protected and job-specific questions are not reusable', () => {
       assert.equal(result.filled.length, 0);
       assert.equal(applied.length, 0);
     });
+});
+
+test('Pass 2 matches dropdown options case-insensitively and trimmed', async () => {
+  const { api, applied } = engine([{
+    field: { key: 'q-auth', label: 'Work authorization', kind: 'select' },
+    options: ['Yes', 'No'],
+    status: 'needs_review',
+    reason: 'Missing work authorization fact.',
+  }]);
+  const result = await api.fill(url, candidate, null, false, null, null, {
+    'work authorization': ' yes ',
+  });
+
+  assert.equal(result.filled.length, 1);
+  assert.equal(result.filled[0].value, 'Yes');
+  assert.equal(result.filled[0].ai, true);
+  assert.equal(applied[0].status, 'supported');
+  assert.equal(applied[0].value, 'Yes');
+  assert.equal(result.questions.length, 0);
+});
+
+test('Pass 2 resolves question labels longer than 200 chars using id = key.slice(0, 200)', async () => {
+  const longLabel = 'Please describe in thorough detail your prior experience designing distributed backend services and customer-facing web applications across multiple cloud regions including how you handled reliability monitoring incident response and cross-team technical leadership';
+  assert.ok(longLabel.length > 200 && longLabel.length <= 300);
+
+  const plan = {
+    field: { key: 'q-long', label: longLabel, kind: 'textarea' },
+    status: 'ai',
+    reason: 'Write a concise first-person answer.',
+  };
+
+  const pass1 = await engine([plan]).api.fill(url, candidate, null, false, null, null, {});
+  assert.equal(pass1.questions.length, 1);
+  assert.equal(pass1.questions[0].id.length, 200);
+
+  const { api, applied } = engine([plan]);
+  const pass2 = await api.fill(url, candidate, null, false, null, null, {
+    [pass1.questions[0].id]: 'I led multi-region service migrations with SLO alerting.',
+  });
+
+  assert.equal(pass2.filled.length, 1);
+  assert.equal(pass2.filled[0].value, 'I led multi-region service migrations with SLO alerting.');
+  assert.equal(pass2.filled[0].ai, true);
+  assert.equal(applied[0].status, 'supported');
+  assert.equal(pass2.questions.length, 0);
+});
+
+test('unresolved work-auth/sponsorship and unrecognized checkboxes enter questions[] with questionMeta while date_of_birth stays excluded', async () => {
+  const { api, applied } = engine([
+    {
+      field: { key: 'q-auth-usa', id: 'auth_usa_input', label: 'Are you legally authorized to work in the USA?', kind: 'combobox', required: true },
+      factKey: 'authorized_in_usa',
+      status: 'needs_review',
+      reason: 'Missing work authorization fact.',
+    },
+    {
+      field: { key: 'q-sponsor', label: 'Will you now or in the future require sponsorship?', kind: 'select', required: false },
+      factKey: 'needs_sponsorship',
+      options: ['Yes', 'No'],
+      status: 'needs_review',
+      reason: 'Missing sponsorship fact.',
+    },
+    {
+      field: { key: 'q-travel-checkbox', label: 'I am willing to travel up to 25% for client meetings', kind: 'checkbox' },
+      status: 'unknown',
+      reason: 'No matching saved candidate detail.',
+    },
+    {
+      field: { key: 'q-dob', label: 'Date of Birth', kind: 'text' },
+      factKey: 'date_of_birth',
+      status: 'needs_review',
+      reason: 'Missing date of birth.',
+    },
+  ]);
+
+  const result = await api.fill(url, candidate, null, false, null, null, {});
+
+  assert.equal(applied.length, 0);
+  assert.equal(result.filled.length, 0);
+
+  const ids = JSON.parse(JSON.stringify(result.questions.map(q => q.id)));
+  assert.deepEqual(ids, [
+    'are you legally authorized to work in the usa',
+    'will you now or in the future require sponsorship',
+    'i am willing to travel up to 25% for client meetings',
+  ]);
+
+  // Verify 4-key shape preserved on questions[]
+  for (const q of result.questions) {
+    assert.deepEqual(Object.keys(q).sort(), ['id', 'label', 'options', 'type']);
+  }
+
+  // Verify questionMeta entries
+  const meta = JSON.parse(JSON.stringify(result.questionMeta));
+  assert.deepEqual(meta['are you legally authorized to work in the usa'], {
+    fieldId: 'auth_usa_input',
+    combo: true,
+    required: true,
+    planStatus: 'needs_review',
+    factKey: 'authorized_in_usa',
+  });
+  assert.deepEqual(meta['will you now or in the future require sponsorship'], {
+    fieldId: 'q-sponsor',
+    combo: false,
+    required: false,
+    planStatus: 'needs_review',
+    factKey: 'needs_sponsorship',
+  });
+  assert.deepEqual(meta['i am willing to travel up to 25% for client meetings'], {
+    fieldId: 'q-travel-checkbox',
+    combo: false,
+    required: false,
+    planStatus: 'unknown',
+    factKey: null,
+  });
+  assert.equal(meta['date of birth'], undefined);
+});
+
+test('Pass 1 with aiAnswers = {} does not invoke readChoices() for combobox fields', async () => {
+  let readChoicesCalls = 0;
+  const readChoicesSpy = async () => {
+    readChoicesCalls += 1;
+    return [{ label: 'Yes' }, { label: 'No' }];
+  };
+
+  const comboPlan = {
+    field: { key: 'q-combo', label: 'Are you comfortable working hybrid?', kind: 'combobox' },
+    status: 'needs_review',
+    reason: 'Requires AI answer.',
+  };
+
+  const pass1 = await engine([comboPlan], () => '', readChoicesSpy).api.fill(url, candidate, null, false, null, null, {});
+  assert.equal(readChoicesCalls, 0, 'Pass 1 probe must skip readChoices() for combobox');
+  assert.equal(pass1.questions.length, 1);
+  assert.deepEqual([...pass1.questions[0].options], []);
+  assert.equal(pass1.questionMeta['are you comfortable working hybrid'].combo, true);
+
+  // Pass 2 with explicit aiAnswers invokes readChoices() once and matches option
+  const { api: pass2Api, applied } = engine([comboPlan], () => '', readChoicesSpy);
+  const pass2 = await pass2Api.fill(url, candidate, null, false, null, null, {
+    'are you comfortable working hybrid': 'yes',
+  });
+  assert.equal(readChoicesCalls, 1, 'Pass 2 must invoke readChoices() once to resolve options');
+  assert.equal(pass2.filled.length, 1);
+  assert.equal(pass2.filled[0].value, 'Yes');
+  assert.equal(applied[0].value, 'Yes');
 });
