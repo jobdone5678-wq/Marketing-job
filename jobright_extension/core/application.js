@@ -859,7 +859,7 @@
 
         // 1. If explicit AI answer was provided via API
         const aiReply = aiAnswers
-          ? (aiAnswers[key] ?? aiAnswers[key.slice(0, 200)] ?? (field.key ? aiAnswers[field.key] : undefined) ?? (field.id ? aiAnswers[field.id] : undefined))
+          ? (aiAnswers[key] ?? aiAnswers[key.slice(0, 200)] ?? (field.id ? aiAnswers[field.id] : undefined))
           : undefined;
         if (typeof aiReply === 'string') {
           if (!options.length) {
