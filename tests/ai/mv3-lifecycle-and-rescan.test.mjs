@@ -339,4 +339,282 @@ test('MV3 Lifecycle, Trusted Context Migration, Sender Validation & Dynamic Resc
       /extension_byok|local_direct/i,
     );
   });
+
+  await t.test('9. panel.html & panel.js wire #ai-screening persistence, extension_byok session isolation, accountChanged reset, and AIRouter imports without answer-drafts', () => {
+    const panelHtmlPath = path.join(rootDir, 'jobright_extension/panel.html');
+    const panelJsPath = path.join(rootDir, 'jobright_extension/panel.js');
+    const panelHtml = fs.readFileSync(panelHtmlPath, 'utf8');
+    const panelJs = fs.readFileSync(panelJsPath, 'utf8');
+
+    // #ai-screening defaults to checked in panel.html and persists via chrome.storage.local
+    assert.match(panelHtml, /<input[^>]*id="ai-screening"[^>]*checked/i, 'panel.html #ai-screening must default to checked');
+    assert.ok(panelJs.includes('aiScreeningEnabled'), 'panel.js must persist aiScreeningEnabled in chrome.storage.local');
+
+    // Dynamic imports for AIRouter and planner-bundle without answer-drafts
+    assert.ok(panelJs.includes("chrome.runtime.getURL('core/ai-router.js')"), 'panel.js must load core/ai-router.js via chrome.runtime.getURL');
+    assert.ok(panelJs.includes("chrome.runtime.getURL('core/ai/planner-bundle.js')"), 'panel.js must load core/ai/planner-bundle.js via chrome.runtime.getURL');
+    assert.equal(panelJs.includes('answer-drafts'), false, 'panel.js must not reference answer-drafts');
+
+    // extension_byok omits apiKey from PUT ai/settings
+    assert.match(panelJs, /mode\s*!==\s*['"]extension_byok['"]/, 'panel.js must omit apiKey from PUT ai/settings when mode is extension_byok');
+
+    // accountChanged clears session AI keys/metadata and resets loaded/dirty flags
+    assert.ok(panelJs.includes("ai_api_key"), 'panel.js must manage ai_api_key in chrome.storage.session');
+    assert.match(panelJs, /if\s*\(\s*accountChanged\s*\)[\s\S]*aiSettingsLoaded\s*=\s*false[\s\S]*aiSettingsDirty\s*=\s*false/, 'accountChanged must reset aiSettingsLoaded and aiSettingsDirty');
+    assert.match(panelJs, /if\s*\(\s*accountChanged\s*\)[\s\S]*chrome\.storage\.session\.remove/, 'accountChanged must clear AI session storage keys');
+
+    // Stage A + Stage B usage
+    assert.ok(panelJs.includes('router.plan('), 'panel.js must call router.plan()');
+    assert.ok(panelJs.includes('router.choose('), 'panel.js must call router.choose()');
+    assert.ok(panelJs.includes('router.generateTextAnswer('), 'panel.js must call router.generateTextAnswer() for direct Stage B');
+  });
+
+  await t.test('10. panel.js draftScreening executes Stage A (plan + deferred combobox choose) + Stage B (prose-only), filters marketing/URL/DOB, disambiguates duplicates, and surfaces errors', async () => {
+    const { runInNewContext } = await import('node:vm');
+    const panelJsPath = path.join(rootDir, 'jobright_extension/panel.js');
+    const panelJs = fs.readFileSync(panelJsPath, 'utf8');
+    const plannerUrl = `file:///${path.join(rootDir, 'jobright_extension/core/ai/planner-bundle.js').replace(/\\/g, '/')}`;
+    const routerUrl = `file:///${aiRouterPath.replace(/\\/g, '/')}`;
+    const { buildVerifiedFacts, inferQuestionDescriptor } = await import(plannerUrl);
+    const { AIRouter } = await import(routerUrl);
+
+    const startIdx = panelJs.indexOf('async function mapConcurrent(');
+    const endIdx = panelJs.indexOf('function outsideApplicationPage(');
+    assert.ok(startIdx !== -1 && endIdx > startIdx, 'Must locate screening section in panel.js');
+    const screeningSlice = panelJs.slice(startIdx, endIdx);
+
+    const makeHarness = ({
+      sessionStore = { ai_provider_mode: 'server' },
+      planHandler,
+      chooseHandler,
+      apiHandler,
+      executeScriptChoices = {},
+    }) => {
+      const apiCalls = [];
+      const planCalls = [];
+      const chooseCalls = [];
+      const generateTextCalls = [];
+
+      class MockAIRouter extends AIRouter {
+        async plan(fields, factsOrPayload, ctx) {
+          planCalls.push({ fields, factsOrPayload, ctx, mode: this.mode, config: this.config });
+          if (planHandler) return planHandler(fields, factsOrPayload, ctx);
+          return { fills: [], deferred: [], unmapped: [] };
+        }
+        async choose(question, options, factsOrPayload, ctx) {
+          chooseCalls.push({ question, options, factsOrPayload, ctx });
+          if (chooseHandler) return chooseHandler(question, options, factsOrPayload, ctx);
+          return { choice: null };
+        }
+        async generateTextAnswer(sys, usr, opts) {
+          generateTextCalls.push({ sys, usr, opts, mode: this.mode, config: this.config });
+          return { ok: true, answer: 'Direct prose answer' };
+        }
+      }
+
+      const sandbox = {
+        console,
+        crypto,
+        Set,
+        Map,
+        Object,
+        Array,
+        Promise,
+        Error,
+        lastScreeningWarnings: [],
+        AI_PROVIDER_DEFAULTS: {
+          server: { baseUrl: '', modelId: '' },
+          openai: { baseUrl: 'https://api.openai.com/v1', modelId: 'gpt-4o-mini' },
+          ollama: { baseUrl: 'http://localhost:11434/v1', modelId: 'llama3.2:latest' },
+        },
+        authFailed: (err) => err?.status === 401 || err?.status === 403,
+        apiOrigin: (o) => o,
+        formTarget: (tab, frame) => ({ tabId: tab.id, frameIds: [frame.frameId] }),
+        checkScreeningContext: async () => {},
+        NextkinFieldMapping: {
+          isUrlField: (q) => /url|github|portfolio/i.test(q?.id || q?.label || ''),
+          CONSEQUENTIAL_FACTS: new Set([
+            'authorized_in_usa', 'needs_sponsorship', 'visa_status', 'work_authorization', 'date_of_birth',
+            'citizenship_status', 'gender', 'race', 'race_ethnicity', 'veteran', 'veteran_status', 'disability', 'disability_status',
+          ]),
+        },
+        chrome: {
+          runtime: { getURL: (p) => p },
+          storage: {
+            session: {
+              get: async () => ({ ...sessionStore }),
+              set: async (vals) => Object.assign(sessionStore, vals),
+            },
+          },
+          scripting: {
+            executeScript: async ({ args }) => {
+              const targetFieldId = args?.[0]?.fieldId || '';
+              return [{ result: executeScriptChoices[targetFieldId] || [] }];
+            },
+          },
+        },
+        api: async (pathStr, opts) => {
+          const body = opts?.body ? JSON.parse(opts.body) : null;
+          apiCalls.push({ path: pathStr, body });
+          if (apiHandler) return apiHandler(pathStr, body);
+          return { ok: true, answer: 'Server prose answer' };
+        },
+        loadAiModules: async () => ({
+          AIRouter: MockAIRouter,
+          buildVerifiedFacts,
+          inferQuestionDescriptor,
+        }),
+      };
+      runInNewContext(screeningSlice, sandbox);
+      return {
+        draftScreening: sandbox.draftScreening,
+        getWarnings: () => sandbox.lastScreeningWarnings,
+        apiCalls,
+        planCalls,
+        chooseCalls,
+        generateTextCalls,
+      };
+    };
+
+    // Case A: Stage A (plan + duplicate-label deferred comboboxes) + Stage B (prose only), filters URL, marketing checkbox, DOB, and work-auth from Stage B
+    const hA = makeHarness({
+      sessionStore: { ai_provider_mode: 'server' },
+      planHandler: async () => ({
+        fills: [{ fieldId: 'f_auth', label: 'Are you legally authorized to work in the US?', value: 'Yes' }],
+        deferred: ['Country', 'Country'],
+        unmapped: [],
+      }),
+      executeScriptChoices: {
+        'combo_1': ['Canada', 'United States'],
+        'combo_2': ['Germany', 'United Kingdom'],
+      },
+      chooseHandler: async (q, options) => {
+        if (q.id === 'combo_1') return { choice: options.includes('United States') ? 'United States' : null };
+        if (q.id === 'combo_2') return { choice: options.includes('Germany') ? 'Germany' : null };
+        return { choice: null };
+      },
+    });
+
+    const profile = { id: 'cand-1', full_name: 'Ada Lovelace', authorized_in_usa: true, primary_skills: 'Math, Engines' };
+    const questions = [
+      { id: 'q_url', label: 'GitHub URL', type: 'text', options: [] },
+      { id: 'q_mkt', label: 'Send me marketing newsletters and job alerts', type: 'checkbox', options: [] },
+      { id: 'q_dob', label: 'Date of Birth', type: 'text', options: [] },
+      { id: 'q_auth', label: 'Are you legally authorized to work in the US?', type: 'select', options: ['Yes', 'No'] },
+      { id: 'q_country_1', label: 'Country', type: 'combobox', options: [] },
+      { id: 'q_country_2', label: 'Country', type: 'combobox', options: [] },
+      { id: 'q_spon', label: 'Will you require visa sponsorship?', type: 'text', options: [] },
+      { id: 'q_why', label: 'Why do you want to join Acme?', type: 'textarea', options: [] },
+    ];
+    const questionMeta = {
+      q_url: { fieldId: 'f_url', combo: false, required: false },
+      q_mkt: { fieldId: 'f_mkt', combo: false, required: false, factKey: 'consent' },
+      q_dob: { fieldId: 'f_dob', combo: false, required: false, factKey: 'date_of_birth' },
+      q_auth: { fieldId: 'f_auth', combo: false, required: true, factKey: 'authorized_in_usa' },
+      q_country_1: { fieldId: 'combo_1', combo: true, required: true },
+      q_country_2: { fieldId: 'combo_2', combo: true, required: true },
+      q_spon: { fieldId: 'f_spon', combo: false, required: true, factKey: 'needs_sponsorship' },
+      q_why: { fieldId: 'f_why', combo: false, required: true },
+    };
+
+    const answersA = await hA.draftScreening(
+      { origin: 'https://app.nextkinhr.com', token: 'tok' },
+      profile,
+      { id: 10 },
+      { title: 'Engineer', company: 'Acme' },
+      questions,
+      { frame: { frameId: 0, result: { url: 'https://jobs.example/apply' } } },
+      {},
+      questionMeta,
+    );
+
+    const plannedIds = hA.planCalls[0].fields.map((f) => f.id);
+    assert.equal(plannedIds.includes('f_url'), false, 'URL field must not reach Stage A');
+    assert.equal(plannedIds.includes('f_mkt'), false, 'Marketing opt-in checkbox must not reach Stage A');
+    assert.equal(plannedIds.includes('f_dob'), false, 'DOB must not reach Stage A');
+
+    assert.equal(hA.chooseCalls.length, 2, 'Both duplicate-label deferred comboboxes must be processed');
+    assert.equal(hA.chooseCalls[0].question.id, 'combo_1');
+    assert.equal(hA.chooseCalls[1].question.id, 'combo_2');
+
+    // Stage B must ONLY receive q_why (never q_spon, q_mkt, q_dob, or q_url)
+    const genAnswerCalls = hA.apiCalls.filter((c) => c.path === 'generate-answer');
+    assert.deepEqual(genAnswerCalls.map((c) => c.body.questionId), ['q_why']);
+
+    assert.deepEqual(
+      { ...answersA },
+      {
+        q_auth: 'Yes',
+        q_country_1: 'United States',
+        q_country_2: 'Germany',
+        q_why: 'Server prose answer',
+      },
+    );
+
+    // Case B: extension_byok without ai_api_key fails fast with actionable message
+    const hB = makeHarness({
+      sessionStore: { ai_provider_mode: 'extension_byok', ai_provider_type: 'openai' },
+    });
+    await assert.rejects(
+      () => hB.draftScreening(
+        { origin: 'https://app.nextkinhr.com', token: 'tok' },
+        profile,
+        { id: 10 },
+        { title: 'Engineer', company: 'Acme' },
+        [{ id: 'q_why', label: 'Why do you want to join Acme?', type: 'textarea', options: [] }],
+        { frame: { frameId: 0, result: { url: 'https://jobs.example/apply' } } },
+        {},
+        {},
+      ),
+      /Enter your API key.*Extension Direct BYOK/i,
+    );
+    assert.equal(hB.planCalls.length, 0, 'Missing extension_byok key must fail before calling router.plan');
+
+    // Case C: Stage A + Stage B errors are surfaced when no answers succeed
+    const hC = makeHarness({
+      sessionStore: { ai_provider_mode: 'portal_byok' },
+      planHandler: async () => {
+        const err = new Error('Custom provider authentication failed');
+        err.status = 401;
+        throw err;
+      },
+    });
+    await assert.rejects(
+      () => hC.draftScreening(
+        { origin: 'https://app.nextkinhr.com', token: 'tok' },
+        profile,
+        { id: 10 },
+        { title: 'Engineer', company: 'Acme' },
+        [{ id: 'q_why', label: 'Why do you want to join Acme?', type: 'textarea', options: [] }],
+        { frame: { frameId: 0, result: { url: 'https://jobs.example/apply' } } },
+        {},
+        {},
+      ),
+      /authentication failed/i,
+    );
+
+    // Case D: extension_byok executes Stage B via router.generateTextAnswer (not server generate-answer)
+    const hD = makeHarness({
+      sessionStore: {
+        ai_provider_mode: 'extension_byok',
+        ai_provider_type: 'openai',
+        ai_base_url: 'https://api.openai.com/v1',
+        ai_model_id: 'gpt-4o-mini',
+        ai_api_key: 'sk-ext-test',
+      },
+    });
+    const answersD = await hD.draftScreening(
+      { origin: 'https://app.nextkinhr.com', token: 'tok' },
+      profile,
+      { id: 10 },
+      { title: 'Engineer', company: 'Acme' },
+      [{ id: 'q_why', label: 'Why do you want to join Acme?', type: 'textarea', options: [] }],
+      { frame: { frameId: 0, result: { url: 'https://jobs.example/apply' } } },
+      {},
+      {},
+    );
+    assert.equal(hD.generateTextCalls.length, 1);
+    assert.equal(hD.apiCalls.filter((c) => c.path === 'generate-answer').length, 0);
+    assert.equal(answersD.q_why, 'Direct prose answer');
+  });
 });
