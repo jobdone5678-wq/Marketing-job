@@ -9,6 +9,7 @@ import {
   SearchIcon,
   CalendarIcon,
   RefreshCwIcon,
+  Wand2Icon,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -65,8 +66,16 @@ export function OutsideJobsTable() {
       {/* HEADER */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-foreground text-2xl font-medium tracking-tight sm:text-3xl">Outside Jobs</h1>
-          <p className="text-muted-foreground mt-1 text-xs">
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-foreground text-[24px] font-medium tracking-tight">Outside Jobs</h1>
+            <Badge
+              variant="outline"
+              className="border-border bg-muted text-[13px] font-medium text-muted-foreground"
+            >
+              Extension Captured
+            </Badge>
+          </div>
+          <p className="text-muted-foreground mt-1 text-[13px]">
             Jobs discovered and captured outside the internal portal
           </p>
         </div>
@@ -76,13 +85,13 @@ export function OutsideJobsTable() {
             size="sm"
             onClick={() => void refreshJobs(true)}
             disabled={loading}
-            className="border-border/60 hover:bg-muted/50 h-8 gap-1.5 rounded-md text-xs font-normal"
+            className="h-9 gap-1.5 rounded-[12px] text-[13px]"
           >
-            <RefreshCwIcon className={`size-3.5 stroke-[1.5] ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCwIcon className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
           <Link href="/dashboard/jobs">
-            <Button variant="outline" size="sm" className="border-border/60 hover:bg-muted/50 h-8 rounded-md text-xs font-normal">
+            <Button variant="secondary" size="sm" className="h-9 rounded-[12px] text-[13px]">
               View portal jobs
             </Button>
           </Link>
@@ -90,17 +99,17 @@ export function OutsideJobsTable() {
       </div>
 
       {/* SEARCH BAR & COUNTERS */}
-      <div className="bg-card border-border/60 flex flex-col items-center justify-between gap-3 rounded-xl border p-3 sm:flex-row">
+      <div className="bg-card border-border/70 flex flex-col items-center justify-between gap-3 rounded-[16px] border p-3 sm:flex-row">
         <div className="relative w-full sm:w-80">
           <SearchIcon className="text-muted-foreground absolute top-1/2 left-3 size-3.5 -translate-y-1/2 stroke-[1.5]" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by company, title, or skills"
-            className="bg-background border-border/60 h-9 rounded-md pl-8.5 text-xs"
+            placeholder="Search company, job title, skills, source..."
+            className="bg-background h-9 rounded-[12px] pl-9 text-[13px]"
           />
         </div>
-        <div className="text-muted-foreground flex items-center gap-4 text-xs font-mono tabular-nums">
+        <div className="text-muted-foreground flex items-center gap-4 text-[13px]">
           <span>
             Total: <strong className="text-foreground font-medium">{jobs.length}</strong>
           </span>
@@ -113,27 +122,27 @@ export function OutsideJobsTable() {
       </div>
 
       {/* TABLE */}
-      <div className="border-border/60 bg-card overflow-hidden rounded-xl border">
+      <div className="border-border/70 bg-card overflow-hidden rounded-[16px] border">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader className="bg-muted/30 border-border/60 border-b">
               <TableRow>
-                <TableHead className="text-muted-foreground w-[240px] text-xs font-medium normal-case">
-                  Job &amp; company
+                <TableHead className="text-muted-foreground w-[240px] text-[11px] font-medium">
+                  Job &amp; Company
                 </TableHead>
-                <TableHead className="text-muted-foreground w-[180px] text-xs font-medium normal-case">
+                <TableHead className="text-muted-foreground w-[180px] text-[11px] font-medium">
                   Source
                 </TableHead>
-                <TableHead className="text-muted-foreground min-w-[200px] text-xs font-medium normal-case">
+                <TableHead className="text-muted-foreground min-w-[200px] text-[11px] font-medium">
                   Match
                 </TableHead>
-                <TableHead className="text-muted-foreground w-[180px] text-xs font-medium normal-case">
+                <TableHead className="text-muted-foreground w-[180px] text-[11px] font-medium">
                   Status
                 </TableHead>
-                <TableHead className="text-muted-foreground w-[130px] text-xs font-medium normal-case">
+                <TableHead className="text-muted-foreground w-[130px] text-[11px] font-medium">
                   Captured
                 </TableHead>
-                <TableHead className="text-muted-foreground w-[90px] text-right text-xs font-medium normal-case">
+                <TableHead className="text-muted-foreground w-[90px] text-right text-[11px] font-medium">
                   Action
                 </TableHead>
               </TableRow>
@@ -141,28 +150,28 @@ export function OutsideJobsTable() {
             <TableBody className="divide-border/50 divide-y">
               {filteredJobs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-muted-foreground h-32 text-center text-xs">
-                    {loading ? 'Loading outside jobs…' : 'No outside jobs match your criteria.'}
+                  <TableCell colSpan={6} className="text-muted-foreground h-32 text-center text-[13px]">
+                    {loading ? 'Loading outside jobs…' : 'No outside jobs found.'}
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredJobs.map((job) => (
                   <TableRow key={job.id} className="hover:bg-muted/30 transition-colors">
                     <TableCell className="py-3.5 align-top">
-                      <div className="text-foreground flex items-center gap-1.5 text-xs font-medium">
-                        <div className="bg-muted text-foreground border-border/60 flex size-5 shrink-0 items-center justify-center rounded border">
-                          <Building2Icon className="size-3 stroke-[1.5]" />
+                      <div className="text-foreground flex items-center gap-1.5 text-[13px] font-medium">
+                        <div className="bg-surface-sunken text-muted-foreground flex size-5 shrink-0 items-center justify-center rounded">
+                          <Building2Icon className="size-3" />
                         </div>
                         <span className="font-medium">{job.company}</span>
                       </div>
-                      <div className="text-muted-foreground mt-0.5 line-clamp-1 text-xs">
+                      <div className="text-foreground mt-0.5 line-clamp-1 text-[13px] font-medium">
                         {job.title}
                       </div>
                     </TableCell>
                     <TableCell className="py-3.5 align-top">
                       <Badge
                         variant="secondary"
-                        className="border-border/60 bg-muted/60 text-muted-foreground h-4 max-w-[160px] truncate rounded px-1.5 py-0 text-[10px] font-normal"
+                        className="h-4 max-w-[160px] truncate px-1.5 py-0 text-[11px] font-medium"
                       >
                         {job.portal_source}
                       </Badge>
@@ -171,9 +180,10 @@ export function OutsideJobsTable() {
                       {job.match_score != null ? (
                         <Badge
                           variant="outline"
-                          className="border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 h-4 rounded px-1.5 py-0 text-[10px] font-medium"
+                          className="h-4 border-primary/20 bg-primary/10 px-1.5 py-0 text-[11px] font-medium text-primary"
                         >
-                          {job.match_score}% match
+                          <Wand2Icon className="mr-1 size-2.5" />
+                          Match: {job.match_score}%
                         </Badge>
                       ) : (
                         <span className="text-muted-foreground text-[11px]">N/A</span>
@@ -182,12 +192,12 @@ export function OutsideJobsTable() {
                     <TableCell className="py-3.5 align-top">
                       <Badge
                         variant="outline"
-                        className="border-border/60 bg-muted/40 text-muted-foreground h-4 rounded px-1.5 py-0 text-[10px] font-normal"
+                        className="h-4 border-border bg-muted px-1.5 py-0 text-[11px] text-muted-foreground"
                       >
                         {job.status || 'Discovered'}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-muted-foreground py-3.5 align-top font-mono text-xs tabular-nums">
+                    <TableCell className="text-muted-foreground py-3.5 align-top text-[13px]">
                       <div className="flex items-center gap-1">
                         <CalendarIcon className="size-3 stroke-[1.5]" />
                         {new Date(job.created_at).toLocaleDateString()}
@@ -203,7 +213,7 @@ export function OutsideJobsTable() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-muted-foreground hover:text-foreground size-7 rounded-md p-0"
+                          className="text-primary hover:bg-primary/10 size-7 rounded-[10px] p-0"
                         >
                           <ExternalLinkIcon className="size-3.5 stroke-[1.5]" />
                         </Button>

@@ -52,7 +52,7 @@ export default function Page() {
       <div className="bg-background text-foreground flex h-screen items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="border-primary size-6 animate-spin rounded-full border-2 border-t-transparent" />
-          <span className="text-muted-foreground text-xs">Loading NextKinHR…</span>
+          <span className="text-muted-foreground text-[13px]">Loading NextKinHR…</span>
         </div>
       </div>
     );

@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/client';
 import { Loader2 } from 'lucide-react';
+import { VerifiedStamp } from '@/components/brand-mark';
 import { ensureSessionProfile } from '@/lib/auth/session-profile';
 
 export function JobseekerAuthCard() {
@@ -21,26 +22,6 @@ export function JobseekerAuthCard() {
 
   const otpInputRef = useRef<HTMLInputElement>(null);
   const supabase = useMemo(() => createClient(), []);
-
-  useEffect(() => {
-    let isMounted = true;
-    async function checkActiveSession() {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (user && isMounted) {
-          router.push('/auth/jobseeker/connected');
-        }
-      } catch {
-        // Allow user to proceed with manual login if session check fails
-      }
-    }
-    checkActiveSession();
-    return () => {
-      isMounted = false;
-    };
-  }, [supabase, router]);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -102,7 +83,7 @@ export function JobseekerAuthCard() {
       } else {
         setStep('otp');
         setCountdown(45);
-        setSuccessMsg(`We dispatched a 6-digit access code to ${cleanEmail}`);
+        setSuccessMsg(`We sent a 6-digit code to ${cleanEmail}`);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to send code';
@@ -204,7 +185,7 @@ export function JobseekerAuthCard() {
         setErrorMsg(error.message);
       } else {
         setCountdown(45);
-        setSuccessMsg('A fresh code was dispatched to your email');
+        setSuccessMsg('A new code is on its way to your email');
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to resend code';
@@ -237,35 +218,43 @@ export function JobseekerAuthCard() {
     }
   };
 
+  const fieldClass =
+    'border-border bg-card text-foreground placeholder:text-muted-foreground focus:border-ring focus:ring-ring/15 h-11 w-full rounded-[10px] border px-3.5 text-[13px] transition-colors outline-none focus:ring-3';
+  const primaryButtonClass =
+    'bg-primary text-primary-foreground hover:bg-primary/90 flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-[10px] text-[13px] font-medium transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40';
+
   return (
-    <div className="w-full max-w-[420px] rounded-xl border border-[#EAEAEA] bg-white p-7 font-sans shadow-[0_1px_3px_rgba(0,0,0,0.02)] sm:p-8">
+    <div className="panel w-full max-w-[420px] p-7 sm:p-8">
       {/* Header */}
-      <div className="mb-6 space-y-1.5">
-        <div className="mb-3 flex items-center justify-between">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#EDF3EC] px-2.5 py-0.5 font-mono text-[10px] tracking-wider text-[#346538] uppercase">
-            <span className="size-1.5 rounded-full bg-[#346538]" />
-            Candidate Access
+      <div className="mb-6">
+        <div className="mb-5 flex items-center justify-between">
+          <span className="text-muted-foreground inline-flex items-center gap-2 text-[13px]">
+            <VerifiedStamp className="size-4" />
+            Candidate access
           </span>
-          <span className="font-mono text-[11px] text-[#787774]">Free account</span>
+          <span className="figure text-muted-foreground text-[11px]">Free account</span>
         </div>
 
-        <h2 className="text-xl font-medium tracking-tight text-[#111111]">
-          {step === 'email' ? 'Sign in with Email' : 'Enter Verification Code'}
+        <h2 className="text-foreground text-[20px] leading-7 font-medium tracking-tight">
+          {step === 'email' ? 'Sign in' : 'Enter your code'}
         </h2>
-        <p className="text-xs leading-relaxed text-[#787774]">
+        <p className="text-muted-foreground mt-2 text-[13px] leading-5">
           {step === 'email'
-            ? 'Enter your email address to receive a secure six-digit login code.'
-            : `Enter the six-digit code sent to ${email}`}
+            ? 'We send a six-digit code to your email — no password to remember'
+            : `Six digits, sent to ${email}`}
         </p>
       </div>
 
       {errorMsg && (
-        <div className="mb-4 rounded-[6px] border border-[#FDEBEC] bg-[#FDEBEC] px-3.5 py-2.5 text-xs leading-relaxed text-[#9F2F2D]">
+        <div
+          role="alert"
+          className="border-destructive/30 bg-destructive/5 text-destructive mb-4 rounded-[10px] border px-3.5 py-2.5 text-[13px] leading-5"
+        >
           {errorMsg}
         </div>
       )}
       {successMsg && (
-        <div className="mb-4 rounded-[6px] border border-[#EDF3EC] bg-[#EDF3EC] px-3.5 py-2.5 text-xs leading-relaxed text-[#346538]">
+        <div className="border-primary/25 bg-primary/5 text-primary mb-4 rounded-[10px] border px-3.5 py-2.5 text-[13px] leading-5">
           {successMsg}
         </div>
       )}
@@ -273,8 +262,11 @@ export function JobseekerAuthCard() {
       {step === 'email' ? (
         <div className="space-y-4">
           <form onSubmit={handleSendOtp} className="space-y-4">
-            <div className="space-y-1.5">
-              <label htmlFor="candidate-email" className="block text-xs font-medium text-[#111111]">
+            <div className="space-y-2">
+              <label
+                htmlFor="candidate-email"
+                className="text-foreground block text-[13px] font-medium"
+              >
                 Email address
               </label>
               <input
@@ -285,20 +277,19 @@ export function JobseekerAuthCard() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoFocus
-                className="h-10 w-full rounded-[6px] border border-[#EAEAEA] bg-white px-3 text-xs text-[#111111] transition-colors placeholder:text-[#787774]/60 focus:border-[#111111] focus:outline-none"
+                className={fieldClass}
               />
             </div>
 
-            {/* Utilitarian Solid Button */}
             <button
               type="submit"
               disabled={loading || googleLoading || !email.trim()}
-              className="flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-[6px] bg-[#111111] text-xs font-medium text-white transition-all hover:bg-[#262626] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+              className={primaryButtonClass}
             >
               {loading ? (
                 <>
-                  <Loader2 className="size-3.5 animate-spin" />
-                  <span>Sending code...</span>
+                  <Loader2 aria-hidden="true" className="size-4 animate-spin stroke-[1.5]" />
+                  <span>Sending code</span>
                 </>
               ) : (
                 <span>Continue with email</span>
@@ -306,22 +297,19 @@ export function JobseekerAuthCard() {
             </button>
           </form>
 
-          <div className="relative flex items-center justify-center py-1">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-[#EAEAEA]" />
-            </div>
-            <span className="relative bg-white px-2 font-mono text-[10px] tracking-wider text-[#787774] uppercase">
-              or
-            </span>
+          <div className="flex items-center gap-3 py-1">
+            <span className="bg-border h-px flex-1" />
+            <span className="text-muted-foreground text-[11px]">or</span>
+            <span className="bg-border h-px flex-1" />
           </div>
 
           <button
             type="button"
             onClick={handleGoogleAuth}
             disabled={googleLoading || loading}
-            className="flex h-10 w-full cursor-pointer items-center justify-center gap-2.5 rounded-[6px] border border-[#EAEAEA] bg-white text-xs font-medium text-[#111111] transition-all hover:bg-[#F7F6F3] active:scale-[0.98]"
+            className="border-border text-foreground hover:bg-accent flex h-11 w-full cursor-pointer items-center justify-center gap-2.5 rounded-[10px] border text-[13px] font-medium transition-colors active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <svg className="size-3.5" viewBox="0 0 24 24">
+            <svg aria-hidden="true" className="size-4" viewBox="0 0 24 24">
               <path
                 fill="#4285F4"
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -339,18 +327,21 @@ export function JobseekerAuthCard() {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
               />
             </svg>
-            <span>{googleLoading ? 'Connecting...' : 'Continue with Google'}</span>
+            <span>{googleLoading ? 'Connecting' : 'Continue with Google'}</span>
           </button>
         </div>
       ) : (
         <div className="space-y-4">
           <form onSubmit={handleVerifyOtp} className="space-y-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label htmlFor="candidate-otp" className="block text-xs font-medium text-[#111111]">
+                <label
+                  htmlFor="candidate-otp"
+                  className="text-foreground block text-[13px] font-medium"
+                >
                   Verification code
                 </label>
-                <span className="font-mono text-[10px] text-[#787774]">6 digits</span>
+                <span className="figure text-muted-foreground text-[11px]">6 digits</span>
               </div>
               <input
                 id="candidate-otp"
@@ -364,19 +355,15 @@ export function JobseekerAuthCard() {
                 onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
                 required
                 autoFocus
-                className="h-11 w-full rounded-[6px] border border-[#EAEAEA] bg-white text-center font-mono text-lg tracking-[0.35em] text-[#111111] tabular-nums transition-colors focus:border-[#111111] focus:outline-none"
+                className="figure border-border bg-card text-foreground placeholder:text-muted-foreground/50 focus:border-ring focus:ring-ring/15 h-14 w-full rounded-[10px] border text-center text-[22px] tracking-[0.35em] transition-colors outline-none focus:ring-3"
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={loading || otpCode.length < 6}
-              className="flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-[6px] bg-[#111111] text-xs font-medium text-white transition-all hover:bg-[#262626] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
-            >
+            <button type="submit" disabled={loading || otpCode.length < 6} className={primaryButtonClass}>
               {loading ? (
                 <>
-                  <Loader2 className="size-3.5 animate-spin" />
-                  <span>Verifying...</span>
+                  <Loader2 aria-hidden="true" className="size-4 animate-spin stroke-[1.5]" />
+                  <span>Verifying</span>
                 </>
               ) : (
                 <span>Verify and continue</span>
@@ -384,7 +371,7 @@ export function JobseekerAuthCard() {
             </button>
           </form>
 
-          <div className="flex items-center justify-between pt-1 text-xs text-[#787774]">
+          <div className="text-muted-foreground flex items-center justify-between pt-1 text-[13px]">
             <button
               type="button"
               onClick={() => {
@@ -393,20 +380,20 @@ export function JobseekerAuthCard() {
                 setErrorMsg(null);
                 setSuccessMsg(null);
               }}
-              className="cursor-pointer transition-colors hover:text-[#111111]"
+              className="hover:text-foreground cursor-pointer transition-colors"
             >
-              Use different email
+              Use a different email
             </button>
 
             <button
               type="button"
               disabled={loading || countdown > 0}
               onClick={handleResendOtp}
-              className={`cursor-pointer ${
+              className={
                 countdown > 0
-                  ? 'cursor-not-allowed text-[#787774]/70'
-                  : 'text-[#111111] hover:underline'
-              }`}
+                  ? 'text-muted-foreground cursor-not-allowed'
+                  : 'text-foreground cursor-pointer hover:underline'
+              }
             >
               {countdown > 0 ? `Resend in ${countdown}s` : 'Resend code'}
             </button>
@@ -414,14 +401,11 @@ export function JobseekerAuthCard() {
         </div>
       )}
 
-      {/* Privacy Note */}
-      <div className="mt-6 flex items-start gap-2 border-t border-[#EAEAEA] pt-4 text-[11px] leading-relaxed text-[#787774]">
-        <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[#346538]" />
-        <span>
-          Applicant credentials pair directly with the NextKin browser extension and remain isolated
-          in your personal encrypted vault.
-        </span>
-      </div>
+      {/* Privacy note */}
+      <p className="border-border text-muted-foreground mt-6 border-t pt-4 text-[13px] leading-5">
+        Your sign-in pairs this account with the Nextkin browser extension. Profile data stays in
+        your own workspace.
+      </p>
     </div>
   );
 }

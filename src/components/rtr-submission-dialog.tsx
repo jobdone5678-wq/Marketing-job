@@ -4,7 +4,7 @@ import * as React from 'react';
 import {
   FileSignature,
   UploadCloud,
-  Sparkles,
+  Wand2,
   CheckCircle2,
   Building2,
   Briefcase,
@@ -573,21 +573,21 @@ export function RTRSubmissionDialog({
       <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto p-6 sm:p-7">
         <DialogHeader className="border-border/70 border-b pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="bg-primary/10 border-primary/20 text-primary flex size-9 items-center justify-center rounded-xl border shadow-2xs">
+            <div className="bg-surface-sunken border-border text-muted-foreground flex size-9 items-center justify-center rounded-[12px] border">
               <FileSignature className="size-5" />
             </div>
             <div>
-              <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+              <DialogTitle className="flex items-center gap-2 text-[17px] font-medium">
                 Add RTR Submission
                 <Badge
                   variant="outline"
-                  className="bg-primary/5 text-primary border-primary/20 h-4.5 py-0 text-[10px] font-semibold tracking-wide"
+                  className="bg-primary/5 text-primary border-primary/20 h-4 py-0 text-[11px] font-medium"
                 >
-                  <Sparkles className="mr-1 size-2.5" />
+                  <Wand2 className="mr-1 size-2.5" />
                   Universal AI OCR
                 </Badge>
               </DialogTitle>
-              <DialogDescription className="text-muted-foreground mt-0.5 text-xs">
+              <DialogDescription className="text-muted-foreground mt-0.5 text-[13px]">
                 Upload ANY Right to Represent (RTR) document, vendor email screenshot, or agreement.
                 OCR automatically extracts all terms and logs representation without job
                 restrictions.
@@ -616,23 +616,23 @@ export function RTRSubmissionDialog({
                 onDragLeave={() => setDragOver(false)}
                 onDrop={handleDrop}
                 onClick={openFilePicker}
-                className={`cursor-pointer rounded-2xl border-2 border-dashed p-6 text-center transition-all sm:p-8 ${
-                  dragOver
-                    ? 'border-primary bg-primary/5 scale-[0.99]'
+                className={`cursor-pointer rounded-[16px] border-2 border-dashed p-6 text-center transition-colors sm:p-8 ${
+ dragOver
+ ?'border-primary bg-primary/5 scale-[0.99]'
                     : 'border-border/80 bg-muted/20 hover:bg-muted/40 hover:border-primary/50'
                 }`}
               >
-                <div className="bg-primary/10 border-primary/20 text-primary mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl border shadow-2xs">
+                <div className="bg-surface-sunken border-border text-muted-foreground mx-auto mb-3 flex size-12 items-center justify-center rounded-[16px] border">
                   <UploadCloud className="size-6" />
                 </div>
-                <h4 className="text-foreground text-sm font-semibold">
+                <h4 className="text-foreground text-[13px] font-medium">
                   Drag and drop any RTR image, email screenshot, or PDF
                 </h4>
-                <p className="text-muted-foreground mx-auto mt-1 max-w-md text-xs">
+                <p className="text-muted-foreground mx-auto mt-1 max-w-md text-[13px]">
                   Accepts recruiter emails, vendor submittals, PDF agreements, and screenshot images
                   (up to 4MB).
                 </p>
-                <div className="text-primary mt-3 inline-flex items-center gap-2 text-xs font-medium">
+                <div className="text-primary mt-3 inline-flex items-center gap-2 text-[13px] font-medium">
                   <span>Browse files</span>
                   <span className="text-muted-foreground/60">•</span>
                   <span className="text-muted-foreground">
@@ -641,28 +641,28 @@ export function RTRSubmissionDialog({
                 </div>
               </div>
             ) : (
-              <div className="border-border/80 bg-card flex flex-col items-start justify-between gap-3 rounded-xl border p-3 shadow-2xs sm:flex-row sm:items-center sm:p-4">
+              <div className="border-border/80 bg-card flex flex-col items-start justify-between gap-3 rounded-[12px] border p-3 sm:flex-row sm:items-center sm:p-4">
                 <div className="flex min-w-0 items-center gap-3">
                   {previewUrl ? (
-                    <div className="border-border/80 bg-muted relative size-14 shrink-0 overflow-hidden rounded-lg border">
+                    <div className="border-border/80 bg-muted relative size-14 shrink-0 overflow-hidden rounded-[10px] border">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={previewUrl} alt="RTR Preview" className="size-full object-cover" />
                     </div>
                   ) : (
-                    <div className="bg-primary/10 border-primary/20 text-primary flex size-12 shrink-0 items-center justify-center rounded-lg border">
+                    <div className="bg-surface-sunken border-border text-muted-foreground flex size-12 shrink-0 items-center justify-center rounded-[10px] border">
                       <FileText className="size-6" />
                     </div>
                   )}
 
                   <div className="min-w-0">
-                    <p className="text-foreground max-w-sm truncate text-xs font-semibold">
+                    <p className="text-foreground max-w-sm truncate text-[13px] font-medium">
                       {file.name}
                     </p>
                     <p className="text-muted-foreground text-[11px]">
                       {(file.size / 1024).toFixed(1)} KB • {file.type || 'Document'}
                     </p>
                     {scanning && (
-                      <div className="text-primary mt-1 flex animate-pulse items-center gap-1.5 text-[11px] font-medium">
+                      <div className="text-primary mt-1 flex items-center gap-1.5 text-[11px] font-medium">
                         <Loader2 className="size-3 animate-spin" />
                         AI Vision extracting candidate, client, rate, and terms...
                       </div>
@@ -677,7 +677,7 @@ export function RTRSubmissionDialog({
                     size="sm"
                     disabled={saving}
                     onClick={openFilePicker}
-                    className="border-border/70 h-8 gap-1.5 rounded-lg text-xs"
+                    className="border-border/70 h-8 gap-1.5 rounded-[10px] text-[13px]"
                   >
                     <RefreshCw className="size-3" />
                     Change Document
@@ -708,7 +708,7 @@ export function RTRSubmissionDialog({
                       setRepresentationClause('');
                       setNotes('');
                     }}
-                    className="text-muted-foreground hover:text-destructive size-8 h-8 rounded-lg p-0"
+                    className="text-muted-foreground hover:text-destructive size-8 h-8 rounded-[10px] p-0"
                   >
                     <X className="size-4" />
                   </Button>
@@ -719,15 +719,15 @@ export function RTRSubmissionDialog({
 
           {/* OCR Extracted Highlights Card */}
           {extractedSummary && (
-            <div className="border-primary/25 bg-primary/5 space-y-2 rounded-xl border p-3.5 text-xs shadow-2xs">
+            <div className="border-primary/25 bg-primary/5 space-y-2 rounded-[12px] border p-3.5 text-[13px]">
               <div className="flex items-center justify-between">
-                <span className="text-primary flex items-center gap-1.5 font-semibold">
-                  <Sparkles className="size-3.5" />
+                <span className="text-primary flex items-center gap-1.5 font-medium">
+                  <Wand2 className="size-3.5" />
                   AI OCR Extracted Details:
                 </span>
                 <Badge
                   variant="outline"
-                  className="bg-background h-4.5 py-0 text-[10px] font-medium"
+                  className="bg-background h-4 py-0 text-[11px] font-medium"
                 >
                   {extractedSummary.rtr_status === 'signed'
                     ? '✓ Signed Agreement'
@@ -736,27 +736,27 @@ export function RTRSubmissionDialog({
               </div>
 
               <div className="grid grid-cols-2 gap-2 pt-1 text-[11px] sm:grid-cols-4">
-                <div className="bg-background/80 border-border/60 rounded-lg border p-2">
-                  <span className="text-muted-foreground block text-[10px]">Candidate</span>
-                  <span className="text-foreground block truncate font-semibold">
+                <div className="bg-background/80 border-border/60 rounded-[10px] border p-2">
+                  <span className="text-muted-foreground block text-[11px]">Candidate</span>
+                  <span className="text-foreground block truncate font-medium">
                     {extractedSummary.candidate_name || candidateName || 'Not named'}
                   </span>
                 </div>
-                <div className="bg-background/80 border-border/60 rounded-lg border p-2">
-                  <span className="text-muted-foreground block text-[10px]">Target Client</span>
-                  <span className="text-foreground block truncate font-semibold">
+                <div className="bg-background/80 border-border/60 rounded-[10px] border p-2">
+                  <span className="text-muted-foreground block text-[11px]">Target Client</span>
+                  <span className="text-foreground block truncate font-medium">
                     {extractedSummary.company_name || companyName || 'Client'}
                   </span>
                 </div>
-                <div className="bg-background/80 border-border/60 rounded-lg border p-2">
-                  <span className="text-muted-foreground block text-[10px]">Role / Title</span>
-                  <span className="text-foreground block truncate font-semibold">
+                <div className="bg-background/80 border-border/60 rounded-[10px] border p-2">
+                  <span className="text-muted-foreground block text-[11px]">Role / Title</span>
+                  <span className="text-foreground block truncate font-medium">
                     {extractedSummary.job_title || jobTitle || 'Consultant'}
                   </span>
                 </div>
-                <div className="bg-background/80 border-border/60 rounded-lg border p-2">
-                  <span className="text-muted-foreground block text-[10px]">Bill Rate</span>
-                  <span className="text-primary block truncate font-semibold">
+                <div className="bg-background/80 border-border/60 rounded-[10px] border p-2">
+                  <span className="text-muted-foreground block text-[11px]">Bill Rate</span>
+                  <span className="text-primary block truncate font-medium">
                     {extractedSummary.hourly_rate
                       ? `$${extractedSummary.hourly_rate}/hr`
                       : 'Not specified'}
@@ -765,7 +765,7 @@ export function RTRSubmissionDialog({
               </div>
 
               {representationClause && (
-                <div className="text-foreground/80 border-border/40 mt-1 line-clamp-2 border-t pt-1 text-[11px] italic">
+                <div className="text-foreground/80 border-border/40 mt-1 line-clamp-2 border-t pt-1 text-[11px]">
                   &ldquo;{representationClause}&rdquo;
                 </div>
               )}
@@ -779,18 +779,18 @@ export function RTRSubmissionDialog({
               <div className="flex items-center justify-between">
                 <Label
                   htmlFor="candidate"
-                  className="flex items-center gap-1.5 text-xs font-semibold"
+                  className="flex items-center gap-1.5 text-[13px] font-medium"
                 >
                   <User className="text-primary size-3.5" />
                   Candidate <span className="text-destructive">*</span>
                 </Label>
                 {autoMatchedCandidate ? (
-                  <Badge className="h-4.5 gap-1 border-emerald-500/30 bg-emerald-500/15 py-0 text-[10px] text-emerald-700 dark:text-emerald-300">
+                  <Badge className="h-4 gap-1 border-primary/20 bg-primary/15 py-0 text-[11px] text-primary">
                     <CheckCircle2 className="size-2.5" />
                     Auto-matched: {autoMatchedCandidate.full_name}
                   </Badge>
                 ) : candidateName ? (
-                  <Badge variant="outline" className="text-muted-foreground h-4.5 py-0 text-[10px]">
+                  <Badge variant="outline" className="text-muted-foreground h-4 py-0 text-[11px]">
                     Custom / Extracted Candidate
                   </Badge>
                 ) : null}
@@ -813,18 +813,18 @@ export function RTRSubmissionDialog({
                     }
                   }}
                 >
-                  <SelectTrigger id="candidate" className="h-9 text-xs">
+                  <SelectTrigger id="candidate" className="h-9 text-[13px]">
                     <SelectValue placeholder="Select candidate for this RTR..." />
                   </SelectTrigger>
                   <SelectContent className="max-h-60">
                     <SelectItem
                       value="__none__"
-                      className="text-muted-foreground text-xs font-medium"
+                      className="text-muted-foreground text-[13px] font-medium"
                     >
                       -- Independent RTR Candidate (type name below) --
                     </SelectItem>
                     {candidates.map((c) => (
-                      <SelectItem key={c.id} value={c.id} className="text-xs">
+                      <SelectItem key={c.id} value={c.id} className="text-[13px]">
                         {c.full_name} {c.visa_status ? `(${c.visa_status})` : ''}
                       </SelectItem>
                     ))}
@@ -848,20 +848,20 @@ export function RTRSubmissionDialog({
                       }
                     }
                   }}
-                  className="h-9 text-xs"
+                  className="h-9 text-[13px]"
                 />
               </div>
             </div>
 
             {/* Different Companies Detected in Document */}
             {detectedCompanies.length > 0 && (
-              <div className="border-primary/20 bg-primary/5 space-y-2 rounded-xl border p-3 shadow-2xs md:col-span-2">
+              <div className="border-primary/20 bg-primary/5 space-y-2 rounded-[12px] border p-3 md:col-span-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-primary flex items-center gap-1.5 text-xs font-semibold">
+                  <span className="text-primary flex items-center gap-1.5 text-[13px] font-medium">
                     <Building2 className="size-3.5" />
                     Companies Detected by OCR ({detectedCompanies.length}):
                   </span>
-                  <span className="text-muted-foreground text-[10px]">
+                  <span className="text-muted-foreground text-[11px]">
                     Click to quickly assign as Client or Vendor
                   </span>
                 </div>
@@ -873,24 +873,24 @@ export function RTRSubmissionDialog({
                     return (
                       <div
                         key={cName}
-                        className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1 text-xs transition-all ${
-                          isClient
-                            ? 'bg-primary/10 border-primary/40 text-primary font-medium'
+                        className={`inline-flex items-center gap-2 rounded-[10px] border px-2.5 py-1 text-[13px] transition-colors ${
+ isClient
+ ?'bg-primary/10 border-primary/40 text-primary font-medium'
                             : isVendor
-                              ? 'border-amber-500/40 bg-amber-500/10 font-medium text-amber-700 dark:text-amber-300'
+                              ? 'border-amber-500/40 bg-amber-500/10 font-medium text-amber-700 dark:text-amber-400'
                               : 'bg-background border-border/80 text-foreground'
                         }`}
                       >
-                        <span className="max-w-[180px] truncate font-semibold" title={cName}>
+                        <span className="max-w-[180px] truncate font-medium" title={cName}>
                           {cName}
                         </span>
-                        <div className="border-border/60 flex items-center gap-1 border-l pl-1.5 text-[10px]">
+                        <div className="border-border/60 flex items-center gap-1 border-l pl-1.5 text-[11px]">
                           <button
                             type="button"
                             onClick={() => setCompanyName(cName)}
-                            className={`rounded px-1.5 py-0.5 font-semibold transition-colors ${
-                              isClient
-                                ? 'bg-primary text-primary-foreground shadow-2xs'
+                            className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
+ isClient
+ ?'bg-primary text-primary-foreground '
                                 : 'hover:bg-primary/10 text-muted-foreground hover:text-primary cursor-pointer'
                             }`}
                             title={`Assign "${cName}" as Client Company`}
@@ -900,9 +900,9 @@ export function RTRSubmissionDialog({
                           <button
                             type="button"
                             onClick={() => setVendorName(cName)}
-                            className={`rounded px-1.5 py-0.5 font-semibold transition-colors ${
-                              isVendor
-                                ? 'bg-amber-500 text-white shadow-2xs'
+                            className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
+ isVendor
+ ?'bg-amber-500 text-white '
                                 : 'text-muted-foreground cursor-pointer hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400'
                             }`}
                             title={`Assign "${cName}" as Vendor Agency`}
@@ -921,7 +921,7 @@ export function RTRSubmissionDialog({
             <div className="space-y-1.5">
               <Label
                 htmlFor="companyName"
-                className="flex items-center gap-1.5 text-xs font-semibold"
+                className="flex items-center gap-1.5 text-[13px] font-medium"
               >
                 <Building2 className="text-primary size-3.5" />
                 Client / Company Name
@@ -931,13 +931,13 @@ export function RTRSubmissionDialog({
                 placeholder="e.g. JPMorgan Chase, Apple"
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </div>
 
             {/* Job Title / Role */}
             <div className="space-y-1.5">
-              <Label htmlFor="jobTitle" className="flex items-center gap-1.5 text-xs font-semibold">
+              <Label htmlFor="jobTitle" className="flex items-center gap-1.5 text-[13px] font-medium">
                 <Briefcase className="text-primary size-3.5" />
                 Target Job Title
               </Label>
@@ -946,7 +946,7 @@ export function RTRSubmissionDialog({
                 placeholder="e.g. Senior Java Full Stack Developer"
                 value={jobTitle}
                 onChange={(e) => setJobTitle(e.target.value)}
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </div>
 
@@ -954,7 +954,7 @@ export function RTRSubmissionDialog({
             <div className="space-y-1.5">
               <Label
                 htmlFor="vendorName"
-                className="flex items-center gap-1.5 text-xs font-semibold"
+                className="flex items-center gap-1.5 text-[13px] font-medium"
               >
                 <Building2 className="text-primary size-3.5" />
                 Vendor / Staffing Agency
@@ -964,7 +964,7 @@ export function RTRSubmissionDialog({
                 placeholder="e.g. Apex Systems, Collabera"
                 value={vendorName}
                 onChange={(e) => setVendorName(e.target.value)}
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </div>
 
@@ -972,20 +972,20 @@ export function RTRSubmissionDialog({
             <div className="space-y-1.5">
               <Label
                 htmlFor="hourlyRate"
-                className="flex items-center gap-1.5 text-xs font-semibold"
+                className="flex items-center gap-1.5 text-[13px] font-medium"
               >
                 <DollarSign className="text-primary size-3.5" />
                 Agreed Hourly Rate ($/hr)
               </Label>
               <div className="relative">
-                <span className="text-muted-foreground absolute top-2.5 left-3 text-xs">$</span>
+                <span className="text-muted-foreground absolute top-2.5 left-3 text-[13px]">$</span>
                 <Input
                   id="hourlyRate"
                   type="text"
                   placeholder="e.g. 75"
                   value={hourlyRate}
                   onChange={(e) => setHourlyRate(e.target.value)}
-                  className="h-9 pl-7 text-xs"
+                  className="h-9 pl-7 text-[13px]"
                 />
               </div>
             </div>
@@ -994,7 +994,7 @@ export function RTRSubmissionDialog({
             <div className="space-y-1.5">
               <Label
                 htmlFor="vendorContactName"
-                className="flex items-center gap-1.5 text-xs font-semibold"
+                className="flex items-center gap-1.5 text-[13px] font-medium"
               >
                 <User className="text-primary size-3.5" />
                 Vendor Contact / Recruiter Name
@@ -1004,7 +1004,7 @@ export function RTRSubmissionDialog({
                 placeholder="e.g. John Smith"
                 value={vendorContactName}
                 onChange={(e) => setVendorContactName(e.target.value)}
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </div>
 
@@ -1012,7 +1012,7 @@ export function RTRSubmissionDialog({
             <div className="space-y-1.5">
               <Label
                 htmlFor="vendorContactEmail"
-                className="flex items-center gap-1.5 text-xs font-semibold"
+                className="flex items-center gap-1.5 text-[13px] font-medium"
               >
                 <Mail className="text-primary size-3.5" />
                 Vendor Recruiter Email <span className="text-destructive">*</span>
@@ -1024,7 +1024,7 @@ export function RTRSubmissionDialog({
                 placeholder="e.g. recruiter@agency.com"
                 value={vendorContactEmail}
                 onChange={(e) => setVendorContactEmail(e.target.value)}
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </div>
 
@@ -1032,7 +1032,7 @@ export function RTRSubmissionDialog({
             <div className="space-y-1.5">
               <Label
                 htmlFor="vendorContactPhone"
-                className="flex items-center gap-1.5 text-xs font-semibold"
+                className="flex items-center gap-1.5 text-[13px] font-medium"
               >
                 <Phone className="text-primary size-3.5" />
                 Vendor Recruiter Phone
@@ -1043,7 +1043,7 @@ export function RTRSubmissionDialog({
                 placeholder="e.g. (555) 123-4567"
                 value={vendorContactPhone}
                 onChange={(e) => setVendorContactPhone(e.target.value)}
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </div>
 
@@ -1051,7 +1051,7 @@ export function RTRSubmissionDialog({
             <div className="space-y-1.5">
               <Label
                 htmlFor="rtrStatus"
-                className="flex items-center gap-1.5 text-xs font-semibold"
+                className="flex items-center gap-1.5 text-[13px] font-medium"
               >
                 <CheckCircle2 className="text-primary size-3.5" />
                 RTR Agreement Status
@@ -1062,20 +1062,20 @@ export function RTRSubmissionDialog({
                   setRtrStatus(val as 'received' | 'signed' | 'expired' | 'rejected')
                 }
               >
-                <SelectTrigger id="rtrStatus" className="h-9 text-xs">
+                <SelectTrigger id="rtrStatus" className="h-9 text-[13px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="signed" className="text-xs">
+                  <SelectItem value="signed" className="text-[13px]">
                     Signed & Authorized (Candidate confirmed)
                   </SelectItem>
-                  <SelectItem value="received" className="text-xs">
+                  <SelectItem value="received" className="text-[13px]">
                     Received (Pending signature/review)
                   </SelectItem>
-                  <SelectItem value="expired" className="text-xs">
+                  <SelectItem value="expired" className="text-[13px]">
                     Expired
                   </SelectItem>
-                  <SelectItem value="rejected" className="text-xs">
+                  <SelectItem value="rejected" className="text-[13px]">
                     Rejected
                   </SelectItem>
                 </SelectContent>
@@ -1084,7 +1084,7 @@ export function RTRSubmissionDialog({
 
             {/* RTR Type */}
             <div className="space-y-1.5">
-              <Label htmlFor="rtrType" className="flex items-center gap-1.5 text-xs font-semibold">
+              <Label htmlFor="rtrType" className="flex items-center gap-1.5 text-[13px] font-medium">
                 <FileSignature className="text-primary size-3.5" />
                 Representation Agreement Type
               </Label>
@@ -1094,17 +1094,17 @@ export function RTRSubmissionDialog({
                   setRtrType(val as 'vendor_rtr' | 'client_rtr' | 'direct_rtr')
                 }
               >
-                <SelectTrigger id="rtrType" className="h-9 text-xs">
+                <SelectTrigger id="rtrType" className="h-9 text-[13px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="vendor_rtr" className="text-xs">
+                  <SelectItem value="vendor_rtr" className="text-[13px]">
                     Vendor RTR (Agency representation)
                   </SelectItem>
-                  <SelectItem value="client_rtr" className="text-xs">
+                  <SelectItem value="client_rtr" className="text-[13px]">
                     Client RTR (Direct client agreement)
                   </SelectItem>
-                  <SelectItem value="direct_rtr" className="text-xs">
+                  <SelectItem value="direct_rtr" className="text-[13px]">
                     Direct RTR (Direct employer authorization)
                   </SelectItem>
                 </SelectContent>
@@ -1113,7 +1113,7 @@ export function RTRSubmissionDialog({
 
             {/* RTR Agreement Date */}
             <div className="space-y-1.5">
-              <Label htmlFor="rtrDate" className="flex items-center gap-1.5 text-xs font-semibold">
+              <Label htmlFor="rtrDate" className="flex items-center gap-1.5 text-[13px] font-medium">
                 <Calendar className="text-primary size-3.5" />
                 Agreement Date
               </Label>
@@ -1122,7 +1122,7 @@ export function RTRSubmissionDialog({
                 type="date"
                 value={rtrDate}
                 onChange={(e) => setRtrDate(e.target.value)}
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </div>
 
@@ -1130,7 +1130,7 @@ export function RTRSubmissionDialog({
             <div className="space-y-1.5">
               <Label
                 htmlFor="expirationDate"
-                className="flex items-center gap-1.5 text-xs font-semibold"
+                className="flex items-center gap-1.5 text-[13px] font-medium"
               >
                 <Calendar className="text-primary size-3.5" />
                 Expiration Date (Optional)
@@ -1140,13 +1140,13 @@ export function RTRSubmissionDialog({
                 type="date"
                 value={expirationDate}
                 onChange={(e) => setExpirationDate(e.target.value)}
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </div>
 
             {/* Notes / Internal Comments */}
             <div className="space-y-1.5 md:col-span-2">
-              <Label htmlFor="notes" className="text-xs font-semibold">
+              <Label htmlFor="notes" className="text-[13px] font-medium">
                 Notes & Representation Terms
               </Label>
               <Input
@@ -1154,7 +1154,7 @@ export function RTRSubmissionDialog({
                 placeholder="Optional notes or details from recruiter / candidate..."
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="h-9 text-xs"
+                className="h-9 text-[13px]"
               />
             </div>
           </div>
@@ -1173,7 +1173,7 @@ export function RTRSubmissionDialog({
                 size="sm"
                 onClick={() => handleOpenChange(false)}
                 disabled={saving}
-                className="h-9 rounded-lg px-3 text-xs"
+                className="h-9 rounded-[10px] px-3 text-[13px]"
               >
                 Cancel
               </Button>
@@ -1181,7 +1181,7 @@ export function RTRSubmissionDialog({
                 type="submit"
                 size="sm"
                 disabled={saving || (!file && !companyName.trim())}
-                className="bg-primary text-primary-foreground hover:bg-primary/90 h-9 cursor-pointer gap-1.5 rounded-lg px-4 text-xs font-semibold shadow-xs"
+                className="bg-primary text-primary-foreground hover:bg-primary/90 h-9 cursor-pointer gap-1.5 rounded-[10px] px-4 text-[13px] font-medium"
               >
                 {saving ? (
                   <>

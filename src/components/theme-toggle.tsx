@@ -2,7 +2,6 @@
 
 import { useTheme } from 'next-themes';
 import { Moon, Sun } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 export function ThemeToggle() {
@@ -11,18 +10,18 @@ export function ThemeToggle() {
     <Tooltip>
       <TooltipTrigger
         render={
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Toggle color theme"
+          <button
+            type="button"
+            aria-label="Toggle colour theme"
             onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+            className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-8 items-center justify-center rounded-[8px] transition-colors"
           />
         }
       >
-        <Sun className="size-4 dark:hidden" />
-        <Moon className="hidden size-4 dark:block" />
+        <Sun className="size-4 stroke-[1.5] dark:hidden" />
+        <Moon className="hidden size-4 stroke-[1.5] dark:block" />
       </TooltipTrigger>
-      <TooltipContent>Switch light / dark theme</TooltipContent>
+      <TooltipContent>Switch light / dark</TooltipContent>
     </Tooltip>
   );
 }

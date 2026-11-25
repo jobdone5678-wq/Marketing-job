@@ -3,49 +3,96 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarMenu,
-  SidebarMenuItem,
-} from '@/components/ui/sidebar';
+import { RotateCwIcon } from 'lucide-react';
 
 export interface NavItem {
   id: string;
   title: string;
   url: string;
   icon: ReactNode;
+  badge?: string | number;
 }
 
-export function NavMain({ items }: { items: NavItem[] }) {
+const SECTIONS: [string, string[]][] = [
+  ['Workspace', ['candidates', 'submissions', 'rtr']],
+  ['Opportunities', ['jobs']],
+  ['Connections', ['email-confirmations']],
+];
+
+export function NavMain({
+  items,
+  onSelectSection,
+  onRefreshJobs,
+}: {
+  items: NavItem[];
+  role?: string;
+  activeSection?: string;
+  onSelectSection?: (id: string) => void;
+  onRefreshJobs?: () => void;
+}) {
   const pathname = usePathname();
 
   return (
-    <SidebarGroup>
-      <SidebarGroupContent>
-        <SidebarMenu className="gap-1">
-          {items.map(({ id, title, url, icon }) => {
-            const active = pathname === url || pathname.startsWith(url + '/');
+    <nav aria-label="Workspace" className="flex flex-col">
+      {SECTIONS.map(([title, ids], index) => {
+        const entries = ids.flatMap((id) => items.filter((item) => item.id === id));
+        if (!entries.length) return null;
 
-            return (
-              <SidebarMenuItem key={id}>
-                <Link
-                  href={url}
-                  aria-current={active ? 'page' : undefined}
-                  className={`flex h-9 items-center gap-2.5 rounded-md px-3 text-xs font-medium transition-colors duration-150 focus-visible:outline-2 ${
-                    active
-                      ? 'bg-sidebar-accent text-foreground'
-                      : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground'
-                  }`}
-                >
-                  <span className={active ? 'text-primary' : 'text-muted-foreground'}>{icon}</span>
-                  <span className="truncate">{title}</span>
-                </Link>
-              </SidebarMenuItem>
-            );
-          })}
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
+        return (
+          <div key={title} className={index === 0 ? '' : 'mt-6'}>
+            <div className="text-muted-foreground mb-2 px-3 text-[11px] leading-4 font-medium">
+              {title}
+            </div>
+            <ul className="flex flex-col gap-0.5">
+              {entries.map((item) => {
+                const active =
+                  pathname === item.url ||
+                  (item.url !== '/dashboard' && pathname.startsWith(item.url + '/'));
+
+                return (
+                  <li key={item.id}>
+                    <Link
+                      href={item.url}
+                      aria-current={active ? 'page' : undefined}
+                      onClick={() => onSelectSection?.(item.id)}
+                      className={`flex h-9 items-center gap-2.5 rounded-[10px] px-3 text-[13px] transition-colors ${
+                        active
+                          ? 'bg-accent text-foreground font-medium'
+                          : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                      }`}
+                    >
+                      <span
+                        className={`flex size-4 shrink-0 items-center justify-center ${
+                          active ? 'text-primary' : ''
+                        }`}
+                      >
+                        {item.icon}
+                      </span>
+                      <span className="flex-1 truncate">{item.title}</span>
+                      {item.badge ? (
+                        <span className="figure text-muted-foreground text-[11px]">
+                          {item.badge}
+                        </span>
+                      ) : null}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        );
+      })}
+
+      {onRefreshJobs && (
+        <button
+          type="button"
+          onClick={onRefreshJobs}
+          className="border-border text-muted-foreground hover:text-foreground hover:border-input mt-6 flex h-9 w-full items-center justify-center gap-2 rounded-[10px] border text-[13px] transition-colors"
+        >
+          <RotateCwIcon className="size-4 stroke-[1.5]" />
+          <span>Sync job feeds</span>
+        </button>
+      )}
+    </nav>
   );
 }

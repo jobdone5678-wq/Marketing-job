@@ -1,6 +1,6 @@
 'use client';
 
-import React,{ useState } from 'react';
+import React, { useState } from 'react';
 
 // Curated high-fidelity SVG brand marks for prominent ATS companies
 const BRAND_LOGOS: Record<string, (className: string) => React.ReactNode> = {
@@ -112,27 +112,13 @@ const BRAND_LOGOS: Record<string, (className: string) => React.ReactNode> = {
       />
     </svg>
   ),
-  redcarepharmacy: (cn) => (
-    <svg className={cn} viewBox="0 0 32 32" fill="none">
-      <circle cx="8" cy="23" r="3.5" fill="#DE0039" />
-      <path
-        d="M7.5 13.5C7.5 8.25 11.75 4 17 4C22.25 4 25.5 7.8 25.5 13C25.5 19 22 25 18 25C15.5 25 14 22.8 14.5 19C15.2 14.5 18 13.5 20.5 13.5"
-        stroke="#DE0039"
-        strokeWidth="4.2"
-        strokeLinecap="round"
-      />
-    </svg>
-  ),
 };
 
-// Subtle, professional neutral avatars for fallbacks (Jobright inspired)
+// Monograms sit in the neutral ramp. A logo should read as a label, not as a colour code.
 const MONOGRAM_PALETTES = [
-  'bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200 border-neutral-200 dark:border-neutral-700',
-  'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700',
-  'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700',
-  'bg-blue-50 text-blue-900 dark:bg-blue-950/60 dark:text-blue-200 border-blue-200 dark:border-blue-800',
-  'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800',
-  'bg-violet-50 text-violet-900 dark:bg-violet-950/60 dark:text-violet-200 border-violet-200 dark:border-violet-800',
+  'bg-surface-sunken text-foreground border-border',
+  'bg-secondary text-secondary-foreground border-border',
+  'bg-accent text-accent-foreground border-border',
 ];
 
 function getCompanyHash(str: string): number {
@@ -166,11 +152,11 @@ interface CompanyLogoProps {
 }
 
 const SIZE_MAP = {
-  xs: { box: 'size-6 rounded-md text-[10px]', icon: 'size-4' },
-  sm: { box: 'size-8 rounded-lg text-xs', icon: 'size-5' },
-  md: { box: 'size-10 rounded-xl text-xs font-bold', icon: 'size-6' },
-  lg: { box: 'size-12 rounded-xl text-sm font-bold', icon: 'size-7' },
-  xl: { box: 'size-16 rounded-2xl text-base font-bold', icon: 'size-10' },
+  xs: { box: 'size-6 rounded-[6px] text-[11px]', icon: 'size-3.5' },
+  sm: { box: 'size-8 rounded-[8px] text-[11px]', icon: 'size-4' },
+  md: { box: 'size-10 rounded-[10px] text-[11px] font-medium', icon: 'size-5' },
+  lg: { box: 'size-12 rounded-[12px] text-[13px] font-medium', icon: 'size-6.5' },
+  xl: { box: 'size-16 rounded-[16px] text-[15px] font-medium', icon: 'size-9' },
 };
 
 export function CompanyLogo({
@@ -179,19 +165,19 @@ export function CompanyLogo({
   size = 'md',
   className = '',
 }: CompanyLogoProps) {
-  const [attempt, setAttempt] = useState<number>(0);
+  const [imgError, setImgError] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
-  const cleanName = company?.trim() || '';
+  const cleanName = company.trim();
   const slug = normalizeSlug(cleanName);
   const sizeConfig = SIZE_MAP[size] || SIZE_MAP.md;
 
-  // 1. Direct curated SVG brand logos (figma, stripe, openai, github, google, redcare, etc.)
+  // 1. Direct verified brand SVGs
   const brandSvg = BRAND_LOGOS[slug];
   if (brandSvg) {
     return (
       <div
-        className={`relative flex shrink-0 items-center justify-center overflow-hidden border border-neutral-200/80 bg-white shadow-2xs dark:border-neutral-800 dark:bg-neutral-900 ${sizeConfig.box} ${className}`}
+        className={`relative flex shrink-0 items-center justify-center overflow-hidden border-border border bg-white dark:bg-neutral-900 ${sizeConfig.box} ${className}`}
         title={company}
       >
         {brandSvg(sizeConfig.icon)}
@@ -199,27 +185,20 @@ export function CompanyLogo({
     );
   }
 
-  // Determine URL attempts:
-  // Attempt 0: https://logo.freehire.me/<Company>
-  // Attempt 1: https://www.google.com/s2/favicons?domain=<targetDomain>&sz=128
-  // Attempt 2+: Monogram
+  // 2. High-res favicon resolver
   const targetDomain = domain || (cleanName.includes('.') ? cleanName : `${slug}.com`);
 
-  const currentUrl =
-    attempt === 0 && cleanName
-      ? `https://logo.freehire.me/${encodeURIComponent(cleanName)}`
-      : attempt === 1 && targetDomain
-        ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(targetDomain)}&sz=128`
-        : null;
+  const remoteLogoUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(targetDomain)}&sz=128`;
 
+  // 3. Restrained, minimalist fallback
   const hash = getCompanyHash(cleanName);
   const palette = MONOGRAM_PALETTES[hash % MONOGRAM_PALETTES.length];
   const initials = getInitials(cleanName);
 
-  if (!currentUrl || attempt >= 2) {
+  if (imgError) {
     return (
       <div
-        className={`relative flex shrink-0 items-center justify-center border font-bold tracking-tight select-none ${palette} ${sizeConfig.box} ${className}`}
+        className={`relative flex shrink-0 items-center justify-center border font-medium tracking-tight select-none ${palette} ${sizeConfig.box} ${className}`}
         title={company}
       >
         <span>{initials}</span>
@@ -229,12 +208,12 @@ export function CompanyLogo({
 
   return (
     <div
-      className={`relative flex shrink-0 items-center justify-center overflow-hidden border border-neutral-200/80 bg-white shadow-2xs dark:border-neutral-800 dark:bg-neutral-900 ${sizeConfig.box} ${className}`}
+      className={`relative flex shrink-0 items-center justify-center overflow-hidden border-border border bg-white dark:bg-neutral-900 ${sizeConfig.box} ${className}`}
       title={company}
     >
       {!loaded && (
         <div
-          className={`absolute inset-0 flex items-center justify-center border font-bold ${palette} select-none`}
+          className={`absolute inset-0 flex items-center justify-center border font-medium ${palette} select-none`}
         >
           <span>{initials}</span>
         </div>
@@ -242,18 +221,14 @@ export function CompanyLogo({
 
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        key={`${cleanName}-${attempt}`}
-        src={currentUrl}
+        src={remoteLogoUrl}
         alt={`${company} logo`}
-        className={`object-contain transition-opacity duration-200 ${sizeConfig.icon} ${
-          loaded ? 'opacity-100' : 'opacity-0'
+        className={`object-contain transition-opacity duration-150 ${sizeConfig.icon} ${
+ loaded ?'opacity-100' : 'opacity-0'
         }`}
         loading="lazy"
         onLoad={() => setLoaded(true)}
-        onError={() => {
-          setLoaded(false);
-          setAttempt((prev) => prev + 1);
-        }}
+        onError={() => setImgError(true)}
       />
     </div>
   );

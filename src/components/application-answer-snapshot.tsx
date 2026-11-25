@@ -79,7 +79,7 @@ export function ApplicationAnswerSnapshot({ submissionId }: { submissionId: stri
       <button
         type="button"
         onClick={handleOpen}
-        className="text-primary mt-2 inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium hover:underline"
+        className="text-primary mt-2 inline-flex cursor-pointer items-center gap-1.5 text-[13px] font-medium hover:underline"
         aria-haspopup="dialog"
       >
         <FileText className="size-3.5 shrink-0" />
@@ -89,18 +89,18 @@ export function ApplicationAnswerSnapshot({ submissionId }: { submissionId: stri
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="flex max-h-[88vh] flex-col sm:max-w-xl">
           <DialogHeader>
-            <p className="text-muted-foreground mb-0.5 text-[10px] font-semibold tracking-widest uppercase">
+            <p className="text-muted-foreground mb-0.5 text-[11px] font-medium">
               Extension observation
             </p>
             <DialogTitle>Captured Application Answers</DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogDescription className="text-[13px]">
               Form answers observed by the browser extension at the moment of submission.
             </DialogDescription>
           </DialogHeader>
 
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
             {loading && (
-              <div className="text-muted-foreground py-10 text-center text-xs">
+              <div className="text-muted-foreground py-10 text-center text-[13px]">
                 Loading captured answers…
               </div>
             )}
@@ -108,14 +108,14 @@ export function ApplicationAnswerSnapshot({ submissionId }: { submissionId: stri
             {error && (
               <div
                 role="alert"
-                className="border-destructive/30 bg-destructive/10 text-destructive rounded-md border p-3 text-xs"
+                className="border-destructive/30 bg-destructive/10 text-destructive rounded-[8px] border p-3 text-[13px]"
               >
                 {error}
               </div>
             )}
 
             {!loading && !error && snapshots && snapshots.length === 0 && (
-              <div className="text-muted-foreground py-10 text-center text-xs">
+              <div className="text-muted-foreground py-10 text-center text-[13px]">
                 No answer snapshot was recorded for this application. Review manually if needed.
               </div>
             )}
@@ -125,10 +125,10 @@ export function ApplicationAnswerSnapshot({ submissionId }: { submissionId: stri
               snapshots?.map((snapshot) => (
                 <section
                   key={snapshot.id}
-                  className="border-border bg-card space-y-3 rounded-lg border p-4 shadow-xs"
+                  className="border-border bg-card space-y-3 rounded-[10px] border p-4"
                 >
-                  <div className="border-border/60 flex flex-wrap items-center justify-between gap-2 border-b pb-2 text-xs">
-                    <span className="text-foreground flex items-center gap-1.5 font-semibold capitalize">
+                  <div className="border-border/60 flex flex-wrap items-center justify-between gap-2 border-b pb-2 text-[13px]">
+                    <span className="text-foreground flex items-center gap-1.5 font-medium capitalize">
                       <Globe className="text-muted-foreground size-3.5" />
                       {snapshot.portal || 'Application portal'} · Attempt {snapshot.attempt} (Rev{' '}
                       {snapshot.revision})
@@ -142,12 +142,12 @@ export function ApplicationAnswerSnapshot({ submissionId }: { submissionId: stri
                   <dl className="space-y-3">
                     {snapshot.answers.map((answer) => (
                       <div key={answer.key} className="space-y-1">
-                        <dt className="text-foreground text-xs font-semibold">
+                        <dt className="text-foreground text-[13px] font-medium">
                           {cleanFieldLabel(answer.label, answer.key)}
                         </dt>
-                        <dd className="bg-muted/40 border-border/40 text-foreground rounded-md border px-3 py-2 font-mono text-xs break-words whitespace-pre-wrap">
+                        <dd className="bg-muted/40 border-border/40 text-foreground rounded-[8px] border px-3 py-2 font-mono text-[13px] break-words whitespace-pre-wrap">
                           {answer.value || (
-                            <span className="text-muted-foreground italic">(blank)</span>
+                            <span className="text-muted-foreground">(blank)</span>
                           )}
                         </dd>
                       </div>
@@ -165,10 +165,10 @@ export function ApplicationAnswerSnapshot({ submissionId }: { submissionId: stri
                   variant="outline"
                   size="sm"
                   onClick={copyAll}
-                  className="gap-1.5 text-xs"
+                  className="gap-1.5 text-[13px]"
                 >
                   {copied ? (
-                    <Check className="size-3.5 text-emerald-600" />
+                    <Check className="size-3.5 text-primary" />
                   ) : (
                     <Copy className="size-3.5" />
                   )}

@@ -3,13 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { JobseekerAuthCard } from '@/components/jobseeker-auth-card';
-import {
-  Sparkles,
-  ShieldCheck,
-  CheckCircle2,
-  Zap,
-  ArrowRight,
-} from 'lucide-react';
+import { BrandMark, VerifiedStamp } from '@/components/brand-mark';
+import { ArrowRight } from 'lucide-react';
 
 type DemoPlatform = 'greenhouse' | 'ashby' | 'lever' | 'workday';
 
@@ -72,191 +67,168 @@ const PLATFORMS: Record<DemoPlatform, PlatformData> = {
   },
 };
 
+const STEPS = [
+  {
+    n: '01',
+    title: 'Pair the extension',
+    note: 'Generate a code in the workspace and the Chrome extension links to this account',
+  },
+  {
+    n: '02',
+    title: 'Autofill from your resume',
+    note: 'Employer forms are filled from the facts you reviewed, not from guesses',
+  },
+  {
+    n: '03',
+    title: 'Keep the receipts',
+    note: 'Gmail sync files the confirmation email each employer sends back',
+  },
+];
+
 export default function JobseekerAuthPage() {
   const [activePlatform, setActivePlatform] = useState<DemoPlatform>('greenhouse');
   const active = PLATFORMS[activePlatform];
 
   return (
-    <main className="bg-background text-foreground flex min-h-screen flex-col justify-between antialiased">
-      {/* Top Header */}
-      <header className="border-border/80 bg-card/80 sticky top-0 z-30 w-full border-b backdrop-blur-md">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link href="/" className="group flex items-center gap-2.5">
-            <div className="bg-primary/10 border-primary/25 text-primary flex size-7 items-center justify-center rounded-lg border text-xs font-bold shadow-2xs transition-transform group-hover:scale-105">
-              <Sparkles className="size-3.5" />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-foreground text-sm font-semibold tracking-tight">
-                Nextkinlife
-              </span>
-              <span className="text-primary bg-primary/10 border-primary/20 rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase">
-                Jobseeker
-              </span>
-            </div>
+    <main className="bg-background text-foreground flex min-h-screen flex-col">
+      {/* Top navigation */}
+      <header className="px-3 pt-3">
+        <div className="panel mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4">
+          <Link href="/" className="flex items-center gap-3">
+            <BrandMark className="size-8" />
+            <span className="flex min-w-0 flex-col">
+              <span className="text-foreground text-[13px] leading-4 font-medium">Nextkinlife</span>
+              <span className="text-muted-foreground text-[11px] leading-4">Candidate access</span>
+            </span>
           </Link>
 
-          <div className="text-muted-foreground flex items-center gap-4 text-xs">
-            <div className="hidden items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-emerald-700 sm:flex dark:text-emerald-400">
-              <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
-              <span className="font-mono text-[11px]">Extension Ready</span>
-            </div>
-            <Link
-              href="/"
-              className="text-foreground hover:text-primary flex items-center gap-1 text-xs font-medium transition-colors"
-            >
-              <span>Recruiter Portal</span>
-              <ArrowRight className="size-3" />
-            </Link>
-          </div>
+          <Link
+            href="/"
+            className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-[13px] transition-colors"
+          >
+            <span>Recruiter portal</span>
+            <ArrowRight aria-hidden="true" className="size-4 stroke-[1.5]" />
+          </Link>
         </div>
       </header>
 
-      {/* Main Structural Layout */}
+      {/* Hero */}
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-4 py-12 sm:px-6 sm:py-16">
-        <div className="grid items-start gap-10 lg:grid-cols-12 lg:gap-14">
-          {/* Left Column: Value Proposition & Live Simulator */}
+        <div className="grid items-center gap-10 lg:grid-cols-12 lg:gap-14">
+          {/* Left: what it does, shown rather than claimed */}
           <div className="animate-fade-rise space-y-8 lg:col-span-7">
-            <div>
-              <div className="bg-primary/10 border-primary/20 text-primary mb-4 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold">
-                <Zap className="size-3.5" />
-                <span>Next-Gen Candidate Experience</span>
-              </div>
-              <h1 className="text-foreground text-3xl leading-[1.1] font-bold tracking-tight sm:text-4xl lg:text-5xl">
-                Accelerate your job search with{' '}
-                <span className="text-primary">tailored intelligence.</span>
+            <div className="max-w-xl">
+              <h1 className="text-foreground text-[32px] leading-[1.15] font-medium tracking-tight sm:text-[40px]">
+                Apply to software roles without retyping your resume
               </h1>
-              <p className="text-muted-foreground mt-4 max-w-xl text-sm leading-relaxed sm:text-base">
-                Connect your verified resume and let our intelligent assistant autofill ATS
-                applications on Ashby, Greenhouse, Lever, and Workday with 95%+ precision.
+              <p className="text-muted-foreground mt-4 text-[15px] leading-6">
+                Review your resume once. The browser extension fills Greenhouse, Ashby, Lever and
+                Workday forms from those verified facts, and every employer confirmation is filed
+                back to your workspace.
               </p>
             </div>
 
-            {/* Interactive ATS Simulator Card */}
-            <div className="border-border/80 bg-card space-y-4 rounded-2xl border p-5 shadow-xs sm:p-6">
-              <div className="border-border/60 flex items-center justify-between border-b pb-3">
-                <span className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
-                  ATS Application Simulation
-                </span>
-                <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 font-mono text-[11px] text-emerald-600 dark:text-emerald-400">
-                  Match Score: {active.score}
+            {/* Product moment: a real application being filled */}
+            <section aria-labelledby="sample-heading" className="panel overflow-hidden">
+              <div className="border-border flex items-center justify-between border-b px-5 py-3">
+                <h2 id="sample-heading" className="text-foreground text-[13px] font-medium">
+                  Sample application
+                </h2>
+                <span className="figure text-muted-foreground text-[11px]">
+                  Match {active.score}
                 </span>
               </div>
 
-              {/* Platform Selector Tabs */}
-              <div className="bg-muted/50 border-border/60 flex flex-wrap gap-1.5 rounded-xl border p-1">
-                {(Object.keys(PLATFORMS) as DemoPlatform[]).map((platform) => (
-                  <button
-                    key={platform}
-                    type="button"
-                    onClick={() => setActivePlatform(platform)}
-                    className={`min-w-[70px] flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                      activePlatform === platform
-                        ? 'bg-background text-foreground border-border/80 border shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {PLATFORMS[platform].name}
-                  </button>
-                ))}
-              </div>
-
-              {/* Simulation Details */}
-              <div className="border-border/60 bg-muted/20 space-y-3 rounded-xl border p-4 font-mono text-xs">
-                <div className="text-muted-foreground border-border/40 flex items-center justify-between border-b pb-2 text-[11px]">
-                  <span className="max-w-[280px] truncate">{active.url}</span>
-                  <span className="shrink-0">{active.fieldsCount} Fields Mapped</span>
-                </div>
-                <div className="font-sans">
-                  <h4 className="text-foreground text-sm font-bold">{active.role}</h4>
-                  <p className="text-muted-foreground mt-0.5 text-xs">
-                    {active.company} · {active.location}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {active.matched.map((skill) => (
-                    <span
-                      key={skill}
-                      className="inline-flex items-center gap-1 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-700 dark:text-emerald-300"
+              <div className="px-5 py-4">
+                <div
+                  role="tablist"
+                  aria-label="Applicant tracking system"
+                  className="bg-surface-sunken border-border flex gap-1 rounded-[10px] border p-1"
+                >
+                  {(Object.keys(PLATFORMS) as DemoPlatform[]).map((platform) => (
+                    <button
+                      key={platform}
+                      type="button"
+                      role="tab"
+                      aria-selected={activePlatform === platform}
+                      onClick={() => setActivePlatform(platform)}
+                      className={`h-8 flex-1 rounded-[7px] border text-[13px] font-medium transition-colors ${
+                        activePlatform === platform
+                          ? 'bg-card text-foreground border-border'
+                          : 'text-muted-foreground hover:text-foreground border-transparent'
+                      }`}
                     >
-                      <CheckCircle2 className="size-3" />
-                      {skill}
-                    </span>
-                  ))}
-                  {active.missing.map((skill) => (
-                    <span
-                      key={skill}
-                      className="bg-muted text-muted-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px]"
-                    >
-                      {skill}
-                    </span>
+                      {PLATFORMS[platform].name}
+                    </button>
                   ))}
                 </div>
-              </div>
-            </div>
 
-            {/* Feature Highlights */}
-            <div className="grid gap-4 pt-2 sm:grid-cols-3">
-              <div className="border-border/70 bg-card space-y-2 rounded-xl border p-4 shadow-2xs">
-                <div className="bg-primary/10 text-primary flex size-7 items-center justify-center rounded-lg text-xs font-bold">
-                  01
-                </div>
-                <h3 className="text-foreground text-xs font-semibold">One-Click Pairing</h3>
-                <p className="text-muted-foreground text-[11px] leading-relaxed">
-                  Generate an instant pairing code and sync with Chrome extension in seconds.
-                </p>
-              </div>
+                <div className="well mt-4 p-4">
+                  <div className="text-muted-foreground border-border flex items-center justify-between gap-4 border-b pb-2.5">
+                    <span className="figure truncate text-[11px]">{active.url}</span>
+                    <span className="figure shrink-0 text-[11px]">
+                      {active.fieldsCount} fields filled
+                    </span>
+                  </div>
 
-              <div className="border-border/70 bg-card space-y-2 rounded-xl border p-4 shadow-2xs">
-                <div className="flex size-7 items-center justify-center rounded-lg bg-emerald-500/10 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                  02
-                </div>
-                <h3 className="text-foreground text-xs font-semibold">Smart Autofill</h3>
-                <p className="text-muted-foreground text-[11px] leading-relaxed">
-                  Answers application questions intelligently based on your confirmed career
-                  history.
-                </p>
-              </div>
+                  <div className="pt-3">
+                    <h3 className="text-foreground text-[13px] font-medium">{active.role}</h3>
+                    <p className="text-muted-foreground mt-1 text-[13px]">
+                      {active.company} · {active.location}
+                    </p>
+                  </div>
 
-              <div className="border-border/70 bg-card space-y-2 rounded-xl border p-4 shadow-2xs">
-                <div className="bg-primary/10 text-primary flex size-7 items-center justify-center rounded-lg text-xs font-bold">
-                  03
+                  <ul className="mt-3 flex flex-wrap gap-1.5">
+                    {active.matched.map((skill) => (
+                      <li
+                        key={skill}
+                        className="border-primary/25 bg-primary/8 text-primary inline-flex h-6 items-center gap-1.5 rounded-[6px] border px-2 text-[11px]"
+                      >
+                        <VerifiedStamp className="size-3.5" />
+                        {skill}
+                      </li>
+                    ))}
+                    {active.missing.map((skill) => (
+                      <li
+                        key={skill}
+                        className="border-border text-muted-foreground inline-flex h-6 items-center rounded-[6px] border px-2 text-[11px]"
+                      >
+                        {skill}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <h3 className="text-foreground text-xs font-semibold">Candidate Vault</h3>
-                <p className="text-muted-foreground text-[11px] leading-relaxed">
-                  Your profile data is strictly sandboxed with SOC 2 compliance and 256-bit
-                  encryption.
-                </p>
               </div>
-            </div>
+            </section>
+
+            {/* How it works */}
+            <ol className="grid gap-x-8 gap-y-6 sm:grid-cols-3">
+              {STEPS.map((step) => (
+                <li key={step.n} className="border-border border-t pt-4">
+                  <div className="flex items-center gap-2">
+                    <span className="figure text-muted-foreground text-[11px]">{step.n}</span>
+                    <span className="text-foreground text-[13px] font-medium">{step.title}</span>
+                  </div>
+                  <p className="text-muted-foreground mt-2 text-[13px] leading-5">{step.note}</p>
+                </li>
+              ))}
+            </ol>
           </div>
 
-          {/* Right Column: Auth Card */}
+          {/* Right: sign in */}
           <div className="animate-fade-rise-delay flex w-full justify-center lg:col-span-5">
-            <div className="w-full max-w-md">
-              <JobseekerAuthCard />
-            </div>
+            <JobseekerAuthCard />
           </div>
         </div>
       </div>
 
       {/* Footer */}
-      <footer className="border-border/70 bg-card text-muted-foreground w-full border-t py-6 text-xs">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 sm:flex-row sm:px-6">
-          <div className="flex items-center gap-2">
-            <span className="text-foreground font-semibold">Nextkinlife</span>
-            <span>&copy; {new Date().getFullYear()} Nextkinlife LLC. All rights reserved.</span>
-          </div>
-
-          <div className="flex items-center gap-6 font-mono text-[11px]">
-            <span className="flex items-center gap-1.5">
-              <ShieldCheck className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-              SOC 2 Type II
-            </span>
-            <span>AES-256 GCM</span>
-            <Link href="/" className="hover:text-foreground transition-colors">
-              Terms &amp; Privacy
-            </Link>
-          </div>
+      <footer className="px-4 pb-8 sm:px-6">
+        <div className="border-border text-muted-foreground mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-3 border-t pt-6 text-[13px] sm:flex-row">
+          <span>© {new Date().getFullYear()} Nextkinlife LLC</span>
+          <Link href="/" className="hover:text-foreground transition-colors">
+            Terms and privacy
+          </Link>
         </div>
       </footer>
     </main>

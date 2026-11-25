@@ -369,15 +369,15 @@ export function ResumeUploadReview({
 
   return (
     <section
-      className="resume-upload-review space-y-4 rounded-lg border p-5"
+      className="resume-upload-review space-y-4 rounded-[10px] border p-5"
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
         if (consent && !busy && e.dataTransfer.files[0]) void upload(e.dataTransfer.files[0]);
       }}
     >
-      <h2 className="font-semibold">Upload and review a resume</h2>
-      <p className="text-muted-foreground text-sm">
+      <h2 className="font-medium">Upload and review a resume</h2>
+      <p className="text-muted-foreground text-[13px]">
         PDF or Word (.docx), up to 10 MiB and 20 PDF pages. Review the extracted facts before
         saving. Processing time depends on the document and provider.
       </p>
@@ -394,7 +394,7 @@ export function ResumeUploadReview({
         </span>
       </label>
       <div className="space-y-2">
-        <label htmlFor={fileInputId} className="block text-sm font-medium">
+        <label htmlFor={fileInputId} className="block text-[13px] font-medium">
           Resume file
         </label>
         <input
@@ -409,14 +409,14 @@ export function ResumeUploadReview({
             if (e.target.files?.[0]) void upload(e.target.files[0]);
           }}
         />
-        <p id={`${fileInputId}-help`} className="text-muted-foreground text-xs leading-relaxed">
+        <p id={`${fileInputId}-help`} className="text-muted-foreground text-[13px] leading-relaxed">
           {consent
             ? 'Choose a PDF or Word (.docx) file to upload.'
             : 'Check the permission box above to enable file selection.'}
         </p>
       </div>
       {status && (
-        <p role="status" className="flex items-center gap-2 text-sm font-medium">
+        <p role="status" className="flex items-center gap-2 text-[13px] font-medium">
           {busy && (
             <span className="border-primary inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-t-transparent" />
           )}
@@ -425,12 +425,12 @@ export function ResumeUploadReview({
         </p>
       )}
       {processingNote && !extraction && (
-        <p role="status" className="text-muted-foreground text-sm">
+        <p role="status" className="text-muted-foreground text-[13px]">
           {processingNote}
         </p>
       )}
       {error && (
-        <p role="alert" className="text-destructive text-sm font-medium">
+        <p role="alert" className="text-destructive text-[13px] font-medium">
           {error}
         </p>
       )}
@@ -455,17 +455,17 @@ export function ResumeUploadReview({
 
       {/* AI Extraction View */}
       {extraction && (
-        <details className="bg-muted/40 mt-3 rounded-lg border p-3 text-xs">
+        <details className="bg-muted/40 mt-3 rounded-[10px] border p-3 text-[13px]">
           <summary className="text-foreground cursor-pointer font-medium">
             View AI Extraction Evidence & Raw Data
           </summary>
           {extraction.warnings?.map((w, i) => (
-            <p key={i} className="mt-1 text-amber-600 dark:text-amber-400">
+            <p key={i} className="mt-1 text-amber-700 dark:text-amber-400">
               ⚠️ {w}
             </p>
           ))}
           {extraction.evidence?.map((e, i) => (
-            <p key={i} className="text-muted-foreground mt-1 text-xs">
+            <p key={i} className="text-muted-foreground mt-1 text-[13px]">
               <strong>{e.field}</strong>: {e.snippet}
             </p>
           ))}

@@ -336,24 +336,24 @@ export function SignupForm() {
   // Authenticated State View
   if (currentUser) {
     const badgeColor =
-      'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30';
+      'bg-primary/10 text-primary border-primary/20';
 
     return (
-      <div className="border-border/70 bg-card/90 flex flex-col gap-4 rounded-2xl border p-5 shadow-xs backdrop-blur-xs sm:p-6">
+      <div className="border-border bg-card flex flex-col gap-4 rounded-[16px] border p-5 sm:p-6">
         <div className="flex items-center justify-between">
-          <span className="text-muted-foreground text-xs">Current Session</span>
+          <span className="text-muted-foreground text-[13px]">Current Session</span>
           <Badge variant="outline" className={badgeColor}>
             Candidate
           </Badge>
         </div>
 
         <div>
-          <h2 className="text-foreground text-lg font-bold tracking-tight">
+          <h2 className="text-foreground text-[17px] font-medium tracking-tight">
             {currentProfile?.full_name || currentUser.user_metadata?.full_name || currentUser.email}
           </h2>
-          <p className="text-muted-foreground mt-0.5 text-xs">{currentUser.email}</p>
+          <p className="text-muted-foreground mt-0.5 text-[13px]">{currentUser.email}</p>
           {currentProfile?.phone && (
-            <p className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
+            <p className="text-muted-foreground mt-0.5 flex items-center gap-1 text-[13px]">
               <PhoneIcon className="text-primary size-3" />
               {currentProfile.phone}
             </p>
@@ -363,13 +363,13 @@ export function SignupForm() {
         {errorMsg && (
           <p
             role="alert"
-            className="border-destructive/30 bg-destructive/10 text-destructive rounded-lg border p-3 text-xs"
+            className="border-destructive/30 bg-destructive/10 text-destructive rounded-[10px] border p-3 text-[13px]"
           >
             {errorMsg}
           </p>
         )}
         {currentProfile && ['rejected', 'suspended'].includes(currentProfile.status) && (
-          <p role="alert" className="text-destructive text-xs">
+          <p role="alert" className="text-destructive text-[13px]">
             Your account is {currentProfile.status}. Contact an administrator to review access.
           </p>
         )}
@@ -378,7 +378,7 @@ export function SignupForm() {
           <Button
             disabled={profileLoading || currentProfile?.status !== 'active'}
             onClick={() => router.push('/dashboard')}
-            className="bg-primary text-primary-foreground flex h-9 w-full cursor-pointer items-center justify-center gap-1.5 text-xs font-medium disabled:opacity-50"
+            className="bg-primary text-primary-foreground flex h-9 w-full cursor-pointer items-center justify-center gap-1.5 text-[13px] font-medium disabled:opacity-50"
           >
             Enter Portal Dashboard
             <ArrowRightIcon className="size-3.5" />
@@ -387,7 +387,7 @@ export function SignupForm() {
             <Button
               variant="outline"
               onClick={() => loadProfile(currentUser)}
-              className="h-9 w-full text-xs"
+              className="h-9 w-full text-[13px]"
             >
               Retry Account Profile
             </Button>
@@ -396,7 +396,7 @@ export function SignupForm() {
             onClick={handleSignOut}
             disabled={loading}
             variant="outline"
-            className="h-9 w-full cursor-pointer text-xs"
+            className="h-9 w-full cursor-pointer text-[13px]"
           >
             {loading ? 'Signing out...' : 'Sign Out'}
           </Button>
@@ -410,16 +410,16 @@ export function SignupForm() {
     return (
       <div className="flex flex-col gap-4">
         <div className="flex flex-col items-center gap-1.5 text-center sm:items-start sm:text-left">
-          <div className="text-primary bg-primary/10 border-primary/20 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold">
+          <div className="text-primary bg-primary/10 border-primary/20 inline-flex items-center gap-1.5 rounded-[6px] border px-2.5 py-1 text-[13px] font-medium">
             <KeyRoundIcon className="size-3.5" />
             Verification Required
           </div>
-          <h1 className="text-foreground text-xl font-bold tracking-tight sm:text-2xl">
+          <h1 className="text-foreground text-[20px] leading-7 font-medium tracking-tight">
             Enter Verification Code
           </h1>
-          <p className="text-muted-foreground text-xs leading-relaxed">
+          <p className="text-muted-foreground text-[13px] leading-5">
             We sent a verification code and a sign-in link to{' '}
-            <span className="text-foreground decoration-primary/40 font-semibold underline underline-offset-2">
+            <span className="text-foreground decoration-primary/40 font-medium underline underline-offset-2">
               {email}
             </span>
             . Enter the code below or click the sign-in link in your email.
@@ -429,7 +429,7 @@ export function SignupForm() {
         {errorMsg && (
           <div
             role="alert"
-            className="bg-destructive/10 text-destructive border-destructive/20 rounded-xl border p-3 text-xs leading-relaxed"
+            className="bg-destructive/10 text-destructive border-destructive/20 rounded-[12px] border p-3 text-[13px] leading-5"
           >
             {errorMsg}
           </div>
@@ -438,15 +438,15 @@ export function SignupForm() {
         {successMsg && (
           <div
             role="status"
-            className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs leading-relaxed text-emerald-600 dark:text-emerald-400"
+            className="rounded-[12px] border border-primary/20 bg-primary/10 p-3 text-[13px] leading-5 text-primary"
           >
             {successMsg}
           </div>
         )}
 
-        <form onSubmit={handleVerifyOtp} className="flex flex-col gap-3.5">
+        <form onSubmit={handleVerifyOtp} className="flex flex-col gap-4">
           <div className="space-y-1.5">
-            <Label htmlFor="otpCode" className="text-foreground/90 text-xs font-semibold">
+            <Label htmlFor="otpCode" className="text-foreground/90 text-[13px] font-medium">
               Verification Code (OTP)
             </Label>
             <div className="relative">
@@ -461,7 +461,7 @@ export function SignupForm() {
                 onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
                 required
                 autoFocus
-                className="bg-background/80 border-border/80 focus-visible:ring-primary/25 focus-visible:border-primary h-11 rounded-xl pr-4 pl-10 text-center font-mono text-lg font-bold tracking-[0.25em] shadow-2xs focus-visible:ring-2"
+                className="bg-card border-border focus-visible:ring-ring/15 focus-visible:border-ring h-11 rounded-[12px] pr-4 pl-10 text-center font-mono text-[17px] font-medium tracking-[0.25em] focus-visible:ring-2"
               />
             </div>
           </div>
@@ -469,7 +469,7 @@ export function SignupForm() {
           <Button
             type="submit"
             disabled={loading || otpCode.length < 6}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-xl text-xs font-semibold shadow-xs transition-all duration-150 hover:shadow active:scale-[0.99]"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-[12px] text-[13px] font-medium transition-colors duration-150 active:scale-[0.98]"
           >
             {loading ? (
               <>
@@ -484,7 +484,7 @@ export function SignupForm() {
             )}
           </Button>
 
-          <div className="border-border/40 flex items-center justify-between border-t pt-2 text-xs">
+          <div className="border-border/40 flex items-center justify-between border-t pt-2 text-[13px]">
             <button
               type="button"
               onClick={() => {
@@ -493,7 +493,7 @@ export function SignupForm() {
                 setErrorMsg(null);
                 setSuccessMsg(null);
               }}
-              className="text-muted-foreground hover:text-foreground inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium transition-colors"
+              className="text-muted-foreground hover:text-foreground inline-flex cursor-pointer items-center gap-1.5 text-[13px] font-medium transition-colors"
             >
               <ArrowLeftIcon className="size-3.5" />
               Edit details
@@ -503,9 +503,9 @@ export function SignupForm() {
               type="button"
               onClick={handleResendOtp}
               disabled={countdown > 0 || loading}
-              className={`inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium transition-colors ${
-                countdown > 0
-                  ? 'text-muted-foreground cursor-not-allowed opacity-60'
+              className={`inline-flex cursor-pointer items-center gap-1.5 text-[13px] font-medium transition-colors ${
+ countdown > 0
+ ?'text-muted-foreground cursor-not-allowed opacity-60'
                   : 'text-primary hover:underline'
               }`}
             >
@@ -522,10 +522,10 @@ export function SignupForm() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col items-center gap-1 text-center sm:items-start sm:text-left">
-        <h1 className="text-foreground text-xl font-bold tracking-tight sm:text-2xl">
+        <h1 className="text-foreground text-[20px] leading-7 font-medium tracking-tight">
           Portal Access
         </h1>
-        <p className="text-muted-foreground text-xs leading-relaxed">
+        <p className="text-muted-foreground text-[13px] leading-5">
           Verify your email to create your candidate account. Existing accounts keep their saved
           profile.
         </p>
@@ -534,7 +534,7 @@ export function SignupForm() {
       {errorMsg && (
         <div
           role="alert"
-          className="bg-destructive/10 text-destructive border-destructive/20 rounded-xl border p-3 text-xs leading-relaxed"
+          className="bg-destructive/10 text-destructive border-destructive/20 rounded-[12px] border p-3 text-[13px] leading-5"
         >
           {errorMsg}
         </div>
@@ -543,16 +543,16 @@ export function SignupForm() {
       {successMsg && (
         <div
           role="status"
-          className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs leading-relaxed text-emerald-600 dark:text-emerald-400"
+          className="rounded-[12px] border border-primary/20 bg-primary/10 p-3 text-[13px] leading-5 text-primary"
         >
           {successMsg}
         </div>
       )}
 
-      <form onSubmit={handleSendOtp} className="flex flex-col gap-3.5">
+      <form onSubmit={handleSendOtp} className="flex flex-col gap-4">
         {/* Email Address */}
         <div className="space-y-1">
-          <Label htmlFor="email" className="text-foreground text-xs font-medium">
+          <Label htmlFor="email" className="text-foreground text-[13px] font-medium">
             Email Address <span className="text-destructive">*</span>
           </Label>
           <div className="relative">
@@ -564,7 +564,7 @@ export function SignupForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="bg-background border-border/80 focus-visible:ring-primary/20 focus-visible:border-primary h-9.5 rounded-lg pr-3 pl-9 text-xs shadow-2xs focus-visible:ring-2"
+              className="bg-background border-border focus-visible:ring-ring/15 focus-visible:border-ring h-11 rounded-[10px] pr-3 pl-9 text-[13px] focus-visible:ring-2"
             />
           </div>
         </div>
@@ -573,7 +573,7 @@ export function SignupForm() {
         <Button
           type="submit"
           disabled={loading}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground group mt-1 flex h-9.5 w-full cursor-pointer items-center justify-center gap-2 rounded-lg text-xs font-semibold shadow-xs transition-all duration-150 hover:shadow active:scale-[0.99]"
+          className="bg-primary hover:bg-primary/90 text-primary-foreground group mt-1 flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-[10px] text-[13px] font-medium transition-colors duration-150 active:scale-[0.98]"
         >
           {loading ? (
             <>
@@ -589,8 +589,8 @@ export function SignupForm() {
           )}
         </Button>
 
-        <div className="after:border-border/60 relative my-0.5 text-center text-xs after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t">
-          <span className="bg-background text-muted-foreground relative z-10 px-2.5 text-[10px] font-medium">
+        <div className="after:border-border/60 relative my-0.5 text-center text-[13px] after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t">
+          <span className="bg-background text-muted-foreground relative z-10 px-2.5 text-[11px] font-medium">
             Or continue with Google
           </span>
         </div>
@@ -601,7 +601,7 @@ export function SignupForm() {
           variant="outline"
           onClick={handleGoogleSignIn}
           disabled={googleLoading}
-          className="border-border/70 hover:border-border hover:bg-muted/50 bg-background flex h-9.5 w-full cursor-pointer items-center justify-center gap-2.5 rounded-lg text-xs font-medium shadow-2xs transition-all active:scale-[0.99]"
+          className="border-border hover:border-border hover:bg-muted/50 bg-background flex h-11 w-full cursor-pointer items-center justify-center gap-2.5 rounded-[10px] text-[13px] font-medium transition-colors active:scale-[0.98]"
         >
           <svg className="size-4 shrink-0" viewBox="0 0 24 24">
             <path
@@ -624,7 +624,7 @@ export function SignupForm() {
           <span>{googleLoading ? 'Connecting to Google...' : 'Continue with Google'}</span>
         </Button>
 
-        <div className="border-border/40 text-muted-foreground flex items-center justify-center gap-1.5 border-t pt-2 text-center text-[10px]">
+        <div className="border-border/40 text-muted-foreground flex items-center justify-center gap-1.5 border-t pt-2 text-center text-[11px]">
           <ShieldCheckIcon className="text-primary size-3 shrink-0" />
           <span>Passwordless login: Secure 6-digit OTP codes sent directly to your email.</span>
         </div>

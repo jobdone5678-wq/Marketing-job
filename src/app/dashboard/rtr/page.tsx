@@ -12,7 +12,7 @@ import {
   XCircle,
   FileText,
   Building,
-  Sparkles,
+  Wand2,
   ExternalLink,
   Eye,
   Trash2,
@@ -290,11 +290,19 @@ export default function RTRManagementPage() {
       {/* Header Bar */}
       <div className="flex flex-col justify-between gap-4 pb-1 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-foreground text-2xl font-medium tracking-tight sm:text-3xl">
+          <div className="text-primary mb-1 flex items-center gap-2 text-[13px] font-medium">
+            <span className="bg-primary inline-block h-1.5 w-1.5 rounded-full" />
+            Compliance &amp; Representation
+          </div>
+          <h1 className="text-foreground flex items-center gap-2.5 text-[24px] font-medium tracking-tight">
+            <span className="bg-primary/10 text-primary flex h-9 w-9 items-center justify-center rounded-[12px]">
+              <FileSignature className="h-5 w-5 stroke-[1.8]" />
+            </span>
             My RTR
           </h1>
-          <p className="text-muted-foreground mt-1 text-xs">
-            Right to Represent exclusivity agreements, terms, and representation tracking
+          <p className="text-muted-foreground mt-1 max-w-2xl text-[13px]">
+            Right to Represent exclusivity agreements, terms, and representation tracking with
+            automated OCR.
           </p>
         </div>
 
@@ -302,11 +310,11 @@ export default function RTRManagementPage() {
           <Button
             variant="outline"
             size="sm"
-            className="border-border/60 hover:bg-muted/50 h-8 cursor-pointer rounded-md px-3 text-xs font-normal"
+            className="border-border/80 hover:border-primary/50 h-9 cursor-pointer rounded-[12px] px-3 text-[13px] font-medium transition-colors"
             onClick={() => void fetchRtrDocuments()}
             disabled={loading}
           >
-            <RefreshCw className={`mr-1.5 size-3.5 stroke-[1.5] ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
 
@@ -322,45 +330,57 @@ export default function RTRManagementPage() {
               setOcrFile(null);
               setOcrModalOpen(true);
             }}
-            className="border-border/60 bg-foreground text-background hover:bg-foreground/90 flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-3 text-xs font-normal"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 flex h-9 cursor-pointer items-center gap-1.5 rounded-[12px] px-3.5 text-[13px] font-medium shadow-sm transition-colors"
           >
-            <Upload className="size-3.5 stroke-[1.5]" />
-            <span>Upload agreement</span>
+            <Wand2 className="size-3.5" />
+            <span>Upload &amp; OCR Extract</span>
           </Button>
         </div>
       </div>
 
       {/* Metric Stat Cards */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div className="border-border/60 bg-card rounded-xl border p-4">
-          <span className="text-muted-foreground text-xs font-normal">Total agreements</span>
-          <div className="text-foreground mt-2 font-mono text-2xl font-medium tracking-tight tabular-nums sm:text-3xl">{totalCount}</div>
-          <p className="text-muted-foreground mt-1 text-[11px]">Active and archived</p>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div className="border-border/70 bg-card space-y-1 rounded-[12px] border p-4">
+          <div className="text-muted-foreground flex items-center justify-between text-[13px] font-medium">
+            <span>Total Agreements</span>
+            <FileText className="text-muted-foreground/70 size-4" />
+          </div>
+          <div className="text-foreground text-[24px] font-medium tracking-tight">{totalCount}</div>
+          <p className="text-muted-foreground text-[11px]">Active &amp; archived</p>
         </div>
 
-        <div className="border-border/60 bg-card rounded-xl border p-4">
-          <span className="text-muted-foreground text-xs font-normal">Signed and active</span>
-          <div className="mt-2 font-mono text-2xl font-medium tracking-tight tabular-nums text-emerald-600 dark:text-emerald-400 sm:text-3xl">{signedCount}</div>
-          <p className="text-muted-foreground mt-1 text-[11px]">Exclusivity confirmed</p>
+        <div className="border-border/70 bg-card space-y-1 rounded-[12px] border p-4">
+          <div className="text-muted-foreground flex items-center justify-between text-[13px] font-medium">
+            <span>Signed / Active</span>
+            <CheckCircle2 className="size-4 text-primary" />
+          </div>
+          <div className="text-[24px] font-medium tracking-tight text-primary">{signedCount}</div>
+          <p className="text-muted-foreground text-[11px]">Exclusivity confirmed</p>
         </div>
 
-        <div className="border-border/60 bg-card rounded-xl border p-4">
-          <span className="text-muted-foreground text-xs font-normal">Pending review</span>
-          <div className="mt-2 font-mono text-2xl font-medium tracking-tight tabular-nums text-amber-600 dark:text-amber-400 sm:text-3xl">{receivedCount}</div>
-          <p className="text-muted-foreground mt-1 text-[11px]">Awaiting signature</p>
+        <div className="border-border/70 bg-card space-y-1 rounded-[12px] border p-4">
+          <div className="text-muted-foreground flex items-center justify-between text-[13px] font-medium">
+            <span>Pending Review</span>
+            <Clock className="size-4 text-amber-700" />
+          </div>
+          <div className="text-[24px] font-medium tracking-tight text-amber-700">{receivedCount}</div>
+          <p className="text-muted-foreground text-[11px]">Awaiting signature</p>
         </div>
 
-        <div className="border-border/60 bg-card rounded-xl border p-4">
-          <span className="text-muted-foreground text-xs font-normal">Expired or rejected</span>
-          <div className="mt-2 font-mono text-2xl font-medium tracking-tight tabular-nums text-destructive sm:text-3xl">{expiredCount}</div>
-          <p className="text-muted-foreground mt-1 text-[11px]">Requires renewal</p>
+        <div className="border-border/70 bg-card space-y-1 rounded-[12px] border p-4">
+          <div className="text-muted-foreground flex items-center justify-between text-[13px] font-medium">
+            <span>Expired / Rejected</span>
+            <AlertCircle className="text-destructive size-4" />
+          </div>
+          <div className="text-destructive text-[24px] font-medium tracking-tight">{expiredCount}</div>
+          <p className="text-muted-foreground text-[11px]">Requires renewal</p>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
       <div className="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
         {/* Status Tabs */}
-        <div className="bg-muted/40 border-border/60 flex items-center gap-1 overflow-x-auto rounded-lg border p-1 text-xs">
+        <div className="bg-muted/50 border-border/60 flex items-center gap-1 overflow-x-auto rounded-[12px] border p-1 text-[13px]">
           {[
             { id: 'all', label: 'All agreements' },
             { id: 'signed', label: 'Signed' },
@@ -371,10 +391,10 @@ export default function RTRManagementPage() {
             <button
               key={tab.id}
               onClick={() => setStatusFilter(tab.id)}
-              className={`cursor-pointer rounded-md px-3 py-1 text-xs transition-colors duration-150 ${
+              className={`cursor-pointer rounded-[10px] px-3 py-1.5 font-medium whitespace-nowrap transition-colors ${
                 statusFilter === tab.id
-                  ? 'bg-background text-foreground font-medium shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground font-normal'
+                  ? 'bg-background text-foreground font-medium'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               {tab.label}
@@ -388,17 +408,17 @@ export default function RTRManagementPage() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search candidate, company, or vendor"
-            className="border-border/60 bg-background h-9 rounded-md pl-8.5 text-xs"
+            placeholder="Search candidate, company, vendor..."
+            className="border-border/80 bg-background h-9 rounded-[12px] pl-9 text-[13px]"
           />
         </div>
       </div>
 
       {/* Table of RTR Documents */}
-      <div className="border-border/60 bg-card overflow-hidden rounded-xl border">
+      <div className="border-border/70 bg-card overflow-hidden rounded-[12px] border">
         {loading ? (
-          <div className="text-muted-foreground space-y-2 p-12 text-center text-xs">
-            <RefreshCw className="text-primary mx-auto size-5 animate-spin stroke-[1.5]" />
+          <div className="text-muted-foreground space-y-2 p-12 text-center text-[13px]">
+            <RefreshCw className="text-primary mx-auto size-5 animate-spin" />
             <p>Loading representation agreements...</p>
           </div>
         ) : documents.length === 0 ? (
@@ -407,8 +427,8 @@ export default function RTRManagementPage() {
               <FileSignature className="size-5 stroke-[1.5]" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-foreground text-sm font-medium">No RTR agreements found</h3>
-              <p className="text-muted-foreground mx-auto max-w-sm text-xs">
+              <h3 className="text-foreground text-[13px] font-medium">No RTR agreements found</h3>
+              <p className="text-muted-foreground mx-auto max-w-sm text-[13px]">
                 Upload an RTR agreement image or PDF using OCR extraction to populate this table
                 automatically.
               </p>
@@ -417,7 +437,7 @@ export default function RTRManagementPage() {
               variant="outline"
               size="sm"
               onClick={() => setOcrModalOpen(true)}
-              className="border-border/60 hover:bg-muted/50 h-8 rounded-md text-xs font-normal"
+              className="rounded-[12px] text-[13px]"
             >
               <Upload className="mr-1.5 size-3.5 stroke-[1.5]" />
               Upload first RTR
@@ -425,8 +445,8 @@ export default function RTRManagementPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-muted/30 border-border/60 text-muted-foreground border-b text-xs font-medium normal-case">
+            <table className="w-full text-left text-[13px]">
+              <thead className="bg-muted/40 border-border/60 text-muted-foreground border-b text-[11px] font-medium">
                 <tr>
                   <th className="px-4 py-3">Candidate &amp; role</th>
                   <th className="px-4 py-3">Client or company</th>
@@ -449,7 +469,7 @@ export default function RTRManagementPage() {
                     <tr key={doc.id} className="hover:bg-muted/20 transition-colors">
                       {/* Candidate & Role */}
                       <td className="px-4 py-3">
-                        <div className="text-foreground font-semibold">{candidateName}</div>
+                        <div className="text-foreground font-medium">{candidateName}</div>
                         <div className="text-muted-foreground max-w-[200px] truncate text-[11px]">
                           {doc.job_title || 'General Representation'}
                         </div>
@@ -460,7 +480,7 @@ export default function RTRManagementPage() {
                         <div className="text-foreground font-medium">
                           {doc.company_name || 'Direct Client'}
                         </div>
-                        <div className="text-muted-foreground max-w-[150px] truncate font-mono text-[10px]">
+                        <div className="text-muted-foreground max-w-[150px] truncate font-mono text-[11px]">
                           {doc.filename}
                         </div>
                       </td>
@@ -482,7 +502,7 @@ export default function RTRManagementPage() {
                         {doc.hourly_rate ? (
                           <Badge
                             variant="outline"
-                            className="text-primary font-mono text-[11px] font-semibold"
+                            className="text-primary font-mono text-[11px] font-medium"
                           >
                             ${doc.hourly_rate}/hr
                           </Badge>
@@ -499,27 +519,27 @@ export default function RTRManagementPage() {
                       <td className="space-y-1 px-4 py-3">
                         <div>
                           {doc.rtr_status === 'signed' ? (
-                            <Badge className="gap-1 border-emerald-500/30 bg-emerald-500/15 text-[10px] text-emerald-700 dark:text-emerald-300">
+                            <Badge className="gap-1 border-primary/20 bg-primary/15 text-[11px] text-primary">
                               <CheckCircle2 className="size-2.5" /> Signed
                             </Badge>
                           ) : doc.rtr_status === 'expired' ? (
-                            <Badge variant="destructive" className="gap-1 text-[10px]">
+                            <Badge variant="destructive" className="gap-1 text-[11px]">
                               <AlertCircle className="size-2.5" /> Expired
                             </Badge>
                           ) : doc.rtr_status === 'rejected' ? (
                             <Badge
                               variant="secondary"
-                              className="text-destructive gap-1 text-[10px]"
+                              className="text-destructive gap-1 text-[11px]"
                             >
                               <XCircle className="size-2.5" /> Rejected
                             </Badge>
                           ) : (
-                            <Badge className="gap-1 border-amber-500/30 bg-amber-500/15 text-[10px] text-amber-700 dark:text-amber-300">
+                            <Badge className="gap-1 border-amber-500/30 bg-amber-500/15 text-[11px] text-amber-700 dark:text-amber-400">
                               <Clock className="size-2.5" /> Received
                             </Badge>
                           )}
                         </div>
-                        <div className="text-muted-foreground font-mono text-[10px] uppercase">
+                        <div className="text-muted-foreground font-mono text-[11px]">
                           {doc.rtr_type.replace('_', ' ')}
                         </div>
                       </td>
@@ -528,7 +548,7 @@ export default function RTRManagementPage() {
                       <td className="px-4 py-3 text-[11px]">
                         <div>Signed: {doc.rtr_date}</div>
                         {doc.expiration_date && (
-                          <div className="text-muted-foreground text-[10px]">
+                          <div className="text-muted-foreground text-[11px]">
                             Expires: {doc.expiration_date}
                           </div>
                         )}
@@ -562,7 +582,7 @@ export default function RTRManagementPage() {
                             <Button
                               variant="ghost"
                               size="xs"
-                              className="h-6 px-1.5 text-[11px] text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                              className="text-primary hover:bg-accent h-6 px-1.5 text-[11px]"
                               onClick={() => void updateStatus(doc.id, 'signed')}
                             >
                               Sign
@@ -593,12 +613,12 @@ export default function RTRManagementPage() {
       <Dialog open={ocrModalOpen} onOpenChange={setOcrModalOpen}>
         <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
-            <div className="text-primary flex items-center gap-2 text-xs font-semibold tracking-wider uppercase">
-              <Sparkles className="size-3.5" />
+            <div className="text-primary flex items-center gap-2 text-[13px] font-medium">
+              <Wand2 className="size-3.5" />
               AI OCR Ingestion
             </div>
-            <DialogTitle className="text-xl">Upload & Extract RTR Document</DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogTitle className="text-[20px]">Upload & Extract RTR Document</DialogTitle>
+            <DialogDescription className="text-[13px]">
               Upload an image (PNG, JPG, WEBP) or PDF of a Right to Represent agreement. The OCR
               engine automatically extracts key terms, rates, and candidate info.
             </DialogDescription>
@@ -612,7 +632,7 @@ export default function RTRManagementPage() {
                 fileInputRef.current.click();
               }
             }}
-            className="border-border/80 hover:border-primary/60 bg-muted/20 hover:bg-muted/30 cursor-pointer space-y-2 rounded-xl border-2 border-dashed p-6 text-center transition-all"
+            className="border-border/80 hover:border-primary/60 bg-muted/20 hover:bg-muted/30 cursor-pointer space-y-2 rounded-[12px] border-2 border-dashed p-6 text-center transition-colors"
           >
             <input
               ref={fileInputRef}
@@ -627,7 +647,7 @@ export default function RTRManagementPage() {
             {uploadingOcr ? (
               <div className="space-y-2 py-4">
                 <RefreshCw className="text-primary mx-auto size-6 animate-spin" />
-                <p className="text-foreground text-xs font-semibold">
+                <p className="text-foreground text-[13px] font-medium">
                   Scanning image & running OCR field extraction...
                 </p>
                 <p className="text-muted-foreground text-[11px]">
@@ -636,8 +656,8 @@ export default function RTRManagementPage() {
               </div>
             ) : ocrFile ? (
               <div className="space-y-1 py-2">
-                <FileCheckIcon className="mx-auto size-6 text-emerald-600" />
-                <p className="text-foreground text-xs font-semibold">{ocrFile.name}</p>
+                <FileCheckIcon className="mx-auto size-6 text-primary" />
+                <p className="text-foreground text-[13px] font-medium">{ocrFile.name}</p>
                 <p className="text-muted-foreground text-[11px]">
                   Click to upload a different file
                 </p>
@@ -645,7 +665,7 @@ export default function RTRManagementPage() {
             ) : (
               <div className="space-y-1.5 py-4">
                 <Upload className="text-muted-foreground mx-auto size-6" />
-                <p className="text-foreground text-xs font-semibold">
+                <p className="text-foreground text-[13px] font-medium">
                   Click or drag RTR image or PDF here
                 </p>
                 <p className="text-muted-foreground text-[11px]">
@@ -658,62 +678,62 @@ export default function RTRManagementPage() {
 
           {/* Extracted Fields Form */}
           <form onSubmit={handleSaveRtr} className="space-y-4 pt-2">
-            <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 text-[13px] sm:grid-cols-2">
               {/* Company / Client */}
               <div className="space-y-1">
-                <Label className="text-xs font-medium">End Client / Company Name</Label>
+                <Label className="text-[13px] font-medium">End Client / Company Name</Label>
                 <Input
                   value={extractedData.company_name || ''}
                   onChange={(e) =>
                     setExtractedData({ ...extractedData, company_name: e.target.value })
                   }
                   placeholder="e.g. Stripe, Salesforce"
-                  className="h-9 text-xs"
+                  className="h-9 text-[13px]"
                 />
               </div>
 
               {/* Job Title */}
               <div className="space-y-1">
-                <Label className="text-xs font-medium">Job Title / Role</Label>
+                <Label className="text-[13px] font-medium">Job Title / Role</Label>
                 <Input
                   value={extractedData.job_title || ''}
                   onChange={(e) =>
                     setExtractedData({ ...extractedData, job_title: e.target.value })
                   }
                   placeholder="e.g. Senior Software Engineer"
-                  className="h-9 text-xs"
+                  className="h-9 text-[13px]"
                 />
               </div>
 
               {/* Vendor Name */}
               <div className="space-y-1">
-                <Label className="text-xs font-medium">Staffing Agency / Prime Vendor</Label>
+                <Label className="text-[13px] font-medium">Staffing Agency / Prime Vendor</Label>
                 <Input
                   value={extractedData.vendor_name || ''}
                   onChange={(e) =>
                     setExtractedData({ ...extractedData, vendor_name: e.target.value })
                   }
                   placeholder="e.g. TEKsystems, Apex Systems"
-                  className="h-9 text-xs"
+                  className="h-9 text-[13px]"
                 />
               </div>
 
               {/* Agreed Rate */}
               <div className="space-y-1">
-                <Label className="text-xs font-medium">Hourly Bill Rate ($)</Label>
+                <Label className="text-[13px] font-medium">Hourly Bill Rate ($)</Label>
                 <Input
                   value={extractedData.hourly_rate || ''}
                   onChange={(e) =>
                     setExtractedData({ ...extractedData, hourly_rate: e.target.value })
                   }
                   placeholder="e.g. 85.00"
-                  className="h-9 text-xs"
+                  className="h-9 text-[13px]"
                 />
               </div>
 
               {/* Recruiter Email */}
               <div className="space-y-1">
-                <Label className="text-xs font-medium">
+                <Label className="text-[13px] font-medium">
                   Vendor Recruiter Email <span className="text-destructive">*</span>
                 </Label>
                 <Input
@@ -727,16 +747,16 @@ export default function RTRManagementPage() {
                     })
                   }
                   placeholder="recruiter@agency.com"
-                  className="h-9 text-xs"
+                  className="h-9 text-[13px]"
                 />
-                <p className="text-muted-foreground text-[10px]">
+                <p className="text-muted-foreground text-[11px]">
                   Required. The agency contact has to be reachable for this agreement.
                 </p>
               </div>
 
               {/* Recruiter Phone */}
               <div className="space-y-1">
-                <Label className="text-xs font-medium">Vendor Contact Phone</Label>
+                <Label className="text-[13px] font-medium">Vendor Contact Phone</Label>
                 <Input
                   value={extractedData.vendor_contact_phone || ''}
                   onChange={(e) =>
@@ -746,13 +766,13 @@ export default function RTRManagementPage() {
                     })
                   }
                   placeholder="(555) 000-0000"
-                  className="h-9 text-xs"
+                  className="h-9 text-[13px]"
                 />
               </div>
 
               {/* Agreement Type */}
               <div className="space-y-1">
-                <Label className="text-xs font-medium">RTR Type</Label>
+                <Label className="text-[13px] font-medium">RTR Type</Label>
                 <select
                   value={extractedData.rtr_type || 'vendor_rtr'}
                   onChange={(e) =>
@@ -761,7 +781,7 @@ export default function RTRManagementPage() {
                       rtr_type: e.target.value as RTRItem['rtr_type'],
                     })
                   }
-                  className="border-border bg-background h-9 w-full rounded-lg border px-3 text-xs"
+                  className="border-border bg-background h-9 w-full rounded-[10px] border px-3 text-[13px]"
                 >
                   <option value="vendor_rtr">Vendor RTR (Agency)</option>
                   <option value="client_rtr">Client Direct RTR</option>
@@ -771,31 +791,31 @@ export default function RTRManagementPage() {
 
               {/* Agreement Date */}
               <div className="space-y-1">
-                <Label className="text-xs font-medium">Agreement Date</Label>
+                <Label className="text-[13px] font-medium">Agreement Date</Label>
                 <Input
                   type="date"
                   value={extractedData.rtr_date || ''}
                   onChange={(e) => setExtractedData({ ...extractedData, rtr_date: e.target.value })}
-                  className="h-9 text-xs"
+                  className="h-9 text-[13px]"
                 />
               </div>
 
               {/* Expiration Date */}
               <div className="space-y-1">
-                <Label className="text-xs font-medium">Exclusivity Expiration</Label>
+                <Label className="text-[13px] font-medium">Exclusivity Expiration</Label>
                 <Input
                   type="date"
                   value={extractedData.expiration_date || ''}
                   onChange={(e) =>
                     setExtractedData({ ...extractedData, expiration_date: e.target.value })
                   }
-                  className="h-9 text-xs"
+                  className="h-9 text-[13px]"
                 />
               </div>
 
               {/* Representation Clause Summary */}
               <div className="space-y-1 sm:col-span-2">
-                <Label className="text-xs font-medium">
+                <Label className="text-[13px] font-medium">
                   Representation Clause / Exclusivity Text
                 </Label>
                 <textarea
@@ -808,7 +828,7 @@ export default function RTRManagementPage() {
                     })
                   }
                   placeholder="Verbatim text granting exclusive rights to represent candidate..."
-                  className="border-border bg-background w-full rounded-lg border p-2 text-xs"
+                  className="border-border bg-background w-full rounded-[10px] border p-2 text-[13px]"
                 />
               </div>
             </div>
@@ -820,11 +840,11 @@ export default function RTRManagementPage() {
                 size="sm"
                 onClick={() => setOcrModalOpen(false)}
                 disabled={saving}
-                className="text-xs"
+                className="text-[13px]"
               >
                 Cancel
               </Button>
-              <Button type="submit" size="sm" disabled={saving || uploadingOcr} className="text-xs">
+              <Button type="submit" size="sm" disabled={saving || uploadingOcr} className="text-[13px]">
                 {saving ? 'Saving...' : uploadingOcr ? 'Reading Document...' : 'Save RTR Record'}
               </Button>
             </div>
@@ -836,55 +856,55 @@ export default function RTRManagementPage() {
       <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <div className="text-muted-foreground text-[10px] font-semibold tracking-wider uppercase">
+            <div className="text-muted-foreground text-[11px] font-medium">
               Agreement Inspection
             </div>
-            <DialogTitle className="text-lg">
+            <DialogTitle className="text-[17px]">
               {selectedDoc?.candidate?.full_name || 'Candidate'} &mdash;{' '}
               {selectedDoc?.company_name || 'Client'}
             </DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogDescription className="text-[13px]">
               Review representation terms, agreed bill rates, and agency contacts.
             </DialogDescription>
           </DialogHeader>
 
           {selectedDoc && (
-            <div className="space-y-4 text-xs">
-              <div className="bg-muted/40 border-border/60 grid grid-cols-2 gap-3 rounded-lg border p-3">
+            <div className="space-y-4 text-[13px]">
+              <div className="bg-muted/40 border-border/60 grid grid-cols-2 gap-3 rounded-[10px] border p-3">
                 <div>
-                  <div className="text-muted-foreground font-mono text-[10px] uppercase">
+                  <div className="text-muted-foreground font-mono text-[11px]">
                     Status
                   </div>
-                  <div className="text-foreground mt-0.5 font-semibold capitalize">
+                  <div className="text-foreground mt-0.5 font-medium capitalize">
                     {selectedDoc.rtr_status}
                   </div>
                 </div>
                 <div>
-                  <div className="text-muted-foreground font-mono text-[10px] uppercase">
+                  <div className="text-muted-foreground font-mono text-[11px]">
                     RTR Type
                   </div>
-                  <div className="text-foreground mt-0.5 font-semibold capitalize">
+                  <div className="text-foreground mt-0.5 font-medium capitalize">
                     {selectedDoc.rtr_type.replace('_', ' ')}
                   </div>
                 </div>
                 <div>
-                  <div className="text-muted-foreground font-mono text-[10px] uppercase">
+                  <div className="text-muted-foreground font-mono text-[11px]">
                     Agreed Rate
                   </div>
-                  <div className="text-primary mt-0.5 font-mono font-semibold">
+                  <div className="text-primary mt-0.5 font-mono font-medium">
                     {selectedDoc.hourly_rate ? `$${selectedDoc.hourly_rate}/hr` : 'Not specified'}
                   </div>
                 </div>
                 <div>
-                  <div className="text-muted-foreground font-mono text-[10px] uppercase">
+                  <div className="text-muted-foreground font-mono text-[11px]">
                     Agreement Date
                   </div>
                   <div className="text-foreground mt-0.5 font-medium">{selectedDoc.rtr_date}</div>
                 </div>
               </div>
 
-              <div className="border-border/60 space-y-2 rounded-lg border p-3">
-                <div className="text-foreground flex items-center gap-1.5 font-semibold">
+              <div className="border-border/60 space-y-2 rounded-[10px] border p-3">
+                <div className="text-foreground flex items-center gap-1.5 font-medium">
                   <Building className="text-muted-foreground size-3.5" />
                   Vendor & Recruiter Contact
                 </div>
@@ -921,9 +941,9 @@ export default function RTRManagementPage() {
               </div>
 
               {selectedDoc.representation_clause && (
-                <div className="border-border/60 bg-muted/20 space-y-1 rounded-lg border p-3">
-                  <div className="text-foreground font-semibold">Exclusivity Clause</div>
-                  <p className="text-muted-foreground leading-relaxed italic">
+                <div className="border-border/60 bg-muted/20 space-y-1 rounded-[10px] border p-3">
+                  <div className="text-foreground font-medium">Exclusivity Clause</div>
+                  <p className="text-muted-foreground leading-relaxed">
                     "{selectedDoc.representation_clause}"
                   </p>
                 </div>

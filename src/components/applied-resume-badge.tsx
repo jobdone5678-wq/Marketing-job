@@ -95,13 +95,13 @@ function AppliedResumeView({
             <button
               type="button"
               onClick={() => void preview()}
-              className={`inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1.5 text-[10px] font-medium transition-shadow hover:shadow-sm ${tailored ? 'border-border bg-muted/40 text-foreground font-semibold' : 'border-border bg-background text-foreground'}`}
+              className={`inline-flex max-w-full items-center gap-1.5 rounded-[8px] border px-2 py-1.5 text-[11px] font-medium transition-shadow hover:shadow-sm ${tailored ?'border-border bg-muted/40 text-foreground font-medium' : 'border-border bg-background text-foreground'}`}
             >
               <FileText className="size-3 shrink-0" />
               <span>Applied Resume{score !== null ? ` (${score}% match)` : ''}</span>
             </button>
             <p
-              className="text-muted-foreground max-w-full truncate text-[10px]"
+              className="text-muted-foreground max-w-full truncate text-[11px]"
               title={resume.filename}
             >
               {resume.filename}
@@ -142,7 +142,7 @@ function AppliedResumeView({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="flex max-h-[90dvh] flex-col sm:max-w-2xl">
           <DialogHeader>
-            <p className="text-muted-foreground mb-1 text-[10px] font-semibold tracking-widest uppercase">
+            <p className="text-muted-foreground mb-1 text-[11px] font-medium">
               Application document
             </p>
             <DialogTitle>Applied Resume Snapshot</DialogTitle>
@@ -154,22 +154,22 @@ function AppliedResumeView({
           {error && <WorkspaceError message={error} />}
           {resume && (
             <>
-              <div className="border-border/60 bg-muted/30 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-xs">
+              <div className="border-border/60 bg-muted/30 flex flex-wrap items-center justify-between gap-2 rounded-[10px] border p-3 text-[13px]">
                 <span className="min-w-0 font-medium break-all">{resume.filename}</span>
                 <span className="text-muted-foreground">
                   {score === null ? 'ATS score not recorded' : `${score}% estimated match`}
                 </span>
               </div>
-              <div className="border-border/60 bg-card min-h-0 flex-1 overflow-y-auto rounded-lg border p-4">
+              <div className="border-border/60 bg-card min-h-0 flex-1 overflow-y-auto rounded-[10px] border p-4">
                 {resume.markdown ? (
-                  <pre className="font-sans text-xs leading-7 break-words whitespace-pre-wrap">
+                  <pre className="font-sans text-[13px] leading-7 break-words whitespace-pre-wrap">
                     {resume.markdown}
                   </pre>
                 ) : (
                   <div className="py-10 text-center">
                     <FileText className="text-muted-foreground mx-auto mb-3 size-7" />
-                    <p className="text-sm font-medium">Original {extension} document</p>
-                    <p className="text-muted-foreground mt-1 text-xs">
+                    <p className="text-[13px] font-medium">Original {extension} document</p>
+                    <p className="text-muted-foreground mt-1 text-[13px]">
                       Download this recorded file to view its complete formatting.
                     </p>
                   </div>
@@ -189,7 +189,7 @@ function AppliedResumeView({
             </>
           )}
           {resume && !resume.base64 && (
-            <p className="text-muted-foreground text-xs">
+            <p className="text-muted-foreground text-[13px]">
               Original file bytes were not archived. The recorded text can be reviewed, but an exact
               original-file download is unavailable.
             </p>
