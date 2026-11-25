@@ -165,4 +165,178 @@ test('MV3 Lifecycle, Trusted Context Migration, Sender Validation & Dynamic Resc
       'application.js must bound rescanning passes to maximum 3 passes',
     );
   });
+
+  await t.test('7. AIRouter proxy modes (server, portal_byok) send PlanApiRequest / ChooseApiRequest payloads with candidateId, context, and answerBank', async () => {
+    const routerUrl = `file:///${aiRouterPath.replace(/\\/g, '/')}`;
+    const { AIRouter } = await import(routerUrl);
+
+    for (const mode of ['server', 'portal_byok']) {
+      const captured = [];
+      const router = new AIRouter({
+        mode,
+        backendUrl: 'https://app.nextkinhr.com/',
+        token: 'jwt-token-xyz',
+        fetchFn: async (url, opts) => {
+          captured.push({ url, method: opts.method, headers: opts.headers, body: JSON.parse(opts.body) });
+          return new Response(
+            JSON.stringify(
+              url.endsWith('/plan')
+                ? { ok: true, fills: [{ label: 'Name', value: 'Ada' }] }
+                : { ok: true, choice: 'A' },
+            ),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        },
+      });
+
+      const fields = [{ id: 'f1', label: 'Name', type: 'text' }];
+      const answerBank = [{ topic: 'relocation', answer: 'Yes' }];
+      const context = { jobTitle: 'Eng' };
+
+      const planRes = await router.plan(
+        fields,
+        { candidateId: 'cand-1', answerBank },
+        context,
+      );
+      assert.equal(planRes.fills?.[0]?.value, 'Ada');
+      assert.equal(captured[0].url, 'https://app.nextkinhr.com/api/extension/autofill/plan');
+      assert.equal(captured[0].headers['Authorization'], 'Bearer jwt-token-xyz');
+      assert.deepEqual(captured[0].body, {
+        candidateId: 'cand-1',
+        fields,
+        context: { jobTitle: 'Eng' },
+        answerBank: [{ topic: 'relocation', answer: 'Yes' }],
+      });
+      assert.equal('mode' in captured[0].body, false, 'proxy plan payload must not include legacy mode key');
+      assert.equal('facts' in captured[0].body, false, 'proxy plan payload must not include legacy facts key');
+
+      const question = { id: 'q1', label: 'Pick one', combo: true };
+      const chooseRes = await router.choose(
+        question,
+        ['A', 'B'],
+        { candidateId: 'cand-1', answerBank: [] },
+        context,
+      );
+      assert.equal(chooseRes.choice, 'A');
+      assert.equal(captured[1].url, 'https://app.nextkinhr.com/api/extension/autofill/choose');
+      assert.deepEqual(captured[1].body, {
+        candidateId: 'cand-1',
+        question,
+        options: ['A', 'B'],
+        context: { jobTitle: 'Eng' },
+        answerBank: [],
+      });
+      assert.equal('mode' in captured[1].body, false, 'proxy choose payload must not include legacy mode key');
+      assert.equal('facts' in captured[1].body, false, 'proxy choose payload must not include legacy facts key');
+    }
+
+    // Backward-compatible Map call with constructor defaults
+    let mapBody = null;
+    const compatRouter = new AIRouter({
+      mode: 'server',
+      backendUrl: 'https://app.nextkinhr.com',
+      candidateId: 'cand-default',
+      answerBank: [{ topic: 'work_auth', answer: 'Yes' }],
+      fetchFn: async (_url, opts) => {
+        mapBody = JSON.parse(opts.body);
+        return new Response(JSON.stringify({ ok: true, fills: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+    });
+    await compatRouter.plan([{ label: 'Email', type: 'text' }], new Map([['profile.email', { value: 'a@b.com' }]]));
+    assert.deepEqual(mapBody, {
+      candidateId: 'cand-default',
+      fields: [{ label: 'Email', type: 'text' }],
+      context: {},
+      answerBank: [{ topic: 'work_auth', answer: 'Yes' }],
+    });
+  });
+
+  await t.test('8. AIRouter.generateTextAnswer executes direct text generation in extension_byok / local_direct (and local alias) and rejects empty answers', async () => {
+    const routerUrl = `file:///${aiRouterPath.replace(/\\/g, '/')}`;
+    const { AIRouter } = await import(routerUrl);
+
+    // Extension BYOK via clientFactory
+    let capturedCall = null;
+    const byokRouter = new AIRouter({
+      mode: 'extension_byok',
+      config: { baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini' },
+      clientFactory: (opts) => {
+        assert.equal(opts.apiKey, 'sk-test');
+        return {
+          generateChatCompletion: async (messages, completionOpts) => {
+            capturedCall = { messages, completionOpts };
+            return { text: '  "I bring 6 years of backend engineering experience."  ' };
+          },
+        };
+      },
+    });
+
+    const byokResult = await byokRouter.generateTextAnswer(
+      'You are a career copilot.',
+      'Why are you interested in this role?',
+    );
+    assert.deepEqual(byokResult, {
+      ok: true,
+      answer: 'I bring 6 years of backend engineering experience.',
+    });
+    assert.deepEqual(capturedCall.messages, [
+      { role: 'system', content: 'You are a career copilot.' },
+      { role: 'user', content: 'Why are you interested in this role?' },
+    ]);
+    assert.equal(capturedCall.completionOpts.responseFormat, 'text');
+    assert.equal(capturedCall.completionOpts.maxTokens, 1500);
+    assert.equal(capturedCall.completionOpts.temperature, 0.7);
+
+    // Local alias normalized to local_direct using real ProviderClient via fetchFn
+    let localFetchUrl = null;
+    let localFetchBody = null;
+    const localRouter = new AIRouter({
+      mode: 'local',
+      config: { baseUrl: 'http://localhost:11434', model: 'llama3' },
+      fetchFn: async (url, init) => {
+        localFetchUrl = url;
+        localFetchBody = JSON.parse(init.body);
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: 'Excited to build distributed systems.' } }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      },
+    });
+    assert.equal(localRouter.mode, 'local_direct');
+
+    const localResult = await localRouter.generateTextAnswer(
+      'System prompt',
+      'User prompt',
+      { maxTokens: 500, temperature: 0.3 },
+    );
+    assert.deepEqual(localResult, { ok: true, answer: 'Excited to build distributed systems.' });
+    assert.equal(localFetchUrl, 'http://localhost:11434/v1/chat/completions');
+    assert.equal(localFetchBody.max_tokens, 500);
+    assert.equal(localFetchBody.temperature, 0.3);
+    assert.equal(localFetchBody.response_format, undefined);
+
+    // Empty response throws
+    const emptyRouter = new AIRouter({
+      mode: 'local_direct',
+      clientFactory: () => ({
+        generateChatCompletion: async () => ({ text: '  ""  ' }),
+      }),
+    });
+    await assert.rejects(
+      () => emptyRouter.generateTextAnswer('sys', 'usr'),
+      /empty/i,
+    );
+
+    // Proxy mode cannot call generateTextAnswer
+    const serverRouter = new AIRouter({ mode: 'server', backendUrl: 'https://app.nextkinhr.com' });
+    await assert.rejects(
+      () => serverRouter.generateTextAnswer('sys', 'usr'),
+      /extension_byok|local_direct/i,
+    );
+  });
 });

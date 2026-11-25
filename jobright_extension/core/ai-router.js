@@ -42,47 +42,62 @@ export function validateSessionFreshness(session, currentState) {
 
 export class AIRouter {
   constructor(options = {}) {
-    this.mode = options.mode || 'server'; // 'server' | 'portal_byok' | 'extension_byok' | 'local_direct'
+    const rawMode = options.mode || 'server'; // 'server' | 'portal_byok' | 'extension_byok' | 'local_direct' ('local' alias supported)
+    this.mode = rawMode === 'local' ? 'local_direct' : rawMode;
     this.config = options.config || {};
     this.backendUrl = options.backendUrl || '';
     this.token = options.token || null;
+    this.candidateId = options.candidateId ?? null;
+    this.answerBank = options.answerBank ?? undefined;
     this.clientFactory = options.clientFactory || null;
     this.fetchFn = options.fetchFn || ((...args) => globalThis.fetch(...args));
     this.planFn = options.planFn || planFormBatch;
     this.chooseFn = options.chooseFn || chooseComboboxOption;
   }
 
+  _isDirectMode() {
+    return this.mode === 'local_direct' || this.mode === 'extension_byok';
+  }
+
   /**
-   * Plans form fields using the active routing mode.
+   * Normalizes either a legacy Map<string, VerifiedFact> or a payload object
+   * { facts?, candidateId?, answerBank? } into a uniform structure.
    */
-  async plan(fields, facts, context = {}) {
-    if (this.mode === 'local_direct' || this.mode === 'extension_byok') {
-      const baseUrl = this.config.baseUrl || (this.mode === 'local_direct' ? 'http://localhost:11434' : 'https://api.openai.com/v1');
-      const model = this.config.model || (this.mode === 'local_direct' ? 'llama3' : 'gpt-4o-mini');
-      const apiKey = this.config.apiKey || '';
-
-      const client = this.clientFactory
-        ? this.clientFactory({ baseUrl, model, apiKey })
-        : new ProviderClient({ baseUrl, model, apiKey, fetchFn: this.fetchFn });
-
-      return await this.planFn(fields, facts, client, context);
+  _unpackInput(factsOrPayload) {
+    if (factsOrPayload instanceof Map) {
+      return {
+        facts: factsOrPayload,
+        candidateId: this.candidateId,
+        answerBank: this.answerBank,
+      };
     }
 
-    // Modes 1 & 2: Route via Next.js backend proxy
+    return {
+      facts: factsOrPayload?.facts instanceof Map ? factsOrPayload.facts : new Map(),
+      candidateId: factsOrPayload?.candidateId ?? this.candidateId,
+      answerBank: factsOrPayload?.answerBank ?? this.answerBank,
+    };
+  }
+
+  _createDirectClient() {
+    const isLocal = this.mode === 'local_direct';
+    const baseUrl = this.config.baseUrl || (isLocal ? 'http://localhost:11434' : 'https://api.openai.com/v1');
+    const model = this.config.model || (isLocal ? 'llama3' : 'gpt-4o-mini');
+    const apiKey = this.config.apiKey || '';
+
+    return this.clientFactory
+      ? this.clientFactory({ baseUrl, model, apiKey })
+      : new ProviderClient({ baseUrl, model, apiKey, fetchFn: this.fetchFn });
+  }
+
+  async _postProxy(path, payload, errorLabel) {
     const baseUrl = (this.backendUrl || '').replace(/\/+$/, '');
-    const endpoint = `${baseUrl}/api/extension/autofill/plan`;
+    const endpoint = `${baseUrl}${path}`;
 
     const headers = { 'Content-Type': 'application/json' };
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
-
-    const payload = {
-      fields,
-      facts: facts instanceof Map ? Object.fromEntries(facts) : facts,
-      context,
-      mode: this.mode,
-    };
 
     const res = await this.fetchFn(endpoint, {
       method: 'POST',
@@ -92,54 +107,82 @@ export class AIRouter {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `Autofill planning proxy error (HTTP ${res.status})`);
+      throw new Error(err.error || `${errorLabel} (HTTP ${res.status})`);
     }
 
     return await res.json();
   }
 
   /**
+   * Plans form fields using the active routing mode.
+   */
+  async plan(fields, factsOrPayload, context = {}) {
+    const { facts, candidateId, answerBank } = this._unpackInput(factsOrPayload);
+
+    if (this._isDirectMode()) {
+      const client = this._createDirectClient();
+      return await this.planFn(fields, facts, client, context);
+    }
+
+    // Modes 1 & 2: Route via Next.js backend proxy (PlanApiRequest)
+    return await this._postProxy(
+      '/api/extension/autofill/plan',
+      { candidateId, fields, context, answerBank },
+      'Autofill planning proxy error',
+    );
+  }
+
+  /**
    * Selects an exact option for combobox widgets.
    */
-  async choose(question, options, facts) {
-    if (this.mode === 'local_direct' || this.mode === 'extension_byok') {
-      const baseUrl = this.config.baseUrl || (this.mode === 'local_direct' ? 'http://localhost:11434' : 'https://api.openai.com/v1');
-      const model = this.config.model || (this.mode === 'local_direct' ? 'llama3' : 'gpt-4o-mini');
-      const apiKey = this.config.apiKey || '';
+  async choose(question, options, factsOrPayload, context = {}) {
+    const { facts, candidateId, answerBank } = this._unpackInput(factsOrPayload);
 
-      const client = this.clientFactory
-        ? this.clientFactory({ baseUrl, model, apiKey })
-        : new ProviderClient({ baseUrl, model, apiKey, fetchFn: this.fetchFn });
-
+    if (this._isDirectMode()) {
+      const client = this._createDirectClient();
       return await this.chooseFn(question, options, facts, client);
     }
 
-    const baseUrl = (this.backendUrl || '').replace(/\/+$/, '');
-    const endpoint = `${baseUrl}/api/extension/autofill/choose`;
+    // Modes 1 & 2: Route via Next.js backend proxy (ChooseApiRequest)
+    return await this._postProxy(
+      '/api/extension/autofill/choose',
+      { candidateId, question, options, context, answerBank },
+      'Autofill choose proxy error',
+    );
+  }
 
-    const headers = { 'Content-Type': 'application/json' };
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
+  /**
+   * Generates open-ended prose directly in the browser for Stage B fields
+   * in extension_byok and local_direct modes.
+   */
+  async generateTextAnswer(systemPrompt, userPrompt, options = {}) {
+    if (!this._isDirectMode()) {
+      throw new Error(
+        `generateTextAnswer is only supported in extension_byok or local_direct modes (current mode: ${this.mode})`,
+      );
     }
 
-    const payload = {
-      question,
-      options,
-      facts: facts instanceof Map ? Object.fromEntries(facts) : facts,
-      mode: this.mode,
-    };
+    const client = this._createDirectClient();
+    const messages = [];
+    if (systemPrompt) {
+      messages.push({ role: 'system', content: systemPrompt });
+    }
+    messages.push({ role: 'user', content: userPrompt || '' });
 
-    const res = await this.fetchFn(endpoint, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload),
+    const completion = await client.generateChatCompletion(messages, {
+      responseFormat: 'text',
+      maxTokens: options.maxTokens ?? 1500,
+      temperature: options.temperature ?? 0.7,
+      ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
     });
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `Autofill choose proxy error (HTTP ${res.status})`);
+    const rawText = typeof completion?.text === 'string' ? completion.text.trim() : '';
+    const answer = rawText.replace(/^["']|["']$/g, '').trim();
+    if (!answer) {
+      throw new Error('AI provider returned an empty response.');
     }
 
-    return await res.json();
+    return { ok: true, answer };
   }
 }
