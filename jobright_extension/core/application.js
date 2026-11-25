@@ -767,7 +767,7 @@
         attempts++;
       }
       if (isFilling) {
-        return { filled: [], unfilled: [], questions: [], total: 0, error: 'Autofill is already in progress.' };
+        return { filled: [], unfilled: [], questions: [], questionMeta: {}, total: 0, error: 'Autofill is already in progress.' };
       }
     }
     isFilling = true;
@@ -800,7 +800,7 @@
         typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string' && value.trim()
       )) {
         manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'Save your candidate details in My Applications and Resume first.' });
-        return { filled: [], unfilled: [], questions: [], total: page.fields.length, error: 'Save your candidate details in My Applications and Resume first.' };
+        return { filled: [], unfilled: [], questions: [], questionMeta: {}, total: page.fields.length, error: 'Save your candidate details in My Applications and Resume first.' };
       }
       const baseFields = newFields ? page.fields.filter(field => newFields.some(next =>
         next.element === field.element && next.label === field.label)) : page.fields;
@@ -840,6 +840,23 @@
     }
 
     const questions = [];
+    const questionMeta = Object.create(null);
+    const labelPlanCounts = new Map();
+    for (const plan of plans) {
+      if (plan.status !== 'ai' && plan.status !== 'needs_review' && plan.status !== 'unknown') continue;
+      const { field } = plan;
+      const label = (field.label || field.hint || '').trim();
+      const key = answerKey(field);
+      if (mapping.isUrlField?.(field)) continue;
+      if (plan.factKey === 'date_of_birth') continue;
+      if (label.length < 2 || key.length > 300 || manualQuestion.test(label)) continue;
+      const baseQid = key.slice(0, 200);
+      labelPlanCounts.set(baseQid, (labelPlanCounts.get(baseQid) || 0) + 1);
+    }
+    const labelOccurrence = new Map();
+    const assignedQids = new Set();
+    const hasOwn = (obj, k) => Boolean(k) && Object.prototype.hasOwnProperty.call(obj, k);
+
     for (const plan of plans) {
       const { field } = plan;
       const label = (field.label || field.hint || '').trim();
@@ -847,20 +864,56 @@
 
       if (plan.status === 'ai' || plan.status === 'needs_review' || plan.status === 'unknown') {
         if (mapping.isUrlField?.(field)) continue;
-        // Missing DOB, citizenship and work-authorization facts must not be
-        // guessed from a resume or replaced with an unrelated generic answer.
-        if (['date_of_birth', 'citizenship_status', 'authorized_in_usa', 'needs_sponsorship', 'visa_status', 'work_authorization'].includes(plan.factKey)) continue;
-        if (label.length < 2 || key.length > 300 || manualQuestion.test(label) || writer.read(field)) continue;
-        const choices = plan.options?.length ? plan.options : (await writer.readChoices(field, () => location.href === expectedUrl))
-          .map(option => option.label);
+        // Missing DOB must not be guessed from a resume or sent to AI.
+        if (plan.factKey === 'date_of_birth') continue;
+        if (label.length < 2 || key.length > 300 || manualQuestion.test(label)) continue;
+
+        const baseQid = key.slice(0, 200);
+        const occ = (labelOccurrence.get(baseQid) || 0) + 1;
+        labelOccurrence.set(baseQid, occ);
+        const isDuplicateLabel = (labelPlanCounts.get(baseQid) || 0) > 1;
+        const qid = !isDuplicateLabel
+          ? baseQid
+          : ([field.id, field.name, `${baseQid}::${occ}`].find(
+              (c) => typeof c === 'string' && c.trim() && !assignedQids.has(c),
+            ) || `${baseQid}::${occ}`);
+        assignedQids.add(qid);
+
+        if (writer.read(field)) continue;
+        const skipComboProbe = aiAnswers && Object.keys(aiAnswers).length === 0 && field.kind === 'combobox';
+        const choices = plan.options?.length ? plan.options
+          : skipComboProbe ? []
+          : (await writer.readChoices(field, () => location.href === expectedUrl)).map(option => option.label);
         const options = [...new Set(choices.filter(option => option && option.length <= 1000))].slice(0, 200);
 
         // 1. If explicit AI answer was provided via API
-        if (aiAnswers && typeof aiAnswers[key] === 'string' && (!options.length || options.includes(aiAnswers[key]))) {
-          plan.status = 'supported';
-          plan.value = aiAnswers[key];
-          plan.ai = true;
-          continue;
+        const aiReply = aiAnswers
+          ? (
+              (hasOwn(aiAnswers, qid) ? aiAnswers[qid] : undefined) ??
+              (!isDuplicateLabel
+                ? (
+                    (hasOwn(aiAnswers, field.id) ? aiAnswers[field.id] : undefined) ??
+                    (hasOwn(aiAnswers, key) ? aiAnswers[key] : undefined) ??
+                    (hasOwn(aiAnswers, baseQid) ? aiAnswers[baseQid] : undefined)
+                  )
+                : undefined)
+            )
+          : undefined;
+        if (typeof aiReply === 'string') {
+          if (!options.length) {
+            plan.status = 'supported';
+            plan.value = aiReply;
+            plan.ai = true;
+            continue;
+          }
+          const normalizedReply = aiReply.trim().toLowerCase();
+          const matchedOption = options.find(o => o.trim().toLowerCase() === normalizedReply);
+          if (matchedOption !== undefined) {
+            plan.status = 'supported';
+            plan.value = matchedOption;
+            plan.ai = true;
+            continue;
+          }
         }
 
         // 2. Dynamic resume-grounded answers based strictly on candidate's uploaded resume
@@ -1205,10 +1258,6 @@
           else if (/choose not to disclose|decline to state|prefer not to/i.test(checkLabel)) {
             autoValue = false;
           }
-          // 7. General unknown checkbox: Default to FALSE based on resume
-          else {
-            autoValue = false;
-          }
         }
 
         if (autoValue !== null && autoValue !== undefined) {
@@ -1216,7 +1265,14 @@
           plan.value = autoValue;
           plan.ai = !fromFact;
         } else if (aiAnswers) {
-          questions.push({ id: key.slice(0, 200), label: label.slice(0, 2000), type: field.kind, options });
+          questions.push({ id: qid, label: label.slice(0, 2000), type: field.kind, options });
+          questionMeta[qid] = {
+            fieldId: field.id || field.name || field.key || qid,
+            combo: field.kind === 'combobox',
+            required: Boolean(field.required || field.element?.required || (typeof field.element?.getAttribute === 'function' && field.element.getAttribute('aria-required') === 'true')),
+            planStatus: plan.status,
+            factKey: plan.factKey || null,
+          };
         }
       }
     }
@@ -1312,7 +1368,7 @@
       });
     }
 
-      return { filled, unfilled, questions, total: sourceFields.length + Number(!!input) };
+      return { filled, unfilled, questions, questionMeta, total: sourceFields.length + Number(!!input) };
     } finally {
       isFilling = false;
     }

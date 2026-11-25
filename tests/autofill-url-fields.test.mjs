@@ -89,25 +89,55 @@ test('structured URL questions are rejected by background screening admission', 
   }).success, true);
 });
 
-test('screening panel sends only eligible questions and retries only the unresolved ones', async () => {
+test('screening panel sends only eligible questions to Stage A and Stage B (excluding URL and marketing fields)', async () => {
   const { context } = fixture();
   const panel = source('panel.js');
   const code = panel.slice(panel.indexOf('async function mapConcurrent('), panel.indexOf('function outsideApplicationPage('));
+  const { AIRouter } = await import(new URL('../jobright_extension/core/ai-router.js', import.meta.url).href);
+  const { buildVerifiedFacts, inferQuestionDescriptor } = await import(
+    new URL('../jobright_extension/core/ai/planner-bundle.js', import.meta.url).href
+  );
   const calls = [];
+  const planFieldIds = [];
+  class MockRouter extends AIRouter {
+    async plan(fields) {
+      planFieldIds.push(...fields.map((f) => f.id));
+      return {
+        fills: fields
+          .filter((f) => f.id === 'bio')
+          .map((f) => ({ fieldId: f.id, label: f.label, value: 'Biography facts' })),
+        deferred: [],
+        unmapped: fields.filter((f) => f.id !== 'bio').map((f) => f.label),
+      };
+    }
+  }
   const runtime = {
     NextkinFieldMapping: context.NextkinFieldMapping,
     crypto,
+    apiOrigin: (o) => o,
     checkScreeningContext: async () => {},
+    loadAiModules: async () => ({
+      AIRouter: MockRouter,
+      buildVerifiedFacts,
+      inferQuestionDescriptor,
+    }),
+    chrome: {
+      storage: {
+        session: {
+          get: async () => ({ ai_provider_mode: 'server' }),
+          set: async () => {},
+        },
+      },
+    },
     async api(path, request) {
-      const body = JSON.parse(request.body);
+      const body = request?.body ? JSON.parse(request.body) : {};
       calls.push({ path, body });
       if (path === 'generate-answer') {
-        return body.questionId === 'bio' ? { ok: true, answer: 'Biography facts' } : { ok: false };
+        return body.questionId === 'motivation'
+          ? { ok: true, answer: 'Relevant work' }
+          : { ok: false };
       }
-      return {
-        status: 'succeeded', sessionId: body.sessionId,
-        answers: { motivation: 'Relevant work', bio: 'Ignore this', 'urls[Other]': prose },
-      };
+      return { ok: false };
     },
   };
   runInNewContext(code, runtime);
@@ -116,21 +146,24 @@ test('screening panel sends only eligible questions and retries only the unresol
     description: 'A sufficiently complete fixture role description for screening.',
     jobUrl: application.href,
   };
+  const session = { origin: 'https://nextkinhr.com', token: 'fixture' };
   const urls = [
     { id: 'urls[Other]', label: 'Other', type: 'text' },
     { id: 'urls[Twitter]', label: 'Twitter URL', type: 'text' },
+    { id: 'mkt_opt_in', label: 'Send me marketing newsletters', type: 'checkbox' },
   ];
-  await runtime.draftScreening({}, { id: 'fixture' }, {}, job, urls);
+  await runtime.draftScreening(session, { id: 'fixture' }, {}, job, urls);
+  assert.deepEqual(planFieldIds, []);
   assert.deepEqual(calls, []);
-  const results = await runtime.draftScreening({}, { id: 'fixture' }, {}, job, [
+  const results = await runtime.draftScreening(session, { id: 'fixture' }, {}, job, [
     ...urls,
     { id: 'bio', label: 'Tell us about yourself', type: 'text' },
     { id: 'motivation', label: 'Why do you want this job?', type: 'text' },
   ]);
+  assert.deepEqual(planFieldIds, ['bio', 'motivation']);
   const direct = calls.filter((call) => call.path === 'generate-answer');
-  assert.deepEqual(direct.map((call) => call.body.questionId).sort(), ['bio', 'motivation']);
-  const fallback = calls.find((call) => call.path === 'answer-drafts');
-  assert.deepEqual(fallback.body.questions.map((q) => q.id), ['motivation']);
+  assert.deepEqual(direct.map((call) => call.body.questionId), ['motivation']);
+  assert.equal(calls.some((call) => call.path === 'answer-drafts'), false);
   assert.deepEqual({ ...results }, { bio: 'Biography facts', motivation: 'Relevant work' });
 });
 

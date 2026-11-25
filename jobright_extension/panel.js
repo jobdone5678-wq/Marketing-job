@@ -53,6 +53,9 @@ let matchRequest = 0;
 let answerReview;
 let startedApplication;
 let pendingAppliedPrompt;
+let pendingAiSettingsRefresh = false;
+let aiScreeningUserToggled = false;
+let lastScreeningWarnings = [];
 const DOB_SESSION_KEY = 'nextkinCandidateDobOverrides';
 let candidateDobOverride = null;
 
@@ -175,7 +178,11 @@ function renderAccount() {
     onboardingView.hidden = connected;
     authenticatedView.hidden = !connected;
   }
-  if (connected) void loadAiSettings();
+  if (connected) {
+    const forceReload = pendingAiSettingsRefresh;
+    pendingAiSettingsRefresh = false;
+    void loadAiSettings(forceReload);
+  }
   const name = candidate?.full_name || connection?.user?.name;
   setLine('connection', connected ? 'NextKinHR Connected' : 'Connect to NextKinHR', connected);
   setLine('candidate', name ? 'Candidate: ' + name : 'Candidate profile', !!name);
@@ -431,6 +438,19 @@ async function refresh() {
     $('upload-form').hidden = true;
     $('upload-form').reset();
     notice('upload-status', '');
+    aiSettingsLoaded = false;
+    aiSettingsDirty = false;
+    aiSettingsConfigVersion = 1;
+    pendingAiSettingsRefresh = Boolean(session);
+    if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+      await chrome.storage.session.remove([
+        'ai_api_key',
+        'ai_provider_mode',
+        'ai_provider_type',
+        'ai_base_url',
+        'ai_model_id',
+      ]).catch(() => {});
+    }
   }
   currentTab = tab;
   if (tab?.id) {
@@ -979,66 +999,463 @@ async function mapConcurrent(items, limit, fn) {
   return Promise.all(results);
 }
 
-async function draftScreening(session, profile, tab, job, questions, scope) {
-  const eligible = (questions || []).filter(q => !globalThis.NextkinFieldMapping.isUrlField(q));
+const MARKETING_OPT_IN_REGEX = /(marketing|promotional|newsletter|sms|text message|job alert|future opportunit|talent network|third[- ]?party|partner)/i;
+const SENSITIVE_MANUAL_REGEX = /\b(?:password|secret|bank\s*routing|routing\s*number|bank\s*account|credit.?card|ssn|social.?security|tax.?id|pin|otp)\b/i;
+const PRIVATE_AI_BLOCK_REGEX = /\b(?:date\s*of\s*birth|birth\s*date|birthdate|d\.?\s*o\.?\s*b\.?|dob|captcha|signature)\b/i;
+const STAGE_B_PRIVATE_REGEX = /birth|dob|medical|health|disability|ethnicity|race|gender|veteran|religion|consent|privacy|captcha|signature/i;
+const OPEN_PROSE_REGEX = /\b(bio|biography|summary|about\s*(?:you|yourself)?|cover\s*letter|why\b|describe|explain|tell\s+us|motivat|interest(?:ed)?\s+in|excite|passion|proudest|accomplish|achievement|project|strength|weakness|challenge|additional\s+information|anything\s+else|share\s+with\s+us|statement|experience\s+with|background)\b/i;
+const STAGE_B_CONSEQUENTIAL_FACTS = new Set([
+  'authorized_in_usa', 'needs_sponsorship', 'visa_status', 'work_authorization', 'date_of_birth',
+  'citizenship_status', 'gender', 'race', 'race_ethnicity', 'veteran', 'veteran_status', 'disability', 'disability_status',
+]);
+const NON_PROSE_FIELD_TYPES = new Set([
+  'checkbox', 'checkbox-group', 'radio', 'choice', 'select', 'combobox', 'multi-select', 'multi-combobox',
+]);
+
+let aiModulesPromise = null;
+async function defaultLoadAiModules() {
+  if (!aiModulesPromise) {
+    aiModulesPromise = Promise.all([
+      import(chrome.runtime.getURL('core/ai-router.js')),
+      import(chrome.runtime.getURL('core/ai/planner-bundle.js')),
+    ]).then(([routerMod, bundleMod]) => ({
+      AIRouter: routerMod.AIRouter,
+      buildVerifiedFacts: bundleMod.buildVerifiedFacts,
+      inferQuestionDescriptor: bundleMod.inferQuestionDescriptor,
+    })).catch((err) => {
+      aiModulesPromise = null;
+      throw err;
+    });
+  }
+  return aiModulesPromise;
+}
+
+function normalizeQuestionLabel(label) {
+  return String(label || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function isMarketingOptInQuestion(q) {
+  const label = String(q?.label || '');
+  if (!label) return false;
+  if (q?.type === 'checkbox' || q?.type === 'checkbox-group') {
+    return MARKETING_OPT_IN_REGEX.test(label);
+  }
+  return /(opt[- ]?in|subscribe|receive|send me).*(marketing|promotional|newsletter|sms|job alert|future opportunit|talent network|third[- ]?party|partner)/i.test(label);
+}
+
+function isFatalAiError(err) {
+  if (!err) return false;
+  const status = err.status;
+  if (status === 401 || status === 403 || status === 422 || status === 503) return true;
+  return /authentication failed|api key is required|not configured|image generation model|\bHTTP (?:401|403|422|503)\b|\bunauthorized\b|\bplanner is disabled\b/i.test(err.message || '');
+}
+
+async function resolveActiveAiConfig(session) {
+  let stored = {};
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+      stored = await chrome.storage.session.get([
+        'ai_provider_mode',
+        'ai_provider_type',
+        'ai_base_url',
+        'ai_model_id',
+        'ai_api_key',
+      ]);
+    }
+  } catch {}
+
+  let mode = stored?.ai_provider_mode || '';
+  let provider = stored?.ai_provider_type || '';
+  let baseUrl = stored?.ai_base_url || '';
+  let modelId = stored?.ai_model_id || '';
+  const apiKey = typeof stored?.ai_api_key === 'string' ? stored.ai_api_key.trim() : '';
+
+  if (!mode) {
+    const remote = await api('ai/settings', {}, session).catch((err) => {
+      if (typeof authFailed === 'function' && authFailed(err)) throw err;
+      return null;
+    });
+    if (remote) {
+      mode = remote.mode || 'server';
+      provider = remote.provider || 'server';
+      baseUrl = remote.baseUrl || '';
+      modelId = remote.modelId || '';
+      try {
+        if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+          await chrome.storage.session.set({
+            ai_provider_mode: mode,
+            ai_provider_type: provider,
+            ai_base_url: baseUrl || null,
+            ai_model_id: modelId || null,
+          });
+        }
+      } catch {}
+    } else {
+      mode = 'server';
+    }
+  }
+
+  const normalizedMode = mode === 'local' ? 'local_direct' : mode;
+  if (normalizedMode === 'extension_byok' && !apiKey) {
+    throw new Error(
+      'Enter your API key in AI Provider Settings for Extension Direct BYOK (or switch to Portal Encrypted BYOK).',
+    );
+  }
+
+  const defaultsMap = typeof AI_PROVIDER_DEFAULTS !== 'undefined' ? AI_PROVIDER_DEFAULTS : {};
+  if (normalizedMode === 'local_direct') {
+    const defaults = defaultsMap[provider] || defaultsMap.ollama || { baseUrl: 'http://localhost:11434/v1', modelId: 'llama3.2:latest' };
+    baseUrl = baseUrl || defaults.baseUrl;
+    modelId = modelId || defaults.modelId;
+  } else if (normalizedMode === 'extension_byok') {
+    const defaults = defaultsMap[provider] || defaultsMap.openai || { baseUrl: 'https://api.openai.com/v1', modelId: 'gpt-4o-mini' };
+    baseUrl = baseUrl || defaults.baseUrl;
+    modelId = modelId || defaults.modelId;
+  }
+
+  return {
+    mode: normalizedMode,
+    provider: provider || 'server',
+    baseUrl,
+    modelId,
+    apiKey,
+  };
+}
+
+function buildStageBPrompts(profile, job, q) {
+  const cf = profile?.confirmed_facts || profile || {};
+  const candName = cf.full_name || profile?.full_name || 'Applicant';
+  const candTitle = cf.current_job_title || cf.current_title || profile?.current_job_title || job?.title || '';
+  const rawSkills = cf.primary_skills ?? profile?.primary_skills ?? cf.skills ?? profile?.skills ?? '';
+  const skillsStr = Array.isArray(rawSkills) ? rawSkills.join(', ') : String(rawSkills || '');
+  const candSummary = cf.summary || cf.bio || profile?.summary || profile?.bio || '';
+  const rawSnippet = profile?.raw_text || cf.raw_text || '';
+  const resumeContext = typeof rawSnippet === 'string' && rawSnippet
+    ? `Resume Highlights: ${rawSnippet.slice(0, 800)}`
+    : '';
+
+  const systemPrompt = `You are an expert career copilot. Write a concise, compelling, first-person ("I") answer (2-3 sentences, maximum 60 words) for a job application field.
+Candidate: ${candName}${candTitle ? ` (${candTitle})` : ''}
+${skillsStr ? `Key Skills: ${skillsStr}` : ''}
+${candSummary ? `Candidate Summary: ${candSummary}` : ''}
+${resumeContext}
+Target Role: ${job?.title || 'Role'} at ${job?.company || 'Target Company'}.
+Strict Rules:
+- Write strictly in first person ("I", "my") as the candidate.
+- Highlight specific real skills and experience from the candidate's profile.
+- Do NOT include quotation marks, markdown headings, or bullet points.
+- Keep the response under 60 words, direct and natural.`;
+
+  const userPrompt = `Write a professional response for application field: "${q.label}"`;
+  return { systemPrompt, userPrompt };
+}
+
+async function readDeferredComboboxOptions(tab, scope, fieldId, label, matchIndex, fallbackOptions) {
+  let liveOptions = [];
+  if (tab?.id != null && scope?.frame && typeof chrome !== 'undefined' && chrome.scripting?.executeScript) {
+    try {
+      const [probe] = await chrome.scripting.executeScript({
+        target: formTarget(tab, scope.frame),
+        func: async ({ fieldId: targetFieldId, label: targetLabel, matchIndex: idx }) => {
+          const formsApi = globalThis.NextkinForms;
+          const writer = globalThis.NextkinFieldWriter;
+          if (!formsApi?.discoverFields || !writer?.readChoices) return [];
+          const fields = formsApi.discoverFields();
+          const norm = (v) => String(v ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+          const targetNorm = norm(targetLabel);
+          let field = targetFieldId
+            ? fields.find(
+                (f) =>
+                  f.id === targetFieldId ||
+                  f.name === targetFieldId ||
+                  f.key === targetFieldId ||
+                  f.element?.id === targetFieldId ||
+                  f.element?.name === targetFieldId,
+              )
+            : null;
+          if (!field) {
+            const comboMatches = fields.filter(
+              (f) => f.kind === 'combobox' && norm(f.label || f.hint) === targetNorm,
+            );
+            field = comboMatches[idx] || comboMatches[0] || null;
+          }
+          if (!field) {
+            const anyMatches = fields.filter((f) => norm(f.label || f.hint) === targetNorm);
+            field = anyMatches[idx] || anyMatches[0] || null;
+          }
+          if (!field) return [];
+          const raw = await writer.readChoices(field, () => true);
+          return (Array.isArray(raw) ? raw : [])
+            .map((o) => (typeof o === 'string' ? o : (o?.label ?? o?.value ?? '')))
+            .map((s) => String(s).trim())
+            .filter(Boolean);
+        },
+        args: [{ fieldId, label, matchIndex }],
+      });
+      if (Array.isArray(probe?.result)) {
+        liveOptions = [...new Set(probe.result.map((o) => String(o).trim()).filter(Boolean))];
+      }
+    } catch {}
+  }
+  if (!liveOptions.length && Array.isArray(fallbackOptions) && fallbackOptions.length) {
+    liveOptions = [...new Set(fallbackOptions.map((o) => String(o).trim()).filter(Boolean))];
+  }
+  return liveOptions;
+}
+
+async function draftScreening(session, profile, tab, job, questions, scope, reusable = null, questionMeta = null) {
+  lastScreeningWarnings = [];
+  const eligible = (questions || []).filter((q) => {
+    if (!q || !q.label) return false;
+    if (globalThis.NextkinFieldMapping?.isUrlField?.(q)) return false;
+    const qid = q.id || q.label;
+    const meta = questionMeta?.[qid];
+    if (meta?.factKey === 'date_of_birth') return false;
+    if (SENSITIVE_MANUAL_REGEX.test(q.label) || PRIVATE_AI_BLOCK_REGEX.test(q.label)) return false;
+    if (isMarketingOptInQuestion(q)) return false;
+    return true;
+  });
   if (!eligible.length) return {};
 
-  const answers = Object.create(null);
-  await mapConcurrent(eligible, 3, async (q) => {
-    await checkScreeningContext(tab, session, profile.id, scope);
-    try {
-      const result = await api('generate-answer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: q.label,
-          fieldLabel: q.label,
-          fieldType: q.type,
-          questionId: q.id,
-          options: q.options || [],
-          jobTitle: job?.title || '',
-          companyName: job?.company || '',
-          candidateId: profile.id,
-        }),
-      }, session);
-      if (result?.ok && typeof result.answer === 'string' && result.answer.trim())
-        answers[q.id || q.label] = result.answer;
-    } catch {
-      // Unresolved questions can use the background fallback.
-    }
-  });
-  await checkScreeningContext(tab, session, profile.id, scope);
-  const unresolved = eligible.filter(q => !Object.hasOwn(answers, q.id || q.label)).slice(0, 30);
-  if (!unresolved.length || !job?.description || job.description.trim().length < 40) return answers;
+  const aiConfig = await resolveActiveAiConfig(session);
+  const { AIRouter, buildVerifiedFacts, inferQuestionDescriptor } = await (
+    typeof loadAiModules === 'function' ? loadAiModules() : defaultLoadAiModules()
+  );
 
+  const router = new AIRouter({
+    mode: aiConfig.mode,
+    backendUrl: apiOrigin(session.origin),
+    token: session.token,
+    candidateId: profile.id,
+    answerBank: reusable,
+    config: {
+      baseUrl: aiConfig.baseUrl || undefined,
+      apiKey: aiConfig.apiKey || undefined,
+      model: aiConfig.modelId || undefined,
+    },
+  });
+
+  const facts = buildVerifiedFacts(profile, reusable);
+  const planContext = {
+    jobTitle: job?.title || '',
+    company: job?.company || '',
+    url: scope?.frame?.result?.url || job?.jobUrl || '',
+  };
+
+  const answers = Object.create(null);
+  const errors = [];
+
+  if (scope) await checkScreeningContext(tab, session, profile.id, scope);
+
+  // Stage A: Structured Plan + Live Combobox Choose
+  const planFields = eligible.map((q) => {
+    const qid = q.id || q.label;
+    const meta = questionMeta?.[qid] || {};
+    return {
+      id: meta.fieldId || qid,
+      label: q.label,
+      type: q.type || 'text',
+      combo: typeof meta.combo === 'boolean' ? meta.combo : q.type === 'combobox',
+      required: Boolean(meta.required),
+      ...(Array.isArray(q.options) && q.options.length ? { options: q.options } : {}),
+    };
+  });
+
+  let planRes = null;
   try {
-    const sessionId = crypto.randomUUID();
-    let result = await api('answer-drafts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId, requestId: crypto.randomUUID(), consent: true, candidateId: profile.id,
-        jobTitle: job.title, companyName: job.company, jobDescription: job.description,
-        jobUrl: job.jobUrl, questions: unresolved,
-      }),
-    }, session);
-    for (let attempt = 0; attempt < 25 && result.status !== 'succeeded'; attempt++) {
-      if (result.sessionId !== sessionId || !result.taskId) throw new Error('NextKinHR returned an invalid screening task.');
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      await checkScreeningContext(tab, session, profile.id, scope);
-      result = await api('answer-drafts?taskId=' + encodeURIComponent(result.taskId), {}, session);
+    planRes = await router.plan(
+      planFields,
+      { facts, candidateId: profile.id, answerBank: reusable },
+      planContext,
+    );
+  } catch (err) {
+    errors.push(err instanceof Error ? err : new Error(String(err)));
+    if (isFatalAiError(err)) {
+      throw errors[0];
     }
-    if (result.sessionId !== sessionId || result.status !== 'succeeded') {
-      throw new Error('AI drafts are still processing. Try again shortly.');
-    }
-    for (const q of unresolved) {
-      const key = q.id || q.label;
-      if (typeof result.answers?.[key] === 'string' && result.answers[key].trim()) answers[key] = result.answers[key];
-    }
-  } catch (error) {
-    if (!Object.keys(answers).length) throw error;
   }
-  await checkScreeningContext(tab, session, profile.id, scope);
+
+  if (planRes && Array.isArray(planRes.fills)) {
+    for (const fill of planRes.fills) {
+      if (!fill || fill.value === undefined || fill.value === null) continue;
+      const val = String(fill.value).trim();
+      if (!val) continue;
+
+      let target = null;
+      if (typeof fill.fieldId === 'string' && fill.fieldId.trim()) {
+        target = eligible.find((q) => {
+          const qid = q.id || q.label;
+          if (Object.hasOwn(answers, qid)) return false;
+          const fId = questionMeta?.[qid]?.fieldId || qid;
+          return fId === fill.fieldId;
+        });
+      }
+      if (!target && typeof fill.label === 'string') {
+        const fillNorm = normalizeQuestionLabel(fill.label);
+        target = eligible.find((q) => {
+          const qid = q.id || q.label;
+          return !Object.hasOwn(answers, qid) && normalizeQuestionLabel(q.label) === fillNorm;
+        });
+      }
+      if (target) {
+        answers[target.id || target.label] = val;
+      }
+    }
+  }
+
+  // Deferred combobox resolution via live DOM readChoices + AIRouter.choose
+  const deferredItems = Array.isArray(planRes?.deferred) ? planRes.deferred : [];
+  if (deferredItems.length > 0) {
+    const processedDeferredQids = new Set();
+    const labelMatchCounts = new Map();
+
+    for (const deferredItem of deferredItems) {
+      const defFieldId = typeof deferredItem === 'object' && deferredItem !== null
+        ? (deferredItem.fieldId || deferredItem.id || '')
+        : '';
+      const defLabel = typeof deferredItem === 'object' && deferredItem !== null
+        ? (deferredItem.label || '')
+        : String(deferredItem || '');
+      const defNorm = normalizeQuestionLabel(defLabel);
+
+      while (true) {
+        let target = null;
+        if (defFieldId) {
+          target = eligible.find((q) => {
+            const qid = q.id || q.label;
+            if (Object.hasOwn(answers, qid) || processedDeferredQids.has(qid)) return false;
+            return (questionMeta?.[qid]?.fieldId || qid) === defFieldId;
+          });
+        }
+        if (!target && defNorm) {
+          target = eligible.find((q) => {
+            const qid = q.id || q.label;
+            if (Object.hasOwn(answers, qid) || processedDeferredQids.has(qid)) return false;
+            const isCombo = Boolean(questionMeta?.[qid]?.combo) || q.type === 'combobox';
+            return isCombo && normalizeQuestionLabel(q.label) === defNorm;
+          }) || eligible.find((q) => {
+            const qid = q.id || q.label;
+            if (Object.hasOwn(answers, qid) || processedDeferredQids.has(qid)) return false;
+            return normalizeQuestionLabel(q.label) === defNorm;
+          });
+        }
+        if (!target) break;
+        if (scope) await checkScreeningContext(tab, session, profile.id, scope);
+
+        const targetQid = target.id || target.label;
+        processedDeferredQids.add(targetQid);
+        const targetMeta = questionMeta?.[targetQid] || {};
+        const matchIndex = labelMatchCounts.get(defNorm) || 0;
+        labelMatchCounts.set(defNorm, matchIndex + 1);
+
+        const options = await readDeferredComboboxOptions(
+          tab,
+          scope,
+          targetMeta.fieldId || targetQid,
+          target.label,
+          matchIndex,
+          target.options,
+        );
+        if (options.length) {
+          try {
+            const chooseRes = await router.choose(
+              {
+                id: targetMeta.fieldId || targetQid,
+                label: target.label,
+                type: target.type || 'combobox',
+                combo: true,
+                required: Boolean(targetMeta.required),
+              },
+              options,
+              { facts, candidateId: profile.id, answerBank: reusable },
+              planContext,
+            );
+            if (chooseRes && typeof chooseRes.choice === 'string' && chooseRes.choice.trim()) {
+              answers[targetQid] = chooseRes.choice.trim();
+            }
+          } catch (err) {
+            errors.push(err instanceof Error ? err : new Error(String(err)));
+            if (isFatalAiError(err) && !Object.keys(answers).length) {
+              throw errors[0];
+            }
+          }
+        }
+
+        if (defFieldId) break;
+      }
+    }
+  }
+
+  // Stage B: Open-ended prose-only fallback for remaining eligible unanswered questions
+  const consequentialSet = globalThis.NextkinFieldMapping?.CONSEQUENTIAL_FACTS || STAGE_B_CONSEQUENTIAL_FACTS;
+  const stageBEligible = eligible.filter((q) => {
+    const qid = q.id || q.label;
+    if (Object.hasOwn(answers, qid)) return false;
+    if (Array.isArray(q.options) && q.options.length > 0) return false;
+    if (NON_PROSE_FIELD_TYPES.has(q.type)) return false;
+    if (q.type !== 'textarea' && !OPEN_PROSE_REGEX.test(q.label)) return false;
+    if (STAGE_B_PRIVATE_REGEX.test(q.label) || SENSITIVE_MANUAL_REGEX.test(q.label)) return false;
+    if (isMarketingOptInQuestion(q)) return false;
+
+    const meta = questionMeta?.[qid];
+    if (meta?.factKey && (consequentialSet.has(meta.factKey) || meta.factKey === 'date_of_birth' || meta.factKey === 'consent' || meta.factKey === 'e_signature')) {
+      return false;
+    }
+
+    const descriptor = inferQuestionDescriptor({ id: qid, label: q.label, type: q.type });
+    if (descriptor.category !== '') return false;
+    if (descriptor.canonical_name && consequentialSet.has(descriptor.canonical_name)) return false;
+    return true;
+  });
+
+  if (stageBEligible.length > 0) {
+    const isDirect = aiConfig.mode === 'extension_byok' || aiConfig.mode === 'local_direct';
+    await mapConcurrent(stageBEligible, 3, async (q) => {
+      if (scope) await checkScreeningContext(tab, session, profile.id, scope);
+      const qid = q.id || q.label;
+      try {
+        if (isDirect) {
+          const { systemPrompt, userPrompt } = buildStageBPrompts(profile, job, q);
+          const result = await router.generateTextAnswer(systemPrompt, userPrompt);
+          if (result?.ok && typeof result.answer === 'string' && result.answer.trim()) {
+            answers[qid] = result.answer.trim();
+          }
+        } else {
+          const result = await api('generate-answer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt: q.label,
+              fieldLabel: q.label,
+              fieldType: q.type,
+              questionId: q.id,
+              options: [],
+              jobTitle: job?.title || '',
+              companyName: job?.company || '',
+              candidateId: profile.id,
+            }),
+          }, session);
+          if (result?.ok && typeof result.answer === 'string' && result.answer.trim()) {
+            answers[qid] = result.answer.trim();
+          } else if (result?.error) {
+            throw new Error(result.error);
+          }
+        }
+      } catch (err) {
+        errors.push(err instanceof Error ? err : new Error(String(err)));
+      }
+    });
+  }
+
+  if (scope) await checkScreeningContext(tab, session, profile.id, scope);
+
+  if (!Object.keys(answers).length && errors.length > 0) {
+    throw errors[0];
+  }
+  if (errors.length > 0) {
+    lastScreeningWarnings = errors.map((e) => e.message).filter(Boolean);
+  }
+
   return answers;
 }
 
@@ -1103,6 +1520,7 @@ function aggregateAutofillResults(results) {
   const filledMap = new Map();
   const unfilledMap = new Map();
   const questionsMap = new Map();
+  const questionMeta = Object.create(null);
   const warnings = [];
   const unverified = [];
   let sumOfTotals = 0;
@@ -1138,6 +1556,14 @@ function aggregateAutofillResults(results) {
         const key = item.key || item.id || item.label;
         if (!questionsMap.has(key)) {
           questionsMap.set(key, item);
+        }
+      }
+    }
+
+    if (output.questionMeta && typeof output.questionMeta === 'object') {
+      for (const [metaKey, metaVal] of Object.entries(output.questionMeta)) {
+        if (!Object.hasOwn(questionMeta, metaKey)) {
+          questionMeta[metaKey] = metaVal;
         }
       }
     }
@@ -1183,6 +1609,7 @@ function aggregateAutofillResults(results) {
     filled,
     unfilled,
     questions,
+    questionMeta,
     warnings,
     unverified,
     total,
@@ -1222,6 +1649,7 @@ $('autofill').addEventListener('click', async () => {
   $('review-answers').disabled = true;
   $('answer-review').hidden = true;
   answerReview = null;
+  lastScreeningWarnings = [];
   $('results').hidden = true;
   notice('notice', 'Filling the application…');
   try {
@@ -1270,29 +1698,40 @@ $('autofill').addEventListener('click', async () => {
         target: formTarget(tab, frame),
         func: (qIds) => {
           for (const id of qIds) {
-            const el = document.querySelector(`[name="${id}"], #${id}`) || document.activeElement;
-            if (el) el.classList.add('nextkin-field-loading');
+            try {
+              const escaped = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id;
+              const el = document.querySelector(`[name="${escaped}"], #${escaped}`) || document.activeElement;
+              if (el) el.classList.add('nextkin-field-loading');
+            } catch {}
           }
         },
-        args: [result.questions.map(q => q.id).filter(Boolean)],
+        args: [result.questions.map(q => result.questionMeta?.[q.id]?.fieldId || q.id).filter(Boolean)],
       }).catch(() => {});
       const jobKey = globalThis.NextkinFieldMapping.screeningJobKey(source?.result?.job);
       const scope = { frame, source, kekaDetails, selection, jobKey };
-      const drafts = await draftScreening(session, profile, tab, job, result.questions, scope);
-      await checkScreeningContext(tab, session, profile.id, scope);
-      const completed = await fillForm(tab, frame, profile, null, documentId, reusable, drafts, source === frame ? jobKey : null);
-      await chrome.scripting.executeScript({
-        target: formTarget(tab, frame),
-        func: () => {
-          document.querySelectorAll('.nextkin-field-loading').forEach(el => el.classList.remove('nextkin-field-loading'));
-        },
-      }).catch(() => {});
+      let completed;
+      try {
+        const drafts = await draftScreening(session, profile, tab, job, result.questions, scope, reusable, result.questionMeta);
+        await checkScreeningContext(tab, session, profile.id, scope);
+        completed = await fillForm(tab, frame, profile, null, documentId, reusable, drafts, source === frame ? jobKey : null);
+      } finally {
+        await chrome.scripting.executeScript({
+          target: formTarget(tab, frame),
+          func: () => {
+            document.querySelectorAll('.nextkin-field-loading').forEach(el => el.classList.remove('nextkin-field-loading'));
+          },
+        }).catch(() => {});
+      }
       const fields = new Map(result.filled.map(field => [field.key, field]));
       for (const field of completed.filled) fields.set(field.key, field);
       renderResults({ filled: [...fields.values()], unfilled: completed.unfilled, total: completed.total });
-      notice('notice', completed.filled.some(field => field.ai)
-        ? 'Review the AI drafts before submitting.'
-        : 'AI found no supported answers for the remaining questions.');
+      if (lastScreeningWarnings.length > 0) {
+        notice('notice', `Partial AI drafts applied (${lastScreeningWarnings[0]})`, true);
+      } else {
+        notice('notice', completed.filled.some(field => field.ai)
+          ? 'Review the AI drafts before submitting.'
+          : 'AI found no supported answers for the remaining questions.');
+      }
     }
     if (frame.frameId === 0 && !autoSubmit && !useAI) notice('notice', 'Use Next on the employer form to fill the following step.');
     if (job) {
@@ -1304,7 +1743,7 @@ $('autofill').addEventListener('click', async () => {
       }, session);
       lastCapture = { ...job, ownerId: session.user.id };
     }
-    if (!tracking?.tracked) notice('notice', tracking?.error || 'Application tracking is unavailable. Check your NextKinHR connection.', true);
+    if (!tracking?.tracked && !lastScreeningWarnings.length) notice('notice', tracking?.error || 'Application tracking is unavailable. Check your NextKinHR connection.', true);
     else if (autoSubmit) {
       await checkFormContext(tab, session);
       const [attempt] = await chrome.scripting.executeScript({
@@ -1588,15 +2027,29 @@ async function loadAiSettings(force = false) {
     const data = await api('ai/settings', {}, connection);
     if (!data) return;
     aiSettingsConfigVersion = data.configVersion || 1;
-    if ($('ai-mode-select')) $('ai-mode-select').value = data.mode || 'server';
-    if ($('ai-provider-select')) $('ai-provider-select').value = data.provider || 'server';
-    if ($('ai-base-url')) $('ai-base-url').value = data.baseUrl || '';
-    if ($('ai-model-id')) $('ai-model-id').value = data.modelId || '';
+    const mode = data.mode || 'server';
+    const provider = data.provider || 'server';
+    const baseUrl = data.baseUrl || '';
+    const modelId = data.modelId || '';
+    if ($('ai-mode-select')) $('ai-mode-select').value = mode;
+    if ($('ai-provider-select')) $('ai-provider-select').value = provider;
+    if ($('ai-base-url')) $('ai-base-url').value = baseUrl;
+    if ($('ai-model-id')) $('ai-model-id').value = modelId;
     if ($('ai-api-key')) {
       $('ai-api-key').placeholder = data.maskedApiKey || (data.hasApiKey ? '••••••••' : 'sk-...');
     }
     aiSettingsLoaded = true;
     aiSettingsDirty = false;
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+        await chrome.storage.session.set({
+          ai_provider_mode: mode,
+          ai_provider_type: provider,
+          ai_base_url: baseUrl || null,
+          ai_model_id: modelId || null,
+        });
+      }
+    } catch {}
   } catch {}
 }
 
@@ -1680,7 +2133,7 @@ $('ai-save-settings')?.addEventListener('click', async () => {
     modelId,
     configVersion: aiSettingsConfigVersion,
   };
-  if (keyInput) payload.apiKey = keyInput;
+  if (keyInput && mode !== 'extension_byok') payload.apiKey = keyInput;
 
   try {
     const res = await api('ai/settings', {
@@ -1691,25 +2144,36 @@ $('ai-save-settings')?.addEventListener('click', async () => {
     aiSettingsConfigVersion = res.configVersion || aiSettingsConfigVersion + 1;
     aiSettingsDirty = false;
     aiSettingsLoaded = true;
-    if (statusEl) {
-      statusEl.textContent = '✓ AI settings saved.';
-      statusEl.style.color = '#10b981';
-    }
     if ($('ai-api-key')) {
       $('ai-api-key').value = '';
       if (keyInput) $('ai-api-key').placeholder = '••••••••';
     }
+    let hasSessionKey = Boolean(keyInput);
     try {
       if (typeof chrome !== 'undefined' && chrome.storage?.session) {
-        await chrome.storage.session.set({
+        const sessionUpdate = {
           ai_provider_mode: mode,
           ai_provider_type: provider,
           ai_base_url: baseUrl,
           ai_model_id: modelId,
-          ...(keyInput ? { ai_api_key: keyInput } : {}),
-        });
+        };
+        if (keyInput) {
+          sessionUpdate.ai_api_key = keyInput;
+        } else if (mode !== 'extension_byok') {
+          await chrome.storage.session.remove('ai_api_key');
+        } else {
+          const existingSession = await chrome.storage.session.get('ai_api_key');
+          hasSessionKey = Boolean(existingSession?.ai_api_key);
+        }
+        await chrome.storage.session.set(sessionUpdate);
       }
     } catch {}
+    if (statusEl) {
+      statusEl.textContent = mode === 'extension_byok' && !hasSessionKey
+        ? '✓ AI settings saved. Enter your API key before autofilling in Extension Direct BYOK mode.'
+        : '✓ AI settings saved.';
+      statusEl.style.color = '#10b981';
+    }
   } catch (err) {
     if (statusEl) {
       statusEl.textContent = 'Error: ' + err.message;
@@ -1761,6 +2225,23 @@ $('ai-test-connection')?.addEventListener('click', async () => {
     }
   }
 });
+
+$('ai-screening')?.addEventListener('change', (e) => {
+  aiScreeningUserToggled = true;
+  const enabled = Boolean(e.target?.checked);
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    void chrome.storage.local.set({ aiScreeningEnabled: enabled }).catch(() => {});
+  }
+});
+
+if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+  chrome.storage.local.get('aiScreeningEnabled').then((stored) => {
+    const el = $('ai-screening');
+    if (el && !aiScreeningUserToggled) {
+      el.checked = stored?.aiScreeningEnabled !== false;
+    }
+  }).catch(() => {});
+}
 
 renderAccount();
 window.addEventListener('focus', () => scheduleRefresh());

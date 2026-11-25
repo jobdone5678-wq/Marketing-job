@@ -392,4 +392,83 @@ test('AI Settings Sync & Test Connection Endpoints', async (t) => {
     assert.equal(body.ok, false);
     assert.match(body.error, /image generation model/i);
   });
+
+  await t.test("PUT with mode: 'portal_byok' and no apiKey for USER_2 (no stored secret) returns 400", async () => {
+    const req = new Request('http://localhost/api/extension/ai/settings', {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${USER_2}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        mode: 'portal_byok',
+        provider: 'openrouter',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        modelId: 'deepseek/deepseek-chat',
+      }),
+    });
+
+    const res = await putSettings(req, { db });
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.equal(body.ok, false);
+    assert.match(body.error, /API key is required/i);
+
+    const configRow = await db.query(
+      `SELECT * FROM public.user_ai_provider_configs WHERE user_id = $1`,
+      [USER_2]
+    );
+    assert.equal(configRow.rows.length, 0, 'Keyless portal_byok config must not be saved');
+  });
+
+  await t.test("PUT with mode: 'portal_byok' and apiKey: null or '' for USER_1 returns 400 and preserves existing secret", async () => {
+    const beforeSecret = await db.query(
+      `SELECT * FROM private.user_ai_provider_secrets WHERE user_id = $1`,
+      [USER_1]
+    );
+    assert.equal(beforeSecret.rows.length, 1);
+
+    for (const emptyApiKey of [null, '', '   ']) {
+      const req = new Request('http://localhost/api/extension/ai/settings', {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${USER_1}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          mode: 'portal_byok',
+          configVersion: 3,
+          apiKey: emptyApiKey,
+        }),
+      });
+
+      const res = await putSettings(req, { db });
+      assert.equal(res.status, 400);
+      const body = await res.json();
+      assert.equal(body.ok, false);
+      assert.match(body.error, /API key is required/i);
+
+      const afterSecret = await db.query(
+        `SELECT * FROM private.user_ai_provider_secrets WHERE user_id = $1`,
+        [USER_1]
+      );
+      assert.equal(afterSecret.rows.length, 1, 'Existing secret must not be deleted');
+      assert.equal(
+        afterSecret.rows[0].encrypted_api_key,
+        beforeSecret.rows[0].encrypted_api_key,
+        'Existing secret cipher must be preserved'
+      );
+
+      const decrypted = decryptSecret(
+        {
+          encrypted: afterSecret.rows[0].encrypted_api_key,
+          iv: afterSecret.rows[0].iv,
+          authTag: afterSecret.rows[0].auth_tag,
+        },
+        USER_1,
+        afterSecret.rows[0].key_origin
+      );
+      assert.equal(decrypted, 'sk-or-v1-abcdef0123456789102');
+    }
+  });
 });

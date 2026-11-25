@@ -36,7 +36,14 @@ function loadSource(path, dependencies, globals) {
   return exports;
 }
 
-function fixture({ failWrite = false, changeBeforeWrite = false } = {}) {
+function fixture({
+  failWrite = false,
+  changeBeforeWrite = false,
+  env = {},
+  aiProviderData,
+  encryption,
+  upstreamContent = 'A generated draft.',
+} = {}) {
   const calls = [];
   const candidate = {
     id: candidateId,
@@ -117,7 +124,7 @@ function fixture({ failWrite = false, changeBeforeWrite = false } = {}) {
     errorResponse: (error) =>
       Response.json({ error: error.message }, { status: error.status || 500 }),
   };
-  const globals = { process: { env: { OPENAI_API_KEY: 'fixture' } } };
+  const globals = { process: { env: { OPENAI_API_KEY: 'fixture', ...env } } };
   const capture = loadSource(
     'lib/capture/server',
     {
@@ -137,27 +144,29 @@ function fixture({ failWrite = false, changeBeforeWrite = false } = {}) {
     globals
   );
   const providerCalls = [];
-  const route = loadSource(
-    'app/api/extension/generate-answer/route',
-    {
-      '@/lib/capture/server': capture,
-      '@/lib/db/admin': admin,
-      '@/lib/extension-answers/candidate-context': candidateContext,
-      '@/lib/extension-answers/saved-answers': { approvedSavedAnswers },
-      '../../../../../jobright_extension/core/field-mapping.js': { isUrlField },
-      '@/lib/rate-limit': { checkRateLimit: () => ({ allowed: true }) },
-      zod: { z },
-      ai: aiPkg,
-      '@ai-sdk/openai-compatible': openaiCompatiblePkg,
+  const providerRequests = [];
+  const deps = {
+    '@/lib/capture/server': capture,
+    '@/lib/db/admin': admin,
+    '@/lib/extension-answers/candidate-context': candidateContext,
+    '@/lib/extension-answers/saved-answers': { approvedSavedAnswers },
+    '../../../../../jobright_extension/core/field-mapping.js': { isUrlField },
+    '@/lib/rate-limit': { checkRateLimit: () => ({ allowed: true }) },
+    zod: { z },
+    ai: aiPkg,
+    '@ai-sdk/openai-compatible': openaiCompatiblePkg,
+  };
+  if (aiProviderData) deps['@/lib/ai/ai-provider-data'] = aiProviderData;
+  if (encryption) deps['@/lib/ai/encryption'] = encryption;
+
+  const route = loadSource('app/api/extension/generate-answer/route', deps, {
+    ...globals,
+    fetch: async (url, request) => {
+      providerRequests.push({ url: String(url), headers: request?.headers });
+      providerCalls.push(JSON.parse(request.body));
+      return Response.json({ choices: [{ message: { content: upstreamContent } }] });
     },
-    {
-      ...globals,
-      fetch: async (_url, request) => {
-        providerCalls.push(JSON.parse(request.body));
-        return Response.json({ choices: [{ message: { content: 'A generated draft.' } }] });
-      },
-    }
-  );
+  });
   const call = (method, token, body = {}) =>
     route[method](
       new Request('http://localhost.test', {
@@ -173,7 +182,7 @@ function fixture({ failWrite = false, changeBeforeWrite = false } = {}) {
         }),
       })
     );
-  return { call, calls, candidate, providerCalls };
+  return { call, calls, candidate, providerCalls, providerRequests };
 }
 
 test('generation uses the account-scoped candidate and leaves reusable answers untouched', async () => {
@@ -299,4 +308,105 @@ test('explicit approval preserves concurrent changes and reports a conflict', as
   const result = await call('PUT', activeToken);
   assert.equal(result.status, 409);
   assert.deepEqual(candidate.confirmed_facts, { summary: 'A concurrently updated summary.' });
+});
+
+test('POST returns 401 when portal BYOK secret is missing or decryption fails without falling back to OPENAI_API_KEY', async () => {
+  // Missing secret with mode: 'portal_byok'
+  {
+    const { call, providerCalls } = fixture({
+      env: { OPENAI_API_KEY: 'sk-server-fallback' },
+      aiProviderData: {
+        getUserAiProviderConfig: async () => ({
+          mode: 'portal_byok',
+          base_url: 'https://openrouter.ai/api/v1',
+          model_id: 'openai/gpt-4o-mini',
+        }),
+        getUserAiProviderSecret: async () => null,
+      },
+      encryption: {
+        decryptSecret: () => 'unused',
+      },
+    });
+    const res = await call('POST', activeToken);
+    assert.equal(res.status, 401);
+    assert.equal(providerCalls.length, 0);
+  }
+
+  // Decryption failure with routing: 'proxy'
+  {
+    const { call, providerCalls } = fixture({
+      env: { OPENAI_API_KEY: 'sk-server-fallback' },
+      aiProviderData: {
+        getUserAiProviderConfig: async () => ({
+          mode: 'server',
+          routing: 'proxy',
+          base_url: 'https://openrouter.ai/api/v1',
+          model_id: 'openai/gpt-4o-mini',
+        }),
+        getUserAiProviderSecret: async () => ({
+          encrypted_api_key: 'cipher',
+          iv: 'iv',
+          auth_tag: 'tag',
+          key_origin: 'https://openrouter.ai',
+        }),
+      },
+      encryption: {
+        decryptSecret: () => {
+          throw new Error('Unsupported state or unable to authenticate data');
+        },
+      },
+    });
+    const res = await call('POST', activeToken);
+    assert.equal(res.status, 401);
+    assert.equal(providerCalls.length, 0);
+  }
+});
+
+test('POST returns 502 when upstream model returns empty content or only quotes', async () => {
+  for (const upstreamContent of ['', '""', "''", '  "  "  ']) {
+    const { call } = fixture({ upstreamContent });
+    const res = await call('POST', activeToken);
+    assert.equal(res.status, 502);
+    const body = await res.json();
+    assert.match(body.error, /empty response/i);
+  }
+});
+
+test('POST strips only paired outer quotes and preserves unbalanced quotes', async () => {
+  {
+    const { call } = fixture({ upstreamContent: '"I am excited about this role."' });
+    const res = await call('POST', activeToken);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.answer, 'I am excited about this role.');
+  }
+  {
+    const { call } = fixture({ upstreamContent: 'She said "hello"' });
+    const res = await call('POST', activeToken);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.answer, 'She said "hello"');
+  }
+});
+
+test('POST preserves /v1beta/openai base URL without appending /v1 and prefers AI_PROVIDER_DEFAULT_* env vars', async () => {
+  const { call, providerRequests, providerCalls } = fixture({
+    env: {
+      OPENAI_API_KEY: 'sk-legacy-openai',
+      OPENAI_BASE_URL: 'https://legacy.example.com/v1',
+      OPENAI_MODEL: 'legacy-model',
+      AI_PROVIDER_DEFAULT_API_KEY: 'sk-default-gemini',
+      AI_PROVIDER_DEFAULT_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+      AI_PROVIDER_DEFAULT_MODEL: 'gemini-2.5-flash',
+    },
+  });
+  const res = await call('POST', activeToken);
+  assert.equal(res.status, 200);
+  assert.equal(providerRequests.length, 1);
+  assert.equal(
+    providerRequests[0].url,
+    'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
+  );
+  assert.equal(providerRequests[0].headers?.authorization, 'Bearer sk-default-gemini');
+  assert.equal(providerCalls[0].model, 'gemini-2.5-flash');
 });

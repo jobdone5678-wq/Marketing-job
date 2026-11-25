@@ -35,54 +35,200 @@ function startMockAiServer() {
         return;
       }
 
-      if (modeBehavior === '401') {
+      const isAiEndpoint =
+        req.url === '/api/extension/autofill/plan' ||
+        req.url === '/api/extension/autofill/choose' ||
+        req.url === '/api/extension/generate-answer' ||
+        req.url === '/v1/chat/completions';
+
+      if (modeBehavior === '401' && isAiEndpoint) {
         res.writeHead(401, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Custom provider authentication failed' }));
         return;
       }
 
-      if (modeBehavior === 'html_502') {
+      if (modeBehavior === 'html_502' && isAiEndpoint) {
         res.writeHead(502, { 'Content-Type': 'text/html' });
         res.end('<!DOCTYPE html><html><body>502 Bad Gateway</body></html>');
         return;
       }
 
-      // Modes 1 & 2: backend proxy routes
-      if (req.url === '/api/extension/autofill/plan') {
+      if (req.url === '/mock-ats/apply') {
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(`<!DOCTYPE html>
+<html>
+  <head><title>Senior Engineer at Acme Corp</title></head>
+  <body>
+    <main>
+      <h1>Senior Engineer</h1>
+      <p data-company="Acme Corp">Acme Corp · San Francisco, CA</p>
+      <div class="job-description">Build reliable distributed systems and developer tools at Acme Corp with TypeScript and Node.js.</div>
+      <form id="application-form">
+        <label for="first_name">First Name</label>
+        <input id="first_name" name="first_name" type="text" required />
+
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required />
+
+        <label for="work_auth_select">Are you legally authorized to work in the United States?</label>
+        <select id="work_auth_select" name="work_auth" required>
+          <option value="">Select...</option>
+          <option value="Yes">Yes</option>
+          <option value="No">No</option>
+        </select>
+
+        <label for="sponsorship_combo">Will you now or in the future require sponsorship?</label>
+        <div id="sponsorship_combo" role="combobox" tabindex="0" aria-expanded="false" aria-haspopup="listbox">Select an option</div>
+        <ul id="sponsorship_listbox" role="listbox" style="display:none;">
+          <li role="option" data-value="Yes">Yes</li>
+          <li role="option" data-value="No">No</li>
+        </ul>
+
+        <label for="why_acme">Why do you want to join Acme Corp?</label>
+        <textarea id="why_acme" name="why_acme" required></textarea>
+
+        <label><input id="mkt_opt_in" name="mkt_opt_in" type="checkbox" /> Send me marketing newsletters and promotional job alerts</label>
+        <button type="submit">Submit Application</button>
+      </form>
+    </main>
+    <script>
+      const combo = document.getElementById('sponsorship_combo');
+      const listbox = document.getElementById('sponsorship_listbox');
+      combo.addEventListener('click', () => {
+        combo.setAttribute('aria-expanded', 'true');
+        listbox.style.display = 'block';
+      });
+      listbox.querySelectorAll('[role="option"]').forEach((opt) => {
+        opt.addEventListener('click', () => {
+          combo.textContent = opt.textContent;
+          combo.setAttribute('aria-expanded', 'false');
+          listbox.style.display = 'none';
+        });
+      });
+    </script>
+  </body>
+</html>`);
+        return;
+      }
+
+      if (req.url?.startsWith('/api/extension/candidates')) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            actorId: 'user-1',
+            candidates: [
+              {
+                id: 'cand-1',
+                version: 1,
+                provenance_status: 'confirmed',
+                full_name: 'Ada Lovelace',
+                email: 'ada@example.com',
+                primary_skills: 'TypeScript, Node.js',
+                confirmed_facts: {
+                  full_name: 'Ada Lovelace',
+                  email: 'ada@example.com',
+                  primary_skills: 'TypeScript, Node.js',
+                },
+              },
+            ],
+          }),
+        );
+        return;
+      }
+
+      if (req.url === '/api/extension/resume') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ documents: [] }));
+        return;
+      }
+
+      if (req.url === '/api/extension/ai/settings') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(
           JSON.stringify({
             ok: true,
-            fills: [
-              {
-                label: 'First Name',
-                value: 'Ada',
-                fieldId: 'first_name',
-                evidenceIds: ['name.full_name'],
-                grounded: true,
-              },
-              {
-                label: 'Email',
-                value: 'ada@example.com',
-                fieldId: 'email',
-                evidenceIds: ['contact.email'],
-                grounded: true,
-              },
-            ],
+            mode: 'server',
+            provider: 'server',
+            baseUrl: null,
+            modelId: null,
+            configVersion: req.method === 'PUT' ? 2 : 1,
+            hasApiKey: false,
+            maskedApiKey: null,
+          }),
+        );
+        return;
+      }
+
+      if (req.url === '/api/extension/save-external-job') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+
+      if (req.url === '/api/extension/generate-answer') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            ok: true,
+            answer: 'I want to join Acme Corp to build reliable TypeScript and Node.js systems.',
+            stored: false,
+          }),
+        );
+        return;
+      }
+
+      // Modes 1 & 2: backend proxy routes
+      if (req.url === '/api/extension/autofill/plan') {
+        const fields = Array.isArray(body?.fields) ? (body.fields as Array<{ id?: string; label?: string }>) : [];
+        const hasAuthSelect = fields.some((f) => /legally authorized to work in the United States/i.test(f.label || ''));
+        const hasSponCombo = fields.some((f) => /will you now or in the future require sponsorship/i.test(f.label || ''));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            ok: true,
+            fills: hasAuthSelect
+              ? [
+                  {
+                    label: 'Are you legally authorized to work in the United States?',
+                    value: 'yes',
+                    fieldId: fields.find((f) => /authorized to work/i.test(f.label || ''))?.id,
+                    evidenceIds: ['work_auth.authorized_in_usa'],
+                    grounded: true,
+                  },
+                ]
+              : [
+                  {
+                    label: 'First Name',
+                    value: 'Ada',
+                    fieldId: 'first_name',
+                    evidenceIds: ['name.full_name'],
+                    grounded: true,
+                  },
+                  {
+                    label: 'Email',
+                    value: 'ada@example.com',
+                    fieldId: 'email',
+                    evidenceIds: ['contact.email'],
+                    grounded: true,
+                  },
+                ],
             unmapped: [],
-            deferred: ['Authorized to Work in US?'],
+            deferred: hasSponCombo
+              ? ['Will you now or in the future require sponsorship?']
+              : ['Authorized to Work in US?'],
           }),
         );
         return;
       }
 
       if (req.url === '/api/extension/autofill/choose') {
+        const isSponsor = /sponsorship/i.test(body?.question?.label || '');
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(
           JSON.stringify({
             ok: true,
-            choice: 'Yes',
-            evidenceIds: ['work_auth.authorized_in_usa'],
+            choice: isSponsor ? 'No' : 'Yes',
+            evidenceIds: [isSponsor ? 'work_auth.need_sponsorship_now' : 'work_auth.authorized_in_usa'],
           }),
         );
         return;
@@ -391,5 +537,90 @@ test.describe('E2E: FreeHire Hybrid AI Autofill Chrome Extension', () => {
 
     // Submission safety: autofill NEVER triggers form submit
     expect(submissionTriggered).toBe(false);
+  });
+
+  test('5. Side panel #autofill executes Stage A (plan + combobox choose) + Stage B (prose), excludes marketing, and surfaces errors', async () => {
+    const atsPage = await context.newPage();
+    await atsPage.goto(`${mockBaseUrl}/mock-ats/apply`);
+    await expect(atsPage.locator('#application-form')).toBeVisible();
+
+    const panelPage = await context.newPage();
+    await panelPage.goto(`chrome-extension://${extensionId}/panel.html`);
+
+    // Seed authenticated extension session & point chrome.tabs.query({ active: true }) at atsPage
+    await panelPage.evaluate(async (baseUrl) => {
+      type MockChrome = {
+        storage: {
+          local: { set: (items: Record<string, unknown>) => Promise<void> };
+          session: { set: (items: Record<string, unknown>) => Promise<void> };
+        };
+        tabs: {
+          query: (queryInfo: { active?: boolean; currentWindow?: boolean }) => Promise<Array<{ url?: string }>>;
+        };
+      };
+      const extChrome = (globalThis as unknown as { chrome: MockChrome }).chrome;
+      await extChrome.storage.local.set({
+        origin: baseUrl,
+        user: { id: 'user-1', name: 'Ada Lovelace', email: 'ada@example.com' },
+      });
+      await extChrome.storage.session.set({
+        origin: baseUrl,
+        token: 'ext-token-123',
+        accountId: 'user-1',
+        ai_provider_mode: 'server',
+      });
+      const allTabs = await extChrome.tabs.query({});
+      const atsTab = allTabs.find((t) => t.url && t.url.includes('/mock-ats/apply'));
+      if (!atsTab) throw new Error('Could not find mock-ats tab');
+      const origQuery = extChrome.tabs.query.bind(extChrome.tabs);
+      extChrome.tabs.query = async (queryInfo) => {
+        if (queryInfo && queryInfo.active && queryInfo.currentWindow) {
+          return [atsTab];
+        }
+        return origQuery(queryInfo);
+      };
+    }, mockBaseUrl);
+
+    // Trigger refresh by focusing panelPage
+    await panelPage.evaluate(() => window.dispatchEvent(new Event('focus')));
+
+    await expect(panelPage.locator('#ai-screening')).toBeChecked();
+    await expect(panelPage.locator('#autofill')).toBeEnabled({ timeout: 10000 });
+
+    await panelPage.click('#autofill');
+
+    // Verify Stage A + Stage B fills landed in the mock ATS page DOM
+    await expect(atsPage.locator('#first_name')).toHaveValue('Ada', { timeout: 10000 });
+    await expect(atsPage.locator('#email')).toHaveValue('ada@example.com');
+    await expect(atsPage.locator('#work_auth_select')).toHaveValue('Yes');
+    await expect(atsPage.locator('#sponsorship_combo')).toHaveText('No');
+    await expect(atsPage.locator('#why_acme')).toHaveValue(
+      'I want to join Acme Corp to build reliable TypeScript and Node.js systems.',
+    );
+    await expect(atsPage.locator('#mkt_opt_in')).not.toBeChecked();
+
+    // Verify marketing opt-in checkbox was never sent to plan or generate-answer
+    const planReq = mockServer.requests.find((r) => r.url === '/api/extension/autofill/plan');
+    const chooseReq = mockServer.requests.find((r) => r.url === '/api/extension/autofill/choose');
+    const genReq = mockServer.requests.find((r) => r.url === '/api/extension/generate-answer');
+    expect(planReq).toBeTruthy();
+    expect(chooseReq).toBeTruthy();
+    expect(genReq).toBeTruthy();
+    const planFields = Array.isArray(planReq!.body?.fields)
+      ? (planReq!.body.fields as Array<{ label?: string }>)
+      : [];
+    expect(planFields.some((f) => /marketing/i.test(f.label || ''))).toBe(false);
+    expect(/marketing/i.test(genReq!.body.fieldLabel || '')).toBe(false);
+
+    // Verify error surfacing: switch to 401 mode and clear answers to re-trigger autofill error
+    await atsPage.fill('#why_acme', '');
+    await atsPage.selectOption('#work_auth_select', '');
+    mockServer.setBehavior('401');
+    await expect(panelPage.locator('#autofill')).toBeEnabled({ timeout: 10000 });
+    await panelPage.click('#autofill');
+
+    await expect(panelPage.locator('#notice')).toBeVisible({ timeout: 10000 });
+    await expect(panelPage.locator('#notice')).toHaveAttribute('data-error', 'true');
+    await expect(panelPage.locator('#notice')).toContainText(/authentication failed/i);
   });
 });

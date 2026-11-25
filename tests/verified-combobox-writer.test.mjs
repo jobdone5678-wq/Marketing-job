@@ -975,3 +975,54 @@ test('closeCombo only dispatches Escape if listbox is still open, never closing 
 
   assert.equal(openComboEscape, true, 'MUST dispatch Escape when combobox is still open');
 });
+
+test('readChoices dispatches ArrowDown fallback when initial trigger click renders no options and returns options that appear afterward', async () => {
+  const control = new MockNode('DIV', { class: 'select__control' });
+  const combo = new MockNode('DIV', { role: 'combobox', 'aria-haspopup': 'listbox', 'aria-expanded': 'false' });
+  const trigger = new MockNode('BUTTON', { 'data-slot': 'select-trigger' });
+  combo.appendChild(trigger);
+  control.appendChild(combo);
+  mockDoc.body.appendChild(control);
+
+  const listbox = new MockNode('DIV', { role: 'listbox' });
+  const optYes = new MockNode('DIV', { role: 'option', 'data-value': 'yes' }, 'Yes');
+  const optNo = new MockNode('DIV', { role: 'option', 'data-value': 'no' }, 'No');
+
+  let controlClicked = false;
+  let arrowDownCount = 0;
+
+  control.addEventListener('click', () => {
+    controlClicked = true;
+  });
+
+  // Trigger click alone does not render options; ArrowDown opens the listbox asynchronously
+  trigger.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') {
+      arrowDownCount += 1;
+      setTimeout(() => {
+        combo.setAttribute('aria-expanded', 'true');
+        listbox.appendChild(optYes);
+        listbox.appendChild(optNo);
+        mockDoc.body.appendChild(listbox);
+      }, 40);
+    } else if (e.key === 'Escape') {
+      combo.setAttribute('aria-expanded', 'false');
+      listbox.remove();
+    }
+  });
+
+  const field = {
+    key: 'field:arrow-combo',
+    label: 'Authorized in US',
+    kind: 'combobox',
+    options: [],
+    element: combo,
+  };
+
+  const choices = await writer.readChoices(field, () => true);
+
+  assert.equal(controlClicked, true, 'readChoices should also click .select__control fallback');
+  assert.equal(arrowDownCount, 1, 'readChoices must dispatch ArrowDown fallback when trigger click renders no options');
+  assert.deepEqual(choices.map(c => c.label), ['Yes', 'No']);
+  assert.equal(combo.getAttribute('aria-expanded'), 'false', 'readChoices must close combobox in finally');
+});

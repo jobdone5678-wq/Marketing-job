@@ -621,4 +621,135 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
       }
     );
   });
+
+  await t.test('10. resolveProviderClient allows custom non-whitelist public hosts in portal_byok and defaultBaseUrl while blocking private/loopback/metadata IPs', async () => {
+    const mockDnsPublic = async () => [{ address: '93.184.216.34', family: 4 }];
+    const mockDnsPrivate = async () => [{ address: '10.0.0.5', family: 4 }];
+
+    // A) portal_byok with custom non-whitelist domain (mocked public DNS)
+    const customOrigin = 'https://generativelanguage.googleapis.com/v1beta/openai';
+    const rawApiKey = 'sk-custom-gemini-key-123';
+    const encrypted = encryptSecret(rawApiKey, USER_OWNER, customOrigin);
+    const dbCustomPortal = createMockDb(
+      {
+        [USER_OWNER]: {
+          user_id: USER_OWNER,
+          mode: 'portal_byok',
+          provider: 'gemini',
+          base_url: customOrigin,
+          model_id: 'gemini-2.5-flash',
+        },
+      },
+      {
+        [USER_OWNER]: {
+          user_id: USER_OWNER,
+          encrypted_api_key: encrypted.encrypted,
+          iv: encrypted.iv,
+          auth_tag: encrypted.authTag,
+          key_origin: customOrigin,
+        },
+      }
+    );
+
+    const customPortalClient = await resolveProviderClient(USER_OWNER, {
+      db: dbCustomPortal,
+      dnsLookup: mockDnsPublic,
+    });
+    assert.equal(customPortalClient.baseUrl, customOrigin);
+    assert.equal(customPortalClient.apiKey, rawApiKey);
+    assert.equal(customPortalClient.agent.targetIp, '93.184.216.34');
+
+    // B) portal_byok with public IP literal
+    const ipOrigin = 'https://93.184.216.34/v1';
+    const encryptedIp = encryptSecret(rawApiKey, USER_OWNER, ipOrigin);
+    const dbIpPortal = createMockDb(
+      {
+        [USER_OWNER]: {
+          user_id: USER_OWNER,
+          mode: 'portal_byok',
+          provider: 'custom',
+          base_url: ipOrigin,
+          model_id: 'custom-model',
+        },
+      },
+      {
+        [USER_OWNER]: {
+          user_id: USER_OWNER,
+          encrypted_api_key: encryptedIp.encrypted,
+          iv: encryptedIp.iv,
+          auth_tag: encryptedIp.authTag,
+          key_origin: ipOrigin,
+        },
+      }
+    );
+    const ipPortalClient = await resolveProviderClient(USER_OWNER, { db: dbIpPortal });
+    assert.equal(ipPortalClient.baseUrl, ipOrigin);
+
+    // C) defaultBaseUrl with custom non-whitelist domain (mocked public DNS) and public IP literal
+    process.env.AI_PROVIDER_DEFAULT_BASE_URL = 'https://custom-gateway.example.com/v1';
+    const defaultCustomClient = await resolveProviderClient(USER_OWNER, {
+      db: createMockDb({}, {}),
+      dnsLookup: mockDnsPublic,
+    });
+    assert.equal(defaultCustomClient.baseUrl, 'https://custom-gateway.example.com/v1');
+    assert.equal(defaultCustomClient.agent.targetIp, '93.184.216.34');
+
+    process.env.AI_PROVIDER_DEFAULT_BASE_URL = 'https://93.184.216.34/v1';
+    const defaultIpClient = await resolveProviderClient(USER_OWNER, {
+      db: createMockDb({}, {}),
+    });
+    assert.equal(defaultIpClient.baseUrl, 'https://93.184.216.34/v1');
+
+    // D) Blocked loopback, private, metadata hosts/IPs are still rejected in both paths
+    for (const blockedUrl of [
+      'http://127.0.0.1:8080/v1',
+      'http://localhost:8080/v1',
+      'http://10.0.0.1/v1',
+      'http://169.254.169.254/latest/meta-data/',
+    ]) {
+      const encBlocked = encryptSecret(rawApiKey, USER_OWNER, blockedUrl);
+      const dbBlockedPortal = createMockDb(
+        {
+          [USER_OWNER]: {
+            user_id: USER_OWNER,
+            mode: 'portal_byok',
+            provider: 'custom',
+            base_url: blockedUrl,
+            model_id: 'm',
+          },
+        },
+        {
+          [USER_OWNER]: {
+            user_id: USER_OWNER,
+            encrypted_api_key: encBlocked.encrypted,
+            iv: encBlocked.iv,
+            auth_tag: encBlocked.authTag,
+            key_origin: blockedUrl,
+          },
+        }
+      );
+
+      await assert.rejects(
+        async () => resolveProviderClient(USER_OWNER, { db: dbBlockedPortal }),
+        (err) => err instanceof OrchestratorError && err.status === 400 && err.code === 'SSRF_BLOCKED'
+      );
+
+      process.env.AI_PROVIDER_DEFAULT_BASE_URL = blockedUrl;
+      await assert.rejects(
+        async () => resolveProviderClient(USER_OWNER, { db: createMockDb({}, {}) }),
+        (err) => err instanceof OrchestratorError && err.status === 500 && err.code === 'SSRF_BLOCKED'
+      );
+    }
+
+    // E) DNS resolving to private IP is also rejected
+    process.env.AI_PROVIDER_DEFAULT_BASE_URL = 'https://rebind.example.com/v1';
+    await assert.rejects(
+      async () =>
+        resolveProviderClient(USER_OWNER, {
+          db: createMockDb({}, {}),
+          dnsLookup: mockDnsPrivate,
+        }),
+      (err) => err instanceof OrchestratorError && err.status === 500 && err.code === 'SSRF_BLOCKED'
+    );
+  });
 });

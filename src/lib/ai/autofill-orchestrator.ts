@@ -10,7 +10,7 @@
  */
 
 import { decryptSecret } from './encryption.ts';
-import { createSafeAgent } from './ssrf-guard.ts';
+import { createSafeAgent, type DnsLookupFn } from './ssrf-guard.ts';
 import { createSsrfSafeFetch } from './ssrf-fetch-adapter.ts';
 import { ProviderClient, ProviderError, type TokenUsageTelemetry } from './provider-client.ts';
 import { ServerVercelProviderClient } from './server-provider-client.ts';
@@ -76,6 +76,7 @@ export interface ChooseApiResponse {
 export interface OrchestratorOptions {
   db?: any;
   fetchFn?: typeof fetch;
+  dnsLookup?: DnsLookupFn;
 }
 
 /**
@@ -173,7 +174,10 @@ export async function resolveProviderClient(
     const targetUrl = config.base_url || secret.key_origin;
     let safeAgent;
     try {
-      safeAgent = await createSafeAgent(targetUrl);
+      safeAgent = await createSafeAgent(targetUrl, {
+        allowCustom: true,
+        dnsLookup: options?.dnsLookup,
+      });
     } catch (err: any) {
       throw new OrchestratorError(
         err.message || 'SSRF verification failed',
@@ -209,7 +213,10 @@ export async function resolveProviderClient(
 
   let safeAgent;
   try {
-    safeAgent = await createSafeAgent(defaultBaseUrl);
+    safeAgent = await createSafeAgent(defaultBaseUrl, {
+      allowCustom: true,
+      dnsLookup: options?.dnsLookup,
+    });
   } catch (err: any) {
     throw new OrchestratorError(
       err.message || 'SSRF verification failed for server provider',

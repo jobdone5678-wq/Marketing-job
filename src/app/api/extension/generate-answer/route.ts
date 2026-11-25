@@ -193,39 +193,90 @@ export async function POST(request: Request) {
       return { ok: true, answer: String(candSummary).trim(), stored: true };
     }
 
-    let apiKey = process.env.OPENAI_API_KEY?.trim() || '';
-    let baseUrl = process.env.OPENAI_BASE_URL || 'https://api.xkiro.com/v1/';
-    let model = process.env.OPENAI_MODEL || 'mistralai/mistral-large-2512';
+    let apiKey = (process.env.AI_PROVIDER_DEFAULT_API_KEY || process.env.OPENAI_API_KEY || '').trim();
+    let baseUrl = (
+      process.env.AI_PROVIDER_DEFAULT_BASE_URL ||
+      process.env.OPENAI_BASE_URL ||
+      'https://api.openai.com/v1'
+    ).trim();
+    let model = (
+      process.env.AI_PROVIDER_DEFAULT_MODEL ||
+      process.env.OPENAI_MODEL ||
+      'gpt-4o-mini'
+    ).trim();
 
     // Check if user has configured a custom BYOK provider
+    let aiProviderData: any = null;
+    let encryptionMod: any = null;
     try {
-      const { getUserAiProviderConfig, getUserAiProviderSecret } = await import('@/lib/ai/ai-provider-data');
-      const { decryptSecret } = await import('@/lib/ai/encryption');
-      const userConfig = await getUserAiProviderConfig(actor.id);
-      if (
-        userConfig &&
+      aiProviderData = await import('@/lib/ai/ai-provider-data');
+      encryptionMod = await import('@/lib/ai/encryption');
+    } catch {
+      aiProviderData = null;
+      encryptionMod = null;
+    }
+
+    let userConfig: any = null;
+    if (aiProviderData?.getUserAiProviderConfig) {
+      try {
+        userConfig = await aiProviderData.getUserAiProviderConfig(actor.id);
+      } catch (err: any) {
+        const code = err?.code;
+        if (code !== 'PGRST205' && code !== '42P01') {
+          throw err;
+        }
+      }
+    }
+
+    const isPortalMode = Boolean(
+      userConfig &&
         (userConfig.mode === 'portal' ||
           userConfig.mode === 'portal_byok' ||
           userConfig.routing === 'portal' ||
           userConfig.routing === 'proxy' ||
           userConfig.credential_source === 'portal')
-      ) {
-        const userSecret = await getUserAiProviderSecret(actor.id);
-        if (userSecret?.encrypted_api_key) {
-          apiKey = decryptSecret(
-            {
-              encrypted: userSecret.encrypted_api_key,
-              iv: userSecret.iv,
-              authTag: userSecret.auth_tag,
-            },
-            actor.id,
-            userSecret.key_origin
-          );
-          if (userConfig.base_url) baseUrl = userConfig.base_url;
-          if (userConfig.model_id) model = userConfig.model_id;
+    );
+
+    if (isPortalMode) {
+      let userSecret: any = null;
+      if (aiProviderData?.getUserAiProviderSecret) {
+        try {
+          userSecret = await aiProviderData.getUserAiProviderSecret(actor.id);
+        } catch (err: any) {
+          const code = err?.code;
+          if (code !== 'PGRST205' && code !== '42P01') {
+            throw err;
+          }
         }
       }
-    } catch {}
+
+      if (!userSecret?.encrypted_api_key || !encryptionMod?.decryptSecret) {
+        throw new CaptureError(
+          'Custom provider authentication failed. Re-save your API key in AI Provider Settings.',
+          401
+        );
+      }
+
+      try {
+        apiKey = encryptionMod.decryptSecret(
+          {
+            encrypted: userSecret.encrypted_api_key,
+            iv: userSecret.iv,
+            authTag: userSecret.auth_tag,
+          },
+          actor.id,
+          userSecret.key_origin
+        );
+      } catch {
+        throw new CaptureError(
+          'Custom provider authentication failed. Re-save your API key in AI Provider Settings.',
+          401
+        );
+      }
+
+      if (userConfig.base_url) baseUrl = userConfig.base_url;
+      if (userConfig.model_id) model = userConfig.model_id;
+    }
 
     if (!apiKey) {
       throw new CaptureError('AI generation service is not configured.', 503);
@@ -236,8 +287,7 @@ export async function POST(request: Request) {
         ? `Resume Highlights: ${rawSnippet.slice(0, 800)}`
         : '';
 
-    const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-    const completionsUrl = `${cleanBaseUrl}/chat/completions`;
+    const cleanBaseUrl = baseUrl.trim().replace(/\/+$/, '');
 
     const systemPrompt = choiceMode
       ? `You are a job application assistant. Select the single best answer for the candidate from the provided options, based strictly on their resume.
@@ -271,11 +321,20 @@ Strict Rules:
 
     let rawAnswer = '';
     try {
-      const normalizedBaseUrl = cleanBaseUrl.endsWith('/chat/completions')
-        ? cleanBaseUrl.slice(0, -'/chat/completions'.length)
-        : cleanBaseUrl.endsWith('/v1')
+      let normalizedBaseUrl: string;
+      if (cleanBaseUrl.endsWith('/chat/completions')) {
+        normalizedBaseUrl = cleanBaseUrl.slice(0, -'/chat/completions'.length);
+      } else {
+        let pathname = cleanBaseUrl;
+        try {
+          pathname = new URL(cleanBaseUrl).pathname;
+        } catch {
+          // Fallback to raw string when base URL is not a full URL
+        }
+        normalizedBaseUrl = /\/v\d+(?:[a-z0-9_-]*)(?:\/|$)/i.test(pathname)
           ? cleanBaseUrl
           : `${cleanBaseUrl}/v1`;
+      }
 
       const provider = createOpenAICompatible({
         name: 'generate-answer',
@@ -293,13 +352,25 @@ Strict Rules:
         maxRetries: 0,
       });
 
-      rawAnswer = result.text.trim();
+      rawAnswer = (result.text || '').trim();
+      if (!rawAnswer) {
+        throw new CaptureError(
+          'AI provider returned an empty response. Increase token limit or switch from a reasoning-only model.',
+          502
+        );
+      }
     } catch (err: any) {
       if (err instanceof CaptureError) throw err;
       throw new CaptureError(`AI generation failed: ${err?.message || 'Please try again.'}`, 502);
     }
 
-    let answer = rawAnswer.replace(/^["']|["']$/g, '').trim();
+    let answer = rawAnswer.replace(/^(["'])([\s\S]*)\1$/, '$2').trim();
+    if (!answer) {
+      throw new CaptureError(
+        'AI provider returned an empty response. Increase token limit or switch from a reasoning-only model.',
+        502
+      );
+    }
     if (choiceMode) {
       const lower = answer.toLowerCase();
       const match =

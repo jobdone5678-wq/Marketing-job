@@ -1022,6 +1022,7 @@ test('Part 9: Multi-Frame Result Aggregation in panel.js - aggregateAutofillResu
           { key: 'resume', label: 'Resume', kind: 'file' }
         ],
         questions: [{ key: 'q1', label: 'Years of experience?' }],
+        questionMeta: { q1: { fieldId: 'f_q1', combo: false, required: true } },
         warnings: ['Warning 1'],
         unverified: ['Unverified 1'],
         total: 4
@@ -1040,6 +1041,10 @@ test('Part 9: Multi-Frame Result Aggregation in panel.js - aggregateAutofillResu
           { key: 'github', label: 'GitHub URL', kind: 'text' }
         ],
         questions: [{ key: 'q1', label: 'Years of experience?' }, { key: 'q2', label: 'Target salary?' }],
+        questionMeta: {
+          q1: { fieldId: 'f_q1_dup', combo: false, required: false },
+          q2: { fieldId: 'f_q2', combo: true, required: true },
+        },
         warnings: ['Warning 2'],
         unverified: ['Unverified 2'],
         total: 3
@@ -1065,9 +1070,13 @@ test('Part 9: Multi-Frame Result Aggregation in panel.js - aggregateAutofillResu
   assert.equal(aggregated.unfilled.length, 2); // phone, github
   assert.deepEqual(Array.from(aggregated.unfilled.map(u => u.key)), ['phone', 'github']);
 
-  // Questions deduplication
+  // Questions deduplication & questionMeta preservation
   assert.equal(aggregated.questions.length, 2); // q1, q2
   assert.deepEqual(Array.from(aggregated.questions.map(q => q.key)), ['q1', 'q2']);
+  assert.deepEqual(JSON.parse(JSON.stringify(aggregated.questionMeta)), {
+    q1: { fieldId: 'f_q1', combo: false, required: true },
+    q2: { fieldId: 'f_q2', combo: true, required: true },
+  });
 
   // Warnings and unverified aggregation
   assert.deepEqual(Array.from(aggregated.warnings), ['Warning 1', 'Warning 2']);
