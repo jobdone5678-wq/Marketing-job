@@ -128,7 +128,7 @@ test('4. Multi-factor semantic evaluation checks question context, question kind
     }
   };
 
-  const plans = planFill([authField, countryField], candidate);
+  const plans = planFill([authField, countryField], candidate, { jobCountry: 'United States' });
   const authPlan = plans.find(p => p.field.key === 'auth_q');
   const countryPlan = plans.find(p => p.field.key === 'country_q');
 

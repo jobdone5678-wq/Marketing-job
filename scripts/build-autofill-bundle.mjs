@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 
 const files = [
+  'jobright_extension/core/site-registry.js',
+  'jobright_extension/core/site-rules.js',
   'jobright_extension/adapters/ats-adapters.js',
   'jobright_extension/core/job-capture.js',
   'jobright_extension/core/field-mapping.js',

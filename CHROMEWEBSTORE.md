@@ -1,6 +1,6 @@
 # Chrome Web Store Listing — NextKinHR Recruiting Copilot
 
-> Last Updated: 2026-11-23
+> Last Updated: 2026-11-25
 
 ## Store Listing
 
@@ -18,7 +18,7 @@ KEY FEATURES
 • Smart Resume Sync: Automatically imports your verified resume facts, work history, education, and portfolio links from your NextKinHR account.
 • Context-Aware Answer Bank: Remembers your preferred answers to common screening questions (e.g. work authorization, notice period, language proficiency).
 • Automatic Application Tracking: Detects confirmed job submissions and automatically updates your NextKinHR dashboard so you never lose track of where you applied.
-• Side Panel Review: Review and verify every field before submitting, keeping you in complete control of your application data.
+• Side Panel Review: See which fields were verified and which require review. Submit applications with AI drafts or employer declarations directly on the employer page.
 
 HOW TO USE
 1. Install NextKinHR Recruiting Copilot and sign in with your NextKinHR account.
@@ -97,6 +97,8 @@ English
 - [x] Data is NOT used for purposes unrelated to the extension's core functionality
 - [x] Data is NOT used for creditworthiness or lending purposes
 
+Application attempt details are kept in extension session storage. Pending submission receipts can include permitted answers and resume metadata. They do not include the resume file contents.
+
 ## Privacy Policy
 
 **Privacy Policy URL** [REQUIRED]
@@ -125,4 +127,5 @@ Nextkinlife LLC
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 3.3.19 (unreleased updates) | 2026-11-25 | Improved autofill verification, candidate-specific resume attachment, AI review, and submission tracking. |
 | 3.3.19 | 2026-11-23 | Prepared store listing documentation, verified Manifest V3 icons, solidified two-tier background queue, and hardened custom combobox form autofill. |

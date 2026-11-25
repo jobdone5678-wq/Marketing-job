@@ -157,6 +157,7 @@ function createSandbox({
     chrome: {
       runtime: {
         sendMessage: async msg => {
+          if (msg.type === 'NEXTKIN_GET_SUBMISSION_ATTEMPT') return sandbox.submissionAttempt !== false;
           messages.push(msg);
           return true;
         }
@@ -170,20 +171,21 @@ function createSandbox({
   return {
     sandbox,
     MockElement,
-    run: () => {
+    run: async () => {
       runInNewContext(confirmationScript, sandbox);
       if (scheduledCallback) scheduledCallback();
+      await new Promise(resolve => setImmediate(resolve));
       return messages;
     },
-    triggerPageChange: () => {
-      for (const fn of listeners.get('beforeunload') || []) fn({ type: 'beforeunload' });
+    triggerPageChange: async () => {
+      for (const fn of listeners.get('beforeunload') || []) await fn({ type: 'beforeunload' });
       return messages;
     },
     messages
   };
 }
 
-test('ATS Confirmation: Visiting Angels confirmation heading + receipt with survey invitation', () => {
+test('ATS Confirmation: Visiting Angels confirmation heading + receipt with survey invitation', async () => {
   const { sandbox, MockElement, run } = createSandbox({
     url: 'https://visitingangels.careerportal.com/confirmation',
     title: "You're ready for the next step"
@@ -194,13 +196,13 @@ test('ATS Confirmation: Visiting Angels confirmation heading + receipt with surv
   sandbox.document.body.appendChild(heading);
   sandbox.document.body.appendChild(confirmationMsg);
 
-  const messages = run();
+  const messages = await run();
   assert.equal(messages.length, 1, 'Visiting Angels confirmation must be detected even with follow-up survey invitation');
   assert.equal(messages[0].status, 'SUBMITTED');
   assert.ok(messages[0].evidence.toLowerCase().includes('received your application'));
 });
 
-test('ATS Confirmation: Negative check - standalone survey completion is rejected', () => {
+test('ATS Confirmation: Negative check - standalone survey completion is rejected', async () => {
   const { sandbox, MockElement, run } = createSandbox({
     url: 'https://feedback.surveyportal.com/survey-complete',
     title: 'Survey Completed'
@@ -209,11 +211,11 @@ test('ATS Confirmation: Negative check - standalone survey completion is rejecte
   const surveyMsg = new MockElement('DIV', { class: 'survey-response' }, 'Thank you for taking our survey! Your feedback has been recorded.');
   sandbox.document.body.appendChild(surveyMsg);
 
-  const messages = run();
+  const messages = await run();
   assert.equal(messages.length, 0, 'Standalone survey completion must not trigger application confirmation');
 });
 
-test('ATS Confirmation: Negative check - newsletter subscription is rejected', () => {
+test('ATS Confirmation: Negative check - newsletter subscription is rejected', async () => {
   const { sandbox, MockElement, run } = createSandbox({
     url: 'https://company.com/newsletter/thanks',
     title: 'Newsletter Subscription'
@@ -222,11 +224,11 @@ test('ATS Confirmation: Negative check - newsletter subscription is rejected', (
   const newsMsg = new MockElement('DIV', {}, 'Thank you for subscribing to our newsletter! Subscription confirmed.');
   sandbox.document.body.appendChild(newsMsg);
 
-  const messages = run();
+  const messages = await run();
   assert.equal(messages.length, 0, 'Newsletter signup must not trigger application confirmation');
 });
 
-test('ATS Confirmation: Workday verified terminal selector and requisition extraction', () => {
+test('ATS Confirmation: Workday verified terminal selector and requisition extraction', async () => {
   const { sandbox, MockElement, run } = createSandbox({
     url: 'https://company.myworkdayjobs.com/en-US/Careers/job/Austin/Software-Engineer_JR10928/apply',
     title: 'Workday Application'
@@ -239,7 +241,7 @@ test('ATS Confirmation: Workday verified terminal selector and requisition extra
   successCard.appendChild(reqInfo);
   sandbox.document.body.appendChild(successCard);
 
-  const messages = run();
+  const messages = await run();
   assert.equal(messages.length, 1);
   assert.equal(messages[0].status, 'SUBMITTED');
   assert.equal(messages[0].atsProvider, 'workday');
@@ -247,7 +249,7 @@ test('ATS Confirmation: Workday verified terminal selector and requisition extra
   assert.ok(messages[0].evidence.includes('application has been submitted') || messages[0].evidence.includes('Congratulations'));
 });
 
-test('ATS Confirmation: Greenhouse confirmation page and requisition ID extraction', () => {
+test('ATS Confirmation: Greenhouse confirmation page and requisition ID extraction', async () => {
   const { sandbox, MockElement, run } = createSandbox({
     url: 'https://boards.greenhouse.io/acme/jobs/987654/confirmation',
     title: 'Thank you for applying'
@@ -256,14 +258,14 @@ test('ATS Confirmation: Greenhouse confirmation page and requisition ID extracti
   const confirmationDiv = new MockElement('DIV', { id: 'application_confirmation', class: 'application-confirmation' }, 'Thank you for applying to Acme!');
   sandbox.document.body.appendChild(confirmationDiv);
 
-  const messages = run();
+  const messages = await run();
   assert.equal(messages.length, 1);
   assert.equal(messages[0].status, 'SUBMITTED');
   assert.equal(messages[0].atsProvider, 'greenhouse');
   assert.equal(messages[0].requisitionId, '987654');
 });
 
-test('ATS Confirmation: Lever confirmation page and posting UUID extraction', () => {
+test('ATS Confirmation: Lever confirmation page and posting UUID extraction', async () => {
   const leverId = '550e8400-e29b-41d4-a716-446655440000';
   const { sandbox, MockElement, run } = createSandbox({
     url: `https://jobs.lever.co/brand/${leverId}/thanks`,
@@ -273,14 +275,14 @@ test('ATS Confirmation: Lever confirmation page and posting UUID extraction', ()
   const leverCard = new MockElement('DIV', { class: 'application-confirmation lever-confirmation' }, 'Application submitted! Thanks for applying.');
   sandbox.document.body.appendChild(leverCard);
 
-  const messages = run();
+  const messages = await run();
   assert.equal(messages.length, 1);
   assert.equal(messages[0].status, 'SUBMITTED');
   assert.equal(messages[0].atsProvider, 'lever');
   assert.equal(messages[0].requisitionId, leverId);
 });
 
-test('ATS Confirmation: Ashby confirmation terminal selector and external ID extraction', () => {
+test('ATS Confirmation: Ashby confirmation terminal selector and external ID extraction', async () => {
   const ashbyPostingId = '8f3b2366-0d17-4ef2-a63e-b6a4ea29d4f0';
   const { sandbox, MockElement, run } = createSandbox({
     url: `https://jobs.ashbyhq.com/startup/${ashbyPostingId}/application`,
@@ -290,14 +292,14 @@ test('ATS Confirmation: Ashby confirmation terminal selector and external ID ext
   const ashbyCard = new MockElement('DIV', { 'data-testid': 'application-submitted' }, "Your application was successfully submitted. We'll contact you if there are next steps.");
   sandbox.document.body.appendChild(ashbyCard);
 
-  const messages = run();
+  const messages = await run();
   assert.equal(messages.length, 1);
   assert.equal(messages[0].status, 'SUBMITTED');
   assert.equal(messages[0].atsProvider, 'ashby');
   assert.equal(messages[0].requisitionId, ashbyPostingId);
 });
 
-test('ATS Confirmation: SmartRecruiters confirmation test attribute and job ID extraction', () => {
+test('ATS Confirmation: SmartRecruiters confirmation test attribute and job ID extraction', async () => {
   const { sandbox, MockElement, run } = createSandbox({
     url: 'https://careers.smartrecruiters.com/AcmeCorp/jobs/74399999999/thank-you',
     title: 'Application Successful'
@@ -306,14 +308,14 @@ test('ATS Confirmation: SmartRecruiters confirmation test attribute and job ID e
   const srCard = new MockElement('DIV', { 'data-test': 'application-success' }, 'Your application has been received. Thank you for your interest!');
   sandbox.document.body.appendChild(srCard);
 
-  const messages = run();
+  const messages = await run();
   assert.equal(messages.length, 1);
   assert.equal(messages[0].status, 'SUBMITTED');
   assert.equal(messages[0].atsProvider, 'smartrecruiters');
   assert.equal(messages[0].requisitionId, '74399999999');
 });
 
-test('ATS Confirmation: Negative check - active enabled submit button blocks confirmation', () => {
+test('ATS Confirmation: Negative check - active enabled submit button blocks confirmation', async () => {
   const { sandbox, MockElement, run } = createSandbox({
     url: 'https://boards.greenhouse.io/acme/jobs/12345/apply',
     activeSubmit: true // Active submit button present on form
@@ -323,11 +325,11 @@ test('ATS Confirmation: Negative check - active enabled submit button blocks con
   const heading = new MockElement('H2', {}, 'Thank you for your interest in our company');
   sandbox.document.body.appendChild(heading);
 
-  const messages = run();
+  const messages = await run();
   assert.equal(messages.length, 0, 'Must NOT report confirmation when active submit button is still visible and enabled');
 });
 
-test('ATS Confirmation: Footers and wizard step bars do not falsely trigger confirmation', () => {
+test('ATS Confirmation: Footers and wizard step bars do not falsely trigger confirmation', async () => {
   const { sandbox, MockElement, run } = createSandbox({
     url: 'https://company.myworkdayjobs.com/apply/step2',
     activeSubmit: false
@@ -338,58 +340,55 @@ test('ATS Confirmation: Footers and wizard step bars do not falsely trigger conf
   sandbox.document.body.appendChild(footer);
   sandbox.document.body.appendChild(wizardBar);
 
-  const messages = run();
+  const messages = await run();
   assert.equal(messages.length, 0, 'Footers and wizard indicators must be strictly excluded from confirmation detection');
 });
 
-test('ATS Confirmation: Explicit ATS error banner triggers FAILED status', () => {
+test('ATS Confirmation: Explicit ATS error banner triggers FAILED status', async () => {
   const { run } = createSandbox({
     url: 'https://company.myworkdayjobs.com/apply',
     errorBanner: true,
     errorText: 'Submission failed: there was an error processing your application'
   });
 
-  const messages = run();
+  const messages = await run();
   assert.equal(messages.length, 1);
   assert.equal(messages[0].status, 'FAILED');
   assert.ok(messages[0].evidence.includes('Submission failed'));
 });
 
-test('ATS Confirmation: Ambiguous outcome on page change triggers PENDING_VERIFICATION (never FAILED)', () => {
+test('ATS Confirmation: Ambiguous outcome on page change triggers PENDING_VERIFICATION (never FAILED)', async () => {
   const env = createSandbox({
     url: 'https://jobs.ashbyhq.com/docker/posting/application'
   });
 
-  // Simulate user submitted form previously
-  env.sandbox.sessionStorage.setItem('nextkin_submission_attempted', 'true');
-
-  env.run();
+  await env.run();
   // No confirmation and no explicit error initially
   assert.equal(env.messages.length, 0);
 
   // Now page navigates / unloads before unambiguous receipt was observed
-  env.triggerPageChange();
+  await env.triggerPageChange();
 
   assert.equal(env.messages.length, 1);
   assert.equal(env.messages[0].status, 'PENDING_VERIFICATION');
   assert.equal(env.messages[0].evidence, 'Pending verification on page navigation');
 });
 
-test('ATS Confirmation: Form submit and multi-step button clicks propagate NEXTKIN_SET_SUBMISSION_ATTEMPT', () => {
+test('ATS Confirmation: wizard navigation cannot arm submission tracking', async () => {
   const env = createSandbox({
     url: 'https://jobs.lever.co/employ/a4ec1fd5-d606-4995-a745-5a8b7848937c'
   });
-  env.run();
+  await env.run();
 
   const continueBtn = new env.MockElement('BUTTON', {}, 'Continue');
   env.sandbox.document.dispatchEvent({ type: 'click', target: continueBtn });
 
   const attemptMessages = env.messages.filter(m => m.type === 'NEXTKIN_SET_SUBMISSION_ATTEMPT');
-  assert.equal(attemptMessages.length, 1, 'Clicking continue button must propagate NEXTKIN_SET_SUBMISSION_ATTEMPT');
-  assert.equal(env.sandbox.sessionStorage.getItem('nextkin_submission_attempted'), 'true');
+  assert.equal(attemptMessages.length, 0);
+  assert.equal(env.sandbox.sessionStorage.getItem('nextkin_submission_attempted'), null);
 });
 
-test('ATS Confirmation: Lever confirmation heading is detected and reported even without URL-only trigger', () => {
+test('ATS Confirmation: Lever confirmation heading is detected and reported even without URL-only trigger', async () => {
   const env = createSandbox({
     url: 'https://jobs.lever.co/employ/a4ec1fd5-d606-4995-a745-5a8b7848937c',
     title: 'Mid-Market Account Executive'
@@ -400,7 +399,7 @@ test('ATS Confirmation: Lever confirmation heading is detected and reported even
   env.sandbox.document.body.appendChild(heading);
   env.sandbox.document.body.appendChild(returnBtn);
 
-  const messages = env.run();
+  const messages = await env.run();
   const confirmationMsg = messages.find(m => m.type === 'application-confirmation');
   assert.ok(confirmationMsg, 'Lever confirmation must be reported');
   assert.equal(confirmationMsg.status, 'SUBMITTED');

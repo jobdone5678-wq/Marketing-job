@@ -61,9 +61,19 @@
   } catch {}
 
   function isJobPortal() {
-    const host = location.hostname.toLowerCase();
-    
-    // 1. Known ATS & Job Portal host domains (Strict whitelist)
+    const href = typeof location !== 'undefined' ? location.href : '';
+    const host = (typeof location !== 'undefined' ? location.hostname : '').toLowerCase();
+    if (globalThis.NextkinSiteRegistry?.isExcludedUrl?.(href)) {
+      return false;
+    }
+    if (globalThis.NextkinSiteRules?.isSiteBlocked?.(href)) {
+      return false;
+    }
+    if (globalThis.NextkinSiteRegistry?.resolveSite?.(href, document)) {
+      return true;
+    }
+
+    // 1. Known ATS & Job Portal host domains (Strict whitelist fallback)
     const atsDomains = [
       'ashbyhq.com', 'greenhouse.io', 'lever.co', 'myworkdayjobs.com', 'myworkday.com',
       'workday.com', 'smartrecruiters.com', 'jobvite.com', 'taleo.net', 'icims.com',
@@ -224,45 +234,54 @@
 
   }
 
-  function init() {
-    if (isJobPortal()) {
-      mountFloatingWidget();
+  let intervalId = null;
+  let domObserver = null;
+
+  function ensureMonitors() {
+    if (!intervalId) {
+      intervalId = setInterval(() => {
+        if (isJobPortal()) {
+          const host = document.getElementById(ROOT_ID);
+          if (!host) {
+            mountFloatingWidget();
+          } else {
+            const expectedDisplay = isSidePanelOpen ? 'none' : 'block';
+            if (host.style.display !== expectedDisplay) {
+              host.style.display = expectedDisplay;
+            }
+          }
+        }
+      }, 800);
+    }
+
+    if (!domObserver && typeof MutationObserver === 'function' && document.documentElement) {
+      try {
+        domObserver = new MutationObserver(() => {
+          if (isJobPortal() && !document.getElementById(ROOT_ID)) {
+            mountFloatingWidget();
+          }
+        });
+        domObserver.observe(document.documentElement, { childList: true, subtree: true });
+      } catch {}
     }
   }
 
-  // Run on load and observe future navigation / dynamic ATS form loads
+  function init() {
+    if (isJobPortal()) {
+      mountFloatingWidget();
+      ensureMonitors();
+    }
+  }
+
+  // Run on load and observe navigation / dynamic ATS form loads only on supported portals
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
     init();
   }
 
-  // Periodic safety check for client-side routing on job portals
-  setInterval(() => {
-    if (isJobPortal()) {
-      const host = document.getElementById(ROOT_ID);
-      if (!host) {
-        mountFloatingWidget();
-      } else {
-        const expectedDisplay = isSidePanelOpen ? 'none' : 'block';
-        if (host.style.display !== expectedDisplay) {
-          host.style.display = expectedDisplay;
-        }
-      }
-    }
-  }, 800);
-
-  // Watch DOM mutations to mount as soon as body / portal container appears
-  try {
-    const observer = new MutationObserver(() => {
-      if (isJobPortal() && !document.getElementById(ROOT_ID)) {
-        mountFloatingWidget();
-      }
-    });
-    observer.observe(document.documentElement, { childList: true, subtree: true });
-  } catch {}
-
   // Watch URL changes in SPAs
   window.addEventListener('popstate', init);
   window.addEventListener('hashchange', init);
+  window.addEventListener('nextkin:spa-navigation', init);
 })();

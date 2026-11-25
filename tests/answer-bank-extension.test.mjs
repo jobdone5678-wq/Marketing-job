@@ -180,7 +180,7 @@ test('Answer Bank Extension: 5. Unrecognized field falls back to Answer Bank (Ti
   });
 
   assert.equal(plans.length, 1);
-  assert.equal(plans[0].status, 'ready');
+  assert.equal(plans[0].status, 'supported');
   assert.equal(plans[0].value, 'node:test');
   assert.equal(plans[0].source, 'answer_bank');
 });

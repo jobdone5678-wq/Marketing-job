@@ -120,6 +120,7 @@ function setupMockConfirmationEnv(options = {}) {
   const chromeMock = {
     runtime: {
       sendMessage: async (msg) => {
+        if (msg.type === 'NEXTKIN_GET_SUBMISSION_ATTEMPT') return Boolean(options.submissionAttempt);
         messages.push(msg);
         return true;
       }
@@ -163,12 +164,13 @@ test('Two-Tier Confirmation: 1. High-confidence confirmation receipts auto-recor
   // Case A: Page displays confirmation text, but NO submission was attempted (idle browsing / direct visit)
   const envA = setupMockConfirmationEnv({
     url: 'https://jobs.example.com/jobs/123',
-    sessionStorage: {} // empty! No submission attempted
+    sessionStorage: { nextkin_submission_attempted: 'true' }, // Employer storage cannot authorize a receipt.
   });
   const heading = new MockElement('H1', {}, 'Thank you for your application');
   envA.body.appendChild(heading);
 
   runInNewContext(code, envA.sandbox);
+  await new Promise(resolve => setImmediate(resolve));
 
   // Must NOT auto-record without submission attempt evidence
   assert.equal(
@@ -177,15 +179,16 @@ test('Two-Tier Confirmation: 1. High-confidence confirmation receipts auto-recor
     'High-confidence confirmation must NOT auto-record if no submission was attempted'
   );
 
-  // Case B: Submission attempt occurred in sessionStorage
+  // Case B: The worker confirms the submission attempt.
   const envB = setupMockConfirmationEnv({
     url: 'https://jobs.example.com/jobs/123',
-    sessionStorage: { nextkin_submission_attempted: 'true' }
+    submissionAttempt: true,
   });
   const headingB = new MockElement('H1', {}, 'Thank you for your application');
   envB.body.appendChild(headingB);
 
   runInNewContext(code, envB.sandbox);
+  await new Promise(resolve => setImmediate(resolve));
 
   // Must auto-record when submission attempt was present
   assert.ok(

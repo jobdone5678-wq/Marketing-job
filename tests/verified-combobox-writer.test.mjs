@@ -680,8 +680,9 @@ test('writer strictly preserves field if modified by an isTrusted user event', a
 
   assert.ok(writer.userEditedElements?.has(input), 'Input must be tracked in userEditedElements');
   assert.equal(input.value, 'Samantha', 'Manually entered value must be preserved');
-  assert.equal(report.filled.length, 1, 'Preserved field must be in filled');
-  assert.equal(report.filled[0].writtenValue, 'Samantha');
+  assert.equal(report.filled.length, 0);
+  assert.equal(report.unverified[0].status, 'preserved_user_value');
+  assert.equal(report.unverified[0].actual, 'Samantha');
 });
 
 test('writer tracks isTrusted clicks on <label> or sibling radio across the entire radio group', async () => {
@@ -738,8 +739,9 @@ test('writer tracks isTrusted clicks on <label> or sibling radio across the enti
   assert.ok(writer.userEditedElements?.has(radioB), 'Radio B in same group must be tracked in userEditedElements');
   assert.equal(radioB.checked, true, 'User selected Option B must remain checked');
   assert.equal(radioA.checked, false, 'Option A must not overwrite user choice');
-  assert.equal(report.filled.length, 1, 'Preserved field must be in filled');
-  assert.equal(report.filled[0].writtenValue, 'Not Authorized');
+  assert.equal(report.filled.length, 0);
+  assert.equal(report.unverified[0].status, 'preserved_user_value');
+  assert.equal(report.unverified[0].actual, 'Not Authorized');
 });
 
 test('fillCombo searches document.body portal listbox when opened via pointerdown and selects option', async () => {
@@ -1025,4 +1027,28 @@ test('readChoices dispatches ArrowDown fallback when initial trigger click rende
   assert.equal(arrowDownCount, 1, 'readChoices must dispatch ArrowDown fallback when trigger click renders no options');
   assert.deepEqual(choices.map(c => c.label), ['Yes', 'No']);
   assert.equal(combo.getAttribute('aria-expanded'), 'false', 'readChoices must close combobox in finally');
+});
+
+
+test('verification rejects uncommitted dropdowns, different identifiers and partial selections', () => {
+  const combo = new MockNode('INPUT', { role: 'combobox', value: 'Authorized' });
+  const identifier = new MockNode('INPUT', { value: 'INV-1234567' });
+  const rows = [
+    { field: { element: combo, kind: 'combobox' }, value: 'Authorized', _write: { option: { isConnected: false } } },
+    { field: { element: identifier, kind: 'text' }, value: 'ABC-1234567' },
+    { field: { element: new MockNode('DIV'), kind: 'multi-combobox' }, value: ['Java', 'SQL'],
+      _write: { partial: true } },
+  ].map(plan => ({ status: 'supported', ...plan }));
+  const report = writer.verifyWrites(rows);
+  assert.equal(report.filled.length, 0);
+  assert.deepEqual(report.unverified.map(item => item.status), ['unverified', 'unverified', 'partial']);
+});
+
+test('a numeric placeholder is unanswered and an opposite option is not selected', () => {
+  const select = new MockNode('SELECT');
+  select.selectedIndex = 0;
+  select.options = [{ text: 'Please Select', value: '0' }];
+  const field = { element: select, kind: 'select', options: [] };
+  assert.equal(writer.isAnswered(field), false);
+  assert.equal(writer.setChoice({ ...field, options: [{ label: 'Not authorized', value: '0' }] }, 'Authorized'), null);
 });

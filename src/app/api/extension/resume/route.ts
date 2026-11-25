@@ -19,11 +19,18 @@ export async function GET(request: Request) {
     const profile = await extensionProfile(request);
     const db = database();
     const documentAccess = await extensionDocumentAccess(profile.id);
-    const documentId = new URL(request.url).searchParams.get('documentId');
+    const params = new URL(request.url).searchParams;
+    const documentId = params.get('documentId');
     if (documentId) {
       z.uuid().parse(documentId);
-      const { filename, bytes } = await downloadExtensionDocument(documentId, documentAccess);
+      const candidateId = params.get('candidateId');
+      const { filename, bytes } = await downloadExtensionDocument(
+        documentId,
+        documentAccess,
+        candidateId === null ? undefined : z.uuid().parse(candidateId),
+      );
       return {
+        documentId,
         filename,
         mimeType: /\.docx$/i.test(filename)
           ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'

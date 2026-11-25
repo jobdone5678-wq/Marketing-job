@@ -29,11 +29,7 @@ export async function GET(request: Request) {
     const candidate = candidateData as Candidate;
     const confirmed = (candidate.confirmed_facts || {}) as Record<string, any>;
 
-    // 2. The resume document uploaded in the dashboard. A confirmed document is
-    //    preferred, but a document the candidate uploaded and has not confirmed
-    //    yet is still their resume and must not force a second upload in the
-    //    extension. Documents the account uploaded are included even before they
-    //    are linked to a profile.
+    // Only documents linked to this candidate are eligible for automatic attachment.
     const { data: linked, error: linkedError } = await db
       .from('candidate_documents')
       .select('id, filename, object_path, content_hash, status, created_at')
@@ -43,24 +39,7 @@ export async function GET(request: Request) {
       .limit(5);
     checkDb(linkedError);
 
-    const { data: owned, error: ownedError } = await db
-      .from('candidate_documents')
-      .select('id, filename, object_path, content_hash, status, created_at')
-      .eq('owner_id', profile.id)
-      .is('candidate_id', null)
-      .in('status', ['confirmed', 'review'])
-      .order('created_at', { ascending: false })
-      .limit(5);
-    checkDb(ownedError);
-
-    const documents = [...(linked || []), ...(owned || [])].sort((a, b) => {
-      const rank = (row: { status: string }) => (row.status === 'confirmed' ? 0 : 1);
-      return (
-        rank(a) - rank(b) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
-    });
-
-    const doc = documents[0];
+    const doc = [...(linked || [])].sort((a, b) => Number(b.status === 'confirmed') - Number(a.status === 'confirmed'))[0];
     if (doc?.object_path) {
       const { data: download, error: downloadError } = await db.storage
         .from('candidate-resumes')
@@ -73,6 +52,7 @@ export async function GET(request: Request) {
           ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
           : 'application/pdf';
         return {
+          documentId: doc.id,
           filename: doc.filename,
           mimeType,
           base64,

@@ -3,7 +3,7 @@
   "minimum_chrome_version": "116",
   "name": "NextKinHR Recruiting Copilot",
   "short_name": "NextKinHR",
-  "version": "3.3.19",
+  "version": "3.4.3",
   "description": "Sync your NextKinHR resume, capture job details, and fill application forms.",
   "icons": {
     "16": "icon16.plasmo.6c567d50.png",
@@ -27,8 +27,27 @@
   ],
   "content_scripts": [
     {
-      "matches": ["https://*/*"],
-      "js": ["application-launch.js"],
+      "matches": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+      "exclude_matches": [
+        "https://challenges.cloudflare.com/*",
+        "https://*.recaptcha.net/*",
+        "https://www.google.com/recaptcha/*",
+        "https://*.hcaptcha.com/*",
+        "https://accounts.google.com/*",
+        "https://login.microsoftonline.com/*",
+        "https://*.okta.com/*",
+        "https://*.auth0.com/*",
+        "https://*.duosecurity.com/*",
+        "https://www.googletagmanager.com/*",
+        "https://www.google-analytics.com/*",
+        "https://*.stripe.com/*"
+      ],
+      "js": [
+        "core/site-registry.js",
+        "core/site-rules.js",
+        "core/runtime-gate.js",
+        "application-launch.js"
+      ],
       "all_frames": true,
       "run_at": "document_start"
     },
@@ -63,12 +82,25 @@
         "*://*.reddit.com/*",
         "*://*.wikipedia.org/*",
         "*://*.github.com/*",
-        "*://*.cloudflare.com/*"
+        "*://*.cloudflare.com/*",
+        "https://*.recaptcha.net/*",
+        "https://*.hcaptcha.com/*",
+        "https://accounts.google.com/*",
+        "https://login.microsoftonline.com/*",
+        "https://*.okta.com/*",
+        "https://*.auth0.com/*",
+        "https://*.duosecurity.com/*",
+        "https://www.googletagmanager.com/*",
+        "https://www.google-analytics.com/*",
+        "https://*.stripe.com/*"
       ],
       "js": [
+        "core/site-registry.js",
+        "core/site-rules.js",
         "adapters/ats-adapters.js",
         "core/job-capture.js",
         "core/answer-bank.js",
+        "core/question-intent.js",
         "core/field-mapping.js",
         "core/field-writer.js",
         "core/form-discovery.js",

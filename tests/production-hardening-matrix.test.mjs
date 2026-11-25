@@ -542,7 +542,7 @@ test('Production Hardening: Immutable ApplicationAttemptContext and multi-tab is
 // --------------------------------------------------------------------------
 // 4. Deterministic ATS Confirmation Rules
 // --------------------------------------------------------------------------
-test('Production Hardening: Deterministic ATS Confirmation Rules for 5 major providers', () => {
+test('Production Hardening: Deterministic ATS Confirmation Rules for 5 major providers', async () => {
   function createConfirmationSandbox({
     url = 'https://boards.greenhouse.io/acme/jobs/12345/apply',
     title = 'Job Application',
@@ -674,6 +674,7 @@ test('Production Hardening: Deterministic ATS Confirmation Rules for 5 major pro
       chrome: {
         runtime: {
           sendMessage: async msg => {
+            if (msg.type === 'NEXTKIN_GET_SUBMISSION_ATTEMPT') return true;
             messages.push(msg);
             return true;
           },
@@ -687,9 +688,10 @@ test('Production Hardening: Deterministic ATS Confirmation Rules for 5 major pro
     return {
       sandbox,
       MockElement,
-      run: () => {
+      run: async () => {
         runInNewContext(confirmationScript, sandbox);
         if (scheduledCallback) scheduledCallback();
+        await new Promise(resolve => setImmediate(resolve));
         return messages;
       },
       messages,
@@ -707,7 +709,7 @@ test('Production Hardening: Deterministic ATS Confirmation Rules for 5 major pro
   successCard.appendChild(heading);
   successCard.appendChild(reqInfo);
   wd.sandbox.document.body.appendChild(successCard);
-  const wdMsgs = wd.run();
+  const wdMsgs = await wd.run();
   assert.equal(wdMsgs.length, 1);
   assert.equal(wdMsgs[0].status, 'SUBMITTED');
   assert.equal(wdMsgs[0].atsProvider, 'workday');
@@ -720,7 +722,7 @@ test('Production Hardening: Deterministic ATS Confirmation Rules for 5 major pro
   });
   const confirmationDiv = new gh.MockElement('DIV', { id: 'application_confirmation', class: 'application-confirmation' }, 'Thank you for applying to Acme!');
   gh.sandbox.document.body.appendChild(confirmationDiv);
-  const ghMsgs = gh.run();
+  const ghMsgs = await gh.run();
   assert.equal(ghMsgs.length, 1);
   assert.equal(ghMsgs[0].status, 'SUBMITTED');
   assert.equal(ghMsgs[0].atsProvider, 'greenhouse');
@@ -733,7 +735,7 @@ test('Production Hardening: Deterministic ATS Confirmation Rules for 5 major pro
   });
   const leverDiv = new lv.MockElement('DIV', { class: 'application-confirmation' }, 'Thank you for submitting your application!');
   lv.sandbox.document.body.appendChild(leverDiv);
-  const lvMsgs = lv.run();
+  const lvMsgs = await lv.run();
   assert.equal(lvMsgs.length, 1);
   assert.equal(lvMsgs[0].status, 'SUBMITTED');
   assert.equal(lvMsgs[0].atsProvider, 'lever');
@@ -746,7 +748,7 @@ test('Production Hardening: Deterministic ATS Confirmation Rules for 5 major pro
   });
   const ashbyDiv = new ab.MockElement('DIV', { 'data-testid': 'application-submitted' }, 'Application received successfully');
   ab.sandbox.document.body.appendChild(ashbyDiv);
-  const abMsgs = ab.run();
+  const abMsgs = await ab.run();
   assert.equal(abMsgs.length, 1);
   assert.equal(abMsgs[0].status, 'SUBMITTED');
   assert.equal(abMsgs[0].atsProvider, 'ashby');
@@ -758,7 +760,7 @@ test('Production Hardening: Deterministic ATS Confirmation Rules for 5 major pro
   });
   const srDiv = new sr.MockElement('DIV', { 'data-test': 'application-success' }, 'You have successfully applied');
   sr.sandbox.document.body.appendChild(srDiv);
-  const srMsgs = sr.run();
+  const srMsgs = await sr.run();
   assert.equal(srMsgs.length, 1);
   assert.equal(srMsgs[0].status, 'SUBMITTED');
   assert.equal(srMsgs[0].atsProvider, 'smartrecruiters');
@@ -771,7 +773,7 @@ test('Production Hardening: Deterministic ATS Confirmation Rules for 5 major pro
   });
   const negHeading = new neg.MockElement('H2', {}, 'Thank you for your interest in our company');
   neg.sandbox.document.body.appendChild(negHeading);
-  const negMsgs = neg.run();
+  const negMsgs = await neg.run();
   assert.equal(negMsgs.length, 0, 'Active submit button must prevent confirmation');
 
   // 4.7: Footer text exclusion
@@ -782,7 +784,7 @@ test('Production Hardening: Deterministic ATS Confirmation Rules for 5 major pro
   const footerText = new foot.MockElement('P', {}, 'Thank you for visiting. Applications received daily.');
   footerEl.appendChild(footerText);
   foot.sandbox.document.body.appendChild(footerEl);
-  const footMsgs = foot.run();
+  const footMsgs = await foot.run();
   assert.equal(footMsgs.length, 0, 'Footer text must be excluded from confirmation detection');
 });
 

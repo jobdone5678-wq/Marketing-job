@@ -16,16 +16,20 @@
     /\b(ssn|social\s+security|background\s+check|drug\s+screen)\b/i
   ];
 
-  function isSensitiveQuestion(question) {
+  function isSensitiveQuestion(question, options) {
     if (!question || typeof question !== 'string') return false;
-    return SENSITIVE_PATTERNS.some(re => re.test(question));
+    if (SENSITIVE_PATTERNS.some(re => re.test(question))) return true;
+    const policy = root.NextkinQuestionIntent;
+    // The shared protected-question policy is authoritative; if it is not loaded, fail closed.
+    if (!policy || typeof policy.isProtectedQuestion !== 'function') return true;
+    return policy.isProtectedQuestion(question, options || []);
   }
 
   function matchAnswer(field, answers, companySlug = null) {
     if (!field || !Array.isArray(answers) || answers.length === 0) return null;
 
     const rawQuestion = field.label || field.name || field.hint || '';
-    if (isSensitiveQuestion(rawQuestion)) return null;
+    if (isSensitiveQuestion(rawQuestion, field.options)) return null;
 
     const normQ = normalizeQuestion(rawQuestion);
     if (!normQ) return null;

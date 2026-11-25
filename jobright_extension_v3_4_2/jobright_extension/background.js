@@ -1,3 +1,9 @@
+try {
+  if (typeof importScripts === 'function') {
+    importScripts('core/site-registry.js', 'core/site-rules.js');
+  }
+} catch {}
+
 async function configurePanel() {
   if (typeof chrome !== 'undefined' && chrome.sidePanel?.setPanelBehavior) {
     await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
@@ -66,6 +72,10 @@ function sanitizeQueueItem(item, token = item.token) {
       delete body[key];
     }
   }
+  if (body.appliedResume && typeof body.appliedResume === 'object') {
+    const { filename, mimeType, sizeBytes, resumeId, contentHash } = body.appliedResume;
+    body.appliedResume = { filename, mimeType, sizeBytes, resumeId, contentHash };
+  }
   if (Array.isArray(body.answers)) {
     body.answers = body.answers.filter(answer => answer &&
       !/password|passphrase|secret|credential|verification.?code|security.?code|one.?time.?code|api.?key|token|captcha|otp/i
@@ -105,7 +115,7 @@ async function getQueueConnection() {
 }
 
 function matchesQueueAccount(item, connection) {
-  return Boolean(connection.token && connection.workspace && connection.accountId &&
+  return Boolean(item && connection.token && connection.workspace && connection.accountId &&
     item.workspace === connection.workspace && item.accountId === connection.accountId);
 }
 
@@ -305,7 +315,8 @@ async function markSessionReported(item) {
     if (typeof chrome === 'undefined' || !chrome.storage?.session?.get) return;
     const sessionData = await chrome.storage.session.get(null);
     for (const [k, v] of Object.entries(sessionData || {})) {
-      if ((k.startsWith('application-intent:') || k.startsWith('embedded-outside-application:')) && v?.eventKey === item.id) {
+      if ((k.startsWith('application-intent:') || k.startsWith('embedded-outside-application:') || k.startsWith('submission_attempt:')) &&
+        v?.eventKey === item.id && v.workspace === item.workspace && v.accountId === item.accountId) {
         const { submissionEvidence, ...completed } = v;
         await chrome.storage.session.set({ [k]: { ...completed, reported: true } });
       }
@@ -365,31 +376,9 @@ async function deliverReceipt(item, allowQueueUpdates) {
   const route = intentId
     ? '/api/extension/events'
     : (isManual ? '/api/extension/auto-submit' : '/api/webhooks/application-submitted');
-  if (intentId && !Number.isInteger(item.body.attempt)) {
-    if (!intentIdPattern.test(intentId)) {
-      if (allowQueueUpdates) await moveSubmission(item, DEAD_LETTER_KEY, 'VALIDATION_FAILED');
-      return { success: false };
-    }
-    const response = await fetch(item.workspace + '/api/extension/intents/' + intentId,
-      workspaceRequest(connection.token)).catch(() => null);
-    if (!response?.ok) {
-      if (!allowQueueUpdates) return { success: false };
-      if (response?.status === 401) return recordReceiptAuthFailure(item, connection, now);
-      if (response?.status === 403 || response?.status === 404) {
-        await moveSubmission(item, DEAD_LETTER_KEY, 'INTENT_UNAVAILABLE');
-        return { success: false };
-      }
-      return handleRetryableFailure(item, 'Application attempt lookup failed');
-    }
-    const data = await response.json().catch(() => null);
-    if (data?.intent?.id !== intentId || !Number.isInteger(data.intent.attempt)) {
-      if (allowQueueUpdates) await moveSubmission(item, DEAD_LETTER_KEY, 'VALIDATION_FAILED');
-      return { success: false };
-    }
-    item.body = { ...item.body, attempt: Math.max(1, data.intent.attempt) };
-    if (allowQueueUpdates) await updateQueueItem(item, previous => ({ ...previous, body: item.body }));
-    const current = await getQueueConnection();
-    if (!matchesQueueAccount(item, current) || current.token !== connection.token) return { success: false };
+  if (intentId && (!intentIdPattern.test(intentId) || !Number.isInteger(item.body.attempt) || item.body.attempt < 1)) {
+    if (allowQueueUpdates) await moveSubmission(item, DEAD_LETTER_KEY, 'VALIDATION_FAILED');
+    return { success: false, error: 'SUBMISSION_ATTEMPT_REQUIRED' };
   }
 
   let response;
@@ -415,13 +404,16 @@ async function deliverReceipt(item, allowQueueUpdates) {
       data = await response.json();
     } catch {}
     const isIntent = item.body?.intentId;
+    // Failed / pending-verification observations are terminal deliveries too: the backend recorded
+    // them, so dequeue without treating the application as reported or submitted.
+    const isObservation = isIntent && ['failed', 'submit_attempted'].includes(item.body?.status);
     const isSuccess = isIntent
-      ? ['submitted', 'confirmed'].includes(data?.status)
+      ? ['submitted', 'confirmed', 'failed', 'submit_attempted'].includes(data?.status)
       : data?.success === true;
 
     if (isSuccess) {
       await updateQueueItem(item, () => null).catch(() => {});
-      await markSessionReported(item);
+      if (!isObservation) await markSessionReported(item);
       clearAlertBadge();
       broadcastSyncAlert('NEXTKIN_SYNC_SUCCESS', {
         status: 'DELIVERED',
@@ -625,10 +617,12 @@ async function getStoredCredentials() {
   // Migrate legacy token from local to session if session token is absent
   if (local.token && !sessionToken) {
     sessionToken = local.token;
+    accountId = local.user?.id;
     try {
       if (chrome.storage?.session?.set) {
         await chrome.storage.session.set({
           token: sessionToken,
+          ...(accountId ? { accountId } : {}),
           ...(local.origin ? { origin: local.origin } : {}),
         });
       }
@@ -652,6 +646,8 @@ async function getStoredCredentials() {
 }
 
 const trackedKey = tabId => 'application-intent:' + tabId;
+const attemptStateKey = tabId => 'application-attempt-state:' + tabId;
+const submissionKey = (tabId, frameId) => 'submission_attempt:' + tabId + ':' + frameId;
 const embeddedKey = tabId => 'embedded-outside-application:' + tabId;
 const stepKey = tabId => 'application-next-step:' + tabId;
 const intentIdPattern = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
@@ -674,6 +670,9 @@ function workspaceRequest(token) {
 }
 
 function portalOrigin(url) {
+  if (typeof globalThis.NextkinSiteRegistry?.canonicalOrigin === 'function') {
+    return globalThis.NextkinSiteRegistry.canonicalOrigin(url) || url.origin;
+  }
   return url.origin === 'https://job-boards.greenhouse.io' ? 'https://boards.greenhouse.io' : url.origin;
 }
 
@@ -681,6 +680,9 @@ const PRESERVED_JOB_PARAMS = new Set(['gh_jid', 'jobid', 'job_id', 'jk', 'requis
 
 function cleanApplicationUrl(url) {
   if (!url) return '';
+  if (typeof globalThis.NextkinSiteRegistry?.cleanApplicationUrl === 'function') {
+    return globalThis.NextkinSiteRegistry.cleanApplicationUrl(url);
+  }
   try {
     const parsed = typeof url === 'string' ? new URL(url) : (url instanceof URL ? url : new URL(String(url)));
     const clean = params => {
@@ -715,45 +717,174 @@ async function loadApplicationData(path) {
   return current.origin === origin && current.token === token ? data : null;
 }
 
-async function loadApplicationResume(candidateId) {
-  if (!intentIdPattern.test(candidateId || '')) return null;
-  const params = new URLSearchParams({ candidateId, originalOnly: 'true' });
-  const file = await loadApplicationData('resume-file?' + params);
-  return file?.source === 'upload' && file.base64 && file.filename ? file : null;
+async function applicationScope(sender) {
+  const tabId = sender.tab?.id;
+  if (!Number.isInteger(tabId) || !Number.isInteger(sender.frameId) || !sender.documentId ||
+    !/^https:\/\//.test(sender.url || '') || globalThis.NextkinSiteRegistry?.isExcludedUrl?.(sender.url)) return null;
+  const connection = await getQueueConnection();
+  if (!connection.token || !connection.accountId || !connection.workspace) return null;
+  const trackingKey = sender.frameId ? embeddedKey(tabId) : trackedKey(tabId);
+  const stateKey = attemptStateKey(tabId);
+  const stored = await chrome.storage.session.get([trackingKey, stateKey]);
+  const tracking = stored[trackingKey];
+  const states = stored[stateKey] || {};
+  const state = states[sender.frameId];
+  const formUrl = tracking?.applicationUrl || tracking?.externalJob?.jobUrl;
+  const tracked = matchesQueueAccount(tracking, connection) && formUrl &&
+    (!sender.frameId || (tracking.frameId === sender.frameId && tracking.documentId === sender.documentId)) &&
+    sameApplicationStepScope(new URL(formUrl), new URL(sender.url));
+  const bound = matchesQueueAccount(state, connection) && state.documentId === sender.documentId &&
+    sameApplicationStepScope(new URL(state.formUrl), new URL(sender.url));
+  return { connection, tracking: tracked ? tracking : null, state: bound ? state : null, states, stateKey };
+}
+
+const attemptLocks = new Map();
+function withAttemptLock(tabId, fn) {
+  const prev = attemptLocks.get(tabId) || Promise.resolve();
+  const next = prev.catch(() => {}).then(fn);
+  attemptLocks.set(tabId, next);
+  return next.finally(() => {
+    if (attemptLocks.get(tabId) === next) attemptLocks.delete(tabId);
+  });
+}
+
+const VALID_ATTEMPT_TRANSITIONS = {
+  DRAFT: new Set(['DRAFT', 'FILLING', 'REVIEW_REQUIRED', 'FAILED']),
+  FILLING: new Set(['FILLING', 'REVIEW_REQUIRED', 'READY_TO_SUBMIT', 'FAILED']),
+  REVIEW_REQUIRED: new Set(['REVIEW_REQUIRED', 'FILLING', 'READY_TO_SUBMIT', 'SUBMITTING', 'PENDING_VERIFICATION', 'FAILED']),
+  READY_TO_SUBMIT: new Set(['READY_TO_SUBMIT', 'FILLING', 'REVIEW_REQUIRED', 'SUBMITTING', 'PENDING_VERIFICATION', 'FAILED']),
+  SUBMITTING: new Set(['SUBMITTING', 'PENDING_VERIFICATION', 'SUBMITTED', 'REVIEW_REQUIRED', 'FAILED']),
+  PENDING_VERIFICATION: new Set(['PENDING_VERIFICATION', 'SUBMITTED', 'REVIEW_REQUIRED', 'FAILED']),
+  SUBMITTED: new Set(['SUBMITTED']),
+  FAILED: new Set(['FAILED', 'DRAFT', 'FILLING', 'REVIEW_REQUIRED']),
+};
+
+async function storeAttempt(message, sender) {
+  const tabId = sender.tab?.id;
+  if (!Number.isInteger(tabId)) return false;
+  return withAttemptLock(tabId, async () => {
+    const scope = await applicationScope(sender);
+    if (!scope) return false;
+    const { connection, tracking, state, states, stateKey } = scope;
+    const { frameId, documentId, url } = sender;
+    if (message.type === 'NEXTKIN_CLEAR_ATTEMPT') {
+      if (states[frameId]?.documentId !== documentId || states[frameId]?.attemptId !== message.attemptId) return false;
+      delete states[frameId];
+    } else {
+      const context = message.payload?.context;
+      const nextStatus = message.payload?.application_status || 'DRAFT';
+      const prevStatus = state?.attemptId === context?.attemptId ? state?.applicationStatus : null;
+      if (!intentIdPattern.test(context?.attemptId || '') || !intentIdPattern.test(context.candidateId || '') ||
+        (tracking?.candidateId && tracking.candidateId !== context.candidateId) ||
+        (prevStatus && VALID_ATTEMPT_TRANSITIONS[prevStatus] && !VALID_ATTEMPT_TRANSITIONS[prevStatus].has(nextStatus)) ||
+        (state?.attemptId === context.attemptId && (state.candidateId !== context.candidateId ||
+          state.jobKey !== context.jobKey || state.profileVersion !== context.profileVersion || state.resumeDocumentId !== context.resumeDocumentId))) return false;
+      states[frameId] = {
+        workspace: connection.workspace, accountId: connection.accountId,
+        tabId: sender.tab.id, frameId, documentId, formUrl: url,
+        attemptId: context.attemptId, eventKey: tracking?.eventKey,
+        jobKey: context.jobKey, candidateId: context.candidateId, profileVersion: context.profileVersion,
+        resumeDocumentId: context.resumeDocumentId, applicationStatus: nextStatus,
+        requiresReview: Boolean(message.payload.requiresReview || (state?.attemptId === context.attemptId && state.requiresReview)),
+        syncStatus: message.payload.sync_status, updatedAt: Date.now(),
+      };
+    }
+    await chrome.storage.session.set({ [stateKey]: states });
+    return true;
+  });
+}
+
+async function automationDisabled(url, activeOnly = false) {
+  const rules = globalThis.NextkinSiteRules;
+  if (!rules) return false;
+  const { workspace, token, accountId } = await getQueueConnection();
+  const entry = workspace && token ? await rules.getWorkspaceRules(workspace, token, accountId) : null;
+  return rules.automationDisabled(url, activeOnly, entry);
+}
+
+async function markSubmission(sender, attemptId) {
+  const scope = await applicationScope(sender);
+  const context = scope?.tracking;
+  if (!context || context.reported || (attemptId && scope.state?.attemptId !== attemptId)) return false;
+  const { connection, state } = scope;
+  let candidateId = context.candidateId;
+  let attempt;
+  if (context.intentId) {
+    const response = await fetch(connection.workspace + '/api/extension/intents/' + context.intentId,
+      workspaceRequest(connection.token)).catch(() => null);
+    const { intent } = response?.ok ? await response.json() : {};
+    if (intent?.id !== context.intentId || !Number.isInteger(intent?.attempt) ||
+      (candidateId && intent.candidate_id !== candidateId)) return false;
+    candidateId = intent.candidate_id;
+    attempt = Math.max(1, intent.attempt);
+  }
+  if (!intentIdPattern.test(candidateId || '') || (state && state.candidateId !== candidateId)) return false;
+  const current = await getQueueConnection();
+  if (!matchesQueueAccount(context, current)) return false;
+  const { token: _token, ...receiptContext } = context;
+  const key = submissionKey(sender.tab.id, sender.frameId);
+  const previous = (await chrome.storage.session.get(key))[key];
+  if (previous?.eventKey === context.eventKey && previous.documentId === sender.documentId &&
+    previous.attemptId === (state?.attemptId || context.eventKey) && Date.now() - previous.timestamp < 15000) return true;
+  await chrome.storage.session.set({ [key]: {
+    ...receiptContext, candidateId, attempt, timestamp: Date.now(),
+    frameId: sender.frameId, documentId: sender.documentId, applicationUrl: cleanApplicationUrl(sender.url),
+    jobKey: state?.jobKey || context.externalJob?.externalId || cleanApplicationUrl(sender.url),
+    attemptId: state?.attemptId || context.eventKey, profileVersion: state?.profileVersion,
+    resumeDocumentId: state?.resumeDocumentId,
+  } });
+  return true;
+}
+
+async function readSubmissionAttempt(sender) {
+  const tabId = sender.tab?.id;
+  if (!Number.isInteger(tabId) || !Number.isInteger(sender.frameId) || !sender.url) return null;
+  const key = submissionKey(tabId, sender.frameId);
+  const marker = (await chrome.storage.session.get(key))[key];
+  if (!marker || Date.now() - marker.timestamp > 15 * 60 * 1000 ||
+    portalOrigin(new URL(sender.url)) !== marker.jobOrigin ||
+    !matchesQueueAccount(marker, await getQueueConnection())) return null;
+  return marker;
 }
 
 async function loadSavedProfile(candidateId) {
-  const query = new URLSearchParams({ savedOnly: 'true' });
-  if (intentIdPattern.test(candidateId || '')) query.set('candidateId', candidateId);
+  if (!intentIdPattern.test(candidateId || '')) return null;
+  const query = new URLSearchParams({ savedOnly: 'true', candidateId });
   const data = await loadApplicationData('candidates?' + query);
   const profile = data?.candidates?.[0];
   const facts = profile?.confirmed_facts;
-  if (profile?.provenance_status !== 'confirmed' || !facts?.full_name ||
+  if (profile?.id !== candidateId || profile?.provenance_status !== 'confirmed' || !facts?.full_name ||
     String(facts.notes || '').startsWith('Profile created from an uploaded resume.')) return null;
   return profile;
 }
 
 async function queueApplicationStep(tabId, sender, message) {
-  const { origin, token } = await getStoredCredentials();
-  if (!workspaceOrigin(origin) || !token || !intentIdPattern.test(message.candidateId || '')) return;
+  const scope = await applicationScope(sender);
+  if (!scope?.state || scope.state.candidateId !== message.candidateId ||
+    scope.state.resumeDocumentId !== (message.resumeDocumentId || null) ||
+    await automationDisabled(sender.url)) return false;
+  const { workspace, accountId } = scope.connection;
   const step = {
-    origin, token, formUrl: sender.url, documentId: sender.documentId,
-    candidateId: message.candidateId, expiresAt: Date.now() + 30000,
+    workspace, accountId, formUrl: sender.url, documentId: sender.documentId,
+    attemptId: scope.state.attemptId, jobKey: scope.state.jobKey, eventKey: scope.state.eventKey || scope.tracking?.eventKey || null,
+    candidateId: message.candidateId, profileVersion: scope.state.profileVersion, requiresReview: scope.state.requiresReview, expiresAt: Date.now() + 30000,
     resumeDocumentId: intentIdPattern.test(message.resumeDocumentId || '') ? message.resumeDocumentId : null,
   };
   await chrome.storage.session.set({ [stepKey(tabId)]: step });
 }
 
 function sameApplicationStepScope(previous, current) {
-  if (previous.origin !== current.origin) return false;
+  if (portalOrigin(previous) !== portalOrigin(current)) return false;
   const base = path => path.replace(/\/(?:apply|application|applyjob)(?:\/.*)?$/i, '').replace(/\/$/, '');
   const previousKey = new URL(cleanApplicationUrl(new URL(previous)));
   const currentKey = new URL(cleanApplicationUrl(new URL(current)));
-  for (const [key, value] of currentKey.searchParams) {
-    if (previousKey.searchParams.has(key) && previousKey.searchParams.get(key) !== value) return false;
-  }
-  const previousRoute = previousKey.hash.split('?')[0];
-  const currentRoute = currentKey.hash.split('?')[0];
+  if (previousKey.search !== currentKey.search) return false;
+  const previousJob = globalThis.NextkinSiteRegistry?.extractIdentifiers?.(previous.href)?.requisitionId;
+  const currentJob = globalThis.NextkinSiteRegistry?.extractIdentifiers?.(current.href)?.requisitionId;
+  if ((previousJob || currentJob) && previousJob !== currentJob) return false;
+  const [previousRoute, previousHashQuery] = previousKey.hash.split('?');
+  const [currentRoute, currentHashQuery] = currentKey.hash.split('?');
+  if (previousHashQuery !== currentHashQuery) return false;
   if ((previousRoute || currentRoute) && base(previousRoute) !== base(currentRoute)) return false;
   return previous.pathname === current.pathname || base(previous.pathname) === base(current.pathname);
 }
@@ -761,7 +892,7 @@ function sameApplicationStepScope(previous, current) {
 async function continueTracking(tabId, step, url) {
   const key = trackedKey(tabId);
   const context = (await chrome.storage.session.get(key))[key];
-  if (context?.applicationUrl === cleanApplicationUrl(new URL(step.formUrl)) && context.token === step.token) {
+  if (context?.applicationUrl === cleanApplicationUrl(new URL(step.formUrl)) && context.workspace === step.workspace && context.accountId === step.accountId && context.candidateId === step.candidateId) {
     await chrome.storage.session.set({ [key]: { ...context, applicationUrl: cleanApplicationUrl(url) } });
   }
 }
@@ -773,17 +904,20 @@ async function claimApplicationStep(tabId, sender) {
   if (!step || step.documentId === sender.documentId || step.expiresAt < Date.now()) return null;
   await chrome.storage.session.remove(key);
   const url = new URL(sender.url);
-  const current = await getStoredCredentials();
-  if (!sameApplicationStepScope(new URL(step.formUrl), url) || workspaceOrigin(step.origin) !== workspaceOrigin(current.origin) || !current.token ||
+  const current = await getQueueConnection();
+  if (!sameApplicationStepScope(new URL(step.formUrl), url) || !matchesQueueAccount(step, current) || !current.token || await automationDisabled(sender.url) ||
     /(?:login|sign[-_]?in|register|creat(?:e|ing)[-_]?account)(?:$|[/_-])/i.test(url.pathname)) return null;
   const [profile, resume] = await Promise.all([
     loadSavedProfile(step.candidateId),
-    (step.resumeDocumentId ? loadApplicationData('resume?documentId=' + step.resumeDocumentId)
-      : loadApplicationResume(step.candidateId)).catch(() => null),
+    step.resumeDocumentId ? loadApplicationData('resume?' + new URLSearchParams({ documentId: step.resumeDocumentId, candidateId: step.candidateId })).catch(() => null) : null,
   ]);
-  if (!profile) return null;
+  if (!profile || (profile.version ?? 1) !== (step.profileVersion ?? 1)) return null;
+  if (!matchesQueueAccount(step, await getQueueConnection())) return null;
   await continueTracking(tabId, step, url);
-  return { profile, resume, resumeDocumentId: step.resumeDocumentId };
+  return {
+    profile, resume, resumeDocumentId: step.resumeDocumentId, requiresReview: step.requiresReview,
+    attemptId: step.attemptId || null, jobKey: step.jobKey || null, eventKey: step.eventKey || null,
+  };
 }
 
 function externalJobDetails(job, url, jobUrl, candidateId) {
@@ -820,7 +954,7 @@ async function prepareEmbeddedOutsideApplication(tabId, tabUrl, frame, job, cand
   const parent = new URL(tabUrl);
   const url = new URL(frame.url);
   if (!outsidePage(parent) || !outsidePage(url) || !matchesEmbeddedPosting(parent, url)) return false;
-  const { origin, token, activeCandidateId, accountId } = await getStoredCredentials();
+  const { origin, token, accountId } = await getStoredCredentials();
   const workspace = workspaceOrigin(origin);
   if (!workspace || !token || (await chrome.tabs.get(tabId)).url !== tabUrl) return false;
 
@@ -828,6 +962,9 @@ async function prepareEmbeddedOutsideApplication(tabId, tabUrl, frame, job, cand
   const storage = await chrome.storage.session.get([key, trackedKey(tabId)]);
   const top = storage[trackedKey(tabId)];
   if (top?.intentId && top.accountId === accountId && top.jobOrigin === portalOrigin(parent)) {
+    if (candidateId && top.candidateId && top.candidateId !== candidateId) {
+      throw new Error('Select the candidate who started this application.');
+    }
     if (storage[key]) await chrome.storage.session.remove(key);
     return true;
   }
@@ -836,16 +973,15 @@ async function prepareEmbeddedOutsideApplication(tabId, tabUrl, frame, job, cand
   const sameForm = previous?.documentId === frame.documentId && previous.parentUrl === parent.href && previous.externalJob?.jobUrl === jobUrl &&
     previous.token === token && previous.workspace === workspace;
 
-  // Eliminate cross-tab profile bleed:
-  // Tab-scoped candidate identity takes priority over global activeCandidateId
+  // Reuse a candidate only within the same embedded application document.
   const existingTabCandidate = (intentIdPattern.test(previous?.candidateId || '') ? previous.candidateId : null)
     || (intentIdPattern.test(previous?.externalJob?.candidateId || '') ? previous.externalJob.candidateId : null)
     || (top?.accountId === accountId && intentIdPattern.test(top?.candidateId || '') ? top.candidateId : null)
     || (top?.accountId === accountId && intentIdPattern.test(top?.externalJob?.candidateId || '') ? top.externalJob.candidateId : null);
 
   const selectedCandidate = (intentIdPattern.test(candidateId || '') ? candidateId : null)
-    || existingTabCandidate
-    || (intentIdPattern.test(activeCandidateId || '') ? activeCandidateId : 'current');
+    || (sameForm ? existingTabCandidate : null);
+  if (!intentIdPattern.test(selectedCandidate || '')) return false;
 
   if (sameForm && (previous?.candidateId === selectedCandidate || previous?.externalJob?.candidateId === selectedCandidate)) {
     if (submissionEvidence && !previous.reported) await chrome.storage.session.set({ [key]: { ...previous, submissionEvidence } });
@@ -882,7 +1018,7 @@ async function resumeEmbeddedTracking(sender) {
   await pendingTracking.get(tabId)?.catch(() => {});
   const key = embeddedKey(tabId);
   const context = (await chrome.storage.session.get(key))[key];
-  if (!context || context.reported || context.frameId !== sender.frameId || context.documentId === sender.documentId ||
+  if (!context || !await readSubmissionAttempt(sender) || context.reported || context.frameId !== sender.frameId || context.documentId === sender.documentId ||
     context.parentUrl !== sender.tab.url) return;
   const url = new URL(sender.url);
   if (portalOrigin(url) !== context.jobOrigin || !matchesEmbeddedPosting(new URL(sender.tab.url), url)) return;
@@ -892,9 +1028,9 @@ async function resumeEmbeddedTracking(sender) {
 
 async function saveOutsideDiscovery(key) {
   const context = (await chrome.storage.session.get(key))[key];
-  if (!context?.externalJob || context.reported || outsideDiscoveries.get(key) === context.eventKey) return;
+  if (!context?.externalJob || context.externalJob.jobDescription.length < 10 || context.reported || outsideDiscoveries.get(key) === context.eventKey) return;
   const current = await getStoredCredentials();
-  if (workspaceOrigin(current.origin) !== context.workspace || !current.token) return;
+  if (!matchesQueueAccount(context, { workspace: workspaceOrigin(current.origin), token: current.token, accountId: current.accountId })) return;
   if (outsideDiscoveries.get(key) === context.eventKey) return;
   outsideDiscoveries.set(key, context.eventKey);
   const job = context.externalJob;
@@ -905,7 +1041,7 @@ async function saveOutsideDiscovery(key) {
         candidateId: intentIdPattern.test(job.candidateId) ? job.candidateId : undefined,
         title: job.jobTitle, company: job.companyName, jobUrl: job.jobUrl, portalSource: job.portalSource,
         location: job.jobLocation, department: job.department, employmentType: job.employmentType, externalId: job.externalId,
-        description: job.jobDescription.length >= 10 ? job.jobDescription : `Application for ${job.jobTitle} at ${job.companyName}.`,
+        description: job.jobDescription,
       }),
     });
     saved = response.ok;
@@ -923,31 +1059,31 @@ async function prepareApplication(tabId, expectedUrl, job, candidateId, submitte
     return urlNow === expectedUrl || (submittedFromPage && urlNow && portalOrigin(new URL(urlNow)) === jobOrigin);
   };
   if (!await stillOnApplication()) throw new Error('The application tab changed. Try autofill again.');
-  const { origin, token, activeCandidateId, accountId } = await getStoredCredentials();
+  const { origin, token, accountId } = await getStoredCredentials();
   const workspace = workspaceOrigin(origin);
   if (!workspace || !token) return false;
 
   let intentId = new URLSearchParams(url.hash.slice(1)).get('marketing-intent');
+  const linkedIntent = intentIdPattern.test(intentId || '');
   const jobUrl = cleanApplicationUrl(url);
   const key = trackedKey(tabId);
   const savedContext = (await chrome.storage.session.get(key))[key];
-  const context = savedContext?.accountId === accountId ? savedContext : undefined;
+  const context = savedContext?.accountId === accountId && savedContext?.workspace === workspace ? savedContext : undefined;
 
   // Tab-scoped candidate identity to prevent cross-tab profile bleed
   const existingTabCandidate = (intentIdPattern.test(context?.candidateId || '') ? context.candidateId : null)
     || (intentIdPattern.test(context?.externalJob?.candidateId || '') ? context.externalJob.candidateId : null);
 
-  const tabCandidateId = (intentIdPattern.test(candidateId || '') ? candidateId : null)
-    || existingTabCandidate
-    || (intentIdPattern.test(activeCandidateId || '') ? activeCandidateId : 'current');
+  let tabCandidateId = (intentIdPattern.test(candidateId || '') ? candidateId : null)
+    || (context?.applicationUrl && sameApplicationStepScope(new URL(context.applicationUrl), url) ? existingTabCandidate : null);
 
   if (submittedFromPage && context && context.workspace === workspace && token && (
-    context.applicationUrl === jobUrl ||
-    (context.awaitSubmit && sameApplicationStepScope(new URL(context.applicationUrl), url))
+    (!candidateId || context.candidateId === candidateId) && (context.applicationUrl === jobUrl ||
+    (context.awaitSubmit && context.applicationUrl && sameApplicationStepScope(new URL(context.applicationUrl), url)))
   )) {
     if (context.reported) return false;
     if (submissionEvidence || context.awaitSubmit) {
-      await chrome.storage.session.set({ [key]: { ...context, token, awaitSubmit: false, ...(submissionEvidence ? { submissionEvidence } : {}) } });
+      await chrome.storage.session.set({ [key]: { ...context, token, applicationUrl: jobUrl, awaitSubmit: false, ...(submissionEvidence ? { submissionEvidence } : {}) } });
     }
     return true;
   }
@@ -960,27 +1096,37 @@ async function prepareApplication(tabId, expectedUrl, job, candidateId, submitte
       throw new Error(data?.error || 'Could not link this form to your NextKinHR application.');
     }
     ({ intentId } = await response.json());
-  } else if (!submittedFromPage) {
+  }
+  if (intentIdPattern.test(intentId || '')) {
     const response = await fetch(workspace + '/api/extension/intents/' + intentId, workspaceRequest(token));
     if (!response.ok) {
       const data = await response.json().catch(() => null);
       throw new Error(data?.error || 'Could not verify this NextKinHR application.');
     }
     const { intent } = await response.json();
-    if (tabCandidateId && tabCandidateId !== 'current' && intent?.candidate_id && intent.candidate_id !== tabCandidateId) {
+    if (!intentIdPattern.test(intent?.candidate_id || '')) return false;
+    if (linkedIntent) {
+      const job = Array.isArray(intent.job) ? intent.job[0] : intent.job;
+      if (!job?.application_url || !sameApplicationStepScope(new URL(job.application_url), url)) {
+        throw new Error('This form does not match the NextKinHR application.');
+      }
+    }
+    if (tabCandidateId && intent?.candidate_id !== tabCandidateId) {
       throw new Error('Select the candidate who started this application.');
     }
+    tabCandidateId = intent?.candidate_id;
   }
   let externalJob;
   if (!intentIdPattern.test(intentId || '')) {
     intentId = null;
     if (url.origin === workspace || /(^|\.)(nextkinhr\.com|jobright-internal\.com)$/.test(url.hostname)) return false;
+    if (!intentIdPattern.test(tabCandidateId || '')) return false;
     externalJob = externalJobDetails(job, url, jobUrl, tabCandidateId);
     if (!externalJob) return false;
   }
   if (!await stillOnApplication()) throw new Error('The application tab changed. Try autofill again.');
 
-  const changed = context?.intentId !== intentId || context?.jobOrigin !== jobOrigin || context.workspace !== workspace
+  const changed = context?.intentId !== intentId || context?.jobOrigin !== jobOrigin || context?.workspace !== workspace
     || (context.applicationUrl && context.applicationUrl !== jobUrl)
     || context.externalJob?.jobUrl !== externalJob?.jobUrl
     || (context.candidateId || context.externalJob?.candidateId) !== (tabCandidateId || externalJob?.candidateId);
@@ -1001,7 +1147,7 @@ async function watchPortalLaunch(sender, job, actorId, candidateParam) {
   if (!Number.isInteger(tabId) || sender.frameId !== 0 || !sender.url) return false;
   const launch = new URL(sender.url);
   if (!workspaceLaunchPath.test(launch.pathname)) return false;
-  const { origin, token, user, activeCandidateId, accountId } = await getStoredCredentials();
+  const { origin, token, user, accountId } = await getStoredCredentials();
   const workspace = workspaceOrigin(origin);
   if (!workspace || workspaceOrigin(launch.href) !== workspace || !token || (await chrome.tabs.get(tabId)).url !== launch.href) return false;
   if (launch.pathname.startsWith('/dashboard/') && (!actorId || user?.id !== actorId)) return false;
@@ -1010,8 +1156,7 @@ async function watchPortalLaunch(sender, job, actorId, candidateParam) {
   if (destination.protocol !== 'https:' || destination.username || destination.password || workspaceOrigin(destination.href)) return false;
   const applicationUrl = cleanApplicationUrl(destination);
   const candidateId = intentIdPattern.test(candidateParam || '') ? candidateParam
-    : (intentIdPattern.test(job?.candidateId || '') ? job.candidateId
-    : (intentIdPattern.test(activeCandidateId || '') ? activeCandidateId : undefined));
+    : (intentIdPattern.test(job?.candidateId || '') ? job.candidateId : undefined);
   const externalJob = externalJobDetails(job, destination, applicationUrl, candidateId);
   if (!externalJob) return false;
   const key = trackedKey(tabId);
@@ -1085,7 +1230,11 @@ if (typeof chrome !== 'undefined' && chrome.tabs?.onRemoved?.addListener) {
   chrome.tabs.onRemoved.addListener(tabId => {
     outsideDiscoveries.delete(trackedKey(tabId));
     outsideDiscoveries.delete(embeddedKey(tabId));
-    void chrome.storage.session.remove([trackedKey(tabId), stepKey(tabId), embeddedKey(tabId)]);
+    void (async () => {
+      const all = await chrome.storage.session.get(null);
+      const markers = Object.keys(all).filter(key => key.startsWith('submission_attempt:' + tabId + ':'));
+      await chrome.storage.session.remove([trackedKey(tabId), stepKey(tabId), embeddedKey(tabId), attemptStateKey(tabId), ...markers]);
+    })().catch(() => {});
   });
 }
 
@@ -1105,58 +1254,64 @@ async function recordConfirmation(message, sender) {
   const url = new URL(sender.url);
   const embedded = sender.frameId !== 0;
   const key = embedded ? embeddedKey(sender.tab.id) : trackedKey(sender.tab.id);
-  let context = (await chrome.storage.session.get(key))[key];
-
-  // Check 15-minute attempt TTL and pre-submit snapshot
-  const attemptKey = `submission_attempt:${sender.tab.id}`;
-  const attemptData = (await chrome.storage.session.get(attemptKey).catch(() => ({})))?.[attemptKey];
-  const isRecentAttempt = attemptData && Date.now() - attemptData.timestamp <= 15 * 60 * 1000;
-
-  const snapshotKey = `submission_snapshot:${sender.tab.id}`;
-  const snapshot = (await chrome.storage.session.get(snapshotKey).catch(() => ({})))?.[snapshotKey];
-
-  const current = await getStoredCredentials();
+  const context = await readSubmissionAttempt(sender);
+  const status = message.status || 'SUBMITTED';
+  // SUBMITTED is a success receipt; FAILED and PENDING_VERIFICATION are still meaningful
+  // observations and must be recorded instead of silently discarded.
+  if (!context || !['SUBMITTED', 'FAILED', 'PENDING_VERIFICATION'].includes(status)) return false;
   const connection = await getQueueConnection();
-  if (current.token !== connection.token || workspaceOrigin(current.origin) !== connection.workspace || !connection.accountId) return false;
-  const snapshotData = snapshot && matchesQueueAccount(snapshot, connection) ? snapshot : null;
-
-  if (!context) {
-    if (isRecentAttempt && matchesQueueAccount(attemptData, connection) && snapshotData) {
-      context = {
-        workspace: connection.workspace,
-        accountId: connection.accountId,
-        jobOrigin: portalOrigin(url),
-        externalJob: {
-          jobTitle: snapshotData.jobTitle,
-          companyName: snapshotData.companyName,
-          jobLocation: snapshotData.jobLocation,
-          jobUrl: snapshotData.jobUrl || sender.url,
-          portalSource: snapshotData.portalSource || 'extension',
-          candidateId: current.activeCandidateId,
-        },
-        candidateId: current.activeCandidateId,
-        eventKey: snapshotData.eventKey,
-      };
-    } else {
-      return false;
-    }
-  } else if ((context.launchExpiresAt && context.launchExpiresAt <= Date.now()) ||
-    portalOrigin(url) !== context.jobOrigin) {
-    return false;
-  }
+  if (!matchesQueueAccount(context, connection)) return false;
+  const latestContext = (await chrome.storage.session.get(key))[key];
+  if (latestContext && latestContext.eventKey !== context.eventKey) return false;
+  if (context.launchExpiresAt && context.launchExpiresAt <= Date.now()) return false;
+  if (latestContext?.reported || context.reported) return true;
+  const observedId = globalThis.NextkinSiteRegistry?.extractIdentifiers?.(url.href)?.requisitionId;
+  const expectedId = globalThis.NextkinSiteRegistry?.extractIdentifiers?.(context.applicationUrl)?.requisitionId || context.externalJob?.externalId;
+  if (observedId && expectedId && String(observedId).toLowerCase() !== String(expectedId).toLowerCase()) return false;
   if (embedded) {
-    if (sender.frameId !== context.frameId || sender.documentId !== context.documentId || !sender.tab.url) return false;
+    if (sender.frameId !== context.frameId || !sender.tab.url || sender.documentId !== (latestContext?.documentId || context.documentId)) return false;
     const parent = new URL(sender.tab.url);
     if (parent.href !== context.parentUrl || !matchesEmbeddedPosting(parent, url)) return false;
   }
-  if (context.workspace !== connection.workspace || !connection.token ||
-    (context.accountId ? context.accountId !== connection.accountId : context.token !== connection.token)) return false;
-  if (context.reported) return true;
   const receiptUrl = cleanApplicationUrl(url);
 
   // Tab-scoped candidate identity
-  const tabCandidateId = intentIdPattern.test(context.candidateId || '') ? context.candidateId
-    : (intentIdPattern.test(context.externalJob?.candidateId || '') ? context.externalJob.candidateId : undefined);
+  const tabCandidateId = context.candidateId;
+  if (status !== 'SUBMITTED') {
+    // Do not clear awaitSubmit or mark the attempt reported: the candidate may still submit.
+    const observedStatus = status === 'FAILED' ? 'failed' : 'submit_attempted';
+    const observedBody = context.intentId
+      ? {
+          intentId: context.intentId,
+          attempt: context.attempt,
+          status: observedStatus,
+          candidateId: tabCandidateId,
+          url: receiptUrl,
+          applicationUrl: context.applicationUrl,
+          observedAt: new Date().toISOString(),
+          eventKey: context.eventKey,
+          evidence: message.evidence || (status === 'FAILED' ? 'Submission failed' : 'Pending verification on page navigation'),
+          captureMethod: 'extension-detected',
+          atsDetected: Boolean(message.atsDetected),
+        }
+      : {
+          ...(context.externalJob || {}),
+          status: observedStatus,
+          confirmationUrl: receiptUrl,
+          candidateId: tabCandidateId,
+          eventKey: context.eventKey,
+          evidence: message.evidence || (status === 'FAILED' ? 'Submission failed' : 'Pending verification on page navigation'),
+          captureMethod: 'extension-detected',
+          atsDetected: Boolean(message.atsDetected),
+        };
+    const observedItem = sanitizeQueueItem({
+      id: context.eventKey + ':' + observedStatus,
+      workspace: context.workspace,
+      accountId: connection.accountId,
+      body: observedBody,
+    }, connection.token);
+    return persistAndDeliverReceipt(observedItem);
+  }
 
   let payload = {
     ...context.externalJob,
@@ -1164,19 +1319,10 @@ async function recordConfirmation(message, sender) {
     candidateId: tabCandidateId,
   };
 
-  if (snapshotData) {
-    payload = {
-      ...payload,
-      title: payload.title || payload.jobTitle || snapshotData.jobTitle,
-      company: payload.company || payload.companyName || snapshotData.companyName,
-      location: payload.location || payload.jobLocation || snapshotData.jobLocation,
-      jobUrl: payload.jobUrl || snapshotData.jobUrl,
-    };
-  }
-
   if (context.intentId) {
     payload = {
       intentId: context.intentId,
+      attempt: context.attempt,
       status: 'confirmed',
       candidateId: tabCandidateId,
       url: receiptUrl,
@@ -1187,8 +1333,8 @@ async function recordConfirmation(message, sender) {
 
   const confirmationBody = {
     ...payload,
-    candidateId: tabCandidateId,
     ...context.submissionEvidence,
+    candidateId: tabCandidateId,
     eventKey: context.eventKey,
     evidence: message.evidence,
     captureMethod: 'extension-detected',
@@ -1322,7 +1468,7 @@ async function manageQueue(action, id) {
   });
 }
 
-const connectedPanels = new Set();
+const connectedPanels = new Map();
 const pendingTracking = new Map();
 const pendingSteps = new Map();
 
@@ -1332,25 +1478,25 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onConnect?.addListener) {
       port.disconnect();
       return;
     }
-    if (port.name === 'nextkin_side_panel') {
-      connectedPanels.add(port);
-      // Broadcast to tabs that side panel is now open
-      chrome.tabs.query({}).then(tabs => {
-        for (const tab of tabs) {
-          if (tab.id) chrome.tabs.sendMessage(tab.id, { type: 'NEXTKIN_SIDE_PANEL_STATE', isOpen: true }).catch(() => {});
-        }
-      }).catch(() => {});
-
-      port.onDisconnect.addListener(() => {
-        connectedPanels.delete(port);
-        const isOpen = connectedPanels.size > 0;
-        chrome.tabs.query({}).then(tabs => {
-          for (const tab of tabs) {
-            if (tab.id) chrome.tabs.sendMessage(tab.id, { type: 'NEXTKIN_SIDE_PANEL_STATE', isOpen }).catch(() => {});
-          }
-        }).catch(() => {});
-      });
-    }
+    if (port.name !== 'nextkin_side_panel' || port.sender?.url !== chrome.runtime.getURL('panel.html')) return;
+    const ping = tabId => {
+      if (!Number.isInteger(tabId)) return;
+      const isOpen = [...connectedPanels.values()].includes(tabId);
+      void chrome.tabs.sendMessage(tabId, { type: 'NEXTKIN_SIDE_PANEL_STATE', isOpen }).catch(() => {});
+    };
+    port.onMessage.addListener(message => {
+      if (message?.type !== 'panel-tab' || !Number.isInteger(message.tabId)) return;
+      const previous = connectedPanels.get(port);
+      if (previous === message.tabId) return;
+      connectedPanels.set(port, message.tabId);
+      ping(previous);
+      ping(message.tabId);
+    });
+    port.onDisconnect.addListener(() => {
+      const previous = connectedPanels.get(port);
+      connectedPanels.delete(port);
+      ping(previous);
+    });
   });
 }
 
@@ -1378,7 +1524,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) {
       })();
       return true;
     }
-    if (message?.type === 'queue-submission' && message.payload) {
+    if (message?.type === 'queue-submission' && message.payload && sender.url === chrome.runtime.getURL('panel.html')) {
       void (async () => {
         try {
           const connection = await getQueueConnection();
@@ -1396,73 +1542,29 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) {
       })();
       return true;
     }
-    if (message?.type === 'NEXTKIN_SET_SUBMISSION_ATTEMPT') {
-      const tabId = sender.tab?.id;
-      if (tabId != null) {
-        const key = `submission_attempt:${tabId}`;
-        void getQueueConnection().then(({ workspace, accountId }) =>
-          chrome.storage.session.set({ [key]: { timestamp: Date.now(), workspace, accountId } }))
-          .then(() => reply({ success: true }), (err) => reply({ error: err.message }));
-        return true;
-      }
-      reply({ error: 'No tab id' });
-      return false;
-    }
-    if (message?.type === 'NEXTKIN_SET_JOB_SNAPSHOT') {
-      const tabId = sender.tab?.id;
-      if (tabId != null) {
-        const key = `submission_snapshot:${tabId}`;
-        void getQueueConnection().then(async ({ workspace, accountId }) => {
-          const prior = (await chrome.storage.session.get(key))[key];
-          const eventKey = prior?.eventKey && prior.workspace === workspace && prior.accountId === accountId &&
-            prior?.jobUrl === message.payload?.jobUrl ? prior.eventKey : crypto.randomUUID();
-          await chrome.storage.session.set({ [key]: { ...(message.payload || {}), workspace, accountId,
-            eventKey, updatedAt: Date.now() } });
-        })
-          .then(() => reply({ success: true }), (err) => reply({ error: err.message }));
-        return true;
-      }
-      reply({ error: 'No tab id' });
-      return false;
-    }
-    if (message?.type === 'NEXTKIN_FETCH_RESUME_FILE') {
-      void (async () => {
-        try {
-          const { origin, token, activeCandidateId } = await getStoredCredentials();
-          const candidateId = message.candidateId || activeCandidateId;
-          if (!origin || !token) {
-            reply({ error: 'Extension is not connected to a server.' });
-            return;
-          }
-          if (!candidateId) {
-            reply({ error: 'No active candidate profile selected.' });
-            return;
-          }
-          const res = await fetch(`${origin}/api/extension/resume-file?candidateId=${encodeURIComponent(candidateId)}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            reply({ error: err.error || `Resume fetch failed (${res.status})` });
-            return;
-          }
-          const data = await res.json();
-          reply(data);
-        } catch (err) {
-          reply({ error: err.message });
-        }
-      })();
+    if (message?.type === 'NEXTKIN_SAVE_ATTEMPT' || message?.type === 'NEXTKIN_CLEAR_ATTEMPT') {
+      void withQueueLock(() => storeAttempt(message, sender)).then(reply, () => reply(false));
       return true;
     }
-    if (message?.type === 'NEXTKIN_BROADCAST_AUTOFILL_CHILD_FRAMES') {
-      const tabId = sender.tab?.id;
-      if (tabId != null) {
-        chrome.tabs.sendMessage(tabId, { type: 'NEXTKIN_TRIGGER_AUTOFILL' }).catch(() => {});
-        reply({ success: true });
+    if (message?.type === 'NEXTKIN_CANCEL_SUBMISSION_ATTEMPT') {
+      void (async () => {
+        const marker = await readSubmissionAttempt(sender);
+        if (!marker || marker.documentId !== sender.documentId || marker.attemptId !== message.attemptId) return false;
+        await chrome.storage.session.remove(submissionKey(sender.tab.id, sender.frameId));
         return true;
-      }
-      reply({ error: 'No tab id' });
-      return false;
+      })().then(reply, () => reply(false));
+      return true;
+    }
+    if (message?.type === 'NEXTKIN_GET_SUBMISSION_ATTEMPT') {
+      void readSubmissionAttempt(sender).then(marker => reply(Boolean(marker)), () => reply(false));
+      return true;
+    }
+    if (message?.type === 'NEXTKIN_GET_SITE_RULES') {
+      void (async () => {
+        const { workspace, token, accountId } = await getQueueConnection();
+        return workspace && token ? globalThis.NextkinSiteRules?.getWorkspaceRules(workspace, token, accountId) : null;
+      })().then(reply, () => reply(null));
+      return true;
     }
     if (message?.type === 'NEXTKIN_SAVE_CONNECTION') {
       const { token, user, origin } = message;
@@ -1517,18 +1619,11 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) {
     }
     if (message?.action === 'load_application_profile' && sender.tab?.id != null) {
       void (async () => {
-        let candId = message.candidateId;
-        if (!intentIdPattern.test(candId || '')) {
-          const tabId = sender.tab.id;
-          const tabContext = await chrome.storage.session.get([trackedKey(tabId), embeddedKey(tabId)]);
-          const tabScope = tabContext[trackedKey(tabId)] || tabContext[embeddedKey(tabId)];
-          candId = tabScope?.candidateId || tabScope?.externalJob?.candidateId;
-        }
-        if (!intentIdPattern.test(candId || '')) {
-          const creds = await getStoredCredentials();
-          candId = creds.activeCandidateId;
-        }
-        return loadSavedProfile(candId);
+        const scope = await applicationScope(sender);
+        if (!scope?.state || scope.state.candidateId !== message.candidateId ||
+          (scope.tracking?.candidateId && scope.tracking.candidateId !== message.candidateId) ||
+          await automationDisabled(sender.url)) return null;
+        return loadSavedProfile(message.candidateId);
       })().then(reply, () => reply(null));
       return true;
     }
@@ -1537,7 +1632,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) {
       if (message?.action === 'queue_application_step') {
         const pending = queueApplicationStep(tabId, sender, message);
         pendingSteps.set(tabId, pending);
-        void pending.then(() => reply(true), () => reply(false)).finally(() => {
+        void pending.then(result => reply(result !== false), () => reply(false)).finally(() => {
           if (pendingSteps.get(tabId) === pending) pendingSteps.delete(tabId);
         });
         return true;
@@ -1599,12 +1694,21 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) {
       const embedded = panel ? message.embeddedFrame : applicationPage && embeddedSubmit && {
         frameId: sender.frameId, documentId: sender.documentId, url: sender.url,
       };
-      const tracking = embedded
-        ? Promise.resolve(pendingTracking.get(tabId)).catch(() => {}).then(() =>
-          prepareEmbeddedOutsideApplication(tabId, panel ? message.url : sender.tab.url, embedded, message.job,
-            panel ? message.candidateId : undefined, submitted, submitted ? message.submissionEvidence : undefined))
-        : prepareApplication(tabId, message.url, message.job, message.candidateId,
-          submitted, submitted ? message.submissionEvidence : undefined);
+      const tracking = Promise.resolve(pendingTracking.get(tabId)).catch(() => {}).then(async () => {
+        if (panel && await automationDisabled(embedded?.url || message.url)) return false;
+        const scope = submitted ? await applicationScope(sender) : null;
+        if (submitted && (!scope || (message.attemptId && scope.state?.attemptId !== message.attemptId))) return false;
+        if (submitted && message.automatic && (!scope.state || scope.state.requiresReview || await automationDisabled(sender.url, true))) return false;
+        const candidateId = panel ? message.candidateId : scope?.state?.candidateId || scope?.tracking?.candidateId;
+        const evidence = submitted && message.submissionEvidence ? sanitizeQueueItem({ body: message.submissionEvidence }).body : undefined;
+        const submissionEvidence = evidence ? { answers: evidence.answers, appliedResume: evidence.appliedResume } : undefined;
+        const tracked = embedded
+          ? await prepareEmbeddedOutsideApplication(tabId, panel ? message.url : sender.tab.url, embedded, message.job,
+            candidateId, submitted, submissionEvidence)
+          : await prepareApplication(tabId, message.url, message.job, candidateId, submitted, submissionEvidence);
+        if (!tracked || !submitted) return tracked;
+        return markSubmission(sender, message.attemptId);
+      });
       pendingTracking.set(tabId, tracking);
       void tracking.then(
         async tracked => {
@@ -1622,7 +1726,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) {
       return true;
     }
     if (message?.action === 'check_side_panel_state') {
-      reply({ isOpen: connectedPanels.size > 0 });
+      reply({ isOpen: [...connectedPanels.values()].includes(sender.tab?.id) });
       return false;
     }
     if (message?.action === 'open_side_panel') {
@@ -1636,6 +1740,30 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage?.addListener) {
           chrome.tabs.sendMessage(sender.tab.id, { type: 'NEXTKIN_SIDE_PANEL_STATE', isOpen: true }).catch(() => {});
         }
         reply(true);
+        return true;
+      }
+      reply(false);
+      return false;
+    }
+    if (message?.type === 'NEXTKIN_REGISTER_MAIN_BRIDGES') {
+      const tabId = sender.tab?.id;
+      const frameId = sender.frameId;
+      const urlHref = sender.url || '';
+      if (tabId == null || !/^https?:\/\//i.test(urlHref) || globalThis.NextkinSiteRegistry?.isExcludedUrl?.(urlHref)) {
+        reply(false);
+        return false;
+      }
+      if (typeof chrome !== 'undefined' && chrome.scripting?.executeScript) {
+        const target = sender.documentId ? { tabId, documentIds: [sender.documentId] } : { tabId, frameIds: [frameId] };
+        void (async () => {
+          if (!Number.isInteger(frameId) || await automationDisabled(urlHref)) return false;
+          await chrome.scripting.executeScript({
+            target,
+            world: 'MAIN',
+            files: ['main-world/submission-network.js', 'main-world/framework-bridges.js'],
+          });
+          return true;
+        })().then(reply, () => reply(false));
         return true;
       }
       reply(false);

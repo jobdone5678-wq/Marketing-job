@@ -52,6 +52,7 @@ export interface PlanResult {
   executableFills?: Fill[];
   unmapped: string[];
   deferred: string[];
+  deferredFieldIds?: string[];
   batchCount: number;
   telemetry?: {
     usage?: TokenUsageTelemetry;
@@ -315,25 +316,14 @@ export async function planFormBatch(
 
       const rawFieldId = typeof rawFill.fieldId === 'string' ? rawFill.fieldId.trim() : '';
 
-      let targetField: Field | undefined;
-      if (rawFieldId !== '') {
-        targetField = targetFields.find(
-          (f) =>
-            !handledFields.has(f) &&
-            (f.id === rawFill.fieldId ||
-              f.name === rawFill.fieldId ||
-              f.id === rawFieldId ||
-              f.name === rawFieldId),
-        );
-        if (!targetField) continue;
-      } else {
-        if (typeof rawFill.label !== 'string') continue;
-        const normalizedRawLabel = normalizeFieldLabel(rawFill.label);
-        targetField = targetFields.find(
-          (f) => !handledFields.has(f) && normalizeFieldLabel(f.label) === normalizedRawLabel,
-        );
-        if (!targetField) continue;
-      }
+      const candidates = rawFieldId
+        ? fields.filter(field => field.id === rawFieldId || field.name === rawFieldId)
+        : typeof rawFill.label === 'string'
+          ? fields.filter(field => normalizeFieldLabel(field.label) === normalizeFieldLabel(rawFill.label))
+          : [];
+      if (candidates.length !== 1) continue;
+      const [targetField] = candidates;
+      if (!targetFields.includes(targetField) || handledFields.has(targetField)) continue;
 
       handledFields.add(targetField);
 
@@ -405,6 +395,7 @@ export async function planFormBatch(
     executableFills,
     unmapped,
     deferred,
+    deferredFieldIds: [...deferredFields].flatMap(field => field.id ? [field.id] : []),
     batchCount,
     ...(telemetry !== undefined ? { telemetry } : {}),
   };

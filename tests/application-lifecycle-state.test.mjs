@@ -204,9 +204,9 @@ test('Separation of application_status (ATS) from sync_status (NextKinHR backend
   assert.equal(status.candidateId, 'cand-2');
 });
 
-test('Persistence: persists minimal durable state to session storage without raw DOM nodes', () => {
+test('Persistence: sends minimal attempt state to the extension worker and avoids website storage', async () => {
   const sessionStorageStore = {};
-  const chromeSessionStore = {};
+  const messages = [];
 
   const sandbox = loadApplicationModule({
     window: {
@@ -215,19 +215,7 @@ test('Persistence: persists minimal durable state to session storage without raw
         getItem: k => sessionStorageStore[k] || null,
       },
     },
-    chrome: {
-      storage: {
-        session: {
-          set: async data => { Object.assign(chromeSessionStore, data); },
-          get: async k => {
-            if (typeof k === 'string') return { [k]: chromeSessionStore[k] };
-            const res = {};
-            for (const key of k) if (chromeSessionStore[key]) res[key] = chromeSessionStore[key];
-            return res;
-          },
-        },
-      },
-    },
+    chrome: { runtime: { sendMessage: async message => { messages.push(message); return true; } } },
   });
 
   const { ApplicationStateManager, ApplicationAttemptContext, ApplicationState, SyncStatus } = sandbox.NextkinApplication;
@@ -244,29 +232,14 @@ test('Persistence: persists minimal durable state to session storage without raw
   const manager = new ApplicationStateManager(context, { initialState: ApplicationState.FILLING });
   manager.setSyncStatus(SyncStatus.SYNC_PENDING);
 
-  // Check window.sessionStorage
-  const storedJson = sessionStorageStore.nextkin_application_attempt_state;
-  assert.ok(storedJson, 'State must be persisted in window.sessionStorage');
-  const parsed = JSON.parse(storedJson);
-  assert.equal(parsed.context.candidateId, 'cand-persist');
-  assert.equal(parsed.application_status, ApplicationState.FILLING);
-  assert.equal(parsed.sync_status, SyncStatus.SYNC_PENDING);
-
-  // Check chrome.storage.session
-  const activeKey = 'application-state-active';
-  assert.ok(chromeSessionStore[activeKey], 'State must be persisted in chrome.storage.session');
-  assert.equal(chromeSessionStore[activeKey].attemptId, context.attemptId);
-
-  // Verify no DOM nodes or circular references
-  assert.doesNotThrow(() => JSON.stringify(parsed));
-  assert.equal(typeof parsed.context.jobUrl, 'string');
-
-  // Verify restoration
-  const restored = ApplicationStateManager.restore({ attemptId: context.attemptId });
-  assert.ok(restored, 'ApplicationStateManager must be restored from storage');
-  assert.equal(restored.getContext().candidateId, 'cand-persist');
-  assert.equal(restored.getState(), ApplicationState.FILLING);
-  assert.equal(restored.getSyncStatus(), SyncStatus.SYNC_PENDING);
+  await manager.persist();
+  const message = messages.at(-1);
+  assert.equal(message.type, 'NEXTKIN_SAVE_ATTEMPT');
+  assert.equal(message.payload.context.candidateId, context.candidateId);
+  assert.equal(message.payload.application_status, ApplicationState.FILLING);
+  assert.equal(message.payload.sync_status, SyncStatus.SYNC_PENDING);
+  assert.equal(message.payload.history, undefined);
+  assert.deepEqual(sessionStorageStore, {});
 });
 
 test('Multi-tab isolation: candidate identity cannot be mutated mid-attempt', async () => {
@@ -332,7 +305,7 @@ test('validateForSubmission: keeps user in control of final submission without t
   fields[1].element.value = 'alice@example.com';
 
   const readyValidation = validateForSubmission(url);
-  assert.equal(readyValidation.ready, true);
-  assert.equal(readyValidation.state, ApplicationState.READY_TO_SUBMIT);
-  assert.equal(readyValidation.button, 'Submit Application');
+  assert.equal(readyValidation.ready, false);
+  assert.equal(readyValidation.state, ApplicationState.REVIEW_REQUIRED);
+  assert.equal(readyValidation.incomplete, true);
 });

@@ -23,6 +23,9 @@
 
   function cleanApplicationUrl(url) {
     if (!url) return '';
+    if (typeof globalThis.NextkinSiteRegistry?.cleanApplicationUrl === 'function') {
+      return globalThis.NextkinSiteRegistry.cleanApplicationUrl(url);
+    }
     try {
       const parsed = typeof url === 'string' ? new URL(url) : (url instanceof URL ? url : new URL(String(url)));
       const clean = params => {
@@ -73,6 +76,20 @@
     }).filter(Boolean).join(' • ');
   }
 
+  // Country is "verified" only when the single JobPosting's structured data names exactly one country.
+  // Free-text locations ("Remote - EMEA") never qualify.
+  function verifiedCountry(rootNode = document) {
+    try {
+      const posting = structuredPosting(rootNode);
+      if (!posting) return '';
+      const countries = new Set([posting.jobLocation].flat().filter(Boolean).map(item => {
+        const c = (item?.address || item)?.addressCountry;
+        return String(c?.name || c || '').trim();
+      }).filter(Boolean));
+      return countries.size === 1 ? [...countries][0] : '';
+    } catch { return ''; }
+  }
+
   function safeHtml(markup) {
     const template = document.createElement('template');
     template.innerHTML = String(markup).slice(0, 120_000);
@@ -100,7 +117,8 @@
     const keka = kekaPosting(current);
     const isWorkspace = /(^|\.)(nextkinhr\.com|jobright-internal\.com)$/.test(current.hostname)
       || ['localhost', '127.0.0.1'].includes(current.hostname) && !!first(root, '#nextkin-job-details');
-    const isAts = /(^|\.)(linkedin\.com|lever\.co|ashbyhq\.com|greenhouse\.io|myworkdayjobs\.com|myworkdaysite\.com|smartrecruiters\.com|smartr\.me|workable\.com|taleo\.net|icims\.com|jobvite\.com|bamboohr\.com|clearcompany\.com|hrmdirect\.com|oraclecloud\.com|oraclegovcloud\.com|successfactors\.(?:com|eu)|sapsf\.com|brassring\.com|dayforce(hcm)?\.com|phenompeople\.com|avature\.net|paycom(online)?\.(?:com|net)|paylocity\.com|paycor\.com|newtonsoftware\.com|gusto\.com|gem\.com|hiringthing\.com|oasisrecruit\.com|careerplug\.com|catsone\.com|recruiterflow\.com|trakstar\.com|polymer\.co|gohire\.io|trinethire\.com|kula\.ai|dover\.com|eightfold\.ai|ultipro\.(?:com|ca)|rec\.pro\.ukg\.net|zohorecruit\.(?:com|ca|eu|in)|personio\.(?:de|com)|breezy\.hr|teamtailor\.com|recruitee\.com|pinpointhq\.com|freshteam\.com|comeet\.(?:com|co)|jobscore\.com|isolvedhire\.com|jobdiva\.com|applytojob\.com|toasttab\.com|withwaymo\.com|governmentjobs\.com|usajobs\.gov|ycombinator\.com|workatastartup\.com)$/i.test(current.hostname);
+    const isAts = (typeof globalThis.NextkinSiteRegistry?.isSupportedPortal === 'function' && globalThis.NextkinSiteRegistry.isSupportedPortal(jobUrl, root)) ||
+      /(^|\.)(linkedin\.com|lever\.co|ashbyhq\.com|greenhouse\.io|myworkdayjobs\.com|myworkdaysite\.com|smartrecruiters\.com|smartr\.me|workable\.com|taleo\.net|icims\.com|jobvite\.com|bamboohr\.com|clearcompany\.com|hrmdirect\.com|oraclecloud\.com|oraclegovcloud\.com|successfactors\.(?:com|eu)|sapsf\.com|brassring\.com|dayforce(hcm)?\.com|phenompeople\.com|avature\.net|paycom(online)?\.(?:com|net)|paylocity\.com|paycor\.com|newtonsoftware\.com|gusto\.com|gem\.com|hiringthing\.com|oasisrecruit\.com|careerplug\.com|catsone\.com|recruiterflow\.com|trakstar\.com|polymer\.co|gohire\.io|trinethire\.com|kula\.ai|dover\.com|eightfold\.ai|ultipro\.(?:com|ca)|rec\.pro\.ukg\.net|zohorecruit\.(?:com|ca|eu|in)|personio\.(?:de|com)|breezy\.hr|teamtailor\.com|recruitee\.com|pinpointhq\.com|freshteam\.com|comeet\.(?:com|co)|jobscore\.com|isolvedhire\.com|jobdiva\.com|applytojob\.com|toasttab\.com|withwaymo\.com|governmentjobs\.com|usajobs\.gov|ycombinator\.com|workatastartup\.com)$/i.test(current.hostname);
     const portal = isWorkspace && /^\/(?:dashboard\/jobs|jobs\/info)\/[^/]+\/?$/.test(current.pathname);
     if (isWorkspace && !portal) return null;
     const workspace = portal ? parse(first(root, '#nextkin-job-details')?.textContent) : null;
@@ -167,14 +185,11 @@
 
     const markup = workspace?.descriptionHtml || posting?.description || descriptionNode?.innerHTML || '';
     const template = safeHtml(markup);
-    let descriptionHtml = template.innerHTML.slice(0, 120_000);
+    const descriptionHtml = template.innerHTML.slice(0, 120_000);
     for (const element of template.content.querySelectorAll('br, p, li, h1, h2, h3, h4, div, section')) element.after('\n');
-    let description = text(workspace?.description || template.content.textContent || descriptionNode?.innerText, 60_000);
-    if (description.length < 30 && (isAts || /apply|application/i.test(current.pathname))) {
-      description = `${title} at ${company}. Application posting for the ${title} role at ${company}.`;
-      descriptionHtml = `<p>${description}</p>`;
-    }
-    if (!title || !company || description.length < 15 || /^(careers?|open positions?|job search|all jobs|open roles|job opportunities)$/i.test(title)) return null;
+    const description = text(workspace?.description || template.content.textContent || descriptionNode?.innerText, 60_000);
+    const applicationPage = isAts || /apply|application/i.test(current.pathname);
+    if (!title || !company || (!applicationPage && description.length < 15) || /^(careers?|open positions?|job search|all jobs|open roles|job opportunities)$/i.test(title)) return null;
 
     const apply = [...root.querySelectorAll('a[href]')].find(link => /^(apply(?:\s+(?:now|for\s+(?:this\s+)?(?:job|role|position)))?|submit application)\b/i
       .test((link.innerText || link.getAttribute('aria-label') || link.textContent || '').trim()));
@@ -183,7 +198,9 @@
     const postingParam = [...current.searchParams.keys()].some(key => /^(?:gh_jid|jobId|job_id|jk|postingId)$/i.test(key));
     return {
       title, company, description, descriptionHtml,
-      jobUrl: keka?.details || (workspace || postingParam || !onSameSite || /^(?:\/|\/(?:careers?|jobs?|openings?)\/?)$/i.test(new URL(canonical).pathname) ? jobUrl : canonical),
+      descriptionSource: description.length >= 15 ? 'captured' : 'unavailable',
+      navigationUrl: current.href,
+      jobUrl: cleanApplicationUrl(keka?.details || (workspace || postingParam || !onSameSite || /^(?:\/|\/(?:careers?|jobs?|openings?)\/?)$/i.test(new URL(canonical).pathname) ? jobUrl : canonical)),
       applicationUrl: keka?.application || url(workspace?.applicationUrl || posting?.applicationUrl || apply?.getAttribute('href'), jobUrl),
       location: text(workspace?.location || formatLocations(posting?.jobLocation) || read(root,
         '[itemprop="jobLocation"], [data-automation-id="locations"], [data-automation-id="jobPostingLocation"], [data-testid="job-location"], .job-location, .posting-categories .location, .ki-location + span, .jobs-unified-top-card__subtitle-primary-grouping', 200), 200),
@@ -212,31 +229,8 @@
       department: job.department || null,
       employmentType: job.employmentType || null,
     };
-    try {
-      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-        chrome.runtime.sendMessage({
-          type: 'NEXTKIN_SET_JOB_SNAPSHOT',
-          payload: snapshot,
-        }).catch(() => {});
-      }
-    } catch {}
     return snapshot;
   }
 
-  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
-    document.addEventListener('click', (event) => {
-      const btn = event.target?.closest?.('button, input[type="submit"], [role="button"]');
-      if (!btn) return;
-      const txt = (btn.innerText || btn.value || '').trim();
-      if (/\b(?:submit|apply|send application|complete application|review application|continue|finish|next)\b/i.test(txt)) {
-        snapshotJobMetadata();
-      }
-    }, true);
-
-    document.addEventListener('submit', () => {
-      snapshotJobMetadata();
-    }, true);
-  }
-
-  globalThis.NextkinJobCapture = { read: jobFromDom, kekaPosting, cleanApplicationUrl, snapshot: snapshotJobMetadata };
+  globalThis.NextkinJobCapture = { verifiedCountry, read: jobFromDom, kekaPosting, cleanApplicationUrl, snapshot: snapshotJobMetadata };
 })();

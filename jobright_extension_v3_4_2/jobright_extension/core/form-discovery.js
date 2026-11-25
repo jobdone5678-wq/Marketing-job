@@ -93,8 +93,10 @@
 
   function querySelectorAllDeep(selector, rootNode = document) {
     const results = [];
+    const seenRoots = new Set();
     function search(node) {
-      if (!node) return;
+      if (!node || seenRoots.has(node)) return;
+      seenRoots.add(node);
       if (node.querySelectorAll) {
         try {
           const matches = node.querySelectorAll(selector);
@@ -102,16 +104,39 @@
             results.push(matches[i]);
           }
         } catch {}
-      }
-      const children = node.querySelectorAll ? node.querySelectorAll('*') : [];
-      for (let i = 0; i < children.length; i++) {
-        if (children[i].shadowRoot && children[i].id !== 'mp-copilot-root' && children[i].id !== 'nextkin-floating-widget-root') {
-          search(children[i].shadowRoot);
+        const all = node.querySelectorAll('*');
+        for (let i = 0; i < all.length; i++) {
+          const child = all[i];
+          if (child.shadowRoot && child.id !== 'mp-copilot-root' && child.id !== 'nextkin-floating-widget-root') {
+            search(child.shadowRoot);
+          }
         }
       }
     }
     search(rootNode);
     return results;
+  }
+
+  function isFieldRequired(el, elements = [el], questionText = '') {
+    if (el?.required || el?.getAttribute?.('aria-required') === 'true') return true;
+    if (Array.isArray(elements) && elements.some(item => item?.required || item?.getAttribute?.('aria-required') === 'true')) return true;
+    if (el?.closest?.('[aria-required="true"], [data-required="true"]')) return true;
+    return /\*\s*$|^\s*\*|\(\s*required\s*\)/i.test(String(questionText || ''));
+  }
+
+  function semanticFieldId(question, kind, sectionId, el) {
+    const raw = [
+      String(kind || 'text'),
+      String(sectionId || '').trim().toLowerCase(),
+      String(question || '').trim().toLowerCase().replace(/\s+/g, ' '),
+      String(el?.getAttribute?.('data-automation-id') || el?.id || el?.name || '').trim().toLowerCase(),
+    ].join('|');
+    let hash = 2166136261;
+    for (let i = 0; i < raw.length; i++) {
+      hash ^= raw.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return 'nf_' + (hash >>> 0).toString(36);
   }
 
   function isResumeInput(el, text = '') {
@@ -364,6 +389,11 @@
     const scopedTree = scopeToApplication(tree) || tree;
     const fields = [], seen = new Set();
     const adapter = activeAdapter();
+    const rules = globalThis.NextkinSiteRules;
+    const locationUrl = typeof location !== 'undefined' ? location.href : '';
+    if (locationUrl && rules?.automationDisabled?.(locationUrl)) return [];
+    const provider = globalThis.NextkinSiteRegistry?.detectAtsProvider(locationUrl);
+    const selectors = rules?.evaluateSitePolicy?.(provider || 'generic')?.selectorTables?.fields || [];
     const walk = scope => {
       // A checkbox group asks one question about several boxes, so the group is the field.
       for (const group of scope.querySelectorAll('fieldset, [role="group"], [class*="checkbox-group" i], [class*="checkboxGroup" i], [class*="checkbox_group" i], [data-testid*="checkbox" i]')) {
@@ -406,7 +436,13 @@
         });
       }
 
-      for (const el of scope.querySelectorAll(CONTROL_SELECTOR)) {
+      const controls = new Set(scope.querySelectorAll(CONTROL_SELECTOR));
+      for (const selector of selectors) {
+        try {
+          for (const element of scope.querySelectorAll(selector)) controls.add(element);
+        } catch {}
+      }
+      for (const el of controls) {
         if (el.closest('#mp-copilot-root') || !visibleChoice(el)) continue;
         if (seen.has(el)) continue;
         if (el.tagName === 'INPUT' && el.tabIndex === -1 && !el.id && !el.name && !el.getAttribute('role')) continue;
@@ -458,7 +494,32 @@
         const question = kind === 'radio' ? choiceQuestion(el) || controlName(el) || text : text;
         const factHint = hint || (kind === 'radio' || isCheck ? controlName(el) : '');
         const fieldKind = (kind === 'radio' && elements.length > 1) ? 'choice' : kind;
-        fields.push({ element: el, elements, key: (fieldKind === 'choice' ? 'choice:' : 'field:') + fields.length + ':' + (el.id || el.name || factHint), label: question, hint: factHint, kind: fieldKind, options, scope: groupLabel, excluded: excluded.test([question, factHint, el.id, el.name, groupLabel].join(' ').replace(/[_-]/g, ' ')), adapter: adapter?.id || 'generic', editable: isEditable });
+        const isExcluded = excluded.test([question, factHint, el.id, el.name, groupLabel].join(' ').replace(/[_-]/g, ' '));
+        const fieldId = semanticFieldId(question, fieldKind, groupLabel, el);
+        const questionId = semanticFieldId(question, fieldKind, '', null);
+        const required = isFieldRequired(el, elements, question);
+        fields.push({
+          fieldId,
+          questionId,
+          element: el,
+          elements,
+          key: (fieldKind === 'choice' ? 'choice:' : 'field:') + fields.length + ':' + (el.id || el.name || factHint),
+          label: question,
+          hint: factHint,
+          kind: fieldKind,
+          inputType: el.type || el.tagName?.toLowerCase() || fieldKind,
+          required,
+          visible: true,
+          enabled: !el.disabled,
+          protected: isExcluded,
+          sectionId: groupLabel || '',
+          options,
+          scope: groupLabel,
+          excluded: isExcluded,
+          adapter: adapter?.id || 'generic',
+          adapterId: adapter?.id || 'generic',
+          editable: isEditable,
+        });
       }
 
       // Button-based choice groups (Ashby/Greenhouse/Lever Yes/No and segmented radio groups)

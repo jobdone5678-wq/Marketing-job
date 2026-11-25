@@ -432,14 +432,14 @@ test('E2E ATS Fixture: 1. Greenhouse Universal Application Form', () => {
 
   // Custom question resolved via Tier 3 Answer Bank
   const customQPlan = findPlan(plans, 'custom_q');
-  assert.equal(customQPlan?.status, 'ready');
+  assert.equal(customQPlan?.status, 'supported');
   assert.equal(customQPlan?.value, 'Node test runner and Playwright');
   assert.equal(customQPlan?.source, 'answer_bank');
 
-  // Consent checkbox auto-checked for legal/recruitment data processing terms
+  // The applicant reviews legal and recruitment data processing terms.
   const consentPlan = findPlan(plans, 'consent');
-  assert.equal(consentPlan?.status, 'supported');
-  assert.equal(consentPlan?.value, true);
+  assert.equal(consentPlan?.status, 'manual');
+  assert.equal(consentPlan?.value, undefined);
 
   // Strict URL Uniqueness verification
   const supportedUrls = plans.filter((p) => p.status === 'supported' && typeof p.value === 'string' && p.value.startsWith('http')).map((p) => p.value);
@@ -501,7 +501,7 @@ test('E2E ATS Fixture: 2. Lever Universal Application Form', () => {
 
   // Custom question (notice period) matched via Answer Bank
   const noticePlan = findPlan(plans, 'comments');
-  assert.equal(noticePlan?.status, 'ready');
+  assert.equal(noticePlan?.status, 'supported');
   assert.equal(noticePlan?.value, '2 weeks');
   assert.equal(noticePlan?.source, 'answer_bank');
 
@@ -565,7 +565,7 @@ test('E2E ATS Fixture: 3. Ashby Universal Application Form', () => {
 
   // Custom question matched via Answer Bank
   const expPlan = findPlan(plans, 'custom_experience');
-  assert.equal(expPlan?.status, 'ready');
+  assert.equal(expPlan?.status, 'supported');
   assert.equal(expPlan?.value, 'Built distributed React/Node platforms serving 2M+ daily active users with sub-100ms latency.');
   assert.equal(expPlan?.source, 'answer_bank');
 });
@@ -672,9 +672,9 @@ test('E2E Safety Invariants: Feature Flag NEXT_PUBLIC_ENABLE_UNIVERSAL_AUTOFILL_
   const supportedUrls = plans.filter((p) => p.status === 'supported' && typeof p.value === 'string' && p.value.startsWith('http')).map((p) => p.value);
   assert.equal(supportedUrls.length, new Set(supportedUrls).size, 'No duplicate URLs slotted even with flag disabled');
 
-  // 4. Consent fields auto-checked for standard legal acknowledgement
-  assert.equal(planMap.consent.status, 'supported');
-  assert.equal(planMap.consent.value, true);
+  // 4. Legal acknowledgement remains manual.
+  assert.equal(planMap.consent.status, 'manual');
+  assert.equal(planMap.consent.value, undefined);
 });
 
 test('E2E Form Disappearance and Confirmation Flow', () => {

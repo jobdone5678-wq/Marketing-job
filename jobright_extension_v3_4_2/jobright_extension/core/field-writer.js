@@ -232,6 +232,13 @@
     try {
       element.dispatchEvent(new Evt('change', { bubbles: true }));
     } catch {}
+    // Workday's React controlled fields need the component's own handler; synthetic events alone
+    // are isTrusted:false and are ignored. Restrict this to Workday automation-id controls so other
+    // portals keep the standard event sequence.
+    if (element.getAttribute?.('data-automation-id')) {
+      commitFiberChange(element, strVal);
+      if (shouldBlur) commitFiberBlur(element);
+    }
     if (shouldBlur) {
       try {
         element.dispatchEvent(new FocusEvt('blur', { bubbles: true, composed: true }));
@@ -385,7 +392,8 @@
   }
 
   function comboInput(el) {
-    return el.tagName === 'INPUT' ? el : el.querySelector('input:not([type=hidden])');
+    const input = el.tagName === 'INPUT' ? el : el.querySelector?.('input:not([type=hidden])') || el.querySelector?.('input');
+    return input?.type === 'hidden' ? null : input;
   }
 
   function comboTrigger(el) {
@@ -403,14 +411,11 @@
   function comboSearchInput(el, roots = []) {
     const local = comboInput(el);
     if (local && !local.readOnly && local.type !== 'button') return local;
-    const doc = el.ownerDocument;
     for (const root of roots) {
       if (!root?.isConnected) continue;
       const input = root.querySelector('input:not([type=hidden]):not([readonly]), [role="searchbox"], [cmdk-input]');
       if (input) return input;
     }
-    const activeSearch = doc.querySelector('.select2-search__field, [role="searchbox"], [cmdk-input], [data-automation-id*="search" i], [data-automation-id*="promptSearch" i]');
-    if (activeSearch && activeSearch.isConnected && activeSearch.getClientRects().length) return activeSearch;
     return local && !local.readOnly ? local : null;
   }
 
@@ -419,7 +424,14 @@
     const display = (el.querySelector ? el.querySelector('[data-placeholder], .select2-selection__rendered, .ng-value-label, .k-input-value-text, [data-slot="select-value"], [class*="singleValue" i], [class*="single-value" i], [class*="select__single-value" i]') : null) ||
       root.querySelector?.('[data-placeholder], .select2-selection__rendered, .ng-value-label, .k-input-value-text, [data-slot="select-value"], [class*="singleValue" i], [class*="single-value" i], [class*="select__single-value" i]');
     const input = comboInput(el);
-    const value = (display?.textContent || input?.value || (input ? '' : el.textContent)).trim();
+    const committed = input && committedAutocomplete.get(input);
+    const trigger = comboTrigger(el);
+    const selectOnly = !input && trigger?.getAttribute?.('aria-expanded') !== 'true' &&
+      (trigger?.tagName === 'BUTTON' || trigger?.getAttribute?.('role') === 'combobox') &&
+      !trigger.querySelector?.(listboxSelector);
+    const value = (display?.textContent ||
+      (input?.list || (committed && input.value === committed) ? input.value : '') ||
+      (selectOnly ? trigger.textContent : '') || '').trim();
     return el.hasAttribute('data-placeholder') || display?.hasAttribute('data-placeholder') ||
       display?.querySelector('.select2-selection__placeholder') || placeholder.test(value) ? '' : value;
   }
@@ -434,15 +446,16 @@
         if (el?.tagName === 'SELECT' && typeof el.selectedIndex === 'number' && el.selectedIndex >= 0 && el.options?.[el.selectedIndex]) {
           const opt = el.options[el.selectedIndex];
           const lbl = (opt.text || opt.textContent || opt.label || opt.value || '').trim();
-          if (!placeholder.test(lbl)) return lbl;
+          return !opt.disabled && !placeholder.test(lbl) && opt.value !== '' ? lbl : '';
         }
-        return (field.options || []).find(option => option?.element?.selected && !placeholder.test(option.label))?.label || (el?.value?.trim() || '');
+        return (field.options || []).find(option => option?.element?.selected && !placeholder.test(option.label))?.label || '';
       }
       case 'radio': return field.options.find(option => checked(option.element) || selected(option.element))?.label || '';
       case 'choice': return field.options.find(option => selected(option.element) || checked(option.element))?.label || '';
       case 'combobox': return comboValue(el);
       case 'multi-combobox': {
-        const chips = el.querySelectorAll ? el.querySelectorAll('.ng-value-label, .select2-selection__choice__display, .k-chip-label, [data-slot="multi-select-value"], [class*="multi-value__label" i], [class*="multiValue" i]') : [];
+        const scope = el.closest?.('.select__control, [class*="select__control" i], [class*="select-shell" i], .ng-select, .select2-selection') || el;
+        const chips = scope.querySelectorAll ? scope.querySelectorAll('.ng-value-label, .select2-selection__choice__display, .k-chip-label, [data-slot="multi-select-value"], [class*="multi-value__label" i], [class*="multiValue" i]') : [];
         return [...chips].map(chip => chip.textContent.trim()).filter(Boolean);
       }
       case 'resume-file': return el?.files?.[0]?.name || (el?.value ? String(el.value).split(/[/\\]/).pop() : '');
@@ -450,10 +463,94 @@
     }
   }
 
+  const openedMenus = new WeakMap();
+  const committedAutocomplete = new WeakMap();
+  const visibleMenus = doc => [...(doc?.querySelectorAll?.(listboxSelector) || [])]
+    .filter(node => !node.getClientRects || node.getClientRects().length);
+
+  // Condition-based waiting: wake on DOM mutations (options rendered asynchronously by React/ARIA
+  // comboboxes) and poll briefly for non-mutating frameworks, bounded by the caller's deadline.
+  async function waitForOptions(el, isCurrent, maxMs) {
+    const doc = el?.ownerDocument || (typeof document !== 'undefined' ? document : null);
+    const started = Date.now();
+    let options = comboOptions(el);
+    while (!options.length && isCurrent() && Date.now() - started < maxMs) {
+      await new Promise(resolve => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          try { observer?.disconnect(); } catch {}
+          clearTimeout(timer);
+          resolve();
+        };
+        const observer = typeof MutationObserver !== 'undefined' && doc?.body
+          ? new MutationObserver(finish) : null;
+        if (observer) observer.observe(doc.body, { childList: true, subtree: true,
+          attributes: true, attributeFilter: ['aria-expanded', 'aria-activedescendant', 'class', 'style'] });
+        const timer = setTimeout(finish, 40);
+      });
+      options = comboOptions(el);
+    }
+    return options;
+  }
+
+  function reactProps(el) {
+    if (!el) return null;
+    const key = Object.keys(el).find(name => /^__reactProps\$/.test(name));
+    return key ? el[key] : null;
+  }
+  // Workday controlled inputs ignore synthetic DOM events (isTrusted:false). Calling the
+  // component's own handler is the only reliable way to commit those values.
+  function commitFiberChange(el, value) {
+    const handler = reactProps(el)?.onChange;
+    if (typeof handler !== 'function') return false;
+    try {
+      handler({ target: el, currentTarget: el, type: 'change', preventDefault() {}, stopPropagation() {} });
+      return true;
+    } catch { return false; }
+  }
+  function commitFiberBlur(el) {
+    const handler = reactProps(el)?.onBlur;
+    if (typeof handler !== 'function') return false;
+    try {
+      handler({ target: el, currentTarget: el, type: 'blur', preventDefault() {}, stopPropagation() {} });
+      return true;
+    } catch { return false; }
+  }
+  function triggerWorkdaySearch(el, query) {
+    const handler = reactProps(el)?.onKeyDown || reactProps(comboInput(el))?.onKeyDown;
+    if (typeof handler !== 'function') return false;
+    try {
+      handler({ key: 'Tab', code: 'Tab', keyCode: 9, target: { value: query }, currentTarget: el,
+        preventDefault() {}, stopPropagation() {} });
+      return true;
+    } catch { return false; }
+  }
+
+  // Verify the selection committed to the control (display value), not just that an option was
+  // clicked. Re-renders and stale search text otherwise look like a successful fill.
+  async function waitForCommitted(field, expected, isCurrent, maxMs = 600) {
+    const doc = field.element?.ownerDocument || (typeof document !== 'undefined' ? document : null);
+    const started = Date.now();
+    let actual = comboValue(field.element);
+    while (normalize(actual) !== normalize(expected) && isCurrent() && Date.now() - started < maxMs) {
+      await new Promise(resolve => {
+        let done = false;
+        const finish = () => { if (done) return; done = true; try { observer?.disconnect(); } catch {} clearTimeout(timer); resolve(); };
+        const observer = typeof MutationObserver !== 'undefined' && doc?.body ? new MutationObserver(finish) : null;
+        if (observer) observer.observe(doc.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'aria-expanded'] });
+        const timer = setTimeout(finish, 40);
+      });
+      actual = comboValue(field.element);
+    }
+    return normalize(actual) === normalize(expected);
+  }
+
   function getListboxRoots(el) {
     if (!el) return [];
     const control = comboInput(el) || el;
-    const ids = [el, control].flatMap(node => [node?.getAttribute?.('aria-controls'), node?.getAttribute?.('aria-owns')])
+    const ids = [el, control, comboTrigger(el)].flatMap(node => [node?.getAttribute?.('aria-controls'), node?.getAttribute?.('aria-owns')])
       .filter(Boolean).flatMap(idStr => idStr.split(/\s+/));
     const doc = el.ownerDocument || globalThis.document;
     const view = doc?.defaultView || globalThis;
@@ -467,48 +564,22 @@
 
     const roots = ids.map(id => el.getRootNode?.().getElementById?.(id) || doc.getElementById?.(id)).filter(r => r && isVisible(r));
 
-    // Discover portals in document.body
-    const portalSelector = '[data-radix-popper-content-wrapper], [data-floating-ui-portal], .select2-dropdown, .k-animation-container, [class*="autocomplete-popup" i], [class*="floatingContainer" i]';
-    const bodyPortals = doc.body?.querySelectorAll ? Array.from(doc.body.querySelectorAll(portalSelector)).filter(isVisible) : [];
-
-    // Query open shadow roots
-    const shadowRoots = [];
-    const collectShadowRoots = (rootNode) => {
-      if (!rootNode) return;
-      const stack = [rootNode];
-      while (stack.length) {
-        const curr = stack.pop();
-        if (curr?.shadowRoot) {
-          shadowRoots.push(curr.shadowRoot);
-          stack.push(curr.shadowRoot);
-        }
-        if (curr?.children) {
-          for (let i = 0; i < curr.children.length; i++) {
-            stack.push(curr.children[i]);
-          }
-        }
-      }
-    };
-    if (doc.body) collectShadowRoots(doc.body);
-
-    const shadowPortals = shadowRoots.flatMap(sr => [
-      ...(sr.querySelectorAll?.(portalSelector) || []),
-      ...(sr.querySelectorAll?.(listboxSelector) || [])
-    ]).filter(isVisible);
-
-    if (bodyPortals.length || shadowPortals.length) {
-      roots.push(...bodyPortals, ...shadowPortals);
-    }
-
-    if (!roots.length) {
-      const menus = [...new Set([...(el.getRootNode?.()?.querySelectorAll?.(listboxSelector) || []), ...(doc.querySelectorAll ? doc.querySelectorAll(listboxSelector) : [])])].filter(isVisible);
-      const fieldContainer = el.closest?.('.select, .select__container, .select-shell, [class*="select__container"], [class*="form-group"], [class*="field-container"], [class*="application-question"]');
-      const nearby = menus.filter(menu => (el.contains?.(menu)) || (el.parentElement?.contains?.(menu)) || (fieldContainer?.contains?.(menu)));
-      if (nearby.length >= 1) roots.push(...nearby);
-      else if (menus.length === 1) roots.push(menus[0]);
-      else if (menus.length > 1) roots.push(menus[menus.length - 1]);
-    }
-    return [...new Set(roots)];
+    if (ids.length) return [...new Set(roots)];
+    const container = el.closest?.('.select, .select__container, .select-shell, [class*="form-group"], [class*="field-container"], [class*="application-question"]') || el.parentElement || el;
+    const localRoot = container === doc?.body ? el : container;
+    const local = [...(localRoot.querySelectorAll?.(listboxSelector) || [])].filter(isVisible);
+    if (local.length) return local.length === 1 ? local : [];
+    const interaction = openedMenus.get(el);
+    const expanded = [el, control, comboTrigger(el)].some(node => node?.getAttribute?.('aria-expanded') === 'true');
+    if (!interaction) return [];
+    const ashby = el.matches?.('.ashby-application-form-input-autocomplete');
+    if (!expanded && !ashby) return [];
+    if (interaction.menu?.isConnected && isVisible(interaction.menu)) return [interaction.menu];
+    const menus = visibleMenus(doc).filter(menu => !interaction.before.has(menu) && isVisible(menu) && (expanded || menu.matches?.('.ashby-application-form-input-autocomplete-popup')));
+    const deepest = menus.filter(menu => !menus.some(other => other !== menu && menu.contains(other)));
+    if (deepest.length !== 1) return [];
+    interaction.menu = deepest[0];
+    return deepest;
   }
 
   function comboOptions(el) {
@@ -542,28 +613,7 @@
   }
 
   function choose(field, desired) {
-    const bool = normalizeBoolean(desired);
-    if (bool !== null && mapping?.pickBooleanOption) {
-      const bOpt = mapping.pickBooleanOption(field.options, bool);
-      if (bOpt) return bOpt;
-    }
-    if (typeof desired === 'boolean' && mapping?.pickBooleanOption) {
-      return mapping.pickBooleanOption(field.options, desired);
-    }
-    const opt = mapping?.pickOption ? mapping.pickOption(field, desired) : null;
-    if (opt) return opt;
-    if (bool !== null && mapping?.pickBooleanOption) {
-      return mapping.pickBooleanOption(field.options, bool);
-    }
-    const norm = s => String(s ?? '').toLowerCase().trim().replace(/[^a-z0-9]+/g, ' ');
-    const target = norm(desired);
-    if (target && Array.isArray(field.options)) {
-      const exact = field.options.find(o => norm(optionLabel(o)) === target || norm(o.value) === target);
-      if (exact) return exact;
-      const partial = field.options.find(o => norm(optionLabel(o)).includes(target) || target.includes(norm(optionLabel(o))));
-      if (partial) return partial;
-    }
-    return null;
+    return mapping?.pickOption?.(field, desired, field.factKey) || null;
   }
 
   function isComboOpen(el) {
@@ -611,6 +661,7 @@
 
     // Always blur cleanly
     const FocusEvt = view.FocusEvent || view.Event || globalThis.FocusEvent || globalThis.Event;
+    openedMenus.delete(el);
     const blurTargets = [search, input, trigger, el].filter(Boolean);
     for (const target of blurTargets) {
       try {
@@ -620,20 +671,17 @@
     }
   }
 
-  async function openComboOptions(el, trigger, isCurrent = () => true, requireClick = false) {
+  async function openComboOptions(el, trigger, isCurrent = () => true, requireClick = false, config = {}) {
+    const doc = el.ownerDocument || globalThis.document;
+    openedMenus.set(el, { before: new Set(visibleMenus(doc)), menu: null });
     const clickedTrigger = click(trigger);
     const ctrl = el.closest?.('.select__control, [class*="select__control" i]');
     const clickedCtrl = ctrl && ctrl !== trigger ? click(ctrl) : false;
     if (requireClick && !clickedTrigger && !clickedCtrl) return [];
 
     let options = [];
-    const openStart = Date.now();
-    // await options asynchronously (up to 400ms)
-    while (isCurrent()) {
-      options = comboOptions(el);
-      if (options.length || Date.now() - openStart >= 400) break;
-      await wait(30);
-    }
+    // Bounded wait driven by option appearance / DOM mutations, not a global fixed delay.
+    options = await waitForOptions(el, isCurrent, Number(config.maxOptionWaitMs) || 400);
     // ArrowDown fallback if options still not open
     if (!options.length && isCurrent()) {
       try {
@@ -642,12 +690,7 @@
         (trigger || el).dispatchEvent(new KeyEvt('keydown', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
         (trigger || el).dispatchEvent(new KeyEvt('keyup', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
       } catch {}
-      const arrowStart = Date.now();
-      while (isCurrent()) {
-        options = comboOptions(el);
-        if (options.length || Date.now() - arrowStart >= 250) break;
-        await wait(30);
-      }
+      options = await waitForOptions(el, isCurrent, Math.max(250, Number(config.maxOptionWaitMs) || 0));
     }
     return options;
   }
@@ -666,9 +709,10 @@
     }
   }
 
-  async function fillCombo(field, desired, isCurrent = () => true) {
+  async function fillCombo(field, desired, isCurrent = () => true, config = {}) {
     const el = field.element;
     const input = comboInput(el);
+    if (input) committedAutocomplete.delete(input);
     if (input?.list) {
       const option = choose(field, desired);
       if (!option) return null;
@@ -676,29 +720,26 @@
       return { expected: option.value };
     }
 
+    if (el.matches?.('.ashby-application-form-input-autocomplete') && !field.factKey) field = { ...field, factKey: 'current_location' };
     const trigger = comboTrigger(el);
     let options = comboOptions(el);
 
     // If options not open, click trigger to open listbox
     if (!options.length && trigger) {
-      options = await openComboOptions(el, trigger, isCurrent, false);
+      options = await openComboOptions(el, trigger, isCurrent, false, config);
     }
 
     // Match candidate value against option text
     let option = choose({ ...field, options }, desired);
 
-    // If no immediate match, allow options up to 400ms to settle/populate (cascading parent just selected)
+    // If no immediate match, wait for async options to settle (cascading parent just selected,
+    // server-side typeahead). The bound is configurable per consequential field.
     if (!option) {
-      const settleStart = Date.now();
-      while (Date.now() - settleStart < 400 && isCurrent()) {
-        await wait(30);
-        options = comboOptions(el);
-        option = choose({ ...field, options }, desired);
-        if (option) break;
-      }
+      options = await waitForOptions(el, isCurrent, Number(config.maxOptionWaitMs) || 400);
+      option = choose({ ...field, options }, desired);
     }
 
-    if (option) {
+    if (option && isCurrent() && el.isConnected) {
       const ok = click(option.element);
       try {
         const view = el.ownerDocument?.defaultView || globalThis;
@@ -706,9 +747,8 @@
         option.element.dispatchEvent(new KeyEvt('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
       } catch {}
       closeCombo(el);
-      const actualVal = comboValue(el);
-      const isSel = selected(option.element) || (actualVal && equals(actualVal, option.label));
-      return ok ? { expected: option.label, option: option.element, typed: false, verified: Boolean(isSel) } : null;
+      if (ok && config.requireCommittedSelection && !(await waitForCommitted(field, option.label, isCurrent))) return null;
+      return ok ? { expected: option.label } : null;
     }
 
     // Type into combobox search input if present (Typeahead search fallback)
@@ -728,17 +768,14 @@
         } catch {}
       }
       typed = true;
-      const searchStart = Date.now();
-      // await filtered options asynchronously (up to 1200ms, allowing settling)
-      while (Date.now() - searchStart < 1200 && isCurrent()) {
-        await wait(30);
-        options = comboOptions(el);
-        option = choose({ ...field, options }, desired);
-        if (option) break;
-      }
+      // Workday's async typeahead ignores ordinary typing: the component's own onKeyDown handler
+      // is what starts the server search for promptOption results.
+      if (el.getAttribute?.('data-automation-id')) triggerWorkdaySearch(el, query);
+      options = await waitForOptions(el, isCurrent, Number(config.maxOptionWaitMs) || 1200);
+      option = choose({ ...field, options }, desired);
     }
 
-    if (option) {
+    if (option && isCurrent() && el.isConnected) {
       const ok = click(option.element);
       try {
         const view = el.ownerDocument?.defaultView || globalThis;
@@ -746,16 +783,18 @@
         option.element.dispatchEvent(new KeyEvt('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
       } catch {}
       closeCombo(el);
-      const actualVal = comboValue(el);
-      const isSel = selected(option.element) || (actualVal && equals(actualVal, option.label));
-      return ok ? { expected: option.label, option: option.element, typed, verified: Boolean(isSel) } : null;
+      if (ok && search === input && normalize(query) !== normalize(option.label) && normalize(input?.value) === normalize(option.label)) {
+        committedAutocomplete.set(input, input.value);
+      }
+      if (ok && config.requireCommittedSelection && !(await waitForCommitted(field, option.label, isCurrent))) return null;
+      return ok ? { expected: option.label } : null;
     }
 
     // Close with Escape fallback
     if (typed && search && normalize(search.value) === normalize(query)) {
       setNativeValue(search, '');
     }
-    closeCombo(el, typed);
+    closeCombo(el);
     return null;
   }
 
@@ -791,8 +830,7 @@
     }
     if (field.kind === 'multi-select') notify(field.element);
     const expected = options.map(optionLabel);
-    return { expected, matches: actual => Array.isArray(actual) && expected.every(value =>
-      actual.some(selected => normalize(selected) === normalize(value))) };
+    return { expected };
   }
 
   async function fillMultiCombo(field, values, isCurrent) {
@@ -802,32 +840,39 @@
         ? values.split(/[,;\n]+/).map(v => v.trim()).filter(Boolean)
         : []);
     if (!normalizedValues.length) return null;
-    const selected = [];
-    for (const value of new Set(normalizedValues.slice(0, 20))) {
+    const requested = [...new Set(normalizedValues.map(value => String(value).trim()).filter(Boolean))];
+    if (requested.length > 20) return null;
+    const expected = [];
+    for (const value of requested) {
       if (!isCurrent() || !field.element.isConnected) break;
       const result = await fillCombo(field, value, isCurrent);
-      if (result) selected.push(result.expected);
+      if (result) expected.push(result.expected);
     }
     if (isCurrent()) closeCombo(field.element);
-    const actual = read(field);
-    return selected.length && selected.every(value => actual.some(item => normalize(item) === normalize(value)))
-      ? { expected: actual } : null;
+    return { expected: expected.length === requested.length ? expected : requested, partial: expected.length < requested.length };
   }
 
-  function equals(value, expected) {
+  function equals(value, expected, field) {
     if (Array.isArray(expected)) {
-      return Array.isArray(value) && value.length === new Set(expected).size &&
-        expected.every(answer => value.some(item => normalize(item) === normalize(answer)));
+      const wanted = new Set(expected.map(normalize));
+      const actual = new Set(Array.isArray(value) ? value.map(normalize) : []);
+      return wanted.size > 0 && actual.size === wanted.size && [...wanted].every(answer => actual.has(answer));
     }
-    const bExpected = normalizeBoolean(expected);
-    const bValue = normalizeBoolean(value);
-    if (bExpected !== null && bValue !== null) return bExpected === bValue;
+    if (value == null || expected == null) return false;
     if (typeof expected === 'boolean') return value === expected;
-    if (normalize(value) === normalize(expected)) return true;
-    const dVal = String(value || '').replace(/\D/g, '');
-    const dExp = String(expected || '').replace(/\D/g, '');
-    if (dVal.length >= 7 && dExp.length >= 7 && (dVal === dExp || dVal.endsWith(dExp) || dExp.endsWith(dVal))) return true;
-    return false;
+    if (field?.element?.type === 'tel') {
+      const digits = phone => /^[+() .\d-]+$/.test(String(phone)) ? String(phone).replace(/\D/g, '') : '';
+      const a = digits(value), b = digits(expected);
+      if (a.length >= 7 && b.length >= 7) return a === b;
+    }
+    if (mapping?.isUrlField?.(field)) return String(value).trim() === String(expected).trim();
+    return normalize(value) === normalize(expected);
+  }
+
+  function isAnswered(field, value = read(field)) {
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'boolean') return field.kind !== 'checkbox' || value;
+    return value != null && String(value).trim() !== '' && !placeholder.test(String(value).trim());
   }
 
   // Dual-layer edit tracking & durable field store across wizard step transitions
@@ -1043,119 +1088,10 @@
     return false;
   }
 
-  // Resolve or re-resolve live element from DOM in case of React rerender
+  // Rediscover replaced controls on the next pass. A repeated name can now
+  // refer to a different employment record.
   function ensureConnectedElement(field) {
-    if (!field || !field.element) return null;
-    if (field.element.isConnected) return field.element;
-
-    const doc = field.element.ownerDocument || globalThis.document;
-    if (!doc || typeof doc.querySelector !== 'function') return field.element;
-
-    // 1. Try to find connected element by id using attribute selector
-    if (field.element.id) {
-      if (typeof doc.querySelectorAll === 'function') {
-        try {
-          const candidates = doc.querySelectorAll(`[id="${safeCssEscape(field.element.id)}"]`);
-          const byId = Array.from(candidates).find(el => el.isConnected);
-          if (byId) {
-            field.element = byId;
-            return byId;
-          }
-        } catch {}
-      }
-      if (typeof doc.getElementById === 'function') {
-        try {
-          const byId = doc.getElementById(field.element.id);
-          if (byId && byId.isConnected) {
-            field.element = byId;
-            return byId;
-          }
-        } catch {}
-      }
-    }
-
-    // 2. Try to find connected element by name
-    const name = field.element.name || (typeof field.element.getAttribute === 'function' ? field.element.getAttribute('name') : null);
-    if (name) {
-      if (typeof doc.querySelectorAll === 'function') {
-        try {
-          const candidates = doc.querySelectorAll(`[name="${safeCssEscape(name)}"]`);
-          const byName = Array.from(candidates).find(el => el.isConnected);
-          if (byName) {
-            field.element = byName;
-            return byName;
-          }
-        } catch {}
-      }
-      try {
-        const byName = doc.querySelector(`[name="${safeCssEscape(name)}"]`);
-        if (byName && byName.isConnected) {
-          field.element = byName;
-          return byName;
-        }
-      } catch {}
-    }
-
-    if (typeof field.element.getAttribute === 'function') {
-      const autoId = field.element.getAttribute('data-automation-id');
-      if (autoId) {
-        if (typeof doc.querySelectorAll === 'function') {
-          try {
-            const candidates = doc.querySelectorAll(`[data-automation-id="${safeCssEscape(autoId)}"]`);
-            const byAuto = Array.from(candidates).find(el => el.isConnected);
-            if (byAuto) {
-              field.element = byAuto;
-              return byAuto;
-            }
-          } catch {}
-        }
-        try {
-          const byAuto = doc.querySelector(`[data-automation-id="${safeCssEscape(autoId)}"]`);
-          if (byAuto && byAuto.isConnected) {
-            field.element = byAuto;
-            return byAuto;
-          }
-        } catch {}
-      }
-
-      const testId = field.element.getAttribute('data-testid') || field.element.getAttribute('data-test');
-      if (testId) {
-        if (typeof doc.querySelectorAll === 'function') {
-          try {
-            const candidates = doc.querySelectorAll(`[data-testid="${safeCssEscape(testId)}"], [data-test="${safeCssEscape(testId)}"]`);
-            const byTest = Array.from(candidates).find(el => el.isConnected);
-            if (byTest) {
-              field.element = byTest;
-              return byTest;
-            }
-          } catch {}
-        }
-        try {
-          const byTest = doc.querySelector(`[data-testid="${safeCssEscape(testId)}"], [data-test="${safeCssEscape(testId)}"]`);
-          if (byTest && byTest.isConnected) {
-            field.element = byTest;
-            return byTest;
-          }
-        } catch {}
-      }
-    }
-
-    if (root.NextkinForms?.discoverFields) {
-      try {
-        const freshFields = root.NextkinForms.discoverFields(doc);
-        const match = freshFields.find(f =>
-          (field.key && f.key === field.key) ||
-          (field.label && normalize(f.label) === normalize(field.label))
-        );
-        if (match?.element?.isConnected) {
-          field.element = match.element;
-          if (match.options?.length) field.options = match.options;
-          return match.element;
-        }
-      } catch {}
-    }
-
-    return field.element;
+    return field?.element?.isConnected ? field.element : null;
   }
 
   // Bounded async polling with MutationObserver for dependent field readiness (Country -> State -> City)
@@ -1299,51 +1235,54 @@
     });
   }
 
-  async function attachResumeFile(fileInput, candidateId) {
-    if (!fileInput || fileInput.type !== 'file') return null;
-    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return null;
+  const ResumeUploadState = {
+    FILE_ASSIGNED: 'FILE_ASSIGNED',
+    UPLOAD_PENDING: 'UPLOAD_PENDING',
+    UPLOAD_CONFIRMED: 'UPLOAD_CONFIRMED',
+    UPLOAD_FAILED: 'UPLOAD_FAILED',
+    MANUAL_REQUIRED: 'MANUAL_REQUIRED',
+  };
 
-    const res = await new Promise((resolve) => {
-      chrome.runtime.sendMessage(
-        { type: 'NEXTKIN_FETCH_RESUME_FILE', candidateId },
-        (response) => {
-          if (chrome.runtime?.lastError) {
-            resolve({ error: chrome.runtime.lastError.message });
-          } else {
-            resolve(response || { error: 'No response' });
-          }
-        }
-      );
-    });
+  function inspectUploadStatus(fileInput, expectedFilename) {
+    const container = fileInput?.closest?.('form, [data-automation-id], .field, .upload, div') || fileInput?.parentElement;
+    if (!container?.querySelector) return ResumeUploadState.FILE_ASSIGNED;
+    const errorEl = container.querySelector('[role="alert"], .error, [class*="upload-error" i], [data-automation-id*="error" i]');
+    if (errorEl && /upload|file|resume|fail|error|invalid/i.test(errorEl.textContent || '')) {
+      return ResumeUploadState.UPLOAD_FAILED;
+    }
+    const busyEl = container.querySelector('[aria-busy="true"], [role="progressbar"], .uploading, [class*="uploading" i], [class*="spinner" i]');
+    if (busyEl) return ResumeUploadState.UPLOAD_PENDING;
+    const text = (container.textContent || '').toLowerCase();
+    if (expectedFilename && text.includes(String(expectedFilename).toLowerCase())) {
+      return ResumeUploadState.UPLOAD_CONFIRMED;
+    }
+    return ResumeUploadState.FILE_ASSIGNED;
+  }
 
-    if (!res || res.error || !res.base64) {
+  async function attachResumeFile(fileInput, resume, isCurrent = () => true) {
+    if (!fileInput?.isConnected || fileInput.type !== 'file' || !resume?.base64 || fileInput.files?.length || !isCurrent()) return null;
+    try {
+      const bytes = Uint8Array.from(atob(resume.base64), char => char.charCodeAt(0));
+      const expected = resume.filename || 'Resume.pdf';
+      const transfer = new DataTransfer();
+      const file = new File([bytes], expected, { type: resume.mimeType || 'application/pdf' });
+      transfer.items.add(file);
+      fileInput.files = transfer.files;
+      fileInput.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+      const actual = fileInput.files?.[0];
+      if (!actual || actual.name !== expected || actual.size !== bytes.length || actual.type !== file.type) return null;
+      const attached = new Uint8Array(await actual.arrayBuffer());
+      if (!isCurrent() || !fileInput.isConnected || fileInput.files?.[0] !== actual ||
+        attached.length !== bytes.length || !attached.every((byte, index) => byte === bytes[index])) {
+        return null;
+      }
+      const uploadState = inspectUploadStatus(fileInput, expected);
+      if (uploadState === ResumeUploadState.UPLOAD_FAILED) return null;
+      return { expected, file: actual, uploadState };
+    } catch {
       return null;
     }
-
-    try {
-      const binaryStr = atob(res.base64);
-      const len = binaryStr.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binaryStr.charCodeAt(i);
-      }
-
-      const filename = res.filename || 'Resume.pdf';
-      const mimeType = res.mimeType || 'application/pdf';
-      const file = new File([bytes], filename, { type: mimeType, lastModified: Date.now() });
-
-      if (typeof DataTransfer !== 'undefined') {
-        const dt = new DataTransfer();
-        dt.items.add(file);
-        fileInput.files = dt.files;
-        fileInput.dispatchEvent(new Event('input', { bubbles: true }));
-        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-        return { expected: filename, file };
-      }
-    } catch (err) {
-      console.warn('[NextKin] Failed to attach resume file:', err);
-    }
-    return null;
   }
 
   function verifyWrites(plans) {
@@ -1361,7 +1300,7 @@
         manual.push(plan);
         continue;
       }
-      if (plan.status === 'unmapped' || plan.status === 'unsupported') {
+      if (plan.status !== 'supported') {
         unmapped.push(plan);
         continue;
       }
@@ -1393,14 +1332,10 @@
       const expected = plan.writtenValue ?? plan.expected ?? plan._writtenExpected ?? plan.value;
       const write = plan._write;
 
-      const isVerified = (
-        equals(actual, expected) ||
-        (write?.matches ? write.matches(actual) : false) ||
-        (field.kind === 'combobox' && expected && String(actual || '').toLowerCase().includes(String(expected).toLowerCase())) ||
-        (write?.option && !write.option.isConnected && expected) ||
-        (write?.option?.isConnected && selected(write.option)) ||
-        (field.kind === 'checkbox' && (typeof expected === 'boolean' ? actual === expected : equals(actual, expected)))
-      );
+      const isVerified = !write?.conflict && !write?.partial && equals(actual, expected, field);
+      const partial = write?.partial || (Array.isArray(expected) && Array.isArray(actual) &&
+        actual.length > 0 && actual.length < expected.length &&
+        actual.every(value => expected.some(option => normalize(value) === normalize(option))));
 
       if (isVerified) {
         recordPreservedValues([field]);
@@ -1411,7 +1346,7 @@
           writtenValue: expected,
           ai: !!plan.ai,
           learned: !!plan.learned,
-          status: 'filled'
+          status: write?.alreadyCorrect ? 'already_correct' : 'filled'
         });
       } else {
         unverified.push({
@@ -1419,7 +1354,8 @@
           field: plan.field,
           expected,
           actual,
-          status: 'unverified'
+          status: write?.conflict ? (write.preserved ? 'preserved_user_value' : 'conflict') :
+            partial ? 'partial' : 'unverified'
         });
       }
     }
@@ -1466,10 +1402,35 @@
 
     for (const plan of sortedPlans) {
       const { field, value } = plan;
-      if (plan.status !== 'supported' || !ctx.isCurrent() || field.excluded) continue;
+      delete plan._writeFailed;
+      delete plan._write;
+      delete plan._writtenExpected;
+      if (plan.status !== 'supported') continue;
+      if (!ctx.isCurrent() || field.excluded || (plan.ai && !mapping?.isAiEligible?.(field, plan.factKey))) {
+        plan._writeFailed = true;
+        continue;
+      }
 
       // Handle React rerendering: re-resolve element if it was disconnected
       ensureConnectedElement(field);
+      if (!field.element?.isConnected && typeof root.NextkinFormDiscovery?.discoverFields === 'function') {
+        const doc = ctx.document || (typeof document !== 'undefined' ? document : null);
+        if (doc) {
+          const refreshed = root.NextkinFormDiscovery.discoverFields(doc);
+          const match = refreshed.find(candidate =>
+            candidate.element?.isConnected && (
+              (field.questionId && candidate.questionId === field.questionId) ||
+              (candidate.kind === field.kind && field.label && candidate.label === field.label &&
+                (candidate.scope || '') === (field.scope || ''))
+            )
+          );
+          if (match) {
+            field.element = match.element;
+            field.elements = match.elements;
+            field.options = match.options;
+          }
+        }
+      }
       const el = field.element;
       if (!el?.isConnected) {
         plan._writeFailed = true;
@@ -1487,7 +1448,7 @@
       const currentEl = field.element;
       const domVal = read(field);
       if (mapping?.isUrlField?.(field) && (
-        domVal || plan.ai || plan.learned || !plan.factKey || !mapping.candidateHttpUrl(value) ||
+        plan.ai || plan.learned || !plan.factKey || !mapping.candidateHttpUrl(value) ||
         (currentEl.maxLength > 0 && value.length > currentEl.maxLength)
       )) {
         plan._writeFailed = true;
@@ -1497,31 +1458,17 @@
       const isCountryCodeOnly = field.kind === 'text' && (currentEl.type === 'tel' || /phone/i.test(field.hint || field.label)) && /^\+?\d{1,3}\s*$/.test(String(previous).trim());
       const hasAnswer = !isCountryCodeOnly && (Array.isArray(previous) ? previous.length > 0 : (typeof previous === 'boolean' ? previous : Boolean(previous && String(previous).trim().length > 0)));
       let write;
-      const isProfileFact = Boolean(plan.factKey && !plan.ai);
       const userEdited = isFieldUserEdited(field);
       const unfilled = isFieldUnfilled(field, previous);
-
-      if (hasAnswer && userEdited) {
-        write = { expected: previous, preserved: true };
-      } else if (hasAnswer && !unfilled && !plan.overwriteExisting && !isProfileFact) {
-        const option = field.options?.length ? choose(field, value) : null;
-        if (equals(previous, option?.label ?? value)) write = { expected: previous };
-        else write = { expected: previous, preserved: true };
-      } else if (hasAnswer && !unfilled && !plan.overwriteExisting && isProfileFact) {
-        if (equals(previous, value)) {
-          write = { expected: previous };
-        } else {
-          write = { expected: previous, preserved: true };
-        }
-      } else if (field.kind === 'resume-file') {
-        const attachRes = await attachResumeFile(currentEl);
-        if (attachRes) {
-          write = { expected: attachRes.expected };
-        } else {
-          plan._writeFailed = true;
-        }
+      if (field.kind === 'resume-file') {
+        write = await attachResumeFile(currentEl, ctx.resume, ctx.isCurrent);
+      } else if (hasAnswer && (userEdited || (!unfilled && !plan.overwriteExisting))) {
+        const option = field.options?.length && !Array.isArray(value) ? choose({ ...field, factKey: plan.factKey }, value) : null;
+        const expected = option?.label ?? value;
+        const alreadyCorrect = equals(previous, expected, field);
+        write = { expected, alreadyCorrect, conflict: !alreadyCorrect, preserved: userEdited };
       } else if (field.kind === 'combobox') {
-        write = await fillCombo(field, value, ctx.isCurrent);
+        write = await fillCombo({ ...field, factKey: plan.factKey }, value, ctx.isCurrent, plan.writerOptions || {});
       } else if (field.kind === 'multi-combobox') {
         write = await fillMultiCombo(field, value, ctx.isCurrent);
       } else if (isMultiKind(field.kind)) {
@@ -1535,9 +1482,11 @@
           if (ok) write = { expected: boolVal };
         }
       } else {
-        const expected = currentEl.maxLength > 0 ? String(value).slice(0, currentEl.maxLength) : String(value);
-        setNativeValue(currentEl, expected);
-        write = { expected };
+        const expected = String(value);
+        if (!(currentEl.maxLength >= 0 && expected.length > currentEl.maxLength)) {
+          setNativeValue(currentEl, expected);
+          write = { expected };
+        }
       }
       if (!write) {
         plan._writeFailed = true;
@@ -1548,8 +1497,27 @@
       plan._writtenExpected = write.expected;
     }
 
-    // Step 3: Wait 50ms for framework reconciliation, then readback verification
+    // Step 3: Wait for framework reconciliation. A country selection can replace the dependent
+    // state/city controls; rediscover them by stable question id so readback follows the live DOM.
     await wait(50);
+    if (root.NextkinFormDiscovery?.discoverFields) {
+      let refreshed = null;
+      for (const plan of sortedPlans) {
+        if (plan.status !== 'supported' || plan._writeFailed || plan.field.element?.isConnected) continue;
+        const doc = ctx.document || (typeof document !== 'undefined' ? document : null);
+        if (!doc) continue;
+        refreshed = refreshed || root.NextkinFormDiscovery.discoverFields(doc);
+        const match = refreshed.find(candidate => candidate.element?.isConnected && (
+          (plan.field.questionId && candidate.questionId === plan.field.questionId) ||
+          (candidate.kind === plan.field.kind && plan.field.label && candidate.label === plan.field.label)
+        ));
+        if (match) {
+          plan.field.element = match.element;
+          plan.field.elements = match.elements;
+          plan.field.options = match.options;
+        }
+      }
+    }
 
     const verification = verifyWrites(plans);
 
@@ -1564,11 +1532,14 @@
   }
 
   root.NextkinFieldWriter = {
+    ResumeUploadState,
+    inspectUploadStatus,
     applyFill,
     verifyWrites,
     setNativeValue,
     attachResumeFile,
     read,
+    isAnswered,
     readChoices,
     setCheckbox,
     setRadio,
@@ -1588,6 +1559,6 @@
     preservedStore: durableFieldStore,
     isFieldUnfilled,
     isFieldUserEdited,
-    installUserEditTracking
+    installUserEditTracking,
   };
 })(globalThis);

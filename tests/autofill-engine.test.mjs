@@ -485,7 +485,7 @@ test('Part 3: Custom Comboboxes - async option await, search input typing, Escap
 
   // Trigger opens listbox
   trigger.addEventListener('click', () => {
-    mockDoc.body.appendChild(listbox);
+    combo.appendChild(listbox);
   });
 
   mockDoc.body.appendChild(combo);
@@ -608,7 +608,7 @@ test('Part 4: Multi-Step / Wizard Navigation - applyFill preserves previous valu
   assert.equal(writer.getPreservedValue(plan2.field), 'Bell');
 });
 
-test('Part 5: React rerender handling - re-resolves disconnected DOM elements by ID/name', async () => {
+test('Part 5: React rerender handling - leaves replaced controls for rediscovery', async () => {
   const oldInput = new MockInputElement();
   oldInput.id = 'applicant-phone';
   oldInput.name = 'phone';
@@ -630,9 +630,9 @@ test('Part 5: React rerender handling - re-resolves disconnected DOM elements by
   const session = { isCurrent: () => true };
   const receipts = await writer.applyFill([plan], session);
 
-  assert.equal(receipts.length, 1);
-  assert.equal(freshInput.value, '555-0199');
-  assert.equal(plan.field.element, freshInput);
+  assert.equal(receipts.length, 0);
+  assert.equal(receipts.unverified.length, 1);
+  assert.equal(freshInput.value, '');
 });
 
 test('Part 6: Dependent controls (Country -> State) - handles async enablement and option population', async () => {

@@ -7,6 +7,50 @@ export async function OPTIONS(request: Request) {
   return cors(request, new Response(null, { status: 204 }));
 }
 
+// Facts that the autofill mapper is allowed to consume. Keep this allowlist narrow and bounded:
+// these values can answer demographic and location questions, so only explicit profile edits are
+// accepted here. Unknown keys in confirmed_facts are ignored.
+const AUTOFILL_TEXT_FACT_KEYS = [
+  'intended_work_country', 'preferred_work_location', 'preferred_office_location',
+  'salary_currency', 'salary_period', 'compensation_type',
+] as const;
+const AUTOFILL_BOOLEAN_FACT_KEYS = [
+  'protected_veteran', 'military_service', 'current_military_service',
+] as const;
+const AUTOFILL_FACT_KEYS = [...AUTOFILL_TEXT_FACT_KEYS, ...AUTOFILL_BOOLEAN_FACT_KEYS,
+  'community_memberships', 'relocation_destinations'] as const;
+
+function confirmedAutofillFacts(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+  const source = input as Record<string, unknown>;
+  const facts: Record<string, unknown> = {};
+  const shortList = (value: unknown) => Array.isArray(value) && value.length <= 20 &&
+    value.every(item => typeof item === 'string' && item.length <= 200);
+
+  for (const key of AUTOFILL_TEXT_FACT_KEYS) {
+    const value = source[key];
+    if (typeof value === 'string' && value.length <= 200) facts[key] = value.trim();
+  }
+  for (const key of AUTOFILL_BOOLEAN_FACT_KEYS) {
+    if (typeof source[key] === 'boolean') facts[key] = source[key];
+  }
+  const memberships = source.community_memberships;
+  if (memberships && typeof memberships === 'object' && !Array.isArray(memberships)) {
+    const cm = memberships as Record<string, unknown>;
+    facts.community_memberships = {
+      selected: shortList(cm.selected) ? cm.selected : [],
+      disclosure_preference: typeof cm.disclosure_preference === 'string' && cm.disclosure_preference.length <= 40
+        ? cm.disclosure_preference : '',
+      none_of_the_above: cm.none_of_the_above === true,
+      confirmed: cm.confirmed === true,
+    };
+  }
+  const destinations = source.relocation_destinations;
+  if (shortList(destinations)) facts.relocation_destinations = destinations;
+  else if (typeof destinations === 'string' && destinations.length <= 200) facts.relocation_destinations = destinations.trim();
+  return facts;
+}
+
 async function getAuthenticatedUserId(request: Request): Promise<{ id: string; role: string }> {
   // 1. Try Extension Bearer token
   try {
@@ -198,8 +242,10 @@ export async function POST(request: Request) {
     const disability = countryAnswers.us_disability === 'Not stated' ? null
       : demographics.disabilityStatus || countryAnswers.us_disability || usAnswers.disability_status || body.disability || body.disability_status || null;
 
+    const autofillFacts = confirmedAutofillFacts(body.confirmed_facts);
     const mergedFacts = {
       ...existingFacts,
+      ...autofillFacts,
       raw_text,
       filename,
       has_parsed_resume,
@@ -266,6 +312,11 @@ export async function POST(request: Request) {
       screeningAnswers: screening,
       uploadedAt: new Date().toISOString(),
     };
+    // An explicitly cleared fact must not be resurrected from the previously stored profile.
+    const mutableFacts = mergedFacts as Record<string, unknown>;
+    for (const key of AUTOFILL_FACT_KEYS) {
+      if (autofillFacts[key] === '') delete mutableFacts[key];
+    }
 
     let savedCandidate;
 

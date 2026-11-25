@@ -65,44 +65,10 @@
   let attempts = 0;
   let receipt;
 
-  // Track submission attempt to distinguish page navigation after submit vs idle browsing
   let submissionAttempted = false;
-  try {
-    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('nextkin_submission_attempted') === 'true') {
-      submissionAttempted = true;
-    }
-  } catch {}
-
-  const submitButtonRegex = /\b(?:submit|apply|send application|complete application|review application|continue|finish|next)\b/i;
-
-  function markSubmissionAttempt() {
-    submissionAttempted = true;
-    try { sessionStorage?.setItem('nextkin_submission_attempted', 'true'); } catch {}
-    try {
-      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-        chrome.runtime.sendMessage({ type: 'NEXTKIN_SET_SUBMISSION_ATTEMPT' }).catch(() => {});
-      }
-    } catch {}
-    try {
-      if (typeof globalThis.NextkinJobCapture?.snapshot === 'function') {
-        globalThis.NextkinJobCapture.snapshot();
-      }
-    } catch {}
-  }
-
-  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
-    document.addEventListener('submit', () => {
-      markSubmissionAttempt();
-    }, true);
-
-    document.addEventListener('click', event => {
-      const btn = event.target?.closest?.('button, input[type="submit"], [role="button"]');
-      if (!btn) return;
-      const txt = (btn.innerText || btn.value || '').trim();
-      if (submitButtonRegex.test(txt)) {
-        markSubmissionAttempt();
-      }
-    }, true);
+  void globalThis.NextkinSiteRules?.getCachedRules?.();
+  function hasSubmissionAttempt() {
+    return chrome.runtime.sendMessage({ type: 'NEXTKIN_GET_SUBMISSION_ATTEMPT' }).catch(() => false);
   }
 
   function isVisible(element) {
@@ -117,7 +83,10 @@
   }
 
   function detectExplicitError() {
-    for (const el of qAll(errorSelectors)) {
+    const ats = detectAtsProvider();
+    const overlays = globalThis.NextkinSiteRules?.evaluateSitePolicy?.(ats)?.errorSelectors || [];
+    const remoteErrors = overlays.flatMap(selector => qAll(selector));
+    for (const el of [...qAll(errorSelectors), ...remoteErrors]) {
       if (!isVisible(el) || el.closest?.(hiddenSelectors)) continue;
       const txt = (el.innerText || el.textContent || '').trim();
       if (errorPattern.test(txt)) {
@@ -168,6 +137,11 @@
   }
 
   function detectAtsProvider() {
+    const href = window.location?.href || '';
+    if (typeof globalThis.NextkinSiteRegistry?.detectAtsProvider === 'function') {
+      const detected = globalThis.NextkinSiteRegistry.detectAtsProvider(href, typeof document !== 'undefined' ? document : null);
+      if (detected && detected !== 'generic') return detected;
+    }
     const host = (window.location?.hostname || '').toLowerCase();
     if (/(^|\.)myworkday(jobs|site)?\.com$/i.test(host)) return 'workday';
     if (/(^|\.)(greenhouse\.io|job-boards\.greenhouse\.io)$/i.test(host)) return 'greenhouse';
@@ -273,6 +247,19 @@
     return null;
   }
 
+  // A confirmation URL path is a hint, not proof. Require visible, job-specific confirmation text
+  // on the destination page before reporting SUBMITTED; otherwise the observer falls through to
+  // PENDING_VERIFICATION on navigation and the candidate can confirm manually.
+  function urlConfirmationEvidence() {
+    for (const el of [...qAll(statusSelectors), ...qAll(atsSuccessSelector)]) {
+      if (!isVisible(el) || el.closest?.(hiddenSelectors)) continue;
+      const text = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      const evidence = confirmationEvidence(text);
+      if (evidence) return evidence;
+    }
+    return null;
+  }
+
   function checkAtsDeterministic(ats) {
     const pathname = (window.location?.pathname || '').toLowerCase();
     const { requisitionId, confirmationId } = extractRequisitionAndConfirmationId(ats);
@@ -291,7 +278,8 @@
         return { status: 'SUBMITTED', evidence, atsDetected: true, atsProvider: 'workday', requisitionId, confirmationId };
       }
       if (/\/(?:congratulations|applicationSubmitted|apply\/congratulations)/i.test(pathname)) {
-        return { status: 'SUBMITTED', evidence: `URL confirmation path: ${pathname}`, atsDetected: true, atsProvider: 'workday', requisitionId, confirmationId };
+        const evidence = urlConfirmationEvidence();
+        if (evidence) return { status: 'SUBMITTED', evidence, atsDetected: true, atsProvider: 'workday', requisitionId, confirmationId };
       }
     }
 
@@ -304,7 +292,8 @@
         return { status: 'SUBMITTED', evidence, atsDetected: true, atsProvider: 'greenhouse', requisitionId, confirmationId };
       }
       if (/\/(?:confirmation|thank[-_]?you)(?:\?.*)?$/i.test(pathname)) {
-        return { status: 'SUBMITTED', evidence: `URL confirmation path: ${pathname}`, atsDetected: true, atsProvider: 'greenhouse', requisitionId, confirmationId };
+        const evidence = urlConfirmationEvidence();
+        if (evidence) return { status: 'SUBMITTED', evidence, atsDetected: true, atsProvider: 'greenhouse', requisitionId, confirmationId };
       }
     }
 
@@ -317,7 +306,8 @@
         return { status: 'SUBMITTED', evidence, atsDetected: true, atsProvider: 'lever', requisitionId, confirmationId };
       }
       if (/\/(?:thanks|thank-you|confirmation)(?:\?.*)?$/i.test(pathname)) {
-        return { status: 'SUBMITTED', evidence: `URL confirmation path: ${pathname}`, atsDetected: true, atsProvider: 'lever', requisitionId, confirmationId };
+        const evidence = urlConfirmationEvidence();
+        if (evidence) return { status: 'SUBMITTED', evidence, atsDetected: true, atsProvider: 'lever', requisitionId, confirmationId };
       }
     }
 
@@ -330,7 +320,8 @@
         return { status: 'SUBMITTED', evidence, atsDetected: true, atsProvider: 'ashby', requisitionId, confirmationId };
       }
       if (/\/(?:confirmation|submitted|thank[-_]?you)(?:\?.*)?$/i.test(pathname)) {
-        return { status: 'SUBMITTED', evidence: `URL confirmation path: ${pathname}`, atsDetected: true, atsProvider: 'ashby', requisitionId, confirmationId };
+        const evidence = urlConfirmationEvidence();
+        if (evidence) return { status: 'SUBMITTED', evidence, atsDetected: true, atsProvider: 'ashby', requisitionId, confirmationId };
       }
     }
 
@@ -343,8 +334,29 @@
         return { status: 'SUBMITTED', evidence, atsDetected: true, atsProvider: 'smartrecruiters', requisitionId, confirmationId };
       }
       if (/\/(?:thank-you|success|confirmation)(?:\?.*)?$/i.test(pathname)) {
-        return { status: 'SUBMITTED', evidence: `URL confirmation path: ${pathname}`, atsDetected: true, atsProvider: 'smartrecruiters', requisitionId, confirmationId };
+        const evidence = urlConfirmationEvidence();
+        if (evidence) return { status: 'SUBMITTED', evidence, atsDetected: true, atsProvider: 'smartrecruiters', requisitionId, confirmationId };
       }
+    }
+
+    // 6. Registry & Remote Rule confirmation selectors across all 80+ supported ATS platforms
+    const registrySite = globalThis.NextkinSiteRegistry?.SITE_BY_KEY?.[ats];
+    const remotePolicy = globalThis.NextkinSiteRules?.evaluateSitePolicy?.(ats);
+    const dynamicSelectors = [
+      ...(Array.isArray(remotePolicy?.confirmationSelectors) ? remotePolicy.confirmationSelectors : []),
+      ...(Array.isArray(registrySite?.confirmationSelectors) ? registrySite.confirmationSelectors : []),
+    ].filter(Boolean);
+    if (dynamicSelectors.length) {
+      const matchedEl = dynamicSelectors.map(selector => { try { return q(selector); } catch { return null; } }).find(el => el && isVisible(el));
+      if (matchedEl && isVisible(matchedEl)) {
+        const heading = q('h1, h2, h3, p', matchedEl)?.innerText || matchedEl.innerText || 'Application submitted';
+        const evidence = confirmationEvidence(heading) || `Confirmed via ${ats} selector`;
+        return { status: 'SUBMITTED', evidence, atsDetected: true, atsProvider: ats, requisitionId, confirmationId };
+      }
+    }
+    if (registrySite?.confirmationPaths && registrySite.confirmationPaths.test(pathname)) {
+      const evidence = urlConfirmationEvidence();
+      if (evidence) return { status: 'SUBMITTED', evidence, atsDetected: true, atsProvider: ats, requisitionId, confirmationId };
     }
 
     return null;
@@ -429,8 +441,11 @@
     if (standaloneNonJob.test(bodyText) && !appReceiptPattern.test(bodyText)) return null;
     if (/\b(?:newsletter|subscribe|subscription|survey|feedback|donation|cart|checkout|order)\b/i.test(pathname)) return null;
     if (confirmationUrlPattern.test(pathname)) {
-      const { requisitionId, confirmationId } = extractRequisitionAndConfirmationId(ats);
-      return { status: 'SUBMITTED', evidence: `URL confirmation path: ${pathname}`, atsDetected: hasAtsSelector || ats !== 'generic', atsProvider: ats, requisitionId, confirmationId };
+      const evidence = urlConfirmationEvidence();
+      if (evidence) {
+        const { requisitionId, confirmationId } = extractRequisitionAndConfirmationId(ats);
+        return { status: 'SUBMITTED', evidence, atsDetected: hasAtsSelector || ats !== 'generic', atsProvider: ats, requisitionId, confirmationId };
+      }
     }
 
     return null;
@@ -451,10 +466,10 @@
         url: window.location?.href || ''
       });
       if (ok) {
+        globalThis.NextkinApplication?.confirmSubmission?.({ evidence: data.evidence });
         confirmedSent = true;
         try { observer?.disconnect(); } catch {}
         clearTimeout(timer);
-        try { sessionStorage?.removeItem('nextkin_submission_attempted'); } catch {}
         return true;
       }
     } catch {}
@@ -469,25 +484,19 @@
       const detected = detectConfirmation();
       receipt = detected ? { ...detected, url } : undefined;
     }
-    if (!receipt) return;
+    const observation = receipt;
+    if (!observation) return;
 
-    if (receipt.status === 'SUBMITTED') {
-      const isUrlOnly = String(receipt.evidence || '').startsWith('URL confirmation path:');
-      const hasTerminalSelector = Boolean(qAll(atsSuccessSelector).length);
-      const isVerifiedAts = Boolean(receipt.atsDetected && receipt.atsProvider !== 'generic');
-
-      // On generic/unverified sites, require active submission attempt evidence unless terminal selector is present
-      if (!isVerifiedAts && !submissionAttempted && !hasTerminalSelector) {
-        return;
-      }
-      // URL-only matches always require submissionAttempted
-      if (isUrlOnly && !submissionAttempted) {
-        return;
-      }
+    submissionAttempted = Boolean(await hasSubmissionAttempt());
+    if (window.location?.href !== url) { receipt = undefined; schedule(); return; }
+    if (!submissionAttempted) {
+      attempts++;
+      schedule(1000 * attempts);
+      return;
     }
 
     attempts++;
-    const ok = await report(receipt);
+    const ok = await report(observation);
     if (ok) return;
 
     schedule(2000 * attempts);
@@ -503,9 +512,9 @@
 
   // Handle page change: If submission was attempted but outcome is ambiguous or unconfirmed,
   // set PENDING_VERIFICATION (NEVER FAILED). Only explicit ATS error banners trigger FAILED.
-  function handlePageChange() {
+  async function handlePageChange() {
     if (confirmedSent) return;
-    if (!submissionAttempted) return;
+    if (!submissionAttempted && !await hasSubmissionAttempt()) return;
 
     // Check for explicit error banner
     const errorText = detectExplicitError();
@@ -532,6 +541,11 @@
     window.addEventListener('beforeunload', handlePageChange);
     window.addEventListener('pagehide', handlePageChange);
     window.addEventListener('popstate', handlePageChange);
+    // MAIN-world messages are page-controlled. Use them only to prompt a new DOM check.
+    window.addEventListener('nextkin:submission-network', () => {
+      receipt = undefined;
+      schedule();
+    });
   }
 
   let observer;

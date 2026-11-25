@@ -6,17 +6,8 @@ try {
     sidePanelPort = chrome.runtime.connect({ name: 'nextkin_side_panel' });
   }
 } catch {}
-window.addEventListener('beforeunload', () => {
-  try {
-    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-      if (tab?.id) {
-        chrome.tabs.sendMessage(tab.id, { type: 'NEXTKIN_SIDE_PANEL_STATE', isOpen: false }).catch(() => {});
-      }
-    }).catch(() => {});
-  } catch {}
-});
-const captureScripts = ['adapters/ats-adapters.js', 'core/form-discovery.js', 'core/field-mapping.js',
-  'core/field-writer.js', 'core/job-capture.js', 'core/application.js'];
+const captureScripts = ['core/site-registry.js', 'core/site-rules.js', 'adapters/ats-adapters.js',
+  'core/form-discovery.js', 'core/question-intent.js', 'core/field-mapping.js', 'core/field-writer.js', 'core/job-capture.js', 'core/application.js'];
 const profileLabels = {
   full_name: 'Full name',
   email: 'Email',
@@ -37,6 +28,9 @@ const profileLabels = {
 };
 
 let connection, candidate, currentTab, currentForm, documents = [], selected, preferences = {}, allProfilesMap = new Map();
+// Consequential mappings (DOB, veteran classification, community memberships, relocation) are
+// always left for candidate review. This is an application policy, not a backend profile field.
+const REQUIRE_CANDIDATE_REVIEW = true;
 let refreshNumber = 0;
 let refreshTimer;
 let refreshing = false;
@@ -151,7 +145,7 @@ async function syncLegacyResume(session, profile) {
     const isOriginal = file?.source === 'upload' ||
       (!file?.source && (file?.filename !== generatedName || file?.filename === knownFilename));
     const original = file?.base64 && file.filename && isOriginal ? file : null;
-    legacyResume = { key, token: session.token, file: original, expiresAt: Date.now() + 60000 };
+    legacyResume = { key, candidateId: profile.id, token: session.token, file: original, expiresAt: Date.now() + 60000 };
   }
   return legacyResume.file ? [{
     id: 'dashboard-resume', filename: legacyResume.file.filename, candidate_id: profile.id, status: 'confirmed',
@@ -365,15 +359,18 @@ function buildScopedProfile(candidate) {
     'authorized_in_usa', 'needs_sponsorship', 'need_sponsorship_now',
     'need_sponsorship_future', 'open_to_relocation', 'relocation_preference', 'willing_to_relocate',
     'intended_work_country', 'employment_country', 'work_location_country',
-    'visa_status', 'work_authorization', 'citizenship_status', 'summary', 'bio', 'gender',
+    'visa_status', 'work_authorization', 'citizenship_status', 'summary', 'bio', 'gender', 'pronouns',
     'race', 'race_ethnicity', 'veteran', 'veteran_status', 'disability', 'disability_status',
     'availability', 'salary_expectation', 'highest_education', 'school', 'graduation_year',
-    'preferred_work_type', 'saved_answers', 'highest_qualification'
+    'preferred_work_type', 'saved_answers', 'highest_qualification',
+    // Explicitly confirmed demographic / location facts understood by the mapper (v3.4.3).
+    'community_memberships', 'protected_veteran', 'military_service', 'current_military_service',
+    'preferred_work_location', 'preferred_office_location', 'relocation_destinations',
+    'salary_currency', 'salary_period', 'compensation_type'
   ];
   const scopedFacts = {};
   for (const key of allowedKeys) {
     if (facts[key] !== undefined) scopedFacts[key] = facts[key];
-    else if (candidate[key] !== undefined) scopedFacts[key] = candidate[key];
   }
   const dob = effectiveDob(candidate);
   if (dob) scopedFacts.date_of_birth = dob;
@@ -382,6 +379,9 @@ function buildScopedProfile(candidate) {
     id: candidate.id,
     version: candidate.version,
     provenance_status: candidate.provenance_status || 'confirmed',
+    // Trusted application-level policy, not an optional candidate property. It must survive
+    // profile scoping so consequential disclosures always reach candidate review.
+    requireCandidateReview: REQUIRE_CANDIDATE_REVIEW,
     ...scopedFacts,
     confirmed_facts: scopedFacts,
   };
@@ -395,6 +395,9 @@ async function refresh() {
     getStoredCredentials(),
   ]);
   if (number !== refreshNumber || busy) return;
+  if (Number.isInteger(tab?.id)) {
+    try { sidePanelPort?.postMessage({ type: 'panel-tab', tabId: tab.id }); } catch {}
+  }
   let session = workspaceUrl(storage.origin) && storage.token && storage.user?.id ? storage : null;
   if (!session) {
     try {
@@ -936,6 +939,8 @@ async function readScreeningFrame(tab, frame) {
 
 async function checkScreeningContext(tab, session, candidateId, { frame, source, kekaDetails, jobKey, selection }) {
   await checkFormContext(tab, session, candidateId);
+  await globalThis.NextkinSiteRules?.getCachedRules?.();
+  if (globalThis.NextkinSiteRules?.automationDisabled?.(frame?.result?.url || tab.url, true)) throw new Error('AI screening is disabled for this employer site.');
   const target = await readScreeningFrame(tab, frame);
   if (source) {
     const posting = source === frame ? target : await readScreeningFrame(tab, source);
@@ -1030,9 +1035,6 @@ async function defaultLoadAiModules() {
   return aiModulesPromise;
 }
 
-function normalizeQuestionLabel(label) {
-  return String(label || '').trim().toLowerCase().replace(/\s+/g, ' ');
-}
 
 function isMarketingOptInQuestion(q) {
   const label = String(q?.label || '');
@@ -1150,47 +1152,23 @@ Strict Rules:
   return { systemPrompt, userPrompt };
 }
 
-async function readDeferredComboboxOptions(tab, scope, fieldId, label, matchIndex, fallbackOptions) {
+async function readDeferredComboboxOptions(tab, scope, questionId, fallbackOptions) {
   let liveOptions = [];
   if (tab?.id != null && scope?.frame && typeof chrome !== 'undefined' && chrome.scripting?.executeScript) {
     try {
       const [probe] = await chrome.scripting.executeScript({
         target: formTarget(tab, scope.frame),
-        func: async ({ fieldId: targetFieldId, label: targetLabel, matchIndex: idx }) => {
-          const formsApi = globalThis.NextkinForms;
+        func: async id => {
           const writer = globalThis.NextkinFieldWriter;
-          if (!formsApi?.discoverFields || !writer?.readChoices) return [];
-          const fields = formsApi.discoverFields();
-          const norm = (v) => String(v ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
-          const targetNorm = norm(targetLabel);
-          let field = targetFieldId
-            ? fields.find(
-                (f) =>
-                  f.id === targetFieldId ||
-                  f.name === targetFieldId ||
-                  f.key === targetFieldId ||
-                  f.element?.id === targetFieldId ||
-                  f.element?.name === targetFieldId,
-              )
-            : null;
-          if (!field) {
-            const comboMatches = fields.filter(
-              (f) => (f.kind === 'combobox' || f.kind === 'multi-combobox') && norm(f.label || f.hint) === targetNorm,
-            );
-            field = comboMatches[idx] || comboMatches[0] || null;
-          }
-          if (!field) {
-            const anyMatches = fields.filter((f) => norm(f.label || f.hint) === targetNorm);
-            field = anyMatches[idx] || anyMatches[0] || null;
-          }
-          if (!field) return [];
+          const field = globalThis.NextkinApplication?.screeningField(id);
+          if (!field || !writer || globalThis.NextkinSiteRules?.automationDisabled?.(location.href)) return [];
           const raw = await writer.readChoices(field, () => true);
           return (Array.isArray(raw) ? raw : [])
             .map((o) => (typeof o === 'string' ? o : (o?.label ?? o?.value ?? '')))
             .map((s) => String(s).trim())
             .filter(Boolean);
         },
-        args: [{ fieldId, label, matchIndex }],
+        args: [questionId],
       });
       if (Array.isArray(probe?.result)) {
         liveOptions = [...new Set(probe.result.map((o) => String(o).trim()).filter(Boolean))];
@@ -1210,7 +1188,7 @@ async function draftScreening(session, profile, tab, job, questions, scope, reus
     if (globalThis.NextkinFieldMapping?.isUrlField?.(q)) return false;
     const qid = q.id || q.label;
     const meta = questionMeta?.[qid];
-    if (meta?.factKey === 'date_of_birth') return false;
+    if (meta?.factKey || globalThis.NextkinFieldMapping?.isAiEligible?.({ label: q.label, kind: q.type }) === false) return false;
     if (SENSITIVE_MANUAL_REGEX.test(q.label) || PRIVATE_AI_BLOCK_REGEX.test(q.label)) return false;
     if (isMarketingOptInQuestion(q)) return false;
     return true;
@@ -1239,7 +1217,7 @@ async function draftScreening(session, profile, tab, job, questions, scope, reus
   const planContext = {
     jobTitle: job?.title || '',
     company: job?.company || '',
-    url: scope?.frame?.result?.url || job?.jobUrl || '',
+    url: globalThis.NextkinSiteRegistry?.cleanApplicationUrl(job?.jobUrl || scope?.frame?.result?.url) || job?.jobUrl || '',
   };
 
   const answers = Object.create(null);
@@ -1252,7 +1230,7 @@ async function draftScreening(session, profile, tab, job, questions, scope, reus
     const qid = q.id || q.label;
     const meta = questionMeta?.[qid] || {};
     return {
-      id: meta.fieldId || qid,
+      id: qid,
       label: q.label,
       type: q.type || 'text',
       combo: typeof meta.combo === 'boolean' ? meta.combo : (q.type === 'combobox' || q.type === 'multi-combobox'),
@@ -1281,22 +1259,7 @@ async function draftScreening(session, profile, tab, job, questions, scope, reus
       const val = String(fill.value).trim();
       if (!val) continue;
 
-      let target = null;
-      if (typeof fill.fieldId === 'string' && fill.fieldId.trim()) {
-        target = eligible.find((q) => {
-          const qid = q.id || q.label;
-          if (Object.hasOwn(answers, qid)) return false;
-          const fId = questionMeta?.[qid]?.fieldId || qid;
-          return fId === fill.fieldId;
-        });
-      }
-      if (!target && typeof fill.label === 'string') {
-        const fillNorm = normalizeQuestionLabel(fill.label);
-        target = eligible.find((q) => {
-          const qid = q.id || q.label;
-          return !Object.hasOwn(answers, qid) && normalizeQuestionLabel(q.label) === fillNorm;
-        });
-      }
+      const target = eligible.find(q => q.id === fill.fieldId && !Object.hasOwn(answers, q.id));
       if (target) {
         answers[target.id || target.label] = val;
       }
@@ -1304,63 +1267,24 @@ async function draftScreening(session, profile, tab, job, questions, scope, reus
   }
 
   // Deferred combobox resolution via live DOM readChoices + AIRouter.choose
-  const deferredItems = Array.isArray(planRes?.deferred) ? planRes.deferred : [];
-  if (deferredItems.length > 0) {
+  const deferredIds = Array.isArray(planRes?.deferredFieldIds) ? planRes.deferredFieldIds : [];
+  if (deferredIds.length > 0) {
     const processedDeferredQids = new Set();
-    const labelMatchCounts = new Map();
 
-    for (const deferredItem of deferredItems) {
-      const defFieldId = typeof deferredItem === 'object' && deferredItem !== null
-        ? (deferredItem.fieldId || deferredItem.id || '')
-        : '';
-      const defLabel = typeof deferredItem === 'object' && deferredItem !== null
-        ? (deferredItem.label || '')
-        : String(deferredItem || '');
-      const defNorm = normalizeQuestionLabel(defLabel);
-
-      while (true) {
-        let target = null;
-        if (defFieldId) {
-          target = eligible.find((q) => {
-            const qid = q.id || q.label;
-            if (Object.hasOwn(answers, qid) || processedDeferredQids.has(qid)) return false;
-            return (questionMeta?.[qid]?.fieldId || qid) === defFieldId;
-          });
-        }
-        if (!target && defNorm) {
-          target = eligible.find((q) => {
-            const qid = q.id || q.label;
-            if (Object.hasOwn(answers, qid) || processedDeferredQids.has(qid)) return false;
-            const isCombo = Boolean(questionMeta?.[qid]?.combo) || q.type === 'combobox' || q.type === 'multi-combobox';
-            return isCombo && normalizeQuestionLabel(q.label) === defNorm;
-          }) || eligible.find((q) => {
-            const qid = q.id || q.label;
-            if (Object.hasOwn(answers, qid) || processedDeferredQids.has(qid)) return false;
-            return normalizeQuestionLabel(q.label) === defNorm;
-          });
-        }
-        if (!target) break;
+    for (const id of deferredIds) {
+      const target = eligible.find(q => q.id === id);
+      if (target && !Object.hasOwn(answers, target.id) && !processedDeferredQids.has(target.id)) {
         if (scope) await checkScreeningContext(tab, session, profile.id, scope);
 
         const targetQid = target.id || target.label;
         processedDeferredQids.add(targetQid);
         const targetMeta = questionMeta?.[targetQid] || {};
-        const matchIndex = labelMatchCounts.get(defNorm) || 0;
-        labelMatchCounts.set(defNorm, matchIndex + 1);
-
-        const options = await readDeferredComboboxOptions(
-          tab,
-          scope,
-          targetMeta.fieldId || targetQid,
-          target.label,
-          matchIndex,
-          target.options,
-        );
+        const options = await readDeferredComboboxOptions(tab, scope, targetQid, target.options);
         if (options.length) {
           try {
             const chooseRes = await router.choose(
               {
-                id: targetMeta.fieldId || targetQid,
+                id: targetQid,
                 label: target.label,
                 type: target.type || 'combobox',
                 combo: true,
@@ -1381,7 +1305,6 @@ async function draftScreening(session, profile, tab, job, questions, scope, reus
           }
         }
 
-        if (defFieldId) break;
       }
     }
   }
@@ -1657,10 +1580,12 @@ $('autofill').addEventListener('click', async () => {
     if (selection && selection !== cachedProfile.id) throw new Error('The selected candidate changed. Start autofill again.');
     const [freshProfile, posting] = await Promise.all([
       api('candidates?' + new URLSearchParams({ candidateId: cachedProfile.id, savedOnly: 'true' }), {}, session)
-        .then(data => data.candidates?.[0]),
+        .then(data => (data.candidates || []).find(c => c.id === cachedProfile.id)),
       postingForAutofill(tab, frame, embeddedFrame),
     ]);
     const { job, source, kekaDetails } = posting;
+    await globalThis.NextkinSiteRules?.getCachedRules?.();
+    if (globalThis.NextkinSiteRules?.automationDisabled?.(frame.result.url)) throw new Error('Autofill is disabled for this employer site.');
     if (freshProfile?.provenance_status !== 'confirmed' || !freshProfile.confirmed_facts?.full_name ||
       String(freshProfile.confirmed_facts.notes || '').startsWith('Profile created from an uploaded resume.')) {
       throw new Error('Save your candidate details in My Profile first.');
@@ -1668,12 +1593,14 @@ $('autofill').addEventListener('click', async () => {
     const profile = freshProfile;
     const reusable = await reusableAnswers(session, profile);
     let file = null;
-    if (selected || profile.id) {
+    const selectedResume = selected;
+    if (selectedResume?.candidate_id && selectedResume.candidate_id !== profile.id) throw new Error('Select a resume for this candidate.');
+    if (selectedResume || profile.id) {
       try {
-        if (selected?.id === 'dashboard-resume' && legacyResume?.file) {
+        if (selectedResume?.id === 'dashboard-resume' && legacyResume?.file && legacyResume.candidateId === profile.id) {
           file = legacyResume.file;
-        } else if (/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(selected?.id || '')) {
-          file = await api('resume?documentId=' + encodeURIComponent(selected.id), {}, session);
+        } else if (selectedResume?.candidate_id === profile.id && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(selectedResume?.id || '')) {
+          file = await api('resume?' + new URLSearchParams({ documentId: selectedResume.id, candidateId: profile.id }), {}, session);
         } else if (profile.id) {
           await syncLegacyResume(session, profile);
           file = legacyResume?.file ?? null;
@@ -1687,25 +1614,25 @@ $('autofill').addEventListener('click', async () => {
     const tracking = await chrome.runtime.sendMessage({
       action: 'prepare_application_tracking', tabId: tab.id, url: tab.url, embeddedFrame, job, candidateId: profile.id,
     }).catch(() => ({ error: 'Application tracking could not start.' }));
-    await checkFormContext(tab, session);
-    const documentId = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(selected?.id || '') ? selected.id : null;
-    const result = await fillForm(tab, frame, profile, file ?? null, documentId, reusable, useAI ? {} : null);
+    if (['Select the candidate who started this application.', 'This form does not match the NextKinHR application.'].includes(tracking?.error) ||
+      /unauthori|forbidden|account changed|candidate/i.test(tracking?.error || '')) {
+      throw new Error(tracking.error);
+    }
+    await checkFormContext(tab, session, profile.id);
+    if (selected !== selectedResume) throw new Error('The selected resume changed. Start autofill again.');
+    const documentId = file?.documentId || (file && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(selectedResume?.id || '') ? selectedResume.id : null);
+    const initialJobKey = globalThis.NextkinFieldMapping?.screeningJobKey?.(source?.result?.job || job) || null;
+    const result = await fillForm(tab, frame, profile, file ?? null, documentId, reusable, useAI ? {} : null, source === frame || !source ? initialJobKey : null);
     renderResults(result);
     if (file || !selected) notice('notice', '');
-    if (useAI && result.questions?.length) {
+    if (useAI && result.questions?.length && !globalThis.NextkinSiteRules?.automationDisabled?.(frame.result.url, true)) {
       notice('notice', 'Drafting screening answers…');
       await chrome.scripting.executeScript({
         target: formTarget(tab, frame),
-        func: (qIds) => {
-          for (const id of qIds) {
-            try {
-              const escaped = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id;
-              const el = document.querySelector(`[name="${escaped}"], #${escaped}`) || document.activeElement;
-              if (el) el.classList.add('nextkin-field-loading');
-            } catch {}
-          }
+        func: ids => {
+          for (const id of ids) globalThis.NextkinApplication?.screeningField(id)?.element.classList.add('nextkin-field-loading');
         },
-        args: [result.questions.map(q => result.questionMeta?.[q.id]?.fieldId || q.id).filter(Boolean)],
+        args: [result.questions.map(question => question.id)],
       }).catch(() => {});
       const jobKey = globalThis.NextkinFieldMapping.screeningJobKey(source?.result?.job);
       const scope = { frame, source, kekaDetails, selection, jobKey };
@@ -1734,17 +1661,19 @@ $('autofill').addEventListener('click', async () => {
       }
     }
     if (frame.frameId === 0 && !autoSubmit && !useAI) notice('notice', 'Use Next on the employer form to fill the following step.');
-    if (job) {
+    if (autoSubmit && useAI && !result.questions?.length) notice('notice', 'Review the employer form and submit it manually.');
+    if (job?.description?.trim().length >= 10) {
+      const { navigationUrl, ...postingDetails } = job;
       await api('save-external-job', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...job, jobUrl: tracking?.outsideJobUrl || job.jobUrl,
+        body: JSON.stringify({ ...postingDetails, jobUrl: tracking?.outsideJobUrl || job.jobUrl,
           candidateId: profile.id, applicationUrl: job.applicationUrl ?? undefined }),
       }, session);
       lastCapture = { ...job, ownerId: session.user.id };
     }
     if (!tracking?.tracked && !lastScreeningWarnings.length) notice('notice', tracking?.error || 'Application tracking is unavailable. Check your NextKinHR connection.', true);
-    else if (autoSubmit) {
+    else if (autoSubmit && !useAI) {
       await checkFormContext(tab, session);
       const [attempt] = await chrome.scripting.executeScript({
         target: formTarget(tab, frame),
@@ -1886,8 +1815,8 @@ $('mark-applied').addEventListener('click', async () => {
         eventKey: crypto.randomUUID(),
         companyName: job.company,
         jobTitle: job.title,
-        jobUrl: job.jobUrl || pending.url,
-        confirmationUrl: pending.url,
+        jobUrl: globalThis.NextkinSiteRegistry?.cleanApplicationUrl(job.jobUrl || pending.url) || job.jobUrl,
+        confirmationUrl: globalThis.NextkinSiteRegistry?.cleanApplicationUrl(pending.url),
         portalSource: job.portalSource,
         jobLocation: job.location,
         evidence: 'Candidate confirmed submission in the NextKinHR side panel.',
@@ -1909,8 +1838,8 @@ $('mark-applied').addEventListener('click', async () => {
           eventKey: crypto.randomUUID(),
           companyName: job.company,
           jobTitle: job.title,
-          jobUrl: job.jobUrl || pending.url,
-          confirmationUrl: pending.url,
+          jobUrl: globalThis.NextkinSiteRegistry?.cleanApplicationUrl(job.jobUrl || pending.url) || job.jobUrl,
+          confirmationUrl: globalThis.NextkinSiteRegistry?.cleanApplicationUrl(pending.url),
           portalSource: job.portalSource,
           jobLocation: job.location,
           evidence: 'Candidate confirmed submission in the NextKinHR side panel (queued).',

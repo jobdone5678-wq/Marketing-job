@@ -563,13 +563,15 @@ test('Background Queue: legacy ownership is held for review across retries and c
   assert.ok(!JSON.stringify(worker._localStorage).includes(legacy.token));
 });
 
-test('Background Queue: an offline intent receipt is saved and resolves its attempt during recovery', async () => {
+test('Background Queue: an offline intent receipt retains the attempt captured before submission', async () => {
   const intentId = '8b1d6779-6dc3-419c-855a-fa293123aba0';
   const worker = createMockWorker(async () => { throw new Error('offline'); });
   const url = 'https://careers.example.com/jobs/1/confirmation';
   await worker.chrome.storage.session.set({
-    'application-intent:1': {
-      ...owner, intentId, eventKey: 'intent-receipt', applicationUrl: 'https://careers.example.com/jobs/1',
+    'submission_attempt:1:0': {
+      ...owner, intentId, attempt: 2, timestamp: Date.now(),
+      candidateId: 'a71cb53e-586a-4aa6-a17e-507d6730eafc',
+      eventKey: 'intent-receipt', applicationUrl: 'https://careers.example.com/jobs/1',
       jobOrigin: 'https://careers.example.com',
     },
   });
@@ -578,13 +580,12 @@ test('Background Queue: an offline intent receipt is saved and resolves its atte
   }), true);
   const [pending] = await worker.getSubmissionQueue();
   assert.equal(pending.body.intentId, intentId);
-  assert.equal(pending.body.attempt, undefined);
+  assert.equal(pending.body.attempt, 2);
   await worker.updateQueueItem(pending, previous => ({ ...previous, nextRetryAt: 0 }));
 
   const requests = [];
   worker.fetch = async (url, options) => {
     requests.push(url);
-    if (!options.method) return Response.json({ intent: { id: intentId, attempt: 2 } });
     const body = JSON.parse(options.body);
     const [stored] = await worker.getSubmissionQueue();
     assert.equal(stored.body.attempt, 2);
@@ -593,7 +594,7 @@ test('Background Queue: an offline intent receipt is saved and resolves its atte
     return Response.json({ status: 'confirmed' });
   };
   await worker.processSubmissionQueue();
-  assert.deepEqual(requests, [workspace + '/api/extension/intents/' + intentId, workspace + '/api/extension/events']);
+  assert.deepEqual(requests, [workspace + '/api/extension/events']);
   assert.equal((await worker.getSubmissionQueue()).length, 0);
 });
 

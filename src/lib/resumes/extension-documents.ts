@@ -14,15 +14,16 @@ export async function extensionDocumentAccess(ownerId: string) {
   return ids.length ? `${unlinked},candidate_id.in.(${ids.join(',')})` : unlinked;
 }
 
-export async function downloadExtensionDocument(documentId: string, documentAccess: string) {
+export async function downloadExtensionDocument(documentId: string, documentAccess: string, candidateId?: string) {
   const db = database();
-  const { data: document, error } = await db
+  const query = db
     .from('candidate_documents')
     .select('filename, object_path')
     .eq('id', documentId)
     .or(documentAccess)
-    .in('status', availableStatuses)
-    .maybeSingle();
+    .in('status', availableStatuses);
+  if (candidateId) query.eq('candidate_id', candidateId);
+  const { data: document, error } = await query.maybeSingle();
   checkDb(error);
   if (!document) throw new CaptureError('Resume file is no longer available.', 404);
   const { data: file, error: downloadError } = await db.storage

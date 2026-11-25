@@ -3,11 +3,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 
+await import('../jobright_extension/core/field-mapping.js');
+
 // Loads the real shipped extension source (not the generated test bundle) so the
 // AI-answer path in jobright_extension/core/application.js stays covered.
 function engine(plans, read = () => '', readChoices = async () => []) {
   const source = readFileSync(new URL('../jobright_extension/core/application.js', import.meta.url), 'utf8');
   const applied = [];
+  const elements = new WeakMap();
   const sandbox = {
     console,
     crypto,
@@ -24,7 +27,11 @@ function engine(plans, read = () => '', readChoices = async () => []) {
     },
     NextkinFieldMapping: {
       resolveFact: label => ({ 'Full Name': { key: 'full_name' }, Email: { key: 'email' } })[label] || null,
-      planFill: () => plans.map(plan => ({ ...plan, field: { ...plan.field } })),
+      isAiEligible: globalThis.NextkinFieldMapping.isAiEligible,
+      planFill: () => plans.map(plan => {
+        if (!elements.has(plan.field)) elements.set(plan.field, { isConnected: true });
+        return { ...plan, field: { ...plan.field, element: plan.field.element || elements.get(plan.field) } };
+      }),
       buildValues: candidate => ({ full_name: candidate.full_name, primary_skills: candidate.primary_skills }),
       isChoiceKind: kind => ['choice', 'radio', 'select', 'combobox'].includes(kind),
       isMultiKind: kind => ['checkbox-group', 'multi-select', 'multi-combobox'].includes(kind),
@@ -140,13 +147,13 @@ test('protected and job-specific questions are not reusable', () => {
 
 test('Pass 2 matches dropdown options case-insensitively and trimmed', async () => {
   const { api, applied } = engine([{
-    field: { key: 'q-auth', label: 'Work authorization', kind: 'select' },
+    field: { key: 'q-shift', label: 'Would you work a weekend shift?', kind: 'select' },
     options: ['Yes', 'No'],
     status: 'needs_review',
     reason: 'Missing work authorization fact.',
   }]);
   const result = await api.fill(url, candidate, null, false, null, null, {
-    'work authorization': ' yes ',
+    'would you work a weekend shift': ' yes ',
   });
 
   assert.equal(result.filled.length, 1);
@@ -183,7 +190,7 @@ test('Pass 2 resolves question labels longer than 200 chars using id = key.slice
   assert.equal(pass2.questions.length, 0);
 });
 
-test('unresolved work-auth/sponsorship and unrecognized checkboxes enter questions[] with questionMeta while date_of_birth stays excluded', async () => {
+test('work authorization, sponsorship, scalar checkboxes and date of birth stay out of AI screening', async () => {
   const { api, applied } = engine([
     {
       field: { key: 'q-auth-usa', id: 'auth_usa_input', label: 'Are you legally authorized to work in the USA?', kind: 'combobox', required: true },
@@ -216,42 +223,8 @@ test('unresolved work-auth/sponsorship and unrecognized checkboxes enter questio
   assert.equal(applied.length, 0);
   assert.equal(result.filled.length, 0);
 
-  const ids = JSON.parse(JSON.stringify(result.questions.map(q => q.id)));
-  assert.deepEqual(ids, [
-    'are you legally authorized to work in the usa',
-    'will you now or in the future require sponsorship',
-    'i am willing to travel up to 25% for client meetings',
-  ]);
-
-  // Verify 4-key shape preserved on questions[]
-  for (const q of result.questions) {
-    assert.deepEqual(Object.keys(q).sort(), ['id', 'label', 'options', 'type']);
-  }
-
-  // Verify questionMeta entries
-  const meta = JSON.parse(JSON.stringify(result.questionMeta));
-  assert.deepEqual(meta['are you legally authorized to work in the usa'], {
-    fieldId: 'auth_usa_input',
-    combo: true,
-    required: true,
-    planStatus: 'needs_review',
-    factKey: 'authorized_in_usa',
-  });
-  assert.deepEqual(meta['will you now or in the future require sponsorship'], {
-    fieldId: 'q-sponsor',
-    combo: false,
-    required: false,
-    planStatus: 'needs_review',
-    factKey: 'needs_sponsorship',
-  });
-  assert.deepEqual(meta['i am willing to travel up to 25% for client meetings'], {
-    fieldId: 'q-travel-checkbox',
-    combo: false,
-    required: false,
-    planStatus: 'unknown',
-    factKey: null,
-  });
-  assert.equal(meta['date of birth'], undefined);
+  assert.equal(result.questions.length, 0);
+  assert.deepEqual(Object.keys(result.questionMeta), []);
 });
 
 test('Pass 1 with aiAnswers = {} does not invoke readChoices() for combobox fields', async () => {
@@ -286,8 +259,8 @@ test('Pass 1 with aiAnswers = {} does not invoke readChoices() for combobox fiel
 
 test('duplicate-label comboboxes disambiguate qid deterministically across Pass 1 and Pass 2 without leakage', async () => {
   const dupPlans = [
-    { field: { key: 'c1', label: 'Country', kind: 'combobox' }, status: 'needs_review', reason: 'Requires AI.' },
-    { field: { key: 'c2', label: 'Country', kind: 'combobox' }, status: 'needs_review', reason: 'Requires AI.' },
+    { field: { key: 'c1', label: 'Preferred shift', kind: 'combobox' }, status: 'needs_review', reason: 'Requires AI.' },
+    { field: { key: 'c2', label: 'Preferred shift', kind: 'combobox' }, status: 'needs_review', reason: 'Requires AI.' },
   ];
   const readChoicesByKey = async (field) => {
     if (field.key === 'c1') return [{ label: 'United States' }, { label: 'Mexico' }];
@@ -299,16 +272,16 @@ test('duplicate-label comboboxes disambiguate qid deterministically across Pass 
   const pass1 = await engine(dupPlans, () => '', readChoicesByKey).api.fill(url, candidate, null, false, null, null, {});
   assert.deepEqual(
     JSON.parse(JSON.stringify(pass1.questions)).map(q => q.id),
-    ['country::1', 'country::2'],
+    ['preferred shift', 'preferred shift::2'],
   );
-  assert.equal(pass1.questionMeta['country::1'].fieldId, 'c1');
-  assert.equal(pass1.questionMeta['country::2'].fieldId, 'c2');
+  assert.equal(pass1.questionMeta['preferred shift'].fieldId, 'c1');
+  assert.equal(pass1.questionMeta['preferred shift::2'].fieldId, 'c2');
 
   // Pass 2 with distinct answers fills each combobox with its own answer
   const { api: apiBoth } = engine(dupPlans, () => '', readChoicesByKey);
   const pass2Both = await apiBoth.fill(url, candidate, null, false, null, null, {
-    'country::1': 'United States',
-    'country::2': 'Canada',
+    'preferred shift': 'United States',
+    'preferred shift::2': 'Canada',
   });
   assert.deepEqual(
     pass2Both.filled.map(f => ({ key: f.key, value: f.value })),
@@ -321,7 +294,7 @@ test('duplicate-label comboboxes disambiguate qid deterministically across Pass 
   // Single-answered duplicate-label combobox must NOT leak answer to its sibling
   const { api: apiSingle } = engine(dupPlans, () => '', readChoicesByKey);
   const pass2Single = await apiSingle.fill(url, candidate, null, false, null, null, {
-    'country::1': 'United States',
+    'preferred shift': 'United States',
   });
   assert.deepEqual(
     pass2Single.filled.map(f => ({ key: f.key, value: f.value })),
@@ -329,17 +302,17 @@ test('duplicate-label comboboxes disambiguate qid deterministically across Pass 
   );
   assert.deepEqual(
     JSON.parse(JSON.stringify(pass2Single.questions)).map(q => q.id),
-    ['country::2'],
+    ['preferred shift::2'],
   );
 
-  // Even when sibling 1 is already filled in DOM during Pass 2, sibling 2 still gets occurrence #2 ('country::2')
+  // Even when sibling 1 is already filled in DOM during Pass 2, sibling 2 still gets occurrence #2 ('preferred shift::2')
   const { api: apiPrefilled } = engine(
     dupPlans,
     (f) => (f.key === 'c1' ? 'United States' : ''),
     readChoicesByKey,
   );
   const pass2Prefilled = await apiPrefilled.fill(url, candidate, null, false, null, null, {
-    'country::2': 'Canada',
+    'preferred shift::2': 'Canada',
   });
   assert.deepEqual(
     pass2Prefilled.filled.map(f => ({ key: f.key, value: f.value })),

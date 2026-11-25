@@ -68,6 +68,8 @@ function createSandbox(url = 'https://jobs.ashbyhq.com/openai/application?jr_id=
   };
 
   const sandbox = {
+    URL,
+    URLSearchParams,
     window: {
       addEventListener: (type, cb) => { listeners[type] = cb; },
       removeEventListener: () => {}
@@ -154,6 +156,8 @@ test('Floating Icon: Mounts floating widget with workspace extension icon on job
 
 test('Strict Autofill: If candidate details are missing or empty, autofill fills NOTHING', async () => {
   const sandbox = {
+    URL,
+    URLSearchParams,
     window: {},
     document: {
       querySelectorAll: () => [],
@@ -196,6 +200,8 @@ test('Strict Autofill: If candidate details are missing or empty, autofill fills
 
 test('Strict Autofill: When candidate submits details, ONLY fields present in details are filled; omitted fields are not filled', async () => {
   const sandbox = {
+    URL,
+    URLSearchParams,
     window: {},
     document: {
       querySelectorAll: () => [],

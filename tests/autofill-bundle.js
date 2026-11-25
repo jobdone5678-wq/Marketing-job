@@ -1,3 +1,714 @@
+// === File: jobright_extension/core/site-registry.js ===
+(function (root) {
+  'use strict';
+
+  /**
+   * NextKinHR Unified Site Registry (modeled on Jobright v1.27.1 SITE_REGISTRY / ATS_SUBMISSION_SITES / scraping-rules).
+   * Single source of truth for portal detection, URL canonicalization, preserved query params,
+   * iframe application hosts, submission network endpoints, confirmation selectors, and exclusions.
+   */
+
+  const BASE_PRESERVED_PARAMS = [
+    'gh_jid',
+    'ashby_jid',
+    'jobid',
+    'job_id',
+    'jk',
+    'vjk',
+    'requisition',
+    'req_id',
+    'rid',
+    'jid',
+    'id',
+    'postingid',
+    'jobpipeline',
+    'lever-origin',
+    'nl',
+  ];
+
+  const STRIP_TRACKING_PARAM_SET = new Set([
+    'ref',
+    'source',
+    'src',
+    'fbclid',
+    'gclid',
+    'dclid',
+    'msclkid',
+    'trk',
+    'trkinfo',
+    'mc_cid',
+    'mc_eid',
+    'marketing-intent',
+    'jr_id',
+    '__hsfp',
+    '__hssc',
+    '__hstc',
+    '_hsenc',
+    '_gl',
+    'igshid',
+    's_kwcid',
+  ]);
+
+  const EXCLUDED_URL_PATTERNS = [
+    /^(?:about|chrome|chrome-extension|moz-extension|edge|devtools|view-source|data|blob|file|javascript):/i,
+    /^https?:\/\/challenges\.cloudflare\.com(?:\/|$)/i,
+    /^https?:\/\/(?:www\.)?(?:recaptcha\.net|google\.com\/recaptcha|gstatic\.com\/recaptcha)(?:\/|$)/i,
+    /^https?:\/\/(?:[a-z0-9-]+\.)?hcaptcha\.com(?:\/|$)/i,
+    /^https?:\/\/accounts\.google\.com(?:\/|$)/i,
+    /^https?:\/\/login\.(?:microsoftonline\.com|live\.com)(?:\/|$)/i,
+    /^https?:\/\/(?:[a-z0-9-]+\.)?(?:okta\.com|oktapreview\.com|auth0\.com|duosecurity\.com|onelogin\.com)(?:\/|$)/i,
+    /^https?:\/\/(?:www\.)?(?:googletagmanager\.com|google-analytics\.com|doubleclick\.net)(?:\/|$)/i,
+    /^https?:\/\/(?:[a-z0-9-]+\.)?stripe\.com\/v3(?:\/|$)/i,
+    /\/cdn-cgi\/(?:challenge-platform|l\/chk_captcha|trace)/i,
+  ];
+
+  const SITE_DEFINITIONS = [
+    {
+      key: 'workday',
+      label: 'Workday',
+      hostPattern: /(^|\.)myworkday(jobs|site)?\.com$/i,
+      domSelector: '[data-automation-id*="workday" i], [data-automation-id="applicationSubmitted"], [data-automation-id="applyManually"]',
+      iframePortal: false,
+      preservedParams: ['jobreqid', 'rid'],
+      confirmationPaths: /\/(?:congratulations|applicationSubmitted|apply\/congratulations)(?:\/|\?|$)/i,
+      confirmationSelectors: [
+        '[data-automation-id="applicationSubmitted"]',
+        '[data-automation-id="congratulations"]',
+        '[data-automation-id="thankYouMessage"]',
+        '[data-automation-id="submissionSummary"]',
+      ],
+      errorSelectors: ['[data-automation-id="errorBanner"]', '[data-automation-id="errorMessage"]'],
+      reqIdPathPattern: /(?:\/|_|-)((?:JR\d+|R-\d+|\d{5,}))(?:\/|$)/i,
+      supportsMainWorldNetwork: true,
+      submitNetworkPattern: /\/wday\/cxs\/[^/]+\/[^/]+\/jobs\/[^/]+\/(?:apply|finalize)|\/apply\/finalize(?:\/|\?|$)/i,
+    },
+    {
+      key: 'greenhouse',
+      label: 'Greenhouse',
+      hostPattern: /(^|\.)(?:greenhouse\.io|job-boards\.greenhouse\.io|boards\.greenhouse\.io|boards\.eu\.greenhouse\.io|job-boards\.eu\.greenhouse\.io)$/i,
+      domSelector: '#application_confirmation, [data-qa="job-application-success"], #grnhse_app, form#application_form',
+      iframePortal: true,
+      preservedParams: ['gh_jid', 'gh_src', 'token'],
+      confirmationPaths: /\/(?:confirmation|thank[-_]?you)(?:\/|\?|$)/i,
+      confirmationSelectors: ['#application_confirmation', '[data-qa="job-application-success"]', '.application-confirmation', '#apply_status'],
+      canonicalOrigin: url => (url.hostname === 'job-boards.greenhouse.io' ? 'https://boards.greenhouse.io' : url.origin),
+      reqIdPathPattern: /\/jobs\/(\d+)(?:\/|$)/i,
+      supportsMainWorldNetwork: true,
+      submitNetworkPattern: /\/(?:applications|jobs\/\d+(?:\/apply)?)(?:\?|$)/i,
+    },
+    {
+      key: 'lever',
+      label: 'Lever',
+      hostPattern: /(^|\.)lever\.co$/i,
+      domSelector: '.lever-confirmation, .application-form[action*="lever"], [data-qa="lever-application"]',
+      iframePortal: true,
+      preservedParams: ['lever-origin', 'lever-source'],
+      confirmationPaths: /\/(?:thanks|thank[-_]?you|confirmation)(?:\/|\?|$)/i,
+      confirmationSelectors: ['.application-confirmation', '.application-submitted', '[data-qa="confirmation-page"]', '.confirmation-section', '.lever-confirmation'],
+      reqIdPathPattern: /\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})(?:\/|$)/i,
+      supportsMainWorldNetwork: true,
+      submitNetworkPattern: /\/jobs\/[a-f0-9-]+\/apply(?:\?|$)|\/postings\/[^/]+\/apply/i,
+    },
+    {
+      key: 'ashby',
+      label: 'Ashby',
+      hostPattern: /(^|\.)ashbyhq\.com$/i,
+      domSelector: '[data-testid="application-submitted"], [class*="ashby-application" i], [id*="ashby"]',
+      iframePortal: true,
+      preservedParams: ['ashby_jid'],
+      confirmationPaths: /\/(?:confirmation|submitted|thank[-_]?you)(?:\/|\?|$)/i,
+      confirmationSelectors: ['[data-testid="application-submitted"]', '[data-testid*="application-success" i]', '[class*="applicationSubmitted" i]', '[class*="ApplicationSuccess" i]'],
+      reqIdPathPattern: /\/([a-f0-9-]{10,})(?:\/|$)/i,
+      supportsMainWorldNetwork: true,
+      submitNetworkPattern: /\/api\/non-user-graphql|applicationForm\.submit/i,
+    },
+    {
+      key: 'smartrecruiters',
+      label: 'SmartRecruiters',
+      hostPattern: /(^|\.)(?:smartrecruiters\.com|smartr\.me)$/i,
+      domSelector: '[data-test="application-success"], [data-testid="application-success"], st-application-success, spl-application-submitted',
+      iframePortal: true,
+      confirmationPaths: /\/(?:thank[-_]?you|success|confirmation)(?:\/|\?|$)/i,
+      confirmationSelectors: ['[data-test="application-success"]', '[data-testid="application-success"]', 'st-application-success', '.application-success', '[data-qa="success-page"]', 'spl-application-submitted'],
+      reqIdPathPattern: /\/jobs\/([a-zA-Z0-9_-]+)/i,
+      supportsMainWorldNetwork: true,
+      submitNetworkPattern: /\/oneclick-ui\/api\/.*\/apply|\/api\/applications/i,
+    },
+    {
+      key: 'oraclecloud',
+      label: 'Oracle Cloud HCM',
+      hostPattern: /\.oraclecloud\.com$/i,
+      domSelector: '[id*="cx-application" i], [class*="apply-flow" i]',
+      preservedParams: ['jobId', 'siteNumber', 'RequisitionId'],
+      supportsMainWorldNetwork: true,
+      submitNetworkPattern: /recruitingCEJobApplications|\/hcmRestApi\/resources\/latest\/recruitingCEJobApplications/i,
+    },
+    {
+      key: 'icims',
+      label: 'iCIMS',
+      hostPattern: /(^|\.)icims\.com$/i,
+      domSelector: '#icims_content_iframe, [class*="iCIMS_"]',
+      iframePortal: true,
+      preservedParams: ['in_iframe', 'jid', 'pr'],
+      supportsMainWorldNetwork: false,
+    },
+    {
+      key: 'taleo',
+      label: 'Oracle Taleo',
+      hostPattern: /(^|\.)taleo\.net$/i,
+      preservedParams: ['job', 'requisitionNo', 'org', 'lang'],
+    },
+    {
+      key: 'successfactors',
+      label: 'SAP SuccessFactors',
+      hostPattern: /(^|\.)(?:successfactors\.(?:com|eu)|jobs\.sap\.com)$/i,
+      preservedParams: ['career_job_req_id', 'career_ns', 'jobId'],
+      supportsMainWorldNetwork: true,
+      submitNetworkPattern: /\/apply\/(?:submit|finalize)|rcmCandidateApplication/i,
+    },
+    {
+      key: 'workable',
+      label: 'Workable',
+      hostPattern: /(^|\.)workable\.com$/i,
+      iframePortal: true,
+      confirmationSelectors: ['[data-ui="application-submitted"]', '[data-ui="application-success"]'],
+      supportsMainWorldNetwork: true,
+      submitNetworkPattern: /\/api\/v[1-3]\/accounts\/[^/]+\/jobs\/[^/]+\/candidates/i,
+    },
+    {
+      key: 'bamboohr',
+      label: 'BambooHR',
+      hostPattern: /(^|\.)(?:bamboohr\.com|bamboohr\.co\.uk)$/i,
+      iframePortal: true,
+      supportsMainWorldNetwork: true,
+      submitNetworkPattern: /\/careers\/\d+\/apply|\/careers\/submit/i,
+    },
+    {
+      key: 'jobvite',
+      label: 'Jobvite',
+      hostPattern: /(^|\.)jobvite\.com$/i,
+      iframePortal: true,
+      preservedParams: ['j', 's', 'p', '__jvst'],
+      supportsMainWorldNetwork: true,
+      submitNetworkPattern: /\/jobvite\.com\/.*\/apply/i,
+    },
+    {
+      key: 'jazzhr',
+      label: 'JazzHR',
+      hostPattern: /(^|\.)(?:applytojob\.com|jazzhr\.com|resumatorapi\.com)$/i,
+      iframePortal: true,
+    },
+    {
+      key: 'breezy',
+      label: 'Breezy HR',
+      hostPattern: /(^|\.)breezy\.hr$/i,
+    },
+    {
+      key: 'personio',
+      label: 'Personio',
+      hostPattern: /(^|\.)(?:personio\.com|personio\.de)$/i,
+      preservedParams: ['language', 'display'],
+    },
+    {
+      key: 'rippling',
+      label: 'Rippling',
+      hostPattern: /(^|\.)rippling\.com$/i,
+      pathPattern: /\/jobs(?:\/|$)|ats\.rippling\.com/i,
+      supportsMainWorldNetwork: true,
+      submitNetworkPattern: /\/api\/ats\/.*\/apply/i,
+    },
+    { key: 'clearcompany', label: 'ClearCompany', hostPattern: /(^|\.)clearcompany\.com$/i, supportsMainWorldNetwork: true, submitNetworkPattern: /\/Candidate\/Submit/i },
+    { key: 'paycor', label: 'Paycor Recruiting', hostPattern: /(^|\.)(?:paycor\.com|newton\.newtonsoftware\.com|recruitingbypaycor\.com)$/i, preservedParams: ['gnk', 'gni'] },
+    { key: 'brassring', label: 'IBM Kenexa BrassRing', hostPattern: /(^|\.)brassring\.com$/i, preservedParams: ['partnerid', 'siteid', 'areqid'], supportsMainWorldNetwork: true, submitNetworkPattern: /SubmitApplication/i },
+    { key: 'paylocity', label: 'Paylocity', hostPattern: /(^|\.)(?:paylocity\.com|recruiting\.paylocity\.com)$/i },
+    { key: 'paycom', label: 'Paycom', hostPattern: /(^|\.)paycomonline\.net$/i },
+    { key: 'adp', label: 'ADP Workforce Now', hostPattern: /(^|\.)adp\.com$/i, preservedParams: ['cid', 'ccId', 'lang', 'selectedMenuKey'] },
+    { key: 'dayforce', label: 'Dayforce HCM', hostPattern: /(^|\.)(?:dayforcehcm\.com|ceridian\.com)$/i },
+    { key: 'ultipro', label: 'UKG / UltiPro', hostPattern: /(^|\.)(?:ultipro\.com|ukg\.com)$/i },
+    { key: 'eightfold', label: 'Eightfold AI', hostPattern: /(^|\.)eightfold\.ai$/i, preservedParams: ['pid', 'domain'] },
+    { key: 'phenom', label: 'Phenom People', hostPattern: /(^|\.)phenompeople\.com$/i },
+    { key: 'zohorecruit', label: 'Zoho Recruit', hostPattern: /(^|\.)zohorecruit\.(?:com|in|eu|com\.au)$/i },
+    { key: 'teamtailor', label: 'Teamtailor', hostPattern: /(^|\.)teamtailor\.com$/i },
+    { key: 'recruitee', label: 'Recruitee', hostPattern: /(^|\.)recruitee\.com$/i },
+    { key: 'pinpoint', label: 'Pinpoint', hostPattern: /(^|\.)pinpointhq\.com$/i },
+    { key: 'avature', label: 'Avature', hostPattern: /(^|\.)avature\.net$/i, preservedParams: ['jobId', 'pipelineId'] },
+    { key: 'gusto', label: 'Gusto Careers', hostPattern: /(^|\.)jobs\.gusto\.com$/i },
+    { key: 'gem', label: 'Gem ATS', hostPattern: /(^|\.)jobs\.gem\.com$/i },
+    { key: 'hiringthing', label: 'HiringThing', hostPattern: /(^|\.)hiringthing\.com$/i },
+    { key: 'jobscore', label: 'JobScore', hostPattern: /(^|\.)jobscore\.com$/i },
+    { key: 'careerplug', label: 'CareerPlug', hostPattern: /(^|\.)careerplug\.com$/i },
+    { key: 'catsone', label: 'CATS ATS', hostPattern: /(^|\.)catsone\.com$/i },
+    { key: 'recruiterflow', label: 'Recruiterflow', hostPattern: /(^|\.)recruiterflow\.com$/i },
+    { key: 'trakstar', label: 'Trakstar Hire', hostPattern: /(^|\.)hire\.trakstar\.com$/i },
+    { key: 'polymer', label: 'Polymer', hostPattern: /(^|\.)(?:polymer\.co|jobs\.polymer\.co)$/i },
+    { key: 'gohire', label: 'GoHire', hostPattern: /(^|\.)gohire\.io$/i },
+    { key: 'trinethire', label: 'TriNet Hire', hostPattern: /(^|\.)trinethire\.com$/i },
+    { key: 'kula', label: 'Kula', hostPattern: /(^|\.)kula\.ai$/i },
+    { key: 'dover', label: 'Dover', hostPattern: /(^|\.)(?:dover\.io|app\.dover\.com)$/i },
+    { key: 'toasttab', label: 'Toast Jobs', hostPattern: /(^|\.)careers\.toasttab\.com$/i },
+    { key: 'hubspot', label: 'HubSpot Careers', hostPattern: /(^|\.)hubspot\.com$/i, pathPattern: /\/careers/i },
+    { key: 'waymo', label: 'Waymo Careers', hostPattern: /(^|\.)waymo\.com$/i, pathPattern: /\/careers/i },
+    { key: 'ycombinator', label: 'Work at a Startup (YC)', hostPattern: /(^|\.)workatastartup\.com$/i },
+    { key: 'governmentjobs', label: 'GovernmentJobs / NEOGOV', hostPattern: /(^|\.)(?:governmentjobs\.com|schooljobs\.com|neogov\.com)$/i },
+    { key: 'usajobs', label: 'USAJOBS', hostPattern: /(^|\.)usajobs\.gov$/i },
+    { key: 'taxcredits', label: 'WOTC / TaxCredits', hostPattern: /(^|\.)taxcredits\.com$/i },
+    { key: 'freshteam', label: 'Freshteam', hostPattern: /(^|\.)freshteam\.com$/i },
+    { key: 'comeet', label: 'Comeet', hostPattern: /(^|\.)comeet\.co$/i },
+    { key: 'keka', label: 'Keka Hire', hostPattern: /(^|\.)(?:kekahire\.com|keka\.com)$/i },
+    { key: 'isolved', label: 'iSolved Hire', hostPattern: /(^|\.)isolvedhire\.com$/i },
+    { key: 'jobdiva', label: 'JobDiva', hostPattern: /(^|\.)jobdiva\.com$/i },
+    { key: 'bullhorn', label: 'Bullhorn', hostPattern: /(^|\.)bullhorn(?:staffing)?\.com$/i },
+    { key: 'cornerstone', label: 'Cornerstone OnDemand', hostPattern: /(^|\.)csod\.com$/i },
+    { key: 'darwinbox', label: 'Darwinbox', hostPattern: /(^|\.)darwinbox\.(?:com|in)$/i },
+    { key: 'fountain', label: 'Fountain', hostPattern: /(^|\.)fountain\.com$/i },
+    { key: 'paradox', label: 'Paradox Olivia', hostPattern: /(^|\.)paradox\.ai$/i },
+    { key: 'silkroad', label: 'SilkRoad / Rival', hostPattern: /(^|\.)silkroad\.com$/i },
+    { key: 'join', label: 'JOIN', hostPattern: /(^|\.)join\.com$/i },
+    { key: 'manatal', label: 'Manatal', hostPattern: /(^|\.)manatal\.com$/i },
+    { key: 'linkedin', label: 'LinkedIn Jobs', hostPattern: /(^|\.)linkedin\.com$/i, pathPattern: /\/jobs(?:\/|$)/i, domSelector: '.jobs-easy-apply-modal, [data-test-modal="easy-apply-modal"], [data-test-easy-apply-modal]', preservedParams: ['currentJobId'] },
+    { key: 'indeed', label: 'Indeed', hostPattern: /(^|\.)(?:indeed\.com|smartapply\.indeed\.com)$/i, preservedParams: ['jk', 'vjk', 'advn'] },
+    { key: 'glassdoor', label: 'Glassdoor', hostPattern: /(^|\.)glassdoor\.com$/i, pathPattern: /\/(?:Job|job-listing|partner)/i, preservedParams: ['jobListingId', 'jl'] },
+    { key: 'wellfound', label: 'Wellfound', hostPattern: /(^|\.)(?:wellfound\.com|angel\.co)$/i },
+    { key: 'dice', label: 'Dice', hostPattern: /(^|\.)dice\.com$/i },
+    { key: 'ziprecruiter', label: 'ZipRecruiter', hostPattern: /(^|\.)ziprecruiter\.com$/i },
+    { key: 'monster', label: 'Monster', hostPattern: /(^|\.)monster\.com$/i },
+    { key: 'careerbuilder', label: 'CareerBuilder', hostPattern: /(^|\.)careerbuilder\.com$/i },
+    { key: 'builtin', label: 'Built In', hostPattern: /(^|\.)builtin(?:nyc|austin|boston|chicago|la|colorado|seattle|sf)?\.com$/i },
+    { key: 'snagajob', label: 'Snagajob', hostPattern: /(^|\.)snagajob\.com$/i },
+    { key: 'handshake', label: 'Handshake', hostPattern: /(^|\.)joinhandshake\.com$/i },
+    { key: 'wayup', label: 'WayUp', hostPattern: /(^|\.)wayup\.com$/i },
+    { key: 'naukri', label: 'Naukri', hostPattern: /(^|\.)naukri\.com$/i },
+    { key: 'foundit', label: 'Foundit', hostPattern: /(^|\.)foundit\.in$/i },
+    { key: 'cutshort', label: 'Cutshort', hostPattern: /(^|\.)cutshort\.io$/i },
+    { key: 'bayt', label: 'Bayt', hostPattern: /(^|\.)bayt\.com$/i },
+    { key: 'jobstreet', label: 'JobStreet', hostPattern: /(^|\.)jobstreet\.com$/i },
+    { key: 'welcometothejungle', label: 'Welcome to the Jungle', hostPattern: /(^|\.)welcometothejungle\.com$/i },
+    { key: 'seek', label: 'SEEK', hostPattern: /(^|\.)seek\.com\.au$/i },
+    { key: 'reed', label: 'Reed', hostPattern: /(^|\.)reed\.co\.uk$/i },
+    { key: 'totaljobs', label: 'Totaljobs', hostPattern: /(^|\.)totaljobs\.com$/i },
+    { key: 'amazon', label: 'Amazon Jobs', hostPattern: /(^|\.)amazon\.jobs$/i },
+    { key: 'google', label: 'Google Careers', hostPattern: /(^|\.)(?:careers\.google\.com|google\.com)$/i, pathPattern: /^\/about\/careers|^\/careers|careers\.google\.com/i },
+    { key: 'apple', label: 'Apple Jobs', hostPattern: /(^|\.)jobs\.apple\.com$/i },
+    { key: 'meta', label: 'Meta Careers', hostPattern: /(^|\.)metacareers\.com$/i },
+    { key: 'microsoft', label: 'Microsoft Careers', hostPattern: /(^|\.)careers\.microsoft\.com$/i },
+    { key: 'netflix', label: 'Netflix Jobs', hostPattern: /(^|\.)jobs\.netflix\.com$/i },
+    { key: 'tesla', label: 'Tesla Careers', hostPattern: /(^|\.)tesla\.com$/i, pathPattern: /\/careers/i },
+    { key: 'tiktok', label: 'TikTok / ByteDance', hostPattern: /(^|\.)(?:lifeattiktok\.com|careers\.tiktok\.com|jobs\.bytedance\.com|tiktokusds\.com|joinbytedance\.com)$/i },
+    { key: 'uber', label: 'Uber Careers', hostPattern: /(^|\.)uber\.com$/i, pathPattern: /\/careers/i },
+    { key: 'walmart', label: 'Walmart Careers', hostPattern: /(^|\.)careers\.walmart\.com$/i },
+    { key: 'cisco', label: 'Cisco Careers', hostPattern: /(^|\.)careers\.cisco\.com$/i },
+    { key: 'jacobs', label: 'Jacobs Careers', hostPattern: /(^|\.)careers\.jacobs\.com$/i },
+    { key: 'stripe', label: 'Stripe Jobs', hostPattern: /(^|\.)stripe\.com$/i, pathPattern: /\/jobs/i },
+    { key: 'airbnb', label: 'Airbnb Careers', hostPattern: /(^|\.)careers\.airbnb\.com$/i },
+    { key: 'nvidia', label: 'NVIDIA Careers', hostPattern: /(^|\.)nvidia\.wd5\.myworkdayjobs\.com$|(^|\.)nvidia\.com$/i, pathPattern: /\/careers|myworkdayjobs/i },
+    { key: 'salesforce', label: 'Salesforce Careers', hostPattern: /(^|\.)careers\.salesforce\.com$/i },
+  ];
+
+  const SITE_BY_KEY = Object.create(null);
+  for (const def of SITE_DEFINITIONS) {
+    SITE_BY_KEY[def.key] = def;
+  }
+
+  function parseTarget(urlOrHost) {
+    const raw = String(
+      urlOrHost ||
+      (typeof window !== 'undefined' && window.location?.href) ||
+      (typeof location !== 'undefined' && location?.href) ||
+      ''
+    ).trim();
+    if (!raw) return { url: null, host: '', pathname: '', href: '' };
+    try {
+      const hostWithPort = /^(?:localhost|[a-z0-9.-]+\.[a-z0-9-]+):\d+(?:\/|$)/i.test(raw);
+      const hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(raw) && !hostWithPort;
+      const parsed = new URL(hasScheme ? raw : 'https://' + raw.replace(/^\/+/, ''));
+      if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
+        return { url: null, host: '', pathname: '', href: raw };
+      }
+      return { url: parsed, host: parsed.hostname.toLowerCase(), pathname: parsed.pathname || '/', href: parsed.href };
+    } catch {
+      return { url: null, host: raw.toLowerCase().split('/')[0], pathname: '/', href: raw };
+    }
+  }
+
+  function isExcludedUrl(urlOrHost) {
+    const { url, href, pathname, host } = parseTarget(urlOrHost);
+    if (!href) return false;
+    if (!url) return true;
+    if (EXCLUDED_URL_PATTERNS.some(rx => rx.test(href))) return true;
+    if (/(?:^|\.)nextkinhr\.com$/i.test(host)) return false;
+    if (/\/(?:cdn-cgi\/challenge-platform|recaptcha\/api2)/i.test(pathname)) return true;
+    return false;
+  }
+
+  function resolveSite(urlOrHost, doc) {
+    const { host, pathname, href } = parseTarget(urlOrHost);
+    if (isExcludedUrl(href)) return null;
+    for (const def of SITE_DEFINITIONS) {
+      if (!def.hostPattern.test(host)) continue;
+      if (def.pathPattern && !def.pathPattern.test(pathname + ' ' + host)) continue;
+      return def;
+    }
+    const qDoc = doc || (typeof document !== 'undefined' ? document : null);
+    if (qDoc && typeof qDoc.querySelector === 'function') {
+      for (const def of SITE_DEFINITIONS) {
+        if (!def.domSelector) continue;
+        try {
+          if (qDoc.querySelector(def.domSelector)) return def;
+        } catch {}
+      }
+    }
+    return null;
+  }
+
+  function detectAtsProvider(urlOrHost, doc) {
+    return resolveSite(urlOrHost, doc)?.key || 'generic';
+  }
+
+  function isSupportedPortal(urlOrHost, doc) {
+    const resolved = resolveSite(urlOrHost, doc);
+    if (resolved) return true;
+    const { host, pathname, href } = parseTarget(urlOrHost);
+    if (isExcludedUrl(href)) return false;
+    if (/^(?:jobs?|careers?|apply|recruit(?:ing)?|talent)\./i.test(host)) return true;
+    if (/\/(?:careers?|jobs?|apply|application|positions?|openings?|recruit)\b/i.test(pathname)) return true;
+    return false;
+  }
+
+  function isIframeApplication(urlOrHost) {
+    const site = resolveSite(urlOrHost);
+    return Boolean(site?.iframePortal);
+  }
+
+  function canonicalOrigin(urlInput) {
+    try {
+      const parsed = typeof urlInput === 'string' ? new URL(urlInput) : urlInput;
+      const site = resolveSite(parsed.href);
+      if (site?.canonicalOrigin) return site.canonicalOrigin(parsed);
+      return parsed.origin;
+    } catch {
+      return '';
+    }
+  }
+
+  function getPreservedParams(urlOrHost, extraParams = [], policyOrRules = undefined) {
+    const set = new Set(BASE_PRESERVED_PARAMS);
+    const site = resolveSite(urlOrHost);
+    if (Array.isArray(site?.preservedParams)) {
+      for (const p of site.preservedParams) set.add(String(p).toLowerCase());
+    }
+    const policy = policyOrRules && Array.isArray(policyOrRules.preservedParams)
+      ? policyOrRules
+      : root.NextkinSiteRules?.evaluateSitePolicy?.(site?.key || 'generic', undefined, policyOrRules);
+    for (const param of policy?.preservedParams || []) {
+      const lower = String(param).toLowerCase();
+      if (!/token|secret|password|credential|session|auth|api[-_]?key/.test(lower)) {
+        set.add(lower);
+      }
+    }
+    if (Array.isArray(extraParams)) {
+      for (const p of extraParams) set.add(String(p).toLowerCase());
+    }
+    return set;
+  }
+
+  function cleanApplicationUrl(urlInput, extraParams = [], policyOrRules = undefined) {
+    if (!urlInput) return '';
+    try {
+      const parsed = typeof urlInput === 'string'
+        ? new URL(urlInput)
+        : (urlInput instanceof URL ? new URL(urlInput.href) : new URL(String(urlInput)));
+      if (!['https:', 'http:'].includes(parsed.protocol)) return '';
+      parsed.username = '';
+      parsed.password = '';
+      const preserved = getPreservedParams(parsed.href, extraParams, policyOrRules);
+      const cleanParams = (params) => {
+        for (const name of [...params.keys()]) {
+          const lower = name.toLowerCase();
+          if (/token|secret|password|credential|session|auth|api[-_]?key/.test(lower) || lower.startsWith('utm_') || STRIP_TRACKING_PARAM_SET.has(lower) || !preserved.has(lower)) {
+            params.delete(name);
+          }
+        }
+        params.sort();
+      };
+      cleanParams(parsed.searchParams);
+      const [route, query] = parsed.hash.slice(1).split(/\?(.*)/s, 2);
+      const SearchParams = parsed.searchParams.constructor || URLSearchParams;
+      const routeParams = new SearchParams(query);
+      cleanParams(routeParams);
+      parsed.hash = /^!?\//.test(route) ? route + (routeParams.size ? '?' + routeParams.toString() : '') : '';
+      return parsed.href;
+    } catch {
+      return '';
+    }
+  }
+
+  function extractIdentifiers(urlOrHost, doc, explicitAts) {
+    const { url, pathname } = parseTarget(urlOrHost);
+    const ats = explicitAts || detectAtsProvider(urlOrHost, doc);
+    const site = SITE_BY_KEY[ats] || null;
+    let requisitionId = null;
+    let confirmationId = null;
+
+    if (doc && typeof doc.querySelector === 'function') {
+      const reqEl = doc.querySelector('[data-automation-id="requisitionId"], [data-automation-id="jobId"], [data-testid*="requisition-id" i], [data-qa*="req-id" i]');
+      if (reqEl) requisitionId = (reqEl.innerText || reqEl.textContent || '').trim() || null;
+
+      const confEl = doc.querySelector('[data-automation-id="confirmationId"], #confirmation_id, [data-qa="confirmation-id"], [data-testid*="confirmation-id" i]');
+      if (confEl) confirmationId = (confEl.innerText || confEl.textContent || '').trim() || null;
+    }
+
+    const routeQuery = url?.hash.match(/^#!?\/[^?]*\?(.*)$/)?.[1];
+    const paramSets = url ? [url.searchParams, ...(routeQuery ? [new URLSearchParams(routeQuery)] : [])] : [];
+    for (const params of paramSets) {
+      if (!confirmationId) {
+        confirmationId = params.get('confirmation_id') || params.get('conf_id') || params.get('application_id') || params.get('gh_aid') || null;
+      }
+      if (!requisitionId) {
+        requisitionId = params.get('req_id') || params.get('requisition_id') || params.get('gh_jid') || params.get('ashby_jid') || params.get('job_id') || params.get('jobId') || params.get('jk') || null;
+      }
+    }
+
+    if (!requisitionId && site?.reqIdPathPattern) {
+      const m = pathname.match(site.reqIdPathPattern);
+      if (m && m[1]) requisitionId = m[1];
+    }
+
+    return { requisitionId, confirmationId, atsProvider: ats };
+  }
+
+  const api = {
+    SITE_DEFINITIONS,
+    SITE_BY_KEY,
+    BASE_PRESERVED_PARAMS,
+    EXCLUDED_URL_PATTERNS,
+    resolveSite,
+    detectAtsProvider,
+    isSupportedPortal,
+    isIframeApplication,
+    isExcludedUrl,
+    canonicalOrigin,
+    getPreservedParams,
+    cleanApplicationUrl,
+    extractIdentifiers,
+    listSites: () => SITE_DEFINITIONS.map(s => s.key),
+    getRegistryCount: () => SITE_DEFINITIONS.length,
+  };
+
+  root.NextkinSiteRegistry = api;
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = api;
+  }
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+
+// === File: jobright_extension/core/site-rules.js ===
+(function (root) {
+  'use strict';
+
+  const CACHE_STORAGE_KEY = 'nextkin_site_rules_v1';
+  const SELECTOR_TTL = 6 * 60 * 60 * 1000;
+  const POLICY_TTL = 2 * 60 * 1000;
+  const modes = new Set(['active', 'legacy', 'off']);
+  const sites = new Map();
+  const refreshes = new Map();
+  const retryAfter = new Map();
+  const empty = { schemaVersion: 1, sites: {} };
+  let memoryCache = null;
+  let memoryCacheAccountId = null;
+
+  // Chrome extension version components are integers 0..65535 (up to 4 dot-separated parts).
+  const versionPattern = /^(?:0|[1-9]\d{0,4})(?:\.(?:0|[1-9]\d{0,4})){0,3}$/;
+  const isValidExtensionVersion = value => typeof value === 'string' && versionPattern.test(value) &&
+    value.split('.').every(part => Number(part) >= 0 && Number(part) <= 65535);
+  const getExtensionVersion = () => typeof chrome !== 'undefined' ? chrome.runtime?.getManifest?.()?.version || '0' : '0';
+
+  function compareExtensionVersion(a, b) {
+    if (!isValidExtensionVersion(a) || !isValidExtensionVersion(b)) return NaN;
+    const left = a.split('.').map(Number);
+    const right = b.split('.').map(Number);
+    for (let i = 0; i < 4; i++) {
+      const difference = (left[i] || 0) - (right[i] || 0);
+      if (difference) return Math.sign(difference);
+    }
+    return 0;
+  }
+
+  function workspaceOrigin(value) {
+    try {
+      const url = new URL(value);
+      if (url.username || url.password) return null;
+      if (url.protocol === 'https:' && /(^|\.)(nextkinhr\.com|jobright-internal\.com)$/.test(url.hostname)) return url.origin;
+      if (url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname)) return url.origin;
+    } catch {}
+    return null;
+  }
+
+  const isObject = value => value && typeof value === 'object' && !Array.isArray(value);
+  const isSiteKey = value => /^[a-z][a-z0-9_-]{0,40}$/.test(value) &&
+    (value === 'generic' || Object.hasOwn(root.NextkinSiteRegistry?.SITE_BY_KEY || {}, value));
+  const strings = (value, max = 256) => Array.isArray(value) && value.length <= 40 &&
+    value.every(item => typeof item === 'string' && item.trim() && item.length <= max);
+  const selector = value => {
+    if (typeof document === 'undefined') return true;
+    try { document.createDocumentFragment().querySelector(value); return true; } catch { return false; }
+  };
+
+  function validateRules(rules) {
+    if (!isObject(rules) || rules.schemaVersion !== 1 || !isObject(rules.sites) ||
+      (rules.globalMode !== undefined && !modes.has(rules.globalMode)) ||
+      (rules.revision !== undefined && (typeof rules.revision !== 'string' || rules.revision.length > 80)) ||
+      (rules.disabledSites !== undefined && (!strings(rules.disabledSites, 41) || !rules.disabledSites.every(isSiteKey)))) return false;
+    const allowedRoot = new Set(['schemaVersion', 'revision', 'globalMode', 'disabledSites', 'sites']);
+    const allowedSite = new Set(['mode', 'minExtensionVersion', 'maxExtensionVersion', 'confirmationSelectors',
+      'errorSelectors', 'selectorTables', 'preservedParams', 'excludePathPatterns']);
+    if (Object.keys(rules).some(key => !allowedRoot.has(key))) return false;
+    return Object.entries(rules.sites).every(([key, entry]) => {
+      if (!isSiteKey(key) || !isObject(entry) || Object.keys(entry).some(name => !allowedSite.has(name))) return false;
+      if (entry.mode !== undefined && !modes.has(entry.mode)) return false;
+      for (const key of ['minExtensionVersion', 'maxExtensionVersion']) {
+        if (entry[key] !== undefined && !isValidExtensionVersion(entry[key])) return false;
+      }
+      if (entry.minExtensionVersion && entry.maxExtensionVersion && compareExtensionVersion(entry.minExtensionVersion, entry.maxExtensionVersion) > 0) return false;
+      for (const key of ['confirmationSelectors', 'errorSelectors', 'preservedParams', 'excludePathPatterns']) {
+        if (entry[key] !== undefined && !strings(entry[key])) return false;
+      }
+      if ([...(entry.confirmationSelectors || []), ...(entry.errorSelectors || [])].some(value => !selector(value))) return false;
+      if (entry.preservedParams?.some(value => !/^[a-z0-9_-]{1,48}$/i.test(value) || /token|secret|password|credential|session|auth|api[-_]?key/i.test(value))) return false;
+      // Prefixes keep the contract predictable and avoid executing remote regexes.
+      if (entry.excludePathPatterns?.some(value => !value.startsWith('/') && !value.startsWith('#/'))) return false;
+      if (entry.selectorTables !== undefined && (!isObject(entry.selectorTables) ||
+        Object.entries(entry.selectorTables).some(([name, list]) => name !== 'fields' || !strings(list) || !list.every(selector)))) return false;
+      return true;
+    });
+  }
+
+  function validateSiteRuleEntry(entry, version) {
+    if (!isObject(entry)) return null;
+    if (entry.minExtensionVersion && !(compareExtensionVersion(version, entry.minExtensionVersion) >= 0)) return null;
+    if (entry.maxExtensionVersion && !(compareExtensionVersion(version, entry.maxExtensionVersion) <= 0)) return null;
+    return entry;
+  }
+
+  function evaluateSitePolicy(siteKey, version = getExtensionVersion(), payload = memoryCache) {
+    const hasPayload = Boolean(payload && (isObject(payload.rules) || isObject(payload.sites)));
+    const rules = payload?.rules || payload || empty;
+    const stale = typeof payload?.expiresAt === 'number' && payload.expiresAt <= Date.now();
+    const killMode = value => value === true ? 'off' : value === false ? undefined : value;
+    const globalMode = killMode(rules.siteRulesKillSwitch) || rules.globalMode || (hasPayload ? 'active' : 'legacy');
+    const entry = validateSiteRuleEntry(rules.sites?.[siteKey], version);
+    const siteMode = killMode(entry?.killSwitch) || entry?.mode || globalMode;
+    const blocked = !modes.has(globalMode) || !modes.has(siteMode) || globalMode === 'off' || siteMode === 'off' ||
+      Boolean(rules.disabledSites?.includes(siteKey));
+    const mode = blocked ? 'off' : (!hasPayload || stale || globalMode === 'legacy') ? 'legacy' : siteMode;
+    const overlays = mode === 'active' ? entry || {} : {};
+    return {
+      siteKey, blocked, mode,
+      stale: stale || !hasPayload, revision: rules.revision,
+      selectorTables: overlays.selectorTables || {},
+      confirmationSelectors: overlays.confirmationSelectors || [],
+      errorSelectors: overlays.errorSelectors || [],
+      preservedParams: overlays.preservedParams || [],
+      // Retain safety path exclusions even when rules become stale or degraded.
+      excludePathPatterns: blocked ? [] : (entry?.excludePathPatterns || []),
+    };
+  }
+
+  function automationDisabled(input, activeOnly = false, payload = memoryCache, version = getExtensionVersion(), doc = typeof document !== 'undefined' ? document : undefined) {
+    const registry = root.NextkinSiteRegistry;
+    if (registry?.isExcludedUrl(input)) return true;
+    const policy = evaluateSitePolicy(registry?.detectAtsProvider(input, doc) || 'generic', version, payload);
+    if (policy.blocked || (activeOnly && policy.mode !== 'active')) return true;
+    try {
+      const url = new URL(String(input).includes('://') ? input : 'https://' + input);
+      return policy.excludePathPatterns.some(prefix =>
+        prefix.startsWith('#') ? url.hash.startsWith(prefix) : url.pathname.startsWith(prefix));
+    } catch { return true; }
+  }
+
+  function isSiteBlocked(input, version, payload) {
+    return automationDisabled(input, false, payload, version);
+  }
+
+  function invalidateCache() {
+    memoryCache = null;
+    memoryCacheAccountId = null;
+    sites.clear();
+    retryAfter.clear();
+  }
+
+  async function getCachedRules() {
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage && typeof document !== 'undefined') {
+      try {
+        const entry = await chrome.runtime.sendMessage({ type: 'NEXTKIN_GET_SITE_RULES' });
+        if (!entry || !validateRules(entry.rules) || (memoryCacheAccountId && entry.accountId && entry.accountId !== memoryCacheAccountId)) {
+          memoryCache = entry && validateRules(entry.rules) ? entry : null;
+          memoryCacheAccountId = memoryCache ? (entry.accountId || null) : null;
+        } else {
+          memoryCache = entry;
+          memoryCacheAccountId = entry.accountId || memoryCacheAccountId;
+        }
+      } catch {
+        memoryCache = null;
+        memoryCacheAccountId = null;
+      }
+    }
+    return memoryCache;
+  }
+
+  async function getWorkspaceRules(origin, token, accountId, version = getExtensionVersion()) {
+    const workspace = workspaceOrigin(origin);
+    if (!workspace || !token || typeof accountId !== 'string' || !accountId || !isValidExtensionVersion(version)) return null;
+    const key = JSON.stringify([CACHE_STORAGE_KEY, workspace, accountId, version]);
+    if (refreshes.has(key)) return refreshes.get(key);
+    const refresh = (async () => {
+      const stored = sites.get(key) || (await chrome.storage?.local?.get(key).catch(() => ({})))?.[key];
+      const cached = stored && validateRules(stored.rules) ? stored : null;
+      const now = Date.now();
+      const policyFresh = cached && typeof cached.policyExpiresAt === 'number' && cached.policyExpiresAt > now;
+      if (policyFresh || retryAfter.get(key) > now) return cached;
+      retryAfter.set(key, now + 60000);
+      try {
+        const url = new URL('/api/extension/site-rules', workspace);
+        url.searchParams.set('version', version);
+        const result = await fetch(url, {
+          credentials: 'omit', redirect: 'error', cache: 'no-store',
+          signal: typeof AbortSignal !== 'undefined' ? AbortSignal.timeout?.(4000) : undefined,
+          headers: { Authorization: 'Bearer ' + token },
+        });
+        if (!result.ok) return cached;
+        const text = await result.text();
+        if (text.length > 128000) return cached;
+        const parsed = JSON.parse(text);
+        const rules = parsed.rules || parsed;
+        if (!validateRules(rules)) return cached;
+        const fetchedAt = Date.now();
+        const entry = {
+          rules,
+          accountId,
+          expiresAt: fetchedAt + SELECTOR_TTL,
+          policyExpiresAt: fetchedAt + POLICY_TTL,
+        };
+        sites.set(key, entry);
+        await chrome.storage?.local?.set({ [key]: entry }).catch(() => {});
+        return entry;
+      } catch {
+        return cached;
+      }
+    })();
+    refreshes.set(key, refresh);
+    try { return await refresh; } finally { refreshes.delete(key); }
+  }
+
+  root.NextkinSiteRules = {
+    POLICY_TTL, SELECTOR_TTL,
+    compareExtensionVersion, compareSemver: compareExtensionVersion,
+    getExtensionVersion, getCachedRules, invalidateCache, evaluateSitePolicy, isSiteBlocked, automationDisabled,
+    getWorkspaceRules, refreshFromWorkspace: getWorkspaceRules,
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = root.NextkinSiteRules;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+
 // === File: jobright_extension/adapters/ats-adapters.js ===
 /**
  * NextKinHR Universal ATS Portal Adapters Registry
@@ -1461,6 +2172,9 @@
 
   function cleanApplicationUrl(url) {
     if (!url) return '';
+    if (typeof globalThis.NextkinSiteRegistry?.cleanApplicationUrl === 'function') {
+      return globalThis.NextkinSiteRegistry.cleanApplicationUrl(url);
+    }
     try {
       const parsed = typeof url === 'string' ? new URL(url) : (url instanceof URL ? url : new URL(String(url)));
       const clean = params => {
@@ -1538,7 +2252,8 @@
     const keka = kekaPosting(current);
     const isWorkspace = /(^|\.)(nextkinhr\.com|jobright-internal\.com)$/.test(current.hostname)
       || ['localhost', '127.0.0.1'].includes(current.hostname) && !!first(root, '#nextkin-job-details');
-    const isAts = /(^|\.)(linkedin\.com|lever\.co|ashbyhq\.com|greenhouse\.io|myworkdayjobs\.com|myworkdaysite\.com|smartrecruiters\.com|smartr\.me|workable\.com|taleo\.net|icims\.com|jobvite\.com|bamboohr\.com|clearcompany\.com|hrmdirect\.com|oraclecloud\.com|oraclegovcloud\.com|successfactors\.(?:com|eu)|sapsf\.com|brassring\.com|dayforce(hcm)?\.com|phenompeople\.com|avature\.net|paycom(online)?\.(?:com|net)|paylocity\.com|paycor\.com|newtonsoftware\.com|gusto\.com|gem\.com|hiringthing\.com|oasisrecruit\.com|careerplug\.com|catsone\.com|recruiterflow\.com|trakstar\.com|polymer\.co|gohire\.io|trinethire\.com|kula\.ai|dover\.com|eightfold\.ai|ultipro\.(?:com|ca)|rec\.pro\.ukg\.net|zohorecruit\.(?:com|ca|eu|in)|personio\.(?:de|com)|breezy\.hr|teamtailor\.com|recruitee\.com|pinpointhq\.com|freshteam\.com|comeet\.(?:com|co)|jobscore\.com|isolvedhire\.com|jobdiva\.com|applytojob\.com|toasttab\.com|withwaymo\.com|governmentjobs\.com|usajobs\.gov|ycombinator\.com|workatastartup\.com)$/i.test(current.hostname);
+    const isAts = (typeof globalThis.NextkinSiteRegistry?.isSupportedPortal === 'function' && globalThis.NextkinSiteRegistry.isSupportedPortal(jobUrl, root)) ||
+      /(^|\.)(linkedin\.com|lever\.co|ashbyhq\.com|greenhouse\.io|myworkdayjobs\.com|myworkdaysite\.com|smartrecruiters\.com|smartr\.me|workable\.com|taleo\.net|icims\.com|jobvite\.com|bamboohr\.com|clearcompany\.com|hrmdirect\.com|oraclecloud\.com|oraclegovcloud\.com|successfactors\.(?:com|eu)|sapsf\.com|brassring\.com|dayforce(hcm)?\.com|phenompeople\.com|avature\.net|paycom(online)?\.(?:com|net)|paylocity\.com|paycor\.com|newtonsoftware\.com|gusto\.com|gem\.com|hiringthing\.com|oasisrecruit\.com|careerplug\.com|catsone\.com|recruiterflow\.com|trakstar\.com|polymer\.co|gohire\.io|trinethire\.com|kula\.ai|dover\.com|eightfold\.ai|ultipro\.(?:com|ca)|rec\.pro\.ukg\.net|zohorecruit\.(?:com|ca|eu|in)|personio\.(?:de|com)|breezy\.hr|teamtailor\.com|recruitee\.com|pinpointhq\.com|freshteam\.com|comeet\.(?:com|co)|jobscore\.com|isolvedhire\.com|jobdiva\.com|applytojob\.com|toasttab\.com|withwaymo\.com|governmentjobs\.com|usajobs\.gov|ycombinator\.com|workatastartup\.com)$/i.test(current.hostname);
     const portal = isWorkspace && /^\/(?:dashboard\/jobs|jobs\/info)\/[^/]+\/?$/.test(current.pathname);
     if (isWorkspace && !portal) return null;
     const workspace = portal ? parse(first(root, '#nextkin-job-details')?.textContent) : null;
@@ -1605,14 +2320,11 @@
 
     const markup = workspace?.descriptionHtml || posting?.description || descriptionNode?.innerHTML || '';
     const template = safeHtml(markup);
-    let descriptionHtml = template.innerHTML.slice(0, 120_000);
+    const descriptionHtml = template.innerHTML.slice(0, 120_000);
     for (const element of template.content.querySelectorAll('br, p, li, h1, h2, h3, h4, div, section')) element.after('\n');
-    let description = text(workspace?.description || template.content.textContent || descriptionNode?.innerText, 60_000);
-    if (description.length < 30 && (isAts || /apply|application/i.test(current.pathname))) {
-      description = `${title} at ${company}. Application posting for the ${title} role at ${company}.`;
-      descriptionHtml = `<p>${description}</p>`;
-    }
-    if (!title || !company || description.length < 15 || /^(careers?|open positions?|job search|all jobs|open roles|job opportunities)$/i.test(title)) return null;
+    const description = text(workspace?.description || template.content.textContent || descriptionNode?.innerText, 60_000);
+    const applicationPage = isAts || /apply|application/i.test(current.pathname);
+    if (!title || !company || (!applicationPage && description.length < 15) || /^(careers?|open positions?|job search|all jobs|open roles|job opportunities)$/i.test(title)) return null;
 
     const apply = [...root.querySelectorAll('a[href]')].find(link => /^(apply(?:\s+(?:now|for\s+(?:this\s+)?(?:job|role|position)))?|submit application)\b/i
       .test((link.innerText || link.getAttribute('aria-label') || link.textContent || '').trim()));
@@ -1621,7 +2333,9 @@
     const postingParam = [...current.searchParams.keys()].some(key => /^(?:gh_jid|jobId|job_id|jk|postingId)$/i.test(key));
     return {
       title, company, description, descriptionHtml,
-      jobUrl: keka?.details || (workspace || postingParam || !onSameSite || /^(?:\/|\/(?:careers?|jobs?|openings?)\/?)$/i.test(new URL(canonical).pathname) ? jobUrl : canonical),
+      descriptionSource: description.length >= 15 ? 'captured' : 'unavailable',
+      navigationUrl: current.href,
+      jobUrl: cleanApplicationUrl(keka?.details || (workspace || postingParam || !onSameSite || /^(?:\/|\/(?:careers?|jobs?|openings?)\/?)$/i.test(new URL(canonical).pathname) ? jobUrl : canonical)),
       applicationUrl: keka?.application || url(workspace?.applicationUrl || posting?.applicationUrl || apply?.getAttribute('href'), jobUrl),
       location: text(workspace?.location || formatLocations(posting?.jobLocation) || read(root,
         '[itemprop="jobLocation"], [data-automation-id="locations"], [data-automation-id="jobPostingLocation"], [data-testid="job-location"], .job-location, .posting-categories .location, .ki-location + span, .jobs-unified-top-card__subtitle-primary-grouping', 200), 200),
@@ -1650,30 +2364,7 @@
       department: job.department || null,
       employmentType: job.employmentType || null,
     };
-    try {
-      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-        chrome.runtime.sendMessage({
-          type: 'NEXTKIN_SET_JOB_SNAPSHOT',
-          payload: snapshot,
-        }).catch(() => {});
-      }
-    } catch {}
     return snapshot;
-  }
-
-  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
-    document.addEventListener('click', (event) => {
-      const btn = event.target?.closest?.('button, input[type="submit"], [role="button"]');
-      if (!btn) return;
-      const txt = (btn.innerText || btn.value || '').trim();
-      if (/\b(?:submit|apply|send application|complete application|review application|continue|finish|next)\b/i.test(txt)) {
-        snapshotJobMetadata();
-      }
-    }, true);
-
-    document.addEventListener('submit', () => {
-      snapshotJobMetadata();
-    }, true);
   }
 
   globalThis.NextkinJobCapture = { read: jobFromDom, kekaPosting, cleanApplicationUrl, snapshot: snapshotJobMetadata };
@@ -2036,6 +2727,24 @@
     return '';
   }
 
+  function firstDefined(...values) {
+    for (const value of values) {
+      if (value !== undefined && value !== null && value !== '') return value;
+    }
+    return undefined;
+  }
+
+  const COUNTRY_ALIASES = {
+    'united states': ['us', 'usa', 'united states of america'],
+    'united kingdom': ['uk', 'gb', 'great britain'],
+    'canada': ['ca'],
+  };
+
+  const EMPLOYMENT_TYPE_ALIASES = {
+    'full time': ['fulltime', 'full-time'],
+    'part time': ['parttime', 'part-time'],
+  };
+
   function pickOption(field, desired, factKey = '') {
     const d = norm(desired), opts = field.options || [];
     if (!d) return null;
@@ -2050,9 +2759,16 @@
         return matches.length === 1 ? matches[0] : null;
       }
     }
-    const code = Object.hasOwn(US_STATES, d) ? US_STATES[d] : Object.keys(US_STATES).find(state => US_STATES[state] === d);
-    const aliases = { 'united states': ['us', 'usa', 'united states of america'], 'full time': ['permanent', 'fulltime'], 'part time': ['parttime'] };
-    const equivalent = Object.entries(aliases).find(([key, values]) => key === d || values.includes(d));
+    const isStateField = !factKey || ['current_state', 'state', 'current_location', 'location'].includes(factKey);
+    const code = isStateField
+      ? (Object.hasOwn(US_STATES, d) ? US_STATES[d] : Object.keys(US_STATES).find(state => US_STATES[state] === d))
+      : null;
+    const aliasTable = (factKey === 'country' || factKey === 'intended_work_country') ? COUNTRY_ALIASES
+      : (factKey === 'contract_type' || factKey === 'preferred_work_type') ? EMPLOYMENT_TYPE_ALIASES
+      : null;
+    const equivalent = aliasTable
+      ? Object.entries(aliasTable).find(([key, values]) => key === d || values.includes(d))
+      : null;
     const acceptable = new Set([d, ...(code ? [code] : []), ...(equivalent ? [equivalent[0], ...equivalent[1]] : [])]);
     const matches = opts.filter(o => acceptable.has(norm(optionText(o))) || acceptable.has(norm(o.value)));
     if (matches.length === 1) return matches[0];
@@ -2146,7 +2862,7 @@
     return null;
   }
 
-  function buildValues(candidate) {
+  function buildValues(candidate, options = {}) {
     const candFacts = candidate.confirmed_facts || {};
     const facts = candidate.provenance_status === 'confirmed' ? (candidate.confirmed_facts || {}) : candidate;
     let fullName = String(facts.full_name || candidate.full_name || candFacts.full_name || candFacts.name || candidate.name || '').trim();
@@ -2182,12 +2898,13 @@
 
     const demographics = facts.demographics || candidate.demographics || candFacts.demographics || {};
     const firstName = facts.first_name || candidate.first_name || candFacts.first_name || names[0] || '';
-    const preferredFirst = facts.preferred_first_name || facts.preferred_name || candidate.preferred_first_name || candidate.preferred_name || candFacts.preferred_first_name || candFacts.preferred_name || firstName;
-    const gender = facts.gender || candidate.gender || candFacts.gender || demographics.gender || '';
-    const pronouns = facts.pronouns || candidate.pronouns || candFacts.pronouns || demographics.pronouns || '';
-    const race = facts.race || candidate.race || candFacts.race || facts.race_ethnicity || candidate.race_ethnicity || candFacts.race_ethnicity || demographics.raceEthnicity || demographics.race || '';
-    const veteran = facts.veteran || candidate.veteran || facts.veteran_status || candidate.veteran_status || candFacts.veteran || candFacts.veteran_status || demographics.veteranStatus || demographics.veteran || '';
-    const disability = facts.disability || candidate.disability || facts.disability_status || candidate.disability_status || candFacts.disability || candFacts.disability_status || demographics.disabilityStatus || demographics.disability || '';
+    const explicitPreferred = firstDefined(facts.preferred_first_name, facts.preferred_name, candidate.preferred_first_name, candidate.preferred_name, candFacts.preferred_first_name, candFacts.preferred_name);
+    const preferredFirst = explicitPreferred ?? (options.fallbackPreferredToLegal === false ? '' : firstName);
+    const gender = firstDefined(facts.gender, candidate.gender, candFacts.gender, demographics.gender) ?? '';
+    const pronouns = firstDefined(facts.pronouns, candidate.pronouns, candFacts.pronouns, demographics.pronouns) ?? '';
+    const race = firstDefined(facts.race, candidate.race, candFacts.race, facts.race_ethnicity, candidate.race_ethnicity, candFacts.race_ethnicity, demographics.raceEthnicity, demographics.race) ?? '';
+    const veteran = firstDefined(facts.veteran, candidate.veteran, facts.veteran_status, candidate.veteran_status, candFacts.veteran, candFacts.veteran_status, demographics.veteranStatus, demographics.veteran) ?? '';
+    const disability = firstDefined(facts.disability, candidate.disability, facts.disability_status, candidate.disability_status, candFacts.disability, candFacts.disability_status, demographics.disabilityStatus, demographics.disability) ?? '';
     const visaStatus = facts.visa_status || candidate.visa_status || facts.work_authorization || candidate.work_authorization || candFacts.visa_status || candFacts.work_authorization || '';
     const workAuth = facts.work_authorization || candidate.work_authorization || facts.visa_status || candidate.visa_status || candFacts.work_authorization || candFacts.visa_status || '';
     const linkedin = facts.linkedin_url || candidate.linkedin_url || candFacts.linkedin_url || '';
@@ -2275,7 +2992,7 @@
       availability: facts.availability || candidate.availability || candidate.available_to_join || candidate.notice_period || '',
       salary_expectation: facts.expected_salary || facts.salary_expectation || candidate.expected_salary || candidate.salary_expectation || candFacts.expected_salary || candFacts.salary_expectation || '',
       how_heard: facts.how_heard || candidate.how_heard || '',
-      highest_education: facts.highest_qualification || candidate.highest_qualification || candidate.degree || candidate.highest_education || '',
+      highest_education: facts.highest_qualification || candidate.highest_qualification || candFacts.highest_qualification || candidate.degree || candFacts.degree || candidate.highest_education || candFacts.highest_education || '',
       school: facts.school || candidate.university_name || candidate.school || candidate.institution || '',
       graduation_year: facts.graduation_year || candidate.graduation_year || '',
       languages: candidate.languages || [],
@@ -2457,12 +3174,52 @@
     return null;
   }
 
+  const US_COUNTRY_VALUES = new Set(['us', 'usa', 'united states', 'united states of america']);
+
+  function isValidAnswerForField(field, value) {
+    if (value === undefined || value === null || value === '') return false;
+    const type = field.element?.type || '';
+    if (type === 'number' && !Number.isFinite(Number(value))) return false;
+    if ((type === 'date' || isDateInput(field.element)) && Number.isNaN(Date.parse(String(value)))) return false;
+    if (type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim())) return false;
+    if (type === 'url' && !candidateHttpUrl(String(value).trim())) return false;
+    if (isChoiceKind(field.kind) && Array.isArray(field.options) && field.options.length > 0) {
+      return Boolean(pickOption(field, value));
+    }
+    return true;
+  }
+
+  function educationLevel(text) {
+    const s = String(text || '');
+    if (/\b(?:ph\.?d|doctorate|doctoral|ed\.?d)\b/i.test(s)) return 6;
+    if (/\b(?:master|m\.?s\.?|m\.?a\.?|m\.?tech|m\.?sc|mba|j\.?d\.?|m\.?d\.?|ll\.?m)\b/i.test(s)) return 5;
+    if (/\b(?:bachelor|b\.?s\.?|b\.?a\.?|b\.?tech|b\.?e\.?|b\.?sc|undergraduate)\b/i.test(s)) return 4;
+    if (/\b(?:associate|a\.?a\.?s?\.?|a\.?s\.?)\b/i.test(s)) return 3;
+    if (/\b(?:diploma|vocational|certificate|trade school)\b/i.test(s)) return 2;
+    if (/\b(?:high school|ged|secondary|hs diploma)\b/i.test(s)) return 1;
+    return 0;
+  }
+
+  function requiredEducationLevel(questionText) {
+    const q = String(questionText || '');
+    if (/\b(?:ph\.?d|doctorate|doctoral)\b/i.test(q)) return 6;
+    if (/\b(?:master|mba|graduate degree)\b/i.test(q)) return 5;
+    if (/\b(?:bachelor|undergraduate)\b/i.test(q)) return 4;
+    if (/\b(?:associate)\b/i.test(q)) return 3;
+    if (/\b(?:college degree|university degree|completed.*degree|have a degree|hold a degree)\b/i.test(q)) return 3;
+    if (/\b(?:high school|ged|secondary)\b/i.test(q)) return 1;
+    return 0;
+  }
+
   function planFill(fields, candidate, options = {}) {
-    const values = buildValues(candidate);
+    const values = buildValues(candidate, options);
     const aiPlan = (field, reason) => ({ field, status: 'ai', reason, options: (field.options || []).map(o => optionText(o)), aiPrompt: field.label });
     const consumedUrls = new Set();
+    const verifiedJobCountry = norm(options.jobCountry || options.job?.country || '');
+    const jobIsUS = Boolean(verifiedJobCountry && US_COUNTRY_VALUES.has(verifiedJobCountry));
+    const requireReview = Boolean(options?.requireCandidateReview || candidate?.requireCandidateReview);
 
-    const plans = fields.map(field => {
+    const planSingleField = (field) => {
       if (field.kind === 'inaccessible' || field.excluded) {
         return { field, status: 'manual', reason: 'Manual or protected field.' };
       }
@@ -2538,7 +3295,7 @@
         if (MARKETING_REGEX.test(consentText)) {
           return { field, factKey: 'consent', status: 'manual', reason: 'Promotional and marketing opt-ins are not auto-checked.' };
         } else if (LEGAL_CONSENT_REGEX.test(consentText)) {
-          return { field, factKey: 'consent', value: true, status: 'supported', reason: 'Standard legal terms and privacy acknowledgement.' };
+          return { field, factKey: 'consent', status: 'manual', reason: 'Review and acknowledge the employer terms manually.' };
         }
       }
       if (/\b(signature|sign here|certify by entering your name)\b/i.test(nl)) {
@@ -2554,12 +3311,13 @@
           const companySlug = options.companySlug || options.company || options.job?.company || candidate?.companySlug;
           const matchFn = (root.NextkinAnswerBank && root.NextkinAnswerBank.matchAnswer) || matchAnswerBankFallback;
           const match = matchFn(field, bankList, companySlug);
-          if (match && match.answer !== undefined && match.answer !== null) {
+          if (match && match.answer !== undefined && match.answer !== null && isValidAnswerForField(field, match.answer)) {
             return {
               field,
               value: match.answer,
-              status: 'ready',
+              status: 'supported',
               source: 'answer_bank',
+              learned: true,
               companyScope: match.companyScope || null,
               reason: match.companyScope ? `Answer bank match for ${match.companyScope}` : 'Universal answer bank match'
             };
@@ -2590,11 +3348,20 @@
         pickBooleanOption(field.options, true) && pickBooleanOption(field.options, false)) {
         return { field, factKey, status: 'needs_review', reason: 'Citizenship requires an explicit yes/no answer.' };
       }
-      // A known United States authorization must not answer a question about an unrelated foreign country.
-      if (factKey === 'authorized_in_usa' && !isUSQuestion(nl) &&
-        !/^(?:are you\s+)?(?:legally\s+)?authorized to work(?:\s+in\s+(?:this country|the country\b[^?]*))?[?.\s]*$/i.test(nl || nh) &&
-        !/^(?:are you (?:legally )?authorized to work|legally authorized|work authorization|authorized to work|authorized in usa)[?.\s]*$/i.test(nl || nh)) {
-        return { field, factKey, status: 'unknown', reason: 'Question is not about United States work authorization.' };
+      // A known United States authorization must not answer a question about an unrelated or unverified country.
+      if (factKey === 'authorized_in_usa' && !isUSQuestion(nl)) {
+        const isAmbiguousAuth =
+          /^(?:are you\s+)?(?:legally\s+)?authorized to work(?:\s+in\s+(?:this country|the country\b[^?]*))?[?.\s]*$/i.test(nl || nh) ||
+          /^(?:are you (?:legally )?authorized to work|legally authorized|work authorization|authorized to work|authorized in usa)[?.\s]*$/i.test(nl || nh);
+        if (!isAmbiguousAuth) {
+          return { field, factKey, status: 'unknown', reason: 'Question is not about United States work authorization.' };
+        }
+        if (verifiedJobCountry && !jobIsUS) {
+          return { field, factKey, status: 'unknown', reason: `Job country (${options.jobCountry || options.job?.country}) is not United States.` };
+        }
+        if (!jobIsUS) {
+          return { field, factKey, status: 'needs_review', reason: 'Job country must be verified as United States before using US work authorization.' };
+        }
       }
 
       let val = values[factKey];
@@ -2749,19 +3516,15 @@
         const hasNo = field.options?.some(o => /^(no|false)$/i.test(optionText(o)));
         if (hasYes && hasNo) {
           const ql = (field.label || '').toLowerCase();
-          const candidateHasBachelor = /\b(?:bachelor|b\.?tech|b\.?s|b\.?a|undergraduate)\b/i.test(String(val));
-          const candidateHasMaster = /\b(?:master|m\.?s|m\.?tech|mba)\b/i.test(String(val));
-          const candidateHasDoctorate = /\b(?:ph\.?d|doctor|doctorate)\b/i.test(String(val));
-
-          let satisfies = false;
-          if (/(master|graduate degree)/i.test(ql)) {
-            satisfies = candidateHasMaster || candidateHasDoctorate;
-          } else if (/(phd|doctorate)/i.test(ql)) {
-            satisfies = candidateHasDoctorate;
-          } else if (/(bachelor|undergraduate|degree|education|college|university|completed.*degree)/i.test(ql)) {
-            satisfies = candidateHasBachelor || candidateHasMaster || candidateHasDoctorate;
+          if (/\b(?:currently enrolled|enrolled in|currently attending|pursuing|in progress|expected graduation|graduation date|major|field of study|are you a student|current student)\b/i.test(ql)) {
+            return { field, factKey, status: 'needs_review', reason: 'Enrollment or study status cannot be inferred from completed degree.' };
           }
-
+          const candLevel = educationLevel(val);
+          const reqLevel = requiredEducationLevel(ql);
+          if (!candLevel || !reqLevel) {
+            return { field, factKey, status: 'needs_review', reason: 'Education qualification cannot be evaluated conclusively.' };
+          }
+          const satisfies = candLevel >= reqLevel;
           const opt = pickBooleanOption(field.options, satisfies);
           if (opt) {
             return { field, factKey, value: optionText(opt), status: 'supported', exactMatch: true, matchLength: resolved.length, reason: 'Candidate education qualification evaluated.' };
@@ -2769,7 +3532,7 @@
         }
       }
       const isConsequential = Boolean(factKey && CONSEQUENTIAL_FACTS.has(factKey));
-      const reviewRequired = isConsequential && (options?.requireCandidateReview || candidate?.requireCandidateReview);
+      const reviewRequired = isConsequential && requireReview;
 
       if (isChoiceKind(field.kind)) {
         const opt = pickOption(field, val, factKey);
@@ -2801,6 +3564,18 @@
         matchLength: resolved.length,
         reason: reviewRequired ? 'Consequential disclosure left for candidate review.' : 'Exact profile field mapping.',
       };
+    };
+
+    const plans = fields.map(field => {
+      const plan = planSingleField(field);
+      if (plan.factKey && CONSEQUENTIAL_FACTS.has(plan.factKey)) {
+        plan.consequential = true;
+        if (requireReview && plan.status === 'supported') {
+          plan.status = 'needs_review';
+          plan.reason = 'Consequential disclosure left for candidate review.';
+        }
+      }
+      return plan;
     });
 
     // Two controls that ask the same question in the same words are ambiguous, so neither is
@@ -2862,11 +3637,49 @@
     return normKey; // Factual question cached globally
   }
 
-  root.NextkinFieldMapping = { planFill, resolveFact, opensWith, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS, CONSEQUENTIAL_FACTS, isCompanySpecificQuestion, computeCacheKey, isUrlField, candidateHttpUrl, screeningJobKey };
+  const AnswerPolicy = {
+    VERIFIED_PROFILE: 'verified_profile',
+    AI_DRAFT_ALLOWED: 'ai_draft_allowed',
+    CANDIDATE_REVIEW: 'candidate_review',
+    MANUAL_ONLY: 'manual_only',
+    UNKNOWN: 'unknown',
+  };
+
+  const PROTECTED_QUESTION_PATTERN = /\b(?:first name|last name|full name|legal name|your name|email|phone|address|zip|postal|date|birthday|birth|dob|age|at least \d+|over \d+|legal age|\d+\s*years\s*old|salary|compensation|wage|pay|hourly rate|desired pay|pay rate|citizen\w*|national|nationality|sponsor\w*|visa|immigra\w*|work authori\w*|right to work|eligible to work|eligible for employment|legally entitled|entitled to work|employment eligibility|authorized to work|work permit|convict\w*|felon\w*|misdemeanor|criminal|crime|background check|drug test|disab\w*|veteran\w*|military|ethnic\w*|race|gender|pronoun\w*|religion|medical|health|demograph\w*|legal|signatur\w*|attest\w*|certif\w*|declar\w*|acknowledg\w*|agree\w*|consent|privacy|terms|arbitration|captcha|password|secret|token|otp|ssn|social security|tax id|bank|credit card)\b/i;
+
+  function classifyQuestionPolicy(field, factKey) {
+    if (!field || field.excluded || isUrlField(field)) return AnswerPolicy.MANUAL_ONLY;
+    if (factKey === 'consent' || factKey === 'e_signature') return AnswerPolicy.MANUAL_ONLY;
+    if (factKey) {
+      return CONSEQUENTIAL_FACTS.has(factKey) ? AnswerPolicy.CANDIDATE_REVIEW : AnswerPolicy.VERIFIED_PROFILE;
+    }
+    if (!['text', 'textarea', 'select', 'radio', 'choice', 'combobox', 'checkbox-group', 'multi-select', 'multi-combobox'].includes(field.kind)) {
+      return AnswerPolicy.MANUAL_ONLY;
+    }
+    const type = field.element?.type;
+    if (['text', 'textarea'].includes(field.kind) && type && !['text', 'textarea', 'search'].includes(type)) {
+      return AnswerPolicy.MANUAL_ONLY;
+    }
+    const autocomplete = field.element?.getAttribute?.('autocomplete');
+    if (autocomplete && !['on', 'off'].includes(autocomplete)) return AnswerPolicy.MANUAL_ONLY;
+    const query = [field.label, field.hint, field.name, field.element?.name].join(' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]/g, ' ');
+    if (PROTECTED_QUESTION_PATTERN.test(query)) return AnswerPolicy.CANDIDATE_REVIEW;
+    return AnswerPolicy.AI_DRAFT_ALLOWED;
+  }
+
+  function isAiEligible(field, factKey) {
+    return classifyQuestionPolicy(field, factKey) === AnswerPolicy.AI_DRAFT_ALLOWED;
+  }
+
+  root.NextkinFieldMapping = { AnswerPolicy, classifyQuestionPolicy, isAiEligible, planFill, resolveFact, opensWith, buildValues, pickOption, pickBooleanOption, normalizeBoolean, isChoiceKind, isMultiKind, CANONICAL_FACTS, CONSEQUENTIAL_FACTS, isCompanySpecificQuestion, computeCacheKey, isUrlField, candidateHttpUrl, screeningJobKey };
   if (typeof exports !== 'undefined') {
+    exports.AnswerPolicy = AnswerPolicy;
+    exports.classifyQuestionPolicy = classifyQuestionPolicy;
+    exports.isAiEligible = isAiEligible;
     exports.isUrlField = isUrlField;
     exports.planFill = planFill;
     exports.candidateHttpUrl = candidateHttpUrl;
+    exports.screeningJobKey = screeningJobKey;
     exports.resolveFact = resolveFact;
     exports.opensWith = opensWith;
     exports.buildValues = buildValues;
@@ -3263,7 +4076,8 @@
   }
 
   function comboInput(el) {
-    return el.tagName === 'INPUT' ? el : el.querySelector('input:not([type=hidden])');
+    const input = el.tagName === 'INPUT' ? el : el.querySelector?.('input:not([type=hidden])') || el.querySelector?.('input');
+    return input?.type === 'hidden' ? null : input;
   }
 
   function comboTrigger(el) {
@@ -3281,14 +4095,11 @@
   function comboSearchInput(el, roots = []) {
     const local = comboInput(el);
     if (local && !local.readOnly && local.type !== 'button') return local;
-    const doc = el.ownerDocument;
     for (const root of roots) {
       if (!root?.isConnected) continue;
       const input = root.querySelector('input:not([type=hidden]):not([readonly]), [role="searchbox"], [cmdk-input]');
       if (input) return input;
     }
-    const activeSearch = doc.querySelector('.select2-search__field, [role="searchbox"], [cmdk-input], [data-automation-id*="search" i], [data-automation-id*="promptSearch" i]');
-    if (activeSearch && activeSearch.isConnected && activeSearch.getClientRects().length) return activeSearch;
     return local && !local.readOnly ? local : null;
   }
 
@@ -3297,7 +4108,14 @@
     const display = (el.querySelector ? el.querySelector('[data-placeholder], .select2-selection__rendered, .ng-value-label, .k-input-value-text, [data-slot="select-value"], [class*="singleValue" i], [class*="single-value" i], [class*="select__single-value" i]') : null) ||
       root.querySelector?.('[data-placeholder], .select2-selection__rendered, .ng-value-label, .k-input-value-text, [data-slot="select-value"], [class*="singleValue" i], [class*="single-value" i], [class*="select__single-value" i]');
     const input = comboInput(el);
-    const value = (display?.textContent || input?.value || (input ? '' : el.textContent)).trim();
+    const committed = input && committedAutocomplete.get(input);
+    const trigger = comboTrigger(el);
+    const selectOnly = !input && trigger?.getAttribute?.('aria-expanded') !== 'true' &&
+      (trigger?.tagName === 'BUTTON' || trigger?.getAttribute?.('role') === 'combobox') &&
+      !trigger.querySelector?.(listboxSelector);
+    const value = (display?.textContent ||
+      (input?.list || (committed && input.value === committed) ? input.value : '') ||
+      (selectOnly ? trigger.textContent : '') || '').trim();
     return el.hasAttribute('data-placeholder') || display?.hasAttribute('data-placeholder') ||
       display?.querySelector('.select2-selection__placeholder') || placeholder.test(value) ? '' : value;
   }
@@ -3312,15 +4130,16 @@
         if (el?.tagName === 'SELECT' && typeof el.selectedIndex === 'number' && el.selectedIndex >= 0 && el.options?.[el.selectedIndex]) {
           const opt = el.options[el.selectedIndex];
           const lbl = (opt.text || opt.textContent || opt.label || opt.value || '').trim();
-          if (!placeholder.test(lbl)) return lbl;
+          return !opt.disabled && !placeholder.test(lbl) && opt.value !== '' ? lbl : '';
         }
-        return (field.options || []).find(option => option?.element?.selected && !placeholder.test(option.label))?.label || (el?.value?.trim() || '');
+        return (field.options || []).find(option => option?.element?.selected && !placeholder.test(option.label))?.label || '';
       }
       case 'radio': return field.options.find(option => checked(option.element) || selected(option.element))?.label || '';
       case 'choice': return field.options.find(option => selected(option.element) || checked(option.element))?.label || '';
       case 'combobox': return comboValue(el);
       case 'multi-combobox': {
-        const chips = el.querySelectorAll ? el.querySelectorAll('.ng-value-label, .select2-selection__choice__display, .k-chip-label, [data-slot="multi-select-value"], [class*="multi-value__label" i], [class*="multiValue" i]') : [];
+        const scope = el.closest?.('.select__control, [class*="select__control" i], [class*="select-shell" i], .ng-select, .select2-selection') || el;
+        const chips = scope.querySelectorAll ? scope.querySelectorAll('.ng-value-label, .select2-selection__choice__display, .k-chip-label, [data-slot="multi-select-value"], [class*="multi-value__label" i], [class*="multiValue" i]') : [];
         return [...chips].map(chip => chip.textContent.trim()).filter(Boolean);
       }
       case 'resume-file': return el?.files?.[0]?.name || (el?.value ? String(el.value).split(/[/\\]/).pop() : '');
@@ -3328,10 +4147,15 @@
     }
   }
 
+  const openedMenus = new WeakMap();
+  const committedAutocomplete = new WeakMap();
+  const visibleMenus = doc => [...(doc?.querySelectorAll?.(listboxSelector) || [])]
+    .filter(node => !node.getClientRects || node.getClientRects().length);
+
   function getListboxRoots(el) {
     if (!el) return [];
     const control = comboInput(el) || el;
-    const ids = [el, control].flatMap(node => [node?.getAttribute?.('aria-controls'), node?.getAttribute?.('aria-owns')])
+    const ids = [el, control, comboTrigger(el)].flatMap(node => [node?.getAttribute?.('aria-controls'), node?.getAttribute?.('aria-owns')])
       .filter(Boolean).flatMap(idStr => idStr.split(/\s+/));
     const doc = el.ownerDocument || globalThis.document;
     const view = doc?.defaultView || globalThis;
@@ -3345,48 +4169,22 @@
 
     const roots = ids.map(id => el.getRootNode?.().getElementById?.(id) || doc.getElementById?.(id)).filter(r => r && isVisible(r));
 
-    // Discover portals in document.body
-    const portalSelector = '[data-radix-popper-content-wrapper], [data-floating-ui-portal], .select2-dropdown, .k-animation-container, [class*="autocomplete-popup" i], [class*="floatingContainer" i]';
-    const bodyPortals = doc.body?.querySelectorAll ? Array.from(doc.body.querySelectorAll(portalSelector)).filter(isVisible) : [];
-
-    // Query open shadow roots
-    const shadowRoots = [];
-    const collectShadowRoots = (rootNode) => {
-      if (!rootNode) return;
-      const stack = [rootNode];
-      while (stack.length) {
-        const curr = stack.pop();
-        if (curr?.shadowRoot) {
-          shadowRoots.push(curr.shadowRoot);
-          stack.push(curr.shadowRoot);
-        }
-        if (curr?.children) {
-          for (let i = 0; i < curr.children.length; i++) {
-            stack.push(curr.children[i]);
-          }
-        }
-      }
-    };
-    if (doc.body) collectShadowRoots(doc.body);
-
-    const shadowPortals = shadowRoots.flatMap(sr => [
-      ...(sr.querySelectorAll?.(portalSelector) || []),
-      ...(sr.querySelectorAll?.(listboxSelector) || [])
-    ]).filter(isVisible);
-
-    if (bodyPortals.length || shadowPortals.length) {
-      roots.push(...bodyPortals, ...shadowPortals);
-    }
-
-    if (!roots.length) {
-      const menus = [...new Set([...(el.getRootNode?.()?.querySelectorAll?.(listboxSelector) || []), ...(doc.querySelectorAll ? doc.querySelectorAll(listboxSelector) : [])])].filter(isVisible);
-      const fieldContainer = el.closest?.('.select, .select__container, .select-shell, [class*="select__container"], [class*="form-group"], [class*="field-container"], [class*="application-question"]');
-      const nearby = menus.filter(menu => (el.contains?.(menu)) || (el.parentElement?.contains?.(menu)) || (fieldContainer?.contains?.(menu)));
-      if (nearby.length >= 1) roots.push(...nearby);
-      else if (menus.length === 1) roots.push(menus[0]);
-      else if (menus.length > 1) roots.push(menus[menus.length - 1]);
-    }
-    return [...new Set(roots)];
+    if (ids.length) return [...new Set(roots)];
+    const container = el.closest?.('.select, .select__container, .select-shell, [class*="form-group"], [class*="field-container"], [class*="application-question"]') || el.parentElement || el;
+    const localRoot = container === doc?.body ? el : container;
+    const local = [...(localRoot.querySelectorAll?.(listboxSelector) || [])].filter(isVisible);
+    if (local.length) return local.length === 1 ? local : [];
+    const interaction = openedMenus.get(el);
+    const expanded = [el, control, comboTrigger(el)].some(node => node?.getAttribute?.('aria-expanded') === 'true');
+    if (!interaction) return [];
+    const ashby = el.matches?.('.ashby-application-form-input-autocomplete');
+    if (!expanded && !ashby) return [];
+    if (interaction.menu?.isConnected && isVisible(interaction.menu)) return [interaction.menu];
+    const menus = visibleMenus(doc).filter(menu => !interaction.before.has(menu) && isVisible(menu) && (expanded || menu.matches?.('.ashby-application-form-input-autocomplete-popup')));
+    const deepest = menus.filter(menu => !menus.some(other => other !== menu && menu.contains(other)));
+    if (deepest.length !== 1) return [];
+    interaction.menu = deepest[0];
+    return deepest;
   }
 
   function comboOptions(el) {
@@ -3420,28 +4218,7 @@
   }
 
   function choose(field, desired) {
-    const bool = normalizeBoolean(desired);
-    if (bool !== null && mapping?.pickBooleanOption) {
-      const bOpt = mapping.pickBooleanOption(field.options, bool);
-      if (bOpt) return bOpt;
-    }
-    if (typeof desired === 'boolean' && mapping?.pickBooleanOption) {
-      return mapping.pickBooleanOption(field.options, desired);
-    }
-    const opt = mapping?.pickOption ? mapping.pickOption(field, desired) : null;
-    if (opt) return opt;
-    if (bool !== null && mapping?.pickBooleanOption) {
-      return mapping.pickBooleanOption(field.options, bool);
-    }
-    const norm = s => String(s ?? '').toLowerCase().trim().replace(/[^a-z0-9]+/g, ' ');
-    const target = norm(desired);
-    if (target && Array.isArray(field.options)) {
-      const exact = field.options.find(o => norm(optionLabel(o)) === target || norm(o.value) === target);
-      if (exact) return exact;
-      const partial = field.options.find(o => norm(optionLabel(o)).includes(target) || target.includes(norm(optionLabel(o))));
-      if (partial) return partial;
-    }
-    return null;
+    return mapping?.pickOption?.(field, desired, field.factKey) || null;
   }
 
   function isComboOpen(el) {
@@ -3489,6 +4266,7 @@
 
     // Always blur cleanly
     const FocusEvt = view.FocusEvent || view.Event || globalThis.FocusEvent || globalThis.Event;
+    openedMenus.delete(el);
     const blurTargets = [search, input, trigger, el].filter(Boolean);
     for (const target of blurTargets) {
       try {
@@ -3499,6 +4277,8 @@
   }
 
   async function openComboOptions(el, trigger, isCurrent = () => true, requireClick = false) {
+    const doc = el.ownerDocument || globalThis.document;
+    openedMenus.set(el, { before: new Set(visibleMenus(doc)), menu: null });
     const clickedTrigger = click(trigger);
     const ctrl = el.closest?.('.select__control, [class*="select__control" i]');
     const clickedCtrl = ctrl && ctrl !== trigger ? click(ctrl) : false;
@@ -3547,6 +4327,7 @@
   async function fillCombo(field, desired, isCurrent = () => true) {
     const el = field.element;
     const input = comboInput(el);
+    if (input) committedAutocomplete.delete(input);
     if (input?.list) {
       const option = choose(field, desired);
       if (!option) return null;
@@ -3554,6 +4335,7 @@
       return { expected: option.value };
     }
 
+    if (el.matches?.('.ashby-application-form-input-autocomplete') && !field.factKey) field = { ...field, factKey: 'current_location' };
     const trigger = comboTrigger(el);
     let options = comboOptions(el);
 
@@ -3576,7 +4358,7 @@
       }
     }
 
-    if (option) {
+    if (option && isCurrent() && el.isConnected) {
       const ok = click(option.element);
       try {
         const view = el.ownerDocument?.defaultView || globalThis;
@@ -3584,9 +4366,7 @@
         option.element.dispatchEvent(new KeyEvt('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
       } catch {}
       closeCombo(el);
-      const actualVal = comboValue(el);
-      const isSel = selected(option.element) || (actualVal && equals(actualVal, option.label));
-      return ok ? { expected: option.label, option: option.element, typed: false, verified: Boolean(isSel) } : null;
+      return ok ? { expected: option.label } : null;
     }
 
     // Type into combobox search input if present (Typeahead search fallback)
@@ -3616,7 +4396,7 @@
       }
     }
 
-    if (option) {
+    if (option && isCurrent() && el.isConnected) {
       const ok = click(option.element);
       try {
         const view = el.ownerDocument?.defaultView || globalThis;
@@ -3624,16 +4404,17 @@
         option.element.dispatchEvent(new KeyEvt('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
       } catch {}
       closeCombo(el);
-      const actualVal = comboValue(el);
-      const isSel = selected(option.element) || (actualVal && equals(actualVal, option.label));
-      return ok ? { expected: option.label, option: option.element, typed, verified: Boolean(isSel) } : null;
+      if (ok && search === input && normalize(query) !== normalize(option.label) && normalize(input?.value) === normalize(option.label)) {
+        committedAutocomplete.set(input, input.value);
+      }
+      return ok ? { expected: option.label } : null;
     }
 
     // Close with Escape fallback
     if (typed && search && normalize(search.value) === normalize(query)) {
       setNativeValue(search, '');
     }
-    closeCombo(el, typed);
+    closeCombo(el);
     return null;
   }
 
@@ -3669,8 +4450,7 @@
     }
     if (field.kind === 'multi-select') notify(field.element);
     const expected = options.map(optionLabel);
-    return { expected, matches: actual => Array.isArray(actual) && expected.every(value =>
-      actual.some(selected => normalize(selected) === normalize(value))) };
+    return { expected };
   }
 
   async function fillMultiCombo(field, values, isCurrent) {
@@ -3680,32 +4460,39 @@
         ? values.split(/[,;\n]+/).map(v => v.trim()).filter(Boolean)
         : []);
     if (!normalizedValues.length) return null;
-    const selected = [];
-    for (const value of new Set(normalizedValues.slice(0, 20))) {
+    const requested = [...new Set(normalizedValues.map(value => String(value).trim()).filter(Boolean))];
+    if (requested.length > 20) return null;
+    const expected = [];
+    for (const value of requested) {
       if (!isCurrent() || !field.element.isConnected) break;
       const result = await fillCombo(field, value, isCurrent);
-      if (result) selected.push(result.expected);
+      if (result) expected.push(result.expected);
     }
     if (isCurrent()) closeCombo(field.element);
-    const actual = read(field);
-    return selected.length && selected.every(value => actual.some(item => normalize(item) === normalize(value)))
-      ? { expected: actual } : null;
+    return { expected: expected.length === requested.length ? expected : requested, partial: expected.length < requested.length };
   }
 
-  function equals(value, expected) {
+  function equals(value, expected, field) {
     if (Array.isArray(expected)) {
-      return Array.isArray(value) && value.length === new Set(expected).size &&
-        expected.every(answer => value.some(item => normalize(item) === normalize(answer)));
+      const wanted = new Set(expected.map(normalize));
+      const actual = new Set(Array.isArray(value) ? value.map(normalize) : []);
+      return wanted.size > 0 && actual.size === wanted.size && [...wanted].every(answer => actual.has(answer));
     }
-    const bExpected = normalizeBoolean(expected);
-    const bValue = normalizeBoolean(value);
-    if (bExpected !== null && bValue !== null) return bExpected === bValue;
+    if (value == null || expected == null) return false;
     if (typeof expected === 'boolean') return value === expected;
-    if (normalize(value) === normalize(expected)) return true;
-    const dVal = String(value || '').replace(/\D/g, '');
-    const dExp = String(expected || '').replace(/\D/g, '');
-    if (dVal.length >= 7 && dExp.length >= 7 && (dVal === dExp || dVal.endsWith(dExp) || dExp.endsWith(dVal))) return true;
-    return false;
+    if (field?.element?.type === 'tel') {
+      const digits = phone => /^[+() .\d-]+$/.test(String(phone)) ? String(phone).replace(/\D/g, '') : '';
+      const a = digits(value), b = digits(expected);
+      if (a.length >= 7 && b.length >= 7) return a === b;
+    }
+    if (mapping?.isUrlField?.(field)) return String(value).trim() === String(expected).trim();
+    return normalize(value) === normalize(expected);
+  }
+
+  function isAnswered(field, value = read(field)) {
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'boolean') return field.kind !== 'checkbox' || value;
+    return value != null && String(value).trim() !== '' && !placeholder.test(String(value).trim());
   }
 
   // Dual-layer edit tracking & durable field store across wizard step transitions
@@ -3921,119 +4708,10 @@
     return false;
   }
 
-  // Resolve or re-resolve live element from DOM in case of React rerender
+  // Rediscover replaced controls on the next pass. A repeated name can now
+  // refer to a different employment record.
   function ensureConnectedElement(field) {
-    if (!field || !field.element) return null;
-    if (field.element.isConnected) return field.element;
-
-    const doc = field.element.ownerDocument || globalThis.document;
-    if (!doc || typeof doc.querySelector !== 'function') return field.element;
-
-    // 1. Try to find connected element by id using attribute selector
-    if (field.element.id) {
-      if (typeof doc.querySelectorAll === 'function') {
-        try {
-          const candidates = doc.querySelectorAll(`[id="${safeCssEscape(field.element.id)}"]`);
-          const byId = Array.from(candidates).find(el => el.isConnected);
-          if (byId) {
-            field.element = byId;
-            return byId;
-          }
-        } catch {}
-      }
-      if (typeof doc.getElementById === 'function') {
-        try {
-          const byId = doc.getElementById(field.element.id);
-          if (byId && byId.isConnected) {
-            field.element = byId;
-            return byId;
-          }
-        } catch {}
-      }
-    }
-
-    // 2. Try to find connected element by name
-    const name = field.element.name || (typeof field.element.getAttribute === 'function' ? field.element.getAttribute('name') : null);
-    if (name) {
-      if (typeof doc.querySelectorAll === 'function') {
-        try {
-          const candidates = doc.querySelectorAll(`[name="${safeCssEscape(name)}"]`);
-          const byName = Array.from(candidates).find(el => el.isConnected);
-          if (byName) {
-            field.element = byName;
-            return byName;
-          }
-        } catch {}
-      }
-      try {
-        const byName = doc.querySelector(`[name="${safeCssEscape(name)}"]`);
-        if (byName && byName.isConnected) {
-          field.element = byName;
-          return byName;
-        }
-      } catch {}
-    }
-
-    if (typeof field.element.getAttribute === 'function') {
-      const autoId = field.element.getAttribute('data-automation-id');
-      if (autoId) {
-        if (typeof doc.querySelectorAll === 'function') {
-          try {
-            const candidates = doc.querySelectorAll(`[data-automation-id="${safeCssEscape(autoId)}"]`);
-            const byAuto = Array.from(candidates).find(el => el.isConnected);
-            if (byAuto) {
-              field.element = byAuto;
-              return byAuto;
-            }
-          } catch {}
-        }
-        try {
-          const byAuto = doc.querySelector(`[data-automation-id="${safeCssEscape(autoId)}"]`);
-          if (byAuto && byAuto.isConnected) {
-            field.element = byAuto;
-            return byAuto;
-          }
-        } catch {}
-      }
-
-      const testId = field.element.getAttribute('data-testid') || field.element.getAttribute('data-test');
-      if (testId) {
-        if (typeof doc.querySelectorAll === 'function') {
-          try {
-            const candidates = doc.querySelectorAll(`[data-testid="${safeCssEscape(testId)}"], [data-test="${safeCssEscape(testId)}"]`);
-            const byTest = Array.from(candidates).find(el => el.isConnected);
-            if (byTest) {
-              field.element = byTest;
-              return byTest;
-            }
-          } catch {}
-        }
-        try {
-          const byTest = doc.querySelector(`[data-testid="${safeCssEscape(testId)}"], [data-test="${safeCssEscape(testId)}"]`);
-          if (byTest && byTest.isConnected) {
-            field.element = byTest;
-            return byTest;
-          }
-        } catch {}
-      }
-    }
-
-    if (root.NextkinForms?.discoverFields) {
-      try {
-        const freshFields = root.NextkinForms.discoverFields(doc);
-        const match = freshFields.find(f =>
-          (field.key && f.key === field.key) ||
-          (field.label && normalize(f.label) === normalize(field.label))
-        );
-        if (match?.element?.isConnected) {
-          field.element = match.element;
-          if (match.options?.length) field.options = match.options;
-          return match.element;
-        }
-      } catch {}
-    }
-
-    return field.element;
+    return field?.element?.isConnected ? field.element : null;
   }
 
   // Bounded async polling with MutationObserver for dependent field readiness (Country -> State -> City)
@@ -4177,51 +4855,54 @@
     });
   }
 
-  async function attachResumeFile(fileInput, candidateId) {
-    if (!fileInput || fileInput.type !== 'file') return null;
-    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return null;
+  const ResumeUploadState = {
+    FILE_ASSIGNED: 'FILE_ASSIGNED',
+    UPLOAD_PENDING: 'UPLOAD_PENDING',
+    UPLOAD_CONFIRMED: 'UPLOAD_CONFIRMED',
+    UPLOAD_FAILED: 'UPLOAD_FAILED',
+    MANUAL_REQUIRED: 'MANUAL_REQUIRED',
+  };
 
-    const res = await new Promise((resolve) => {
-      chrome.runtime.sendMessage(
-        { type: 'NEXTKIN_FETCH_RESUME_FILE', candidateId },
-        (response) => {
-          if (chrome.runtime?.lastError) {
-            resolve({ error: chrome.runtime.lastError.message });
-          } else {
-            resolve(response || { error: 'No response' });
-          }
-        }
-      );
-    });
+  function inspectUploadStatus(fileInput, expectedFilename) {
+    const container = fileInput?.closest?.('form, [data-automation-id], .field, .upload, div') || fileInput?.parentElement;
+    if (!container?.querySelector) return ResumeUploadState.FILE_ASSIGNED;
+    const errorEl = container.querySelector('[role="alert"], .error, [class*="upload-error" i], [data-automation-id*="error" i]');
+    if (errorEl && /upload|file|resume|fail|error|invalid/i.test(errorEl.textContent || '')) {
+      return ResumeUploadState.UPLOAD_FAILED;
+    }
+    const busyEl = container.querySelector('[aria-busy="true"], [role="progressbar"], .uploading, [class*="uploading" i], [class*="spinner" i]');
+    if (busyEl) return ResumeUploadState.UPLOAD_PENDING;
+    const text = (container.textContent || '').toLowerCase();
+    if (expectedFilename && text.includes(String(expectedFilename).toLowerCase())) {
+      return ResumeUploadState.UPLOAD_CONFIRMED;
+    }
+    return ResumeUploadState.FILE_ASSIGNED;
+  }
 
-    if (!res || res.error || !res.base64) {
+  async function attachResumeFile(fileInput, resume, isCurrent = () => true) {
+    if (!fileInput?.isConnected || fileInput.type !== 'file' || !resume?.base64 || fileInput.files?.length || !isCurrent()) return null;
+    try {
+      const bytes = Uint8Array.from(atob(resume.base64), char => char.charCodeAt(0));
+      const expected = resume.filename || 'Resume.pdf';
+      const transfer = new DataTransfer();
+      const file = new File([bytes], expected, { type: resume.mimeType || 'application/pdf' });
+      transfer.items.add(file);
+      fileInput.files = transfer.files;
+      fileInput.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+      const actual = fileInput.files?.[0];
+      if (!actual || actual.name !== expected || actual.size !== bytes.length || actual.type !== file.type) return null;
+      const attached = new Uint8Array(await actual.arrayBuffer());
+      if (!isCurrent() || !fileInput.isConnected || fileInput.files?.[0] !== actual ||
+        attached.length !== bytes.length || !attached.every((byte, index) => byte === bytes[index])) {
+        return null;
+      }
+      const uploadState = inspectUploadStatus(fileInput, expected);
+      if (uploadState === ResumeUploadState.UPLOAD_FAILED) return null;
+      return { expected, file: actual, uploadState };
+    } catch {
       return null;
     }
-
-    try {
-      const binaryStr = atob(res.base64);
-      const len = binaryStr.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binaryStr.charCodeAt(i);
-      }
-
-      const filename = res.filename || 'Resume.pdf';
-      const mimeType = res.mimeType || 'application/pdf';
-      const file = new File([bytes], filename, { type: mimeType, lastModified: Date.now() });
-
-      if (typeof DataTransfer !== 'undefined') {
-        const dt = new DataTransfer();
-        dt.items.add(file);
-        fileInput.files = dt.files;
-        fileInput.dispatchEvent(new Event('input', { bubbles: true }));
-        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-        return { expected: filename, file };
-      }
-    } catch (err) {
-      console.warn('[NextKin] Failed to attach resume file:', err);
-    }
-    return null;
   }
 
   function verifyWrites(plans) {
@@ -4239,7 +4920,7 @@
         manual.push(plan);
         continue;
       }
-      if (plan.status === 'unmapped' || plan.status === 'unsupported') {
+      if (plan.status !== 'supported') {
         unmapped.push(plan);
         continue;
       }
@@ -4271,14 +4952,10 @@
       const expected = plan.writtenValue ?? plan.expected ?? plan._writtenExpected ?? plan.value;
       const write = plan._write;
 
-      const isVerified = (
-        equals(actual, expected) ||
-        (write?.matches ? write.matches(actual) : false) ||
-        (field.kind === 'combobox' && expected && String(actual || '').toLowerCase().includes(String(expected).toLowerCase())) ||
-        (write?.option && !write.option.isConnected && expected) ||
-        (write?.option?.isConnected && selected(write.option)) ||
-        (field.kind === 'checkbox' && (typeof expected === 'boolean' ? actual === expected : equals(actual, expected)))
-      );
+      const isVerified = !write?.conflict && !write?.partial && equals(actual, expected, field);
+      const partial = write?.partial || (Array.isArray(expected) && Array.isArray(actual) &&
+        actual.length > 0 && actual.length < expected.length &&
+        actual.every(value => expected.some(option => normalize(value) === normalize(option))));
 
       if (isVerified) {
         recordPreservedValues([field]);
@@ -4289,7 +4966,7 @@
           writtenValue: expected,
           ai: !!plan.ai,
           learned: !!plan.learned,
-          status: 'filled'
+          status: write?.alreadyCorrect ? 'already_correct' : 'filled'
         });
       } else {
         unverified.push({
@@ -4297,7 +4974,8 @@
           field: plan.field,
           expected,
           actual,
-          status: 'unverified'
+          status: write?.conflict ? (write.preserved ? 'preserved_user_value' : 'conflict') :
+            partial ? 'partial' : 'unverified'
         });
       }
     }
@@ -4344,10 +5022,34 @@
 
     for (const plan of sortedPlans) {
       const { field, value } = plan;
-      if (plan.status !== 'supported' || !ctx.isCurrent() || field.excluded) continue;
+      delete plan._writeFailed;
+      delete plan._write;
+      delete plan._writtenExpected;
+      if (plan.status !== 'supported') continue;
+      if (!ctx.isCurrent() || field.excluded || (plan.ai && !mapping?.isAiEligible?.(field, plan.factKey))) {
+        plan._writeFailed = true;
+        continue;
+      }
 
       // Handle React rerendering: re-resolve element if it was disconnected
       ensureConnectedElement(field);
+      if (!field.element?.isConnected && typeof root.NextkinFormDiscovery?.discoverFields === 'function') {
+        const doc = ctx.document || (typeof document !== 'undefined' ? document : null);
+        if (doc) {
+          const refreshed = root.NextkinFormDiscovery.discoverFields(doc);
+          const match = refreshed.find(candidate =>
+            candidate.element?.isConnected &&
+            candidate.kind === field.kind &&
+            ((field.questionId && candidate.questionId === field.questionId) ||
+              (field.label && candidate.label === field.label && (candidate.scope || '') === (field.scope || '')))
+          );
+          if (match) {
+            field.element = match.element;
+            field.elements = match.elements;
+            field.options = match.options;
+          }
+        }
+      }
       const el = field.element;
       if (!el?.isConnected) {
         plan._writeFailed = true;
@@ -4365,7 +5067,7 @@
       const currentEl = field.element;
       const domVal = read(field);
       if (mapping?.isUrlField?.(field) && (
-        domVal || plan.ai || plan.learned || !plan.factKey || !mapping.candidateHttpUrl(value) ||
+        plan.ai || plan.learned || !plan.factKey || !mapping.candidateHttpUrl(value) ||
         (currentEl.maxLength > 0 && value.length > currentEl.maxLength)
       )) {
         plan._writeFailed = true;
@@ -4375,31 +5077,17 @@
       const isCountryCodeOnly = field.kind === 'text' && (currentEl.type === 'tel' || /phone/i.test(field.hint || field.label)) && /^\+?\d{1,3}\s*$/.test(String(previous).trim());
       const hasAnswer = !isCountryCodeOnly && (Array.isArray(previous) ? previous.length > 0 : (typeof previous === 'boolean' ? previous : Boolean(previous && String(previous).trim().length > 0)));
       let write;
-      const isProfileFact = Boolean(plan.factKey && !plan.ai);
       const userEdited = isFieldUserEdited(field);
       const unfilled = isFieldUnfilled(field, previous);
-
-      if (hasAnswer && userEdited) {
-        write = { expected: previous, preserved: true };
-      } else if (hasAnswer && !unfilled && !plan.overwriteExisting && !isProfileFact) {
-        const option = field.options?.length ? choose(field, value) : null;
-        if (equals(previous, option?.label ?? value)) write = { expected: previous };
-        else write = { expected: previous, preserved: true };
-      } else if (hasAnswer && !unfilled && !plan.overwriteExisting && isProfileFact) {
-        if (equals(previous, value)) {
-          write = { expected: previous };
-        } else {
-          write = { expected: previous, preserved: true };
-        }
-      } else if (field.kind === 'resume-file') {
-        const attachRes = await attachResumeFile(currentEl);
-        if (attachRes) {
-          write = { expected: attachRes.expected };
-        } else {
-          plan._writeFailed = true;
-        }
+      if (field.kind === 'resume-file') {
+        write = await attachResumeFile(currentEl, ctx.resume, ctx.isCurrent);
+      } else if (hasAnswer && (userEdited || (!unfilled && !plan.overwriteExisting))) {
+        const option = field.options?.length && !Array.isArray(value) ? choose({ ...field, factKey: plan.factKey }, value) : null;
+        const expected = option?.label ?? value;
+        const alreadyCorrect = equals(previous, expected, field);
+        write = { expected, alreadyCorrect, conflict: !alreadyCorrect, preserved: userEdited };
       } else if (field.kind === 'combobox') {
-        write = await fillCombo(field, value, ctx.isCurrent);
+        write = await fillCombo({ ...field, factKey: plan.factKey }, value, ctx.isCurrent);
       } else if (field.kind === 'multi-combobox') {
         write = await fillMultiCombo(field, value, ctx.isCurrent);
       } else if (isMultiKind(field.kind)) {
@@ -4413,9 +5101,11 @@
           if (ok) write = { expected: boolVal };
         }
       } else {
-        const expected = currentEl.maxLength > 0 ? String(value).slice(0, currentEl.maxLength) : String(value);
-        setNativeValue(currentEl, expected);
-        write = { expected };
+        const expected = String(value);
+        if (!(currentEl.maxLength >= 0 && expected.length > currentEl.maxLength)) {
+          setNativeValue(currentEl, expected);
+          write = { expected };
+        }
       }
       if (!write) {
         plan._writeFailed = true;
@@ -4442,11 +5132,14 @@
   }
 
   root.NextkinFieldWriter = {
+    ResumeUploadState,
+    inspectUploadStatus,
     applyFill,
     verifyWrites,
     setNativeValue,
     attachResumeFile,
     read,
+    isAnswered,
     readChoices,
     setCheckbox,
     setRadio,
@@ -4466,7 +5159,7 @@
     preservedStore: durableFieldStore,
     isFieldUnfilled,
     isFieldUserEdited,
-    installUserEditTracking
+    installUserEditTracking,
   };
 })(globalThis);
 
@@ -4567,8 +5260,10 @@
 
   function querySelectorAllDeep(selector, rootNode = document) {
     const results = [];
+    const seenRoots = new Set();
     function search(node) {
-      if (!node) return;
+      if (!node || seenRoots.has(node)) return;
+      seenRoots.add(node);
       if (node.querySelectorAll) {
         try {
           const matches = node.querySelectorAll(selector);
@@ -4576,16 +5271,39 @@
             results.push(matches[i]);
           }
         } catch {}
-      }
-      const children = node.querySelectorAll ? node.querySelectorAll('*') : [];
-      for (let i = 0; i < children.length; i++) {
-        if (children[i].shadowRoot && children[i].id !== 'mp-copilot-root' && children[i].id !== 'nextkin-floating-widget-root') {
-          search(children[i].shadowRoot);
+        const all = node.querySelectorAll('*');
+        for (let i = 0; i < all.length; i++) {
+          const child = all[i];
+          if (child.shadowRoot && child.id !== 'mp-copilot-root' && child.id !== 'nextkin-floating-widget-root') {
+            search(child.shadowRoot);
+          }
         }
       }
     }
     search(rootNode);
     return results;
+  }
+
+  function isFieldRequired(el, elements = [el], questionText = '') {
+    if (el?.required || el?.getAttribute?.('aria-required') === 'true') return true;
+    if (Array.isArray(elements) && elements.some(item => item?.required || item?.getAttribute?.('aria-required') === 'true')) return true;
+    if (el?.closest?.('[aria-required="true"], [data-required="true"]')) return true;
+    return /\*\s*$|^\s*\*|\(\s*required\s*\)/i.test(String(questionText || ''));
+  }
+
+  function semanticFieldId(question, kind, sectionId, el) {
+    const raw = [
+      String(kind || 'text'),
+      String(sectionId || '').trim().toLowerCase(),
+      String(question || '').trim().toLowerCase().replace(/\s+/g, ' '),
+      String(el?.getAttribute?.('data-automation-id') || el?.id || el?.name || '').trim().toLowerCase(),
+    ].join('|');
+    let hash = 2166136261;
+    for (let i = 0; i < raw.length; i++) {
+      hash ^= raw.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return 'nf_' + (hash >>> 0).toString(36);
   }
 
   function isResumeInput(el, text = '') {
@@ -4838,6 +5556,11 @@
     const scopedTree = scopeToApplication(tree) || tree;
     const fields = [], seen = new Set();
     const adapter = activeAdapter();
+    const rules = globalThis.NextkinSiteRules;
+    const locationUrl = typeof location !== 'undefined' ? location.href : '';
+    if (locationUrl && rules?.automationDisabled?.(locationUrl)) return [];
+    const provider = globalThis.NextkinSiteRegistry?.detectAtsProvider(locationUrl);
+    const selectors = rules?.evaluateSitePolicy?.(provider || 'generic')?.selectorTables?.fields || [];
     const walk = scope => {
       // A checkbox group asks one question about several boxes, so the group is the field.
       for (const group of scope.querySelectorAll('fieldset, [role="group"], [class*="checkbox-group" i], [class*="checkboxGroup" i], [class*="checkbox_group" i], [data-testid*="checkbox" i]')) {
@@ -4880,7 +5603,13 @@
         });
       }
 
-      for (const el of scope.querySelectorAll(CONTROL_SELECTOR)) {
+      const controls = new Set(scope.querySelectorAll(CONTROL_SELECTOR));
+      for (const selector of selectors) {
+        try {
+          for (const element of scope.querySelectorAll(selector)) controls.add(element);
+        } catch {}
+      }
+      for (const el of controls) {
         if (el.closest('#mp-copilot-root') || !visibleChoice(el)) continue;
         if (seen.has(el)) continue;
         if (el.tagName === 'INPUT' && el.tabIndex === -1 && !el.id && !el.name && !el.getAttribute('role')) continue;
@@ -4932,7 +5661,32 @@
         const question = kind === 'radio' ? choiceQuestion(el) || controlName(el) || text : text;
         const factHint = hint || (kind === 'radio' || isCheck ? controlName(el) : '');
         const fieldKind = (kind === 'radio' && elements.length > 1) ? 'choice' : kind;
-        fields.push({ element: el, elements, key: (fieldKind === 'choice' ? 'choice:' : 'field:') + fields.length + ':' + (el.id || el.name || factHint), label: question, hint: factHint, kind: fieldKind, options, scope: groupLabel, excluded: excluded.test([question, factHint, el.id, el.name, groupLabel].join(' ').replace(/[_-]/g, ' ')), adapter: adapter?.id || 'generic', editable: isEditable });
+        const isExcluded = excluded.test([question, factHint, el.id, el.name, groupLabel].join(' ').replace(/[_-]/g, ' '));
+        const fieldId = semanticFieldId(question, fieldKind, groupLabel, el);
+        const questionId = semanticFieldId(question, fieldKind, '', null);
+        const required = isFieldRequired(el, elements, question);
+        fields.push({
+          fieldId,
+          questionId,
+          element: el,
+          elements,
+          key: (fieldKind === 'choice' ? 'choice:' : 'field:') + fields.length + ':' + (el.id || el.name || factHint),
+          label: question,
+          hint: factHint,
+          kind: fieldKind,
+          inputType: el.type || el.tagName?.toLowerCase() || fieldKind,
+          required,
+          visible: true,
+          enabled: !el.disabled,
+          protected: isExcluded,
+          sectionId: groupLabel || '',
+          options,
+          scope: groupLabel,
+          excluded: isExcluded,
+          adapter: adapter?.id || 'generic',
+          adapterId: adapter?.id || 'generic',
+          editable: isEditable,
+        });
       }
 
       // Button-based choice groups (Ashby/Greenhouse/Lever Yes/No and segmented radio groups)
@@ -5108,7 +5862,13 @@
   const reviewField = /\b(?:agree|consent|terms|privacy|arbitration|acknowledg\w*|certify|declare|signature|captcha|password|otp)\b/i;
   const fileEvidence = new WeakMap();
   const submitting = new WeakSet();
-  const seenElements = new WeakSet();
+  let verifiedElements = new WeakMap();
+  let reviewRequired = false;
+  let questionIds = new WeakMap();
+  let questionsById = new Map();
+  const isAnswered = (field, value = writer.read(field)) => writer.isAnswered
+    ? writer.isAnswered(field, value)
+    : Array.isArray(value) ? value.length > 0 : Boolean(value);
   let isFilling = false;
   let wizard;
   const answerKey = field => field.label.normalize('NFKC').toLowerCase().replace(/[?*:.!]+$/g, '').trim().replace(/\s+/g, ' ');
@@ -5155,6 +5915,7 @@
       ApplicationState.FAILED,
     ],
     [ApplicationState.REVIEW_REQUIRED]: [
+      ApplicationState.SUBMITTING,
       ApplicationState.FILLING,
       ApplicationState.READY_TO_SUBMIT,
       ApplicationState.FAILED,
@@ -5209,6 +5970,10 @@
 
   function detectAtsProvider(url) {
     if (!url) return 'generic';
+    if (typeof globalThis.NextkinSiteRegistry?.detectAtsProvider === 'function') {
+      const detected = globalThis.NextkinSiteRegistry.detectAtsProvider(url, typeof document !== 'undefined' ? document : null);
+      if (detected && detected !== 'generic') return detected;
+    }
     try {
       const hostname = new URL(url).hostname.toLowerCase();
       if (/(^|\.)(myworkdayjobs|myworkdaysite)\.com$/i.test(hostname)) return 'workday';
@@ -5247,6 +6012,8 @@
       this.userId = params.userId || null;
       this.candidateId = params.candidateId || null;
       this.profileVersion = params.profileVersion ?? 1;
+      this.resumeDocumentId = params.resumeDocumentId || null;
+      this.jobKey = params.jobKey || params.jobUrl || null;
       this.atsProvider = params.atsProvider || detectAtsProvider(params.jobUrl || (typeof location !== 'undefined' ? location.href : ''));
       this.jobUrl = params.jobUrl || (typeof location !== 'undefined' ? location.href : '');
       this.companyName = params.companyName || '';
@@ -5270,6 +6037,10 @@
         ...this.toJSON(),
         ...updates,
         candidateId: this.candidateId,
+        profileVersion: this.profileVersion,
+        resumeDocumentId: this.resumeDocumentId,
+        jobKey: this.jobKey,
+        jobUrl: this.jobUrl,
         attemptId: this.attemptId,
         createdAt: this.createdAt,
         updatedAt: updates.updatedAt || new Date().toISOString(),
@@ -5283,6 +6054,8 @@
         userId: this.userId,
         candidateId: this.candidateId,
         profileVersion: this.profileVersion,
+        resumeDocumentId: this.resumeDocumentId,
+        jobKey: this.jobKey,
         atsProvider: this.atsProvider,
         jobUrl: this.jobUrl,
         companyName: this.companyName,
@@ -5301,7 +6074,7 @@
 
   /**
    * ApplicationStateManager manages explicit lifecycle states and NextKinHR sync status.
-   * Persists minimal durable state in chrome.storage.session and window.sessionStorage
+   * Persists state through the service worker in trusted extension storage
    * without storing raw DOM nodes.
    */
   class ApplicationStateManager {
@@ -5324,7 +6097,6 @@
         }
       ];
       this.listeners = new Set();
-      this.storageKey = options.storageKey || `nextkin_application_state_${this.context.attemptId}`;
       this.persist();
     }
 
@@ -5429,62 +6201,17 @@
      * Persist minimal durable state without saving raw DOM nodes.
      */
     persist() {
+      const { attemptId, candidateId, profileVersion, resumeDocumentId, jobKey } = this.context;
       const payload = {
-        attemptId: this.context.attemptId,
-        context: this.context.toJSON(),
+        context: { attemptId, candidateId, profileVersion, resumeDocumentId, jobKey },
+        requiresReview: reviewRequired,
         application_status: this.application_status,
         sync_status: this.sync_status,
-        history: this.history.slice(-25),
         updatedAt: new Date().toISOString(),
       };
 
-      try {
-        if (typeof window !== 'undefined' && window.sessionStorage) {
-          window.sessionStorage.setItem('nextkin_application_attempt_state', JSON.stringify(payload));
-          if (this.context.attemptId) {
-            window.sessionStorage.setItem(`nextkin_attempt_${this.context.attemptId}`, JSON.stringify(payload));
-          }
-          if (this.context.tabId != null) {
-            window.sessionStorage.setItem(`nextkin_attempt_tab_${this.context.tabId}`, JSON.stringify(payload));
-          }
-        }
-      } catch {}
-
-      try {
-        if (typeof chrome !== 'undefined' && chrome.storage?.session?.set) {
-          const key = this.storageKey || `application_attempt_${this.context.attemptId}`;
-          const toSet = { [key]: payload, 'application-state-active': payload };
-          if (this.context.tabId != null) {
-            toSet[`application-state:${this.context.tabId}`] = payload;
-          }
-          chrome.storage.session.set(toSet).catch(() => {});
-        }
-      } catch {}
-    }
-
-    static restore(options = {}) {
-      const { attemptId, tabId } = options;
-      let raw = null;
-      try {
-        if (typeof window !== 'undefined' && window.sessionStorage) {
-          if (attemptId) raw = window.sessionStorage.getItem(`nextkin_attempt_${attemptId}`);
-          if (!raw && tabId != null) raw = window.sessionStorage.getItem(`nextkin_attempt_tab_${tabId}`);
-          if (!raw) raw = window.sessionStorage.getItem('nextkin_application_attempt_state');
-        }
-      } catch {}
-
-      if (raw) {
-        try {
-          const data = JSON.parse(raw);
-          if (data?.context) {
-            const context = ApplicationAttemptContext.fromJSON(data.context);
-            return new ApplicationStateManager(context, {
-              initialState: data.application_status,
-              initialSyncStatus: data.sync_status,
-              history: data.history,
-            });
-          }
-        } catch {}
+      if (this.context.candidateId && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        return chrome.runtime.sendMessage({ type: 'NEXTKIN_SAVE_ATTEMPT', payload }).catch(() => null);
       }
       return null;
     }
@@ -5492,13 +6219,39 @@
 
   let currentManager = null;
 
-  function getOrCreateManager(candidate, expectedUrl, job = null) {
-    if (!currentManager) {
-      currentManager = ApplicationStateManager.restore();
+  function resetAttempt() {
+    const attemptId = currentManager?.getContext().attemptId;
+    currentManager = null;
+    verifiedElements = new WeakMap();
+    reviewRequired = false;
+    questionIds = new WeakMap();
+    questionsById = new Map();
+    wizard?.disconnect();
+    wizard = null;
+    writer?.clearPreservedValues?.();
+    if (attemptId && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      void chrome.runtime.sendMessage({ type: 'NEXTKIN_CLEAR_ATTEMPT', attemptId }).catch(() => {});
     }
+  }
+
+  async function isAutomationDisabled(url, activeOnly = false) {
+    const rules = globalThis.NextkinSiteRules;
+    await rules?.getCachedRules?.();
+    return rules?.automationDisabled?.(url, activeOnly);
+  }
+
+  function getOrCreateManager(candidate, expectedUrl, job = null, resumeDocumentId = null, attemptIdentity = null) {
 
     const targetUrl = expectedUrl || (typeof location !== 'undefined' ? location.href : '');
     const activeJob = job || (capture?.read ? capture.read() : null);
+    const urlKey = globalThis.NextkinSiteRegistry?.cleanApplicationUrl?.(targetUrl) || targetUrl;
+    const registryId = globalThis.NextkinSiteRegistry?.extractIdentifiers?.(targetUrl)?.requisitionId;
+    const identity = registryId || activeJob?.externalId;
+    const jobKey = attemptIdentity?.jobKey || (identity ? JSON.stringify([new URL(targetUrl).origin, identity]) : urlKey);
+    if (currentManager && currentManager.getContext().jobKey !== jobKey) {
+      if (!candidate?.id) return currentManager;
+      resetAttempt();
+    }
 
     if (currentManager) {
       const activeCandidateId = currentManager.getContext().candidateId;
@@ -5519,18 +6272,29 @@
         );
       }
 
+      if (isActive && candidate?.version && candidate.version !== currentManager.getContext().profileVersion) {
+        throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'The candidate profile changed. Reopen the application to start a new attempt.');
+      }
+      if (isActive && resumeDocumentId && currentManager.getContext().resumeDocumentId !== resumeDocumentId) {
+        throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'The selected resume changed. Reopen the application to start a new attempt.');
+      }
       if (isActive && (!candidate?.id || candidate.id === activeCandidateId)) {
         return currentManager;
       }
+      // Clear stale verified field records when starting a fresh attempt after an inactive one
+      resetAttempt();
     }
 
     const context = new ApplicationAttemptContext({
+      attemptId: attemptIdentity?.attemptId || undefined,
       applicationId: candidate?.applicationId || activeJob?.externalId || null,
       userId: candidate?.userId || candidate?.user_id || null,
       candidateId: candidate?.id || null,
       profileVersion: candidate?.version || candidate?.profileVersion || 1,
       atsProvider: detectAtsProvider(targetUrl),
       jobUrl: targetUrl,
+      jobKey,
+      resumeDocumentId,
       companyName: activeJob?.company || '',
       jobTitle: activeJob?.title || '',
     });
@@ -5563,6 +6327,12 @@
   }
 
   function answerFits(field, value) {
+    if (value === undefined || value === null || value === '') return false;
+    const type = field.element?.type || '';
+    if (type === 'number' && !Number.isFinite(Number(value))) return false;
+    if (type === 'date' && Number.isNaN(Date.parse(String(value)))) return false;
+    if (type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim())) return false;
+    if (type === 'url' && !mapping.candidateHttpUrl?.(String(value).trim())) return false;
     const options = (field.options || []).map(option => option.label).filter(Boolean);
     if (!options.length) return true;
     const bool = mapping.normalizeBoolean(value);
@@ -5589,791 +6359,432 @@
     if (location.href !== expectedUrl) return [];
     const page = inspect();
     const plans = mapping.planFill(page.fields, candidate);
-    const keys = plans.map(plan => answerKey(plan.field));
-    return plans.filter(plan => reusable(plan, keys)).flatMap(plan => {
-      const { field } = plan;
-      const value = writer.read(field);
-      if (typeof value === 'string' && (!value || value.length > 2000) || Array.isArray(value) && !value.length) return [];
-      if (Array.isArray(value) && (value.length > 50 || value.some(item => item.length > 200))) return [];
-      return [{ key: answerKey(field), label: field.label, type: answerType(field), value }];
-    }).slice(0, 100);
-  }
-
-  function inspect() {
-    const job = capture.read();
-    const fields = discovery.discoverFields().filter(field => field.kind !== 'inaccessible' && !field.excluded);
-    const contacts = new Set(fields.map(field => mapping.resolveFact(field.label, field.hint)?.key)
-      .filter(key => contactKeys.has(key)));
-    const routeLooksLikeApplication = /(?:^|[/?=_#-])(?:apply|applyjob|application|applytojob|jobapply)(?:$|[/?=_#-])/i.test(location.pathname + location.search + (location.hash || ''));
-    const resumeInput = findResumeInput();
-    const hasForm = (contacts.size >= 2 && !!(job || routeLooksLikeApplication || resumeInput)) ||
-      (routeLooksLikeApplication && fields.length >= 1) || (!!job && fields.length >= 2 && !!resumeInput);
-    return { job, fields, hasForm, resumeInput };
-  }
-
-  function findResumeInput(root = document) {
-    const matches = input => {
-      if (input.disabled) return false;
-      const label = discovery.label(input);
-      const description = [label, input.name, input.id, input.getAttribute?.('data-testid'), input.getAttribute?.('data-automation-id')]
-        .join(' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').normalize('NFD').replace(/\p{M}/gu, '');
-      return /\b(?:resume|curriculum vitae|cv)\b/i.test(description) && !/cover\s*letter|additional|optional document/i.test(label);
-    };
-    const direct = [...root.querySelectorAll('input[type="file"]')].find(matches);
-    if (direct) return direct;
-    for (const host of root.querySelectorAll('*')) {
-      if (!host.shadowRoot) continue;
-      const nested = findResumeInput(host.shadowRoot);
-      if (nested) return nested;
-    }
-  }
-
-  function resumeMetadata(file) {
-    if (!file || !/\.(?:pdf|docx)$/i.test(file.name)) return null;
-    return { filename: file.name.slice(0, 255), mimeType: /\.docx$/i.test(file.name)
-      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf' };
-  }
-
-  async function readAttachedResume(file) {
-    const metadata = resumeMetadata(file);
-    if (!metadata || fileEvidence.has(file) || file.size > 2 * 1024 * 1024) return;
-    fileEvidence.set(file, metadata);
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const chunks = [];
-    for (let offset = 0; offset < bytes.length; offset += 8192) {
-      chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 8192)));
-    }
-    fileEvidence.set(file, { ...metadata, base64: btoa(chunks.join('')) });
-  }
-
-  function submissionEvidence(form) {
-    const answers = new Map();
-    for (const field of discovery.discoverFields(form)) {
-      if (!field.label || field.excluded || field.kind === 'inaccessible' || manualQuestion.test(field.label) || privateAnswer.test(field.label)) continue;
-      const key = answerKey(field).slice(0, 160);
-      const value = writer.read(field);
-      if (!key || value === undefined || value === null || value === '' || answers.has(key)) continue;
-      answers.set(key, { key, label: field.label.slice(0, 200), value: String(Array.isArray(value) ? value.join(', ') : value).slice(0, 1000) });
-      if (answers.size === 100) break;
-    }
-    const file = findResumeInput(form)?.files?.[0];
-    const appliedResume = file && (fileEvidence.get(file) || resumeMetadata(file));
-    return { answers: [...answers.values()], ...(appliedResume ? { appliedResume } : {}) };
-  }
-
-  function prepareSubmission(form, url, job, evidence = submissionEvidence(form)) {
-    return chrome.runtime.sendMessage({ action: 'prepare_application_tracking', url, job, submitted: true,
-      submissionEvidence: evidence });
-  }
-
-  /**
-   * Submit application to employer portal ATS while keeping user in control of final submission.
-   * Runtime errors are paired with explicit state transitions to REVIEW_REQUIRED, READY_TO_SUBMIT,
-   * SUBMITTING, and PENDING_VERIFICATION.
-   */
-  async function submitApplication(expectedUrl) {
-    const manager = currentManager || getOrCreateManager(null, expectedUrl);
-
-    if (location.href !== expectedUrl) {
-      manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'The application page changed.' });
-      throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'The application page changed.');
+      const keys = plans.map(plan => answerKey(plan.field));
+      return plans.filter(plan => reusable(plan, keys)).flatMap(plan => {
+        const { field } = plan;
+        const value = writer.read(field);
+        if (typeof value === 'string' && (!value || value.length > 2000) || Array.isArray(value) && !value.length) return [];
+        if (Array.isArray(value) && (value.length > 50 || value.some(item => item.length > 200))) return [];
+        return [{ key: answerKey(field), label: field.label, type: answerType(field), value }];
+      }).slice(0, 100);
     }
 
-    const { job, hasForm, fields } = inspect();
-    const forms = new Set(fields.map(field => field.element?.form || field.element?.closest?.('form')).filter(Boolean));
-    const [form] = forms;
-
-    if (!hasForm || forms.size !== 1 || submitting.has(form) || typeof form.requestSubmit !== 'function') {
-      manager.transition(ApplicationState.REVIEW_REQUIRED, {
-        reason: 'Submit manually on the employer page. A single final application form is required.',
-        hasForm,
-        formsCount: forms.size,
-      });
-      throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'Submit manually on the employer page. A single final application form is required.');
+    function inspect() {
+      if (globalThis.NextkinSiteRules?.automationDisabled?.(location.href)) return { job: null, hasForm: false, fields: [] };
+      const job = capture.read();
+      const fields = discovery.discoverFields().filter(field => field.kind !== 'inaccessible' && !field.excluded);
+      const contacts = new Set(fields.map(field => mapping.resolveFact(field.label, field.hint)?.key)
+        .filter(key => contactKeys.has(key)));
+      const routeLooksLikeApplication = /(?:^|[/?=_#-])(?:apply|applyjob|application|applytojob|jobapply)(?:$|[/?=_#-])/i.test(location.pathname + location.search + (location.hash || ''));
+      const resumeInput = findResumeInput();
+      const hasForm = (contacts.size >= 2 && !!(job || routeLooksLikeApplication || resumeInput)) ||
+        (routeLooksLikeApplication && fields.length >= 1) || (!!job && fields.length >= 2 && !!resumeInput);
+      return { job, fields, hasForm, resumeInput };
     }
 
-    const buttons = [...form.elements].filter(button => button.type === 'submit' && !button.disabled &&
-      !button.formNoValidate && button.getClientRects().length && finalSubmit.test(submitLabel(button)));
-    const blocked = form.querySelector('[data-sitekey], iframe[src*="captcha" i], [name*="captcha" i], input[type="password"]');
-    const incomplete = fields.some(field => {
-      const element = field.element;
-      const value = writer.read(field);
-      const label = field.label + ' ' + (field.hint || '');
-      if (reviewField.test(label) && field.kind === 'checkbox') return value !== true;
-      const required = element?.required || element?.getAttribute?.('aria-required') === 'true' ||
-        field.options?.some(option => option.element?.required) || reviewField.test(label);
-      return required && (value === '' || value == null || value === false || Array.isArray(value) && !value.length);
-    });
-
-    if (buttons.length !== 1 || blocked || incomplete || !form.checkValidity()) {
-      manager.transition(ApplicationState.REVIEW_REQUIRED, {
-        reason: 'Review and complete the employer form, then submit it manually.',
-        buttonsCount: buttons.length,
-        blocked: !!blocked,
-        incomplete,
-        valid: form.checkValidity(),
-      });
-      throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'Review and complete the employer form, then submit it manually.', {
-        buttonsCount: buttons.length,
-        blocked: !!blocked,
-        incomplete,
-      });
+    function findResumeInput(root = discovery.scopeToApplication?.(document) || document) {
+      const matches = input => {
+        if (input.disabled) return false;
+        const label = discovery.label(input);
+        const description = [label, input.name, input.id, input.getAttribute?.('data-testid'), input.getAttribute?.('data-automation-id')]
+          .join(' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').normalize('NFD').replace(/\p{M}/gu, '');
+        return /\b(?:resume|curriculum vitae|cv)\b/i.test(description) && !/cover\s*letter|additional|optional document/i.test(label);
+      };
+      if (discovery.querySelectorAllDeep) {
+        const candidates = [...discovery.querySelectorAllDeep('input[type="file"]', root)].filter(matches);
+        return candidates.length === 1 ? candidates[0] : undefined;
+      }
+      const direct = [...root.querySelectorAll('input[type="file"]')].filter(matches);
+      if (direct.length) return direct.length === 1 ? direct[0] : undefined;
+      for (const host of root.querySelectorAll('*')) {
+        if (!host.shadowRoot) continue;
+        const nested = findResumeInput(host.shadowRoot);
+        if (nested) return nested;
+      }
     }
 
-    // Validated -> Transition to READY_TO_SUBMIT
-    manager.transition(ApplicationState.READY_TO_SUBMIT, {
-      validated: true,
-      button: submitLabel(buttons[0]),
-    });
+    function resumeMetadata(file) {
+      if (!file || !/\.(?:pdf|docx)$/i.test(file.name)) return null;
+      return { filename: file.name.slice(0, 255), mimeType: /\.docx$/i.test(file.name)
+        ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf' };
+    }
 
-    // Submit action begins -> Transition to SUBMITTING
-    manager.transition(ApplicationState.SUBMITTING, {
-      submittedAt: new Date().toISOString(),
-      formUrl: expectedUrl,
-    });
+    function verifiedField(field, value) {
+      const ctx = currentManager?.getContext();
+      if (field.kind === 'resume-file') return fileEvidence.get(field.element?.files?.[0])?.attemptId === ctx?.attemptId;
+      const record = verifiedElements.get(field.element);
+      if (!record || !ctx) return false;
+      if (record.attemptId !== ctx.attemptId || record.candidateId !== ctx.candidateId || record.jobKey !== ctx.jobKey) {
+        return false;
+      }
+      return JSON.stringify(record.value) === JSON.stringify(value);
+    }
 
-    submitting.add(form);
-    try {
+    function submissionEvidence(form) {
+      const answers = new Map();
+      for (const field of discovery.discoverFields(form)) {
+        if (!field.label || field.excluded || field.kind === 'inaccessible' || manualQuestion.test(field.label) || privateAnswer.test(field.label)) continue;
+        const key = answerKey(field).slice(0, 160);
+        const value = writer.read(field);
+        if (!key || value === undefined || value === null || value === '' || answers.has(key)) continue;
+        answers.set(key, { key, label: field.label.slice(0, 200), value: String(Array.isArray(value) ? value.join(', ') : value).slice(0, 1000) });
+        if (answers.size === 100) break;
+      }
       const file = findResumeInput(form)?.files?.[0];
-      if (file) await readAttachedResume(file).catch(() => {});
-      const evidence = submissionEvidence(form);
+      const metadata = file && resumeMetadata(file);
+      const proof = file && fileEvidence.get(file);
+      const appliedResume = metadata && { ...metadata, sizeBytes: file.size, resumeId: proof?.documentId };
+      return { answers: [...answers.values()], ...(appliedResume ? { appliedResume } : {}) };
+    }
 
-      manager.setSyncStatus(SyncStatus.SYNC_PENDING, { url: expectedUrl });
-      const tracked = await prepareSubmission(form, expectedUrl, job, evidence);
+    function prepareSubmission(form, url, job, evidence = submissionEvidence(form), automatic = false) {
+      return chrome.runtime.sendMessage({ action: 'prepare_application_tracking', url, job, submitted: true, automatic,
+        attemptId: currentManager?.getContext().candidateId ? currentManager.getContext().attemptId : undefined, submissionEvidence: evidence });
+    }
 
-      if (!tracked?.tracked || location.href !== expectedUrl || !form.isConnected || !form.checkValidity()) {
+    /**
+     * Submit application to employer portal ATS while keeping user in control of final submission.
+     * Runtime errors are paired with explicit state transitions to REVIEW_REQUIRED, READY_TO_SUBMIT,
+     * SUBMITTING, and PENDING_VERIFICATION.
+     */
+    async function submitApplication(expectedUrl) {
+      const manager = currentManager || getOrCreateManager(null, expectedUrl);
+      if (await isAutomationDisabled(expectedUrl, true)) throw new Error('Automatic submission is disabled for this employer site.');
+
+      if (reviewRequired || manager.getState() !== ApplicationState.READY_TO_SUBMIT || globalThis.NextkinSiteRules?.automationDisabled?.(expectedUrl, true)) {
+        throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'Review the form and submit it manually on the employer page.');
+      }
+      if (location.href !== expectedUrl) {
+        manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'The application page changed.' });
+        throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'The application page changed.');
+      }
+
+      const { job, hasForm, fields } = inspect();
+      const forms = new Set(fields.map(field => field.element?.form || field.element?.closest?.('form')).filter(Boolean));
+      const [form] = forms;
+
+      if (!hasForm || forms.size !== 1 || submitting.has(form) || typeof form.requestSubmit !== 'function') {
         manager.transition(ApplicationState.REVIEW_REQUIRED, {
-          reason: 'Automatic submission could not start. Review the form and submit manually.',
-          tracked: !!tracked?.tracked,
+          reason: 'Submit manually on the employer page. A single final application form is required.',
+          hasForm,
+          formsCount: forms.size,
         });
-        manager.setSyncStatus(SyncStatus.SYNC_FAILED, { error: tracked?.error || 'Tracking failed' });
-        throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'Automatic submission could not start. Review the form and submit manually.');
+        throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'Submit manually on the employer page. A single final application form is required.');
       }
 
-      if (file !== findResumeInput(form)?.files?.[0] || JSON.stringify(evidence.answers) !== JSON.stringify(submissionEvidence(form).answers)) {
+      const buttons = [...form.elements].filter(button => button.type === 'submit' && !button.disabled &&
+        !button.formNoValidate && button.getClientRects().length && finalSubmit.test(submitLabel(button)));
+      const blocked = form.querySelector('[data-sitekey], iframe[src*="captcha" i], [name*="captcha" i], input[type="password"]');
+      const incomplete = fields.some(field => {
+        const element = field.element;
+        const value = writer.read(field);
+        const label = field.label + ' ' + (field.hint || '');
+        if (reviewField.test(label)) return true;
+        const required = field.required || element?.required || element?.getAttribute?.('aria-required') === 'true' ||
+          field.options?.some(option => option.element?.required) || reviewField.test(label);
+        return required && (!isAnswered(field, value) || !verifiedField(field, value));
+      });
+
+      if (buttons.length !== 1 || blocked || incomplete || !form.checkValidity()) {
         manager.transition(ApplicationState.REVIEW_REQUIRED, {
-          reason: 'Form values changed during autofill. Review the form and submit manually.',
+          reason: 'Review and complete the employer form, then submit it manually.',
+          buttonsCount: buttons.length,
+          blocked: !!blocked,
+          incomplete,
+          valid: form.checkValidity(),
         });
-        throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'Form values changed during autofill. Review the form and submit manually.');
+        throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'Review and complete the employer form, then submit it manually.', {
+          buttonsCount: buttons.length,
+          blocked: !!blocked,
+          incomplete,
+        });
       }
 
-      manager.setSyncStatus(SyncStatus.SYNCED, { outsideJobUrl: tracked.outsideJobUrl });
-      form.requestSubmit(buttons[0]);
-
-      // Form submission dispatched -> Transition to PENDING_VERIFICATION (awaiting ATS confirmation)
-      manager.transition(ApplicationState.PENDING_VERIFICATION, {
-        reason: 'Form submission dispatched, awaiting ATS receipt confirmation',
+      // Validated -> Transition to READY_TO_SUBMIT
+      manager.transition(ApplicationState.READY_TO_SUBMIT, {
+        validated: true,
+        button: submitLabel(buttons[0]),
       });
-    } catch (error) {
-      submitting.delete(form);
-      if (manager.getState() === ApplicationState.SUBMITTING) {
-        manager.transition(ApplicationState.FAILED, { error: error.message });
+
+      // Submit action begins -> Transition to SUBMITTING
+      manager.transition(ApplicationState.SUBMITTING, {
+        submittedAt: new Date().toISOString(),
+        formUrl: expectedUrl,
+      });
+
+      submitting.add(form);
+      let staged = false;
+      try {
+        const file = findResumeInput(form)?.files?.[0];
+        if (file && fileEvidence.get(file)?.attemptId !== manager.getContext().attemptId) {
+          throw new Error('Review the attached resume and submit manually on the employer page.');
+        }
+        const evidence = submissionEvidence(form);
+
+        manager.setSyncStatus(SyncStatus.SYNC_PENDING, { url: expectedUrl });
+        const tracked = await prepareSubmission(form, expectedUrl, job, evidence, true);
+        staged = Boolean(tracked?.tracked);
+
+        if (!tracked?.tracked || location.href !== expectedUrl || !form.isConnected || !form.checkValidity()) {
+          manager.transition(ApplicationState.REVIEW_REQUIRED, {
+            reason: 'Automatic submission could not start. Review the form and submit manually.',
+            tracked: !!tracked?.tracked,
+          });
+          manager.setSyncStatus(SyncStatus.SYNC_FAILED, { error: tracked?.error || 'Tracking failed' });
+          throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'Automatic submission could not start. Review the form and submit manually.');
+        }
+
+        const finalFields = discovery.discoverFields(form);
+        if (currentManager !== manager || reviewRequired || !buttons[0].getClientRects().length || buttons[0].disabled ||
+          !finalSubmit.test(submitLabel(buttons[0])) || globalThis.NextkinSiteRules?.automationDisabled?.(expectedUrl, true) ||
+          finalFields.some(field => !field.excluded && (reviewField.test(field.label + ' ' + (field.hint || '')) ||
+            ((field.required || field.element?.required || field.element?.getAttribute?.('aria-required') === 'true') &&
+              !verifiedField(field, writer.read(field))))) ||
+          file !== findResumeInput(form)?.files?.[0] || JSON.stringify(evidence.answers) !== JSON.stringify(submissionEvidence(form).answers)) {
+          manager.transition(ApplicationState.REVIEW_REQUIRED, {
+            reason: 'Form values changed during autofill. Review the form and submit manually.',
+          });
+          throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'Form values changed during autofill. Review the form and submit manually.');
+        }
+
+        form.requestSubmit(buttons[0]);
+
+        // Form submission dispatched -> Transition to PENDING_VERIFICATION (awaiting ATS confirmation)
+        manager.transition(ApplicationState.PENDING_VERIFICATION, {
+          reason: 'Form submission dispatched, awaiting ATS receipt confirmation',
+        });
+      } catch (error) {
+        if (staged) {
+          void chrome.runtime.sendMessage({
+            type: 'NEXTKIN_CANCEL_SUBMISSION_ATTEMPT', attemptId: manager.getContext().attemptId,
+          }).catch(() => {});
+        }
+        if (manager.getState() === ApplicationState.SUBMITTING) {
+          manager.transition(ApplicationState.FAILED, { error: error.message });
+        }
+        throw error;
+      } finally {
+        submitting.delete(form);
       }
-      throw error;
-    }
-  }
-
-  function submitLabel(button) {
-    return String(button.innerText || button.value || button.getAttribute?.('aria-label') || '').trim();
-  }
-
-  /**
-   * Non-throwing pre-submission validation query.
-   * Keeps user in control of final submission by surfacing missing fields and terms.
-   */
-  function validateForSubmission(expectedUrl) {
-    const targetUrl = expectedUrl || (typeof location !== 'undefined' ? location.href : '');
-    const manager = currentManager || getOrCreateManager(null, targetUrl);
-
-    if (location.href !== targetUrl) {
-      manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'The application page changed.' });
-      return { ready: false, state: ApplicationState.REVIEW_REQUIRED, reason: 'The application page changed.' };
     }
 
-    const { hasForm, fields } = inspect();
-    const forms = new Set(fields.map(field => field.element?.form || field.element?.closest?.('form')).filter(Boolean));
-    const [form] = forms;
-
-    if (!hasForm || forms.size !== 1 || submitting.has(form) || typeof form.requestSubmit !== 'function') {
-      manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'A single final application form is required.' });
-      return { ready: false, state: ApplicationState.REVIEW_REQUIRED, reason: 'Submit manually on the employer page. A single final application form is required.' };
+    function submitLabel(button) {
+      return String(button.innerText || button.value || button.getAttribute?.('aria-label') || '').trim();
     }
 
-    const buttons = [...form.elements].filter(button => button.type === 'submit' && !button.disabled &&
-      !button.formNoValidate && button.getClientRects().length && finalSubmit.test(submitLabel(button)));
-    const blocked = form.querySelector('[data-sitekey], iframe[src*="captcha" i], [name*="captcha" i], input[type="password"]');
-    const incomplete = fields.some(field => {
-      const element = field.element;
-      const value = writer.read(field);
-      const label = field.label + ' ' + (field.hint || '');
-      if (reviewField.test(label) && field.kind === 'checkbox') return value !== true;
-      const required = element?.required || element?.getAttribute?.('aria-required') === 'true' ||
-        field.options?.some(option => option.element?.required) || reviewField.test(label);
-      return required && (value === '' || value == null || value === false || Array.isArray(value) && !value.length);
-    });
+    /**
+     * Non-throwing pre-submission validation query.
+     * Keeps user in control of final submission by surfacing missing fields and terms.
+     */
+    function validateForSubmission(expectedUrl) {
+      const targetUrl = expectedUrl || (typeof location !== 'undefined' ? location.href : '');
+      const manager = currentManager || getOrCreateManager(null, targetUrl);
 
-    if (buttons.length !== 1 || blocked || incomplete || !form.checkValidity()) {
-      manager.transition(ApplicationState.REVIEW_REQUIRED, {
-        reason: 'Review and complete the employer form, then submit it manually.',
-        blocked: !!blocked,
-        incomplete,
-        buttonsCount: buttons.length,
+      if (reviewRequired || globalThis.NextkinSiteRules?.automationDisabled?.(targetUrl, true)) {
+        return { ready: false, state: ApplicationState.REVIEW_REQUIRED, reason: 'Review the form and submit it manually on the employer page.' };
+      }
+      if (location.href !== targetUrl) {
+        manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'The application page changed.' });
+        return { ready: false, state: ApplicationState.REVIEW_REQUIRED, reason: 'The application page changed.' };
+      }
+
+      const { hasForm, fields } = inspect();
+      const forms = new Set(fields.map(field => field.element?.form || field.element?.closest?.('form')).filter(Boolean));
+      const [form] = forms;
+
+      if (!hasForm || forms.size !== 1 || submitting.has(form) || typeof form.requestSubmit !== 'function') {
+        manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'A single final application form is required.' });
+        return { ready: false, state: ApplicationState.REVIEW_REQUIRED, reason: 'Submit manually on the employer page. A single final application form is required.' };
+      }
+
+      const buttons = [...form.elements].filter(button => button.type === 'submit' && !button.disabled &&
+        !button.formNoValidate && button.getClientRects().length && finalSubmit.test(submitLabel(button)));
+      const blocked = form.querySelector('[data-sitekey], iframe[src*="captcha" i], [name*="captcha" i], input[type="password"]');
+      const incomplete = fields.some(field => {
+        const element = field.element;
+        const value = writer.read(field);
+        const label = field.label + ' ' + (field.hint || '');
+        if (reviewField.test(label)) return true;
+        const required = field.required || element?.required || element?.getAttribute?.('aria-required') === 'true' ||
+          field.options?.some(option => option.element?.required) || reviewField.test(label);
+        return required && (!isAnswered(field, value) || !verifiedField(field, value));
       });
+
+      if (buttons.length !== 1 || blocked || incomplete || !form.checkValidity()) {
+        manager.transition(ApplicationState.REVIEW_REQUIRED, {
+          reason: 'Review and complete the employer form, then submit it manually.',
+          blocked: !!blocked,
+          incomplete,
+          buttonsCount: buttons.length,
+        });
+        return {
+          ready: false,
+          state: ApplicationState.REVIEW_REQUIRED,
+          reason: 'Review and complete the employer form, then submit it manually.',
+          blocked: !!blocked,
+          incomplete,
+          buttonsCount: buttons.length,
+        };
+      }
+
+      manager.transition(ApplicationState.READY_TO_SUBMIT, { validated: true, button: submitLabel(buttons[0]) });
       return {
-        ready: false,
-        state: ApplicationState.REVIEW_REQUIRED,
-        reason: 'Review and complete the employer form, then submit it manually.',
-        blocked: !!blocked,
-        incomplete,
-        buttonsCount: buttons.length,
+        ready: true,
+        state: ApplicationState.READY_TO_SUBMIT,
+        button: submitLabel(buttons[0]),
       };
     }
 
-    manager.transition(ApplicationState.READY_TO_SUBMIT, { validated: true, button: submitLabel(buttons[0]) });
-    return {
-      ready: true,
-      state: ApplicationState.READY_TO_SUBMIT,
-      button: submitLabel(buttons[0]),
-    };
-  }
-
-  function confirmSubmission(evidence = {}) {
-    if (currentManager) {
-      if (currentManager.getState() !== ApplicationState.SUBMITTED) {
-        currentManager.transition(ApplicationState.SUBMITTED, { evidence, confirmedAt: new Date().toISOString() });
+    function confirmSubmission(evidence = {}) {
+      if (currentManager) {
+        if (currentManager.getState() !== ApplicationState.SUBMITTED) {
+          currentManager.transition(ApplicationState.SUBMITTED, { evidence, confirmedAt: new Date().toISOString() });
+        }
+        return currentManager.getStatus();
       }
-      return currentManager.getStatus();
+      return null;
     }
-    return null;
-  }
 
-  function failSubmission(reason = '') {
-    if (currentManager) {
-      currentManager.transition(ApplicationState.FAILED, { reason, failedAt: new Date().toISOString() });
-      return currentManager.getStatus();
-    }
-    return null;
-  }
-
-  async function fill(expectedUrl, candidate, resume, continuation = false, newFields, saved = null, aiAnswers = null) {
-    if (isFilling) {
-      let attempts = 0;
-      while (isFilling && attempts < 30) {
-        await new Promise(r => setTimeout(r, 100));
-        attempts++;
+    function failSubmission(reason = '') {
+      if (currentManager) {
+        currentManager.transition(ApplicationState.FAILED, { reason, failedAt: new Date().toISOString() });
+        return currentManager.getStatus();
       }
+      return null;
+    }
+
+    async function fill(expectedUrl, candidate, resume, continuation = false, newFields, saved = null, aiAnswers = null, resumeDocumentId = null) {
       if (isFilling) {
-        return { filled: [], unfilled: [], questions: [], questionMeta: {}, total: 0, error: 'Autofill is already in progress.' };
-      }
-    }
-    isFilling = true;
-    try {
-      // Older callers pass `saved` and `aiAnswers` as the fourth and fifth arguments.
-      // Accept both shapes so an extension or a test bundle built at either version works.
-      if (typeof continuation !== 'boolean') {
-        const legacySaved = continuation;
-        const legacyAi = newFields;
-        continuation = false;
-        newFields = null;
-        saved = legacySaved;
-        aiAnswers = legacyAi;
-      }
-
-      const manager = getOrCreateManager(candidate, expectedUrl);
-      manager.transition(ApplicationState.FILLING, { url: expectedUrl, continuation });
-
-      if (location.href !== expectedUrl) {
-        manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'The page changed. Open the application form and try again.' });
-        throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'The page changed. Open the application form and try again.');
-      }
-      const page = inspect();
-      if (!page.hasForm && (!continuation || !page.fields.length)) {
-        manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'Open the job application form before using autofill.' });
-        throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'Open the job application form before using autofill.');
-      }
-      const facts = candidate?.provenance_status === 'confirmed' ? candidate.confirmed_facts : candidate;
-      if (!facts || !Object.values(facts).some(value =>
-        typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string' && value.trim()
-      )) {
-        manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'Save your candidate details in My Applications and Resume first.' });
-        return { filled: [], unfilled: [], questions: [], questionMeta: {}, total: page.fields.length, error: 'Save your candidate details in My Applications and Resume first.' };
-      }
-      const baseFields = newFields ? page.fields.filter(field => newFields.some(next =>
-        next.element === field.element && next.label === field.label)) : page.fields;
-      const sourceFields = continuation
-        ? baseFields.filter(field => !field.element || !seenElements.has(field.element))
-        : baseFields;
-      for (const field of sourceFields) {
-        if (field.element && typeof field.element === 'object') {
-          seenElements.add(field.element);
+        let attempts = 0;
+        while (isFilling && attempts < 30) {
+          await new Promise(r => setTimeout(r, 100));
+          attempts++;
         }
-        if (Array.isArray(field.elements)) {
-          for (const el of field.elements) {
-            if (el && typeof el === 'object') seenElements.add(el);
-          }
+        if (isFilling) {
+          return { filled: [], unfilled: [], questions: [], questionMeta: {}, total: 0, error: 'Autofill is already in progress.' };
         }
       }
-      const plans = mapping.planFill(sourceFields, facts);
-    const keys = plans.map(plan => answerKey(plan.field));
-    const values = mapping.buildValues(facts);
+      isFilling = true;
+      try {
+        // Older callers pass `saved` and `aiAnswers` as the fourth and fifth arguments.
+        // Accept both shapes so an extension or a test bundle built at either version works.
+        if (typeof continuation !== 'boolean') {
+          const legacySaved = continuation;
+          const legacyAi = newFields;
+          continuation = false;
+          newFields = null;
+          saved = legacySaved;
+          aiAnswers = legacyAi;
+        }
 
-    // Replay reusable answers from the answer bank. Profile-owned facts always win,
-    // and a saved answer is never applied to a job-specific or protected question.
-    if (saved && typeof saved === 'object') {
+        if (await isAutomationDisabled(expectedUrl)) {
+          return { filled: [], unfilled: [], questions: [], questionMeta: {}, total: 0, error: 'Autofill is disabled for this employer site.' };
+        }
+        if (aiAnswers && globalThis.NextkinSiteRules?.automationDisabled?.(expectedUrl, true)) aiAnswers = null;
+        const manager = getOrCreateManager(candidate, expectedUrl, null, resumeDocumentId);
+        manager.transition(ApplicationState.FILLING, { url: expectedUrl, continuation });
+
+        if (location.href !== expectedUrl) {
+          manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'The page changed. Open the application form and try again.' });
+          throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'The page changed. Open the application form and try again.');
+        }
+        const page = inspect();
+        if (!page.hasForm && (!continuation || !page.fields.length)) {
+          manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'Open the job application form before using autofill.' });
+          throw new ApplicationStateError(ApplicationState.REVIEW_REQUIRED, 'Open the job application form before using autofill.');
+        }
+        const facts = candidate?.provenance_status === 'confirmed' ? candidate.confirmed_facts : candidate;
+        if (!facts || !Object.values(facts).some(value =>
+          typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string' && value.trim()
+        )) {
+          manager.transition(ApplicationState.REVIEW_REQUIRED, { reason: 'Save your candidate details in My Applications and Resume first.' });
+          return { filled: [], unfilled: [], questions: [], questionMeta: {}, total: page.fields.length, error: 'Save your candidate details in My Applications and Resume first.' };
+        }
+        const baseFields = newFields ? page.fields.filter(field => newFields.some(next =>
+          next.element === field.element && next.label === field.label)) : page.fields;
+        const sourceFields = continuation
+          ? baseFields.filter(field => !field.element || !verifiedField(field, writer.read(field)) || !isAnswered(field))
+          : baseFields;
+        const plans = mapping.planFill(sourceFields, facts);
+      const keys = plans.map(plan => answerKey(plan.field));
+
+      // Replay reusable answers from the answer bank. Profile-owned facts always win,
+      // and a saved answer is never applied to a job-specific or protected question.
+      if (saved && typeof saved === 'object') {
+        for (const plan of plans) {
+          const key = answerKey(plan.field);
+          if (plan.factKey || !reusable(plan, keys)) continue;
+          const entry = saved[key];
+          if (!entry) continue;
+          const value = entry && typeof entry === 'object' ? entry.value : entry;
+          if (value === undefined || value === null || value === '') continue;
+          if (entry && typeof entry === 'object' && entry.type && entry.type !== answerType(plan.field)) continue;
+          if (!answerFits(plan.field, value)) continue;
+          plan.status = 'supported';
+          plan.value = value;
+          plan.learned = true;
+        }
+      }
+
+      const questions = [];
+      const questionMeta = Object.create(null);
+      const hasOwn = (obj, k) => Boolean(k) && Object.prototype.hasOwnProperty.call(obj, k);
+
       for (const plan of plans) {
-        const key = answerKey(plan.field);
-        if (plan.factKey || !reusable(plan, keys)) continue;
-        const entry = saved[key];
-        if (!entry) continue;
-        const value = entry && typeof entry === 'object' ? entry.value : entry;
-        if (value === undefined || value === null || value === '') continue;
-        if (entry && typeof entry === 'object' && entry.type && entry.type !== answerType(plan.field)) continue;
-        if (!answerFits(plan.field, value)) continue;
-        plan.status = 'supported';
-        plan.value = value;
-        plan.learned = true;
-      }
-    }
+        const { field } = plan;
+        const label = (field.label || field.hint || '').trim();
+        const key = answerKey(field);
 
-    const questions = [];
-    const questionMeta = Object.create(null);
-    const labelPlanCounts = new Map();
-    for (const plan of plans) {
-      if (plan.status !== 'ai' && plan.status !== 'needs_review' && plan.status !== 'unknown') continue;
-      const { field } = plan;
-      const label = (field.label || field.hint || '').trim();
-      const key = answerKey(field);
-      if (mapping.isUrlField?.(field)) continue;
-      if (plan.factKey === 'date_of_birth') continue;
-      if (label.length < 2 || key.length > 300 || manualQuestion.test(label)) continue;
-      const baseQid = key.slice(0, 200);
-      labelPlanCounts.set(baseQid, (labelPlanCounts.get(baseQid) || 0) + 1);
-    }
-    const labelOccurrence = new Map();
-    const assignedQids = new Set();
-    const hasOwn = (obj, k) => Boolean(k) && Object.prototype.hasOwnProperty.call(obj, k);
-
-    for (const plan of plans) {
-      const { field } = plan;
-      const label = (field.label || field.hint || '').trim();
-      const key = answerKey(field);
-
-      if (plan.status === 'ai' || plan.status === 'needs_review' || plan.status === 'unknown') {
-        if (mapping.isUrlField?.(field)) continue;
-        // Missing DOB must not be guessed from a resume or sent to AI.
-        if (plan.factKey === 'date_of_birth') continue;
-        if (label.length < 2 || key.length > 300 || manualQuestion.test(label)) continue;
-
-        const baseQid = key.slice(0, 200);
-        const occ = (labelOccurrence.get(baseQid) || 0) + 1;
-        labelOccurrence.set(baseQid, occ);
-        const isDuplicateLabel = (labelPlanCounts.get(baseQid) || 0) > 1;
-        const qid = !isDuplicateLabel
-          ? baseQid
-          : ([field.id, field.name, `${baseQid}::${occ}`].find(
-              (c) => typeof c === 'string' && c.trim() && !assignedQids.has(c),
-            ) || `${baseQid}::${occ}`);
-        assignedQids.add(qid);
-
-        if (writer.read(field)) continue;
-        const isComboKind = field.kind === 'combobox' || field.kind === 'multi-combobox';
-        const skipComboProbe = aiAnswers && Object.keys(aiAnswers).length === 0 && isComboKind;
-        const choices = plan.options?.length ? plan.options
-          : skipComboProbe ? []
-          : (await writer.readChoices(field, () => location.href === expectedUrl)).map(option => option.label);
-        const options = [...new Set(choices.filter(option => option && option.length <= 1000))].slice(0, 200);
-
-        // 1. If explicit AI answer was provided via API
-        const aiReply = aiAnswers
-          ? (
-              (hasOwn(aiAnswers, qid) ? aiAnswers[qid] : undefined) ??
-              (!isDuplicateLabel
-                ? (
-                    (hasOwn(aiAnswers, field.id) ? aiAnswers[field.id] : undefined) ??
-                    (hasOwn(aiAnswers, key) ? aiAnswers[key] : undefined) ??
-                    (hasOwn(aiAnswers, baseQid) ? aiAnswers[baseQid] : undefined)
-                  )
-                : undefined)
-            )
-          : undefined;
-        if (typeof aiReply === 'string') {
-          if (!options.length) {
-            plan.status = 'supported';
-            plan.value = field.kind === 'multi-combobox'
-              ? aiReply.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean)
-              : aiReply;
-            plan.ai = true;
-            continue;
+        if (aiAnswers && (plan.status === 'ai' || plan.status === 'needs_review' || plan.status === 'unknown')) {
+          if (!field.element || label.length < 2 || key.length > 300 || !mapping.isAiEligible?.(field, plan.factKey)) continue;
+          let qid = questionIds.get(field.element);
+          const previousField = questionsById.get(qid);
+          if (!previousField || previousField.label !== field.label || previousField.kind !== field.kind) {
+            const baseQid = key.slice(0, 200);
+            qid = baseQid;
+            for (let suffix = 2; questionsById.has(qid); suffix++) qid = baseQid + '::' + suffix;
+            questionIds.set(field.element, qid);
           }
-          const normalizedReply = aiReply.trim().toLowerCase();
-          const matchedOption = options.find(o => o.trim().toLowerCase() === normalizedReply);
-          if (matchedOption !== undefined) {
-            plan.status = 'supported';
-            plan.value = field.kind === 'multi-combobox' ? [matchedOption] : matchedOption;
-            plan.ai = true;
-            continue;
-          }
-          if (field.kind === 'multi-combobox' || field.kind === 'multi-select' || field.kind === 'checkbox-group') {
-            const parts = aiReply.split(/[,;\n]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
-            const matchedList = parts.map(p => options.find(o => o.trim().toLowerCase() === p)).filter(Boolean);
-            if (matchedList.length) {
+          questionsById.set(qid, field);
+          if (isAnswered(field)) continue;
+          const isComboKind = field.kind === 'combobox' || field.kind === 'multi-combobox';
+          const skipComboProbe = aiAnswers && Object.keys(aiAnswers).length === 0 && isComboKind;
+          const choices = plan.options?.length ? plan.options
+            : skipComboProbe ? []
+            : (await writer.readChoices(field, () => location.href === expectedUrl && !globalThis.NextkinSiteRules?.automationDisabled?.(expectedUrl))).map(option => option.label);
+          const options = [...new Set(choices.filter(option => option && option.length <= 1000))].slice(0, 200);
+
+          const aiReply = hasOwn(aiAnswers || {}, qid) ? aiAnswers[qid] : undefined;
+          if (typeof aiReply === 'string') {
+            if (!options.length && ['text', 'textarea'].includes(field.kind) && aiReply.trim()) {
               plan.status = 'supported';
-              plan.value = [...new Set(matchedList)];
+              plan.value = aiReply.trim();
               plan.ai = true;
               continue;
             }
-          }
-        }
-
-        // 2. Dynamic resume-grounded answers based strictly on candidate's uploaded resume
-        let autoValue = null;
-        let fromFact = false;
-        const ql = label.toLowerCase();
-
-        const candEmployer = values.current_employer || candidate.current_company || candidate.company || '';
-        const candSkills = values.primary_skills || candidate.secondary_skills || '';
-        const skillsList = Array.isArray(candSkills) ? candSkills : String(candSkills).split(/[,;|\n]+/).map(s => s.trim()).filter(Boolean);
-        const skillsStr = skillsList.join(', ');
-        const candCity = values.current_city || candidate.city || '';
-        const candState = values.current_state || candidate.state || '';
-        const candDegree = values.highest_education || candidate.highest_qualification || candidate.degree || '';
-        const candGradYear = values.graduation_year || candidate.graduation_year || '';
-        const candSummary = values.summary || values.bio || '';
-        const candResumeText = (resume?.raw_text || resume?.source_text || candidate.source_text || '').toLowerCase();
-        const activeJobData = capture?.read ? capture.read() : null;
-        const companyName = activeJobData?.company || '';
-
-        if (mapping.isChoiceKind(field.kind)) {
-          const targetVisa = values.visa_status || candidate.visa_status || values.work_authorization || candidate.work_authorization || '';
-          if (!/sponsor|citizenship|citizen\?/i.test(ql) &&
-            (/(visa status|immigration status|work authorization status|work authorization type|type of visa)/i.test(ql) ||
-              (/(authoriz|visa)/i.test(ql) && options.some(o => /citizen|green card|permanent|h-?1b|opt|stem|f-?1|ead/i.test(o))))) {
-            if (targetVisa) {
-              const tvNorm = targetVisa.toLowerCase();
-              const matches = options.filter(o => {
-                const ot = String(o).toLowerCase();
-                if (/stem\s*opt/i.test(tvNorm)) return /stem\s*opt/i.test(ot);
-                if (/\bopt\b/i.test(tvNorm)) return /\bopt\b/i.test(ot) && !/stem/i.test(ot);
-                if (/h-?1b/i.test(tvNorm)) return /h-?1b/i.test(ot);
-                if (/f-?1\b/i.test(tvNorm)) return /f-?1\b/i.test(ot) && !/opt|stem/i.test(ot);
-                if (/green card|permanent resident/i.test(tvNorm)) return /green card|permanent resident/i.test(ot);
-                return ot.trim() === tvNorm.trim();
-              });
-              if (matches.length === 1) {
-                autoValue = matches[0];
-                fromFact = true;
+            const normalizedReply = aiReply.trim().toLowerCase();
+            const matches = options.filter(o => o.trim().toLowerCase() === normalizedReply);
+            const multi = mapping.isMultiKind(field.kind);
+            if (matches.length === 1) {
+              const [matchedOption] = matches;
+              plan.status = 'supported';
+              plan.value = multi ? [matchedOption] : matchedOption;
+              plan.ai = true;
+              continue;
+            }
+            if (multi) {
+              const parts = aiReply.split(/[,;\n]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+              const groups = parts.map(part => options.filter(option => option.trim().toLowerCase() === part));
+              if (parts.length && groups.every(matches => matches.length === 1)) {
+                const matchedList = groups.flat();
+                plan.status = 'supported';
+                plan.value = [...new Set(matchedList)];
+                plan.ai = true;
+                continue;
               }
             }
-          } else if (/(authoriz|eligible|legal right)/i.test(ql) && !/(require|need|sponsor|citizen)/i.test(ql)) {
-            if (values.authorized_in_usa !== undefined && values.authorized_in_usa !== null && values.authorized_in_usa !== '') {
-              const affirmative = values.authorized_in_usa === true || values.authorized_in_usa === 'true';
-              autoValue = options.find(o => mapping.normalizeBoolean(o) === affirmative) || (affirmative ? options.find(o => /^yes\b/i.test(o)) : options.find(o => /^no\b/i.test(o))) || affirmative;
-              fromFact = true;
-            }
-          } else if (/(full-time|onsite|internship|summer internship|start date.*internship)/i.test(ql)) {
-            if (values.availability || candidate.availability || values.authorized_in_usa !== undefined) {
-              autoValue = options.find(o => mapping.normalizeBoolean(o) === true) || options.find(o => /^yes\b/i.test(o)) || true;
-              fromFact = true;
-            }
-          } else if (/(currently enrolled|phd program|degree program)/i.test(ql)) {
-            if (candDegree || candResumeText) {
-              const hasProgram = /phd|doctor|master|bachelor|student|enrolled/i.test(candDegree) || /phd|doctor|master|bachelor|enrolled/i.test(candResumeText);
-              if (hasProgram) {
-                autoValue = options.find(o => mapping.normalizeBoolean(o) === true) || options.find(o => /^yes\b/i.test(o)) || true;
-                fromFact = true;
-              }
-            }
-          } else if (/(require|need).*(sponsor|visa)/i.test(ql)) {
-            if (values.needs_sponsorship !== undefined && values.needs_sponsorship !== null && values.needs_sponsorship !== '') {
-              const needSponsor = values.needs_sponsorship === true || values.needs_sponsorship === 'true';
-              autoValue = options.find(o => mapping.normalizeBoolean(o) === needSponsor) || (needSponsor ? options.find(o => /^yes\b/i.test(o)) : options.find(o => /^no\b/i.test(o))) || needSponsor;
-              fromFact = true;
-            }
-          } else if (/(worked for|worked before|employee or a contractor)/i.test(ql)) {
-            if (candEmployer || (Array.isArray(candidate.employment_history) && candidate.employment_history.length > 0)) {
-              const workedThere = Boolean(
-                companyName && (
-                  (candEmployer && candEmployer.toLowerCase().includes(companyName.toLowerCase())) ||
-                  (Array.isArray(candidate.employment_history) && candidate.employment_history.some(e => (e.company || '').toLowerCase().includes(companyName.toLowerCase())))
-                )
-              );
-              autoValue = options.find(o => mapping.normalizeBoolean(o) === workedThere) || (workedThere ? options.find(o => /^yes\b/i.test(o)) : options.find(o => /^no\b/i.test(o))) || workedThere;
-              fromFact = true;
-            }
-          } else if (/(gender|sex)/i.test(ql)) {
-            const candGender = candidate.gender || candidate.confirmed_facts?.gender || values.gender;
-            if (candGender) {
-              autoValue = options.find(o => new RegExp(`^${candGender}\\b`, 'i').test(o)) || options.find(o => new RegExp(candGender, 'i').test(o)) || candGender;
-              fromFact = true;
-            }
-          } else if (/(hispanic|latino)/i.test(ql) && !/(race|ethnic)/i.test(ql)) {
-            const candRace = candidate.race || candidate.race_ethnicity || candidate.confirmed_facts?.race || candidate.confirmed_facts?.race_ethnicity || values.race;
-            if (candRace) {
-              const crNorm = String(candRace || '').toLowerCase();
-              if (crNorm.includes('hispanic') && !crNorm.includes('not hispanic') && !crNorm.includes('not latino')) {
-                autoValue = options.find(o => /^(yes|true)/i.test(o)) || 'Yes';
-              } else if (crNorm.includes('decline') || crNorm.includes('prefer not') || crNorm.includes('choose not')) {
-                autoValue = options.find(o => /decline|prefer not|choose not|do not wish/i.test(o)) || options.find(o => /^no\b/i.test(o)) || 'Decline';
-              } else {
-                autoValue = options.find(o => /^(no|false)/i.test(o)) || 'No';
-              }
-              fromFact = true;
-            }
-          } else if (/(race|ethnic)/i.test(ql)) {
-            const candRace = candidate.race || candidate.race_ethnicity || candidate.confirmed_facts?.race || candidate.confirmed_facts?.race_ethnicity || values.race;
-            if (candRace) {
-              const crNorm = String(candRace).trim().toLowerCase();
-              const crClean = crNorm.replace(/\(not hispanic or latino\)/gi, '').trim();
-              let matched = null;
+          }
 
-              // 1. Direct match
-              matched = options.find(o => o.trim().toLowerCase() === crNorm);
-
-              // 2. Semantic EEOC category matching
-              if (!matched) {
-                if ((crNorm.includes('hispanic') || crNorm.includes('latino')) && !crNorm.includes('not hispanic') && !crNorm.includes('not latino')) {
-                  matched = options.find(o => {
-                    const ot = o.toLowerCase();
-                    return (ot.includes('hispanic') || ot.includes('latino')) && !ot.includes('not hispanic') && !ot.includes('not latino');
-                  });
-                } else if (crClean.includes('white') || crClean.includes('caucasian')) {
-                  matched = options.find(o => /white|caucasian/i.test(o.replace(/\(not hispanic or latino\)/gi, '')));
-                } else if (crClean.includes('black') || crClean.includes('african')) {
-                  matched = options.find(o => /black|african[ -]?american/i.test(o.replace(/\(not hispanic or latino\)/gi, '')));
-                } else if (crClean.includes('hawaiian') || crClean.includes('pacific islander')) {
-                  matched = options.find(o => /hawaiian|pacific\s*islander/i.test(o.replace(/\(not hispanic or latino\)/gi, '')));
-                } else if (crClean.includes('asian')) {
-                  matched = options.find(o => {
-                    const otClean = o.replace(/\(not hispanic or latino\)/gi, '').toLowerCase();
-                    return /asian/i.test(otClean) && !/pacific/i.test(otClean);
-                  });
-                } else if (crClean.includes('american indian') || crClean.includes('alaska') || crClean.includes('indigenous') || crClean.includes('native american')) {
-                  matched = options.find(o => /american\s*indian|alaska|native\s*american|indigenous/i.test(o.replace(/\(not hispanic or latino\)/gi, '')));
-                } else if (crClean.includes('two or more') || crClean.includes('multiracial')) {
-                  matched = options.find(o => /two\s*or\s*more|multiracial/i.test(o.replace(/\(not hispanic or latino\)/gi, '')));
-                } else if (crClean.includes('decline') || crClean.includes('prefer not') || crClean.includes('choose not') || crClean.includes('not self-identify') || crClean.includes('do not wish')) {
-                  matched = options.find(o => /decline|prefer not|choose not|do not wish/i.test(o));
-                }
-              }
-
-              // 3. Prefix or fuzzy fallback
-              if (!matched) {
-                matched = options.find(o => {
-                  const otClean = o.replace(/\(not hispanic or latino\)/gi, '').trim().toLowerCase();
-                  return otClean && (otClean.startsWith(crClean) || crClean.startsWith(otClean));
-                });
-              }
-
-              autoValue = matched || candRace;
-              fromFact = true;
-            }
-          } else if (/(veteran)/i.test(ql)) {
-            const candVet = candidate.veteran || candidate.veteran_status || candidate.confirmed_facts?.veteran || candidate.confirmed_facts?.veteran_status || values.veteran;
-            if (candVet) {
-              const cvNorm = candVet.toLowerCase();
-              if (cvNorm.includes('not a protected veteran') || cvNorm.includes('not a veteran')) {
-                autoValue = options.find(o => /not a (?:protected )?veteran|^no\b|neither|do not identify|not a veteran/i.test(o)) || candVet;
-              } else if (cvNorm.includes('identify as one or more') || cvNorm.includes('protected veteran')) {
-                autoValue = options.find(o => /i identify as one or more|protected veteran|active duty|veteran\b/i.test(o) && !/not a/i.test(o)) || candVet;
-              } else if (cvNorm.includes('do not wish') || cvNorm.includes('prefer not')) {
-                autoValue = options.find(o => /prefer not|choose not|decline|do not wish/i.test(o)) || candVet;
-              } else {
-                autoValue = options.find(o => new RegExp(candVet.slice(0, 15), 'i').test(o)) || candVet;
-              }
-              fromFact = true;
-            }
-          } else if (/(disabil)/i.test(ql)) {
-            const candDis = candidate.disability || candidate.disability_status || candidate.confirmed_facts?.disability || candidate.confirmed_facts?.disability_status || values.disability;
-            if (candDis) {
-              const cdNorm = candDis.toLowerCase();
-              if (cdNorm.includes('not have a disability') || cdNorm.includes('no disability')) {
-                autoValue = options.find(o => /no,? (?:i )?do not have|no disability|^no\b/i.test(o)) || candDis;
-              } else if (cdNorm.includes('have a disability') && !cdNorm.includes('not')) {
-                autoValue = options.find(o => /yes,? (?:i )?(?:have|do have)|have a disability|^yes\b/i.test(o)) || candDis;
-              } else if (cdNorm.includes('do not wish') || cdNorm.includes('prefer not')) {
-                autoValue = options.find(o => /prefer not|choose not|decline|do not wish/i.test(o)) || candDis;
-              } else {
-                autoValue = options.find(o => new RegExp(candDis.slice(0, 15), 'i').test(o)) || candDis;
-              }
-              fromFact = true;
-            }
-          } else if (/(pronoun)/i.test(ql)) {
-            const explicit = candidate.pronouns || values.pronouns || '';
-            if (explicit) {
-              autoValue = options.find(o => new RegExp(explicit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(o)) || explicit;
-              fromFact = true;
-            } else if (candidate.gender || values.gender) {
-              const g = String(candidate.gender || values.gender || '').toLowerCase();
-              if (g.startsWith('f') || g.includes('woman') || g.includes('female')) {
-                autoValue = options.find(o => /she\/her/i.test(o));
-              } else if (g.includes('non-binary') || g.includes('they')) {
-                autoValue = options.find(o => /they\/them/i.test(o));
-              } else if (g.startsWith('m') || g.includes('man') || g.includes('male')) {
-                autoValue = options.find(o => /he\/him/i.test(o));
-              }
-              if (autoValue) fromFact = true;
-            }
-          } else if (/(degree|education|bachelor|master|phd|doctor|college|university|qualification)/i.test(ql)) {
-            const isYesNo = options.some(o => /^(yes|true)$/i.test(o)) && options.some(o => /^(no|false)$/i.test(o));
-            if (isYesNo) {
-              const candidateHasBachelor = /bachelor|b\.?tech|b\.?s|b\.?a|undergraduate/i.test(candDegree) || /bachelor/i.test(candResumeText);
-              const candidateHasMaster = /master|m\.?s|m\.?tech|mba/i.test(candDegree) || /master/i.test(candResumeText);
-              const candidateHasDoctorate = /phd|doctor/i.test(candDegree);
-
-              let satisfies = false;
-              if (/(master|graduate degree)/i.test(ql)) {
-                satisfies = candidateHasMaster || candidateHasDoctorate;
-              } else if (/(phd|doctorate)/i.test(ql)) {
-                satisfies = candidateHasDoctorate;
-              } else if (/(bachelor|undergraduate|degree|education|college|university|completed.*degree)/i.test(ql)) {
-                satisfies = candidateHasBachelor || candidateHasMaster || candidateHasDoctorate;
-              }
-
-              if (satisfies) {
-                autoValue = options.find(o => /^(yes|true)$/i.test(o)) || true;
-              } else {
-                autoValue = options.find(o => /^(no|false)$/i.test(o)) || false;
-              }
-            } else {
-              if (/master/i.test(candDegree)) {
-                autoValue = options.find(o => /master/i.test(o));
-              } else if (/phd|doctor/i.test(candDegree)) {
-                autoValue = options.find(o => /phd|doctor/i.test(o));
-              } else if (/bachelor|b\.?tech|b\.?s|b\.?a/i.test(candDegree) || /bachelor/i.test(candResumeText)) {
-                autoValue = options.find(o => /bachelor|undergraduate|b\.?s|b\.?a|b\.?tech/i.test(o)) || options.find(o => /college|degree/i.test(o));
-              } else if (candDegree) {
-                autoValue = options.find(o => new RegExp(candDegree.slice(0, 15), 'i').test(o));
-              }
-            }
-          } else if (/(country)/i.test(ql)) {
-            const targetCountry = values.country || candidate.country || '';
-            if (targetCountry) {
-              autoValue = options.find(o => new RegExp(`^${targetCountry}$`, 'i').test(o)) || options.find(o => new RegExp(targetCountry, 'i').test(o)) || targetCountry;
-            }
-          } else if (/(where do you intend to work|intend to work|work location)/i.test(ql)) {
-            const pref = candidate.preferred_work_type || candidate.work_location_preference || '';
-            if (pref) {
-              autoValue = options.find(o => new RegExp(pref, 'i').test(o));
-              fromFact = true;
-            }
-          } else if (/(location|city)/i.test(ql)) {
-            if (candCity) {
-              autoValue = options.find(o => new RegExp(`\\b${candCity}\\b`, 'i').test(o));
-            }
-          } else if (/(graduate|graduation|year)/i.test(ql)) {
-            if (candGradYear) {
-              autoValue = options.find(o => o.includes(candGradYear));
-            }
-          } else if (/(hear|source|how did you)/i.test(ql)) {
-            const src = values.how_heard || candidate.how_heard || '';
-            if (src) {
-              autoValue = options.find(o => new RegExp(src, 'i').test(o)) || src;
-            }
-          }
-        } else if (field.kind === 'text' || field.kind === 'textarea') {
-          // Bio / summary / statement / cover letter
-          if (/(additional information|cover letter|anything else|share with us|bio|biography|about\s*(you|yourself)?|summary|statement)/i.test(ql)) {
-            if (candSummary) {
-              autoValue = candSummary;
-            }
-          }
-          // Salary / compensation
-          else if (/(salary|compensation|rate|gross salary|pay expectation)/i.test(ql)) {
-            if (values.salary_expectation || candidate.salary_expectation) {
-              autoValue = values.salary_expectation || candidate.salary_expectation;
-            }
-          }
-          // Start date / availability
-          else if (/(start date|notice|available|availability|when can you start)/i.test(ql)) {
-            if (values.availability || candidate.availability) {
-              autoValue = values.availability || candidate.availability;
-            }
-          }
-          // Source / How did you hear
-          else if (/(hear|source|referral)/i.test(ql)) {
-            if (values.how_heard || candidate.how_heard) {
-              autoValue = values.how_heard || candidate.how_heard;
-            }
-          }
-          // Skills / Tech stack overview
-          else if (/(experience with|skills with|tech stack|technologies have you used|tools and frameworks)/i.test(ql)) {
-            if (skillsStr) {
-              autoValue = skillsStr;
-            }
-          }
-          // LinkedIn profile
-          else if (/(linkedin|linked\s*in)/i.test(ql)) {
-            if (values.linkedin_url || candidate.linkedin_url) {
-              autoValue = values.linkedin_url || candidate.linkedin_url;
-            }
-          }
-          // Location / City
-          else if (/(current location|city|where are you located|present location)/i.test(ql) && !/(relocat|work location)/i.test(ql)) {
-            if (values.current_location || values.location || candCity) {
-              autoValue = values.current_location || values.location || candCity;
-            }
-          }
-          // Work authorization & Visa text
-          else if (/(work authorization|visa status|immigration status|work permit)/i.test(ql)) {
-            if (values.work_authorization || values.visa_status || candidate.work_authorization || candidate.visa_status) {
-              autoValue = values.work_authorization || values.visa_status || candidate.work_authorization || candidate.visa_status;
-            }
-          }
-        } else if (field.kind === 'checkbox') {
-          const groupQuestion = (field.element?.closest('.application-question, fieldset, [role="group"], .form-group, .question')
-            ?.querySelector('.application-label, legend, .question-title, [class*="label" i]')?.innerText || '').toLowerCase();
-          const checkLabel = ql;
-          const combined = `${groupQuestion} ${checkLabel}`;
-
-          // 1. Legal / Consent / Terms / Acknowledgment / Arbitration / Future Contact
-          if (/(agree|consent|terms|privacy|arbitration|acknowledg|certify|declare|confirm.*(?:terms|agreement|policy)|contact me|receive updates|future job)/i.test(combined)) {
-            autoValue = true;
-          }
-          // 2. Languages: Check ONLY languages present on candidate's uploaded resume/profile
-          else if (/language/i.test(combined)) {
-            const candLangs = Array.isArray(candidate.languages) ? candidate.languages.map(l => String(l).toLowerCase()) : [];
-            if (candLangs.length > 0) {
-              autoValue = candLangs.some(l => checkLabel.includes(l));
-            }
-          }
-          // 3. Start Date Cohort Windows: Check only if candidate declared an availability date
-          else if (/(cohort|dates|available dates|what are the dates|start date)/i.test(groupQuestion) || /\b(january|february|march|april|may|june|july|august|september|october|november|december)\b/i.test(checkLabel)) {
-            if (values.availability || candidate.availability || candidate.available_to_join) {
-              const targetAvail = String(values.availability || candidate.availability || candidate.available_to_join).toLowerCase();
-              autoValue = targetAvail.includes(checkLabel) || checkLabel.includes(targetAvail);
-            }
-          }
-          // 4. Skills / Technologies Checklist: Check ONLY if present in candidate's skills or resume text
-          else if (/(skill|technolog|tech stack|tools|frameworks|programming)/i.test(groupQuestion)) {
-            const skillsText = `${candSkills} ${candSummary} ${candResumeText}`.toLowerCase();
-            const cleanCheck = checkLabel.replace(/\([^)]*\)/g, '').trim().toLowerCase();
-            autoValue = cleanCheck.length >= 2 && skillsText.includes(cleanCheck);
-          }
-          // 5. Pronouns
-          else if (/(pronoun|he\/him|she\/her|they\/them)/i.test(combined)) {
-            const explicit = candidate.pronouns || values.pronouns || '';
-            const g = String(candidate.gender || values.gender || '').toLowerCase();
-            if (explicit) {
-              autoValue = new RegExp(explicit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(checkLabel);
-            } else if (g.startsWith('f') || g.includes('woman') || g.includes('female')) {
-              autoValue = /she\/her/i.test(checkLabel);
-            } else if (g.includes('non-binary') || g.includes('they')) {
-              autoValue = /they\/them/i.test(checkLabel);
-            } else if (g.startsWith('m') || g.includes('man') || g.includes('male')) {
-              autoValue = /he\/him/i.test(checkLabel);
-            }
-          }
-          // 6. Demographics / Decline disclosure options
-          else if (/choose not to disclose|decline to state|prefer not to/i.test(checkLabel)) {
-            autoValue = false;
-          }
-        }
-
-        if (autoValue !== null && autoValue !== undefined) {
-          plan.status = 'supported';
-          plan.value = autoValue;
-          plan.ai = !fromFact;
-        } else if (aiAnswers) {
           questions.push({ id: qid, label: label.slice(0, 2000), type: field.kind, options });
           questionMeta[qid] = {
             fieldId: field.id || field.name || field.key || qid,
@@ -6384,109 +6795,127 @@
           };
         }
       }
-    }
 
-    const receipts = await writer.applyFill(plans, {
-      sessionId: crypto.randomUUID(),
-      isCurrent: () => location.href === expectedUrl,
-    });
-    const filled = receipts.map(receipt => ({
-      key: receipt.field.key,
-      label: receipt.field.label || receipt.field.hint || 'Application field',
-      value: Array.isArray(receipt.writtenValue)
-        ? receipt.writtenValue.join(', ')
-        : typeof receipt.writtenValue === 'boolean' ? (receipt.writtenValue ? 'Yes' : 'No') : String(receipt.writtenValue ?? ''),
-      ai: !!receipt.ai,
-      learned: !!receipt.learned,
-    }));
-    const input = findResumeInput();
-    if (input?.isConnected && !input.files?.length && location.href === expectedUrl) {
-      if (resume?.base64) {
-        try {
-          const bytes = Uint8Array.from(atob(resume.base64), char => char.charCodeAt(0));
-          const transfer = new DataTransfer();
-          transfer.items.add(new File([bytes], resume.filename || 'Resume.pdf', { type: resume.mimeType || 'application/pdf' }));
-          input.files = transfer.files;
-          input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-          input.dispatchEvent(new Event('change', { bubbles: true }));
-          const file = input.files?.[0];
-          if (file?.name === resume.filename) {
-            const metadata = resumeMetadata(file);
-            if (metadata && file.size <= 2 * 1024 * 1024) fileEvidence.set(file, { ...metadata, base64: resume.base64 });
-            filled.push({ key: 'resume-file', label: 'Resume file', value: resume.filename });
-          }
-        } catch {}
-      } else if (writer?.attachResumeFile) {
-        try {
-          const attachRes = await writer.attachResumeFile(input, candidate?.id);
-          if (attachRes?.file) {
-            filled.push({ key: 'resume-file', label: 'Resume file', value: attachRes.expected });
-          }
-        } catch {}
+      const attemptContext = manager.getContext();
+      const receipts = await writer.applyFill(plans, {
+        sessionId: crypto.randomUUID(),
+        isCurrent: () => location.href === expectedUrl &&
+          currentManager === manager &&
+          currentManager.getContext().attemptId === attemptContext.attemptId &&
+          (!attemptContext.candidateId || currentManager.getContext().candidateId === attemptContext.candidateId) &&
+          !globalThis.NextkinSiteRules?.automationDisabled?.(expectedUrl),
+      });
+      for (const receipt of receipts) {
+        if (receipt.field.element) {
+          verifiedElements.set(receipt.field.element, {
+            attemptId: attemptContext.attemptId,
+            candidateId: attemptContext.candidateId,
+            jobKey: attemptContext.jobKey,
+            fieldKey: receipt.field.key,
+            value: writer.read(receipt.field),
+          });
+        }
       }
-    }
-    const filledKeys = new Set(filled.map(f => f.key));
-    const unfilled = [];
-    for (const plan of plans) {
-      if (!filledKeys.has(plan.field.key)) {
-        unfilled.push({
-          key: plan.field.key,
-          label: plan.field.label || plan.field.hint || 'Application question',
-          kind: plan.field.kind,
-          reason: plan.reason || 'No matching saved candidate detail'
+      const filled = receipts.map(receipt => ({
+        key: receipt.field.key,
+        label: receipt.field.label || receipt.field.hint || 'Application field',
+        value: Array.isArray(receipt.writtenValue)
+          ? receipt.writtenValue.join(', ')
+          : typeof receipt.writtenValue === 'boolean' ? (receipt.writtenValue ? 'Yes' : 'No') : String(receipt.writtenValue ?? ''),
+        status: receipt.status,
+        ai: !!receipt.ai,
+        learned: !!receipt.learned,
+      }));
+      const input = findResumeInput();
+      if (input?.isConnected && !input.files?.length && location.href === expectedUrl && !globalThis.NextkinSiteRules?.automationDisabled?.(expectedUrl)) {
+        const attached = await writer.attachResumeFile?.(input, resume, () => location.href === expectedUrl);
+        if (attached) {
+          fileEvidence.set(attached.file, { attemptId: manager.getContext().attemptId, documentId: manager.getContext().resumeDocumentId, uploadState: attached.uploadState });
+          if (attached.uploadState === 'UPLOAD_PENDING') reviewRequired = true;
+          filled.push({ key: 'resume-file', label: 'Resume file', value: attached.expected, uploadState: attached.uploadState });
+        }
+      }
+      const writtenFields = new Set(receipts.map(receipt => receipt.field));
+      const unverified = new Map((receipts.unverified || []).map(receipt => [receipt.field, receipt]));
+      const verifiedResume = !input || fileEvidence.get(input.files?.[0])?.attemptId === manager.getContext().attemptId;
+      reviewRequired ||= plans.some(plan => plan.ai) || unverified.size > 0 || !verifiedResume;
+      const unfilled = [];
+      for (const plan of plans) {
+        if (!writtenFields.has(plan.field) && plan.field.kind !== 'resume-file') {
+          unfilled.push({
+            key: plan.field.key,
+            label: plan.field.label || plan.field.hint || 'Application question',
+            kind: plan.field.kind,
+            status: unverified.get(plan.field)?.status || plan.status,
+            reason: ({
+              conflict: 'Existing value differs from the candidate profile.',
+              preserved_user_value: 'Your existing answer was preserved. Review it before submitting.',
+              partial: 'Only some requested options could be selected.',
+              unverified: 'Could not verify the value on the employer form.',
+            })[unverified.get(plan.field)?.status] || plan.reason || 'No matching saved candidate detail'
+          });
+        }
+      }
+      if (input?.isConnected && !verifiedResume) {
+        unfilled.unshift({
+          key: 'resume-file',
+          label: 'Resume file',
+          kind: 'file',
+          reason: input.files?.length ? 'Check the existing resume belongs to this candidate.' :
+            (resume?.base64 ? 'Portal requires manual file attachment' : 'Uploaded resume unavailable')
         });
       }
-    }
-    if (input?.isConnected && (!input.files || !input.files.length)) {
-      unfilled.unshift({
-        key: 'resume-file',
-        label: 'Resume file',
-        kind: 'file',
-        reason: resume?.base64 ? 'Portal requires manual file attachment' : 'Uploaded resume unavailable'
+
+      // Evaluate form readiness after autofill
+      const { fields: pageFields } = inspect();
+      const forms = new Set(pageFields.map(field => field.element?.form || field.element?.closest?.('form')).filter(Boolean));
+      const [form] = forms;
+      const buttons = form ? [...form.elements].filter(b => b.type === 'submit' && !b.disabled && !b.formNoValidate && b.getClientRects?.().length && finalSubmit.test(submitLabel(b))) : [];
+      const blocked = form?.querySelector?.('[data-sitekey], iframe[src*="captcha" i], [name*="captcha" i], input[type="password"]');
+
+      const incomplete = pageFields.some(field => {
+        const element = field.element;
+        const value = typeof writer?.read === 'function' ? writer.read(field) : element?.value;
+        const label = field.label + ' ' + (field.hint || '');
+        if (reviewField.test(label)) return true;
+        const required = field.required || element?.required || (typeof element?.getAttribute === 'function' && element.getAttribute('aria-required') === 'true') ||
+          field.options?.some(option => option.element?.required) || reviewField.test(label);
+        return required && (!isAnswered(field, value) || !verifiedField(field, value));
       });
-    }
 
-    // Evaluate form readiness after autofill
-    const { fields: pageFields } = inspect();
-    const forms = new Set(pageFields.map(field => field.element?.form || field.element?.closest?.('form')).filter(Boolean));
-    const [form] = forms;
-    const buttons = form ? [...form.elements].filter(b => b.type === 'submit' && !b.disabled && !b.formNoValidate && b.getClientRects?.().length && finalSubmit.test(submitLabel(b))) : [];
-    const blocked = form?.querySelector?.('[data-sitekey], iframe[src*="captcha" i], [name*="captcha" i], input[type="password"]');
-
-    const incomplete = pageFields.some(field => {
-      const element = field.element;
-      const value = typeof writer?.read === 'function' ? writer.read(field) : element?.value;
-      const label = field.label + ' ' + (field.hint || '');
-      if (reviewField.test(label) && field.kind === 'checkbox') return value !== true;
-      const required = element?.required || (typeof element?.getAttribute === 'function' && element.getAttribute('aria-required') === 'true') ||
-        field.options?.some(option => option.element?.required) || reviewField.test(label);
-      return required && (value === '' || value == null || value === false || Array.isArray(value) && !value.length);
-    });
-
-    if (form && buttons.length === 1 && !blocked && !incomplete && form.checkValidity()) {
-      manager.transition(ApplicationState.READY_TO_SUBMIT, { filledCount: filled.length, total: sourceFields.length });
-    } else {
-      manager.transition(ApplicationState.REVIEW_REQUIRED, {
-        filledCount: filled.length,
-        unfilledCount: unfilled.length,
-        unfilled,
-        questions,
-        incomplete,
-        blocked: !!blocked,
-        buttonsCount: buttons.length,
-      });
-    }
+      if (!reviewRequired && form && buttons.length === 1 && !blocked && !incomplete && form.checkValidity()) {
+        manager.transition(ApplicationState.READY_TO_SUBMIT, { filledCount: filled.length, total: sourceFields.length });
+      } else {
+        manager.transition(ApplicationState.REVIEW_REQUIRED, {
+          filledCount: filled.length,
+          unfilledCount: unfilled.length,
+          unfilled,
+          questions,
+          incomplete,
+          blocked: !!blocked,
+          buttonsCount: buttons.length,
+        });
+      }
 
       return { filled, unfilled, questions, questionMeta, total: sourceFields.length + Number(!!input) };
+    } catch (error) {
+      if (currentManager?.getState() === ApplicationState.FILLING) {
+        currentManager.transition(ApplicationState.FAILED, { error: error.message });
+      }
+      throw error;
     } finally {
       isFilling = false;
     }
   }
 
-  async function startAutofill(expectedUrl, candidate, resume, resumeDocumentId, continuation = false, saved = null, aiAnswers = null) {
-    const result = await fill(expectedUrl, candidate, resume, continuation, null, saved, aiAnswers);
+  async function startAutofill(expectedUrl, candidate, resume, resumeDocumentId, continuation = false, saved = null, aiAnswers = null, attemptIdentity = null) {
+    if (attemptIdentity?.attemptId || attemptIdentity?.jobKey) {
+      getOrCreateManager(candidate, expectedUrl, null, resumeDocumentId, attemptIdentity);
+    }
+    const result = await fill(expectedUrl, candidate, resume, continuation, null, saved, aiAnswers, resumeDocumentId);
     // Keep the answer bank for later wizard steps and for a reload between steps.
     globalThis.__nextkinSavedAnswers = saved || globalThis.__nextkinSavedAnswers || null;
+    await currentManager?.persist();
     if (result.error || !candidate.id || !discovery.observeStepTransitions || typeof chrome === 'undefined') return result;
     wizard?.disconnect();
 
@@ -6524,7 +6953,7 @@
           }
           if (isFilling) return;
         }
-        await fill(url, fresh, resume, true, fields, globalThis.__nextkinSavedAnswers).catch(() => {});
+        await fill(url, fresh, resume, true, fields, globalThis.__nextkinSavedAnswers, null, resumeDocumentId).catch(() => {});
       }
     });
     const currentWizard = { disconnect() {
@@ -6539,8 +6968,15 @@
     const step = await chrome.runtime.sendMessage({ action: 'claim_application_step' }).catch(() => null);
     if (!step?.profile || !discovery.observeStepTransitions) return;
     const url = location.href;
-    const apply = () => startAutofill(url, step.profile, step.resume, step.resumeDocumentId, true,
-      globalThis.__nextkinSavedAnswers).catch(() => {});
+    const apply = () => {
+      reviewRequired ||= Boolean(step.requiresReview);
+      return startAutofill(url, step.profile, step.resume, step.resumeDocumentId, true,
+        globalThis.__nextkinSavedAnswers, null, {
+          attemptId: step.attemptId,
+          jobKey: step.jobKey,
+          eventKey: step.eventKey,
+        }).catch(() => {});
+    };
     if (inspect().fields.length) return apply();
     const observer = discovery.observeStepTransitions(document, ({ allFields }) => {
       if (location.href !== url || !allFields.some(field => !field.excluded && field.kind !== 'inaccessible')) return;
@@ -6551,21 +6987,63 @@
     const timer = setTimeout(() => observer.disconnect(), 15000);
   }
 
+  async function waitForDomSettlement(quietMs = 250, maxWaitMs = 1500) {
+    if (typeof MutationObserver === 'undefined' || typeof document === 'undefined' || !document.body) {
+      await new Promise(r => setTimeout(r, Math.min(quietMs, 200)));
+      return;
+    }
+    await new Promise((resolve) => {
+      let settled = false;
+      let quietTimer = null;
+      let hardTimer = null;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(quietTimer);
+        clearTimeout(hardTimer);
+        try { obs.disconnect(); } catch {}
+        resolve();
+      };
+      const bump = () => {
+        clearTimeout(quietTimer);
+        quietTimer = setTimeout(finish, quietMs);
+      };
+      const obs = new MutationObserver(() => bump());
+      try {
+        obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'style', 'class', 'disabled'] });
+      } catch {
+        finish();
+        return;
+      }
+      hardTimer = setTimeout(finish, maxWaitMs);
+      bump();
+    });
+  }
+
   async function rescanConditionalQuestions(expectedUrl, candidate, resume, maxPasses = 3) {
     const page = inspect();
     if (!page.hasForm) return null;
     let passes = 0;
     while (passes < maxPasses) {
       passes++;
+      await waitForDomSettlement(250, 1400);
+      if (location.href !== expectedUrl) break;
       const { fields } = inspect();
-      const unfilled = fields.filter(f => !f.excluded && f.kind !== 'inaccessible' && !writer.read(f));
+      const unfilled = fields.filter(f =>
+        !f.excluded &&
+        f.kind !== 'inaccessible' &&
+        !isAnswered(f)
+      );
       if (!unfilled.length) break;
       await fill(expectedUrl, candidate, resume, true, unfilled, globalThis.__nextkinSavedAnswers).catch(() => {});
-      await new Promise(r => setTimeout(r, 200));
     }
   }
 
   globalThis.NextkinApplication = {
+    screeningField(id) {
+      const field = questionsById.get(id);
+      return field?.element?.isConnected && mapping.isAiEligible?.(field) ? field : null;
+    },
     scan() {
       const { job, hasForm } = inspect();
       return { job, hasForm, url: location.href };
@@ -6588,7 +7066,7 @@
     getAttemptContext() { return currentManager?.getContext() || null; },
     getState() { return currentManager?.getState() || ApplicationState.DRAFT; },
     getSyncStatus() { return currentManager?.getSyncStatus() || SyncStatus.LOCAL_ONLY; },
-    resetAttempt() { currentManager = null; },
+    resetAttempt,
   };
 
   globalThis.ApplicationAttemptContext = ApplicationAttemptContext;
@@ -6624,7 +7102,7 @@
       const manager = currentManager || getOrCreateManager(null, url, job);
       if (manager.getState() !== ApplicationState.SUBMITTED) {
         if (manager.getState() !== ApplicationState.SUBMITTING) {
-          manager.transition(ApplicationState.SUBMITTING, { manual: true, button: submitLabel(button) });
+          manager.transition(ApplicationState.SUBMITTING, { manual: true, button: button ? submitLabel(button) : '' });
         }
         manager.transition(ApplicationState.PENDING_VERIFICATION, { manual: true });
         manager.setSyncStatus(SyncStatus.SYNC_PENDING, { manual: true });
@@ -6632,18 +7110,11 @@
 
       void prepareSubmission(form, url, job).then(
         tracked => {
-          if (tracked?.tracked) manager.setSyncStatus(SyncStatus.SYNCED, { outsideJobUrl: tracked.outsideJobUrl });
-          else manager.setSyncStatus(SyncStatus.SYNC_FAILED, { error: tracked?.error });
+          if (!tracked?.tracked) manager.setSyncStatus(SyncStatus.SYNC_FAILED, { error: tracked?.error });
         },
         error => manager.setSyncStatus(SyncStatus.SYNC_FAILED, { error: error?.message })
       ).catch(() => {});
     };
-    document.addEventListener('change', event => {
-      const input = event.composedPath?.()[0] || event.target;
-      if (input?.type !== 'file' || input !== findResumeInput()) return;
-      const file = input.files?.[0];
-      if (file) void readAttachedResume(file).catch(() => {});
-    }, true);
     document.addEventListener('submit', event => {
       if (event.target?.tagName === 'FORM') recordAttempt(event, event.target, event.submitter);
     }, true);

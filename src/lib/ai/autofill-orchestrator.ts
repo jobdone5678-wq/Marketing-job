@@ -52,6 +52,7 @@ export interface PlanApiResponse {
   executableFills?: Fill[];
   unmapped?: string[];
   deferred?: string[];
+  deferredFieldIds?: string[];
   telemetry?: {
     usage?: TokenUsageTelemetry;
     durationMs?: number;
@@ -278,6 +279,7 @@ export async function executePlan(
       executableFills: planResult.executableFills,
       unmapped: planResult.unmapped,
       deferred: planResult.deferred,
+      deferredFieldIds: planResult.deferredFieldIds,
       telemetry: planResult.telemetry,
     };
   } catch (err: any) {

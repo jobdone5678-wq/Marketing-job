@@ -72,7 +72,7 @@ test('LinkedIn job view is captured as an outside job so tracking can be armed',
   assert.equal(job.jobUrl, 'https://www.linkedin.com/jobs/view/1234567890');
 });
 
-test('LinkedIn Easy Apply success modal is detected and reported to the worker', () => {
+test('LinkedIn Easy Apply success modal is detected and reported to the worker', async () => {
   const evidence = 'Your application was sent to Morgan McKinley!';
   const visible = { getClientRects: () => [{}], closest: () => null, innerText: evidence };
   const dialog = { ...visible, querySelectorAll: () => [] };
@@ -92,10 +92,11 @@ test('LinkedIn Easy Apply success modal is detected and reported to the worker',
     getComputedStyle: () => ({ display: 'block', visibility: 'visible', opacity: '1' }),
     setTimeout: run => { callback = run; return 1; },
     clearTimeout() {},
-    chrome: { runtime: { sendMessage: async message => { messages.push(message); return true; } } },
+    chrome: { runtime: { sendMessage: async message => { if (message.type !== 'NEXTKIN_GET_SUBMISSION_ATTEMPT') messages.push(message); return true; } } },
   };
   runInNewContext(confirmation, sandbox);
   callback();
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(messages.length, 1);
   assert.equal(messages[0].type, 'application-confirmation');
   assert.match(messages[0].evidence, /application was sent/i);

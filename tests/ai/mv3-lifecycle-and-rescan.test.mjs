@@ -448,7 +448,7 @@ test('MV3 Lifecycle, Trusted Context Migration, Sender Validation & Dynamic Resc
           },
           scripting: {
             executeScript: async ({ args }) => {
-              const targetFieldId = args?.[0]?.fieldId || '';
+              const targetFieldId = args?.[0] || '';
               return [{ result: executeScriptChoices[targetFieldId] || [] }];
             },
           },
@@ -480,17 +480,17 @@ test('MV3 Lifecycle, Trusted Context Migration, Sender Validation & Dynamic Resc
     const hA = makeHarness({
       sessionStore: { ai_provider_mode: 'server' },
       planHandler: async () => ({
-        fills: [{ fieldId: 'f_auth', label: 'Are you legally authorized to work in the US?', value: 'Yes' }],
-        deferred: ['Country', 'Country'],
+        fills: [{ fieldId: 'q_auth', label: 'Are you legally authorized to work in the US?', value: 'Yes' }],
+        deferredFieldIds: ['q_country_1', 'q_country_2'],
         unmapped: [],
       }),
       executeScriptChoices: {
-        'combo_1': ['Canada', 'United States'],
-        'combo_2': ['Germany', 'United Kingdom'],
+        'q_country_1': ['Canada', 'United States'],
+        'q_country_2': ['Germany', 'United Kingdom'],
       },
       chooseHandler: async (q, options) => {
-        if (q.id === 'combo_1') return { choice: options.includes('United States') ? 'United States' : null };
-        if (q.id === 'combo_2') return { choice: options.includes('Germany') ? 'Germany' : null };
+        if (q.id === 'q_country_1') return { choice: options.includes('United States') ? 'United States' : null };
+        if (q.id === 'q_country_2') return { choice: options.includes('Germany') ? 'Germany' : null };
         return { choice: null };
       },
     });
@@ -529,13 +529,14 @@ test('MV3 Lifecycle, Trusted Context Migration, Sender Validation & Dynamic Resc
     );
 
     const plannedIds = hA.planCalls[0].fields.map((f) => f.id);
-    assert.equal(plannedIds.includes('f_url'), false, 'URL field must not reach Stage A');
-    assert.equal(plannedIds.includes('f_mkt'), false, 'Marketing opt-in checkbox must not reach Stage A');
-    assert.equal(plannedIds.includes('f_dob'), false, 'DOB must not reach Stage A');
+    assert.equal(plannedIds.includes('q_url'), false, 'URL field must not reach Stage A');
+    assert.equal(plannedIds.includes('q_mkt'), false, 'Marketing opt-in checkbox must not reach Stage A');
+    assert.equal(plannedIds.includes('q_dob'), false, 'DOB must not reach Stage A');
 
+    assert.equal(plannedIds.includes('q_auth'), false, 'Work authorization stays out of AI planning');
     assert.equal(hA.chooseCalls.length, 2, 'Both duplicate-label deferred comboboxes must be processed');
-    assert.equal(hA.chooseCalls[0].question.id, 'combo_1');
-    assert.equal(hA.chooseCalls[1].question.id, 'combo_2');
+    assert.equal(hA.chooseCalls[0].question.id, 'q_country_1');
+    assert.equal(hA.chooseCalls[1].question.id, 'q_country_2');
 
     // Stage B must ONLY receive q_why (never q_spon, q_mkt, q_dob, or q_url)
     const genAnswerCalls = hA.apiCalls.filter((c) => c.path === 'generate-answer');
@@ -544,7 +545,6 @@ test('MV3 Lifecycle, Trusted Context Migration, Sender Validation & Dynamic Resc
     assert.deepEqual(
       { ...answersA },
       {
-        q_auth: 'Yes',
         q_country_1: 'United States',
         q_country_2: 'Germany',
         q_why: 'Server prose answer',
@@ -618,7 +618,7 @@ test('MV3 Lifecycle, Trusted Context Migration, Sender Validation & Dynamic Resc
     assert.equal(answersD.q_why, 'Direct prose answer');
   });
 
-  await t.test('11. End-to-end Pass 1 -> aggregateAutofillResults -> draftScreening (single deferred label) -> Pass 2 handles duplicate-label comboboxes', async () => {
+  await t.test('11. End-to-end Pass 1 -> aggregateAutofillResults -> draftScreening (distinct deferred IDs) -> Pass 2 handles duplicate-label comboboxes', async () => {
     const { runInNewContext } = await import('node:vm');
     const panelJsPath = path.join(rootDir, 'jobright_extension/panel.js');
     const panelJs = fs.readFileSync(panelJsPath, 'utf8');
@@ -636,8 +636,8 @@ test('MV3 Lifecycle, Trusted Context Migration, Sender Validation & Dynamic Resc
     };
 
     const dupFields = [
-      { key: 'field:0:country_home', label: 'Country', kind: 'combobox', element: { id: 'country_home' } },
-      { key: 'field:1:country_work', label: 'Country', kind: 'combobox', element: { id: 'country_work' } },
+      { key: 'field:0:country_home', label: 'Preferred shift', kind: 'combobox', element: { id: 'country_home' } },
+      { key: 'field:1:country_work', label: 'Preferred shift', kind: 'combobox', element: { id: 'country_work' } },
     ];
     const readChoicesCalls = [];
     const buildApp = () => {
@@ -651,6 +651,7 @@ test('MV3 Lifecycle, Trusted Context Migration, Sender Validation & Dynamic Resc
         NextkinForms: { discoverFields: () => dupFields, label: () => '' },
         NextkinFieldMapping: {
           resolveFact: () => null,
+          isAiEligible: () => true,
           planFill: () => dupFields.map((field) => ({
             field: { ...field },
             status: 'needs_review',
@@ -692,18 +693,18 @@ test('MV3 Lifecycle, Trusted Context Migration, Sender Validation & Dynamic Resc
     const aggregated = aggSandbox.aggregateAutofillResults([{ frameId: 0, result: pass1Raw }]);
 
     assert.equal(aggregated.questions.length, 2);
-    assert.deepEqual(Object.keys(aggregated.questionMeta).sort(), ['country::1', 'country::2']);
+    assert.deepEqual(Object.keys(aggregated.questionMeta).sort(), ['preferred shift', 'preferred shift::2']);
 
-    // Run draftScreening where planner returns single Set-deduplicated deferred label ['Country']
+    // The two controls share a label and retain separate IDs throughout planning and writing.
     const startIdx = panelJs.indexOf('async function mapConcurrent(');
     const endIdx = panelJs.indexOf('function outsideApplicationPage(');
     class MockRouter extends AIRouter {
       async plan() {
-        return { fills: [], deferred: ['Country'], unmapped: [] };
+        return { fills: [], deferredFieldIds: ['preferred shift', 'preferred shift::2'], unmapped: [] };
       }
       async choose(q, options) {
-        if (q.id === 'field:0:country_home') return { choice: options.includes('United States') ? 'United States' : null };
-        if (q.id === 'field:1:country_work') return { choice: options.includes('Canada') ? 'Canada' : null };
+        if (q.id === 'preferred shift') return { choice: options.includes('United States') ? 'United States' : null };
+        if (q.id === 'preferred shift::2') return { choice: options.includes('Canada') ? 'Canada' : null };
         return { choice: null };
       }
     }
@@ -726,9 +727,9 @@ test('MV3 Lifecycle, Trusted Context Migration, Sender Validation & Dynamic Resc
         storage: { session: { get: async () => ({ ai_provider_mode: 'server' }) } },
         scripting: {
           executeScript: async ({ args }) => {
-            const fid = args?.[0]?.fieldId;
-            if (fid === 'field:0:country_home') return [{ result: ['United States', 'Mexico'] }];
-            if (fid === 'field:1:country_work') return [{ result: ['Canada', 'Germany'] }];
+            const fid = args?.[0];
+            if (fid === 'preferred shift') return [{ result: ['United States', 'Mexico'] }];
+            if (fid === 'preferred shift::2') return [{ result: ['Canada', 'Germany'] }];
             return [{ result: [] }];
           },
         },
@@ -748,8 +749,8 @@ test('MV3 Lifecycle, Trusted Context Migration, Sender Validation & Dynamic Resc
       aggregated.questionMeta,
     );
     assert.deepEqual({ ...drafts }, {
-      'country::1': 'United States',
-      'country::2': 'Canada',
+      'preferred shift': 'United States',
+      'preferred shift::2': 'Canada',
     });
 
     // Pass 2 applies both distinct answers

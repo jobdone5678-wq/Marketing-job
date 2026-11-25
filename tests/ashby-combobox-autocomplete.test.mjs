@@ -222,6 +222,7 @@ test('fillCombobox recognizes options inside .ashby-application-form-input-autoc
   });
   inputContainer.appendChild(input);
   mockDoc.body.appendChild(inputContainer);
+  input.ownerDocument = mockDoc;
 
   const field = {
     element: input,

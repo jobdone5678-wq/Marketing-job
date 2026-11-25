@@ -14,6 +14,12 @@ const autofillKeys = [
   'school', 'languages', 'employment_history', 'education_history', 'saved_answers',
   'gender', 'race', 'race_ethnicity', 'veteran', 'veteran_status', 'disability', 'disability_status',
   'pronouns', 'demographics', 'work_authorization',
+  // Explicitly confirmed facts consumed by the autofill mapper. Without these in the savedOnly
+  // projection the side panel and the wizard continuation silently drop them.
+  'intended_work_country',
+  'community_memberships', 'protected_veteran', 'military_service', 'current_military_service',
+  'preferred_work_location', 'preferred_office_location', 'relocation_destinations',
+  'salary_currency', 'salary_period', 'compensation_type',
 ];
 
 export async function OPTIONS(request: Request) {

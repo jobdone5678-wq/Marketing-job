@@ -263,7 +263,7 @@ test('Autofill maps and selects all 8 Race / Ethnicity categories accurately', (
   }
 });
 
-test('planFill auto-checks privacy/terms legal acknowledgement checkboxes', () => {
+test('planFill keeps privacy/terms legal acknowledgement checkboxes manual', () => {
   const sandbox = createTestSandbox();
   const mapping = sandbox.NextkinFieldMapping;
 
@@ -274,9 +274,9 @@ test('planFill auto-checks privacy/terms legal acknowledgement checkboxes', () =
 
   const plan = mapping.planFill(fields, candidate);
   assert.strictEqual(plan.length, 1);
-  assert.strictEqual(plan[0].status, 'supported');
+  assert.strictEqual(plan[0].status, 'manual');
   assert.strictEqual(plan[0].factKey, 'consent');
-  assert.strictEqual(plan[0].value, true);
+  assert.strictEqual(plan[0].value, undefined);
 });
 
 test('planFill rejects marketing, SMS, and promotional checkboxes from auto-checking', () => {
