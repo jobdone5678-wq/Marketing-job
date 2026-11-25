@@ -34,6 +34,7 @@ export const APPROVED_DEFAULT_HOSTS = new Set<string>([
   'api.groq.com',
   'api.mistral.ai',
   'api.xkiro.com',
+  'api.cent-ai.dev',
 ]);
 
 /**

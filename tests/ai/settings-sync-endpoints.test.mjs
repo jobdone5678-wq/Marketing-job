@@ -364,4 +364,32 @@ test('AI Settings Sync & Test Connection Endpoints', async (t) => {
     const body = await res.json();
     assert.equal(body.ok, false);
   });
+
+  await t.test('POST /api/extension/ai/test-connection rejects image generation models with HTTP 422', async () => {
+    const mockFetch = async () => {
+      return new Response(JSON.stringify({ data: [{ id: 'recraft/recraft-v4.1-flash-v2:free' }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    };
+
+    const req = new Request('http://localhost/api/extension/ai/test-connection', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${USER_1}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        baseUrl: 'https://openrouter.ai/api/v1',
+        apiKey: 'test-key',
+        modelId: 'recraft/recraft-v4.1-flash-v2:free',
+      }),
+    });
+
+    const res = await testConnection(req, { db, fetchFn: mockFetch });
+    assert.equal(res.status, 422);
+    const body = await res.json();
+    assert.equal(body.ok, false);
+    assert.match(body.error, /image generation model/i);
+  });
 });

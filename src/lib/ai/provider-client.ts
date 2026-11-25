@@ -277,7 +277,9 @@ export class ProviderClient {
 
     if (this.agent) {
       requestInit.agent = this.agent;
-      requestInit.dispatcher = this.agent;
+      if (typeof this.agent === 'object' && 'dispatch' in this.agent) {
+        requestInit.dispatcher = this.agent;
+      }
     }
 
     let response: Response;

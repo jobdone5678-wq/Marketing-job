@@ -11,6 +11,7 @@
 
 import { decryptSecret } from './encryption.ts';
 import { createSafeAgent } from './ssrf-guard.ts';
+import { createSsrfSafeFetch } from './ssrf-fetch-adapter.ts';
 import { ProviderClient, ProviderError, type TokenUsageTelemetry } from './provider-client.ts';
 import { ServerVercelProviderClient } from './server-provider-client.ts';
 import { buildVerifiedFacts } from './verified-facts.ts';
@@ -181,13 +182,14 @@ export async function resolveProviderClient(
       );
     }
 
-    const ClientClass = isVercelAiSdkEnabled() ? ServerVercelProviderClient : ProviderClient;
+    const useSdk = isVercelAiSdkEnabled();
+    const ClientClass = useSdk ? ServerVercelProviderClient : ProviderClient;
     return new ClientClass({
       baseUrl: safeAgent.validatedUrl,
       apiKey,
       model: config.model_id || 'default',
       agent: safeAgent.agent,
-      fetchFn: options?.fetchFn,
+      fetchFn: useSdk ? options?.fetchFn : createSsrfSafeFetch(safeAgent, options?.fetchFn),
     });
   }
 
@@ -216,13 +218,14 @@ export async function resolveProviderClient(
     );
   }
 
-  const ClientClass = isVercelAiSdkEnabled() ? ServerVercelProviderClient : ProviderClient;
+  const useSdk = isVercelAiSdkEnabled();
+  const ClientClass = useSdk ? ServerVercelProviderClient : ProviderClient;
   return new ClientClass({
     baseUrl: safeAgent.validatedUrl,
     apiKey: defaultApiKey,
     model: defaultModel,
     agent: safeAgent.agent,
-    fetchFn: options?.fetchFn,
+    fetchFn: useSdk ? options?.fetchFn : createSsrfSafeFetch(safeAgent, options?.fetchFn),
   });
 }
 

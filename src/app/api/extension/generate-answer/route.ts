@@ -9,6 +9,8 @@ import {
 import { approvedSavedAnswers } from '@/lib/extension-answers/saved-answers';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { z } from 'zod';
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import { generateText } from 'ai';
 import { isUrlField } from '../../../../../jobright_extension/core/field-mapping.js';
 
 export const runtime = 'nodejs';
@@ -200,7 +202,14 @@ export async function POST(request: Request) {
       const { getUserAiProviderConfig, getUserAiProviderSecret } = await import('@/lib/ai/ai-provider-data');
       const { decryptSecret } = await import('@/lib/ai/encryption');
       const userConfig = await getUserAiProviderConfig(actor.id);
-      if (userConfig && (userConfig.mode === 'portal_byok' || userConfig.routing === 'proxy')) {
+      if (
+        userConfig &&
+        (userConfig.mode === 'portal' ||
+          userConfig.mode === 'portal_byok' ||
+          userConfig.routing === 'portal' ||
+          userConfig.routing === 'proxy' ||
+          userConfig.credential_source === 'portal')
+      ) {
         const userSecret = await getUserAiProviderSecret(actor.id);
         if (userSecret?.encrypted_api_key) {
           apiKey = decryptSecret(
@@ -253,29 +262,43 @@ Strict Rules:
       : prompt ||
         `Write a professional response for application field: "${fieldLabel || 'Bio / Cover Letter'}"`;
 
-    const resp = await fetch(completionsUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        max_tokens: 140,
-        temperature: 0.7,
-      }),
-    });
-
-    if (!resp.ok) {
-      throw new CaptureError('AI generation failed. Please try again.', resp.status);
+    if (/recraft|dall-e|midjourney|flux|stable-diffusion/i.test(model)) {
+      throw new CaptureError(
+        `Configured model "${model}" is an image generation model and cannot produce text answers. Please update your AI Provider Settings to a text model (e.g. nvidia/nemotron-3-ultra-550b-a55b:free or openrouter/free).`,
+        422
+      );
     }
 
-    const data = await resp.json();
-    const rawAnswer = data.choices?.[0]?.message?.content?.trim() || '';
+    let rawAnswer = '';
+    try {
+      const normalizedBaseUrl = cleanBaseUrl.endsWith('/chat/completions')
+        ? cleanBaseUrl.slice(0, -'/chat/completions'.length)
+        : cleanBaseUrl.endsWith('/v1')
+          ? cleanBaseUrl
+          : `${cleanBaseUrl}/v1`;
+
+      const provider = createOpenAICompatible({
+        name: 'generate-answer',
+        baseURL: normalizedBaseUrl,
+        apiKey,
+        fetch: (...args) => globalThis.fetch(...args),
+      });
+
+      const result = await generateText({
+        model: provider.chatModel(model),
+        system: systemPrompt,
+        prompt: userPrompt,
+        maxOutputTokens: 1500,
+        temperature: 0.7,
+        maxRetries: 0,
+      });
+
+      rawAnswer = result.text.trim();
+    } catch (err: any) {
+      if (err instanceof CaptureError) throw err;
+      throw new CaptureError(`AI generation failed: ${err?.message || 'Please try again.'}`, 502);
+    }
+
     let answer = rawAnswer.replace(/^["']|["']$/g, '').trim();
     if (choiceMode) {
       const lower = answer.toLowerCase();

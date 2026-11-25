@@ -6,6 +6,7 @@ import {
 } from '../../../../../lib/ai/ai-provider-data.ts';
 import { decryptSecret } from '../../../../../lib/ai/encryption.ts';
 import { createSafeAgent, SSRFError } from '../../../../../lib/ai/ssrf-guard.ts';
+import { createSsrfSafeFetch } from '../../../../../lib/ai/ssrf-fetch-adapter.ts';
 
 export const runtime = 'nodejs';
 
@@ -96,6 +97,10 @@ export async function POST(request: Request, options?: TestConnectionRouteOption
             { status: 400 },
           );
         }
+      } else if (input.provider === 'server' || !input.baseUrl) {
+        apiKey =
+          (process.env.AI_PROVIDER_DEFAULT_API_KEY || process.env.OPENAI_API_KEY || '').trim() ||
+          undefined;
       }
     }
 
@@ -110,18 +115,28 @@ export async function POST(request: Request, options?: TestConnectionRouteOption
     }
 
     try {
-      const fetchFn = options?.fetchFn || fetch;
+      const fetchFn = createSsrfSafeFetch(safeAgentResult, options?.fetchFn);
       const res = await fetchFn(pingUrl, {
         method: 'GET',
         headers,
         redirect: 'error',
         signal: AbortSignal.timeout(10000),
-        // @ts-ignore
-        agent: safeAgentResult.agent,
       });
 
       const latencyMs = Date.now() - startTime;
       if (res.ok) {
+        const modelId = (input.modelId || input.model_id || '').trim();
+        if (modelId && /recraft|dall-e|midjourney|flux|stable-diffusion/i.test(modelId)) {
+          return Response.json(
+            {
+              ok: false,
+              error: `Model "${modelId}" is an image generation model and cannot produce text for job applications. Please use a text model (e.g. nvidia/nemotron-3-ultra-550b-a55b:free or openrouter/free).`,
+              status: 422,
+            },
+            { status: 422 },
+          );
+        }
+
         return Response.json({
           ok: true,
           message: 'Connection successful',

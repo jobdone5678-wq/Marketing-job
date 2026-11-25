@@ -5,6 +5,8 @@ import test from 'node:test';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import { z } from 'zod';
+import * as aiPkg from 'ai';
+import * as openaiCompatiblePkg from '@ai-sdk/openai-compatible';
 import { approvedSavedAnswers } from '../src/lib/extension-answers/saved-answers.ts';
 import { isUrlField } from '../jobright_extension/core/field-mapping.js';
 
@@ -145,6 +147,8 @@ function fixture({ failWrite = false, changeBeforeWrite = false } = {}) {
       '../../../../../jobright_extension/core/field-mapping.js': { isUrlField },
       '@/lib/rate-limit': { checkRateLimit: () => ({ allowed: true }) },
       zod: { z },
+      ai: aiPkg,
+      '@ai-sdk/openai-compatible': openaiCompatiblePkg,
     },
     {
       ...globals,
