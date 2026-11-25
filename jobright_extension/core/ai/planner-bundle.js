@@ -453,9 +453,12 @@ function inferQuestionDescriptor(field) {
     category
   };
 }
+function normalizeFieldLabel(label) {
+  return label.trim().toLowerCase().replace(/\s+/g, " ");
+}
 async function planFormBatch(fields, facts, client, context) {
   if (!fields || fields.length === 0) {
-    return { fills: [], unmapped: [], deferred: [], batchCount: 0 };
+    return { fills: [], executableFills: [], unmapped: [], deferred: [], batchCount: 0 };
   }
   const batchSize = Math.max(4, Math.min(6, context?.batchSize ?? 5));
   const batchCount = Math.ceil(fields.length / batchSize);
@@ -464,7 +467,19 @@ async function planFormBatch(fields, facts, client, context) {
     ...context?.previouslyResolved || {}
   };
   const allFills = [];
+  const filledFields = /* @__PURE__ */ new Set();
+  const deferredFields = /* @__PURE__ */ new Set();
   const deferredSet = /* @__PURE__ */ new Set();
+  const usageFields = [
+    "inputTokens",
+    "outputTokens",
+    "promptTokens",
+    "completionTokens",
+    "totalTokens"
+  ];
+  const aggregatedUsage = {};
+  let hasUsage = false;
+  let totalDurationMs = void 0;
   for (let i = 0; i < batchCount; i++) {
     const start = i * batchSize;
     const end = Math.min(fields.length, start + batchSize);
@@ -475,21 +490,17 @@ async function planFormBatch(fields, facts, client, context) {
       required: !!f.required,
       combo: !!f.combo
     }));
+    const serializedTargetFields = targetFields.map((f) => ({
+      ...f.id !== void 0 ? { fieldId: f.id } : {},
+      label: f.label,
+      type: f.type || "text",
+      required: !!f.required,
+      combo: !!f.combo,
+      options: f.options
+    }));
     const userPayload = {
-      fields: targetFields.map((f) => ({
-        label: f.label,
-        type: f.type || "text",
-        required: !!f.required,
-        combo: !!f.combo,
-        options: f.options
-      })),
-      fieldsToFill: targetFields.map((f) => ({
-        label: f.label,
-        type: f.type || "text",
-        required: !!f.required,
-        combo: !!f.combo,
-        options: f.options
-      })),
+      fields: serializedTargetFields,
+      fieldsToFill: serializedTargetFields,
       neighborFields,
       neighbors: neighborFields,
       previouslyResolved: { ...previouslyResolved },
@@ -506,18 +517,56 @@ async function planFormBatch(fields, facts, client, context) {
       { role: "user", content: JSON.stringify(userPayload, null, 2) }
     ];
     const completion = await client.generateChatCompletion(messages, {
-      responseFormat: "json_object"
+      responseFormat: "json_object",
+      schemaName: "plan"
     });
+    if (completion.usage) {
+      for (const key of usageFields) {
+        const val = completion.usage[key];
+        if (typeof val === "number" && Number.isFinite(val)) {
+          aggregatedUsage[key] = (aggregatedUsage[key] ?? 0) + val;
+          hasUsage = true;
+        }
+      }
+    }
+    if (typeof completion.durationMs === "number" && Number.isFinite(completion.durationMs)) {
+      totalDurationMs = (totalDurationMs ?? 0) + completion.durationMs;
+    }
     const parsed = completion.rawJson || {};
     const fillsRaw = Array.isArray(parsed.fills) ? parsed.fills : [];
+    const handledFields = /* @__PURE__ */ new Set();
     for (const rawFill of fillsRaw) {
-      if (!rawFill || typeof rawFill.label !== "string") continue;
-      const targetField = targetFields.find(
-        (f) => f.label.trim().toLowerCase() === rawFill.label.trim().toLowerCase()
-      );
-      if (!targetField) continue;
+      if (!rawFill || typeof rawFill !== "object") continue;
+      const rawFieldId = typeof rawFill.fieldId === "string" ? rawFill.fieldId.trim() : "";
+      let targetField;
+      if (rawFieldId !== "") {
+        targetField = targetFields.find(
+          (f) => !handledFields.has(f) && (f.id === rawFill.fieldId || f.name === rawFill.fieldId || f.id === rawFieldId || f.name === rawFieldId)
+        );
+        if (!targetField) continue;
+      } else {
+        if (typeof rawFill.label !== "string") continue;
+        const normalizedRawLabel = normalizeFieldLabel(rawFill.label);
+        targetField = targetFields.find(
+          (f) => !handledFields.has(f) && normalizeFieldLabel(f.label) === normalizedRawLabel
+        );
+        if (!targetField) continue;
+      }
+      handledFields.add(targetField);
+      if (rawFill.action === "skip") {
+        continue;
+      }
       const fillValue = typeof rawFill.value === "string" ? rawFill.value : String(rawFill.value ?? "");
+      if (rawFill.action === "defer_combobox") {
+        if (targetField.combo) {
+          deferredFields.add(targetField);
+          deferredSet.add(targetField.label);
+          previouslyResolved[targetField.label] = "[deferred combobox]";
+        }
+        continue;
+      }
       if (targetField.combo && fillValue.trim() === "") {
+        deferredFields.add(targetField);
         deferredSet.add(targetField.label);
         previouslyResolved[targetField.label] = "[deferred combobox]";
         continue;
@@ -526,6 +575,7 @@ async function planFormBatch(fields, facts, client, context) {
         const descriptor = inferQuestionDescriptor(targetField);
         const grounding = validateGroundedAnswer(fillValue, facts, descriptor);
         if (grounding.valid && grounding.action !== "skip") {
+          filledFields.add(targetField);
           allFills.push({
             label: targetField.label,
             value: fillValue,
@@ -540,14 +590,22 @@ async function planFormBatch(fields, facts, client, context) {
       }
     }
   }
-  const filledLabels = new Set(allFills.map((f) => f.label));
   const deferred = Array.from(deferredSet);
-  const unmapped = fields.filter((f) => !filledLabels.has(f.label) && !deferredSet.has(f.label)).map((f) => f.label);
+  const unmapped = fields.filter((f) => !filledFields.has(f) && !deferredFields.has(f)).map((f) => f.label);
+  const executableFills = allFills.filter(
+    (f) => typeof f.fieldId === "string" && f.fieldId.trim().length > 0
+  );
+  const telemetry = hasUsage || totalDurationMs !== void 0 ? {
+    ...hasUsage ? { usage: aggregatedUsage } : {},
+    ...totalDurationMs !== void 0 ? { durationMs: totalDurationMs } : {}
+  } : void 0;
   return {
     fills: allFills,
+    executableFills,
     unmapped,
     deferred,
-    batchCount
+    batchCount,
+    ...telemetry !== void 0 ? { telemetry } : {}
   };
 }
 
@@ -595,30 +653,46 @@ async function chooseComboboxOption(question, options, facts, client) {
     { role: "user", content: JSON.stringify(userPayload, null, 2) }
   ];
   const completion = await client.generateChatCompletion(messages, {
-    responseFormat: "json_object"
+    responseFormat: "json_object",
+    schemaName: "choose"
   });
+  const telemetry = completion.usage !== void 0 || completion.durationMs !== void 0 ? {
+    ...completion.usage !== void 0 ? { usage: completion.usage } : {},
+    ...completion.durationMs !== void 0 ? { durationMs: completion.durationMs } : {}
+  } : void 0;
+  const telemetryField = telemetry !== void 0 ? { telemetry } : {};
   const parsed = completion.rawJson || {};
   const rawChoice = typeof parsed.choice === "string" ? parsed.choice.trim() : "";
   if (!rawChoice) {
-    return { choice: null, reason: "Model declined to answer or profile lacks support" };
+    return {
+      choice: null,
+      reason: "Model declined to answer or profile lacks support",
+      ...telemetryField
+    };
   }
   const matchedOption = options.find(
     (opt) => opt === rawChoice || opt.trim().toLowerCase() === rawChoice.toLowerCase()
   );
   if (!matchedOption) {
-    return { choice: null, reason: `Model choice "${rawChoice}" was not offered in options` };
+    return {
+      choice: null,
+      reason: `Model choice "${rawChoice}" was not offered in options`,
+      ...telemetryField
+    };
   }
   const descriptor = inferQuestionDescriptor(question);
   const grounding = validateGroundedAnswer(matchedOption, facts, descriptor);
   if (!grounding.valid || grounding.action === "skip") {
     return {
       choice: null,
-      reason: grounding.reason || `Choice "${matchedOption}" is not grounded in verified facts`
+      reason: grounding.reason || `Choice "${matchedOption}" is not grounded in verified facts`,
+      ...telemetryField
     };
   }
   return {
     choice: matchedOption,
-    evidenceIds: grounding.evidenceIds
+    evidenceIds: grounding.evidenceIds,
+    ...telemetryField
   };
 }
 
@@ -956,7 +1030,7 @@ function isUnsupportedParamError(status, bodyText) {
 var ProviderClient = class {
   constructor(configOrBaseUrl, apiKey, model, options) {
     // Capability cache: true until proven unsupported by HTTP 400
-    this.supportsJsonMode = true;
+    this._supportsJsonMode = true;
     if (typeof configOrBaseUrl === "string") {
       this.baseUrl = configOrBaseUrl;
       this.apiKey = apiKey;
@@ -977,6 +1051,12 @@ var ProviderClient = class {
     if (!this.baseUrl) {
       throw new Error("ProviderClient requires a non-empty baseUrl");
     }
+  }
+  get supportsJsonMode() {
+    return this._supportsJsonMode;
+  }
+  set supportsJsonMode(value) {
+    this._supportsJsonMode = value;
   }
   /**
    * Generates chat completion with capability detection, timeout, and markdown stripping.

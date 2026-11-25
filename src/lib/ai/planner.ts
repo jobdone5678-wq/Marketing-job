@@ -13,7 +13,7 @@
 
 import type { VerifiedFact } from './verified-facts.ts';
 import { validateGroundedAnswer } from './grounded.ts';
-import type { ProviderClient } from './provider-client.ts';
+import type { ProviderClient, TokenUsageTelemetry } from './provider-client.ts';
 
 export interface Field {
   label: string;
@@ -49,9 +49,14 @@ export interface FormContext {
 
 export interface PlanResult {
   fills: Fill[];
+  executableFills?: Fill[];
   unmapped: string[];
   deferred: string[];
   batchCount: number;
+  telemetry?: {
+    usage?: TokenUsageTelemetry;
+    durationMs?: number;
+  };
 }
 
 const SYSTEM_PROMPT = `You map a candidate's profile onto a job-application form.
@@ -167,6 +172,10 @@ export function inferQuestionDescriptor(field: Field): {
   };
 }
 
+function normalizeFieldLabel(label: string): string {
+  return label.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 /**
  * Plans form fill values in batches of 4-6 questions while preserving neighbor context.
  */
@@ -177,7 +186,7 @@ export async function planFormBatch(
   context?: FormContext,
 ): Promise<PlanResult> {
   if (!fields || fields.length === 0) {
-    return { fills: [], unmapped: [], deferred: [], batchCount: 0 };
+    return { fills: [], executableFills: [], unmapped: [], deferred: [], batchCount: 0 };
   }
 
   // Batch size: 4-6 questions (default 5)
@@ -190,7 +199,20 @@ export async function planFormBatch(
   };
 
   const allFills: Fill[] = [];
+  const filledFields = new Set<Field>();
+  const deferredFields = new Set<Field>();
   const deferredSet = new Set<string>();
+
+  const usageFields = [
+    'inputTokens',
+    'outputTokens',
+    'promptTokens',
+    'completionTokens',
+    'totalTokens',
+  ] as const;
+  const aggregatedUsage: TokenUsageTelemetry = {};
+  let hasUsage = false;
+  let totalDurationMs: number | undefined = undefined;
 
   for (let i = 0; i < batchCount; i++) {
     const start = i * batchSize;
@@ -207,21 +229,18 @@ export async function planFormBatch(
         combo: !!f.combo,
       }));
 
+    const serializedTargetFields = targetFields.map((f) => ({
+      ...(f.id !== undefined ? { fieldId: f.id } : {}),
+      label: f.label,
+      type: f.type || 'text',
+      required: !!f.required,
+      combo: !!f.combo,
+      options: f.options,
+    }));
+
     const userPayload = {
-      fields: targetFields.map((f) => ({
-        label: f.label,
-        type: f.type || 'text',
-        required: !!f.required,
-        combo: !!f.combo,
-        options: f.options,
-      })),
-      fieldsToFill: targetFields.map((f) => ({
-        label: f.label,
-        type: f.type || 'text',
-        required: !!f.required,
-        combo: !!f.combo,
-        options: f.options,
-      })),
+      fields: serializedTargetFields,
+      fieldsToFill: serializedTargetFields,
       neighborFields,
       neighbors: neighborFields,
       previouslyResolved: { ...previouslyResolved },
@@ -241,22 +260,71 @@ export async function planFormBatch(
 
     const completion = await client.generateChatCompletion(messages, {
       responseFormat: 'json_object',
+      schemaName: 'plan',
     });
+
+    if (completion.usage) {
+      for (const key of usageFields) {
+        const val = completion.usage[key];
+        if (typeof val === 'number' && Number.isFinite(val)) {
+          aggregatedUsage[key] = (aggregatedUsage[key] ?? 0) + val;
+          hasUsage = true;
+        }
+      }
+    }
+    if (typeof completion.durationMs === 'number' && Number.isFinite(completion.durationMs)) {
+      totalDurationMs = (totalDurationMs ?? 0) + completion.durationMs;
+    }
 
     const parsed = completion.rawJson || {};
     const fillsRaw = Array.isArray(parsed.fills) ? parsed.fills : [];
+    const handledFields = new Set<Field>();
 
     for (const rawFill of fillsRaw) {
-      if (!rawFill || typeof rawFill.label !== 'string') continue;
-      const targetField = targetFields.find(
-        (f) => f.label.trim().toLowerCase() === rawFill.label.trim().toLowerCase(),
-      );
-      if (!targetField) continue;
+      if (!rawFill || typeof rawFill !== 'object') continue;
+
+      const rawFieldId = typeof rawFill.fieldId === 'string' ? rawFill.fieldId.trim() : '';
+
+      let targetField: Field | undefined;
+      if (rawFieldId !== '') {
+        targetField = targetFields.find(
+          (f) =>
+            !handledFields.has(f) &&
+            (f.id === rawFill.fieldId ||
+              f.name === rawFill.fieldId ||
+              f.id === rawFieldId ||
+              f.name === rawFieldId),
+        );
+        if (!targetField) continue;
+      } else {
+        if (typeof rawFill.label !== 'string') continue;
+        const normalizedRawLabel = normalizeFieldLabel(rawFill.label);
+        targetField = targetFields.find(
+          (f) => !handledFields.has(f) && normalizeFieldLabel(f.label) === normalizedRawLabel,
+        );
+        if (!targetField) continue;
+      }
+
+      handledFields.add(targetField);
+
+      if (rawFill.action === 'skip') {
+        continue;
+      }
 
       const fillValue = typeof rawFill.value === 'string' ? rawFill.value : String(rawFill.value ?? '');
 
+      if (rawFill.action === 'defer_combobox') {
+        if (targetField.combo) {
+          deferredFields.add(targetField);
+          deferredSet.add(targetField.label);
+          previouslyResolved[targetField.label] = '[deferred combobox]';
+        }
+        continue;
+      }
+
       // Check for combo deferral: combo field with empty value
       if (targetField.combo && fillValue.trim() === '') {
+        deferredFields.add(targetField);
         deferredSet.add(targetField.label);
         previouslyResolved[targetField.label] = '[deferred combobox]';
         continue;
@@ -268,6 +336,7 @@ export async function planFormBatch(
         const grounding = validateGroundedAnswer(fillValue, facts, descriptor);
 
         if (grounding.valid && grounding.action !== 'skip') {
+          filledFields.add(targetField);
           allFills.push({
             label: targetField.label,
             value: fillValue,
@@ -283,17 +352,30 @@ export async function planFormBatch(
     }
   }
 
-  const filledLabels = new Set(allFills.map((f) => f.label));
   const deferred = Array.from(deferredSet);
 
   const unmapped = fields
-    .filter((f) => !filledLabels.has(f.label) && !deferredSet.has(f.label))
+    .filter((f) => !filledFields.has(f) && !deferredFields.has(f))
     .map((f) => f.label);
+
+  const executableFills = allFills.filter(
+    (f) => typeof f.fieldId === 'string' && f.fieldId.trim().length > 0,
+  );
+
+  const telemetry =
+    hasUsage || totalDurationMs !== undefined
+      ? {
+          ...(hasUsage ? { usage: aggregatedUsage } : {}),
+          ...(totalDurationMs !== undefined ? { durationMs: totalDurationMs } : {}),
+        }
+      : undefined;
 
   return {
     fills: allFills,
+    executableFills,
     unmapped,
     deferred,
     batchCount,
+    ...(telemetry !== undefined ? { telemetry } : {}),
   };
 }

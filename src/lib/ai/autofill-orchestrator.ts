@@ -11,7 +11,8 @@
 
 import { decryptSecret } from './encryption.ts';
 import { createSafeAgent } from './ssrf-guard.ts';
-import { ProviderClient, ProviderError } from './provider-client.ts';
+import { ProviderClient, ProviderError, type TokenUsageTelemetry } from './provider-client.ts';
+import { ServerVercelProviderClient } from './server-provider-client.ts';
 import { buildVerifiedFacts } from './verified-facts.ts';
 import { planFormBatch, type Field, type Fill, type FormContext, type PlanResult } from './planner.ts';
 import { chooseComboboxOption, type ChooseResult } from './chooser.ts';
@@ -47,8 +48,13 @@ export interface PlanApiResponse {
   ok: boolean;
   plan?: PlanResult;
   fills?: Fill[];
+  executableFills?: Fill[];
   unmapped?: string[];
   deferred?: string[];
+  telemetry?: {
+    usage?: TokenUsageTelemetry;
+    durationMs?: number;
+  };
   error?: string;
   code?: string;
 }
@@ -58,6 +64,10 @@ export interface ChooseApiResponse {
   choice?: string | null;
   evidenceIds?: string[];
   reason?: string;
+  telemetry?: {
+    usage?: TokenUsageTelemetry;
+    durationMs?: number;
+  };
   error?: string;
   code?: string;
 }
@@ -80,6 +90,15 @@ export function checkFeatureFlag(): void {
       'FEATURE_DISABLED'
     );
   }
+}
+
+/**
+ * Checks rollback feature flag SERVER_ENABLE_VERCEL_AI_SDK.
+ * Disabled by default; enabled only when explicitly set to 'true' or '1'.
+ */
+export function isVercelAiSdkEnabled(): boolean {
+  const flag = process.env.SERVER_ENABLE_VERCEL_AI_SDK;
+  return flag === 'true' || flag === '1';
 }
 
 async function getDb(options?: OrchestratorOptions): Promise<any> {
@@ -162,7 +181,8 @@ export async function resolveProviderClient(
       );
     }
 
-    return new ProviderClient({
+    const ClientClass = isVercelAiSdkEnabled() ? ServerVercelProviderClient : ProviderClient;
+    return new ClientClass({
       baseUrl: safeAgent.validatedUrl,
       apiKey,
       model: config.model_id || 'default',
@@ -196,7 +216,8 @@ export async function resolveProviderClient(
     );
   }
 
-  return new ProviderClient({
+  const ClientClass = isVercelAiSdkEnabled() ? ServerVercelProviderClient : ProviderClient;
+  return new ClientClass({
     baseUrl: safeAgent.validatedUrl,
     apiKey: defaultApiKey,
     model: defaultModel,
@@ -244,8 +265,10 @@ export async function executePlan(
       ok: true,
       plan: planResult,
       fills: planResult.fills,
+      executableFills: planResult.executableFills,
       unmapped: planResult.unmapped,
       deferred: planResult.deferred,
+      telemetry: planResult.telemetry,
     };
   } catch (err: any) {
     if (
@@ -311,6 +334,7 @@ export async function executeChoose(
       choice: chooseResult.choice,
       evidenceIds: chooseResult.evidenceIds || [],
       reason: chooseResult.reason,
+      telemetry: chooseResult.telemetry,
     };
   } catch (err: any) {
     if (

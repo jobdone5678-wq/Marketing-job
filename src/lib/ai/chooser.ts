@@ -13,13 +13,17 @@
 
 import type { VerifiedFact } from './verified-facts.ts';
 import { validateGroundedAnswer } from './grounded.ts';
-import type { ProviderClient } from './provider-client.ts';
+import type { ProviderClient, TokenUsageTelemetry } from './provider-client.ts';
 import { type Field, inferQuestionDescriptor } from './planner.ts';
 
 export interface ChooseResult {
   choice: string | null;
   evidenceIds?: string[];
   reason?: string;
+  telemetry?: {
+    usage?: TokenUsageTelemetry;
+    durationMs?: number;
+  };
 }
 
 const CHOOSE_PROMPT = `You are answering ONE question on a job-application form by
@@ -83,13 +87,27 @@ export async function chooseComboboxOption(
 
   const completion = await client.generateChatCompletion(messages, {
     responseFormat: 'json_object',
+    schemaName: 'choose',
   });
+
+  const telemetry =
+    completion.usage !== undefined || completion.durationMs !== undefined
+      ? {
+          ...(completion.usage !== undefined ? { usage: completion.usage } : {}),
+          ...(completion.durationMs !== undefined ? { durationMs: completion.durationMs } : {}),
+        }
+      : undefined;
+  const telemetryField = telemetry !== undefined ? { telemetry } : {};
 
   const parsed = completion.rawJson || {};
   const rawChoice = typeof parsed.choice === 'string' ? parsed.choice.trim() : '';
 
   if (!rawChoice) {
-    return { choice: null, reason: 'Model declined to answer or profile lacks support' };
+    return {
+      choice: null,
+      reason: 'Model declined to answer or profile lacks support',
+      ...telemetryField,
+    };
   }
 
   // Find exact matching option in the offered options list (case-insensitive / trimmed)
@@ -98,7 +116,11 @@ export async function chooseComboboxOption(
   );
 
   if (!matchedOption) {
-    return { choice: null, reason: `Model choice "${rawChoice}" was not offered in options` };
+    return {
+      choice: null,
+      reason: `Model choice "${rawChoice}" was not offered in options`,
+      ...telemetryField,
+    };
   }
 
   // Infer descriptor so grounding engine has canonical metadata
@@ -111,11 +133,13 @@ export async function chooseComboboxOption(
     return {
       choice: null,
       reason: grounding.reason || `Choice "${matchedOption}" is not grounded in verified facts`,
+      ...telemetryField,
     };
   }
 
   return {
     choice: matchedOption,
     evidenceIds: grounding.evidenceIds,
+    ...telemetryField,
   };
 }

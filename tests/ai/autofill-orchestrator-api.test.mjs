@@ -8,11 +8,14 @@ import {
   executePlan,
   executeChoose,
   checkFeatureFlag,
+  isVercelAiSdkEnabled,
   resolveProviderClient,
   OrchestratorError,
 } from '../../src/lib/ai/autofill-orchestrator.ts';
 import { encryptSecret } from '../../src/lib/ai/encryption.ts';
-import { APPROVED_DEFAULT_HOSTS } from '../../src/lib/ai/ssrf-guard.ts';
+import { APPROVED_DEFAULT_HOSTS, SafeHttpsAgent } from '../../src/lib/ai/ssrf-guard.ts';
+import { ProviderClient } from '../../src/lib/ai/provider-client.ts';
+import { ServerVercelProviderClient } from '../../src/lib/ai/server-provider-client.ts';
 
 const ENCRYPTION_KEY_HEX = crypto.randomBytes(32).toString('hex');
 const USER_OWNER = '11111111-1111-4000-8000-111111111111';
@@ -388,5 +391,234 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
     const chooseData = await chooseRes.json();
     assert.equal(chooseData.ok, true);
     assert.equal(chooseData.choice, 'Option A');
+  });
+
+  await t.test('8. SERVER_ENABLE_VERCEL_AI_SDK is disabled by default, enables ServerVercelProviderClient when true/1, and rolls back when false', async () => {
+    const db = createMockDb({}, {}, {});
+
+    // Disabled by default (unset)
+    delete process.env.SERVER_ENABLE_VERCEL_AI_SDK;
+    assert.equal(isVercelAiSdkEnabled(), false);
+    const defaultClient = await resolveProviderClient(USER_OWNER, { db });
+    assert.equal(defaultClient.constructor.name, 'ProviderClient');
+    assert.ok(defaultClient instanceof ProviderClient);
+    assert.equal(defaultClient instanceof ServerVercelProviderClient, false);
+
+    // Enabled with 'true'
+    process.env.SERVER_ENABLE_VERCEL_AI_SDK = 'true';
+    assert.equal(isVercelAiSdkEnabled(), true);
+    const sdkClientTrue = await resolveProviderClient(USER_OWNER, { db });
+    assert.equal(sdkClientTrue.constructor.name, 'ServerVercelProviderClient');
+    assert.ok(sdkClientTrue instanceof ServerVercelProviderClient);
+    assert.ok(sdkClientTrue.agent instanceof SafeHttpsAgent);
+
+    // Enabled with '1'
+    process.env.SERVER_ENABLE_VERCEL_AI_SDK = '1';
+    assert.equal(isVercelAiSdkEnabled(), true);
+    const sdkClientOne = await resolveProviderClient(USER_OWNER, { db });
+    assert.ok(sdkClientOne instanceof ServerVercelProviderClient);
+
+    // Clean rollback with 'false'
+    process.env.SERVER_ENABLE_VERCEL_AI_SDK = 'false';
+    assert.equal(isVercelAiSdkEnabled(), false);
+    const rolledBackClient = await resolveProviderClient(USER_OWNER, { db });
+    assert.equal(rolledBackClient.constructor.name, 'ProviderClient');
+    assert.equal(rolledBackClient instanceof ServerVercelProviderClient, false);
+  });
+
+  await t.test('9. end-to-end executePlan & executeChoose with SERVER_ENABLE_VERCEL_AI_SDK="true" (BYOK, 401, SafeHttpsAgent binding, telemetry)', async () => {
+    process.env.SERVER_ENABLE_VERCEL_AI_SDK = 'true';
+    ServerVercelProviderClient.clearCache();
+
+    const origin = 'https://openrouter.ai/api/v1';
+    const rawApiKey = 'sk-or-v1-sdk-byok-key-999';
+    const encrypted = encryptSecret(rawApiKey, USER_OWNER, origin);
+
+    const userConfigs = {
+      [USER_OWNER]: {
+        user_id: USER_OWNER,
+        mode: 'portal',
+        provider: 'openrouter',
+        base_url: origin,
+        model_id: 'openai/gpt-4o-mini',
+      },
+    };
+    const userSecrets = {
+      [USER_OWNER]: {
+        user_id: USER_OWNER,
+        encrypted_api_key: encrypted.encrypted,
+        iv: encrypted.iv,
+        auth_tag: encrypted.authTag,
+        key_origin: origin,
+      },
+    };
+    const candidate = {
+      id: CANDIDATE_OWNED,
+      user_id: USER_OWNER,
+      full_name: 'Ada Lovelace',
+      current_city: 'London',
+      authorized_in_usa: true,
+      need_sponsorship_future: false,
+    };
+    const dbByok = createMockDb(userConfigs, userSecrets, { [CANDIDATE_OWNED]: candidate });
+
+    // A) executePlan with BYOK, SafeHttpsAgent socket binding verification, executableFills, and telemetry
+    let seenPlanAuth = null;
+    let seenPlanAgent = null;
+    let seenPlanResponseFormat = null;
+    const mockPlanFetch = async (_url, init) => {
+      seenPlanAuth = init.headers?.authorization || init.headers?.Authorization;
+      seenPlanAgent = init.agent;
+      const body = JSON.parse(init.body);
+      seenPlanResponseFormat = body.response_format;
+      return new Response(
+        JSON.stringify({
+          id: 'chatcmpl-sdk-plan',
+          choices: [
+            {
+              message: {
+                role: 'assistant',
+                content: JSON.stringify({
+                  fills: [
+                    {
+                      label: 'Full Name',
+                      fieldId: 'f_name',
+                      value: 'Ada Lovelace',
+                      action: 'fill',
+                      evidenceIds: ['forged.evidence'],
+                    },
+                    {
+                      label: 'City',
+                      value: 'London',
+                      action: 'fill',
+                    },
+                  ],
+                }),
+              },
+            },
+          ],
+          usage: { prompt_tokens: 60, completion_tokens: 25, total_tokens: 85 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    };
+
+    const planRes = await executePlan(
+      {
+        candidateId: CANDIDATE_OWNED,
+        fields: [
+          { id: 'f_name', label: 'Full Name', type: 'text' },
+          { label: 'City', type: 'text' },
+        ],
+      },
+      USER_OWNER,
+      { db: dbByok, fetchFn: mockPlanFetch }
+    );
+
+    assert.equal(planRes.ok, true);
+    assert.equal(seenPlanAuth, `Bearer ${rawApiKey}`);
+    assert.ok(seenPlanAgent instanceof SafeHttpsAgent, 'SafeHttpsAgent instance must reach fetch adapter');
+    assert.ok(seenPlanAgent.targetIp, 'SafeHttpsAgent must have resolved targetIp');
+    assert.equal(seenPlanAgent.hostname, 'openrouter.ai');
+    assert.equal(seenPlanResponseFormat?.type, 'json_schema');
+
+    // Verify SafeHttpsAgent socket binding preserves targetIp + SNI hostname
+    let boundNetOpts = null;
+    let boundTlsOpts = null;
+    const fakeRawSocket = { once() {}, on() {}, destroy() {} };
+    const fakeTlsSocket = { once() {}, on() {}, destroy() {} };
+    const testAgent = new SafeHttpsAgent(seenPlanAgent.targetIp, seenPlanAgent.hostname, 443, {
+      netConnect: (opts) => {
+        boundNetOpts = opts;
+        return fakeRawSocket;
+      },
+      tlsConnect: (opts) => {
+        boundTlsOpts = opts;
+        return fakeTlsSocket;
+      },
+    });
+    testAgent.createConnection({ host: 'evil.rebind.example' });
+    assert.equal(boundNetOpts.host, seenPlanAgent.targetIp);
+    assert.equal(boundNetOpts.port, 443);
+    assert.equal(boundTlsOpts.servername, 'openrouter.ai');
+
+    assert.equal(planRes.fills.length, 2);
+    assert.equal(planRes.executableFills.length, 1);
+    assert.equal(planRes.executableFills[0].fieldId, 'f_name');
+    const nameFill = planRes.fills.find((f) => f.label === 'Full Name');
+    assert.deepEqual(nameFill.evidenceIds, ['profile.name']);
+    assert.equal(planRes.telemetry?.usage?.promptTokens, 60);
+    assert.equal(planRes.telemetry?.usage?.completionTokens, 25);
+    assert.equal(planRes.telemetry?.usage?.totalTokens, 85);
+    assert.equal(typeof planRes.telemetry?.durationMs, 'number');
+
+    // B) executeChoose end-to-end with telemetry
+    ServerVercelProviderClient.clearCache();
+    let seenChooseAgent = null;
+    const mockChooseFetch = async (_url, init) => {
+      seenChooseAgent = init.agent;
+      return new Response(
+        JSON.stringify({
+          id: 'chatcmpl-sdk-choose',
+          choices: [
+            {
+              message: {
+                role: 'assistant',
+                content: JSON.stringify({
+                  choice: 'No',
+                  evidenceIds: ['forged.choice.evidence'],
+                  reason: 'Candidate does not need sponsorship',
+                }),
+              },
+            },
+          ],
+          usage: { prompt_tokens: 40, completion_tokens: 10, total_tokens: 50 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    };
+
+    const chooseRes = await executeChoose(
+      {
+        candidateId: CANDIDATE_OWNED,
+        question: { label: 'Will you now or in the future require visa sponsorship?' },
+        options: ['Yes', 'No'],
+      },
+      USER_OWNER,
+      { db: dbByok, fetchFn: mockChooseFetch }
+    );
+
+    assert.equal(chooseRes.ok, true);
+    assert.equal(chooseRes.choice, 'No');
+    assert.ok(seenChooseAgent instanceof SafeHttpsAgent);
+    assert.ok(chooseRes.evidenceIds.includes('profile.work_auth.need_sponsorship_future'));
+    assert.equal(chooseRes.telemetry?.usage?.promptTokens, 40);
+    assert.equal(chooseRes.telemetry?.usage?.completionTokens, 10);
+    assert.equal(chooseRes.telemetry?.usage?.totalTokens, 50);
+    assert.equal(typeof chooseRes.telemetry?.durationMs, 'number');
+
+    // C) BYOK 401 failure must not silently fall back
+    ServerVercelProviderClient.clearCache();
+    const mockFetch401 = async () =>
+      new Response(JSON.stringify({ error: { message: 'Invalid API key' } }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+    await assert.rejects(
+      async () =>
+        executePlan(
+          { candidateId: CANDIDATE_OWNED, fields: [{ id: 'f_name', label: 'Full Name', type: 'text' }] },
+          USER_OWNER,
+          { db: dbByok, fetchFn: mockFetch401 }
+        ),
+      (err) => {
+        assert.ok(err instanceof OrchestratorError);
+        assert.equal(err.status, 401);
+        assert.equal(err.code, 'AUTH_FAILED');
+        assert.equal(err.message, 'Custom provider authentication failed');
+        return true;
+      }
+    );
   });
 });

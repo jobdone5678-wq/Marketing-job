@@ -398,35 +398,41 @@ export class ServerVercelProviderClient extends ProviderClient {
 
   private getEffectiveFetch(): typeof fetch | undefined {
     if (this.agent) {
+      let parsedUrl: URL | undefined;
+      try {
+        parsedUrl = new URL(this.baseUrl);
+      } catch {
+        parsedUrl = undefined;
+      }
+      const urlProtocol: 'http:' | 'https:' = parsedUrl?.protocol === 'https:' ? 'https:' : 'http:';
+      const urlPort = parsedUrl
+        ? parsedUrl.port
+          ? parseInt(parsedUrl.port, 10)
+          : urlProtocol === 'https:'
+          ? 443
+          : 80
+        : 80;
+
       const safeAgentResult: SafeAgentResult =
-        typeof this.agent === 'object' && this.agent && 'targetIp' in this.agent
+        typeof this.agent === 'object' &&
+        this.agent !== null &&
+        'agent' in this.agent &&
+        'validatedUrl' in this.agent
           ? (this.agent as SafeAgentResult)
           : {
               agent: this.agent,
               validatedUrl: this.baseUrl,
-              targetIp: '',
-              hostname: (() => {
-                try {
-                  return new URL(this.baseUrl).hostname;
-                } catch {
-                  return 'localhost';
-                }
-              })(),
-              port: (() => {
-                try {
-                  const u = new URL(this.baseUrl);
-                  return u.port ? parseInt(u.port, 10) : u.protocol === 'https:' ? 443 : 80;
-                } catch {
-                  return 80;
-                }
-              })(),
-              protocol: (() => {
-                try {
-                  return new URL(this.baseUrl).protocol === 'https:' ? 'https:' : 'http:';
-                } catch {
-                  return 'http:';
-                }
-              })(),
+              targetIp: typeof this.agent.targetIp === 'string' ? this.agent.targetIp : '',
+              hostname:
+                typeof this.agent.hostname === 'string' && this.agent.hostname
+                  ? this.agent.hostname
+                  : parsedUrl?.hostname || 'localhost',
+              port: typeof this.agent.targetPort === 'number' ? this.agent.targetPort : urlPort,
+              protocol:
+                this.agent.protocol === 'https:' || this.agent.protocol === 'http:'
+                  ? this.agent.protocol
+                  : urlProtocol,
+              redirect: 'error',
             };
       return createSsrfSafeFetch(safeAgentResult, this.customFetch);
     }
