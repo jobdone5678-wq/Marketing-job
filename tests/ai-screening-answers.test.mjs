@@ -283,3 +283,66 @@ test('Pass 1 with aiAnswers = {} does not invoke readChoices() for combobox fiel
   assert.equal(pass2.filled[0].value, 'Yes');
   assert.equal(applied[0].value, 'Yes');
 });
+
+test('duplicate-label comboboxes disambiguate qid deterministically across Pass 1 and Pass 2 without leakage', async () => {
+  const dupPlans = [
+    { field: { key: 'c1', label: 'Country', kind: 'combobox' }, status: 'needs_review', reason: 'Requires AI.' },
+    { field: { key: 'c2', label: 'Country', kind: 'combobox' }, status: 'needs_review', reason: 'Requires AI.' },
+  ];
+  const readChoicesByKey = async (field) => {
+    if (field.key === 'c1') return [{ label: 'United States' }, { label: 'Mexico' }];
+    if (field.key === 'c2') return [{ label: 'Canada' }, { label: 'Germany' }];
+    return [];
+  };
+
+  // Pass 1 produces distinct deterministic qids and questionMeta entries
+  const pass1 = await engine(dupPlans, () => '', readChoicesByKey).api.fill(url, candidate, null, false, null, null, {});
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(pass1.questions)).map(q => q.id),
+    ['country::1', 'country::2'],
+  );
+  assert.equal(pass1.questionMeta['country::1'].fieldId, 'c1');
+  assert.equal(pass1.questionMeta['country::2'].fieldId, 'c2');
+
+  // Pass 2 with distinct answers fills each combobox with its own answer
+  const { api: apiBoth } = engine(dupPlans, () => '', readChoicesByKey);
+  const pass2Both = await apiBoth.fill(url, candidate, null, false, null, null, {
+    'country::1': 'United States',
+    'country::2': 'Canada',
+  });
+  assert.deepEqual(
+    pass2Both.filled.map(f => ({ key: f.key, value: f.value })),
+    [
+      { key: 'c1', value: 'United States' },
+      { key: 'c2', value: 'Canada' },
+    ],
+  );
+
+  // Single-answered duplicate-label combobox must NOT leak answer to its sibling
+  const { api: apiSingle } = engine(dupPlans, () => '', readChoicesByKey);
+  const pass2Single = await apiSingle.fill(url, candidate, null, false, null, null, {
+    'country::1': 'United States',
+  });
+  assert.deepEqual(
+    pass2Single.filled.map(f => ({ key: f.key, value: f.value })),
+    [{ key: 'c1', value: 'United States' }],
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(pass2Single.questions)).map(q => q.id),
+    ['country::2'],
+  );
+
+  // Even when sibling 1 is already filled in DOM during Pass 2, sibling 2 still gets occurrence #2 ('country::2')
+  const { api: apiPrefilled } = engine(
+    dupPlans,
+    (f) => (f.key === 'c1' ? 'United States' : ''),
+    readChoicesByKey,
+  );
+  const pass2Prefilled = await apiPrefilled.fill(url, candidate, null, false, null, null, {
+    'country::2': 'Canada',
+  });
+  assert.deepEqual(
+    pass2Prefilled.filled.map(f => ({ key: f.key, value: f.value })),
+    [{ key: 'c2', value: 'Canada' }],
+  );
+});

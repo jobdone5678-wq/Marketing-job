@@ -1047,7 +1047,7 @@ function isFatalAiError(err) {
   if (!err) return false;
   const status = err.status;
   if (status === 401 || status === 403 || status === 422 || status === 503) return true;
-  return /authentication failed|api key is required|not configured|image generation model/i.test(err.message || '');
+  return /authentication failed|api key is required|not configured|image generation model|\bHTTP (?:401|403|422|503)\b|\bunauthorized\b|\bplanner is disabled\b/i.test(err.message || '');
 }
 
 async function resolveActiveAiConfig(session) {
@@ -1310,7 +1310,6 @@ async function draftScreening(session, profile, tab, job, questions, scope, reus
     const labelMatchCounts = new Map();
 
     for (const deferredItem of deferredItems) {
-      if (scope) await checkScreeningContext(tab, session, profile.id, scope);
       const defFieldId = typeof deferredItem === 'object' && deferredItem !== null
         ? (deferredItem.fieldId || deferredItem.id || '')
         : '';
@@ -1319,65 +1318,70 @@ async function draftScreening(session, profile, tab, job, questions, scope, reus
         : String(deferredItem || '');
       const defNorm = normalizeQuestionLabel(defLabel);
 
-      let target = null;
-      if (defFieldId) {
-        target = eligible.find((q) => {
-          const qid = q.id || q.label;
-          if (Object.hasOwn(answers, qid) || processedDeferredQids.has(qid)) return false;
-          return (questionMeta?.[qid]?.fieldId || qid) === defFieldId;
-        });
-      }
-      if (!target && defNorm) {
-        target = eligible.find((q) => {
-          const qid = q.id || q.label;
-          if (Object.hasOwn(answers, qid) || processedDeferredQids.has(qid)) return false;
-          const isCombo = Boolean(questionMeta?.[qid]?.combo) || q.type === 'combobox';
-          return isCombo && normalizeQuestionLabel(q.label) === defNorm;
-        }) || eligible.find((q) => {
-          const qid = q.id || q.label;
-          if (Object.hasOwn(answers, qid) || processedDeferredQids.has(qid)) return false;
-          return normalizeQuestionLabel(q.label) === defNorm;
-        });
-      }
-      if (!target) continue;
+      while (true) {
+        let target = null;
+        if (defFieldId) {
+          target = eligible.find((q) => {
+            const qid = q.id || q.label;
+            if (Object.hasOwn(answers, qid) || processedDeferredQids.has(qid)) return false;
+            return (questionMeta?.[qid]?.fieldId || qid) === defFieldId;
+          });
+        }
+        if (!target && defNorm) {
+          target = eligible.find((q) => {
+            const qid = q.id || q.label;
+            if (Object.hasOwn(answers, qid) || processedDeferredQids.has(qid)) return false;
+            const isCombo = Boolean(questionMeta?.[qid]?.combo) || q.type === 'combobox';
+            return isCombo && normalizeQuestionLabel(q.label) === defNorm;
+          }) || eligible.find((q) => {
+            const qid = q.id || q.label;
+            if (Object.hasOwn(answers, qid) || processedDeferredQids.has(qid)) return false;
+            return normalizeQuestionLabel(q.label) === defNorm;
+          });
+        }
+        if (!target) break;
+        if (scope) await checkScreeningContext(tab, session, profile.id, scope);
 
-      const targetQid = target.id || target.label;
-      processedDeferredQids.add(targetQid);
-      const targetMeta = questionMeta?.[targetQid] || {};
-      const matchIndex = labelMatchCounts.get(defNorm) || 0;
-      labelMatchCounts.set(defNorm, matchIndex + 1);
+        const targetQid = target.id || target.label;
+        processedDeferredQids.add(targetQid);
+        const targetMeta = questionMeta?.[targetQid] || {};
+        const matchIndex = labelMatchCounts.get(defNorm) || 0;
+        labelMatchCounts.set(defNorm, matchIndex + 1);
 
-      const options = await readDeferredComboboxOptions(
-        tab,
-        scope,
-        targetMeta.fieldId || targetQid,
-        target.label,
-        matchIndex,
-        target.options,
-      );
-      if (!options.length) continue;
-
-      try {
-        const chooseRes = await router.choose(
-          {
-            id: targetMeta.fieldId || targetQid,
-            label: target.label,
-            type: target.type || 'combobox',
-            combo: true,
-            required: Boolean(targetMeta.required),
-          },
-          options,
-          { facts, candidateId: profile.id, answerBank: reusable },
-          planContext,
+        const options = await readDeferredComboboxOptions(
+          tab,
+          scope,
+          targetMeta.fieldId || targetQid,
+          target.label,
+          matchIndex,
+          target.options,
         );
-        if (chooseRes && typeof chooseRes.choice === 'string' && chooseRes.choice.trim()) {
-          answers[targetQid] = chooseRes.choice.trim();
+        if (options.length) {
+          try {
+            const chooseRes = await router.choose(
+              {
+                id: targetMeta.fieldId || targetQid,
+                label: target.label,
+                type: target.type || 'combobox',
+                combo: true,
+                required: Boolean(targetMeta.required),
+              },
+              options,
+              { facts, candidateId: profile.id, answerBank: reusable },
+              planContext,
+            );
+            if (chooseRes && typeof chooseRes.choice === 'string' && chooseRes.choice.trim()) {
+              answers[targetQid] = chooseRes.choice.trim();
+            }
+          } catch (err) {
+            errors.push(err instanceof Error ? err : new Error(String(err)));
+            if (isFatalAiError(err) && !Object.keys(answers).length) {
+              throw errors[0];
+            }
+          }
         }
-      } catch (err) {
-        errors.push(err instanceof Error ? err : new Error(String(err)));
-        if (isFatalAiError(err) && !Object.keys(answers).length) {
-          throw errors[0];
-        }
+
+        if (defFieldId) break;
       }
     }
   }
@@ -1516,6 +1520,7 @@ function aggregateAutofillResults(results) {
   const filledMap = new Map();
   const unfilledMap = new Map();
   const questionsMap = new Map();
+  const questionMeta = Object.create(null);
   const warnings = [];
   const unverified = [];
   let sumOfTotals = 0;
@@ -1551,6 +1556,14 @@ function aggregateAutofillResults(results) {
         const key = item.key || item.id || item.label;
         if (!questionsMap.has(key)) {
           questionsMap.set(key, item);
+        }
+      }
+    }
+
+    if (output.questionMeta && typeof output.questionMeta === 'object') {
+      for (const [metaKey, metaVal] of Object.entries(output.questionMeta)) {
+        if (!Object.hasOwn(questionMeta, metaKey)) {
+          questionMeta[metaKey] = metaVal;
         }
       }
     }
@@ -1596,6 +1609,7 @@ function aggregateAutofillResults(results) {
     filled,
     unfilled,
     questions,
+    questionMeta,
     warnings,
     unverified,
     total,
@@ -1635,6 +1649,7 @@ $('autofill').addEventListener('click', async () => {
   $('review-answers').disabled = true;
   $('answer-review').hidden = true;
   answerReview = null;
+  lastScreeningWarnings = [];
   $('results').hidden = true;
   notice('notice', 'Filling the application…');
   try {

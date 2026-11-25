@@ -107,7 +107,10 @@ export class AIRouter {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `${errorLabel} (HTTP ${res.status})`);
+      const error = new Error(err.error || `${errorLabel} (HTTP ${res.status})`);
+      error.status = res.status;
+      if (err && typeof err.code === 'string') error.code = err.code;
+      throw error;
     }
 
     return await res.json();
@@ -178,7 +181,7 @@ export class AIRouter {
     });
 
     const rawText = typeof completion?.text === 'string' ? completion.text.trim() : '';
-    const answer = rawText.replace(/^["']|["']$/g, '').trim();
+    const answer = rawText.replace(/^(["'])([\s\S]*)\1$/, '$2').trim();
     if (!answer) {
       throw new Error('AI provider returned an empty response.');
     }

@@ -362,14 +362,31 @@ test('POST returns 401 when portal BYOK secret is missing or decryption fails wi
   }
 });
 
-test('POST returns 502 when upstream model returns empty content', async () => {
-  const { call } = fixture({
-    upstreamContent: '',
-  });
-  const res = await call('POST', activeToken);
-  assert.equal(res.status, 502);
-  const body = await res.json();
-  assert.match(body.error, /empty response/i);
+test('POST returns 502 when upstream model returns empty content or only quotes', async () => {
+  for (const upstreamContent of ['', '""', "''", '  "  "  ']) {
+    const { call } = fixture({ upstreamContent });
+    const res = await call('POST', activeToken);
+    assert.equal(res.status, 502);
+    const body = await res.json();
+    assert.match(body.error, /empty response/i);
+  }
+});
+
+test('POST strips only paired outer quotes and preserves unbalanced quotes', async () => {
+  {
+    const { call } = fixture({ upstreamContent: '"I am excited about this role."' });
+    const res = await call('POST', activeToken);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.answer, 'I am excited about this role.');
+  }
+  {
+    const { call } = fixture({ upstreamContent: 'She said "hello"' });
+    const res = await call('POST', activeToken);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.answer, 'She said "hello"');
+  }
 });
 
 test('POST preserves /v1beta/openai base URL without appending /v1 and prefers AI_PROVIDER_DEFAULT_* env vars', async () => {

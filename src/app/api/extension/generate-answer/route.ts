@@ -364,7 +364,13 @@ Strict Rules:
       throw new CaptureError(`AI generation failed: ${err?.message || 'Please try again.'}`, 502);
     }
 
-    let answer = rawAnswer.replace(/^["']|["']$/g, '').trim();
+    let answer = rawAnswer.replace(/^(["'])([\s\S]*)\1$/, '$2').trim();
+    if (!answer) {
+      throw new CaptureError(
+        'AI provider returned an empty response. Increase token limit or switch from a reasoning-only model.',
+        502
+      );
+    }
     if (choiceMode) {
       const lower = answer.toLowerCase();
       const match =

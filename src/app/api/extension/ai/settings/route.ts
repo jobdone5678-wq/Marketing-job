@@ -149,10 +149,12 @@ export async function PUT(request: Request, options?: SettingsRouteOptions) {
     const nextVersion = existing ? currentVersion + 1 : (clientVersion ? clientVersion + 1 : 1);
 
     // API Key handling: retain existing if omitted or masked
+    const trimmedApiKey =
+      typeof incomingApiKey === 'string' ? incomingApiKey.trim() : incomingApiKey;
     const isNewKey =
-      typeof incomingApiKey === 'string' &&
-      incomingApiKey.trim() !== '' &&
-      !incomingApiKey.includes('••••');
+      typeof trimmedApiKey === 'string' &&
+      trimmedApiKey !== '' &&
+      !trimmedApiKey.includes('••••');
 
     const targetMode = input.mode || existing?.mode || 'server';
     const existingSecret = await getUserAiProviderSecret(userId, options?.db);
@@ -160,7 +162,7 @@ export async function PUT(request: Request, options?: SettingsRouteOptions) {
     if (
       targetMode === 'portal_byok' &&
       !isNewKey &&
-      (incomingApiKey === null || incomingApiKey === '' || !existingSecret?.encrypted_api_key)
+      (incomingApiKey === null || trimmedApiKey === '' || !existingSecret?.encrypted_api_key)
     ) {
       return Response.json(
         { ok: false, error: 'An API key is required for Portal Encrypted BYOK mode.' },
@@ -171,7 +173,7 @@ export async function PUT(request: Request, options?: SettingsRouteOptions) {
     if (isNewKey) {
       const targetBaseUrl = baseUrl || existing?.base_url || 'https://api.openai.com';
       const origin = getOriginFromBaseUrl(targetBaseUrl);
-      const payload = encryptSecret(incomingApiKey.trim(), userId, origin);
+      const payload = encryptSecret(trimmedApiKey, userId, origin);
 
       await saveUserAiProviderSecret(
         {
@@ -184,7 +186,7 @@ export async function PUT(request: Request, options?: SettingsRouteOptions) {
         },
         options?.db,
       );
-    } else if (incomingApiKey === null || incomingApiKey === '') {
+    } else if (incomingApiKey === null || trimmedApiKey === '') {
       await deleteUserAiProviderSecret(userId, options?.db);
     }
 

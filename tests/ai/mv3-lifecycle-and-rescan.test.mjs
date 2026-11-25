@@ -617,4 +617,201 @@ test('MV3 Lifecycle, Trusted Context Migration, Sender Validation & Dynamic Resc
     assert.equal(hD.apiCalls.filter((c) => c.path === 'generate-answer').length, 0);
     assert.equal(answersD.q_why, 'Direct prose answer');
   });
+
+  await t.test('11. End-to-end Pass 1 -> aggregateAutofillResults -> draftScreening (single deferred label) -> Pass 2 handles duplicate-label comboboxes', async () => {
+    const { runInNewContext } = await import('node:vm');
+    const panelJsPath = path.join(rootDir, 'jobright_extension/panel.js');
+    const panelJs = fs.readFileSync(panelJsPath, 'utf8');
+    const appJs = fs.readFileSync(applicationPath, 'utf8');
+    const plannerUrl = `file:///${path.join(rootDir, 'jobright_extension/core/ai/planner-bundle.js').replace(/\\/g, '/')}`;
+    const routerUrl = `file:///${aiRouterPath.replace(/\\/g, '/')}`;
+    const { buildVerifiedFacts, inferQuestionDescriptor } = await import(plannerUrl);
+    const { AIRouter } = await import(routerUrl);
+
+    const url = 'https://boards.greenhouse.io/acme/jobs/123/apply';
+    const candidate = {
+      id: 'cand-dup',
+      provenance_status: 'confirmed',
+      confirmed_facts: { full_name: 'Ada Lovelace', primary_skills: 'TypeScript' },
+    };
+
+    const dupFields = [
+      { key: 'field:0:country_home', label: 'Country', kind: 'combobox', element: { id: 'country_home' } },
+      { key: 'field:1:country_work', label: 'Country', kind: 'combobox', element: { id: 'country_work' } },
+    ];
+    const readChoicesCalls = [];
+    const buildApp = () => {
+      const sandbox = {
+        console,
+        crypto,
+        location: new URL(url),
+        document: { querySelectorAll: () => [], addEventListener() {} },
+        globalThis: null,
+        NextkinJobCapture: { read: () => ({ title: 'Engineer', company: 'Acme' }) },
+        NextkinForms: { discoverFields: () => dupFields, label: () => '' },
+        NextkinFieldMapping: {
+          resolveFact: () => null,
+          planFill: () => dupFields.map((field) => ({
+            field: { ...field },
+            status: 'needs_review',
+            reason: 'Requires AI.',
+          })),
+          buildValues: (c) => ({ full_name: c.full_name, primary_skills: c.primary_skills }),
+          isChoiceKind: (kind) => ['choice', 'radio', 'select', 'combobox'].includes(kind),
+          isMultiKind: (kind) => ['checkbox-group', 'multi-select', 'multi-combobox'].includes(kind),
+        },
+        NextkinFieldWriter: {
+          read: () => '',
+          readChoices: async (field) => {
+            readChoicesCalls.push(field.key);
+            if (field.key === 'field:0:country_home') return [{ label: 'United States' }, { label: 'Mexico' }];
+            if (field.key === 'field:1:country_work') return [{ label: 'Canada' }, { label: 'Germany' }];
+            return [];
+          },
+          applyFill: async (received) =>
+            received
+              .filter((p) => p.status === 'supported')
+              .map((p) => ({ field: p.field, writtenValue: p.value, ai: !!p.ai, learned: !!p.learned })),
+        },
+      };
+      sandbox.globalThis = sandbox;
+      runInNewContext(appJs, sandbox);
+      return sandbox.NextkinApplication;
+    };
+
+    // Pass 1
+    const pass1Raw = await buildApp().fill(url, candidate, null, false, null, null, {});
+    assert.equal(readChoicesCalls.length, 0);
+
+    // Aggregate via panel.js aggregateAutofillResults
+    const aggStart = panelJs.indexOf('function aggregateAutofillResults(');
+    const aggEnd = panelJs.indexOf('async function fillForm(');
+    assert.ok(aggStart !== -1 && aggEnd > aggStart);
+    const aggSandbox = {};
+    runInNewContext(panelJs.slice(aggStart, aggEnd) + '\n;this.aggregateAutofillResults = aggregateAutofillResults;', aggSandbox);
+    const aggregated = aggSandbox.aggregateAutofillResults([{ frameId: 0, result: pass1Raw }]);
+
+    assert.equal(aggregated.questions.length, 2);
+    assert.deepEqual(Object.keys(aggregated.questionMeta).sort(), ['country::1', 'country::2']);
+
+    // Run draftScreening where planner returns single Set-deduplicated deferred label ['Country']
+    const startIdx = panelJs.indexOf('async function mapConcurrent(');
+    const endIdx = panelJs.indexOf('function outsideApplicationPage(');
+    class MockRouter extends AIRouter {
+      async plan() {
+        return { fills: [], deferred: ['Country'], unmapped: [] };
+      }
+      async choose(q, options) {
+        if (q.id === 'field:0:country_home') return { choice: options.includes('United States') ? 'United States' : null };
+        if (q.id === 'field:1:country_work') return { choice: options.includes('Canada') ? 'Canada' : null };
+        return { choice: null };
+      }
+    }
+    const screenSandbox = {
+      console,
+      crypto,
+      Set,
+      Map,
+      Object,
+      Array,
+      Promise,
+      Error,
+      lastScreeningWarnings: [],
+      authFailed: () => false,
+      apiOrigin: (o) => o,
+      formTarget: (tab, frame) => ({ tabId: tab.id, frameIds: [frame.frameId] }),
+      checkScreeningContext: async () => {},
+      NextkinFieldMapping: { CONSEQUENTIAL_FACTS: new Set() },
+      chrome: {
+        storage: { session: { get: async () => ({ ai_provider_mode: 'server' }) } },
+        scripting: {
+          executeScript: async ({ args }) => {
+            const fid = args?.[0]?.fieldId;
+            if (fid === 'field:0:country_home') return [{ result: ['United States', 'Mexico'] }];
+            if (fid === 'field:1:country_work') return [{ result: ['Canada', 'Germany'] }];
+            return [{ result: [] }];
+          },
+        },
+      },
+      api: async () => ({ ok: true }),
+      loadAiModules: async () => ({ AIRouter: MockRouter, buildVerifiedFacts, inferQuestionDescriptor }),
+    };
+    runInNewContext(panelJs.slice(startIdx, endIdx), screenSandbox);
+    const drafts = await screenSandbox.draftScreening(
+      { origin: 'https://app.nextkinhr.com', token: 'tok' },
+      candidate,
+      { id: 1 },
+      { title: 'Engineer', company: 'Acme' },
+      aggregated.questions,
+      { frame: { frameId: 0, result: { url } } },
+      {},
+      aggregated.questionMeta,
+    );
+    assert.deepEqual({ ...drafts }, {
+      'country::1': 'United States',
+      'country::2': 'Canada',
+    });
+
+    // Pass 2 applies both distinct answers
+    const pass2 = await buildApp().fill(url, candidate, null, false, null, null, drafts);
+    assert.deepEqual(
+      pass2.filled.map((f) => ({ key: f.key, value: f.value })),
+      [
+        { key: 'field:0:country_home', value: 'United States' },
+        { key: 'field:1:country_work', value: 'Canada' },
+      ],
+    );
+  });
+
+  await t.test('12. AIRouter._postProxy attaches HTTP status/code, generateTextAnswer strips paired quotes, and isFatalAiError catches statusless errors', async () => {
+    const { runInNewContext } = await import('node:vm');
+    const routerUrl = `file:///${aiRouterPath.replace(/\\/g, '/')}`;
+    const { AIRouter } = await import(routerUrl);
+    const panelJs = fs.readFileSync(path.join(rootDir, 'jobright_extension/panel.js'), 'utf8');
+
+    // _postProxy status & code propagation
+    const proxyRouter = new AIRouter({
+      mode: 'server',
+      backendUrl: 'https://app.nextkinhr.com',
+      token: 'tok',
+      fetchFn: async () =>
+        new Response(JSON.stringify({ error: 'Unauthorized', code: 'AUTH_REQUIRED' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    });
+    await assert.rejects(
+      () => proxyRouter.plan([{ label: 'Name', type: 'text' }], new Map()),
+      (err) => err.status === 401 && err.code === 'AUTH_REQUIRED' && /Unauthorized/.test(err.message),
+    );
+
+    // generateTextAnswer paired quote stripping
+    const makeDirectRouter = (text) =>
+      new AIRouter({
+        mode: 'extension_byok',
+        config: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', apiKey: 'sk-test' },
+        clientFactory: () => ({ generateChatCompletion: async () => ({ text }) }),
+      });
+    assert.equal((await makeDirectRouter('"I build reliable systems."').generateTextAnswer('sys', 'usr')).answer, 'I build reliable systems.');
+    assert.equal((await makeDirectRouter('She said "hello"').generateTextAnswer('sys', 'usr')).answer, 'She said "hello"');
+    await assert.rejects(() => makeDirectRouter('""').generateTextAnswer('sys', 'usr'), /empty response/i);
+
+    // isFatalAiError regex fallback for statusless errors
+    const fatalStart = panelJs.indexOf('function isFatalAiError(');
+    const fatalEnd = panelJs.indexOf('async function resolveActiveAiConfig(');
+    const fatalSandbox = {};
+    runInNewContext(panelJs.slice(fatalStart, fatalEnd) + '\n;this.isFatalAiError = isFatalAiError;', fatalSandbox);
+    const { isFatalAiError } = fatalSandbox;
+    assert.equal(isFatalAiError(new Error('Unauthorized')), true);
+    assert.equal(isFatalAiError(new Error('Structured AI planner is disabled')), true);
+    assert.equal(isFatalAiError(new Error('Autofill planning proxy error (HTTP 401)')), true);
+    assert.equal(isFatalAiError(new Error('Autofill planning proxy error (HTTP 503)')), true);
+    assert.equal(isFatalAiError(new Error('Transient network timeout')), false);
+
+    // #autofill click handler resets lastScreeningWarnings on each run (e.g. when #ai-screening is unchecked)
+    const clickIdx = panelJs.indexOf("$('autofill').addEventListener('click'");
+    const tryIdx = panelJs.indexOf('try {', clickIdx);
+    const clickPreamble = panelJs.slice(clickIdx, tryIdx);
+    assert.ok(clickPreamble.includes('lastScreeningWarnings = [];'), '#autofill click handler must reset lastScreeningWarnings before running');
+  });
 });

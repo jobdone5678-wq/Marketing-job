@@ -428,7 +428,7 @@ test('AI Settings Sync & Test Connection Endpoints', async (t) => {
     );
     assert.equal(beforeSecret.rows.length, 1);
 
-    for (const emptyApiKey of [null, '']) {
+    for (const emptyApiKey of [null, '', '   ']) {
       const req = new Request('http://localhost/api/extension/ai/settings', {
         method: 'PUT',
         headers: {
