@@ -19,6 +19,7 @@ export interface PlanItem {
    * have their own "Email", and an ATS serves the application from its own frame
    * — so both narrowings travel with it.
    */
+  fieldId?: string;
   label: string;
   frame: number;
   form: number;
@@ -123,6 +124,7 @@ export function buildPlan(fields: FramedField[]): ApplyPlan {
     // cannot act on.
     .filter((f) => f.label.trim() !== '')
     .map((f) => ({
+      ...(f.fieldId ? { fieldId: f.fieldId } : {}),
       key: `${f.frame}:${f.index}`,
       label: f.label,
       required: f.required,

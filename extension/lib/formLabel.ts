@@ -198,3 +198,67 @@ export function textFromIds(doc: Document, ids: string | null): string {
     .filter(Boolean)
     .join(' ');
 }
+
+/**
+ * Best-effort placeholder text for a control without merging it into `label`.
+ */
+export function extractPlaceholder(el: Fillable): string {
+  const direct = collapse(el.getAttribute('placeholder'));
+  if (direct) return direct;
+  if (el instanceof HTMLButtonElement && el.hasAttribute('data-placeholder')) {
+    return collapse(el.textContent);
+  }
+  const container = el.parentElement;
+  if (container && container.querySelectorAll(namedControl).length <= 1) {
+    const placeholderNode = container.querySelector('[class*="placeholder"]');
+    const nodeText = collapse(placeholderNode?.textContent);
+    if (nodeText) return nodeText;
+  }
+  return '';
+}
+
+/**
+ * Best-effort enclosing section name (`<fieldset><legend>`, `<section>` heading,
+ * or preceding heading above the question row) distinct from `questionLabel`.
+ */
+export function extractSection(el: Fillable, questionLabel: string): string {
+  const normQuestion = normalizeLabel(questionLabel);
+  const accept = (raw: string): string | undefined => {
+    const text = collapse(raw);
+    if (!text || text.length > 160) return undefined;
+    if (normQuestion && normalizeLabel(text) === normQuestion) return undefined;
+    return text;
+  };
+
+  for (let node: Element | null = el.parentElement; node; node = node.parentElement) {
+    if (node.matches('body, html')) break;
+    if (node.matches('fieldset, section, [role="region"], [role="group"], [data-section]')) {
+      const aria =
+        textFromIds(el.ownerDocument, node.getAttribute('aria-labelledby')) ||
+        collapse(node.getAttribute('aria-label'));
+      const ariaSection = accept(aria);
+      if (ariaSection) return ariaSection;
+
+      const legend = Array.from(node.children).find((c) => c.tagName === 'LEGEND');
+      const legendSection = legend ? accept(labelText(legend)) : undefined;
+      if (legendSection) return legendSection;
+
+      const heading = Array.from(node.children).find((c) => c.matches('h1, h2, h3, h4, h5, h6, [role="heading"]'));
+      const headingSection = heading ? accept(labelText(heading)) : undefined;
+      if (headingSection) return headingSection;
+    }
+
+    let prev = node.previousElementSibling;
+    while (prev) {
+      if (prev.matches('h1, h2, h3, h4, h5, h6, [role="heading"], legend')) {
+        const headingSection = accept(labelText(prev));
+        if (headingSection) return headingSection;
+        break;
+      }
+      if (prev.matches(namedControl) || prev.querySelector(namedControl)) break;
+      prev = prev.previousElementSibling;
+    }
+    if (node.matches('form, [role="dialog"]')) break;
+  }
+  return '';
+}

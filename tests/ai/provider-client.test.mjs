@@ -344,3 +344,205 @@ test('ProviderClient: URL resolution and headers', async (t) => {
     assert.equal(capturedHeaders['Authorization'], undefined);
   });
 });
+
+test('ProviderClient: PC-01..PC-06 telemetry, schema enforcement, error codes, completion validation, retries, and redaction', async (t) => {
+  await t.test('PC-01: populates usage telemetry without inventing counts and always sets durationMs and status OK', async () => {
+    const customFetch = async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ fills: [] }) } }],
+          usage: { prompt_tokens: 42, completion_tokens: 11 }, // total_tokens intentionally omitted
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+
+    const client = new ProviderClient({
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'sk-test-secret-123456789',
+      model: 'gpt-4o-mini',
+      fetchFn: customFetch,
+    });
+
+    const result = await client.generateChatCompletion([{ role: 'user', content: 'Plan' }], {
+      responseFormat: 'json_prompt',
+      schemaName: 'plan',
+    });
+
+    assert.equal(result.status, 'OK');
+    assert.equal(result.finishReason, 'stop');
+    assert.equal(typeof result.durationMs, 'number');
+    assert.ok(result.durationMs >= 0);
+    assert.equal(result.usage?.inputTokens, 42);
+    assert.equal(result.usage?.promptTokens, 42);
+    assert.equal(result.usage?.outputTokens, 11);
+    assert.equal(result.usage?.completionTokens, 11);
+    assert.equal(result.usage?.totalTokens, undefined);
+  });
+
+  await t.test('PC-02: sends provider-side json_schema when supported and enforces runtime Zod validation on plan/choose', async () => {
+    let seenResponseFormat;
+    const validClient = new ProviderClient({
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'sk-test-123456789',
+      model: 'gpt-4o-mini',
+      fetchFn: async (_url, init) => {
+        seenResponseFormat = JSON.parse(init.body).response_format;
+        return new Response(
+          JSON.stringify({
+            choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ choice: 'Yes' }) } }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      },
+    });
+
+    const okRes = await validClient.generateChatCompletion([{ role: 'user', content: 'Choose' }], {
+      schemaName: 'choose',
+    });
+    assert.equal(seenResponseFormat?.type, 'json_schema');
+    assert.equal(seenResponseFormat?.json_schema?.name, 'choose');
+    assert.equal(okRes.rawJson?.choice, 'Yes');
+
+    // Runtime Zod validation runs even with supportsStructuredOutputs=false and responseFormat='json_prompt'
+    const invalidSchemaClient = new ProviderClient({
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o-mini',
+      supportsStructuredOutputs: false,
+      supportsJsonMode: false,
+      fetchFn: async () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ wrongField: 123 }) } }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+    });
+
+    await assert.rejects(
+      () =>
+        invalidSchemaClient.generateChatCompletion([{ role: 'user', content: 'Plan' }], {
+          responseFormat: 'json_prompt',
+          schemaName: 'plan',
+        }),
+      (err) =>
+        err instanceof ProviderError &&
+        err.status === 502 &&
+        err.code === 'SCHEMA_VALIDATION_ERROR' &&
+        err.statusCode === 'INVALID_RESPONSE',
+    );
+  });
+
+  await t.test('PC-04: separates ABORTED, TIMEOUT, RATE_LIMITED, NETWORK_ERROR, and INVALID_RESPONSE', async () => {
+    // External AbortSignal -> ABORTED (not TIMEOUT)
+    const abortController = new AbortController();
+    const abortClient = new ProviderClient({
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o-mini',
+      timeoutMs: 5000,
+      fetchFn: async (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => {
+            const e = new Error('Aborted');
+            e.name = 'AbortError';
+            reject(e);
+          });
+          setTimeout(() => abortController.abort(), 15);
+        }),
+    });
+    await assert.rejects(
+      () => abortClient.generateChatCompletion([{ role: 'user', content: 'Hi' }], { signal: abortController.signal }),
+      (err) => err instanceof ProviderError && err.status === 499 && err.code === 'ABORTED' && err.statusCode === 'ABORTED',
+    );
+
+    // HTTP 429 -> RATE_LIMITED
+    const rateClient = new ProviderClient({
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o-mini',
+      fetchFn: async () => new Response(JSON.stringify({ error: 'rate limit' }), { status: 429 }),
+    });
+    await assert.rejects(
+      () => rateClient.generateChatCompletion([{ role: 'user', content: 'Hi' }]),
+      (err) => err instanceof ProviderError && err.status === 429 && err.statusCode === 'RATE_LIMITED',
+    );
+
+    // Network socket failure -> NETWORK_ERROR
+    const netClient = new ProviderClient({
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o-mini',
+      fetchFn: async () => {
+        throw new TypeError('ECONNRESET');
+      },
+    });
+    await assert.rejects(
+      () => netClient.generateChatCompletion([{ role: 'user', content: 'Hi' }]),
+      (err) => err instanceof ProviderError && err.code === 'NETWORK_ERROR' && err.statusCode === 'NETWORK_ERROR',
+    );
+  });
+
+  await t.test('PC-05: rejects missing choice, non-string content, finish_reason length, and model refusal', async () => {
+    const cases = [
+      { name: 'missing choice', body: { choices: [] }, expectedCode: 'INVALID_RESPONSE' },
+      { name: 'non-string content', body: { choices: [{ message: { content: null } }] }, expectedCode: 'INVALID_RESPONSE' },
+      { name: 'truncated length', body: { choices: [{ finish_reason: 'length', message: { content: '{"fills":[' } }] }, expectedCode: 'TRUNCATED_RESPONSE' },
+      { name: 'refusal field', body: { choices: [{ message: { content: '', refusal: 'Cannot answer' } }] }, expectedCode: 'MODEL_REFUSAL' },
+      { name: 'content_filter', body: { choices: [{ finish_reason: 'content_filter', message: { content: '' } }] }, expectedCode: 'MODEL_REFUSAL' },
+    ];
+
+    for (const c of cases) {
+      const client = new ProviderClient({
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-4o-mini',
+        fetchFn: async () =>
+          new Response(JSON.stringify(c.body), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+      });
+
+      await assert.rejects(
+        () => client.generateChatCompletion([{ role: 'user', content: 'Plan' }], { schemaName: 'plan' }),
+        (err) =>
+          err instanceof ProviderError &&
+          err.status === 502 &&
+          err.code === c.expectedCode &&
+          err.statusCode === 'INVALID_RESPONSE',
+        `Expected INVALID_RESPONSE for ${c.name}`,
+      );
+    }
+  });
+
+  await t.test('PC-03 & PC-06: bounded transient retries and sensitive-data redaction in ProviderError', async () => {
+    let attempts = 0;
+    const retryClient = new ProviderClient({
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o-mini',
+      fetchFn: async () => {
+        attempts++;
+        if (attempts < 3) {
+          return new Response(JSON.stringify({ error: 'Too many requests' }), { status: 429 });
+        }
+        return new Response(
+          JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ fills: [] }) } }] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      },
+    });
+
+    const res = await retryClient.generateChatCompletion([{ role: 'user', content: 'Plan' }], {
+      schemaName: 'plan',
+      maxRetries: 2,
+      retryBaseDelayMs: 1,
+    });
+    assert.equal(attempts, 3);
+    assert.deepEqual(res.rawJson, { fills: [] });
+
+    // Sensitive data redaction
+    const err = new ProviderError(
+      'Failed with Bearer secret-token-123 sk-proj-abcdef123456 email candidate@example.com ssn 123-45-6789',
+      500,
+    );
+    assert.ok(!err.message.includes('secret-token-123'));
+    assert.ok(!err.message.includes('sk-proj-abcdef123456'));
+    assert.ok(!err.message.includes('candidate@example.com'));
+    assert.ok(!err.message.includes('123-45-6789'));
+    assert.match(err.message, /\[REDACTED\]/);
+    assert.match(err.message, /\[REDACTED_EMAIL\]/);
+  });
+});

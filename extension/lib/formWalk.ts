@@ -11,7 +11,7 @@ export interface WalkHooks {
   /** The walk wrote into the page's form. */
   wrote(): void;
   /** A question was answered; `frame` and `form` narrow it when the caller knows them. */
-  answered(label: string, frame?: number, form?: number): void;
+  answered(label: string, frame?: number, form?: number, fieldId?: string): void;
 }
 
 /** How long each filled question stays in view before the walk moves on. It is
@@ -36,6 +36,10 @@ export async function walkFills(fills: LabelFill[], hooks: WalkHooks, target?: A
     // runs out and when Stop has been pressed.
     for (let fill = nextStep(walk); fill !== null; fill = nextStep(walk)) {
       if (hooks.stopped()) return stopWalk(walk);
+      if (fill.requiresReview) {
+        walk = skipStep(walk, fill);
+        continue;
+      }
       hooks.filling(fill.label);
       const applied = (await browser.runtime.sendMessage({
         kind: 'FILL_BY_LABEL',
@@ -50,7 +54,7 @@ export async function walkFills(fills: LabelFill[], hooks: WalkHooks, target?: A
         // Ticked off from what was just written, not from a fresh read: the
         // page's own change notice is debounced, so re-reading here would leave
         // the counter a step behind the value on screen.
-        hooks.answered(fill.label, fill.frame, fill.form);
+        hooks.answered(fill.label, fill.frame, fill.form, fill.fieldId);
       } else {
         walk = skipStep(walk, fill);
       }

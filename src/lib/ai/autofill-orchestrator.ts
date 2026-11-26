@@ -14,10 +14,22 @@ import { isVercelAiSdkEnabled, resolveDefaultServerAiConfig } from './server-ai-
 import { decryptSecret } from './encryption';
 import { createSafeAgent, type DnsLookupFn } from './ssrf-guard';
 import { createSsrfSafeFetch } from './ssrf-fetch-adapter';
-import { ProviderClient, ProviderError, type TokenUsageTelemetry } from './provider-client';
+import {
+  ProviderClient,
+  ProviderError,
+  redactSensitiveText,
+  type TokenUsageTelemetry,
+} from './provider-client';
 import { ServerVercelProviderClient } from './server-provider-client';
 import { buildVerifiedFacts } from './verified-facts';
-import { planFormBatch, type Field, type Fill, type FormContext, type PlanResult } from './planner';
+import {
+  planFormBatch,
+  type Field,
+  type Fill,
+  type FormContext,
+  type PlanResult,
+  type UnresolvedDiagnostic,
+} from './planner';
 import { chooseComboboxOption } from './chooser';
 import { isBlockedAutofillField } from './autofill-field-safety';
 import { isUnreviewedResume } from '../candidate/confirmed-facts';
@@ -63,6 +75,7 @@ export interface PlanApiResponse {
   fills?: Fill[];
   executableFills?: Fill[];
   unmapped?: string[];
+  unresolved?: UnresolvedDiagnostic[];
   deferred?: string[];
   deferredFieldIds?: string[];
   deferredPlans?: PlanResult['deferredPlans'];
@@ -92,19 +105,35 @@ export interface OrchestratorOptions {
   fetchFn?: typeof fetch;
   dnsLookup?: DnsLookupFn;
   rateLimitRetryDelaysMs?: number[];
+  signal?: AbortSignal;
+  globalDeadlineMs?: number;
 }
 
 const DEFAULT_RATE_LIMIT_RETRY_DELAYS_MS = [1500, 2500];
+const DEFAULT_GLOBAL_DEADLINE_MS = 50_000;
 
 function isUpstreamTransientError(err: unknown): err is ProviderError {
   return (
     err instanceof ProviderError &&
-    (err.status === 429 || err.status === 503 || err.code === 'RATE_LIMIT')
+    (err.status === 429 ||
+      err.status === 503 ||
+      err.code === 'RATE_LIMIT' ||
+      err.statusCode === 'RATE_LIMITED' ||
+      err.statusCode === 'NETWORK_ERROR') &&
+    err.status !== 401 &&
+    err.status !== 403 &&
+    err.status !== 404 &&
+    err.status !== 400 &&
+    err.code !== 'REDIRECT_BLOCKED' &&
+    err.code !== 'SSRF_BLOCKED'
   );
 }
 
 function isUpstreamRateLimitError(err: unknown): err is ProviderError {
-  return err instanceof ProviderError && (err.status === 429 || err.code === 'RATE_LIMIT');
+  return (
+    err instanceof ProviderError &&
+    (err.status === 429 || err.code === 'RATE_LIMIT' || err.statusCode === 'RATE_LIMITED')
+  );
 }
 
 function isUpstreamUnavailableError(err: unknown): err is ProviderError {
@@ -115,16 +144,28 @@ export async function withUpstreamTransientRetry<T>(
   run: () => Promise<T>,
   delaysMs: number[] = DEFAULT_RATE_LIMIT_RETRY_DELAYS_MS,
   signal?: AbortSignal,
+  deadlineAt?: number,
 ): Promise<T> {
   let attempt = 0;
   while (true) {
+    if (signal?.aborted) {
+      throw new ProviderError('Request was aborted', 499, 'ABORTED', undefined, 'ABORTED');
+    }
+    if (deadlineAt !== undefined && Date.now() >= deadlineAt) {
+      throw new ProviderError('Autofill global deadline exceeded', 504, 'TIMEOUT', undefined, 'TIMEOUT');
+    }
     try {
       return await run();
     } catch (err) {
       if (!isUpstreamTransientError(err) || attempt >= delaysMs.length || signal?.aborted) {
         throw err;
       }
-      const delay = Math.max(0, delaysMs[attempt] ?? 0);
+      const rawDelay = Math.max(0, delaysMs[attempt] ?? 0);
+      const remaining = deadlineAt !== undefined ? deadlineAt - Date.now() : Infinity;
+      if (remaining <= 0) {
+        throw new ProviderError('Autofill global deadline exceeded', 504, 'TIMEOUT', undefined, 'TIMEOUT');
+      }
+      const delay = Math.min(rawDelay, remaining);
       attempt += 1;
       if (delay > 0) {
         await delayTimer(delay, undefined, { signal });
@@ -225,7 +266,14 @@ async function loadVerifiedFacts(actorId: string, candidate: Parameters<typeof b
   }));
   if (skills.size) {
     const id = 'experience_bank.skills';
-    facts.set(id, { id, value: [...skills], type: 'string[]', category: 'skill', source: 'experience_bank' });
+    facts.set(id, {
+      id,
+      value: [...skills],
+      type: 'string[]',
+      category: 'skill',
+      source: 'experience_bank',
+      provenance: 'user_confirmed',
+    });
   }
   return facts;
 }
@@ -413,12 +461,30 @@ export async function executePlan(
     throw new OrchestratorError('Save a confirmed candidate profile before using AI autofill.', 422);
   }
 
+  const deadlineAt =
+    options?.globalDeadlineMs !== undefined
+      ? Date.now() + Math.max(1, options.globalDeadlineMs)
+      : Date.now() + DEFAULT_GLOBAL_DEADLINE_MS;
+
   try {
     const fields = (req.fields || []).filter((field) => field && !isBlockedAutofillField(field));
     const facts = await loadVerifiedFacts(actorId, candidate, fields, db);
-    const planResult = await withUpstreamTransientRetry(
-      () => planFormBatch(fields, facts, () => resolveProviderClient(actorId, options), req.context),
-      options?.rateLimitRetryDelaysMs
+    const planResult = await planFormBatch(
+      fields,
+      facts,
+      () => resolveProviderClient(actorId, options),
+      {
+        ...req.context,
+        signal: options?.signal ?? req.context?.signal,
+        deadlineAt,
+        runWithRetry: (fn) =>
+          withUpstreamTransientRetry(
+            fn,
+            options?.rateLimitRetryDelaysMs,
+            options?.signal ?? req.context?.signal,
+            deadlineAt,
+          ),
+      },
     );
     return {
       ok: true,
@@ -426,38 +492,46 @@ export async function executePlan(
       fills: planResult.fills,
       executableFills: planResult.executableFills,
       unmapped: planResult.unmapped,
+      unresolved: planResult.unresolved,
       deferred: planResult.deferred,
       deferredFieldIds: planResult.deferredFieldIds,
       deferredPlans: planResult.deferredPlans,
       telemetry: planResult.telemetry,
     };
   } catch (err: any) {
-    if (
-      err instanceof ProviderError &&
-      (err.status === 401 || err.code === 'AUTH_FAILED')
-    ) {
-      throw new OrchestratorError(
-        'Custom provider authentication failed',
-        401,
-        'AUTH_FAILED'
-      );
-    }
-    if (isUpstreamRateLimitError(err)) {
-      throw new OrchestratorError(
-        'AI provider rate-limited this request (HTTP 429). Wait a moment or switch models in AI Provider Settings.',
-        429,
-        'UPSTREAM_RATE_LIMITED'
-      );
-    }
-    if (isUpstreamUnavailableError(err)) {
-      throw new OrchestratorError(
-        'AI provider returned HTTP 503 (Service Unavailable). Check your AI provider key, model, or retry shortly.',
-        503,
-        'UPSTREAM_UNAVAILABLE'
-      );
-    }
-    throw err;
+    throw mapOrchestratorProviderError(err);
   }
+}
+
+function mapOrchestratorProviderError(err: unknown): unknown {
+  if (!(err instanceof ProviderError)) return err;
+  if (err.status === 401 || err.code === 'AUTH_FAILED') {
+    return new OrchestratorError('Custom provider authentication failed', 401, 'AUTH_FAILED');
+  }
+  if (err.status === 429 || err.code === 'RATE_LIMIT' || err.statusCode === 'RATE_LIMITED') {
+    return new OrchestratorError(
+      'AI provider rate-limited this request (HTTP 429). Wait a moment or switch models in AI Provider Settings.',
+      429,
+      'UPSTREAM_RATE_LIMITED',
+    );
+  }
+  if (err.status === 503) {
+    return new OrchestratorError(
+      'AI provider returned HTTP 503 (Service Unavailable). Check your AI provider key, model, or retry shortly.',
+      503,
+      'UPSTREAM_UNAVAILABLE',
+    );
+  }
+  if (err.statusCode === 'ABORTED') {
+    return new OrchestratorError('Autofill request was aborted', 499, 'ABORTED');
+  }
+  if (err.statusCode === 'TIMEOUT') {
+    return new OrchestratorError('Autofill request timed out', 504, 'TIMEOUT');
+  }
+  if (err.statusCode === 'INVALID_RESPONSE') {
+    return new OrchestratorError(redactSensitiveText(err.message), 502, err.code || 'INVALID_RESPONSE');
+  }
+  return err;
 }
 
 /**
@@ -500,6 +574,11 @@ export async function executeChoose(
     throw new OrchestratorError('Save a confirmed candidate profile before using AI autofill.', 422);
   }
 
+  const deadlineAt =
+    options?.globalDeadlineMs !== undefined
+      ? Date.now() + Math.max(1, options.globalDeadlineMs)
+      : Date.now() + DEFAULT_GLOBAL_DEADLINE_MS;
+
   try {
     const facts = await loadVerifiedFacts(actorId, candidate, [req.question], db);
     const jevKey = process.env.TYPESAFE_API_KEY?.trim();
@@ -519,7 +598,9 @@ export async function executeChoose(
           } : undefined,
           req.context,
         ),
-      options?.rateLimitRetryDelaysMs
+      options?.rateLimitRetryDelaysMs,
+      options?.signal ?? req.context?.signal,
+      deadlineAt,
     );
     return {
       ok: true,
@@ -529,30 +610,6 @@ export async function executeChoose(
       telemetry: chooseResult.telemetry,
     };
   } catch (err: any) {
-    if (
-      err instanceof ProviderError &&
-      (err.status === 401 || err.code === 'AUTH_FAILED')
-    ) {
-      throw new OrchestratorError(
-        'Custom provider authentication failed',
-        401,
-        'AUTH_FAILED'
-      );
-    }
-    if (isUpstreamRateLimitError(err)) {
-      throw new OrchestratorError(
-        'AI provider rate-limited this request (HTTP 429). Wait a moment or switch models in AI Provider Settings.',
-        429,
-        'UPSTREAM_RATE_LIMITED'
-      );
-    }
-    if (isUpstreamUnavailableError(err)) {
-      throw new OrchestratorError(
-        'AI provider returned HTTP 503 (Service Unavailable). Check your AI provider key, model, or retry shortly.',
-        503,
-        'UPSTREAM_UNAVAILABLE'
-      );
-    }
-    throw err;
+    throw mapOrchestratorProviderError(err);
   }
 }

@@ -10,12 +10,30 @@
  */
 
 import { collapse, COMBO_TRIGGER, comboOptions, displayedValues, isComboWidget, isChoicePlaceholder, isOnScreen } from './comboWidget';
-import type { FieldTag, FormField, LabelFill, FillOutcome, FillStatus, Upload, WidgetType } from './protocol';
+import type { FieldTag, FormField, LabelFill, FillOutcome, FillStatus, OptionsState, Upload, WidgetType } from './protocol';
 import type { AutofillProfile } from './freehire';
 import { easyApplyDialog, easyApplyFieldError, isStoredResumeChoice } from './easyApply';
-import { choiceType, extractHelperText, extractLabel, precedingPrompt, textFromIds } from './formLabel';
+import { choiceType, extractHelperText, extractLabel, extractPlaceholder, extractSection, precedingPrompt, textFromIds } from './formLabel';
 import { demographicKey, isCommunitySelfIdQuestion } from '../../src/lib/profile/demographic-preferences';
-import { binaryChoice, formatAuthorizedCountries, matchChoice, matchFieldKey, normalizeLabel } from './fieldKeys';
+import { asksVisaSponsorship, binaryChoice, formatAuthorizedCountries, matchChoice, matchFieldKey, normalizeLabel, workAuthorizationCountry } from './fieldKeys';
+
+const userEditedControls = new WeakSet<Element>();
+let snapshotSeq = 0;
+
+/** Marks a DOM control as edited by the user so autofill will not overwrite it. */
+export function markUserEdited(el: Element): void {
+  userEditedControls.add(el);
+}
+
+/** Clears the user-edited flag on a DOM control (e.g. when emptied by the user). */
+export function clearUserEdited(el: Element): void {
+  userEditedControls.delete(el);
+}
+
+/** Returns true when a DOM control was marked as user-edited. */
+export function isUserEdited(el: Element): boolean {
+  return userEditedControls.has(el);
+}
 
 export type Fillable = HTMLElement;
 const CHOICES = 'input[type="radio"], input[type="checkbox"], [role="radio"], [role="checkbox"]';
@@ -375,7 +393,85 @@ function isHidden(el: Fillable): boolean {
 /** Serialises the page's form into indexed FormFields. Pure over the document. */
 export function extractForm(doc: Document): FormField[] {
   const forms = Array.from(doc.querySelectorAll('form'));
-  return collectQuestions(doc).map((q, i) => describeQuestion(q, i, forms));
+  const snapshotId = `snap_${++snapshotSeq}`;
+  const seenFieldIds = new Map<string, number>();
+  const questions = collectQuestions(doc);
+  const fields = questions.map((q, i) => {
+    const field = describeQuestion(q, i, forms);
+    field.snapshotId = snapshotId;
+    field.fieldId = assignUniqueFieldId(q, field, seenFieldIds);
+    return field;
+  });
+  annotateParentFieldIds(questions, fields);
+  return fields;
+}
+
+function assignUniqueFieldId(
+  question: Question,
+  field: FormField,
+  seen: Map<string, number>,
+): string {
+  const [el] = question.controls;
+  const raw =
+    el.id.trim() ||
+    el.getAttribute('name')?.trim() ||
+    normalizeLabel(field.label).replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40) ||
+    `q${field.index}`;
+  const base = `f${field.form}:${raw}`;
+  const count = (seen.get(base) ?? 0) + 1;
+  seen.set(base, count);
+  return count === 1 ? base : `${base}#${count}`;
+}
+
+function annotateParentFieldIds(questions: Question[], fields: FormField[]): void {
+  const domIdToFieldId = new Map<string, string>();
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    const f = fields[i];
+    if (!q || !f?.fieldId) continue;
+    for (const c of q.controls) {
+      if (c.id.trim()) domIdToFieldId.set(c.id.trim(), f.fieldId);
+    }
+  }
+
+  for (let i = 0; i < fields.length; i++) {
+    const field = fields[i];
+    const question = questions[i];
+    if (!field || !question || !field.fieldId) continue;
+    const parents = new Set<string>();
+    const [el] = question.controls;
+    const explicitAttr = el.getAttribute('data-parent-field-id') ?? el.getAttribute('data-depends-on') ?? '';
+    for (const ref of explicitAttr.split(/[\s,]+/).filter(Boolean)) {
+      const mapped = domIdToFieldId.get(ref) ?? fields.find((cand) => cand.fieldId === ref)?.fieldId;
+      if (mapped && mapped !== field.fieldId) parents.add(mapped);
+    }
+
+    const isLocationDependent =
+      asksVisaSponsorship(field.label) ||
+      Boolean(workAuthorizationCountry(field.label)) ||
+      /\b(?:this location|this country|selected location)\b/i.test(field.label);
+    if (isLocationDependent) {
+      for (let j = i - 1; j >= 0; j--) {
+        const prev = fields[j];
+        if (!prev?.fieldId || prev.form !== field.form) continue;
+        if ((prev.section ?? '') !== (field.section ?? '')) continue;
+        const prevKey = matchFieldKey(prev.label, prev);
+        if (
+          prevKey === 'intendedWorkCountry' ||
+          prevKey === 'country' ||
+          prevKey === 'location' ||
+          /\b(?:which country|work location|intend to work from)\b/i.test(prev.label)
+        ) {
+          parents.add(prev.fieldId);
+          break;
+        }
+      }
+    }
+
+    if (parents.size > 0) {
+      field.parentFieldIds = [...parents];
+    }
+  }
 }
 
 /**
@@ -419,6 +515,14 @@ export function formIndex(el: Fillable, forms: HTMLFormElement[]): number {
   return owner ? forms.indexOf(owner) : -1;
 }
 
+function resolveOptionsState(widget: WidgetType, options: string[] | undefined): OptionsState {
+  if (widget === 'combobox') return options?.length ? 'loaded' : 'deferred';
+  if (widget === 'select' || widget === 'radio' || widget === 'checkbox_group' || widget === 'boolean_buttons') {
+    return options?.length ? 'loaded' : 'empty';
+  }
+  return 'unknown';
+}
+
 function describeQuestion({ label, controls, helperText, widgetType }: Question, index: number, forms: HTMLFormElement[]): FormField {
   const [el] = controls;
   const resolvedWidget = widgetType ?? inferWidgetType(controls);
@@ -440,9 +544,14 @@ function describeQuestion({ label, controls, helperText, widgetType }: Question,
     required: controls.some((c) => ('required' in c && c.required) || c.getAttribute('aria-required') === 'true') || /\*\s*$/.test(label),
     value: 'value' in el && typeof el.value === 'string' && !booleanButtons ? el.value : '',
     combo: isComboWidget(el),
+    userEdited: controls.some(isUserEdited),
   };
   const resolvedHelper = helperText ?? extractHelperText(el, label);
   if (resolvedHelper) field.helperText = resolvedHelper;
+  const placeholder = extractPlaceholder(el);
+  if (placeholder) field.placeholder = placeholder;
+  const section = extractSection(el, label);
+  if (section) field.section = section;
   const invalid = fieldError(el);
   if (invalid) field.invalid = invalid;
 
@@ -481,6 +590,8 @@ function describeQuestion({ label, controls, helperText, widgetType }: Question,
     // The widget's input is empty even after a commit; the answer is what it displays.
     field.value = displayedValues(el).join(', ');
   }
+  field.currentValue = field.value;
+  field.optionsState = resolveOptionsState(resolvedWidget, field.options);
   return field;
 }
 
@@ -489,25 +600,129 @@ function isSelectableOption(option: HTMLOptionElement): boolean {
     !isChoicePlaceholder(collapse(option.textContent));
 }
 
+function verifyWrittenValue(
+  after: FormField,
+  expectedAnswer: string,
+  choices?: string[],
+): { ok: boolean; verifiedValue: string; error?: string } {
+  const observed = after.value;
+  if (choices?.length) {
+    const ok = observed.trim() !== '';
+    return ok
+      ? { ok: true, verifiedValue: observed }
+      : { ok: false, verifiedValue: observed, error: 'Selected choices were not retained in DOM' };
+  }
+  if (after.widgetType === 'checkbox') {
+    const want = binaryChoice(expectedAnswer);
+    if (want === true) {
+      return observed === 'Yes'
+        ? { ok: true, verifiedValue: observed }
+        : { ok: false, verifiedValue: observed, error: 'Checkbox did not remain checked' };
+    }
+    if (want === false) {
+      return observed === ''
+        ? { ok: true, verifiedValue: observed }
+        : { ok: false, verifiedValue: observed, error: 'Checkbox did not remain unchecked' };
+    }
+  }
+  if (expectedAnswer.trim() && observed.trim() === '') {
+    return { ok: false, verifiedValue: observed, error: 'Control value remained empty after write' };
+  }
+  if (after.widgetType === 'text' || after.widgetType === 'textarea') {
+    if (observed.trim() !== expectedAnswer.trim()) {
+      return {
+        ok: false,
+        verifiedValue: observed,
+        error: `DOM value mismatch: expected "${expectedAnswer.trim()}", got "${observed.trim()}"`,
+      };
+    }
+  }
+  return { ok: true, verifiedValue: observed };
+}
+
 export function fillByLabel(doc: Document, fills: LabelFill[]): FillOutcome[] {
   const questions = collectQuestions(doc);
   const forms = Array.from(doc.querySelectorAll('form'));
   const unfillable = unfillableLabels(doc);
-  return fills.map(({ label, value, form, onlyEmpty, choices }) => {
-    const resolved = findQuestion(unfillable, questions, forms, label, form);
-    if ('miss' in resolved) return { label, status: resolved.miss };
-    const question = resolved.found;
-    if (onlyEmpty && describeQuestion(question, 0, forms).value.trim()) {
-      return { label, status: 'not_fillable' as const };
+  const seenFieldIds = new Map<string, number>();
+  const questionByFieldId = new Map<string, Question>();
+  questions.forEach((q, i) => {
+    const described = describeQuestion(q, i, forms);
+    const id = assignUniqueFieldId(q, described, seenFieldIds);
+    questionByFieldId.set(id, q);
+  });
+
+  return fills.map(({ fieldId, label, value, form, onlyEmpty, choices, requiresReview }) => {
+    const withId = fieldId ? { fieldId } : {};
+    if (requiresReview) {
+      return { ...withId, label, status: 'not_fillable' as const, verificationError: 'Requires manual review' };
+    }
+
+    let question: Question | undefined;
+    if (fieldId) {
+      question = questionByFieldId.get(fieldId);
+      if (!question) {
+        const miss = findQuestion(unfillable, questions, forms, label, form);
+        return {
+          ...withId,
+          label,
+          status: 'miss' in miss ? miss.miss : ('not_found' as const),
+        };
+      }
+    } else {
+      const resolved = findQuestion(unfillable, questions, forms, label, form);
+      if ('miss' in resolved) return { label, status: resolved.miss };
+      question = resolved.found;
+    }
+
+    const before = describeQuestion(question, 0, forms);
+    if (before.userEdited || (onlyEmpty && before.value.trim())) {
+      return { ...withId, label, status: 'not_fillable' as const };
     }
     if (question.controls.length === 1 && isComboWidget(question.controls[0])) {
-      return { label, status: 'deferred_combobox' as const };
+      return { ...withId, label, status: 'deferred_combobox' as const };
     }
     if (choices) {
-      return { label, status: applyExactChoices(question, choices) ? 'filled' : 'no_option' };
+      const applied = applyExactChoices(question, choices);
+      if (!applied) return { ...withId, label, status: 'no_option' as const };
+      const after = describeQuestion(question, 0, forms);
+      const verified = verifyWrittenValue(after, choices.join(', '), choices);
+      if (!verified.ok) {
+        return {
+          ...withId,
+          label,
+          status: 'not_fillable' as const,
+          verifiedValue: verified.verifiedValue,
+          verificationError: verified.error,
+        };
+      }
+      return {
+        ...withId,
+        label,
+        status: 'filled' as const,
+        ...(fieldId ? { verifiedValue: verified.verifiedValue } : {}),
+      };
     }
     const answer = needsNumber(question, label) ? (numericAnswer(value) ?? value) : value;
-    return { label, status: answerQuestion(question, answer) ? ('filled' as const) : ('no_option' as const) };
+    const applied = answerQuestion(question, answer);
+    if (!applied) return { ...withId, label, status: 'no_option' as const };
+    const after = describeQuestion(question, 0, forms);
+    const verified = verifyWrittenValue(after, answer);
+    if (!verified.ok) {
+      return {
+        ...withId,
+        label,
+        status: 'not_fillable' as const,
+        verifiedValue: verified.verifiedValue,
+        verificationError: verified.error,
+      };
+    }
+    return {
+      ...withId,
+      label,
+      status: 'filled' as const,
+      ...(fieldId ? { verifiedValue: verified.verifiedValue } : {}),
+    };
   });
 }
 

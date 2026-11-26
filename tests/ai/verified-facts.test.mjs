@@ -1,6 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildVerifiedFacts } from '../../src/lib/ai/verified-facts.ts';
+import {
+  buildVerifiedFacts,
+  normalizeSkillKey,
+  parseDurationYears,
+  parseStrictNumber,
+  PROVENANCE_RANK,
+} from '../../src/lib/ai/verified-facts.ts';
+import {
+  answerBankExactFactId,
+  answerBankFactId,
+  answerBankIntentFactId,
+  answerBankIntentKey,
+  answerBankQuestionHash,
+  answerBankTopic,
+  extractAnswerBankConstraints,
+  isWorkAuthorizationYesNoQuestion,
+} from '../../src/lib/candidate/answer-bank-topics.ts';
 import * as fieldSafety from '../../src/lib/ai/autofill-field-safety.ts';
 
 test('VerifiedFact builder: candidate schema mapping & typed evidence generation', async (t) => {
@@ -305,7 +321,7 @@ test('VerifiedFact builder: candidate schema mapping & typed evidence generation
     assert.equal(fieldSafety.isBlockedAutofillField({ label: 'Social Security Number' }), true);
   });
 
-  await t.test('builds demographics.* facts ONLY when enabled === true and normalizes veteran/protectedVeteran cleanly', () => {
+  await t.test('builds demographics.* facts ONLY when enabled === true and keeps veteran/protectedVeteran independent (VF-01)', () => {
     const candidate = { full_name: 'Alex Rivera' };
     const screening = {
       age_18_or_older: true,
@@ -323,7 +339,7 @@ test('VerifiedFact builder: candidate schema mapping & typed evidence generation
       assert.equal(key.startsWith('demographics.'), false, `Disabled demographics must not emit ${key}`);
     }
 
-    // Enabled -> emits demographics.<key>
+    // Enabled -> emits demographics.<key> WITHOUT copying veteran -> protectedVeteran
     const enabledFacts = buildVerifiedFacts(candidate, [], screening, {
       enabled: true,
       answers: { gender: ['Male'], veteran: ['No'], raceEthnicity: ['  '] },
@@ -333,6 +349,7 @@ test('VerifiedFact builder: candidate schema mapping & typed evidence generation
       type: 'string[]',
       value: ['Male'],
       source: 'profile',
+      provenance: 'screening_pref',
       category: 'demographics',
     });
     assert.deepEqual(enabledFacts.get('demographics.veteran'), {
@@ -340,20 +357,21 @@ test('VerifiedFact builder: candidate schema mapping & typed evidence generation
       type: 'string[]',
       value: ['No'],
       source: 'profile',
+      provenance: 'screening_pref',
       category: 'demographics',
     });
-    assert.equal(enabledFacts.get('demographics.protectedVeteran')?.value?.[0], 'No');
+    assert.equal(enabledFacts.has('demographics.protectedVeteran'), false, 'veteran must NOT copy to protectedVeteran');
     assert.equal(enabledFacts.has('demographics.raceEthnicity'), false);
 
-    // Only protectedVeteran saved -> normalizes veteran alias cleanly
+    // Only protectedVeteran saved -> must NOT copy to veteran
     const protectedOnlyFacts = buildVerifiedFacts(candidate, [], screening, {
       enabled: true,
-      answers: { protectedVeteran: ['I am not a protected veteran'] },
+      answers: { protectedVeteran: ['No, I am not a protected veteran'] },
     });
-    assert.deepEqual(protectedOnlyFacts.get('demographics.protectedVeteran')?.value, ['I am not a protected veteran']);
-    assert.deepEqual(protectedOnlyFacts.get('demographics.veteran')?.value, ['I am not a protected veteran']);
+    assert.deepEqual(protectedOnlyFacts.get('demographics.protectedVeteran')?.value, ['No, I am not a protected veteran']);
+    assert.equal(protectedOnlyFacts.has('demographics.veteran'), false, 'protectedVeteran must NOT copy to veteran');
 
-    // Both saved -> preserves both without overwriting
+    // Both saved -> preserves both independently
     const bothVeteranFacts = buildVerifiedFacts(candidate, [], screening, {
       enabled: true,
       answers: { veteran: ['Yes'], protectedVeteran: ['No'] },
@@ -407,5 +425,286 @@ test('VerifiedFact builder: candidate schema mapping & typed evidence generation
     assert.equal(facts.get('profile.first_name')?.value, 'Bhargav');
     assert.equal(facts.get('profile.last_name')?.value, 'Reddy');
     assert.equal(facts.get('profile.contact.email')?.value, 'bhargav@example.com');
+  });
+
+  await t.test('EXP-R1 (VF-02): separates skill existence from duration and never overwrites numeric with boolean', () => {
+    const facts = buildVerifiedFacts({
+      full_name: 'Skill Tester',
+      primary_skills: 'Java (4 years), TypeScript',
+      skills: {
+        Python: '18 months',
+        Rust: true,
+      },
+      confirmed_facts: {
+        skills: {
+          Java: true, // existence-only at higher provenance must NOT erase 4 years numeric duration
+        },
+      },
+    });
+
+    assert.equal(facts.get('profile.skills.java.has_experience')?.value, true);
+    assert.equal(facts.get('profile.skills.java.has_experience')?.type, 'boolean');
+    assert.equal(facts.get('profile.skills.java.years')?.value, 4);
+    assert.equal(facts.get('profile.skills.java.years')?.type, 'number');
+    assert.equal(facts.get('profile.skills.java')?.value, 4);
+    assert.equal(facts.get('profile.skills.java')?.type, 'number');
+
+    assert.equal(facts.get('profile.skills.typescript.has_experience')?.value, true);
+    assert.equal(facts.has('profile.skills.typescript.years'), false);
+    assert.equal(facts.get('profile.skills.typescript')?.value, true);
+
+    assert.equal(facts.get('profile.skills.python.years')?.value, 1.5);
+    assert.equal(facts.get('profile.skills.python.has_experience')?.value, true);
+
+    assert.equal(facts.get('profile.skills.rust.has_experience')?.value, true);
+    assert.equal(facts.has('profile.skills.rust.years'), false);
+  });
+
+  await t.test('EXP-R2 (VF-03): preserves symbols in skill IDs (C, C++, C#, .NET, NET never collide)', () => {
+    const keys = {
+      c: normalizeSkillKey('C'),
+      cpp: normalizeSkillKey('C++'),
+      cs: normalizeSkillKey('C#'),
+      dotnet: normalizeSkillKey('.NET'),
+      net: normalizeSkillKey('NET'),
+    };
+    assert.equal(new Set(Object.values(keys)).size, 5, `Expected 5 distinct keys, got ${JSON.stringify(keys)}`);
+    assert.equal(keys.c, 'c');
+    assert.equal(keys.cpp, 'c_plus_plus');
+    assert.equal(keys.cs, 'c_sharp');
+    assert.equal(keys.dotnet, 'dotnet');
+    assert.equal(keys.net, 'net');
+
+    const facts = buildVerifiedFacts({
+      full_name: 'Polyglot Dev',
+      skills: {
+        C: 2,
+        'C++': 5,
+        'C#': 3,
+        '.NET': 4,
+        NET: 1,
+      },
+    });
+
+    assert.equal(facts.get(`profile.skills.${keys.c}.years`)?.value, 2);
+    assert.equal(facts.get(`profile.skills.${keys.cpp}.years`)?.value, 5);
+    assert.equal(facts.get(`profile.skills.${keys.cs}.years`)?.value, 3);
+    assert.equal(facts.get(`profile.skills.${keys.dotnet}.years`)?.value, 4);
+    assert.equal(facts.get(`profile.skills.${keys.net}.years`)?.value, 1);
+  });
+
+  await t.test('EXP-R4 (VF-05, VF-06): strict duration parsing and complete screening/profile history mapping', () => {
+    assert.equal(parseDurationYears('18 months'), 1.5);
+    assert.equal(parseDurationYears('2 years 6 months'), 2.5);
+    assert.equal(parseDurationYears('5+ years'), 5);
+    assert.equal(parseDurationYears('5-7 years'), null);
+    assert.equal(parseDurationYears('5 to 7 years'), null);
+    assert.equal(parseDurationYears('100abc'), null);
+    assert.equal(parseDurationYears('-3'), null);
+    assert.equal(parseDurationYears('-3 years'), null);
+    assert.equal(parseDurationYears(Number.POSITIVE_INFINITY), null);
+    assert.equal(parseDurationYears(Number.NaN), null);
+    assert.equal(parseStrictNumber('100abc'), null);
+    assert.equal(parseStrictNumber('-3'), null);
+
+    const invalidFacts = buildVerifiedFacts({
+      full_name: 'Bad Numbers',
+      total_experience_years: '5-7 years',
+      relevant_experience_years: '100abc',
+      graduation_year: '2020abc',
+      primary_skills: 'Go (-3 years), Java (5-7 years), Rust (100abc)',
+    });
+    assert.equal(invalidFacts.has('profile.experience.total_years'), false);
+    assert.equal(invalidFacts.has('profile.experience.relevant_years'), false);
+    assert.equal(invalidFacts.has('profile.education.graduation_year'), false);
+    assert.equal(invalidFacts.has('profile.skills.go.years'), false);
+    assert.equal(invalidFacts.has('profile.skills.java.years'), false);
+    assert.equal(invalidFacts.has('profile.skills.rust.years'), false);
+
+    const empHistory = [
+      { employer: 'Acme', role: 'Senior Engineer', start_date: '2021-01', current: true },
+      { employer: 'Beta', role: 'Engineer', start_date: '2018-06', end_date: '2020-12' },
+    ];
+    const eduHistory = [
+      { institution: 'MIT', degree: 'Master of Science', major: 'Computer Science', year: 2018, completion_status: 'completed' },
+    ];
+    const vf05Facts = buildVerifiedFacts({
+      full_name: 'History Candidate',
+      total_experience_years: '30 months',
+      available_to_join: '2026-12-01',
+      notice_period: '2 weeks',
+      interview_availability: 'Weekdays after 2pm EST',
+      preferred_work_type: 'Hybrid',
+      employment_status: 'Employed',
+      target_job_titles: 'Staff Software Engineer, Principal Engineer',
+      employment_history: empHistory,
+      education_history: eduHistory,
+    });
+
+    assert.equal(vf05Facts.get('profile.experience.total_years')?.value, 2.5);
+    assert.equal(vf05Facts.get('profile.availability.available_to_join')?.value, '2026-12-01');
+    assert.equal(vf05Facts.get('profile.availability.notice_period')?.value, '2 weeks');
+    assert.equal(vf05Facts.get('profile.availability.interview_availability')?.value, 'Weekdays after 2pm EST');
+    assert.equal(vf05Facts.get('profile.preferences.preferred_work_type')?.value, 'Hybrid');
+    assert.equal(vf05Facts.get('profile.experience.employment_status')?.value, 'Employed');
+    assert.deepEqual(vf05Facts.get('profile.experience.target_job_titles')?.value, [
+      'Staff Software Engineer',
+      'Principal Engineer',
+    ]);
+    assert.equal(vf05Facts.get('profile.experience.employment_history')?.type, 'object[]');
+    assert.deepEqual(vf05Facts.get('profile.experience.employment_history')?.value, empHistory);
+    assert.equal(vf05Facts.get('profile.education.history')?.type, 'object[]');
+    assert.deepEqual(vf05Facts.get('profile.education.history')?.value, eduHistory);
+    assert.equal(vf05Facts.get('profile.education.major')?.value, 'Computer Science');
+    assert.equal(vf05Facts.get('profile.education.completion_status')?.value, 'completed');
+  });
+
+  await t.test('LOC-R1 (VF-07): keeps street, residence, city, state, postal code, citizenship, and intended work country independent; never maps "Boston, Massachusetts" to full_address', () => {
+    const bostonFacts = buildVerifiedFacts({
+      full_name: 'Boston Resident',
+      current_location: 'Boston, Massachusetts',
+    });
+    assert.equal(bostonFacts.get('profile.location.city')?.value, 'Boston');
+    assert.equal(bostonFacts.get('profile.location.state')?.value, 'Massachusetts');
+    assert.equal(bostonFacts.get('profile.location.country')?.value, 'United States');
+    assert.equal(bostonFacts.has('profile.location.full_address'), false, 'Boston, Massachusetts must NOT fall back to full_address');
+    assert.equal(bostonFacts.has('profile.location.street_address'), false);
+
+    const independentFacts = buildVerifiedFacts({
+      full_name: 'Global Candidate',
+      street_address: '123 Main St',
+      current_city: 'Toronto',
+      current_state: 'ON',
+      postal_code: 'M5V 2T6',
+      residence_country: 'Canada',
+      citizenship_country: 'India',
+      intended_work_country: 'United States',
+      full_address: '123 Main St, Toronto, ON M5V 2T6, Canada',
+    });
+    assert.equal(independentFacts.get('profile.location.street_address')?.value, '123 Main St');
+    assert.equal(independentFacts.get('profile.location.residence_country')?.value, 'Canada');
+    assert.equal(independentFacts.get('profile.work_auth.citizenship_country')?.value, 'India');
+    assert.equal(independentFacts.get('profile.location.intended_work_country')?.value, 'United States');
+    assert.equal(independentFacts.get('profile.location.postal_code')?.value, 'M5V 2T6');
+    assert.equal(independentFacts.get('profile.location.zip_code')?.value, 'M5V 2T6');
+    assert.equal(independentFacts.get('profile.location.full_address')?.value, '123 Main St, Toronto, ON M5V 2T6, Canada');
+  });
+
+  await t.test('POL-R1 (VF-04): enforces source provenance hierarchy and records equal-rank conflicts without silent overwrites', () => {
+    assert.ok(PROVENANCE_RANK.user_confirmed > PROVENANCE_RANK.screening_pref);
+    assert.ok(PROVENANCE_RANK.screening_pref > PROVENANCE_RANK.validated_profile);
+    assert.ok(PROVENANCE_RANK.validated_profile > PROVENANCE_RANK.reviewed_resume);
+
+    // 1. user_confirmed > validated_profile > reviewed_resume
+    const hierarchyFacts = buildVerifiedFacts({
+      full_name: 'Profile Name',
+      current_city: 'Profile City',
+      resume_extracts: {
+        full_name: 'Resume Name',
+        current_city: 'Resume City',
+        current_employer: 'Resume Employer',
+      },
+      confirmed_facts: {
+        full_name: 'Confirmed Name',
+      },
+    });
+    assert.equal(hierarchyFacts.get('profile.name')?.value, 'Confirmed Name');
+    assert.equal(hierarchyFacts.get('profile.name')?.provenance, 'user_confirmed');
+    assert.equal(hierarchyFacts.get('profile.location.city')?.value, 'Profile City');
+    assert.equal(hierarchyFacts.get('profile.location.city')?.provenance, 'validated_profile');
+    assert.equal(hierarchyFacts.get('profile.experience.current_employer')?.value, 'Resume Employer');
+    assert.equal(hierarchyFacts.get('profile.experience.current_employer')?.provenance, 'reviewed_resume');
+
+    // 2. Unconfirmed/inferred records and agent_inferred answerBank entries are excluded
+    const excludedFacts = buildVerifiedFacts(
+      {
+        full_name: 'Unconfirmed User',
+        provenance_status: 'unconfirmed',
+      },
+      [
+        { question: 'Why work here?', answer: 'Inferred guess', provenance: 'agent_inferred' },
+        { question: 'Confirmed prompt?', answer: 'Candidate answer', provenance: 'candidate' },
+      ],
+    );
+    assert.equal(excludedFacts.has('profile.name'), false);
+    assert.equal(excludedFacts.has(answerBankExactFactId('Why work here?')), false);
+    assert.equal(excludedFacts.get(answerBankExactFactId('Confirmed prompt?'))?.value, 'Candidate answer');
+
+    // 3. Equal-rank conflicting values record conflict instead of silent overwrite
+    const conflictFacts = buildVerifiedFacts({
+      full_name: 'Conflict Tester',
+      current_city: 'Boston',
+      city: 'Austin',
+      primary_skills: 'Java (4 years)',
+      skills: { Java: 6 },
+    });
+    const cityFact = conflictFacts.get('profile.location.city');
+    assert.equal(cityFact?.value, 'Boston');
+    assert.equal(cityFact?.conflicts?.length, 1);
+    assert.equal(cityFact?.conflicts?.[0]?.incomingValue, 'Austin');
+
+    const javaYearsFact = conflictFacts.get('profile.skills.java.years');
+    assert.equal(javaYearsFact?.value, 4);
+    assert.equal(javaYearsFact?.conflicts?.length, 1);
+    assert.equal(javaYearsFact?.conflicts?.[0]?.incomingValue, 6);
+  });
+
+  await t.test('AB-R1 (AB-01..04): Answer Bank dual index, split relocation intents, and qualified salary keys', () => {
+    // AB-01: answerBankFactId() aligns with answerBankIntentFactId() and answerBankIntentKey()
+    const q = 'Will you need relocation assistance?';
+    assert.equal(answerBankIntentKey(q), 'relocation_assistance');
+    assert.equal(answerBankFactId(q), answerBankIntentFactId(q));
+    assert.equal(answerBankFactId(q), 'answer_bank.intent.relocation_assistance');
+    assert.equal(answerBankExactFactId(q), `answer_bank.exact.${answerBankQuestionHash(q)}`);
+
+    // AB-02: Split relocation intents
+    assert.equal(answerBankIntentKey('Are you willing to relocate?'), 'relocation_willingness');
+    assert.equal(answerBankIntentKey('Will you require relocation assistance?'), 'relocation_assistance');
+    assert.equal(answerBankIntentKey('Have you previously relocated for a role?'), 'relocation_history');
+    assert.equal(answerBankIntentKey('Which locations are you willing to relocate to?'), 'relocation_locations');
+    assert.equal(answerBankIntentKey('Are you willing to relocate without relocation assistance?'), 'relocation_without_assistance');
+    // Coarse DB topic compatibility
+    assert.equal(answerBankTopic('Are you willing to relocate?'), 'relocation');
+
+    // AB-03 & AB-04: Salary qualifiers preserved so different conditions never overwrite each other
+    const usdAnnualQ = 'What is your desired annual salary in USD for a full-time role in the US?';
+    const eurMonthlyQ = 'What is your desired monthly salary in EUR in Germany?';
+    const usdHourlyQ = 'What is your expected hourly contract rate compensation in USD?';
+
+    assert.deepEqual(extractAnswerBankConstraints(usdAnnualQ), {
+      currency: 'usd',
+      period: 'year',
+      country: 'us',
+      employmentType: 'full_time',
+    });
+    assert.equal(answerBankIntentKey(usdAnnualQ), 'salary_expectation.c_usd.p_year.co_us.e_full_time');
+    assert.equal(answerBankIntentKey(eurMonthlyQ), 'salary_expectation.c_eur.p_month.co_de');
+    assert.equal(answerBankIntentKey(usdHourlyQ), 'salary_expectation.c_usd.p_hour.e_contract');
+    assert.equal(answerBankTopic(usdAnnualQ), 'salary_expectation');
+
+    const abFacts = buildVerifiedFacts({ full_name: 'Bank Tester' }, [
+      { question: usdAnnualQ, answer: '$160,000 USD/year', provenance: 'candidate' },
+      { question: eurMonthlyQ, answer: 'EUR 6,000/month', provenance: 'candidate' },
+      { question: 'Are you willing to relocate?', answer: 'Yes', provenance: 'candidate' },
+      { question: 'Will you require relocation assistance?', answer: 'No', provenance: 'candidate' },
+    ]);
+
+    assert.equal(abFacts.get(answerBankExactFactId(usdAnnualQ))?.value, '$160,000 USD/year');
+    assert.equal(abFacts.get(answerBankIntentFactId(usdAnnualQ))?.value, '$160,000 USD/year');
+    assert.equal(abFacts.get(answerBankIntentFactId(eurMonthlyQ))?.value, 'EUR 6,000/month');
+    assert.equal(abFacts.get('answer_bank.intent.relocation_willingness')?.value, 'Yes');
+    assert.equal(abFacts.get('answer_bank.intent.relocation_assistance')?.value, 'No');
+  });
+
+  await t.test('AB-R2 (AB-05): isWorkAuthorizationYesNoQuestion separates binary yes/no from non-binary status/expiry questions', () => {
+    assert.equal(isWorkAuthorizationYesNoQuestion('Are you legally authorized to work in this country?'), true);
+    assert.equal(isWorkAuthorizationYesNoQuestion('Are you authorized to work in the United States?'), true);
+    assert.equal(isWorkAuthorizationYesNoQuestion('Do you have the right to work in the UK?'), true);
+
+    assert.equal(isWorkAuthorizationYesNoQuestion('What is your work authorization status?'), false);
+    assert.equal(isWorkAuthorizationYesNoQuestion('When does it expire?'), false);
+    assert.equal(isWorkAuthorizationYesNoQuestion('When does your work authorization expire?'), false);
+    assert.equal(isWorkAuthorizationYesNoQuestion('Please describe your work authorization details'), false);
+    assert.equal(isWorkAuthorizationYesNoQuestion('Work authorization status'), false);
   });
 });

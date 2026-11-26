@@ -14,15 +14,15 @@ import {
 } from './freehire';
 import { isAutofillProse, isBlockedAutofillField, isPrivateAutofillField } from './autofillSafety';
 import {
-  extractCountryCodeFromLocation,
   inferQuestionDescriptor,
   type Field,
   type FormContext,
 } from '../../src/lib/ai/planner';
+import { extractCountryCodeFromLocation } from './countryResolver';
 import { validateGroundedAnswer } from '../../src/lib/ai/grounded';
 import { findReusableAnswer } from '../../src/lib/ai/reusable-answers';
 import { buildVerifiedFacts } from '../../src/lib/ai/verified-facts';
-import { matchFieldKey, normalizeLabel, offeredChoice, workAuthorizationCountry } from './fieldKeys';
+import { asksVisaSponsorship, matchFieldKey, normalizeLabel, offeredChoice, workAuthorizationCountry } from './fieldKeys';
 import { countryLabel } from './labels';
 import { profileToValues } from './form';
 import { confirmedFieldValue, looksLikeApplication, planLabelFills, scopeToApplication } from './fillPlan';
@@ -69,6 +69,18 @@ async function retryOnceOnRateLimit<T>(fn: () => Promise<T>, signal: AbortSignal
   }
 }
 
+export interface AutofillDiagnostics {
+  requiresReview: Array<{ fieldId?: string; label: string; value?: string; reason?: string }>;
+  unresolved: Array<{
+    fieldId?: string;
+    label: string;
+    reason?: string;
+    reasonCode?: string;
+    stage?: string;
+    retryable?: boolean;
+  }>;
+}
+
 /** What a fill tells the side panel, and asks of it. */
 export interface FillPanel {
   /** A line for the panel's notices. */
@@ -83,6 +95,8 @@ export interface FillPanel {
   known(label: string): void;
   /** The plan refused the agent: the panel shows its upgrade offer. */
   refused(err: PlanRefused): void;
+  /** Structured diagnostics for fields requiring review or unresolved after planning. */
+  diagnostics?(report: AutofillDiagnostics): void;
 }
 
 /**
@@ -96,29 +110,51 @@ function nameSome(labels: string[], shown = 5): string {
   return `${trimmed.slice(0, shown).join(', ')} and ${trimmed.length - shown} more`;
 }
 
-function fieldKey(field: { frame?: number; form?: number; label: string }) {
+function fieldKey(field: { fieldId?: string; frame?: number; form?: number; label: string }) {
+  if (field.fieldId) return `${field.frame ?? 0}:${field.fieldId}`;
   return `${field.frame}:${field.form}:${normalizeLabel(field.label)}`;
 }
 
-function plannerField(field: FramedField): Field & { id: string } {
+type CapturedPlannerField = Field & {
+  id: string;
+  placeholder?: string;
+  section?: string;
+  snapshotId?: string;
+  currentValue?: string;
+  userEdited?: boolean;
+  optionsState?: FramedField['optionsState'];
+  parentFieldIds?: string[];
+};
+
+function plannerField(field: FramedField): CapturedPlannerField {
+  const id = field.fieldId ? `${field.frame}:${field.fieldId}` : `${field.frame}:${field.form}:${field.index}`;
+  const currentValue = field.currentValue ?? field.value;
   return {
-    id: `${field.frame}:${field.form}:${field.index}`,
+    id,
     label: field.label,
+    ...(field.name ? { name: field.name } : {}),
     type: field.tag === 'textarea' ? 'textarea' : field.type,
     required: field.required,
     combo: field.combo,
     ...(field.multiple ? { multiple: true } : {}),
     options: field.options,
+    ...(field.optionsState ? { optionsState: field.optionsState } : {}),
     frame: field.frame,
     form: field.form,
     ...(field.helperText ? { helperText: field.helperText } : {}),
+    ...(field.placeholder ? { placeholder: field.placeholder } : {}),
+    ...(field.section ? { section: field.section } : {}),
+    ...(field.snapshotId ? { snapshotId: field.snapshotId } : {}),
+    ...(currentValue ? { currentValue } : {}),
+    ...(field.userEdited !== undefined ? { userEdited: field.userEdited } : {}),
+    ...(field.parentFieldIds?.length ? { parentFieldIds: field.parentFieldIds } : {}),
     ...(field.widgetType ? { widgetType: field.widgetType } : {}),
   };
 }
 
 function isUpstreamLocationField(field: FramedField): boolean {
-  const key = matchFieldKey(field.label);
-  if (key === 'intendedWorkCountry' || key === 'country' || key === 'city') return true;
+  const key = matchFieldKey(field.label, field);
+  if (key === 'intendedWorkCountry' || key === 'country' || key === 'city' || key === 'location') return true;
   const desc = inferQuestionDescriptor(plannerField(field));
   return (
     desc.canonical_name === 'intended_work_country' ||
@@ -136,7 +172,7 @@ function hasEarlierUnfilledLocation(fields: FramedField[], index: number, done?:
 }
 
 function isLocationLinkedWorkAuth(label: string): boolean {
-  return matchFieldKey(label) === 'visaSponsorshipNeeded' || Boolean(workAuthorizationCountry(label));
+  return asksVisaSponsorship(label) || matchFieldKey(label) === 'visaSponsorshipNeeded' || Boolean(workAuthorizationCountry(label));
 }
 
 function splitCheckboxChoices(value: string, options?: string[]): string[] | undefined {
@@ -204,7 +240,7 @@ function fallbackLocationSearch(
   const helper = field.helperText ?? '';
   if (/\bcity\b/i.test(helper) && profile.location?.trim()) {
     const location = profile.location.trim();
-    if (matchFieldKey(field.label) !== 'intendedWorkCountry') return location;
+    if (matchFieldKey(field.label, field) !== 'intendedWorkCountry') return location;
     const country = values.intendedWorkCountry?.trim();
     const intended = extractCountryCodeFromLocation(country);
     const home = extractCountryCodeFromLocation(profile.country);
@@ -253,15 +289,30 @@ async function fillApplication(
   const stopped = () => signal.aborted || panel.walk.stopped();
   const done = new Set<string>();
   const issues: string[] = [];
+  const requiresReviewItems: AutofillDiagnostics['requiresReview'] = [];
+  const unresolvedDiagnostics: AutofillDiagnostics['unresolved'] = [];
+  const seenDiagnosticKeys = new Set<string>();
+  const recordRequiresReview = (entry: AutofillDiagnostics['requiresReview'][number]) => {
+    const diagKey = `review:${entry.fieldId ?? entry.label}`;
+    if (seenDiagnosticKeys.has(diagKey)) return;
+    seenDiagnosticKeys.add(diagKey);
+    requiresReviewItems.push(entry);
+  };
+  const recordUnresolved = (entry: AutofillDiagnostics['unresolved'][number]) => {
+    const diagKey = `unresolved:${entry.fieldId ?? entry.label}:${entry.reasonCode ?? ''}`;
+    if (seenDiagnosticKeys.has(diagKey)) return;
+    seenDiagnosticKeys.add(diagKey);
+    unresolvedDiagnostics.push(entry);
+  };
   let started = false;
   let usedAi = false;
   const hooks: WalkHooks = {
     ...panel.walk,
     stopped,
-    answered(label, frame, form) {
-      done.add(fieldKey({ label, frame, form }));
+    answered(label, frame, form, fieldId) {
+      done.add(fieldKey({ fieldId, label, frame, form }));
       panel.known(label);
-      panel.walk.answered(label, frame, form);
+      panel.walk.answered(label, frame, form, fieldId);
     },
   };
   const walk = async (fills: LabelFill[]) => {
@@ -272,7 +323,7 @@ async function fillApplication(
     );
   };
   async function fillCombobox(
-    field: { label: string; frame: number; form: number },
+    field: { fieldId?: string; label: string; frame: number; form: number },
     choose: (options: string[]) => Promise<string | string[] | undefined>,
     search?: string,
     exact = false,
@@ -320,7 +371,7 @@ async function fillApplication(
         lastCommittedDisplay = display;
         hooks.wrote();
       }
-      hooks.answered(field.label, field.frame, field.form);
+      hooks.answered(field.label, field.frame, field.form, field.fieldId);
       return choices.length === 1 ? lastCommittedDisplay : committed.join(', ');
     } catch (err) {
       if (err instanceof PlanRefused || (err instanceof ExtensionApiError && [401, 403, 429].includes(err.status))) {
@@ -362,6 +413,19 @@ async function fillApplication(
     }
     panel.offerOverride(null);
     started = true;
+    const knownFieldIds = new Set(scoped.map((f) => plannerField(f).id));
+    const committedParentsByScope = new Map<string, string[]>();
+    const dynamicParentsByFieldId = new Map<string, string[]>();
+    const scopeSectionKey = (f: { frame: number; form: number; section?: string }) =>
+      `${f.frame}:${f.form}:${f.section ?? ''}`;
+    const recordCommittedParent = (f: FramedField) => {
+      const pid = plannerField(f).id;
+      for (const key of [scopeSectionKey(f), `${f.frame}:${f.form}`]) {
+        const list = committedParentsByScope.get(key) ?? [];
+        if (!list.includes(pid)) list.push(pid);
+        committedParentsByScope.set(key, list);
+      }
+    };
     const uniqueFields = (fields: FramedField[]) => {
       const counts = new Map<string, number>();
       for (const field of fields) {
@@ -370,11 +434,13 @@ async function fillApplication(
       }
       return fields.filter((field) => {
         const key = fieldKey(field);
+        const currentVal = (field.currentValue ?? field.value).trim();
         return (
           scopes.has(`${field.frame}:${field.form}`) &&
           counts.get(key) === 1 &&
           !done.has(key) &&
-          !field.value.trim() &&
+          !field.userEdited &&
+          !currentVal &&
           field.label.trim() &&
           field.label.length <= 2000 &&
           !(field.type === 'radio' && !field.options?.length && /^(?:yes|no)$/i.test(normalizeLabel(field.label))) &&
@@ -385,16 +451,36 @@ async function fillApplication(
     const previouslyResolved: Record<string, string> = {};
     const recordResolvedFromForm = (allFields: FramedField[]) => {
       for (const f of allFields) {
-        if (scopes.has(`${f.frame}:${f.form}`) && !isBlockedAutofillField(f) && f.value.trim()) {
-          previouslyResolved[f.label] = f.value.trim();
+        const val = (f.currentValue ?? f.value).trim();
+        if (scopes.has(`${f.frame}:${f.form}`) && !isBlockedAutofillField(f) && val) {
+          previouslyResolved[f.label] = val;
         }
       }
     };
+    const attachConditionalParents = (allFields: FramedField[]): FramedField[] =>
+      allFields.map((f) => {
+        if (!scopes.has(`${f.frame}:${f.form}`)) return f;
+        const id = plannerField(f).id;
+        if (!knownFieldIds.has(id)) {
+          knownFieldIds.add(id);
+          const parents =
+            committedParentsByScope.get(scopeSectionKey(f)) ??
+            committedParentsByScope.get(`${f.frame}:${f.form}`);
+          if (parents?.length) {
+            dynamicParentsByFieldId.set(id, [...parents]);
+          }
+        }
+        const extra = dynamicParentsByFieldId.get(id);
+        if (!extra?.length) return f;
+        const merged = Array.from(new Set([...(f.parentFieldIds ?? []), ...extra]));
+        return { ...f, parentFieldIds: merged };
+      });
     const remaining = async () => {
       const reply = await ask({ kind: 'GET_FRAMED_FORM', target });
       if (reply?.kind !== 'FRAMED_FORM') return [];
-      recordResolvedFromForm(reply.fields);
-      return uniqueFields(reply.fields);
+      const annotated = attachConditionalParents(reply.fields);
+      recordResolvedFromForm(annotated);
+      return uniqueFields(annotated);
     };
 
     // Capture page context before writing any candidate data into the form.
@@ -408,6 +494,9 @@ async function fillApplication(
       (field) => !field.combo && !isLocationLinkedWorkAuth(field.label),
     );
     await walk(planLabelFills(phaseALabelFields, values, profile.authorized_countries));
+    for (const f of phaseALabelFields) {
+      if (done.has(fieldKey(f))) recordCommittedParent(f);
+    }
     if (stopped()) return;
     const phaseARemaining = await remaining();
     for (let i = 0; i < phaseARemaining.length; i++) {
@@ -415,14 +504,15 @@ async function fillApplication(
       const field = phaseARemaining[i];
       if (!field) continue;
       if (isLocationLinkedWorkAuth(field.label)) continue;
-      const confirmedValue = confirmedFieldValue(field.label, values, profile.authorized_countries).trim();
+      const confirmedValue = confirmedFieldValue(field.label, values, profile.authorized_countries, field).trim();
       const value = confirmedValue && /\bcity\b/i.test(field.helperText ?? '')
         ? fallbackLocationSearch(field, profile, values) ?? confirmedValue : confirmedValue;
       if (!field.combo || !value) continue;
-      await fillCombobox(field, async (options) => {
+      const committed = await fillCombobox(field, async (options) => {
         if (isPrivateAutofillField({ ...field, options })) return;
         return offeredChoice(value, options, field.label);
       }, value);
+      if (committed) recordCommittedParent(field);
     }
 
     if (stopped()) return;
@@ -605,6 +695,7 @@ async function fillApplication(
         if (committed) {
           committedByFieldId.set(id, committed);
           previouslyResolved[field.label] = committed;
+          recordCommittedParent(field);
         } else {
           markFailedField(field);
         }
@@ -689,9 +780,47 @@ async function fillApplication(
           const targetField = fill.fieldId
             ? byId.get(fill.fieldId)
             : byLabel.get(normalizeLabel(fill.label));
-          if (targetField && fill.grounded === true && typeof fill.value === 'string' && fill.value.trim()) {
+          if (!targetField) continue;
+          const requiresReview = (fill as typeof fill & { requiresReview?: boolean }).requiresReview === true;
+          if (requiresReview) {
+            recordRequiresReview({
+              fieldId: plannerField(targetField).id,
+              label: targetField.label,
+              value: fill.value,
+              reason: 'Requires manual review before filling',
+            });
+            recordUnresolved({
+              fieldId: plannerField(targetField).id,
+              label: targetField.label,
+              reason: 'Requires manual review before filling',
+              reasonCode: 'REQUIRES_REVIEW',
+              stage: 'planner',
+              retryable: false,
+            });
+            continue;
+          }
+          if (fill.grounded === true && typeof fill.value === 'string' && fill.value.trim()) {
             fillById.set(plannerField(targetField).id, fill);
           }
+        }
+        for (const fill of plan.fills ?? []) {
+          const requiresReview = (fill as typeof fill & { requiresReview?: boolean }).requiresReview === true;
+          if (!requiresReview) continue;
+          const targetField = fill.fieldId
+            ? byId.get(fill.fieldId)
+            : byLabel.get(normalizeLabel(fill.label));
+          recordRequiresReview({
+            fieldId: fill.fieldId ?? (targetField ? plannerField(targetField).id : undefined),
+            label: targetField?.label ?? fill.label,
+            value: fill.value,
+            reason: 'Requires manual review before filling',
+          });
+        }
+        const planUnresolved = (plan as PlanApiResponse & {
+          unresolved?: AutofillDiagnostics['unresolved'];
+        }).unresolved;
+        for (const item of planUnresolved ?? []) {
+          recordUnresolved(item);
         }
 
         const deferredPlanById = new Map<string, NonNullable<PlanApiResponse['deferredPlans']>[number]>();
@@ -801,6 +930,7 @@ async function fillApplication(
             if (!choices?.length && field.options?.length) continue;
           }
           const labelFill: LabelFill = {
+            ...(field.fieldId ? { fieldId: field.fieldId } : {}),
             label: field.label,
             value: choices ? choices.join(', ') : fill.value,
             frame: field.frame,
@@ -812,6 +942,7 @@ async function fillApplication(
             wroteInPass = true;
             committedByFieldId.set(id, labelFill.value);
             previouslyResolved[field.label] = labelFill.value;
+            recordCommittedParent(field);
           } else {
             markFailedField(field);
           }
@@ -872,6 +1003,13 @@ async function fillApplication(
         );
       else panel.notice('No fields were filled. Review the remaining questions.');
       if (issues.length) panel.notice(`Could not complete: ${nameSome(issues)}.`);
+      if (requiresReviewItems.length) {
+        panel.notice(`Review required before filling: ${nameSome(requiresReviewItems.map((r) => r.label))}.`);
+      }
+      panel.diagnostics?.({
+        requiresReview: requiresReviewItems,
+        unresolved: unresolvedDiagnostics,
+      });
     }
   }
 }

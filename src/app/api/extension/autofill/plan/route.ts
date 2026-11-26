@@ -6,6 +6,7 @@ import {
   OrchestratorError,
   type PlanApiRequest,
 } from '@/lib/ai/autofill-orchestrator';
+import { redactSensitiveText } from '@/lib/ai/provider-client';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -39,20 +40,31 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await executePlan(body, actor.id);
+    if (!body || typeof body !== 'object' || !Array.isArray(body.fields)) {
+      return cors(
+        request,
+        Response.json({ ok: false, error: 'fields array is required', code: 'BAD_REQUEST' }, { status: 400 })
+      );
+    }
+
+    const result = await executePlan(body, actor.id, {
+      signal: request.signal,
+      globalDeadlineMs: 50_000,
+    });
     return cors(request, Response.json(result, { status: 200 }));
   } catch (err: any) {
     if (err instanceof OrchestratorError) {
       return cors(
         request,
         Response.json(
-          { ok: false, error: err.message, code: err.code },
+          { ok: false, error: redactSensitiveText(err.message), code: err.code },
           { status: err.status }
         )
       );
     }
     const status = typeof err?.status === 'number' ? err.status : 500;
-    const message = err?.message || 'The autofill plan request could not be completed.';
-    return cors(request, Response.json({ ok: false, error: message }, { status }));
+    const message = redactSensitiveText(err?.message || 'The autofill plan request could not be completed.');
+    const code = typeof err?.code === 'string' ? err.code : undefined;
+    return cors(request, Response.json({ ok: false, error: message, ...(code ? { code } : {}) }, { status }));
   }
 }

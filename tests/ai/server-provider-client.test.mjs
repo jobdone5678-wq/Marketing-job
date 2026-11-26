@@ -911,4 +911,38 @@ test('ServerVercelProviderClient: 3-Tier Fallback, Telemetry, and Capability Cac
     assert.equal(validJsonPromptBody.response_format, undefined);
     assert.deepEqual(jsonPromptRes.rawJson, validPlan);
   });
+
+  await t.test('17. PC-04/PC-05: rejects missing choice, non-string content, truncated finish_reason, and refusal with INVALID_RESPONSE', async () => {
+    const cases = [
+      { name: 'missing choice', body: { choices: [] }, code: 'INVALID_RESPONSE' },
+      { name: 'non-string content', body: { choices: [{ message: { role: 'assistant', content: null } }] }, code: 'INVALID_RESPONSE' },
+      { name: 'truncated length', body: { choices: [{ finish_reason: 'length', message: { role: 'assistant', content: '{"fills":[]}' } }] }, code: 'TRUNCATED_RESPONSE' },
+      { name: 'model refusal', body: { choices: [{ message: { role: 'assistant', content: '', refusal: 'Policy refusal' } }] }, code: 'MODEL_REFUSAL' },
+      { name: 'content_filter', body: { choices: [{ finish_reason: 'content_filter', message: { role: 'assistant', content: '{"fills":[]}' } }] }, code: 'MODEL_REFUSAL' },
+    ];
+
+    for (const c of cases) {
+      ServerVercelProviderClient.clearCache();
+      const client = new ServerVercelProviderClient({
+        baseUrl: 'https://api.openai.com/v1',
+        apiKey: 'test-key',
+        model: 'gpt-4o',
+        fetchFn: async () =>
+          new Response(JSON.stringify(c.body), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+      });
+
+      await assert.rejects(
+        () => client.generateChatCompletion([{ role: 'user', content: 'Plan' }], { schemaName: 'plan' }),
+        (err) =>
+          err instanceof ProviderError &&
+          err.status === 502 &&
+          err.code === c.code &&
+          err.statusCode === 'INVALID_RESPONSE',
+        `Expected INVALID_RESPONSE for ${c.name}`,
+      );
+    }
+  });
 });

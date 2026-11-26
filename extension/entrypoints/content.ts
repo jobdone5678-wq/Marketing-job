@@ -1,6 +1,6 @@
 import { startErrorTelemetry } from '../lib/telemetry';
 import { extractSnapshot, hasJobPostingMarkup } from '../lib/scraper';
-import { extractForm, extractUploads, fillByLabel } from '../lib/form';
+import { clearUserEdited, extractForm, extractUploads, fillByLabel, markUserEdited } from '../lib/form';
 import { revealField } from '../lib/revealField';
 import { easyApplyDialog, easyApplyOnResumeStep, easyApplySent, linkedInPostingClosed } from '../lib/easyApply';
 import { isFreehireOrigin } from '../lib/freehire';
@@ -68,9 +68,11 @@ export default defineContentScript({
           // side that knows this frame's id. The uploads travel alongside the
           // questions: they are not fillable, they say whether this is an
           // application at all.
+          const fields = extractForm(document);
           return Promise.resolve<RuntimeMessage>({
             kind: 'FORM',
-            fields: extractForm(document),
+            snapshotId: fields[0]?.snapshotId,
+            fields,
             uploads: extractUploads(document),
             easyApply: easyApplyDialog(document) !== null,
             resumeStep: easyApplyOnResumeStep(document),
@@ -108,8 +110,22 @@ export default defineContentScript({
     });
 
     const announce = debounce(notifyPanel, FORM_CHANGE_QUIET_MS);
-    document.addEventListener('input', announce, true);
-    document.addEventListener('change', announce, true);
+    const onUserControlEvent = (event: Event) => {
+      if (event.isTrusted && event.target instanceof Element) {
+        const el = event.target;
+        if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) {
+          markUserEdited(el);
+        } else if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
+          if (el.value.trim()) markUserEdited(el);
+          else clearUserEdited(el);
+        } else {
+          markUserEdited(el);
+        }
+      }
+      announce();
+    };
+    document.addEventListener('input', onUserControlEvent, true);
+    document.addEventListener('change', onUserControlEvent, true);
     document.addEventListener('submit', (event) => {
       if (!(event.target instanceof HTMLFormElement) || isFreehireOrigin(location.origin)) return;
       const form = Array.from(document.querySelectorAll('form')).indexOf(event.target);

@@ -1159,4 +1159,108 @@ describe('deterministicAutofill job-alert guard', () => {
     expect(filled[proseLabel]).toBe('Learned to validate role criteria earlier in interviews.');
     expect(notices.some((n) => n.includes('HTTP 429'))).toBe(true);
   });
+
+  it('protects userEdited fields, never writes requiresReview fills, attaches parentFieldIds on conditional recapture, and surfaces diagnostics', async () => {
+    vi.mocked(getAutofillSessionProfile).mockResolvedValueOnce({
+      meta: { candidateId: 'cand-exe' },
+      data: {
+        full_name: 'Ilya S', first_name: 'Ilya', last_name: 'S', email: 'i@x.io',
+        phone: '', location: '', linkedin: '', github: '', portfolio: '',
+        authorized_countries: 'US', visa_sponsorship_needed: '',
+        desired_salary: '', notice_period: '', willing_to_relocate: '', age_18_or_older: '',
+      },
+    });
+    vi.mocked(getAutofillSettings).mockReset();
+    vi.mocked(getAutofillSettings).mockResolvedValueOnce({ mode: 'server', configVersion: 1 });
+    vi.mocked(requestAutofillPlan).mockReset();
+    vi.mocked(requestAutofillChoice).mockReset();
+
+    const capturedBatches: Array<Array<{ id: string; parentFieldIds?: string[] }>> = [];
+    vi.mocked(requestAutofillPlan).mockImplementation(async (input) => {
+      capturedBatches.push(
+        input.fields.map((f) => ({
+          id: f.id ?? '',
+          parentFieldIds: (f as typeof f & { parentFieldIds?: string[] }).parentFieldIds,
+        })),
+      );
+      if (input.fields.some((f) => f.label === 'Work country')) {
+        return {
+          ok: true,
+          deferredPlans: [{ fieldId: '0:f0:work_country', label: 'Work country', searchQuery: 'United States' }],
+          executableFills: [
+            { fieldId: '0:f0:citizenship', label: 'Citizenship', value: 'US Citizen', grounded: true, requiresReview: true },
+          ],
+          unresolved: [
+            { fieldId: '0:f0:note', label: 'Custom note', reason: 'No verified fact', reasonCode: 'MISSING_FACT', stage: 'profile', retryable: false },
+          ],
+        } as unknown as Awaited<ReturnType<typeof requestAutofillPlan>>;
+      }
+      if (input.fields.some((f) => f.label === 'State')) {
+        return {
+          ok: true,
+          executableFills: [{ fieldId: '0:f0:state', label: 'State', value: 'Texas', grounded: true }],
+        };
+      }
+      return { ok: true, executableFills: [] };
+    });
+    vi.mocked(requestAutofillChoice).mockResolvedValueOnce({ ok: true, choice: 'United States' });
+
+    const filled: Record<string, string> = {};
+    sendMessage.mockImplementation(async (m: {
+      kind: string;
+      fills?: Array<{ label: string; value: string }>;
+      step?: { action: string; label: string; value: string };
+    }) => {
+      if (m.kind === 'GET_FRAMED_FORM') {
+        const baseFields = [
+          field(0, 'Work country', { fieldId: 'f0:work_country', combo: true, widgetType: 'combobox', section: 'Eligibility', value: filled['Work country'] ?? '' }),
+          field(1, 'User edited note', { fieldId: 'f0:user_note', userEdited: true, currentValue: '', value: '' }),
+          field(2, 'Citizenship', { fieldId: 'f0:citizenship', value: filled['Citizenship'] ?? '' }),
+          field(3, 'Custom note', { fieldId: 'f0:note', value: filled['Custom note'] ?? '' }),
+        ];
+        if (filled['Work country'] === 'United States') {
+          baseFields.push(
+            field(4, 'State', { fieldId: 'f0:state', section: 'Eligibility', value: filled['State'] ?? '' }),
+          );
+        }
+        return { kind: 'FRAMED_FORM', fields: baseFields, uploads: [{ frame: 0, form: 0 }] };
+      }
+      if (m.kind === 'FILL_BY_LABEL') {
+        for (const f of m.fills ?? []) filled[f.label] = f.value;
+        return { kind: 'FILL_OUTCOMES', outcomes: (m.fills ?? []).map((f) => ({ label: f.label, status: 'filled' })) };
+      }
+      if (m.kind === 'COMBOBOX_STEP' && m.step) {
+        if (m.step.action === 'open') return { kind: 'COMBOBOX_REPLY', reply: { status: 'opened' } };
+        if (m.step.action === 'options') return { kind: 'COMBOBOX_REPLY', reply: { status: 'open', options: ['United States', 'Canada'] } };
+        if (m.step.action === 'select') {
+          filled[m.step.label] = m.step.value;
+          return { kind: 'COMBOBOX_REPLY', reply: { status: 'selected' } };
+        }
+        if (m.step.action === 'verify') return { kind: 'COMBOBOX_REPLY', reply: { status: 'verified', committed: filled[m.step.label] } };
+      }
+      return { kind: 'PAGE_SNAPSHOT', snapshot: { url: 'https://jobs.ashbyhq.com/acme/1', title: 'Engineer', headline: 'Engineer', text: '' } };
+    });
+
+    const diagnostics = vi.fn();
+    const { panel, notices } = makePanel();
+    panel.diagnostics = diagnostics;
+    await runWithTimers(panel);
+
+    expect(filled['User edited note']).toBeUndefined();
+    expect(filled['Citizenship']).toBeUndefined();
+    expect(filled['Work country']).toBe('United States');
+    expect(filled['State']).toBe('Texas');
+    expect(capturedBatches[0]?.some((f) => f.id === '0:f0:user_note')).toBe(false);
+    expect(capturedBatches[1]?.find((f) => f.id === '0:f0:state')?.parentFieldIds).toEqual(['0:f0:work_country']);
+    expect(notices.some((n) => n.includes('Review required before filling: Citizenship'))).toBe(true);
+    expect(diagnostics).toHaveBeenCalledWith({
+      requiresReview: [
+        { fieldId: '0:f0:citizenship', label: 'Citizenship', value: 'US Citizen', reason: 'Requires manual review before filling' },
+      ],
+      unresolved: [
+        { fieldId: '0:f0:citizenship', label: 'Citizenship', reason: 'Requires manual review before filling', reasonCode: 'REQUIRES_REVIEW', stage: 'planner', retryable: false },
+        { fieldId: '0:f0:note', label: 'Custom note', reason: 'No verified fact', reasonCode: 'MISSING_FACT', stage: 'profile', retryable: false },
+      ],
+    });
+  });
 });

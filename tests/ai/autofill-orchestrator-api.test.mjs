@@ -372,7 +372,7 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
 
     const planReq = {
       candidateId: CANDIDATE_OWNED,
-      fields: [{ label: 'Full Name', type: 'text' }],
+      fields: [{ id: 'f_auth_combo', label: 'Are you authorized to work in Canada?', type: 'select', combo: true }],
     };
 
     await assert.rejects(
@@ -647,6 +647,7 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
         fields: [
           { id: 'f_name', label: 'Full Name', type: 'text' },
           { label: 'City', type: 'text' },
+          { id: 'f_auth_combo', label: 'Are you authorized to work in the United States?', type: 'select', combo: true },
         ],
       },
       USER_OWNER,
@@ -746,7 +747,7 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
     await assert.rejects(
       async () =>
         executePlan(
-          { candidateId: CANDIDATE_OWNED, fields: [{ id: 'f_name', label: 'Full Name', type: 'text' }] },
+          { candidateId: CANDIDATE_OWNED, fields: [{ id: 'f_auth_combo', label: 'Are you authorized to work in the United States?', type: 'select', combo: true }] },
           USER_OWNER,
           { db: dbByok, fetchFn: mockFetch401 }
         ),
@@ -942,9 +943,14 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
     );
     assert.equal(planRes.ok, true);
     assert.deepEqual(
+      planRes.executableFills.map((f) => [f.fieldId, f.value]),
+      [['race', 'Asian']],
+      'PL-02 fast-path resolves Race deterministically without an AI call',
+    );
+    assert.deepEqual(
       seenPlanPayload.fields.map((f) => f.label),
-      ['Race', 'Which of the following communities do you belong to?'],
-      'Demographic fields must pass through to Phase B while DOB/privacy/marketing are blocked',
+      ['Which of the following communities do you belong to?'],
+      'Ambiguous demographic field reaches Phase B while Race fast-paths and DOB/privacy/marketing are blocked',
     );
     assert.deepEqual(seenPlanPayload.profile['demographics.raceEthnicity'], ['Asian']);
     assert.deepEqual(seenPlanPayload.profile['demographics.veteran'], ['No']);
@@ -1098,7 +1104,7 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
           {
             message: {
               content: JSON.stringify({
-                fills: [{ fieldId: 'race', label: 'Race', value: 'Asian' }],
+                fills: [{ fieldId: 'race_combo', label: 'Race', value: 'Asian' }],
               }),
             },
           },
@@ -1108,7 +1114,7 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
     const recoveredPlan = await executePlan(
       {
         candidateId: CANDIDATE_OWNED,
-        fields: [{ id: 'race', label: 'Race', options: ['Asian', 'White'] }],
+        fields: [{ id: 'race_combo', label: 'Race', combo: true }],
       },
       USER_OWNER,
       { db, fetchFn: retryPlanFetch, rateLimitRetryDelaysMs: [0] },
@@ -1123,7 +1129,7 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
         executePlan(
           {
             candidateId: CANDIDATE_OWNED,
-            fields: [{ id: 'race', label: 'Race', options: ['Asian', 'White'] }],
+            fields: [{ id: 'race_combo', label: 'Race', combo: true }],
           },
           USER_OWNER,
           { db, fetchFn: always429Fetch, rateLimitRetryDelaysMs: [0] },
@@ -1156,7 +1162,7 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
           {
             message: {
               content: JSON.stringify({
-                fills: [{ fieldId: 'race', label: 'Race', value: 'Asian' }],
+                fills: [{ fieldId: 'race_combo', label: 'Race', value: 'Asian' }],
               }),
             },
           },
@@ -1166,7 +1172,7 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
     const recovered503 = await executePlan(
       {
         candidateId: CANDIDATE_OWNED,
-        fields: [{ id: 'race', label: 'Race', options: ['Asian', 'White'] }],
+        fields: [{ id: 'race_combo', label: 'Race', combo: true }],
       },
       USER_OWNER,
       { db, fetchFn: retry503Fetch, rateLimitRetryDelaysMs: [0] },
@@ -1181,12 +1187,58 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
         executePlan(
           {
             candidateId: CANDIDATE_OWNED,
-            fields: [{ id: 'race', label: 'Race', options: ['Asian', 'White'] }],
+            fields: [{ id: 'race_combo', label: 'Race', combo: true }],
           },
           USER_OWNER,
           { db, fetchFn: always503Fetch, rateLimitRetryDelaysMs: [0] },
         ),
       (err) => err instanceof OrchestratorError && err.status === 503 && err.code === 'UPSTREAM_UNAVAILABLE',
+    );
+
+    // PC-03: Global autofill deadline & per-batch partial recovery in executePlan
+    let multiBatchCalls = 0;
+    const multiBatchFetch = async () => {
+      multiBatchCalls += 1;
+      if (multiBatchCalls === 1) {
+        return Response.json({
+          choices: [{ message: { content: JSON.stringify({ fills: [{ fieldId: 'c1', label: 'Race', value: 'Asian' }] }) } }],
+        });
+      }
+      return Response.json({ error: { message: 'Service Unavailable' } }, { status: 503 });
+    };
+    const partialRes = await executePlan(
+      {
+        candidateId: CANDIDATE_OWNED,
+        fields: [
+          { id: 'c1', label: 'Race', combo: true },
+          { id: 'c2', label: 'Custom Q2', type: 'textarea' },
+          { id: 'c3', label: 'Custom Q3', type: 'textarea' },
+          { id: 'c4', label: 'Custom Q4', type: 'textarea' },
+          { id: 'c5', label: 'Custom Q5', type: 'textarea' },
+        ],
+        context: { batchSize: 4 },
+      },
+      USER_OWNER,
+      { db, fetchFn: multiBatchFetch, rateLimitRetryDelaysMs: [0] },
+    );
+    assert.equal(partialRes.ok, true);
+    assert.equal(partialRes.fills.length, 1);
+    assert.equal(partialRes.fills[0].fieldId, 'c1');
+    assert.equal(partialRes.unresolved?.find((u) => u.fieldId === 'c5')?.reasonCode, 'BATCH_ERROR');
+
+    // Global deadline exhausted before request -> 504 TIMEOUT
+    await assert.rejects(
+      () =>
+        executePlan(
+          { candidateId: CANDIDATE_OWNED, fields: [{ id: 'c1', label: 'Race', combo: true }] },
+          USER_OWNER,
+          {
+            db,
+            fetchFn: async () => new Promise((resolve) => setTimeout(() => resolve(Response.json({ choices: [{ message: { content: '{"fills":[]}' } }] })), 100)),
+            globalDeadlineMs: 15,
+          },
+        ),
+      (err) => err instanceof OrchestratorError && err.status === 504 && err.code === 'TIMEOUT',
     );
 
     // Server AI key prefix & Vercel AI Gateway auto-detection

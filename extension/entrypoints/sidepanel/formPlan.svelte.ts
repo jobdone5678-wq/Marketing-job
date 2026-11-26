@@ -35,6 +35,10 @@ export class FormPlan {
    *  label: LinkedIn's own prefill, not the candidate's typing. Reset with `autofilled`. */
   readonly prefilled = new SvelteSet<string>();
   readonly #seen = new SvelteSet<string>();
+  /** The snapshot id of the most recent form read. */
+  snapshotId = $state<string | null>(null);
+  /** Questions the user manually edited in the current page session. */
+  readonly userEdited = new SvelteSet<string>();
   /** The last read's questions, scoped as the plan is — with their values, which the
    *  plan does not carry. What the "save my answers" offer is computed from. */
   formFields = $state<FramedField[]>([]);
@@ -122,6 +126,7 @@ export class FormPlan {
     this.read = true;
     this.applicationPages = reply?.kind === 'FRAMED_FORM' ? reply.applicationPages ?? [] : [];
     if (reply?.kind !== 'FRAMED_FORM') {
+      this.snapshotId = null;
       this.questionsSeen = 0;
       this.plan = null;
       this.uploads = [];
@@ -131,6 +136,12 @@ export class FormPlan {
       this.closed = false;
       this.formFields = [];
       return;
+    }
+    this.snapshotId = reply.snapshotId ?? reply.fields[0]?.snapshotId ?? null;
+    for (const f of reply.fields) {
+      if (f.userEdited) {
+        this.userEdited.add(f.fieldId ?? normalizeLabel(f.label));
+      }
     }
     this.uploads = reply.uploads;
     this.easyApply = reply.easyApply === true;
@@ -168,18 +179,24 @@ export class FormPlan {
     this.formFilled = false;
     this.autofilled.clear();
     this.prefilled.clear();
+    this.userEdited.clear();
+    this.snapshotId = null;
     this.#seen.clear();
   }
 
   /** Ticks one question off the plan, narrowed by whatever address the caller
    *  has: a fill knows its frame and form, the agent's report knows the label
    *  alone. An address that matches nothing leaves the plan as it was. */
-  tickOff(label: string, frame?: number, form?: number) {
+  tickOff(label: string, frame?: number, form?: number, fieldId?: string) {
     this.autofilled.add(normalizeLabel(label));
     if (!this.plan) return;
-    const item = this.plan.items.find(
-      (i) => i.label === label && (frame === undefined || i.frame === frame) && (form === undefined || i.form === form),
-    );
+    const item =
+      (fieldId
+        ? this.plan.items.find((i) => i.fieldId === fieldId && (frame === undefined || i.frame === frame))
+        : undefined) ??
+      this.plan.items.find(
+        (i) => i.label === label && (frame === undefined || i.frame === frame) && (form === undefined || i.form === form),
+      );
     if (item) this.plan = markAnswered(this.plan, item.key);
   }
 }

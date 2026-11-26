@@ -4,7 +4,12 @@ import { z } from 'zod';
 import {
   ProviderClient,
   ProviderError,
+  extractTokenUsage,
+  signalToProviderError,
   stripMarkdownFences,
+  validateCompletionEnvelope,
+  validateStructuredPayload,
+  withBoundedRetries,
 } from './provider-client';
 import type {
   ProviderClientConfig,
@@ -36,6 +41,8 @@ export interface ServerChatCompletionResult extends ChatCompletionResult {
   rawJson?: any;
   usage?: TokenUsageTelemetry;
   durationMs: number;
+  finishReason?: string;
+  status?: 'OK';
 }
 
 /**
@@ -59,19 +66,6 @@ export function resolveAiSdkBaseUrl(baseUrl: string): string {
     return trimmed;
   }
   return `${trimmed}/v1`;
-}
-
-/**
- * Converts an aborted AbortSignal into the matching ProviderError (TIMEOUT vs ABORTED).
- */
-function signalAbortToProviderError(signal: AbortSignal): ProviderError {
-  const reason = (signal as any).reason;
-  const isTimeout =
-    reason?.name === 'TimeoutError' || (reason && /timeout/i.test(String(reason)));
-  if (isTimeout) {
-    return new ProviderError('Request timed out', 504, 'TIMEOUT');
-  }
-  return new ProviderError('Request was aborted', 499, 'ABORTED');
 }
 
 /**
@@ -126,18 +120,18 @@ function translateToProviderError(err: any, deadline: number, signal?: AbortSign
 
   // Pre-aborted or in-flight caller signal check
   if (signal?.aborted) {
-    return signalAbortToProviderError(signal);
+    return signalToProviderError(signal);
   }
 
   // Explicit abort / timeout error instances (before HTTP status checks)
   if (err?.name === 'TimeoutError' || err?.cause?.name === 'TimeoutError') {
-    return new ProviderError('Request timed out', 504, 'TIMEOUT');
+    return new ProviderError('Request timed out', 504, 'TIMEOUT', undefined, 'TIMEOUT');
   }
   if (err?.name === 'AbortError' || err?.cause?.name === 'AbortError') {
     if (Date.now() >= deadline) {
-      return new ProviderError('Request timed out', 504, 'TIMEOUT');
+      return new ProviderError('Request timed out', 504, 'TIMEOUT', undefined, 'TIMEOUT');
     }
-    return new ProviderError('Request was aborted', 499, 'ABORTED');
+    return new ProviderError('Request was aborted', 499, 'ABORTED', undefined, 'ABORTED');
   }
 
   // AI SDK NoObjectGeneratedError (JSON parse error or schema validation error on Tier 1 / Tier 2)
@@ -240,7 +234,7 @@ function translateToProviderError(err: any, deadline: number, signal?: AbortSign
     return new ProviderError('Redirects are not permitted', 308, 'REDIRECT_BLOCKED');
   }
 
-  return new ProviderError(`Provider request failed: ${err?.message || err}`, 500, 'FETCH_ERROR');
+  return new ProviderError(`Provider request failed: ${err?.message || err}`, 500, 'NETWORK_ERROR', undefined, 'NETWORK_ERROR');
 }
 
 /**
@@ -396,6 +390,49 @@ export class ServerVercelProviderClient extends ProviderClient {
     });
   }
 
+  private wrapEnvelopeValidation(fetchFn: typeof fetch): typeof fetch {
+    return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const response = await fetchFn(input, init);
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.toLowerCase().includes('text/event-stream')) {
+        return response;
+      }
+      if (response.ok) {
+        const bodyText = await response.text();
+        if (isHtml(bodyText, contentType)) {
+          throw new ProviderError(
+            'Endpoint returned HTML error page instead of JSON',
+            502,
+            'HTML_RESPONSE',
+            bodyText,
+            'INVALID_RESPONSE',
+          );
+        }
+        let parsed: any;
+        try {
+          parsed = JSON.parse(bodyText);
+        } catch {
+          throw new ProviderError(
+            'Provider returned malformed JSON response',
+            502,
+            'MALFORMED_JSON',
+            bodyText,
+            'INVALID_RESPONSE',
+          );
+        }
+        if (parsed && typeof parsed === 'object' && 'choices' in parsed) {
+          validateCompletionEnvelope(parsed, bodyText);
+        }
+        return new Response(bodyText, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        });
+      }
+      return response;
+    };
+  }
+
   private getEffectiveFetch(): typeof fetch | undefined {
     if (this.agent) {
       let parsedUrl: URL | undefined;
@@ -434,22 +471,22 @@ export class ServerVercelProviderClient extends ProviderClient {
                   : urlProtocol,
               redirect: 'error',
             };
-      return createSsrfSafeFetch(safeAgentResult, this.customFetch);
+      return this.wrapEnvelopeValidation(createSsrfSafeFetch(safeAgentResult, this.customFetch));
     }
 
     const baseFetch = this.customFetch || globalThis.fetch;
-    return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    return this.wrapEnvelopeValidation(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       let response: Response;
       try {
         response = await baseFetch(input, { ...init, redirect: 'error' });
       } catch (fetchErr: any) {
         if (fetchErr?.message && /redirect/i.test(fetchErr.message)) {
-          throw new ProviderError('Redirects are not permitted', 308, 'REDIRECT_BLOCKED');
+          throw new ProviderError('Redirects are not permitted', 308, 'REDIRECT_BLOCKED', undefined, 'NETWORK_ERROR');
         }
         throw fetchErr;
       }
       if (response.status >= 300 && response.status < 400) {
-        throw new ProviderError('Redirects are not permitted', 308, 'REDIRECT_BLOCKED');
+        throw new ProviderError('Redirects are not permitted', 308, 'REDIRECT_BLOCKED', undefined, 'NETWORK_ERROR');
       }
       const contentType = response.headers.get('content-type') || '';
       if (contentType.toLowerCase().includes('text/event-stream')) {
@@ -462,6 +499,7 @@ export class ServerVercelProviderClient extends ProviderClient {
           response.status === 429 || response.status === 503 ? response.status : 502,
           'HTML_RESPONSE',
           bodyText,
+          response.status === 429 ? 'RATE_LIMITED' : 'INVALID_RESPONSE',
         );
       }
       return new Response(bodyText, {
@@ -469,7 +507,7 @@ export class ServerVercelProviderClient extends ProviderClient {
         statusText: response.statusText,
         headers: response.headers,
       });
-    };
+    });
   }
 
   private getModel(supportsStructuredOutputs: boolean = false) {
@@ -497,24 +535,62 @@ export class ServerVercelProviderClient extends ProviderClient {
   ): Promise<ServerChatCompletionResult> {
     const startTime = Date.now();
     const timeoutMs = options?.timeoutMs ?? this.defaultTimeoutMs;
+    return withBoundedRetries(
+      () => this._generateSingleWithFallback(messages, options, startTime, timeoutMs),
+      {
+        timeoutMs,
+        maxRetries: options?.maxRetries,
+        baseDelayMs: options?.retryBaseDelayMs,
+        signal: options?.signal,
+      },
+    );
+  }
+
+  private validateSdkFinishReason(finishReason?: string, rawText?: string): void {
+    if (finishReason === 'length') {
+      throw new ProviderError(
+        'Provider completion was truncated (finish_reason: length)',
+        502,
+        'TRUNCATED_RESPONSE',
+        rawText,
+        'INVALID_RESPONSE',
+      );
+    }
+    if (finishReason === 'content-filter') {
+      throw new ProviderError(
+        'Provider refused completion request (content_filter)',
+        502,
+        'MODEL_REFUSAL',
+        rawText,
+        'INVALID_RESPONSE',
+      );
+    }
+  }
+
+  private async _generateSingleWithFallback(
+    messages: ChatMessage[],
+    options: (GenerateCompletionOptions & { schema?: z.ZodType<any> }) | undefined,
+    startTime: number,
+    timeoutMs: number,
+  ): Promise<ServerChatCompletionResult> {
     const deadline = startTime + timeoutMs;
 
     // Pre-aborted signal check
     if (options?.signal?.aborted) {
-      throw signalAbortToProviderError(options.signal);
+      throw signalToProviderError(options.signal);
     }
 
     if (deadline - Date.now() <= 0) {
-      throw new ProviderError('Request timed out', 504, 'TIMEOUT');
+      throw new ProviderError('Request timed out', 504, 'TIMEOUT', undefined, 'TIMEOUT');
     }
 
     const checkDeadline = (): number => {
       if (options?.signal?.aborted) {
-        throw signalAbortToProviderError(options.signal);
+        throw signalToProviderError(options.signal);
       }
       const remaining = deadline - Date.now();
       if (remaining <= 0) {
-        throw new ProviderError('Request timed out', 504, 'TIMEOUT');
+        throw new ProviderError('Request timed out', 504, 'TIMEOUT', undefined, 'TIMEOUT');
       }
       return remaining;
     };
@@ -525,24 +601,16 @@ export class ServerVercelProviderClient extends ProviderClient {
     let aggregatedTotalTokens: number | undefined = undefined;
 
     const recordUsage = (usage: any) => {
-      if (!usage) return;
-      const hasRaw = usage.raw && typeof usage.raw === 'object';
-      const pTokens = hasRaw
-        ? usage.raw.prompt_tokens ?? usage.raw.input_tokens
-        : usage.inputTokens ?? usage.promptTokens;
-      const cTokens = hasRaw
-        ? usage.raw.completion_tokens ?? usage.raw.output_tokens
-        : usage.outputTokens ?? usage.completionTokens;
-      const tTokens = hasRaw ? usage.raw.total_tokens : usage.totalTokens;
-
-      if (typeof pTokens === 'number') {
-        aggregatedPromptTokens = (aggregatedPromptTokens ?? 0) + pTokens;
+      const extracted = extractTokenUsage(usage);
+      if (!extracted) return;
+      if (extracted.promptTokens !== undefined) {
+        aggregatedPromptTokens = (aggregatedPromptTokens ?? 0) + extracted.promptTokens;
       }
-      if (typeof cTokens === 'number') {
-        aggregatedCompletionTokens = (aggregatedCompletionTokens ?? 0) + cTokens;
+      if (extracted.completionTokens !== undefined) {
+        aggregatedCompletionTokens = (aggregatedCompletionTokens ?? 0) + extracted.completionTokens;
       }
-      if (typeof tTokens === 'number') {
-        aggregatedTotalTokens = (aggregatedTotalTokens ?? 0) + tTokens;
+      if (extracted.totalTokens !== undefined) {
+        aggregatedTotalTokens = (aggregatedTotalTokens ?? 0) + extracted.totalTokens;
       }
     };
 
@@ -553,11 +621,13 @@ export class ServerVercelProviderClient extends ProviderClient {
         aggregatedTotalTokens !== undefined
       ) {
         return {
-          inputTokens: aggregatedPromptTokens,
-          outputTokens: aggregatedCompletionTokens,
-          promptTokens: aggregatedPromptTokens,
-          completionTokens: aggregatedCompletionTokens,
-          totalTokens: aggregatedTotalTokens,
+          ...(aggregatedPromptTokens !== undefined
+            ? { inputTokens: aggregatedPromptTokens, promptTokens: aggregatedPromptTokens }
+            : {}),
+          ...(aggregatedCompletionTokens !== undefined
+            ? { outputTokens: aggregatedCompletionTokens, completionTokens: aggregatedCompletionTokens }
+            : {}),
+          ...(aggregatedTotalTokens !== undefined ? { totalTokens: aggregatedTotalTokens } : {}),
         };
       }
       return undefined;
@@ -585,11 +655,17 @@ export class ServerVercelProviderClient extends ProviderClient {
           maxRetries: 0,
         });
         recordUsage(result.usage);
+        this.validateSdkFinishReason(result.finishReason, result.text);
+        if (typeof result.text !== 'string') {
+          throw new ProviderError('Provider completion content is not a string', 502, 'INVALID_RESPONSE', undefined, 'INVALID_RESPONSE');
+        }
         return {
           text: result.text,
           rawJson: undefined,
           usage: formatUsage(),
           durationMs: Date.now() - startTime,
+          ...(result.finishReason ? { finishReason: result.finishReason } : {}),
+          status: 'OK',
         };
       } catch (rawErr: any) {
         recordUsage(rawErr?.usage);
@@ -597,15 +673,15 @@ export class ServerVercelProviderClient extends ProviderClient {
       }
     }
 
-    // Schema selection
-    let schema: z.ZodType<any> | undefined = options?.schema;
-    if (!schema) {
-      if (options?.schemaName === 'plan') {
-        schema = PlanContractSchema;
-      } else if (options?.schemaName === 'choose') {
-        schema = ChooseContractSchema;
-      }
-    }
+    // Schema selection (always use Zod schemas on the server)
+    const schema: z.ZodType<any> | undefined =
+      (options?.schema as z.ZodType<any> | undefined) ??
+      (options?.schemaName === 'plan'
+        ? PlanContractSchema
+        : options?.schemaName === 'choose'
+          ? ChooseContractSchema
+          : undefined);
+    const validationOpts = schema ? { ...options, schema } : options;
 
     // ==========================================
     // Tier 1: Structured Output
@@ -633,11 +709,15 @@ export class ServerVercelProviderClient extends ProviderClient {
           maxRetries: 0,
         });
         recordUsage(result.usage);
+        this.validateSdkFinishReason(result.finishReason);
+        const rawJson = validateStructuredPayload(result.output, validationOpts);
         tier1Result = {
-          text: typeof result.output === 'string' ? result.output : JSON.stringify(result.output),
-          rawJson: result.output,
+          text: typeof rawJson === 'string' ? rawJson : JSON.stringify(rawJson),
+          rawJson,
           usage: formatUsage(),
           durationMs: Date.now() - startTime,
+          ...(result.finishReason ? { finishReason: result.finishReason } : {}),
+          status: 'OK',
         };
         tier1Passed = true;
       } catch (rawErr: any) {
@@ -682,26 +762,21 @@ export class ServerVercelProviderClient extends ProviderClient {
           maxRetries: 0,
         });
         recordUsage(result.usage);
+        this.validateSdkFinishReason(result.finishReason);
 
-        let rawJson = result.output;
-        if (schema) {
-          const parsed = schema.safeParse(rawJson);
-          if (!parsed.success) {
-            throw new ProviderError(
-              `Response failed schema validation: ${parsed.error.message}`,
-              502,
-              'SCHEMA_VALIDATION_ERROR',
-              typeof rawJson === 'string' ? rawJson : JSON.stringify(rawJson),
-            );
-          }
-          rawJson = parsed.data;
-        }
+        const rawJson = validateStructuredPayload(
+          result.output,
+          validationOpts,
+          typeof result.output === 'string' ? result.output : JSON.stringify(result.output),
+        );
 
         tier2Result = {
           text: typeof rawJson === 'string' ? rawJson : JSON.stringify(rawJson),
           rawJson,
           usage: formatUsage(),
           durationMs: Date.now() - startTime,
+          ...(result.finishReason ? { finishReason: result.finishReason } : {}),
+          status: 'OK',
         };
         tier2Passed = true;
       } catch (rawErr: any) {
@@ -750,6 +825,10 @@ export class ServerVercelProviderClient extends ProviderClient {
         maxRetries: 0,
       });
       recordUsage(result.usage);
+      this.validateSdkFinishReason(result.finishReason, result.text);
+      if (typeof result.text !== 'string') {
+        throw new ProviderError('Provider completion content is not a string', 502, 'INVALID_RESPONSE', undefined, 'INVALID_RESPONSE');
+      }
 
       const cleanedText = stripMarkdownFences(result.text);
 
@@ -763,6 +842,7 @@ export class ServerVercelProviderClient extends ProviderClient {
             502,
             'HTML_RESPONSE',
             result.text,
+            'INVALID_RESPONSE',
           );
         }
         throw new ProviderError(
@@ -770,27 +850,19 @@ export class ServerVercelProviderClient extends ProviderClient {
           502,
           'MALFORMED_JSON',
           result.text,
+          'INVALID_RESPONSE',
         );
       }
 
-      if (schema) {
-        const parsed = schema.safeParse(rawJson);
-        if (!parsed.success) {
-          throw new ProviderError(
-            `Response failed schema validation: ${parsed.error.message}`,
-            502,
-            'SCHEMA_VALIDATION_ERROR',
-            cleanedText,
-          );
-        }
-        rawJson = parsed.data;
-      }
+      rawJson = validateStructuredPayload(rawJson, validationOpts, cleanedText);
 
       return {
         text: typeof rawJson === 'string' ? rawJson : JSON.stringify(rawJson),
         rawJson,
         usage: formatUsage(),
         durationMs: Date.now() - startTime,
+        ...(result.finishReason ? { finishReason: result.finishReason } : {}),
+        status: 'OK',
       };
     } catch (rawErr: any) {
       recordUsage(rawErr?.usage);

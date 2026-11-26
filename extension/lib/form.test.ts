@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { extractForm, extractUploads, fillByLabel } from './form';
+import { extractForm, extractUploads, fillByLabel, markUserEdited } from './form';
 import { revealField } from './revealField';
 import { planLabelFills, fillsForFrame, looksLikeApplication, scopeToApplication } from './fillPlan';
 import { labeledInput, must, reset, formWith } from './test-utils';
@@ -819,5 +819,82 @@ describe('control naming', () => {
       'checkbox',
       'combobox',
     ]);
+  });
+
+  it('captures unique fieldId, snapshotId, section, placeholder, currentValue, userEdited, optionsState, and parentFieldIds', () => {
+    document.body.innerHTML = `
+      <form>
+        <fieldset>
+          <legend>Employment</legend>
+          <label>Years <input type="text" name="years" placeholder="e.g. 3" /></label>
+          <label>Years <input type="text" name="years" /></label>
+        </fieldset>
+        <section>
+          <h2>Work Eligibility</h2>
+          <label for="work-country">Which country do you intend to work from?</label>
+          <input id="work-country" role="combobox" aria-expanded="false" />
+          <label for="spon">Will you require sponsorship?</label>
+          <select id="spon"><option value="">Select</option><option>Yes</option><option>No</option></select>
+        </section>
+      </form>`;
+
+    const yearsInputs = document.querySelectorAll<HTMLInputElement>('input[name="years"]');
+    yearsInputs[0]!.value = '4';
+    markUserEdited(yearsInputs[0]!);
+
+    const fields = extractForm(document);
+    expect(fields).toHaveLength(4);
+    expect(new Set(fields.map((f) => f.fieldId)).size).toBe(4);
+    expect(fields.every((f) => Boolean(f.snapshotId) && f.snapshotId === fields[0]!.snapshotId)).toBe(true);
+    expect(fields[0]).toMatchObject({
+      label: 'Years',
+      section: 'Employment',
+      placeholder: 'e.g. 3',
+      currentValue: '4',
+      userEdited: true,
+      optionsState: 'unknown',
+    });
+    expect(fields[1]).toMatchObject({
+      label: 'Years',
+      section: 'Employment',
+      currentValue: '',
+      userEdited: false,
+    });
+    expect(fields[2]).toMatchObject({
+      section: 'Work Eligibility',
+      optionsState: 'deferred',
+    });
+    expect(fields[3]).toMatchObject({
+      section: 'Work Eligibility',
+      optionsState: 'loaded',
+      parentFieldIds: [fields[2]!.fieldId!],
+    });
+
+    // Protects userEdited and requiresReview fills, and verifies DOM write by fieldId
+    const secondYearsId = fields[1]!.fieldId!;
+    const outcomes = fillByLabel(document, [
+      { fieldId: fields[0]!.fieldId, label: 'Years', value: '99' },
+      { fieldId: secondYearsId, label: 'Years', value: '2' },
+      { fieldId: fields[3]!.fieldId, label: 'Will you require sponsorship?', value: 'No', requiresReview: true },
+    ]);
+    expect(outcomes).toEqual([
+      { fieldId: fields[0]!.fieldId, label: 'Years', status: 'not_fillable' },
+      { fieldId: secondYearsId, label: 'Years', status: 'filled', verifiedValue: '2' },
+      { fieldId: fields[3]!.fieldId, label: 'Will you require sponsorship?', status: 'not_fillable', verificationError: 'Requires manual review' },
+    ]);
+    expect(yearsInputs[0]!.value).toBe('4');
+    expect(yearsInputs[1]!.value).toBe('2');
+  });
+
+  it('reports DOM verification failure when a controlled input reverts its written value', () => {
+    reset();
+    const input = labeledInput('reverted', 'City', { type: 'text' });
+    input.addEventListener('input', () => {
+      input.value = '';
+    });
+    const [field] = extractForm(document);
+    const [outcome] = fillByLabel(document, [{ fieldId: field!.fieldId, label: 'City', value: 'Austin' }]);
+    expect(outcome?.status).toBe('not_fillable');
+    expect(outcome?.verificationError).toContain('empty');
   });
 });

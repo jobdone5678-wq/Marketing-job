@@ -1,6 +1,6 @@
 // Which of a page's forms is the application, and which label fills go to which frame.
 
-import { matchesCountry, matchFieldKey, normalizeLabel, workAuthorizationCountry } from './fieldKeys';
+import { matchesCountry, matchFieldKey, normalizeLabel, workAuthorizationCountry, type FieldMatchContext } from './fieldKeys';
 import type { LabelFill } from './protocol';
 
 /**
@@ -51,23 +51,39 @@ export function scopeToApplication<T extends { frame: number; form: number }>(
  * its input; the page is not touched here.
  */
 export function planLabelFills(
-  fields: { label: string; frame?: number; form?: number }[],
+  fields: Array<{
+    fieldId?: string;
+    label: string;
+    frame?: number;
+    form?: number;
+    helperText?: string;
+    placeholder?: string;
+    widgetType?: string;
+    options?: readonly string[];
+  }>,
   values: Record<string, string>,
   authorizedCountries?: string,
 ): LabelFill[] {
   const asked = new Set<string>();
   const fills: LabelFill[] = [];
-  for (const { label, frame, form } of fields) {
-    const value = confirmedFieldValue(label, values, authorizedCountries);
-    if (!value || asked.has(normalizeLabel(label))) continue;
-    asked.add(normalizeLabel(label));
-    fills.push({ label, value, frame, form });
+  for (const field of fields) {
+    const { fieldId, label, frame, form } = field;
+    const value = confirmedFieldValue(label, values, authorizedCountries, field);
+    const dedupeKey = fieldId ?? normalizeLabel(label);
+    if (!value || asked.has(dedupeKey)) continue;
+    asked.add(dedupeKey);
+    fills.push({ ...(fieldId ? { fieldId } : {}), label, value, frame, form });
   }
   return fills;
 }
 
-export function confirmedFieldValue(label: string, values: Record<string, string>, authorizedCountries = ''): string {
-  const key = matchFieldKey(label);
+export function confirmedFieldValue(
+  label: string,
+  values: Record<string, string>,
+  authorizedCountries = '',
+  context?: FieldMatchContext,
+): string {
+  const key = matchFieldKey(label, context);
   if (key) return values[key] ?? '';
 
   // A country omitted from the profile is unknown. Only answer an explicitly named country.

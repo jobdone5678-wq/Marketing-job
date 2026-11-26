@@ -205,7 +205,10 @@ test('grounded engine: question-specific typed validation & anti-hallucination g
     assert.equal(rAwsYes.valid, false, 'Must reject "Yes" for unconfirmed AWS cert');
 
     const rAwsNo = validateGroundedAnswer('No', facts, certQuestion);
-    assert.equal(rAwsNo.valid, true, 'Must accept "No" for unconfirmed cert');
+    assert.equal(rAwsNo.valid, false, 'Missing AWS cert must return unresolved, NOT verified "No"');
+    assert.equal(rAwsNo.action, 'skip');
+    assert.equal(rAwsNo.reasonCode, 'UNCONFIRMED_CERTIFICATION');
+    assert.equal(rAwsNo.stage, 'certification');
 
     // Verified cert: PMP
     const pmpQuestion = {
@@ -413,8 +416,8 @@ test('grounded engine: question-specific typed validation & anti-hallucination g
       assert.equal(validateGroundedAnswer(opt, unsetFacts, communityQuestion).action, 'skip');
     }
 
-    // 10d. Enabled with ['Prefer not to say'] on mapped keys -> 'I prefer not to answer' valid
-    const declineFacts = buildVerifiedFacts({ full_name: 'Jordan Lee' }, [], undefined, {
+    // 10d. DP-04: Global decline requires ['Prefer not to say'] on ALL recognized categories in the question
+    const partialDeclineFacts = buildVerifiedFacts({ full_name: 'Jordan Lee' }, [], undefined, {
       enabled: true,
       answers: {
         disability: ['Prefer not to say'],
@@ -422,8 +425,24 @@ test('grounded engine: question-specific typed validation & anti-hallucination g
         parentalStatus: ['Prefer not to say'],
       },
     });
-    assert.equal(validateGroundedAnswer('I prefer not to answer', declineFacts, communityQuestion).valid, true);
-    assert.equal(validateGroundedAnswer('None of the above', declineFacts, communityQuestion).action, 'skip');
+    assert.equal(
+      validateGroundedAnswer('I prefer not to answer', partialDeclineFacts, communityQuestion).action,
+      'skip',
+      'Partial decline (missing neurodivergent/refugeeOrImmigrant) must NOT approve global decline',
+    );
+
+    const fullDeclineFacts = buildVerifiedFacts({ full_name: 'Jordan Lee' }, [], undefined, {
+      enabled: true,
+      answers: {
+        disability: ['Prefer not to say'],
+        neurodivergent: ['Prefer not to say'],
+        veteran: ['Prefer not to say'],
+        parentalStatus: ['Prefer not to say'],
+        refugeeOrImmigrant: ['Prefer not to say'],
+      },
+    });
+    assert.equal(validateGroundedAnswer('I prefer not to answer', fullDeclineFacts, communityQuestion).valid, true);
+    assert.equal(validateGroundedAnswer('None of the above', fullDeclineFacts, communityQuestion).action, 'skip');
 
     // 10e. 'None of the above' allowed ONLY when every non-decline/non-none option is explicitly contradicted
     const allNoFacts = buildVerifiedFacts({ full_name: 'Jordan Lee' }, [], undefined, {
@@ -639,5 +658,594 @@ test('grounded engine: question-specific typed validation & anti-hallucination g
     const baseRes = validateGroundedAnswer('Austin, United States', baseOnlyFacts, workFromQuestion);
     assert.equal(baseRes.valid, true);
     assert.ok(baseRes.evidenceIds.includes('profile.location.base'));
+  });
+
+  await t.test('14. GR-01 & GR-03: skill existence never implies duration or falls back to total_experience_years; symbol preservation', () => {
+    const facts = buildVerifiedFacts({
+      full_name: 'Polyglot Dev',
+      total_experience_years: 8,
+      primary_skills: 'TypeScript, Java (2 years), C (5 years), .NET (4 years)',
+    });
+
+    // Existence-only skill satisfies existence question, NEVER duration question
+    const tsExist = validateGroundedAnswer('Yes', facts, { label: 'Do you have experience with TypeScript?' });
+    assert.equal(tsExist.valid, true);
+    assert.equal(tsExist.reasonCode, 'GROUNDED');
+
+    const tsYears = validateGroundedAnswer('3 years', facts, {
+      label: 'How many years of experience do you have with TypeScript?',
+    });
+    assert.equal(tsYears.valid, false);
+    assert.equal(tsYears.action, 'skip');
+    assert.equal(tsYears.reasonCode, 'SKILL_DURATION_UNKNOWN');
+    assert.equal(tsYears.stage, 'experience');
+
+    // Unknown skills (Kubernetes, Rust) remain unknown even when total_experience_years = 8
+    const k8sYears = validateGroundedAnswer('4 years', facts, {
+      label: 'How many years of experience do you have with Kubernetes?',
+    });
+    assert.equal(k8sYears.valid, false);
+    assert.equal(k8sYears.reasonCode, 'MISSING_FACT');
+
+    const rustNo = validateGroundedAnswer('No', facts, {
+      label: 'Do you have experience with Rust?',
+    });
+    assert.equal(rustNo.valid, false, 'Missing skill must remain unknown rather than fabricating No');
+    assert.equal(rustNo.reasonCode, 'MISSING_FACT');
+
+    // Symbol preservation: C vs C++ vs C# and .NET vs NET
+    assert.equal(validateGroundedAnswer('5 years', facts, { label: 'How many years of experience with C?' }).valid, true);
+    assert.equal(validateGroundedAnswer('5 years', facts, { label: 'How many years of experience with C++?' }).valid, false);
+    assert.equal(validateGroundedAnswer('5 years', facts, { label: 'How many years of experience with C#?' }).valid, false);
+    assert.equal(validateGroundedAnswer('4 years', facts, { label: 'How many years of experience with .NET?' }).valid, true);
+    assert.equal(validateGroundedAnswer('4 years', facts, { label: 'How many years of experience with NET?' }).valid, false);
+  });
+
+  await t.test('15. GR-02 & GR-04: minimum thresholds, exact years, ranges, and relevant vs total experience', () => {
+    const facts = buildVerifiedFacts({
+      full_name: 'Threshold Dev',
+      total_experience_years: 8,
+      relevant_experience_years: 3,
+      primary_skills: 'Java (2 years), Python (4 years)',
+    });
+
+    // GR-02: 2y Java cannot satisfy "at least 5 years of Java"
+    const minJavaYes = validateGroundedAnswer('Yes', facts, {
+      label: 'Do you have at least 5 years of experience with Java?',
+    });
+    assert.equal(minJavaYes.valid, false);
+    assert.equal(minJavaYes.reasonCode, 'EXPERIENCE_INFLATION');
+
+    const minJavaNo = validateGroundedAnswer('No', facts, {
+      label: 'Do you have at least 5 years of experience with Java?',
+    });
+    assert.equal(minJavaNo.valid, true);
+
+    const minJavaNum = validateGroundedAnswer('2 years', facts, {
+      label: 'Do you have at least 5 years of Java experience?',
+    });
+    assert.equal(minJavaNum.valid, false);
+    assert.equal(minJavaNum.reasonCode, 'EXPERIENCE_INFLATION');
+
+    // GR-04: exact years vs range vs relevant experience
+    const exactMismatch = validateGroundedAnswer('3 years', facts, {
+      label: 'How many years of total experience do you have?',
+      canonical_name: 'total_experience_years',
+    });
+    assert.equal(exactMismatch.valid, false, '3 years cannot pass an exact 8-year total experience question');
+    assert.equal(exactMismatch.reasonCode, 'EXPERIENCE_EXACT_MISMATCH');
+
+    const exactEight = validateGroundedAnswer('8 years', facts, {
+      label: 'How many years of total experience do you have?',
+      canonical_name: 'total_experience_years',
+    });
+    assert.equal(exactEight.valid, true);
+
+    // 3y relevant vs 8y total
+    const relThree = validateGroundedAnswer('3 years', facts, {
+      label: 'How many years of relevant experience do you have?',
+      canonical_name: 'relevant_experience_years',
+    });
+    assert.equal(relThree.valid, true);
+    assert.ok(relThree.evidenceIds.includes('profile.experience.relevant_years'));
+
+    const relEight = validateGroundedAnswer('8 years', facts, {
+      label: 'How many years of relevant experience do you have?',
+      canonical_name: 'relevant_experience_years',
+    });
+    assert.equal(relEight.valid, false);
+    assert.equal(relEight.reasonCode, 'EXPERIENCE_INFLATION');
+
+    // Range validation (Python = 4 years)
+    assert.equal(validateGroundedAnswer('3-5 years', facts, { label: 'Years of Python experience' }).valid, true);
+    assert.equal(validateGroundedAnswer('5+ years', facts, { label: 'Years of Python experience' }).valid, false);
+    assert.equal(validateGroundedAnswer('1-2 years', facts, { label: 'Years of Python experience' }).valid, false);
+  });
+
+  await t.test('16. GR-05: degree hierarchy (High School Graduate != Masters), major, completion status, and min requirement', () => {
+    const hsFacts = buildVerifiedFacts({
+      full_name: 'HS Grad',
+      highest_qualification: 'High School Graduate',
+    });
+    const degQ = { label: 'What is your highest level of completed education?', canonical_name: 'highest_education' };
+    assert.equal(validateGroundedAnswer('High School Graduate', hsFacts, degQ).valid, true);
+    const hsMaster = validateGroundedAnswer("Master's degree", hsFacts, degQ);
+    assert.equal(hsMaster.valid, false);
+    assert.equal(hsMaster.reasonCode, 'DEGREE_ELEVATION');
+    assert.equal(validateGroundedAnswer("Bachelor's degree", hsFacts, degQ).valid, false);
+
+    // Major & completion status & minimum qualification
+    const inProgressFacts = buildVerifiedFacts({
+      full_name: 'CS Student',
+      highest_qualification: "Master's Degree",
+      confirmed_facts: {
+        major: 'Computer Science',
+        completion_status: 'in_progress',
+      },
+    });
+    assert.equal(
+      validateGroundedAnswer('Computer Science', inProgressFacts, { label: 'What is your major?' }).valid,
+      true,
+    );
+    assert.equal(
+      validateGroundedAnswer('Biology', inProgressFacts, { label: 'What is your major?' }).valid,
+      false,
+    );
+    assert.equal(
+      validateGroundedAnswer('Yes', inProgressFacts, {
+        label: "Have you completed a Master's degree in Computer Science?",
+      }).valid,
+      false,
+    );
+
+    const completedMastersFacts = buildVerifiedFacts({
+      full_name: 'MS Holder',
+      highest_qualification: "Master's Degree",
+      confirmed_facts: {
+        major: 'Computer Science',
+        completion_status: 'completed',
+      },
+    });
+    assert.equal(
+      validateGroundedAnswer('Yes', completedMastersFacts, {
+        label: "Do you have a Bachelor's degree or higher?",
+      }).valid,
+      true,
+    );
+    assert.equal(
+      validateGroundedAnswer('Yes', completedMastersFacts, {
+        label: "Is your highest degree a Bachelor's degree?",
+      }).valid,
+      false,
+    );
+    assert.equal(
+      validateGroundedAnswer('Yes', completedMastersFacts, {
+        label: "Have you completed a Bachelor's degree in Biology?",
+      }).valid,
+      false,
+    );
+  });
+
+  await t.test('17. GR-06: question-independent certification identification', () => {
+    const facts = buildVerifiedFacts({
+      full_name: 'PMP Holder',
+      certifications: 'PMP',
+    });
+    // Proposed answer mentions held cert 'PMP' on an AWS question -> must STILL reject!
+    const mismatch = validateGroundedAnswer('Yes, PMP', facts, {
+      label: 'Are you AWS Certified Solutions Architect?',
+      category: 'certification',
+    });
+    assert.equal(mismatch.valid, false);
+    assert.equal(mismatch.reasonCode, 'UNCONFIRMED_CERTIFICATION');
+
+    // Missing cert -> unresolved, not verified No
+    const missingNo = validateGroundedAnswer('No', facts, {
+      label: 'Are you AWS Certified Solutions Architect?',
+      category: 'certification',
+    });
+    assert.equal(missingNo.valid, false);
+    assert.equal(missingNo.reasonCode, 'UNCONFIRMED_CERTIFICATION');
+  });
+
+  await t.test('18. GR-07 & GR-08: typed comparators and empty normalized rejection', () => {
+    const facts = buildVerifiedFacts({
+      full_name: 'Jane Doe',
+      email: 'jane@example.com',
+      zip_code: '94105',
+      current_city: 'San Francisco',
+      current_state: 'CA',
+      country: 'United States',
+    });
+
+    // GR-08: Empty normalized values rejected pre-validator
+    for (const emptyLike of ['', '   ', '---', '...', '___']) {
+      const res = validateGroundedAnswer(emptyLike, facts, { label: 'First Name', canonical_name: 'first_name' });
+      assert.equal(res.valid, false);
+      assert.equal(res.reasonCode, 'EMPTY_ANSWER');
+      assert.equal(res.stage, 'input_validation');
+    }
+
+    // GR-07: No unsafe substring matches
+    assert.equal(validateGroundedAnswer('J', facts, { label: 'First Name', canonical_name: 'first_name' }).valid, false);
+    assert.equal(validateGroundedAnswer('Jane', facts, { label: 'First Name', canonical_name: 'first_name' }).valid, true);
+    assert.equal(validateGroundedAnswer('jane@evil.com', facts, { label: 'Email', canonical_name: 'email' }).valid, false);
+    assert.equal(validateGroundedAnswer('example.com', facts, { label: 'Email', canonical_name: 'email' }).valid, false);
+    assert.equal(validateGroundedAnswer('jane@example.com', facts, { label: 'Email', canonical_name: 'email' }).valid, true);
+    assert.equal(validateGroundedAnswer('941', facts, { label: 'Postal Code', canonical_name: 'postal_code' }).valid, false);
+    assert.equal(validateGroundedAnswer('94105', facts, { label: 'Postal Code', canonical_name: 'postal_code' }).valid, true);
+  });
+
+  await t.test('19. GR-09, GR-10, GR-11 & CountryResolver: 3-state sponsorship, jurisdiction scoping, US state disambiguation, trailing assertions', () => {
+    // 3-state sponsorship: now = false, future = unknown
+    const partialSponFacts = buildVerifiedFacts({
+      full_name: 'OPT Worker',
+      need_sponsorship_now: false,
+    });
+    assert.equal(
+      validateGroundedAnswer('No', partialSponFacts, { label: 'Do you currently require visa sponsorship?' }).valid,
+      true,
+    );
+    assert.equal(
+      validateGroundedAnswer('No', partialSponFacts, { label: 'Will you require visa sponsorship in the future?' }).valid,
+      false,
+    );
+    assert.equal(
+      validateGroundedAnswer('No', partialSponFacts, { label: 'Will you now or in the future require sponsorship?' }).valid,
+      false,
+    );
+
+    // now = false, future = true -> now_or_future is Yes (with requiresReview: true)
+    const futureYesFacts = buildVerifiedFacts({
+      full_name: 'STEM OPT',
+      need_sponsorship_now: false,
+      need_sponsorship_future: true,
+    });
+    const nowNo = validateGroundedAnswer('No', futureYesFacts, { label: 'Do you currently require visa sponsorship?' });
+    assert.equal(nowNo.valid, true);
+    assert.equal(nowNo.requiresReview, false);
+    const futureYes = validateGroundedAnswer('Yes', futureYesFacts, {
+      label: 'Will you now or in the future require sponsorship?',
+    });
+    assert.equal(futureYes.valid, true);
+    assert.equal(futureYes.requiresReview, true);
+
+    // GR-10: Country-specific sponsorship does NOT silently fall back to US/global facts
+    const usOnlyFacts = buildVerifiedFacts({
+      full_name: 'US Worker',
+      authorized_in_usa: true,
+      need_sponsorship_now: false,
+      need_sponsorship_future: false,
+    });
+    const caSpon = validateGroundedAnswer('No', usOnlyFacts, {
+      label: 'Will you require visa sponsorship to work in Canada?',
+    });
+    assert.equal(caSpon.valid, false);
+    assert.equal(caSpon.reasonCode, 'COUNTRY_MISMATCH');
+
+    // FK-05: "Canada for any employer" extracts Canada cleanly
+    const caAuthFacts = buildVerifiedFacts({ full_name: 'CA Worker' }, undefined, {
+      age_18_or_older: true,
+      notice_period_days: null,
+      willing_to_relocate: null,
+      visa_sponsorship_needed: null,
+      authorized_countries: ['ca'],
+    });
+    assert.equal(
+      validateGroundedAnswer('Yes', caAuthFacts, {
+        label: 'Are you legally authorized to work in Canada for any employer?',
+      }).valid,
+      true,
+    );
+
+    // FK-04 / AUTH-R2: "Yes, I am a US citizen" rejected unless citizenship_country verified
+    assert.equal(
+      validateGroundedAnswer('Yes, I am a US citizen', usOnlyFacts, {
+        label: 'Are you authorized to work in the United States?',
+      }).valid,
+      false,
+    );
+    const usCitizenFacts = buildVerifiedFacts({
+      full_name: 'US Citizen',
+      authorized_in_usa: true,
+      citizenship_country: 'United States',
+    });
+    assert.equal(
+      validateGroundedAnswer('Yes, I am a US citizen', usCitizenFacts, {
+        label: 'Are you authorized to work in the United States?',
+      }).valid,
+      true,
+    );
+
+    // GR-11: Residence vs Intended Work Country vs Authorized Countries independence
+    const multiGeoFacts = buildVerifiedFacts(
+      {
+        full_name: 'Global Dev',
+        residence_country: 'Canada',
+        intended_work_country: 'Germany',
+        citizenship_country: 'India',
+      },
+      undefined,
+      {
+        age_18_or_older: true,
+        notice_period_days: null,
+        willing_to_relocate: null,
+        visa_sponsorship_needed: null,
+        authorized_countries: ['us'],
+      },
+    );
+    assert.equal(
+      validateGroundedAnswer('Canada', multiGeoFacts, {
+        label: 'Country of Residence',
+        canonical_name: 'residence_country',
+      }).valid,
+      true,
+    );
+    assert.equal(
+      validateGroundedAnswer('Germany', multiGeoFacts, {
+        label: 'Country of Residence',
+        canonical_name: 'residence_country',
+      }).valid,
+      false,
+    );
+    assert.equal(
+      validateGroundedAnswer('Germany', multiGeoFacts, {
+        label: 'Which country do you intend to work from?',
+        canonical_name: 'intended_work_country',
+      }).valid,
+      true,
+    );
+    assert.equal(
+      validateGroundedAnswer('United States', multiGeoFacts, {
+        label: 'Which country do you intend to work from?',
+        canonical_name: 'intended_work_country',
+      }).valid,
+      false,
+    );
+    assert.equal(
+      validateGroundedAnswer('Yes', multiGeoFacts, {
+        label: 'Are you authorized to work in Canada?',
+      }).valid,
+      false,
+    );
+    assert.equal(
+      validateGroundedAnswer('India', multiGeoFacts, {
+        label: 'Country of citizenship',
+        canonical_name: 'citizenship_country',
+      }).valid,
+      true,
+    );
+
+    // CountryResolver US state disambiguation: CA != Canada, IN != India
+    const caStateFacts = buildVerifiedFacts(
+      {
+        full_name: 'SF Dev',
+        current_city: 'San Francisco',
+        current_state: 'CA',
+        country: 'United States',
+      },
+      undefined,
+      {
+        age_18_or_older: true,
+        notice_period_days: null,
+        willing_to_relocate: null,
+        visa_sponsorship_needed: null,
+        authorized_countries: ['us'],
+      },
+    );
+    assert.equal(
+      validateGroundedAnswer('Yes', caStateFacts, {
+        label: 'Are you authorized to work in this location?',
+        resolvedCountryCode: 'San Francisco, CA',
+      }).valid,
+      true,
+    );
+    assert.equal(
+      validateGroundedAnswer('Yes', caStateFacts, {
+        label: 'Are you authorized to work in this location?',
+        resolvedCountryCode: 'Indianapolis, IN',
+      }).valid,
+      true,
+    );
+  });
+
+  await t.test('20. GR-12, GR-13, GR-14, AB-R1, DP-01/DP-03/DP-05: helperText, structured salary, dual-index AB, diagnostics, policies', () => {
+    const facts = buildVerifiedFacts(
+      {
+        full_name: 'Structured Tester',
+        current_city: 'Austin',
+        current_state: 'TX',
+        country: 'United States',
+        zip_code: '78701',
+      },
+      [
+        {
+          topic: 'relocation',
+          question: 'Do you require relocation assistance?',
+          answer: 'No, I do not require relocation assistance.',
+          provenance: 'candidate',
+        },
+        {
+          topic: 'salary_expectation',
+          question: 'What is your expected monthly salary in EUR?',
+          answer: 'EUR 8000 per month',
+          provenance: 'candidate',
+          constraints: { currency: 'EUR', period: 'month' },
+        },
+      ],
+      {
+        age_18_or_older: true,
+        notice_period_days: 14,
+        willing_to_relocate: true,
+        visa_sponsorship_needed: false,
+        desired_salary_amount: 100000,
+        desired_salary_currency: 'USD',
+        desired_salary_period: 'year',
+      },
+      {
+        enabled: true,
+        answers: {
+          veteran: ['No'],
+          protectedVeteran: ['No'],
+        },
+      },
+    );
+
+    // GR-12: helperText disambiguates "Current location"
+    assert.equal(
+      validateGroundedAnswer('78701', facts, {
+        label: 'Current location',
+        helperText: 'Please enter your postal code',
+      }).valid,
+      true,
+    );
+    assert.equal(
+      validateGroundedAnswer('Austin, United States', facts, {
+        label: 'Current location',
+        helperText: 'City and country',
+      }).valid,
+      true,
+    );
+
+    // GR-13: Structured salary { amount, currency, period }
+    assert.equal(
+      validateGroundedAnswer('USD 100,000 per year', facts, { label: 'What are your salary expectations?' }).valid,
+      true,
+    );
+    const eurMismatch = validateGroundedAnswer('EUR 100,000 per year', facts, {
+      label: 'What are your salary expectations?',
+    });
+    assert.equal(eurMismatch.valid, false);
+    assert.equal(eurMismatch.reasonCode, 'SALARY_MISMATCH');
+
+    const hourlyMismatch = validateGroundedAnswer('USD 100 per hour', facts, {
+      label: 'What are your salary expectations?',
+    });
+    assert.equal(hourlyMismatch.valid, false);
+    assert.equal(hourlyMismatch.reasonCode, 'SALARY_MISMATCH');
+
+    // AB-R1: Relocation sub-intents & salary qualifiers do not cross-match
+    assert.equal(
+      validateGroundedAnswer('No, I do not require relocation assistance.', facts, {
+        label: 'Do you require relocation assistance?',
+      }).valid,
+      true,
+    );
+    assert.equal(
+      validateGroundedAnswer('No, I do not require relocation assistance.', facts, {
+        label: 'Have you previously relocated?',
+      }).valid,
+      false,
+    );
+
+    const eurBankOnlyFacts = buildVerifiedFacts(
+      { full_name: 'EU Candidate' },
+      [
+        {
+          topic: 'salary_expectation',
+          question: 'What is your monthly salary expectation in EUR?',
+          answer: 'EUR 8000 per month',
+          provenance: 'candidate',
+          constraints: { currency: 'EUR', period: 'month' },
+        },
+      ],
+    );
+    assert.equal(
+      validateGroundedAnswer('EUR 8000 per month', eurBankOnlyFacts, {
+        label: 'What is your monthly salary expectation in EUR?',
+      }).valid,
+      true,
+    );
+    assert.equal(
+      validateGroundedAnswer('EUR 8000 per month', eurBankOnlyFacts, {
+        label: 'What is your annual salary expectation in USD?',
+      }).valid,
+      false,
+      'Mismatched salary qualifiers (USD/year vs EUR/month) must not match Answer Bank entry',
+    );
+
+    // DEM-R3: Immigration status question with "Refugee or immigrant" option must NOT trigger demographic gate
+    const immFacts = buildVerifiedFacts(
+      {
+        full_name: 'Imm Candidate',
+        confirmed_facts: { visa_status: 'Refugee or immigrant' },
+      },
+      undefined,
+      undefined,
+      { enabled: false, answers: {} },
+    );
+    assert.equal(
+      validateGroundedAnswer('Refugee or immigrant', immFacts, {
+        label: 'What is your current immigration status?',
+        intent: 'visa_status',
+        options: ['Citizen', 'Permanent Resident', 'Work Visa', 'Refugee or immigrant'],
+      }).valid,
+      true,
+    );
+
+    // DP-01 & DP-03: Veteran independence & "No, I am not a protected veteran"
+    const vetOnlyFacts = buildVerifiedFacts({ full_name: 'Vet Only' }, undefined, undefined, {
+      enabled: true,
+      answers: { veteran: ['No'] },
+    });
+    assert.equal(
+      validateGroundedAnswer('No, I am not a protected veteran', vetOnlyFacts, {
+        label: 'Are you a protected veteran?',
+        options: ['Yes, I identify as a protected veteran', 'No, I am not a protected veteran'],
+      }).valid,
+      false,
+      'veteran preference must NOT fall back to protectedVeteran',
+    );
+    assert.equal(
+      validateGroundedAnswer('No, I am not a protected veteran', facts, {
+        label: 'Are you a protected veteran?',
+        options: ['Yes, I identify as a protected veteran', 'No, I am not a protected veteran'],
+      }).valid,
+      true,
+    );
+
+    // DP-05: Consent / accommodation / attestation require user action
+    for (const policyLabel of [
+      'Do you require disability accommodations during the interview?',
+      'I agree to the privacy policy and terms of use',
+      'I certify and attest that all answers are accurate',
+    ]) {
+      const policyRes = validateGroundedAnswer('Yes', facts, { label: policyLabel });
+      assert.equal(policyRes.valid, false);
+      assert.equal(policyRes.reasonCode, 'ATTESTATION_REQUIRES_USER');
+      assert.equal(policyRes.stage, 'policy');
+    }
+
+    // GR-14: Conflicting equal-rank facts trigger CONFLICTING_FACTS
+    const conflictingFacts = buildVerifiedFacts({
+      full_name: 'Jane Doe',
+      confirmed_facts: {
+        first_name: 'Jane',
+        name: 'Janet Doe',
+      },
+    });
+    // Wait: explicit first_name vs name don't conflict; test same-field conflict via direct VerifiedFact entry
+    conflictingFacts.set('profile.first_name', {
+      id: 'profile.first_name',
+      type: 'string',
+      value: 'Jane',
+      source: 'confirmed_facts',
+      provenance: 'user_confirmed',
+      category: 'personal',
+      conflicts: [
+        {
+          existingValue: 'Jane',
+          existingProvenance: 'user_confirmed',
+          incomingValue: 'Janet',
+          incomingProvenance: 'user_confirmed',
+        },
+      ],
+    });
+    const conflictRes = validateGroundedAnswer('Jane', conflictingFacts, {
+      label: 'First Name',
+      canonical_name: 'first_name',
+    });
+    assert.equal(conflictRes.valid, false);
+    assert.equal(conflictRes.reasonCode, 'CONFLICTING_FACTS');
   });
 });

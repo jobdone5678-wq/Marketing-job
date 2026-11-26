@@ -1,5 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { startWalk, nextStep, applyStep, skipStep, stopWalk } from './walk';
+
+const sendMessage = vi.hoisted(() => vi.fn());
+vi.mock('wxt/browser', () => ({ browser: { runtime: { sendMessage } } }));
+import { walkFills } from './formWalk';
 
 describe('walk', () => {
   it('offers the labels in the order it was given them', () => {
@@ -55,5 +59,29 @@ describe('walk', () => {
 
     expect(nextStep(walk)).toBeNull();
     expect(walk.done).toEqual([]);
+  });
+
+  it('skips requiresReview fills without writing and passes fieldId on answered hook', async () => {
+    sendMessage.mockReset();
+    sendMessage.mockResolvedValue({ kind: 'FILL_OUTCOMES', outcomes: [{ fieldId: 'f0:email', label: 'Email', status: 'filled' }] });
+    const answered = vi.fn();
+    vi.useFakeTimers();
+    try {
+      const pending = walkFills(
+        [
+          { fieldId: 'f0:review', label: 'Citizen check', value: 'Yes', requiresReview: true },
+          { fieldId: 'f0:email', label: 'Email', value: 'a@b.io', frame: 0, form: 0 },
+        ],
+        { filling: vi.fn(), stopped: () => false, wrote: vi.fn(), answered },
+      );
+      await vi.runAllTimersAsync();
+      const result = await pending;
+      expect(sendMessage).toHaveBeenCalledTimes(1);
+      expect(answered).toHaveBeenCalledWith('Email', 0, 0, 'f0:email');
+      expect(result.skipped).toHaveLength(1);
+      expect(result.done).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

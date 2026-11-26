@@ -175,6 +175,102 @@ test('demographic preferences options, matching, Supabase RLS, and /api/v1/me/de
     ['Person with disability', 'Parent']
   );
 
+  // DP-01 & DP-03: veteran <-> protectedVeteran must NEVER cross-match/fallback, and "No, I am not a protected veteran" works
+  assert.deepEqual(
+    clone(prefsLib.demographicChoices('protectedVeteran', ['No, I am not a protected veteran'], ['I am a protected veteran', 'No, I am not a protected veteran', 'I am not a protected veteran'])),
+    ['No, I am not a protected veteran']
+  );
+  assert.deepEqual(
+    clone(prefsLib.demographicChoices('protectedVeteran', ['No, I am not a protected veteran'], ['I am a protected veteran', 'I am not a protected veteran'])),
+    ['I am not a protected veteran']
+  );
+  assert.equal(prefsLib.isNegativeDemographicStatus('protectedVeteran', 'No, I am not a protected veteran'), true);
+  assert.equal(prefsLib.isNegativeDemographicStatus('veteran', 'No, I am not a protected veteran'), false, 'veteran must not match protectedVeteran wording');
+  assert.equal(prefsLib.isNegativeDemographicStatus('protectedVeteran', 'No, I am not a veteran'), false, 'protectedVeteran must not match veteran wording');
+  assert.equal(prefsLib.demographicOptionSupported('veteran', ['No, I am not a protected veteran'], 'Not a veteran'), false);
+  assert.equal(prefsLib.demographicOptionSupported('protectedVeteran', ['No'], 'Not a veteran'), false);
+  assert.deepEqual(
+    clone(prefsLib.mixedDemographicChoices(
+      { protectedVeteran: ['No'] },
+      ['Person with disability', 'Veteran', 'Parent', 'I prefer not to answer']
+    )),
+    []
+  );
+
+  // DP-02: Unsafe aliases blocked; exact & safe directional mappings supported
+  assert.deepEqual(
+    clone(prefsLib.demographicChoices('gender', ['Man'], ['Cisgender man', 'Woman', 'Prefer not to say'])),
+    [],
+    'Man must not match Cisgender man'
+  );
+  assert.deepEqual(
+    clone(prefsLib.demographicChoices('gender', ['Male'], ['Cisgender man', 'Cisgender woman'])),
+    [],
+    'Male must not match Cisgender man'
+  );
+  assert.deepEqual(
+    clone(prefsLib.demographicChoices('gender', ['Cisgender man'], ['Man', 'Woman'])),
+    ['Man'],
+    'Cisgender man may safely map directionally to broad Man'
+  );
+  assert.deepEqual(
+    clone(prefsLib.demographicChoices('raceEthnicity', ['Asian'], ['East Asian', 'South Asian', 'White'])),
+    [],
+    'Asian must not match East Asian or South Asian'
+  );
+  assert.deepEqual(
+    clone(prefsLib.demographicChoices('raceEthnicity', ['East Asian'], ['Asian', 'White'])),
+    ['Asian'],
+    'East Asian may safely map directionally to broad Asian'
+  );
+  assert.deepEqual(
+    clone(prefsLib.demographicChoices('raceEthnicity', ['East Asian'], ['South Asian', 'White'])),
+    [],
+    'East Asian must not match South Asian'
+  );
+  assert.deepEqual(
+    clone(prefsLib.demographicChoices('religion', ['No religion'], ['Atheist', 'Agnostic', 'Christianity'])),
+    [],
+    'No religion must not match Atheist or Agnostic'
+  );
+  assert.deepEqual(
+    clone(prefsLib.demographicChoices('religion', ['Atheist'], ['Agnostic', 'No religion', 'Christianity'])),
+    [],
+    'Atheist must not match Agnostic or No religion'
+  );
+  assert.deepEqual(
+    clone(prefsLib.demographicChoices('religion', ['No religion'], ['No religion / Atheist / Agnostic', 'Christianity'])),
+    ['No religion / Atheist / Agnostic'],
+    'No religion safely maps directionally to combined bucket'
+  );
+
+  // DP-04: Global decline in mixedDemographicChoices requires decline preference on ALL recognized categories
+  assert.deepEqual(
+    clone(prefsLib.mixedDemographicChoices(
+      { disability: ['Prefer not to say'], veteran: ['Prefer not to say'] },
+      ['Person with disability', 'Veteran', 'Parent', 'I prefer not to answer']
+    )),
+    [],
+    'Partial decline must NOT pick global I prefer not to answer'
+  );
+  assert.deepEqual(
+    clone(prefsLib.mixedDemographicChoices(
+      { disability: ['Prefer not to say'], veteran: ['Prefer not to say'], parentalStatus: ['Prefer not to say'] },
+      ['Person with disability', 'Veteran', 'Parent', 'I prefer not to answer']
+    )),
+    ['I prefer not to answer'],
+    'Decline on all recognized categories permits global decline'
+  );
+
+  // DP-05: Exclude consent, accommodation, certification, and attestation wording from isDemographicQuestion()
+  assert.equal(prefsLib.isDemographicQuestion('Do you require any disability accommodations during the interview?'), false);
+  assert.equal(prefsLib.isDemographicQuestion('Do you consent to the collection of demographic information?'), false);
+  assert.equal(prefsLib.isDemographicQuestion('I certify and attest that my veteran and gender responses are accurate'), false);
+  assert.equal(prefsLib.isDemographicQuestion('I acknowledge the privacy policy regarding race and ethnicity data'), false);
+  assert.equal(prefsLib.isDemographicQuestion('Voluntary Self-Identification of Disability'), true);
+  assert.equal(prefsLib.isDemographicQuestion('What is your gender identity?'), true);
+  assert.equal(prefsLib.isDemographicQuestion('Date of birth'), true);
+
   // 3. Route rejects unauthenticated callers
   const unauth = await route.GET(new Request('http://localhost/api/v1/me/demographic-preferences'), { db });
   assert.equal(unauth.status, 401);

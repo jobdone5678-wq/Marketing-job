@@ -1,15 +1,25 @@
 import { describe, it, expect } from 'vitest';
-import { matchFieldKey, formatAuthorizedCountries } from './fieldKeys';
+import {
+  formatAuthorizedCountries,
+  matchChoice,
+  matchFieldKey,
+  offeredChoice,
+  parseChoiceAssertion,
+  workAuthorizationCountry,
+} from './fieldKeys';
 
 describe('matchFieldKey', () => {
   it('maps common labels to canonical profile keys', () => {
     expect(matchFieldKey('Name')).toBe('fullName');
     expect(matchFieldKey('Name *')).toBe('fullName');
     expect(matchFieldKey('Name (required)')).toBe('fullName');
-    expect(matchFieldKey('Legal Full Name')).toBe('fullName');
+    expect(matchFieldKey('Legal Full Name')).toBe('legalName');
     expect(matchFieldKey('Name of employer')).toBeNull();
     expect(matchFieldKey('First Name')).toBe('firstName');
-    expect(matchFieldKey('Legal Last Name *')).toBe('lastName');
+    expect(matchFieldKey('Legal First Name')).toBe('legalFirstName');
+    expect(matchFieldKey('Preferred First Name')).toBe('preferredFirstName');
+    expect(matchFieldKey('Preferred Name')).toBe('preferredName');
+    expect(matchFieldKey('Legal Last Name *')).toBe('legalLastName');
     expect(matchFieldKey('E-mail Address')).toBe('email');
     expect(matchFieldKey('LinkedIn URL')).toBe('linkedin');
   });
@@ -120,7 +130,39 @@ describe('matchFieldKey with a preamble', () => {
 
   it('keeps a long city synonym to the label start: a duration question is not the city', () => {
     expect(matchFieldKey('How long have you lived at your current location?')).toBeNull();
-    expect(matchFieldKey('Current location')).toBe('city');
+    expect(matchFieldKey('Current location duration')).toBeNull();
+    expect(matchFieldKey('Current location')).toBeNull();
+    expect(matchFieldKey('Current location', { placeholder: 'Enter city' })).toBe('city');
+    expect(matchFieldKey('Current location', { helperText: 'Please list your city and country.' })).toBe('location');
+    expect(matchFieldKey('Current location', { widgetType: 'select', options: ['United States', 'Canada', 'Germany'] })).toBe('country');
+    expect(matchFieldKey('Current location', { widgetType: 'select', options: ['AL', 'CA', 'TX'] })).toBe('state');
+    expect(matchFieldKey('Current location', { widgetType: 'select', options: ['Remote', 'Hybrid', 'On-site'] })).toBeNull();
+    expect(matchFieldKey('Current location', { widgetType: 'radio', helperText: 'City' })).toBeNull();
+  });
+
+  it('rejects ambiguous prefix matches for phone country code, pronunciation, citizenship, and country-specific sponsorship', () => {
+    expect(matchFieldKey('Phone country code')).toBeNull();
+    expect(matchFieldKey('Phone number *')).toBe('phone');
+    expect(matchFieldKey('First name pronunciation')).toBeNull();
+    expect(matchFieldKey('Country of citizenship')).toBeNull();
+    expect(matchFieldKey('Will you now or in the future require sponsorship to work in Canada?')).toBeNull();
+    expect(matchFieldKey('Do you require UK Skilled Worker visa sponsorship?')).toBeNull();
+  });
+
+  it('preserves trailing assertions on leading Yes/No options and extracts clean work auth countries', () => {
+    expect(parseChoiceAssertion('Yes')).toEqual({ choice: true });
+    expect(parseChoiceAssertion('Yes, I am a US citizen')).toEqual({
+      choice: true,
+      trailingAssertion: 'I am a US citizen',
+    });
+    expect(matchChoice('Yes', 'Yes, I am a US citizen', 'Are you authorized to work?')).toBe(false);
+    expect(offeredChoice('Yes', ['Yes, I am a US citizen', 'No'], 'Are you authorized to work?')).toBeUndefined();
+    expect(matchChoice('Yes, I am a US citizen', 'Yes, I am a US citizen', 'Are you authorized to work?')).toBe(true);
+
+    expect(workAuthorizationCountry('Are you legally authorized to work in Canada for any employer?')).toBe('Canada');
+    expect(workAuthorizationCountry('Are you authorized to work in the United Kingdom today?')).toBe('United Kingdom');
+    expect(workAuthorizationCountry('Are you legally authorized to work in the United States without sponsorship?')).toBeUndefined();
+    expect(workAuthorizationCountry('Are you authorized to work in this country?')).toBeUndefined();
   });
 
   it('keeps word boundaries for long synonyms', () => {

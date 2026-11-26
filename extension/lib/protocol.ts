@@ -33,12 +33,18 @@ export type WidgetType =
   | 'boolean_buttons'
   | 'combobox';
 
+export type OptionsState = 'loaded' | 'deferred' | 'empty' | 'unknown';
+
 /**
  * A serialisable view of one question the page asks (see lib/form.ts). Usually
  * one control, but a question rendered as several checkboxes under a shared
  * `legend` is one field offering their labels as `options` — see `Question`.
  */
 export interface FormField {
+  /** Unique question identifier within the captured form snapshot. */
+  fieldId?: string;
+  /** Snapshot identifier produced by `extractForm` for staleness/recapture checks. */
+  snapshotId?: string;
   /** Position in the page's question list — reported, not used to address it. */
   index: number;
   /**
@@ -54,12 +60,20 @@ export interface FormField {
   label: string;
   /** Optional helper/hint text associated with this question (never merged into `label`). */
   helperText?: string;
+  /** Optional placeholder text associated with this control. */
+  placeholder?: string;
+  /** Nearest enclosing section heading/legend (distinct from `label`). */
+  section?: string;
   /** The UI widget pattern used to render this question. */
   widgetType?: WidgetType;
   name: string;
   required: boolean;
   /** The current answer; for a group, the options already chosen. */
   value: string;
+  /** Alias of current DOM answer at capture time. */
+  currentValue?: string;
+  /** True when the user manually edited this control in the current page session. */
+  userEdited?: boolean;
   /** True for a custom-widget combobox (react-select and friends), which the
    *  simple filler must not write into — see `fillByLabel`. */
   combo: boolean;
@@ -73,6 +87,10 @@ export interface FormField {
    * and the agent reads them with `combobox.open` + `combobox.options`.
    */
   options?: string[];
+  /** Availability state of `options` at capture time. */
+  optionsState?: OptionsState;
+  /** Upstream parent field IDs (e.g. location/country triggers) for this question. */
+  parentFieldIds?: string[];
   multiple?: boolean;
 }
 
@@ -113,12 +131,14 @@ export interface FramedUpload extends Upload {
  * scope, not a missing one.
  */
 export interface LabelFill {
+  fieldId?: string;
   label: string;
   value: string;
   frame?: number;
   form?: number;
   onlyEmpty?: boolean;
   choices?: string[];
+  requiresReview?: boolean;
 }
 
 /**
@@ -159,8 +179,11 @@ export type FillStatus =
   | 'not_fillable';
 
 export interface FillOutcome {
+  fieldId?: string;
   label: string;
   status: FillStatus;
+  verifiedValue?: string;
+  verificationError?: string;
 }
 
 /**
@@ -231,6 +254,7 @@ export type RuntimeMessage =
   // a LinkedIn job that no longer takes applications (see `linkedInPostingClosed`).
   | {
       kind: 'FORM';
+      snapshotId?: string;
       fields: FormField[];
       uploads: Upload[];
       easyApply?: boolean;
@@ -246,6 +270,7 @@ export type RuntimeMessage =
   | { kind: 'GET_FRAMED_FORM'; target?: AutofillTarget }
   | {
       kind: 'FRAMED_FORM';
+      snapshotId?: string;
       fields: FramedField[];
       uploads: FramedUpload[];
       easyApply?: boolean;

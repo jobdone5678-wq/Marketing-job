@@ -38,7 +38,9 @@ export interface DemographicPreferences {
 
 export const demographicKeys = Object.keys(demographicFields) as DemographicKey[];
 
+const nonDemographicAction = /\b(?:accommodations?|adjustments?|consent|certif\w*|attest\w*|signature|agree|acknowledg\w*|marketing|newsletter|opt in|contact me|privacy policy|terms of (?:use|service))\b/;
 const attestation = /\b(?:accommodations?|adjustments?|consent|certif\w*|attest\w*|signature|agree|acknowledg\w*|date of birth|marketing|newsletter|opt in|contact me|privacy policy|terms of (?:use|service))\b/;
+const workAuthExclusion = /\b(?:authorized to work|authorised to work|work authorization|visa sponsorship|at least 18)\b/;
 
 export function demographicWords(text: string): string {
   return text.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_–—-]/g, ' ').toLowerCase();
@@ -46,7 +48,7 @@ export function demographicWords(text: string): string {
 
 export function demographicKey(label: string): DemographicKey | undefined {
   const text = demographicWords(label);
-  if (attestation.test(text) || /\b(?:authorized to work|authorised to work|work authorization|visa sponsorship|at least 18)\b/.test(text)) return undefined;
+  if (attestation.test(text) || workAuthExclusion.test(text)) return undefined;
   const matches = demographicKeys.filter((key) => demographicFields[key][1].test(text));
   const keys = matches.filter((key) =>
     !(key === 'veteran' && matches.includes('protectedVeteran')) &&
@@ -61,6 +63,7 @@ export function isCommunitySelfIdQuestion(label: string): boolean {
 
 export function isDemographicQuestion(label: string): boolean {
   const text = demographicWords(label);
+  if (nonDemographicAction.test(text) || workAuthExclusion.test(text)) return false;
   return isCommunitySelfIdQuestion(text) ||
     /\b(?:date of birth|birth date|birth year|birthday|dob|demographics?)\b/.test(text) ||
     demographicKeys.some((key) => demographicFields[key][1].test(text));
@@ -84,20 +87,23 @@ function statusChoice(key: DemographicKey, option: string): boolean | undefined 
       /^(?:yes|(?:yes )?i have a disability(?: or have (?:had one in the past|a history(?: record)? of having one))?|person with (?:a )?disability)$/,
       /^(?:no|(?:no )?i do not have a disability(?: and have not had one in the past)?)$/,
     ],
-    veteran: [/^(?:yes|(?:i am )?a veteran|veteran)$/, /^(?:no|(?:i am )?(?:not a|no) veteran)$/],
+    veteran: [
+      /^(?:yes|(?:yes )?(?:i am )?a veteran|veteran)$/,
+      /^(?:no|(?:no )?(?:i am )?(?:not a|no) veteran|non veteran)$/,
+    ],
     protectedVeteran: [
-      /^(?:yes|(?:i am )?a protected veteran|i identify as one or more(?: of the)? classifications of (?:a )?protected veteran)$/,
-      /^(?:no|(?:i am )?not a (?:protected )?veteran|i do not identify as a protected veteran)$/,
+      /^(?:yes|(?:yes )?(?:i am )?a protected veteran|(?:yes )?i identify as (?:one or more(?: of the)? classifications of )?(?:a )?protected veteran)$/,
+      /^(?:no|(?:no )?(?:i am )?not a protected veteran|(?:no )?i do not identify as a protected veteran)$/,
     ],
     hispanicOrigin: [
-      /^(?:yes|(?:i am )?hispanic or latin[eoax]|hispanic|latin[eoax])$/,
-      /^(?:no|(?:i am )?not hispanic or latin[eoax])$/,
+      /^(?:yes|(?:yes )?(?:i am )?hispanic or latin[eoax]|hispanic|latin[eoax])$/,
+      /^(?:no|(?:no )?(?:i am )?not hispanic or latin[eoax])$/,
     ],
     transgender: [/^(?:yes|(?:yes )?i identify as transgender)$/, /^(?:no|(?:no )?i do not identify as transgender|not transgender)$/],
     parentalStatus: [/^(?:yes|(?:yes )?i am a parent(?: or have children)?|parent)$/, /^(?:no|(?:no )?i am not a parent)$/],
     caregiverStatus: [/^(?:yes|(?:yes )?i have caregiving responsibilities)$/, /^(?:no|(?:no )?i do not have caregiving responsibilities)$/],
-    neurodivergent: [/^(?:yes|(?:i am )?neurodivergent)$/, /^(?:no|i am not neurodivergent)$/],
-    refugeeOrImmigrant: [/^(?:yes|(?:i am )?(?:an? )?(?:refugee or immigrant|immigrant or refugee))$/, /^(?:no|i am neither a refugee nor an immigrant)$/],
+    neurodivergent: [/^(?:yes|(?:yes )?(?:i am )?neurodivergent)$/, /^(?:no|(?:no )?i am not neurodivergent)$/],
+    refugeeOrImmigrant: [/^(?:yes|(?:yes )?(?:i am )?(?:an? )?(?:refugee or immigrant|immigrant or refugee))$/, /^(?:no|(?:no )?i am neither a refugee nor an immigrant)$/],
     firstGeneration: [/^(?:yes|(?:yes )?i am a first generation (?:college|university|graduate|student))$/, /^(?:no|(?:no )?i am not a first generation (?:college|university|graduate|student))$/],
     schoolMeals: [/^(?:yes)$/, /^(?:no)$/],
     geneticInformation: [/^(?:yes)$/, /^(?:no)$/],
@@ -109,67 +115,91 @@ function statusChoice(key: DemographicKey, option: string): boolean | undefined 
   return undefined;
 }
 
-const CHOICE_ALIASES: Partial<Record<DemographicKey, readonly RegExp[]>> = {
+interface ChoiceAliasRule {
+  pattern: RegExp;
+  code: string;
+  /** Broad/combined codes that this specific choice safely implies (directional). */
+  broadensTo?: readonly string[];
+}
+
+const CHOICE_ALIAS_RULES: Partial<Record<DemographicKey, readonly ChoiceAliasRule[]>> = {
   gender: [
-    /^(?:male|man|cisgender man|male\s*\/\s*man|man\s*\/\s*male)$/,
-    /^(?:female|woman|cisgender woman|female\s*\/\s*woman|woman\s*\/\s*female)$/,
-    /^(?:non ?binary|nonbinary|non ?binary\s*\/\s*(?:genderqueer|third gender))$/,
-    /^(?:genderqueer|gender non ?conforming|genderqueer\s*\/\s*gender non ?conforming)$/,
-    /^(?:transgender|trans)$/,
+    { pattern: /^(?:male|man|male\s*\/\s*man|man\s*\/\s*male)$/, code: 'man' },
+    { pattern: /^(?:cisgender man|cis man|cisgender male|cis male)$/, code: 'cisgender_man', broadensTo: ['man'] },
+    { pattern: /^(?:female|woman|female\s*\/\s*woman|woman\s*\/\s*female)$/, code: 'woman' },
+    { pattern: /^(?:cisgender woman|cis woman|cisgender female|cis female)$/, code: 'cisgender_woman', broadensTo: ['woman'] },
+    { pattern: /^(?:non ?binary|nonbinary|non ?binary\s*\/\s*(?:genderqueer|third gender))$/, code: 'nonbinary' },
+    { pattern: /^(?:genderqueer|gender non ?conforming|genderqueer\s*\/\s*gender non ?conforming)$/, code: 'genderqueer' },
+    { pattern: /^(?:transgender|trans)$/, code: 'transgender' },
   ],
   sex: [
-    /^(?:male|m)$/,
-    /^(?:female|f)$/,
+    { pattern: /^(?:male|m)$/, code: 'male' },
+    { pattern: /^(?:female|f)$/, code: 'female' },
   ],
   pronouns: [
-    /^he\s*\/\s*him(?:\s*\/\s*his)?$/,
-    /^she\s*\/\s*her(?:\s*\/\s*hers)?$/,
-    /^they\s*\/\s*them(?:\s*\/\s*theirs)?$/,
-    /^he\s*\/\s*they$/,
-    /^she\s*\/\s*they$/,
+    { pattern: /^he\s*\/\s*him(?:\s*\/\s*his)?$/, code: 'he_him' },
+    { pattern: /^she\s*\/\s*her(?:\s*\/\s*hers)?$/, code: 'she_her' },
+    { pattern: /^they\s*\/\s*them(?:\s*\/\s*theirs)?$/, code: 'they_them' },
+    { pattern: /^he\s*\/\s*they$/, code: 'he_they' },
+    { pattern: /^she\s*\/\s*they$/, code: 'she_they' },
   ],
   raceEthnicity: [
-    /^(?:asian(?:\s*(?:or|\/)\s*asian american)?|east asian|south asian|southeast asian)(?:\s+not hispanic or latin[eoax])?$/,
-    /^(?:white(?:\s*\/\s*caucasian)?|caucasian)(?:\s+not hispanic or latin[eoax])?$/,
-    /^(?:black(?:\s*(?:or|\/)\s*african american)?(?:\s+not hispanic or latin[eoax])?|african american|black african caribbean or black british)$/,
-    /^hispanic(?:\s*(?:or|\/)\s*latin[eoax])?$/,
-    /^(?:american indian or alaska native|native american or alaska native|indigenous(?:\s*(?:or|\/)\s*native american)?|native american)(?:\s+not hispanic or latin[eoax])?$/,
-    /^native hawaiian or (?:other )?pacific islander(?:\s+not hispanic or latin[eoax])?$/,
-    /^(?:middle eastern or north african|mena)(?:\s+not hispanic or latin[eoax])?$/,
-    /^(?:two or more races(?:\s*\/\s*ethnicities|\s+or\s+ethnicities)?(?:\s+not hispanic or latin[eoax])?|multiracial|mixed(?: or multiple ethnic groups)?)$/,
+    { pattern: /^(?:asian(?:\s*(?:or|\/)\s*asian american)?)(?:\s+not hispanic or latin[eoax])?$/, code: 'asian' },
+    { pattern: /^(?:east asian)(?:\s+not hispanic or latin[eoax])?$/, code: 'east_asian', broadensTo: ['asian'] },
+    { pattern: /^(?:south asian)(?:\s+not hispanic or latin[eoax])?$/, code: 'south_asian', broadensTo: ['asian'] },
+    { pattern: /^(?:southeast asian)(?:\s+not hispanic or latin[eoax])?$/, code: 'southeast_asian', broadensTo: ['asian'] },
+    { pattern: /^(?:white(?:\s*\/\s*caucasian)?|caucasian)(?:\s+not hispanic or latin[eoax])?$/, code: 'white' },
+    { pattern: /^(?:black(?:\s*(?:or|\/)\s*african american)?(?:\s+not hispanic or latin[eoax])?|african american)$/, code: 'black' },
+    { pattern: /^black african caribbean or black british$/, code: 'black_british_caribbean', broadensTo: ['black'] },
+    { pattern: /^hispanic(?:\s*(?:or|\/)\s*latin[eoax])?$/, code: 'hispanic' },
+    { pattern: /^(?:american indian or alaska native|native american or alaska native|indigenous(?:\s*(?:or|\/)\s*native american)?|native american)(?:\s+not hispanic or latin[eoax])?$/, code: 'indigenous' },
+    { pattern: /^native hawaiian or (?:other )?pacific islander(?:\s+not hispanic or latin[eoax])?$/, code: 'pacific_islander' },
+    { pattern: /^(?:middle eastern or north african|mena)(?:\s+not hispanic or latin[eoax])?$/, code: 'mena' },
+    { pattern: /^(?:two or more races(?:\s*\/\s*ethnicities|\s+or\s+ethnicities)?(?:\s+not hispanic or latin[eoax])?|multiracial|mixed(?: or multiple ethnic groups)?)$/, code: 'multiracial' },
   ],
   sexualOrientation: [
-    /^(?:heterosexual|straight|heterosexual\s*\/\s*straight)$/,
-    /^(?:gay|lesbian|gay or lesbian|homosexual)$/,
-    /^(?:bisexual|bi)$/,
+    { pattern: /^(?:heterosexual|straight|heterosexual\s*\/\s*straight)$/, code: 'straight' },
+    { pattern: /^(?:gay|lesbian|gay or lesbian|homosexual)$/, code: 'gay_lesbian' },
+    { pattern: /^(?:bisexual|bi)$/, code: 'bisexual' },
   ],
   religion: [
-    /^(?:buddhism|buddhist)$/,
-    /^(?:christianity|christian)$/,
-    /^(?:hinduism|hindu)$/,
-    /^(?:islam|muslim)$/,
-    /^(?:judaism|jewish)$/,
-    /^(?:sikhism|sikh)$/,
-    /^(?:no religion|none|atheist|agnostic|no religion\s*\/\s*atheist\s*\/\s*agnostic|secular|irreligious)$/,
+    { pattern: /^(?:buddhism|buddhist)$/, code: 'buddhism' },
+    { pattern: /^(?:christianity|christian)$/, code: 'christianity' },
+    { pattern: /^(?:hinduism|hindu)$/, code: 'hinduism' },
+    { pattern: /^(?:islam|muslim)$/, code: 'islam' },
+    { pattern: /^(?:judaism|jewish)$/, code: 'judaism' },
+    { pattern: /^(?:sikhism|sikh)$/, code: 'sikhism' },
+    { pattern: /^(?:no religion|none)$/, code: 'no_religion', broadensTo: ['no_religion_atheist_agnostic'] },
+    { pattern: /^atheist$/, code: 'atheist', broadensTo: ['no_religion_atheist_agnostic'] },
+    { pattern: /^agnostic$/, code: 'agnostic', broadensTo: ['no_religion_atheist_agnostic'] },
+    { pattern: /^no religion\s*\/\s*atheist\s*\/\s*agnostic$/, code: 'no_religion_atheist_agnostic' },
+    { pattern: /^(?:secular|irreligious)$/, code: 'secular' },
   ],
   maritalStatus: [
-    /^(?:single|never married|single\s*\/\s*never married|unmarried)$/,
-    /^(?:domestic partnership|civil union|civil partnership|domestic partnership\s*\/\s*civil union)$/,
+    { pattern: /^(?:single|never married|single\s*\/\s*never married|unmarried)$/, code: 'single' },
+    { pattern: /^(?:domestic partnership|civil union|civil partnership|domestic partnership\s*\/\s*civil union)$/, code: 'domestic_partnership' },
   ],
 };
 
-function aliasGroup(key: DemographicKey, option: string): number {
-  const groups = CHOICE_ALIASES[key];
-  if (!groups) return -1;
+function resolveChoiceAlias(key: DemographicKey, option: string): ChoiceAliasRule | undefined {
+  const rules = CHOICE_ALIAS_RULES[key];
+  if (!rules) return undefined;
   const label = key === 'gender' || key === 'raceEthnicity'
     ? option.replace(/^i (?:identify as|am) (?:a |an )?/, '') : option;
-  return groups.findIndex((pattern) => pattern.test(label));
+  return rules.find((rule) => rule.pattern.test(label));
+}
+
+function aliasMatches(key: DemographicKey, savedOption: string, offeredOption: string): boolean {
+  const savedRule = resolveChoiceAlias(key, savedOption);
+  const offeredRule = resolveChoiceAlias(key, offeredOption);
+  if (!savedRule || !offeredRule) return false;
+  return savedRule.code === offeredRule.code || Boolean(savedRule.broadensTo?.includes(offeredRule.code));
 }
 
 /** Only distinctive labels carry demographic meaning when the ATS omits the group heading. */
 export function demographicOptionKey(label: string): DemographicKey | undefined {
   const option = optionKey(label);
-  if (aliasGroup('pronouns', option) >= 0) return 'pronouns';
+  if (resolveChoiceAlias('pronouns', option)) return 'pronouns';
   if (/^(?:asian or asian american|black or african american|hispanic\s*(?:or|\/)\s*latin[eoax]|indigenous or native american|american indian or alaska native|native hawaiian or (?:other )?pacific islander)$/.test(option)) return 'raceEthnicity';
   return undefined;
 }
@@ -208,14 +238,13 @@ export function demographicChoices(key: DemographicKey, answers: readonly string
     const selectable = options.filter((option) => !attestation.test(optionKey(option)));
     const exact = selectable.filter((option) => optionKey(option) === wanted);
     const status = statusChoice(key, wanted);
-    const alias = aliasGroup(key, wanted);
     const age = key === 'ageRange' ? ageBounds(wanted) : undefined;
     const matches = exact.length ? exact : selectable.filter((option) => {
       const offered = optionKey(option);
       const offeredAge = age ? ageBounds(offered) : undefined;
       return (decline.test(wanted) && decline.test(offered)) ||
         (status !== undefined && statusChoice(key, offered) === status) ||
-        (alias >= 0 && aliasGroup(key, offered) === alias) ||
+        aliasMatches(key, wanted, offered) ||
         Boolean(age && offeredAge && offeredAge[0] <= age[0] && offeredAge[1] >= age[1]);
     });
     if (matches.length !== 1 || !matches[0] || result.includes(matches[0])) return [];
@@ -234,35 +263,34 @@ export function mixedDemographicChoices(
   options: readonly string[],
 ): string[] {
   const chosen: string[] = [];
-  const matchedKeys: DemographicKey[] = [];
+  const matchedKeys = new Set<DemographicKey>();
   for (const option of options) {
+    const normalized = optionKey(option);
+    if (attestation.test(normalized) || decline.test(normalized) || noneOfTheAbove.test(normalized)) {
+      continue;
+    }
     const key = demographicSelectionKey('', option);
     if (!key) continue;
-    matchedKeys.push(key);
-    const saved = answers[key] ?? (key === 'veteran' ? answers.protectedVeteran : undefined);
+    matchedKeys.add(key);
+    const saved = answers[key];
     if (!saved?.length) continue;
     if (demographicChoices(key, saved, [option]).length === 1) {
       chosen.push(option);
     }
   }
   if (chosen.length) return chosen;
-  if (matchedKeys.length > 0 && matchedKeys.every((key) => {
-    const saved = answers[key] ?? (key === 'veteran' ? answers.protectedVeteran : undefined);
-    return saved?.length && saved.every((val) => decline.test(optionKey(val)));
+  if (matchedKeys.size > 0 && [...matchedKeys].every((key) => {
+    const saved = answers[key];
+    return Boolean(saved?.length && saved.every((val) => decline.test(optionKey(val))));
   })) {
-    const declineOpt = options.find((opt) => decline.test(optionKey(opt)));
-    if (declineOpt) return [declineOpt];
+    const declineOpts = options.filter((opt) => decline.test(optionKey(opt)));
+    if (declineOpts.length === 1 && declineOpts[0]) return [declineOpts[0]];
   }
   return [];
 }
 
 export function isNegativeDemographicStatus(key: DemographicKey, value: string): boolean {
-  const normalized = optionKey(value);
-  const direct = statusChoice(key, normalized);
-  if (direct !== undefined) return direct === false;
-  if (key === 'veteran') return statusChoice('protectedVeteran', normalized) === false;
-  if (key === 'protectedVeteran') return statusChoice('veteran', normalized) === false;
-  return false;
+  return statusChoice(key, optionKey(value)) === false;
 }
 
 export function demographicOptionSupported(
@@ -271,26 +299,11 @@ export function demographicOptionSupported(
   option: string,
 ): boolean {
   if (!saved.length) return false;
-  const matchesKey = (targetKey: DemographicKey) =>
-    saved.some(
-      (answer) =>
-        !decline.test(optionKey(answer)) &&
-        demographicChoices(targetKey, [answer], [option]).length === 1,
-    );
-  if (matchesKey(key)) return true;
-  if (key === 'veteran' || key === 'protectedVeteran') {
-    const altKey: DemographicKey = key === 'veteran' ? 'protectedVeteran' : 'veteran';
-    if (matchesKey(altKey)) return true;
-    const offeredStatus = statusChoice(key, optionKey(option));
-    if (offeredStatus !== undefined) {
-      return saved.some(
-        (answer) =>
-          !decline.test(optionKey(answer)) &&
-          statusChoice(altKey, optionKey(answer)) === offeredStatus,
-      );
-    }
-  }
-  return false;
+  return saved.some(
+    (answer) =>
+      !decline.test(optionKey(answer)) &&
+      demographicChoices(key, [answer], [option]).length === 1,
+  );
 }
 
 export function parseDemographicPreferences(input: unknown): DemographicPreferences {
