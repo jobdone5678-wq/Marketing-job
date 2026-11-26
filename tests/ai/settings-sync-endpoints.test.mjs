@@ -14,7 +14,7 @@ import {
   PUT as putSettings,
   maskApiKey,
 } from '../../src/app/api/extension/ai/settings/route.ts';
-import { POST as testConnection } from '../../src/app/api/extension/ai/test-connection/route.ts';
+import { testAiConnection as testConnection } from '../../src/lib/ai/test-connection.ts';
 
 const migrationSql = readFileSync(
   new URL('../../supabase/migrations/20261124000200_user_ai_provider_configs.sql', import.meta.url),
@@ -329,7 +329,10 @@ test('AI Settings Sync & Test Connection Endpoints', async (t) => {
   await t.test('POST /api/extension/ai/test-connection succeeds when provider responds with 200', async (testCase) => {
     testCase.mock.method(dns, 'lookup', async () => [{ address: '8.8.8.8', family: 4 }]);
     const mockFetch = async (url, options) => {
-      return new Response(JSON.stringify({ data: [{ id: 'deepseek-chat' }] }), {
+      assert.match(String(url), /\/chat\/completions$/);
+      assert.equal(options.method, 'POST');
+      assert.equal(JSON.parse(options.body).model, 'deepseek-chat');
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'OK' } }] }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -344,6 +347,7 @@ test('AI Settings Sync & Test Connection Endpoints', async (t) => {
       body: JSON.stringify({
         baseUrl: 'https://openrouter.ai/api/v1',
         apiKey: 'test-key',
+        modelId: 'deepseek-chat',
       }),
     });
 
@@ -351,7 +355,7 @@ test('AI Settings Sync & Test Connection Endpoints', async (t) => {
     assert.equal(res.status, 200);
     const body = await res.json();
     assert.equal(body.ok, true);
-    assert.equal(body.message, 'Connection successful');
+    assert.equal(body.message, 'Chat completion verified');
   });
 
   await t.test('POST /api/extension/ai/test-connection returns 401 when provider rejects credentials', async (testCase) => {
@@ -372,6 +376,7 @@ test('AI Settings Sync & Test Connection Endpoints', async (t) => {
       body: JSON.stringify({
         baseUrl: 'https://openrouter.ai/api/v1',
         apiKey: 'invalid-key',
+        modelId: 'deepseek-chat',
       }),
     });
 
@@ -379,6 +384,35 @@ test('AI Settings Sync & Test Connection Endpoints', async (t) => {
     assert.equal(res.status, 401);
     const body = await res.json();
     assert.equal(body.ok, false);
+  });
+
+  await t.test('Server Test Connection uses the selected server key and reports a chat outage', async (testCase) => {
+    testCase.mock.method(dns, 'lookup', async () => [{ address: '8.8.8.8', family: 4 }]);
+    const env = { ...process.env };
+    try {
+      delete process.env.AI_PROVIDER_DEFAULT_API_KEY;
+      process.env.OPENAI_API_KEY = 'sk-proj-test';
+      process.env.OPENAI_BASE_URL = 'https://stale.example/v1';
+      process.env.OPENAI_MODEL = 'hy4-flash:free';
+      const req = new Request('http://localhost/api/extension/ai/test-connection', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${USER_1}` },
+        body: JSON.stringify({ mode: 'server', baseUrl: 'https://another.example/v1' }),
+      });
+      const res = await testConnection(req, { db, fetchFn: async (url, options) => {
+        assert.equal(String(url), 'https://api.openai.com/v1/chat/completions');
+        assert.equal(new Headers(options.headers).get('authorization'), 'Bearer sk-proj-test');
+        assert.equal(JSON.parse(options.body).model, 'gpt-4o-mini');
+        return new Response('<html>Unavailable</html>', {
+          status: 503,
+          headers: { 'content-type': 'text/html' },
+        });
+      } });
+      assert.equal(res.status, 503);
+      assert.equal((await res.json()).providerStatus, 503);
+    } finally {
+      process.env = env;
+    }
   });
 
   await t.test('POST /api/extension/ai/test-connection rejects image generation models with HTTP 422', async (testCase) => {

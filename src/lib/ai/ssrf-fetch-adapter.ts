@@ -2,7 +2,7 @@ import * as http from 'node:http';
 import * as https from 'node:https';
 import { Readable } from 'node:stream';
 import type { SafeAgentResult } from './ssrf-guard.ts';
-import { ProviderError } from './provider-client.ts';
+import { ProviderError } from './provider-client';
 
 /**
  * Checks whether the response content type or body content represents an HTML error page.
@@ -93,7 +93,7 @@ async function writeRequestBody(req: http.ClientRequest, body: any): Promise<voi
  *    - Preserves TLS SNI hostname verification.
  *    - Enforces redirect: 'error' (throws ProviderError 308 REDIRECT_BLOCKED).
  *    - Supports init.signal for cancellation (499 ABORTED) and timeouts (504 TIMEOUT).
- * 4. HTML/DOCTYPE error handling: throws ProviderError 502 HTML_RESPONSE if HTML is detected.
+ * 4. HTML responses preserve upstream rate-limit and outage statuses.
  */
 export function createSsrfSafeFetch(
   safeAgentResult: SafeAgentResult,
@@ -160,7 +160,7 @@ export function createSsrfSafeFetch(
       if (isHtmlResponse(contentType, bodyText)) {
         throw new ProviderError(
           'Endpoint returned HTML error page instead of JSON',
-          502,
+          res.status === 429 || res.status === 503 ? res.status : 502,
           'HTML_RESPONSE',
           bodyText,
         );
@@ -358,7 +358,7 @@ export function createSsrfSafeFetch(
               return safeReject(
                 new ProviderError(
                   'Endpoint returned HTML error page instead of JSON',
-                  502,
+                  statusCode === 429 || statusCode === 503 ? statusCode : 502,
                   'HTML_RESPONSE',
                   bodyText,
                 ),

@@ -245,6 +245,51 @@ export function mergeScreeningAnswers(
   return next;
 }
 
+export function legacyScreeningPatch(input: unknown, includeClears = false) {
+  const patch: Partial<TypedScreeningAnswers> = {};
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return patch;
+  const values = input as Record<string, unknown>;
+  for (const field of SCREENING_FIELDS) {
+    if (!Object.hasOwn(values, field)) continue;
+    const raw = values[field];
+    if (raw === null || (typeof raw === 'string' && !raw.trim())) {
+      if (includeClears) patch[field] = null;
+      continue;
+    }
+    if (field === 'authorized_countries') {
+      if (Array.isArray(raw) && raw.length <= 250 && raw.every((code) => typeof code === 'string')) {
+        try {
+          patch[field] = raw.length ? [...new Set(raw.map(normalizeCountryCode))] : null;
+        } catch (error) {
+          if (!(error instanceof DomainValidationError)) throw error;
+        }
+      }
+    } else if (field === 'notice_period_days' || field === 'desired_salary_amount') {
+      const value = typeof raw === 'string' && /^\d+$/.test(raw.trim()) ? Number(raw) : raw;
+      if (typeof value !== 'number' || !Number.isSafeInteger(value)) continue;
+      if (field === 'notice_period_days' && value >= 0 && value <= 3650) patch[field] = value;
+      if (field === 'desired_salary_amount' && value > 0 && value <= 2147483647) patch[field] = value;
+    } else if (field === 'desired_salary_currency') {
+      if (typeof raw === 'string' && /^[a-z]{3}$/i.test(raw.trim())) patch[field] = raw.trim().toUpperCase();
+    } else if (field === 'desired_salary_period') {
+      if (SALARY_PERIODS.includes(raw as SalaryPeriod)) patch[field] = raw as SalaryPeriod;
+    } else {
+      const value = typeof raw === 'string' ? raw.trim().toLowerCase() : raw;
+      if (value === true || value === 'yes') patch[field] = true;
+      if (value === false || value === 'no') patch[field] = false;
+    }
+  }
+  return patch;
+}
+
+export function resolveAutofillScreening(
+  typed: TypedScreeningAnswers,
+  confirmedLegacy: unknown,
+): TypedScreeningAnswers {
+  // A typed row is authoritative, including deliberately cleared values.
+  return typed.updated_at ? typed : { ...typed, ...legacyScreeningPatch(confirmedLegacy) };
+}
+
 export async function getScreeningAnswers(
   userId: string,
   db?: any
@@ -269,11 +314,12 @@ export async function getScreeningAnswers(
 export async function upsertMergedScreeningAnswers(
   userId: string,
   patchInput: unknown,
-  db?: any
+  db?: any,
+  confirmedLegacy?: unknown,
 ): Promise<TypedScreeningAnswers> {
   const client = await getDbClient(db);
   const existing = await getScreeningAnswers(userId, client);
-  const merged = mergeScreeningAnswers(existing, patchInput);
+  const merged = mergeScreeningAnswers(resolveAutofillScreening(existing, confirmedLegacy), patchInput);
 
   if (typeof client.query === 'function') {
     const res = await client.query(

@@ -9,6 +9,8 @@
  * - Executes FreeHire planFormBatch and chooseComboboxOption with typed grounding validation
  */
 
+import { setTimeout as delayTimer } from 'node:timers/promises';
+import { isVercelAiSdkEnabled, resolveDefaultServerAiConfig } from './server-ai-config';
 import { decryptSecret } from './encryption';
 import { createSafeAgent, type DnsLookupFn } from './ssrf-guard';
 import { createSsrfSafeFetch } from './ssrf-fetch-adapter';
@@ -22,11 +24,13 @@ import { isUnreviewedResume } from '../candidate/confirmed-facts';
 import { listScreeningAnswerBank } from '../candidate/answerbank';
 import { listExperienceBank } from '../candidate/experience';
 import { getDemographicPreferences } from '../candidate/demographic-preferences-store';
-import { getScreeningAnswers } from '../ingest/screeninganswers';
+import { getScreeningAnswers, resolveAutofillScreening } from '../ingest/screeninganswers';
 import { getUserAiProviderSecret } from './ai-provider-data';
 import { experienceSkillQuestion } from './grounded';
 import { findReusableAnswer } from './reusable-answers';
 import { requestJevChoice } from './jev-choice';
+
+export { isVercelAiSdkEnabled, resolveDefaultServerAiConfig } from './server-ai-config';
 
 export class OrchestratorError extends Error {
   readonly status: number;
@@ -107,67 +111,23 @@ function isUpstreamUnavailableError(err: unknown): err is ProviderError {
   return err instanceof ProviderError && err.status === 503;
 }
 
-export function resolveDefaultServerAiConfig(): { baseUrl: string; apiKey: string; model: string } {
-  const apiKey = (
-    process.env.AI_PROVIDER_DEFAULT_API_KEY ||
-    process.env.OPENAI_API_KEY ||
-    process.env.AI_GATEWAY_API_KEY ||
-    ''
-  ).trim();
-  const explicitBaseUrl = (
-    process.env.AI_PROVIDER_DEFAULT_BASE_URL ||
-    process.env.OPENAI_BASE_URL ||
-    ''
-  ).trim();
-  const explicitModel = (
-    process.env.AI_PROVIDER_DEFAULT_MODEL ||
-    process.env.OPENAI_MODEL ||
-    ''
-  ).trim();
-
-  const isOpenAiDefaultUrl = !explicitBaseUrl || /^https:\/\/api\.openai\.com(?:\/v1)?\/?$/i.test(explicitBaseUrl);
-  let baseUrl = explicitBaseUrl || 'https://api.openai.com/v1';
-
-  if (apiKey.startsWith('AIzaSy') && isOpenAiDefaultUrl) {
-    baseUrl = 'https://generativelanguage.googleapis.com/v1beta/openai/';
-  } else if (apiKey.startsWith('sk-or-') && isOpenAiDefaultUrl) {
-    baseUrl = 'https://openrouter.ai/api/v1';
-  } else if (apiKey.startsWith('sk-xt-') && isOpenAiDefaultUrl) {
-    baseUrl = 'https://api.xkiro.com/v1';
-  } else if ((apiKey.startsWith('vck_') || (!process.env.OPENAI_API_KEY && !process.env.AI_PROVIDER_DEFAULT_API_KEY && process.env.AI_GATEWAY_API_KEY)) && isOpenAiDefaultUrl) {
-    baseUrl = 'https://ai-gateway.vercel.sh/v1';
-  }
-
-  let model = explicitModel || 'gpt-4o-mini';
-  if (apiKey.startsWith('AIzaSy') || baseUrl.includes('generativelanguage.googleapis.com')) {
-    if (!explicitModel || model === 'gpt-4o-mini' || !model.startsWith('gemini-')) {
-      model = 'gemini-2.0-flash';
-    }
-  } else if (baseUrl.includes('ai-gateway.vercel.sh') || apiKey.startsWith('vck_') || baseUrl.includes('openrouter.ai') || apiKey.startsWith('sk-or-')) {
-    if (!model.includes('/')) {
-      model = `openai/${model}`;
-    }
-  }
-
-  return { baseUrl, apiKey, model };
-}
-
-async function withUpstreamTransientRetry<T>(
+export async function withUpstreamTransientRetry<T>(
   run: () => Promise<T>,
-  delaysMs: number[] = DEFAULT_RATE_LIMIT_RETRY_DELAYS_MS
+  delaysMs: number[] = DEFAULT_RATE_LIMIT_RETRY_DELAYS_MS,
+  signal?: AbortSignal,
 ): Promise<T> {
   let attempt = 0;
   while (true) {
     try {
       return await run();
     } catch (err) {
-      if (!isUpstreamTransientError(err) || attempt >= delaysMs.length) {
+      if (!isUpstreamTransientError(err) || attempt >= delaysMs.length || signal?.aborted) {
         throw err;
       }
       const delay = Math.max(0, delaysMs[attempt] ?? 0);
       attempt += 1;
       if (delay > 0) {
-        await new Promise((resolve) => setTimeout(resolve, delay));
+        await delayTimer(delay, undefined, { signal });
       }
     }
   }
@@ -186,15 +146,6 @@ export function checkFeatureFlag(): void {
       'FEATURE_DISABLED'
     );
   }
-}
-
-/**
- * Checks rollback feature flag SERVER_ENABLE_VERCEL_AI_SDK.
- * Disabled by default; enabled only when explicitly set to 'true' or '1'.
- */
-export function isVercelAiSdkEnabled(): boolean {
-  const flag = process.env.SERVER_ENABLE_VERCEL_AI_SDK;
-  return flag === 'true' || flag === '1';
 }
 
 async function getDb(options?: OrchestratorOptions): Promise<any> {
@@ -238,7 +189,7 @@ async function loadProfileFallback(actorId: string, db: any): Promise<Record<str
 
 async function loadVerifiedFacts(actorId: string, candidate: Parameters<typeof buildVerifiedFacts>[0], fields: Field[], db: any) {
   const skillsAsked = new Set(fields.map((field) => experienceSkillQuestion(field.label)).filter(Boolean));
-  const [screening, entries, experience, demographics, profileFallback] = await Promise.all([
+  const [typedScreening, entries, experience, demographics, profileFallback] = await Promise.all([
     getScreeningAnswers(actorId, db),
     listScreeningAnswerBank(actorId, { db, sendableOnly: true }),
     skillsAsked.size ? listExperienceBank(actorId, { db, tailorableOnly: true }) : undefined,
@@ -266,6 +217,7 @@ async function loadVerifiedFacts(actorId: string, candidate: Parameters<typeof b
     const entry = findReusableAnswer(label, entries);
     return entry ? [{ question: label, answer: entry.answer }] : [];
   });
+  const screening = resolveAutofillScreening(typedScreening, candidate.confirmed_facts?.screeningAnswers);
   const facts = buildVerifiedFacts(hydratedCandidate, answers, screening, demographics);
   const skills = new Set(experience?.atoms.flatMap((atom) => {
     if (atom.provenance !== 'manual' && atom.provenance !== 'stated_in_chat') return [];
@@ -306,7 +258,7 @@ async function loadProviderConfig(actorId: string, db: any) {
 }
 
 function isPortalMode(config: Awaited<ReturnType<typeof loadProviderConfig>>): boolean {
-  return Boolean(config && (
+  return Boolean(config && config.mode !== 'server' && (
     config.mode === 'portal' || config.mode === 'portal_byok' || config.routing === 'portal' ||
     config.routing === 'proxy' || config.credential_source === 'portal'
   ));

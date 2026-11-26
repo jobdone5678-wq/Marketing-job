@@ -5,8 +5,8 @@ import test from 'node:test';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import { z } from 'zod';
-import * as aiPkg from 'ai';
-import * as openaiCompatiblePkg from '@ai-sdk/openai-compatible';
+import * as providerModule from '../src/lib/ai/provider-client.ts';
+import { setTimeout as delayTimer } from 'node:timers/promises';
 import { approvedSavedAnswers } from '../src/lib/extension-answers/saved-answers.ts';
 import * as fieldSafety from '../extension/lib/autofillSafety.ts';
 import { isUnreviewedResume } from '../src/lib/candidate/confirmed-facts.ts';
@@ -31,6 +31,7 @@ function loadSource(path, dependencies, globals) {
     exports,
     Response,
     URL,
+    AbortSignal,
     console,
     ...globals,
     require: (name) => dependencies[name],
@@ -45,6 +46,8 @@ function fixture({
   aiProviderData,
   encryption,
   upstreamContent = 'A generated draft.',
+  upstreamStatuses = [],
+  experienceAtoms = [],
 } = {}) {
   const calls = [];
   const candidate = {
@@ -59,6 +62,7 @@ function fixture({
   const expiry = '2100-01-01T00:00:00.000Z';
   const tables = {
     candidates,
+    user_ai_provider_configs: [],
     extension_credentials: [
       { token_hash: hash(activeToken), owner_id: 'owner', expires_at: expiry },
       {
@@ -160,17 +164,41 @@ function fixture({
     '@/lib/ai/ssrf-fetch-adapter': { createSsrfSafeFetch: () => providerFetch },
     '@/lib/rate-limit': { checkRateLimit: () => ({ allowed: true }) },
     zod: { z },
-    ai: aiPkg,
-    '@ai-sdk/openai-compatible': openaiCompatiblePkg,
+    '@/lib/ai/provider-client': providerModule,
+    '@/lib/candidate/experience': { listExperienceBank: async () => ({ atoms: experienceAtoms }) },
+    '@/lib/candidate/answerbank': { listScreeningAnswerBank: async () => [] },
+    '@/lib/ai/reusable-answers': { findReusableAnswer: () => undefined },
   };
   deps['@/lib/ai/ai-provider-data'] = aiProviderData ?? { getUserAiProviderConfig: async () => null };
   deps['@/lib/ai/encryption'] = encryption ?? {};
 
   async function providerFetch(url, request) {
-      providerRequests.push({ url: String(url), headers: request?.headers });
+      providerRequests.push({ url: String(url), headers: new Headers(request?.headers) });
       providerCalls.push(JSON.parse(request.body));
+      const status = upstreamStatuses[providerCalls.length - 1];
+      if (status) return Response.json({ error: { message: 'Provider error' } }, { status });
       return Response.json({ choices: [{ message: { content: upstreamContent } }] });
   }
+  const orchestrator = loadSource('lib/ai/autofill-orchestrator', {
+    'node:timers/promises': { setTimeout: (_, value, options) => delayTimer(0, value, options) },
+    './server-ai-config': loadSource('lib/ai/server-ai-config', {}, globals),
+    './provider-client': providerModule,
+    './server-provider-client': { ServerVercelProviderClient: providerModule.ProviderClient },
+    './encryption': encryption ?? {},
+    './ai-provider-data': aiProviderData ?? {},
+    './ssrf-guard': { createSafeAgent: async (validatedUrl) => ({ validatedUrl }) },
+    './ssrf-fetch-adapter': { createSsrfSafeFetch: () => providerFetch },
+  }, globals);
+  deps['@/lib/ai/autofill-orchestrator'] = {
+    ...orchestrator,
+    resolveProviderClient: async (actorId) => {
+      const db = database();
+      tables.user_ai_provider_configs = [];
+      const config = await aiProviderData?.getUserAiProviderConfig(actorId);
+      if (config) tables.user_ai_provider_configs.push({ ...config, user_id: actorId });
+      return orchestrator.resolveProviderClient(actorId, { db, fetchFn: providerFetch });
+    },
+  };
   const route = loadSource('app/api/extension/generate-answer/route', deps, globals);
   const call = (method, token, body = {}) =>
     route[method](
@@ -343,7 +371,6 @@ test('POST returns 401 when portal BYOK secret is missing or decryption fails wi
       env: { OPENAI_API_KEY: 'sk-server-fallback' },
       aiProviderData: {
         getUserAiProviderConfig: async () => ({
-          mode: 'server',
           routing: 'proxy',
           base_url: 'https://openrouter.ai/api/v1',
           model_id: 'openai/gpt-4o-mini',
@@ -412,6 +439,22 @@ test('POST preserves /v1beta/openai base URL without appending /v1 and prefers A
     providerRequests[0].url,
     'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
   );
-  assert.equal(providerRequests[0].headers?.authorization, 'Bearer sk-default-gemini');
+  assert.equal(providerRequests[0].headers.get('authorization'), 'Bearer sk-default-gemini');
   assert.equal(providerCalls[0].model, 'gemini-2.5-flash');
+});
+
+test('prose generation includes confirmed experience and retries transient provider errors', async () => {
+  const claim = 'Reduced release lead time by two days.';
+  const { call, providerCalls } = fixture({ upstreamStatuses: [503, 429], experienceAtoms: [{ claim }] });
+  assert.equal((await call('POST', activeToken)).status, 200);
+  assert.equal(providerCalls.length, 3);
+  assert.match(providerCalls[0].messages[0].content, /Reduced release lead time/);
+});
+
+test('prose generation preserves provider status after bounded retries', async () => {
+  for (const [status, attempts] of [[401, 1], [429, 3], [503, 3]]) {
+    const { call, providerCalls } = fixture({ upstreamStatuses: Array(attempts).fill(status) });
+    assert.equal((await call('POST', activeToken)).status, status);
+    assert.equal(providerCalls.length, attempts);
+  }
 });

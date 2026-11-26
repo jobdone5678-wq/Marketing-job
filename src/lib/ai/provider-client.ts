@@ -95,7 +95,8 @@ export function resolveCompletionsUrl(baseUrl: string): string {
   if (trimmed.endsWith('/chat/completions')) {
     return trimmed;
   }
-  if (trimmed.endsWith('/v1')) {
+  const path = URL.canParse(trimmed) ? new URL(trimmed).pathname : trimmed;
+  if (/\/v\d+[a-z0-9_-]*(?:\/|$)/i.test(path)) {
     return `${trimmed}/chat/completions`;
   }
   return `${trimmed}/v1/chat/completions`;
@@ -294,6 +295,7 @@ export class ProviderClient {
       response = await fetchFn(url, requestInit);
       rawBody = await response.text();
     } catch (fetchErr: any) {
+      if (fetchErr instanceof ProviderError) throw fetchErr;
       clearTimeout(timer);
       if (timedOut || fetchErr.name === 'AbortError' || fetchErr.message?.includes('aborted')) {
         throw new ProviderError(`Request timed out after ${timeoutMs}ms`, 504, 'TIMEOUT');
@@ -310,7 +312,8 @@ export class ProviderClient {
     const contentType = response.headers.get('content-type');
 
     if (isHtml(rawBody, contentType)) {
-      throw new ProviderError('Endpoint returned HTML error page instead of JSON', 502, 'HTML_RESPONSE', rawBody);
+      const status = response.status === 429 || response.status === 503 ? response.status : 502;
+      throw new ProviderError('Endpoint returned HTML error page instead of JSON', status, 'HTML_RESPONSE', rawBody);
     }
 
     if (!response.ok) {

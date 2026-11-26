@@ -4,21 +4,32 @@ import {
   normalizeContactsInput,
 } from '../candidate/resumeextract';
 import { importResumeToExperienceBank } from '../candidate/experience';
-import { upsertMergedScreeningAnswers } from '../ingest/screeninganswers';
+import { legacyScreeningPatch, upsertMergedScreeningAnswers } from '../ingest/screeninganswers';
 import { database } from '../db/admin';
 
 /**
- * Best-effort synchronization from legacy /api/jobseeker/resume saves into the
- * Freehire-aligned tables (user_profiles, profiles, experience_*, screening_answers).
+ * Synchronizes reviewed screening on legacy resume saves and refreshes the
+ * contact, search preference, and experience stores.
  */
 export async function syncLegacyResumeSaveToV1Tables(
   userId: string,
-  body: Record<string, any>
+  body: Record<string, any>,
+  confirmedScreeningPatch: unknown,
+  confirmedLegacy: unknown,
 ): Promise<void> {
-  try {
-    const db = database();
+  const db = database();
+  // Keep screening independent of resume extraction and experience import.
+  const patch = legacyScreeningPatch(confirmedScreeningPatch, true);
+  if (Object.keys(patch).length) {
+    await upsertMergedScreeningAnswers(userId, patch, db, confirmedLegacy);
+  }
 
-    // 1. Contacts & Structured CV on public.profiles
+  let extracted: ReturnType<typeof extractStructuredResume> | null = null;
+  try {
+    const rawText = String(body.raw_text || body.source_text || '');
+    if (rawText.length >= 20) extracted = extractStructuredResume(rawText);
+
+    // Contacts & Structured CV on public.profiles
     const rawLinks = Array.isArray(body.contacts?.links)
       ? body.contacts.links.filter(
           (l: unknown): l is string => typeof l === 'string' && /^https?:\/\//i.test(l)
@@ -32,8 +43,6 @@ export async function syncLegacyResumeSaveToV1Tables(
       links: rawLinks.slice(0, 20),
     });
 
-    const rawText = String(body.raw_text || body.source_text || '');
-    const extracted = rawText.length >= 20 ? extractStructuredResume(rawText) : null;
 
     await db
       .from('profiles')
@@ -53,7 +62,7 @@ export async function syncLegacyResumeSaveToV1Tables(
       })
       .eq('id', userId);
 
-    // 2. Search Preferences & Location (user_profiles)
+    // Search preferences and location (user_profiles)
     const rawRoles: string[] = Array.isArray(body.roles) ? body.roles : [];
     const rawSkills: string[] = Array.isArray(body.skills)
       ? body.skills
@@ -102,60 +111,15 @@ export async function syncLegacyResumeSaveToV1Tables(
         db
       );
     }
-
-    // 3. Experience Bank import from structured CV
-    if (extracted) {
-      await importResumeToExperienceBank(userId, extracted.resume_structured, db);
-    }
-
-    // 4. Typed Screening Answers (non-EEO)
-    const sa = body.screeningAnswers;
-    if (sa && typeof sa === 'object') {
-      const patch: Record<string, unknown> = {};
-      if (Array.isArray(sa.authorized_countries)) {
-        patch.authorized_countries = sa.authorized_countries;
-      }
-      if (sa.visa_sponsorship_needed === 'yes' || sa.visa_sponsorship_needed === true) {
-        patch.visa_sponsorship_needed = true;
-      } else if (sa.visa_sponsorship_needed === 'no' || sa.visa_sponsorship_needed === false) {
-        patch.visa_sponsorship_needed = false;
-      }
-
-      if (sa.willing_to_relocate === 'yes' || sa.willing_to_relocate === true) {
-        patch.willing_to_relocate = true;
-      } else if (sa.willing_to_relocate === 'no' || sa.willing_to_relocate === false) {
-        patch.willing_to_relocate = false;
-      }
-
-      if (sa.age_18_or_older === 'yes' || sa.age_18_or_older === true) {
-        patch.age_18_or_older = true;
-      } else if (sa.age_18_or_older === 'no' || sa.age_18_or_older === false) {
-        patch.age_18_or_older = false;
-      }
-
-      if (typeof sa.privacy_consent === 'boolean') {
-        patch.privacy_consent = sa.privacy_consent;
-      }
-
-      if (sa.notice_period_days !== undefined && sa.notice_period_days !== '') {
-        const days = Number(sa.notice_period_days);
-        if (Number.isInteger(days) && days >= 0) patch.notice_period_days = days;
-      }
-
-      const salAmt = Number(sa.desired_salary_amount);
-      const salCur =
-        typeof sa.desired_salary_currency === 'string' ? sa.desired_salary_currency.trim() : '';
-      const salPer =
-        typeof sa.desired_salary_period === 'string' ? sa.desired_salary_period.trim() : '';
-      if (Number.isInteger(salAmt) && salAmt > 0) patch.desired_salary_amount = salAmt;
-      if (/^[A-Za-z]{3}$/.test(salCur)) patch.desired_salary_currency = salCur.toUpperCase();
-      if (['year', 'month', 'day', 'hour'].includes(salPer)) patch.desired_salary_period = salPer;
-
-      if (Object.keys(patch).length > 0) {
-        await upsertMergedScreeningAnswers(userId, patch, db);
-      }
-    }
   } catch {
-    // Non-fatal sync so legacy endpoint and unit mocks remain unaffected
+    console.warn('Could not sync candidate contacts and search preferences.');
+  }
+
+  if (extracted) {
+    try {
+      await importResumeToExperienceBank(userId, extracted.resume_structured, db);
+    } catch {
+      console.warn('Could not import the confirmed resume into the experience bank.');
+    }
   }
 }

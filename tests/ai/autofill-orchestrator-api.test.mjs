@@ -54,7 +54,8 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
     process.env.AI_PROVIDER_ENCRYPTION_KEY = ENCRYPTION_KEY_HEX;
     process.env.SERVER_ENABLE_STRUCTURED_AI_PLANNER = 'true';
     process.env.OPENAI_API_KEY = 'sk-server-default-key-12345';
-    process.env.AI_PROVIDER_DEFAULT_MODEL = 'gpt-4o-mini';
+    process.env.OPENAI_MODEL = 'gpt-4o-mini';
+    process.env.SERVER_ENABLE_VERCEL_AI_SDK = 'false';
   });
 
   t.afterEach(() => {
@@ -532,16 +533,14 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
     assert.equal(chooseData.choice, 'Option A');
   });
 
-  await t.test('8. SERVER_ENABLE_VERCEL_AI_SDK is disabled by default, enables ServerVercelProviderClient when true/1, and rolls back when false', async () => {
+  await t.test('8. SERVER_ENABLE_VERCEL_AI_SDK enables ServerVercelProviderClient by default and when true/1, and rolls back when false', async () => {
     const db = createMockDb({}, {}, {});
 
-    // Disabled by default (unset)
+    // Production default
     delete process.env.SERVER_ENABLE_VERCEL_AI_SDK;
-    assert.equal(isVercelAiSdkEnabled(), false);
+    assert.equal(isVercelAiSdkEnabled(), true);
     const defaultClient = await resolveProviderClient(USER_OWNER, { db });
-    assert.equal(defaultClient.constructor.name, 'ProviderClient');
-    assert.ok(defaultClient instanceof ProviderClient);
-    assert.equal(defaultClient instanceof ServerVercelProviderClient, false);
+    assert.ok(defaultClient instanceof ServerVercelProviderClient);
 
     // Enabled with 'true'
     process.env.SERVER_ENABLE_VERCEL_AI_SDK = 'true';
@@ -825,7 +824,7 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
     assert.equal(ipPortalClient.baseUrl, ipOrigin);
 
     // C) defaultBaseUrl with custom non-whitelist domain (mocked public DNS) and public IP literal
-    process.env.AI_PROVIDER_DEFAULT_BASE_URL = 'https://custom-gateway.example.com/v1';
+    process.env.OPENAI_BASE_URL = 'https://custom-gateway.example.com/v1';
     const defaultCustomClient = await resolveProviderClient(USER_OWNER, {
       db: createMockDb({}, {}),
       dnsLookup: mockDnsPublic,
@@ -833,7 +832,7 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
     assert.equal(defaultCustomClient.baseUrl, 'https://custom-gateway.example.com/v1');
     assert.equal(defaultCustomClient.agent.targetIp, '93.184.216.34');
 
-    process.env.AI_PROVIDER_DEFAULT_BASE_URL = 'https://93.184.216.34/v1';
+    process.env.OPENAI_BASE_URL = 'https://93.184.216.34/v1';
     const defaultIpClient = await resolveProviderClient(USER_OWNER, {
       db: createMockDb({}, {}),
     });
@@ -873,7 +872,7 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
         (err) => err instanceof OrchestratorError && err.status === 400 && err.code === 'SSRF_BLOCKED'
       );
 
-      process.env.AI_PROVIDER_DEFAULT_BASE_URL = blockedUrl;
+      process.env.OPENAI_BASE_URL = blockedUrl;
       await assert.rejects(
         async () => resolveProviderClient(USER_OWNER, { db: createMockDb({}, {}) }),
         (err) => err instanceof OrchestratorError && err.status === 500 && err.code === 'SSRF_BLOCKED'
@@ -881,7 +880,7 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
     }
 
     // E) DNS resolving to private IP is also rejected
-    process.env.AI_PROVIDER_DEFAULT_BASE_URL = 'https://rebind.example.com/v1';
+    process.env.OPENAI_BASE_URL = 'https://rebind.example.com/v1';
     await assert.rejects(
       async () =>
         resolveProviderClient(USER_OWNER, {
@@ -1199,9 +1198,11 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
       delete process.env.AI_PROVIDER_DEFAULT_MODEL;
       delete process.env.OPENAI_BASE_URL;
       delete process.env.OPENAI_MODEL;
+      process.env.OPENAI_BASE_URL = 'https://stale.example/v1';
+      process.env.OPENAI_MODEL = 'hy4-flash:free';
       process.env.OPENAI_API_KEY = 'AIzaSyTestGeminiKey';
-      assert.equal(resolveDefaultServerAiConfig().baseUrl, 'https://generativelanguage.googleapis.com/v1beta/openai/');
-      assert.equal(resolveDefaultServerAiConfig().model, 'gemini-2.0-flash');
+      assert.equal(resolveDefaultServerAiConfig().baseUrl, 'https://generativelanguage.googleapis.com/v1beta/openai');
+      assert.equal(resolveDefaultServerAiConfig().model, 'gemini-2.5-flash');
 
       delete process.env.OPENAI_API_KEY;
       process.env.AI_GATEWAY_API_KEY = 'vck_test_gateway_key';

@@ -7,7 +7,7 @@ TypeScript AI planning, combobox selection, grounded validation, job requirement
 - **`autofill-orchestrator.ts`**: Server-enforced orchestrator (`executePlan`, `executeChoose`, `resolveProviderClient`) called by `/api/extension/autofill/plan` and `/choose`.
   - Checks `SERVER_ENABLE_STRUCTURED_AI_PLANNER` (default enabled).
   - Verifies candidate ownership against `actorId`.
-  - Switches between `ServerVercelProviderClient` (`SERVER_ENABLE_VERCEL_AI_SDK=true`) and `ProviderClient`.
+  - Switches between `ServerVercelProviderClient` (default) and `ProviderClient` (`SERVER_ENABLE_VERCEL_AI_SDK=false`).
   - Returns token usage telemetry (`TokenUsageTelemetry`) and `durationMs` so server-mode usage/spend can be tracked and rate-limited.
 - **`planner.ts` & `chooser.ts`**:
   - `planFormBatch`: Classifies unresolved ATS fields, matches against `VerifiedFact` / answer bank, returns executable fills and `deferred` comboboxes.

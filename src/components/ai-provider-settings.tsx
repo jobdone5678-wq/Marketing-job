@@ -207,17 +207,9 @@ export function AiProviderSettings({ candidateId }: AiProviderSettingsProps) {
       setTesting(true);
       setTestResult(null);
 
-      const targetUrl = baseUrl || (mode === 'server' ? 'https://api.openai.com/v1' : '');
-
-      const payload: Record<string, any> = {
-        baseUrl: targetUrl,
-        modelId: modelId || undefined,
-        provider,
-      };
-
-      if (apiKey.trim()) {
-        payload.apiKey = apiKey.trim();
-      }
+      const payload = mode === 'server'
+        ? { mode }
+        : { mode, provider, baseUrl, modelId, apiKey: apiKey.trim() || undefined };
 
       const res = await fetch('/api/extension/ai/test-connection', {
         method: 'POST',

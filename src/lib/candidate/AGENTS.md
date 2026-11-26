@@ -5,7 +5,7 @@ Manages the candidate's verified profile, resume extraction, Experience Bank, Sc
 ## Modules
 
 - **`src/lib/candidate/experience.ts`**:
-  - Append-only/structured `experience_employments` and `experience_evidence_atoms` (`cv_import`, `stated_in_chat`, `manual`, `agent_inferred`).
+  - Append-only/structured `experience_employments` and `experience_atoms` (`cv_import`, `stated_in_chat`, `manual`, `agent_inferred`).
   - Enforces rune caps (`MAX_CLAIM_RUNES = 400`, `MAX_CONTEXT_RUNES = 1200`, `MAX_EMP_SUMMARY_RUNES = 600`) and skill merging via `mergeProfileSkills`.
 - **`src/lib/candidate/answerbank.ts`**:
   - Topic-keyed reusable answers (`CANONICAL_ANSWER_TOPICS`: `salary_expectation`, `notice_period`, `relocation`, `start_date`, `how_did_you_hear`, `age_18_or_older`) + custom screening Q&As (`MAX_ANSWER_LEN = 2000`).

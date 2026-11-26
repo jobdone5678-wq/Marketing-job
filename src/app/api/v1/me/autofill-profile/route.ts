@@ -1,63 +1,18 @@
+import { baseCountry } from '@/lib/profile/base-country';
 import { profileAccess } from '@/lib/auth/profile-access';
 import { isUnreviewedResume } from '@/lib/candidate/confirmed-facts';
 import { splitFullName } from '@/lib/candidate/resumeextract';
 import { checkDb, database } from '@/lib/db/admin';
 import { cors } from '@/lib/http/cors';
-import { getScreeningAnswers } from '@/lib/ingest/screeninganswers';
+import { getScreeningAnswers, resolveAutofillScreening } from '@/lib/ingest/screeninganswers';
 import { resolveV1UserId, v1ErrorResponse } from '@/lib/v1/auth';
 
 const corsOptions = { methods: 'GET, OPTIONS', credentials: false };
 const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 const yesNo = (value: boolean | null) => (value === null ? '' : value ? 'Yes' : 'No');
 
-function countryFromCode(code: string): string {
-  const up = code.trim().toUpperCase();
-  if (!/^[A-Z]{2}$/.test(up)) return code.trim();
-  try {
-    return new Intl.DisplayNames(['en'], { type: 'region' }).of(up) ?? up;
-  } catch {
-    return up;
-  }
-}
-
 function structuredLocation(facts: Record<string, unknown>): Record<string, unknown> | null {
   return facts.location && typeof facts.location === 'object' ? (facts.location as Record<string, unknown>) : null;
-}
-
-function isKnownCountryName(raw: string): boolean {
-  const candidate = raw.trim().toLowerCase();
-  if (!candidate) return false;
-  if (/^(?:usa|u\.s\.a?\.|united states(?: of america)?|uk|u\.k\.|united kingdom|great britain|uae)$/i.test(candidate)) {
-    return true;
-  }
-  const display = new Intl.DisplayNames(['en'], { type: 'region' });
-  if (/^[a-z]{2}$/i.test(candidate)) {
-    const label = display.of(candidate.toUpperCase());
-    return Boolean(label && label.toLowerCase() !== candidate);
-  }
-  // Check common ISO codes via Intl.DisplayNames
-  for (let a = 65; a <= 90; a++) {
-    for (let b = 65; b <= 90; b++) {
-      const code = String.fromCharCode(a, b);
-      const name = display.of(code);
-      if (name && name.toLowerCase() === candidate) return true;
-    }
-  }
-  return false;
-}
-
-function resolveCountry(facts: Record<string, unknown>, authorizedCountries: string[] | null): string {
-  const direct = text(facts.country) || text(facts.current_country);
-  if (direct) return countryFromCode(direct);
-  const loc = structuredLocation(facts);
-  const countries = Array.isArray(loc?.countries) ? loc.countries.map(text).filter(Boolean) : [];
-  if (countries.length === 1 && countries[0]) return countryFromCode(countries[0]);
-  const where = text(loc?.whereBased) || text(facts.full_address);
-  const parts = where.split(',').map((p) => p.trim()).filter(Boolean);
-  if (parts.length >= 3) return parts[parts.length - 1]!;
-  if (parts.length === 2 && parts[1] && isKnownCountryName(parts[1])) return countryFromCode(parts[1]);
-  if (authorizedCountries?.length === 1 && authorizedCountries[0]) return countryFromCode(authorizedCountries[0]);
-  return '';
 }
 
 export function OPTIONS(request: Request) {
@@ -79,7 +34,7 @@ async function readProfile(request: Request): Promise<Response> {
     return Response.json({ error: 'An active candidate account is required.' }, { status: 403 });
   }
 
-  const [candidates, screening] = await Promise.all([
+  const [candidates, typedScreening] = await Promise.all([
     db
       .from('candidates')
       .select('id, confirmed_facts, full_name, email, phone, linkedin_url, current_city, current_state, full_address')
@@ -93,6 +48,7 @@ async function readProfile(request: Request): Promise<Response> {
   checkDb(candidates.error);
   const candidate = candidates.data?.find((row) => !isUnreviewedResume(row.confirmed_facts ?? {}));
   const facts: Record<string, unknown> = candidate?.confirmed_facts ?? {};
+  const screening = resolveAutofillScreening(typedScreening, facts.screeningAnswers);
   const cfContacts = facts.contacts && typeof facts.contacts === 'object' ? (facts.contacts as Record<string, unknown>) : null;
   const profileContacts = (profile as Record<string, unknown>).candidate_contacts &&
     typeof (profile as Record<string, unknown>).candidate_contacts === 'object'
@@ -111,8 +67,12 @@ async function readProfile(request: Request): Promise<Response> {
   const salary = screening.desired_salary_amount;
   const salaryPeriod = screening.desired_salary_period;
   const noticeDays = screening.notice_period_days;
-  const country = resolveCountry(facts, screening.authorized_countries);
-  const intendedWorkCountry = countryFromCode(text(facts.intended_work_country)) || country;
+  const state = text(facts.current_state) || text(candidate?.current_state);
+  const savedLocation = text(structuredLocation(facts)?.whereBased) ||
+    text(facts.location) || text(facts.full_address) || text(candidate?.full_address) ||
+    [text(facts.current_city) || text(candidate?.current_city), state].filter(Boolean).join(', ');
+  const country = baseCountry(text(facts.country) || text(facts.current_country), savedLocation, state) ?? '';
+  const intendedWorkCountry = baseCountry(facts.intended_work_country, undefined) ?? country;
 
   return Response.json({
     meta: {
@@ -141,7 +101,7 @@ async function readProfile(request: Request): Promise<Response> {
           text(cfContacts?.location) ||
           [text((candidate as Record<string, unknown> | undefined)?.current_city), text((candidate as Record<string, unknown> | undefined)?.current_state)].filter(Boolean).join(', ') ||
           text((candidate as Record<string, unknown> | undefined)?.full_address),
-      state: text(facts.current_state) || text((candidate as Record<string, unknown> | undefined)?.current_state),
+      state,
       country,
       postal_code: text(facts.zip_code) || text(facts.postal_code),
       intended_work_country: intendedWorkCountry,

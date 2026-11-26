@@ -1,3 +1,5 @@
+import { baseCountry } from '../src/lib/profile/base-country.ts';
+import { z } from 'zod';
 import assert from 'node:assert/strict';
 import * as crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -77,6 +79,8 @@ function fixture({ candidates = [], screening = {}, account = profile } = {}) {
   });
   const dependencies = {
     'node:crypto': crypto,
+    zod: { z },
+    '../identity/userprofile': { normalizeCountryCode: (code) => code.toLowerCase() },
     'next/server': { NextResponse },
     '@/lib/auth/extension-connect': { EXTENSION_CONNECT_PATH },
     '@/lib/auth/profile-access': { profileAccess },
@@ -88,6 +92,7 @@ function fixture({ candidates = [], screening = {}, account = profile } = {}) {
       },
     },
     '@/lib/http/cors': { cors },
+    '@/lib/profile/base-country': { baseCountry },
     '@/lib/ingest/screeninganswers': {
       getScreeningAnswers: async (id) => {
         assert.equal(id, account.id);
@@ -133,6 +138,9 @@ function fixture({ candidates = [], screening = {}, account = profile } = {}) {
     return exports;
   }
   dependencies['@/lib/v1/auth'] = load('lib/v1/auth');
+  Object.assign(dependencies['@/lib/ingest/screeninganswers'], {
+    resolveAutofillScreening: load('lib/ingest/screeninganswers').resolveAutofillScreening,
+  });
   const connect = load('app/api/v1/auth/extension/connect/route');
   const me = load('app/api/v1/auth/me/route');
   const autofill = load('app/api/v1/me/autofill-profile/route');
@@ -312,5 +320,43 @@ test('Chrome, Firefox and configured store callbacks mint hashed, verifiable cre
     assert.equal((await app.me(token)).status, 401);
     assert.equal((await app.me()).status, 401);
     assert.equal(app.cookieReads, 0);
+  }
+});
+
+test('autofill profile resolves base country and falls back only when the typed screening row is absent', async () => {
+  const candidate = {
+    id: crypto.randomUUID(),
+    user_id: profile.id,
+    provenance_status: 'confirmed',
+    current_city: 'Austin',
+    current_state: 'TX',
+    confirmed_facts: {
+      location: { whereBased: 'Austin, TX', countries: ['in'] },
+      screeningAnswers: {
+        authorized_countries: ['US'],
+        visa_sponsorship_needed: 'no',
+        notice_period_days: '0',
+        desired_salary_amount: '120000',
+        desired_salary_currency: 'usd',
+        desired_salary_period: 'year',
+      },
+    },
+  };
+  for (const typedRow of [false, true]) {
+    const { connect, autofill } = fixture({
+      candidates: [candidate],
+      screening: typedRow ? { updated_at: '2026-01-01', notice_period_days: null } : {},
+    });
+    const redirect = await connect(connectRequest());
+    const token = new URLSearchParams(new URL(redirect.headers.get('location')).hash.slice(1)).get('token');
+    const response = await autofill.GET(new Request(`${origin}/api/v1/me/autofill-profile`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }));
+    assert.equal(response.status, 200);
+    const { data, meta } = await response.json();
+    assert.equal(data.country, 'United States');
+    assert.equal(data.visa_sponsorship_needed, typedRow ? '' : 'No');
+    assert.equal(meta.screening.notice_period_days, typedRow ? null : 0);
+    assert.equal(data.authorized_countries, typedRow ? '' : 'US');
   }
 });

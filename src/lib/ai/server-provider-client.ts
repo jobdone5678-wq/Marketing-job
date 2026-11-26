@@ -188,7 +188,7 @@ function translateToProviderError(err: any, deadline: number, signal?: AbortSign
   if (status === 502 || isHtml(responseBody)) {
     return new ProviderError(
       'Endpoint returned HTML error page instead of JSON',
-      502,
+      status === 429 || status === 503 ? status : 502,
       'HTML_RESPONSE',
       responseBody,
     );
@@ -459,7 +459,7 @@ export class ServerVercelProviderClient extends ProviderClient {
       if (isHtml(bodyText, contentType)) {
         throw new ProviderError(
           'Endpoint returned HTML error page instead of JSON',
-          502,
+          response.status === 429 || response.status === 503 ? response.status : 502,
           'HTML_RESPONSE',
           bodyText,
         );

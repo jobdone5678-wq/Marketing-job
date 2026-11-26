@@ -376,7 +376,13 @@ export async function POST(request: Request) {
       savedCandidate = data;
     }
 
-    await syncLegacyResumeSaveToV1Tables(user.id, body);
+    const screeningPatch = {
+      ...submittedScreening,
+      authorized_countries: Object.hasOwn(review, 'authorized_countries') ? screening.authorized_countries : undefined,
+      age_18_or_older: Object.hasOwn(review, 'age_18_or_older') ? screening.age_18_or_older : undefined,
+      visa_sponsorship_needed: sponsorshipReviewed ? screening.visa_sponsorship_needed : undefined,
+    };
+    await syncLegacyResumeSaveToV1Tables(user.id, body, screeningPatch, existingScreening);
 
     return cors(
       request,

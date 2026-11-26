@@ -8,6 +8,7 @@
  * Zero external or Node-only dependencies.
  */
 
+import { baseCountry, US_STATE_CODES } from '../profile/base-country';
 import { answerBankFactId } from '../candidate/answer-bank-topics';
 import type { DemographicPreferences } from '../profile/demographic-preferences';
 
@@ -302,22 +303,10 @@ export function buildVerifiedFacts(
   const locParts = isNonEmptyString(locationString)
     ? locationString.split(',').map((p) => p.trim()).filter(Boolean)
     : [];
-  const isCountryPart = (raw: string): boolean => {
-    const clean = raw.trim().toLowerCase();
-    if (!clean) return false;
-    if (/^(?:usa|u\.s\.a?\.|united states(?: of america)?|uk|u\.k\.|united kingdom|great britain|uae|canada|india|germany|france|australia|singapore|ireland)$/.test(clean)) {
-      return true;
-    }
-    try {
-      const display = new Intl.DisplayNames(['en'], { type: 'region' });
-      if (/^[a-z]{2}$/i.test(clean)) {
-        const label = display.of(clean.toUpperCase());
-        return Boolean(label && label.toLowerCase() !== clean);
-      }
-    } catch {}
-    return false;
-  };
-  const twoPartCountry = locParts.length === 2 && locParts[1] && isCountryPart(locParts[1]) ? locParts[1] : undefined;
+  const savedState = pickVal('current_state', 'state');
+  const countryFromAddress = baseCountry(undefined, locationString, savedState);
+  const stateSuffix = locParts[1] === savedState || (countryFromAddress === 'United States' && US_STATE_CODES.has(locParts[1] ?? ''));
+  const twoPartCountry = locParts.length === 2 && countryFromAddress && !stateSuffix;
   const cityRaw = pickVal('current_city', 'city') ?? (locParts.length >= 2 ? locParts[0] : undefined);
   if (isNonEmptyString(cityRaw)) {
     addFact('profile.location.city', 'string', cityRaw.trim(), 'location', 'profile', 'current_city');
@@ -326,18 +315,7 @@ export function buildVerifiedFacts(
   if (isNonEmptyString(stateRaw)) {
     addFact('profile.location.state', 'string', stateRaw.trim(), 'location', 'profile', 'current_state');
   }
-  const cfCountries = Array.isArray(cfLocation?.countries)
-    ? cfLocation.countries.filter((c): c is string => isNonEmptyString(c)).map((c) => c.trim())
-    : [];
-  const singleLocCountry = cfCountries.length === 1 && cfCountries[0]
-    ? (/^[a-z]{2}$/i.test(cfCountries[0])
-      ? (new Intl.DisplayNames(['en'], { type: 'region' }).of(cfCountries[0].toUpperCase()) ?? cfCountries[0])
-      : cfCountries[0])
-    : undefined;
-  const countryVal =
-    pickVal('country', 'current_country') ??
-    (locParts.length >= 3 ? locParts[locParts.length - 1] : twoPartCountry) ??
-    singleLocCountry;
+  const countryVal = baseCountry(pickVal('country', 'current_country'), locationString, savedState);
   if (isNonEmptyString(countryVal)) {
     addFact('profile.location.country', 'string', countryVal.trim(), 'location', 'profile', 'country');
   }
