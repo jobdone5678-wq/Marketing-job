@@ -56,6 +56,10 @@ test('Intentional EEO exclusion strips gender, race, veteran, disability, and ag
     disability_status: 'No',
     demographics: { gender: 'Male' },
     age_range: '25-34',
+    national_origin: 'Example',
+    free_school_meals: true,
+    caregiver_status: 'Prefer not to say',
+    genetic_information: 'Decline',
   };
 
   const sanitized = stripEeoFields(input);
@@ -66,4 +70,6 @@ test('Intentional EEO exclusion strips gender, race, veteran, disability, and ag
   });
   assert.equal(isEeoDemographicField('What is your ethnicity?'), true);
   assert.equal(isEeoDemographicField('Are you 18 or older?'), false);
+  assert.equal(isEeoDemographicField('Are you legally authorized to work in Canada?'), false);
+  assert.equal(isEeoDemographicField('What is your current country?'), false);
 });

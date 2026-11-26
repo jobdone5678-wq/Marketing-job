@@ -1,6 +1,6 @@
 // Which of a page's forms is the application, and which label fills go to which frame.
 
-import { matchFieldKey, normalizeLabel } from './fieldKeys';
+import { matchesCountry, matchFieldKey, normalizeLabel, workAuthorizationCountry } from './fieldKeys';
 import type { LabelFill } from './protocol';
 
 /**
@@ -53,17 +53,27 @@ export function scopeToApplication<T extends { frame: number; form: number }>(
 export function planLabelFills(
   fields: { label: string; frame?: number; form?: number }[],
   values: Record<string, string>,
+  authorizedCountries?: string,
 ): LabelFill[] {
   const asked = new Set<string>();
   const fills: LabelFill[] = [];
   for (const { label, frame, form } of fields) {
-    const key = matchFieldKey(label);
-    const value = key ? (values[key] ?? '') : '';
+    const value = confirmedFieldValue(label, values, authorizedCountries);
     if (!value || asked.has(normalizeLabel(label))) continue;
     asked.add(normalizeLabel(label));
     fills.push({ label, value, frame, form });
   }
   return fills;
+}
+
+export function confirmedFieldValue(label: string, values: Record<string, string>, authorizedCountries = ''): string {
+  const key = matchFieldKey(label);
+  if (key) return values[key] ?? '';
+
+  // A country omitted from the profile is unknown. Only answer an explicitly named country.
+  const country = workAuthorizationCountry(label);
+  if (!country) return '';
+  return authorizedCountries.split(',').some((entry) => matchesCountry(country, entry)) ? 'Yes' : '';
 }
 
 /**

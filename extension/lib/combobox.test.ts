@@ -1,5 +1,50 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as combobox from './combobox';
+import { extractForm } from './form';
+
+describe('ATS dropdown controls', () => {
+  beforeEach(reset);
+
+  it('opens, selects and verifies an ARIA button dropdown', async () => {
+    document.body.innerHTML = `<form><label for="region">Region</label>
+      <button id="region" type="button" role="combobox" aria-controls="regions" aria-expanded="false">Select...</button>
+      <div role="listbox" id="regions" hidden><div role="option">India</div></div></form>`;
+    const button = document.querySelector<HTMLButtonElement>('#region')!;
+    const list = document.querySelector<HTMLElement>('#regions')!;
+    button.addEventListener('click', () => {
+      button.setAttribute('aria-expanded', 'true');
+      list.hidden = false;
+    });
+    list.addEventListener('click', () => {
+      button.textContent = 'India';
+      button.setAttribute('aria-expanded', 'false');
+      list.hidden = true;
+    });
+    expect(extractForm(document)[0]).toMatchObject({ label: 'Region', combo: true, value: '' });
+    expect(await combobox.open(document, 'Region')).toEqual({ status: 'opened' });
+    expect(combobox.options(document, 'Region').options).toEqual(['India']);
+    expect(await combobox.select(document, 'Region', 'India')).toEqual({ status: 'selected' });
+    expect(combobox.verify(document, 'Region', 'India').status).toBe('verified');
+  });
+
+  it('clears a temporary typeahead search when no offered option is selected', async () => {
+    document.body.innerHTML = '<label for="city">Current location</label><input id="city" role="combobox" aria-expanded="false">';
+    const input = document.querySelector<HTMLInputElement>('#city')!;
+    input.addEventListener('input', () => {
+      input.setAttribute('aria-expanded', String(Boolean(input.value)));
+      document.querySelector('#result')?.remove();
+      if (!input.value) return;
+      input.setAttribute('aria-controls', 'result');
+      document.body.insertAdjacentHTML('beforeend', '<div id="result" role="listbox"><div role="option">New Delhi</div></div>');
+    });
+    const label = 'Current location';
+    expect(await combobox.runStep(document, { action: 'query', label, value: 'Delhi' })).toEqual({ status: 'queried' });
+    expect(combobox.options(document, label).options).toEqual(['New Delhi']);
+    expect(extractForm(document)[0]?.value).toBe('');
+    await combobox.runStep(document, { action: 'clear', label, value: '' });
+    expect(input.value).toBe('');
+  });
+});
 
 function reset() {
   document.body.replaceChildren();
@@ -419,6 +464,42 @@ describe('combobox.select does not claim a commit it cannot see', () => {
 
 describe('combobox.runStep', () => {
   beforeEach(reset);
+
+  it('adds a selection only when the current multi-select answers match the expected prior choices', async () => {
+    document.body.innerHTML = `
+      <button type="button" role="combobox" aria-label="Race" aria-controls="race-list" aria-expanded="true">Select</button>
+      <div role="listbox" id="race-list" aria-multiselectable="true">
+        <div role="option" aria-selected="false">Asian</div><div role="option" aria-selected="false">White</div>
+      </div>`;
+    for (const option of document.querySelectorAll('[role="option"]')) {
+      option.addEventListener('click', () => option.setAttribute('aria-selected', 'true'));
+    }
+    expect(combobox.options(document, 'Race').multiple).toBe(true);
+    expect(await combobox.select(document, 'Race', 'Asian', undefined, true)).toEqual({ status: 'selected' });
+    expect(await combobox.select(document, 'Race', 'White', undefined, false, ['Other'])).toEqual({ status: 'did_not_commit' });
+    expect(await combobox.select(document, 'Race', 'White', undefined, false, ['Asian'])).toEqual({ status: 'selected' });
+    expect(combobox.verify(document, 'Race', 'White', undefined, true)).toEqual({ status: 'verified', committed: 'Asian, White' });
+  });
+
+  it.each(['div', 'span', 'button'])('drives a %s listbox trigger without submitting the surrounding form', async (tag) => {
+    document.body.innerHTML = `<form>
+      <${tag} aria-label="Country" aria-haspopup="listbox" aria-controls="country-list" aria-expanded="false">Select...</${tag}>
+      <div id="country-list" role="listbox"><div role="option">Germany</div></div>
+    </form>`;
+    const trigger = document.querySelector<HTMLElement>('[aria-haspopup]')!;
+    const option = document.querySelector('[role="option"]')!;
+    const submit = vi.fn();
+    document.querySelector('form')?.addEventListener('submit', submit);
+    trigger.addEventListener('click', () => trigger.setAttribute('aria-expanded', 'true'));
+    option.addEventListener('click', () => {
+      trigger.textContent = 'Germany';
+      trigger.setAttribute('aria-expanded', 'false');
+    });
+    expect(await combobox.open(document, 'Country', 0)).toEqual({ status: 'opened' });
+    expect(await combobox.select(document, 'Country', 'Germany', 0)).toEqual({ status: 'selected' });
+    expect(combobox.verify(document, 'Country', 'Germany', 0)).toEqual({ status: 'verified', committed: 'Germany' });
+    expect(submit).not.toHaveBeenCalled();
+  });
 
   it('drives a widget end to end through the four steps', async () => {
     reactSelect('Are you authorized to work', ['Yes', 'No']);

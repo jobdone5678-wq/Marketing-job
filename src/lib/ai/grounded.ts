@@ -17,6 +17,7 @@
  */
 
 import type { VerifiedFact } from './verified-facts.js';
+import { isAgeThresholdQuestion, matchChoice, matchFieldKey, matchesCountry, workAuthorizationCountry } from '../../../extension/lib/fieldKeys';
 
 export interface QuestionDescriptor {
   id?: string;
@@ -152,6 +153,35 @@ function resolveQuestionMeta(q: QuestionDescriptor | string): {
   return { text, canonical, category, skill };
 }
 
+export function uniqueConfirmedChoice(
+  options: readonly string[],
+  facts: Map<string, VerifiedFact>,
+  question: QuestionDescriptor,
+): { choice: string; evidenceIds: string[] } | undefined {
+  const matches = options.flatMap((option) => {
+    const result = validateGroundedAnswer(option, facts, question);
+    return result.valid && result.evidenceIds.some(
+      (id) => id.startsWith('screening.') || id.startsWith('answer_bank.') || id.startsWith('experience_bank.'),
+    ) ? [{ choice: option, evidenceIds: result.evidenceIds }] : [];
+  });
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+export function experienceSkillQuestion(label: string): string | undefined {
+  const skill = label.trim().toLowerCase().match(
+    /^do you have (?:professional )?experience (?:with|using|in) ([a-z][a-z0-9.+# -]*?)\s*[?*]*$/,
+  )?.[1]?.trim();
+  return skill && !/\b(?:and|or|within|since|including)\b/.test(skill) ? skill : undefined;
+}
+
+function salaryPeriod(text: string): string | undefined {
+  const explicit = text.match(/\b(?:per|a)\s+(year|month|day|hour)\b|\/\s*(year|yr|month|mo|day|hour|hr)\b/i);
+  const period = (explicit?.[1] ?? explicit?.[2])?.toLowerCase();
+  if (period) return ({ yr: 'year', mo: 'month', hr: 'hour' } as Record<string, string>)[period] ?? period;
+  return text.match(/\b(annual|yearly|monthly|daily|hourly)\b/i)?.[1]?.toLowerCase()
+    .replace(/annual|yearly/, 'year').replace('monthly', 'month').replace('daily', 'day').replace('hourly', 'hour');
+}
+
 /**
  * Validates a proposed answer against candidate verified facts with typed, question-specific rules.
  */
@@ -192,22 +222,30 @@ export function validateGroundedAnswer(
   const { text: qText, canonical, category, skill: explicitSkill } = resolveQuestionMeta(question);
   const normQ = normalize(qText);
   const normAns = normalize(answer);
+  const exactBankFact = facts.get(`answer_bank.${normalizeKey(qText)}`);
+  const fromBank = (fact: VerifiedFact | undefined) => (
+    fact && typeof fact.value === 'string' && matchChoice(fact.value, answer, qText)
+      ? validResult([fact.id], 'answer_bank') : undefined
+  );
 
-  // =========================================================================
-  // 1. Check Answer Bank Matches First (zero hallucination, exact past intent)
-  // =========================================================================
-  for (const [factId, fact] of facts.entries()) {
-    if (factId.startsWith('answer_bank.')) {
-      const topic = factId.replace('answer_bank.', '');
-      const factValNorm = normalize(fact.value);
+  if (isAgeThresholdQuestion(qText)) {
+    const fact = facts.get('screening.age_18_or_older');
+    const stance = /^(?:yes|true)(?:[,.] i am (?:at least )?18(?: years(?: old| of age)?)?(?: or older)?)?[.!]?$/i.test(answer.trim())
+      ? true : /^(?:no|false)(?:[,.] i am (?:under|younger than) 18(?: years old)?)?[.!]?$/i.test(answer.trim())
+        ? false : undefined;
+    if (fact) {
+      return stance === fact.value ? validResult([fact.id]) : unresolvedResult('Answer must match the confirmed age threshold', [fact.id]);
+    }
+  }
 
-      // Check if topic matches question category or canonical name or is referenced in question
-      const topicInQ = category === topic || canonical === topic || normQ.includes(topic.replace(/_/g, ' '));
-      const exactAnswerMatch = factValNorm === normAns;
-
-      if (exactAnswerMatch || (topicInQ && (factValNorm.includes(normAns) || normAns.includes(factValNorm)))) {
-        return validResult([factId], 'answer_bank');
-      }
+  if (/\bnotice period\b|^how much notice\b/.test(normQ)) {
+    const fact = facts.get('screening.notice_period_days');
+    if (fact) {
+      const duration = answer.trim().match(/^(\d+)\s*(days?|weeks?)$/i);
+      const days = duration?.[2] ? Number(duration[1]) * (/^week/i.test(duration[2]) ? 7 : 1) :
+        /^(?:immediate(?:ly)?|no notice(?: period)?)$/i.test(answer.trim()) ? 0 :
+        /^\d+$/.test(normAns) && /\b(?:in days|number of days)\b/.test(normQ) ? Number(normAns) : null;
+      return days === fact.value ? validResult([fact.id]) : unresolvedResult('Answer must match the confirmed notice period', [fact.id]);
     }
   }
 
@@ -221,7 +259,9 @@ export function validateGroundedAnswer(
     category === 'sponsorship' ||
     /\b(sponsor(?:ship)?|visa\s+sponsor)\b/i.test(normQ);
 
+  const authorizationCountry = workAuthorizationCountry(qText);
   const isAuthQuestion =
+    Boolean(authorizationCountry) ||
     canonical === 'authorized_in_usa' ||
     category === 'work_auth' ||
     /\b(authorized\s+to\s+work|legally\s+authorized|legal\s+right\s+to\s+work|work\s+authoriz)\b/i.test(normQ);
@@ -233,6 +273,15 @@ export function validateGroundedAnswer(
 
     const futureFact = facts.get('profile.work_auth.need_sponsorship_future');
     const nowFact = facts.get('profile.work_auth.need_sponsorship_now');
+    const generalFact = facts.get('screening.visa_sponsorship_needed');
+    if (generalFact && ((!isSpecificNow && !isSpecificFuture) || /\bnow or in the future\b/.test(normQ))) {
+      const negative = isNegativeStance(answer);
+      const positive = isPositiveStance(answer);
+      const lead = normAns.match(/^(yes|no)\b/)?.[1];
+      return (generalFact.value === true ? positive && lead !== 'no' : negative && lead !== 'yes')
+        ? validResult([generalFact.id])
+        : unresolvedResult('Answer conflicts with confirmed sponsorship requirements', [generalFact.id]);
+    }
 
     if (!futureFact && !nowFact) {
       return unresolvedResult('Missing verified work authorization / sponsorship facts');
@@ -281,9 +330,17 @@ export function validateGroundedAnswer(
   }
 
   if (isAuthQuestion) {
-    const authFact = facts.get('profile.work_auth.authorized_in_usa');
+    const countries = facts.get('screening.authorized_countries');
+    if (authorizationCountry && Array.isArray(countries?.value) &&
+        countries.value.some((code) => matchesCountry(authorizationCountry, code))) {
+      return isPositiveStance(answer) && !/^no\b/i.test(answer.trim())
+        ? validResult([countries.id])
+        : unresolvedResult('Answer conflicts with confirmed work authorization', [countries.id]);
+    }
+    const authFact = authorizationCountry && matchesCountry(authorizationCountry, 'US')
+      ? facts.get('profile.work_auth.authorized_in_usa') : undefined;
     if (!authFact) {
-      return unresolvedResult('Missing profile.work_auth.authorized_in_usa fact');
+      return unresolvedResult('Missing confirmed work authorization for the country asked');
     }
 
     const candidateAuthorized = Boolean(authFact.value);
@@ -307,6 +364,14 @@ export function validateGroundedAnswer(
     }
 
     return unresolvedResult('Ambiguous authorization answer', [authFact.id]);
+  }
+
+  const skillAsked = experienceSkillQuestion(qText);
+  const experienceBank = facts.get('experience_bank.skills');
+  if (skillAsked && Array.isArray(experienceBank?.value) && experienceBank.value.includes(skillAsked)) {
+    return /^(?:yes|true)[.!]?$/i.test(answer.trim())
+      ? validResult([experienceBank.id])
+      : unresolvedResult('The confirmed skill does not support the proposed experience answer', [experienceBank.id]);
   }
 
   // =========================================================================
@@ -580,10 +645,30 @@ export function validateGroundedAnswer(
   };
 
   const matchedFactId = fieldMapping[canonical] || fieldMapping[category];
+  const expectedSalary = facts.get('screening.desired_salary_amount');
+  if (expectedSalary && (matchFieldKey(qText) === 'desiredSalary' ||
+      /\b(?:salary|compensation) expectations?\b|\b(?:expected|desired) (?:annual |monthly |hourly |daily )?(?:salary|compensation)\b/.test(normQ))) {
+    const proposed = answer.trim().match(/^(?:([A-Z]{3})\s+)?([$€£])?\s*(\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:([A-Z]{3})\b)?(.*)$/);
+    const currency = facts.get('screening.desired_salary_currency');
+    const period = facts.get('screening.desired_salary_period');
+    const statedCurrencies = [proposed?.[1], proposed?.[4], qText.match(/\b[A-Z]{3}\b/)?.[0]].filter(Boolean);
+    const symbolCurrency = proposed?.[2] === '€' ? 'EUR' : proposed?.[2] === '£' ? 'GBP' : undefined;
+    const suffix = proposed?.[5]?.trim() ?? '';
+    const validSuffix = !suffix || /^(?:(?:per|a|\/)\s*(?:year|yr|month|mo|day|hour|hr)|annual|yearly|monthly|daily|hourly)$/i.test(suffix);
+    const statedPeriods = [salaryPeriod(suffix), salaryPeriod(qText)].filter(Boolean);
+    if (proposed?.[3] && validSuffix && Number(proposed[3].replace(/,/g, '')) === expectedSalary.value &&
+        statedCurrencies.every((code) => code === currency?.value) &&
+        (!symbolCurrency || symbolCurrency === currency?.value) &&
+        (proposed[2] !== '$' || statedCurrencies.length > 0) &&
+        statedPeriods.every((unit) => unit === period?.value)) {
+      return validResult([expectedSalary.id, ...(currency ? [currency.id] : []), ...(period ? [period.id] : [])]);
+    }
+    return unresolvedResult('Answer must match the saved salary amount, currency and period', [expectedSalary.id]);
+  }
   if (matchedFactId) {
     const fact = facts.get(matchedFactId);
     if (!fact) {
-      return unresolvedResult(`Missing verified fact for ${matchedFactId}`);
+      return fromBank(exactBankFact) ?? unresolvedResult(`Missing verified fact for ${matchedFactId}`);
     }
 
     const factNorm = normalize(fact.value);
@@ -617,6 +702,12 @@ export function validateGroundedAnswer(
     /\b(relocat(?:e|ion)|willing\s+to\s+move)\b/i.test(normQ);
 
   if (isRelocQuestion) {
+    const screeningRelocation = facts.get('screening.willing_to_relocate');
+    if (screeningRelocation && /^(?:(?:are you|would you be) (?:willing to relocate|open to relocat(?:ion|ing))|willing to relocate|open to relocation)(?: for this (?:role|job|position))?$/.test(normQ)) {
+      return matchChoice(screeningRelocation.value === true ? 'Yes' : 'No', answer, qText)
+        ? validResult([screeningRelocation.id])
+        : unresolvedResult('Answer conflicts with confirmed relocation preference', [screeningRelocation.id]);
+    }
     const relocFact = facts.get('profile.preferences.open_to_relocation') || facts.get('profile.open_to_relocation');
     if (relocFact) {
       const openToReloc = Boolean(relocFact.value);
@@ -645,5 +736,6 @@ export function validateGroundedAnswer(
   // 7. Strict Final Fallback: ELIMINATE word-overlap matching
   // =========================================================================
   // If no typed validator has confirmed and cited evidence, reject as unresolved.
-  return unresolvedResult('Answer is not grounded in candidate verified facts');
+  return fromBank(exactBankFact ?? (isRelocQuestion ? facts.get('answer_bank.relocation_willingness') : undefined)) ??
+    unresolvedResult('Answer is not grounded in candidate verified facts');
 }

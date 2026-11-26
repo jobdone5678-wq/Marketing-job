@@ -19,7 +19,11 @@ import { planFormBatch, type Field, type Fill, type FormContext, type PlanResult
 import { chooseComboboxOption } from './chooser';
 import { isPrivateAutofillField } from './autofill-field-safety';
 import { isUnreviewedResume } from '../candidate/confirmed-facts';
+import { foldQuestionForTopic, listScreeningAnswerBank, normalizeAnswerBankTopic } from '../candidate/answerbank';
+import { listExperienceBank } from '../candidate/experience';
+import { getScreeningAnswers } from '../ingest/screeninganswers';
 import { getUserAiProviderSecret } from './ai-provider-data';
+import { experienceSkillQuestion } from './grounded';
 
 export class OrchestratorError extends Error {
   readonly status: number;
@@ -37,7 +41,6 @@ export interface PlanApiRequest {
   candidateId: string;
   fields: Field[];
   context?: FormContext;
-  answerBank?: any;
 }
 
 export interface ChooseApiRequest {
@@ -45,7 +48,6 @@ export interface ChooseApiRequest {
   question: Field;
   options: string[];
   context?: FormContext;
-  answerBank?: any;
 }
 
 export interface PlanApiResponse {
@@ -111,6 +113,44 @@ async function getDb(options?: OrchestratorOptions): Promise<any> {
   if (options?.db) return options.db;
   const admin = await import('@/lib/db/admin');
   return admin.database();
+}
+
+async function loadVerifiedFacts(actorId: string, candidate: Parameters<typeof buildVerifiedFacts>[0], fields: Field[], db: any) {
+  const skillsAsked = new Set(fields.map((field) => experienceSkillQuestion(field.label)).filter(Boolean));
+  const [screening, entries, experience] = await Promise.all([
+    getScreeningAnswers(actorId, db),
+    listScreeningAnswerBank(actorId, { db, sendableOnly: true }),
+    skillsAsked.size ? listExperienceBank(actorId, { db, tailorableOnly: true }) : undefined,
+  ]);
+  const reusable = entries.filter(({ question }) => !isPrivateAutofillField({ label: question }));
+  const answers = fields.flatMap(({ label }) => {
+    const normalized = foldQuestionForTopic(label);
+    if (!normalized) return [];
+    const topic = reusableAnswerTopic(label);
+    const entry = reusable.find(({ question }) => foldQuestionForTopic(question) === normalized) ??
+      (topic && reusable.find(({ question }) => reusableAnswerTopic(question) === topic));
+    return entry ? [{ question: label, answer: entry.answer }] : [];
+  });
+  const facts = buildVerifiedFacts(candidate, answers, screening);
+  const skills = new Set(experience?.atoms.flatMap((atom) => {
+    if (atom.provenance !== 'manual' && atom.provenance !== 'stated_in_chat') return [];
+    return (atom.skills ?? []).map((skill) => skill.trim().toLowerCase()).filter((skill) => skillsAsked.has(skill));
+  }));
+  if (skills.size) {
+    const id = 'experience_bank.skills';
+    facts.set(id, { id, value: [...skills], type: 'string[]', category: 'skill', source: 'experience_bank' });
+  }
+  return facts;
+}
+
+function reusableAnswerTopic(question: string) {
+  const folded = foldQuestionForTopic(question);
+  if (!folded) return;
+  const topic = normalizeAnswerBankTopic(question);
+  if (topic === 'notice_period' && /^(?:(?:what is your|your|current) )?notice period$|^how much notice (?:do you need|is required)$/.test(folded)) return topic;
+  if (topic === 'salary_expectation' && /^(?:(?:what (?:is|are) your|your) )?(?:desired (?:salary|compensation)|(?:salary|compensation) expectations?)$/.test(folded)) return topic;
+  if (topic === 'how_did_you_hear' && /^(?:how did you (?:hear|find out|learn)|where did you hear) about (?:us|this (?:role|position|job|opening|opportunity))$/.test(folded)) return topic;
+  return undefined;
 }
 
 /**
@@ -281,11 +321,12 @@ export async function executePlan(
     throw new OrchestratorError('Save a confirmed candidate profile before using AI autofill.', 422);
   }
 
-  const client = await resolveProviderClient(actorId, options);
-  const facts = buildVerifiedFacts(candidate, req.answerBank);
-
   try {
     const fields = (req.fields || []).filter((field) => field && !isPrivateAutofillField(field));
+    const [client, facts] = await Promise.all([
+      resolveProviderClient(actorId, options),
+      loadVerifiedFacts(actorId, candidate, fields, db),
+    ]);
     const planResult = await planFormBatch(fields, facts, client, req.context);
     return {
       ok: true,
@@ -329,7 +370,7 @@ export async function executeChoose(
   if (!req.question || !Array.isArray(req.options)) {
     throw new OrchestratorError('question and options array are required', 400, 'BAD_REQUEST');
   }
-  if (isPrivateAutofillField(req.question)) {
+  if (isPrivateAutofillField({ ...req.question, options: req.options })) {
     throw new OrchestratorError('This question requires manual review.', 422);
   }
 
@@ -352,10 +393,11 @@ export async function executeChoose(
     throw new OrchestratorError('Save a confirmed candidate profile before using AI autofill.', 422);
   }
 
-  const client = await resolveProviderClient(actorId, options);
-  const facts = buildVerifiedFacts(candidate, req.answerBank);
-
   try {
+    const [client, facts] = await Promise.all([
+      resolveProviderClient(actorId, options),
+      loadVerifiedFacts(actorId, candidate, [req.question], db),
+    ]);
     const chooseResult = await chooseComboboxOption(
       req.question,
       req.options,

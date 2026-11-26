@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { normalizeCountryCode } from '../identity/userprofile';
 import { DomainValidationError, getDbClient } from '../v1/auth';
+import { isDemographicQuestion } from '../profile/demographic-preferences';
 
 export const SALARY_PERIODS = ['year', 'month', 'day', 'hour'] as const;
 export type SalaryPeriod = (typeof SALARY_PERIODS)[number];
@@ -65,7 +66,7 @@ export function isEeoDemographicField(nameOrQuestion: string): boolean {
     .toLowerCase()
     .replace(/[^a-z0-9_]+/g, '_');
   if (EEO_DEMOGRAPHIC_KEYS.has(key)) return true;
-  return EEO_QUESTION_PATTERN.test(nameOrQuestion);
+  return EEO_QUESTION_PATTERN.test(nameOrQuestion) || isDemographicQuestion(nameOrQuestion);
 }
 
 /**

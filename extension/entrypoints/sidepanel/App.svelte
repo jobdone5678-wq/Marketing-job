@@ -5,12 +5,13 @@
   import type { PlanRefused } from '../../lib/planRefused';
   import { track } from '../../lib/analytics';
   import { signIn, signOut, getToken, fetchMe, type HireUser } from '../../lib/auth';
-  import { getAutofillSettings, saveAutofillSettings, type AutofillSettings } from '../../lib/freehire';
+  import { getAutofillSettings, getDemographicPreferences, saveAutofillSettings, type AutofillSettings } from '../../lib/freehire';
   import { normalizeLabel } from '../../lib/fieldKeys';
   import type { PlanItem } from '../../lib/applyPlan';
   import { runAutofill, saveChosenAnswers, type FillPanel } from '../../lib/formFill';
   import { FormPlan } from './formPlan.svelte';
   import { PageMatch } from './pageMatch.svelte';
+  import { isApplicationPageUrl } from '../../lib/pageMatch';
   import { AppliedTracker, type CurrentTab } from './applied.svelte';
   import { answersToOffer, type AnswerOffer } from '../../lib/answerOffer';
   import MatchTab from './MatchTab.svelte';
@@ -110,7 +111,11 @@
     const url = tab?.url ?? '';
     if (currentTab.id !== id) applied.tabChanged(id);
     currentTab = { id, url };
-    if (id !== null && url) await form.refresh({ tabId: id, url });
+    if (id !== null && isApplicationPageUrl(url)) {
+      await form.refresh({ tabId: id, url });
+    } else {
+      form.resetPage();
+    }
   }
 
   async function restoreSession() {
@@ -243,6 +248,18 @@
     }
   }
 
+  function autofill() {
+    if (!user) return;
+    void startFill(async (token, signal) => {
+      const demographics = await getDemographicPreferences(token, signal).catch(() => ({
+        enabled: false,
+        answers: {},
+      }));
+      if (signal.aborted) return;
+      await runAutofill(token, fillPanel, signal, demographics);
+    });
+  }
+
   async function revealItem(item: PlanItem) {
     const reply = (await browser.runtime.sendMessage({
       kind: 'REVEAL_FIELD',
@@ -301,7 +318,7 @@
     onReveal={revealItem}
     onSave={saveAnswers}
     onOverrideFill={runOverrideFill}
-    onAutofill={() => void startFill((token, signal) => runAutofill(token, fillPanel, signal))}
+    onAutofill={autofill}
     onModeChange={changeMode}
   />
 </div>

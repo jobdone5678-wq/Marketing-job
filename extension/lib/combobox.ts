@@ -11,8 +11,8 @@
  */
 
 import type { ComboboxReply, ComboboxStep } from './protocol';
-import { collectQuestions, formIndex } from './form';
-import { comboListbox, comboOptionNodes, displayedValues, isComboWidget, isOnScreen, shownText } from './comboWidget';
+import { collectQuestions, formIndex, setNativeValue } from './form';
+import { comboListbox, comboOptionNodes, comboQueries, displayedValues, isComboWidget, isOnScreen, shownText } from './comboWidget';
 import { normalizeLabel } from './fieldKeys';
 import { assertNever } from './utils';
 
@@ -54,11 +54,12 @@ export async function open(doc: Document, label: string, form?: number): Promise
  * their remedies differ: the first needs opening, while the second is a typeahead
  * that fetches its options over the network and is out of scope.
  */
-export function options(doc: Document, label: string, form?: number): { status: OptionsStatus; options: string[] } {
+export function options(doc: Document, label: string, form?: number): { status: OptionsStatus; options: string[]; multiple?: boolean } {
   const { widget, status } = findWidget(doc, label, form);
   if (!widget) return { status, options: [] };
   if (!isOpen(widget)) return { status: 'not_open', options: [] };
-  return { status: 'open', options: comboOptionNodes(widget).map(shownText).filter(Boolean) };
+  const multiple = comboListbox(widget)?.getAttribute('aria-multiselectable') === 'true';
+  return { status: 'open', options: comboOptionNodes(widget).map(shownText).filter(Boolean), ...(multiple ? { multiple } : {}) };
 }
 
 /**
@@ -66,25 +67,32 @@ export function options(doc: Document, label: string, form?: number): { status: 
  * does not offer commits nothing: approximating it is how a question wanting
  * "No" ends up holding "Norfolk Island".
  */
-export async function select(doc: Document, label: string, value: string, form?: number, onlyEmpty?: boolean): Promise<{ status: SelectStatus }> {
+export async function select(doc: Document, label: string, value: string, form?: number, onlyEmpty?: boolean, expectedSelections?: string[]): Promise<{ status: SelectStatus }> {
   const found = findWidget(doc, label, form);
   if (!found.widget) return { status: found.status };
   const widget = found.widget;
   if (!isOpen(widget)) return { status: 'not_open' };
   if (onlyEmpty && displayedValues(widget).length) return { status: 'did_not_commit' };
+  if (expectedSelections?.length) {
+    const committed = displayedValues(widget);
+    if (comboListbox(widget)?.getAttribute('aria-multiselectable') !== 'true' ||
+        committed.length !== expectedSelections.length ||
+        expectedSelections.some((choice) => !committed.includes(choice))) return { status: 'did_not_commit' };
+  }
 
   const nodes = comboOptionNodes(widget);
   offered.set(
     widget,
     nodes.map((o) => normalizeLabel(shownText(o))),
   );
-  const option = nodes.find((o) => normalizeLabel(shownText(o)) === normalizeLabel(value));
+  const matches = nodes.filter((o) => normalizeLabel(shownText(o)) === normalizeLabel(value));
+  const option = matches.length === 1 ? matches[0] : undefined;
   if (!option) return { status: 'no_option' };
 
   press(option);
   // Waiting for the widget to settle is what makes a following `verify` read the
   // committed value rather than the state before the commit landed.
-  const closed = await settle(() => !isOpen(widget));
+  const closed = await settle(() => !isOpen(widget) || displayedValues(widget).includes(value));
   // A widget still open and displaying nothing did not take the click — most
   // likely it wants trusted input. Saying `selected` would hand the caller a
   // commit that never happened; *which* value arrived is still `verify`'s call.
@@ -106,7 +114,7 @@ export async function select(doc: Document, label: string, value: string, form?:
  * Containment is not enough on its own: a committed text that is itself another
  * whole option ("Niger" for "Nigeria") is a different answer, not a short form.
  */
-export function verify(doc: Document, label: string, expected: string, form?: number): { status: VerifyStatus; committed: string } {
+export function verify(doc: Document, label: string, expected: string, form?: number, exact?: boolean): { status: VerifyStatus; committed: string } {
   const { widget, status } = findWidget(doc, label, form);
   if (!widget) return { status, committed: '' };
 
@@ -119,7 +127,7 @@ export function verify(doc: Document, label: string, expected: string, form?: nu
   const others = offered.get(widget) ?? [];
   const matches = committed.some((shown) => {
     const text = normalizeLabel(shown);
-    return text === wanted || (!others.includes(text) && wanted.includes(text));
+    return text === wanted || (!exact && !others.includes(text) && wanted.includes(text));
   });
   return { status: matches ? 'verified' : 'mismatch', committed: committed.join(', ') };
 }
@@ -141,9 +149,31 @@ export async function runStep(doc: Document, step: ComboboxStep): Promise<Combob
       });
       return options(doc, step.label, step.form);
     case 'select':
-      return select(doc, step.label, step.value, step.form, step.onlyEmpty);
+      return select(doc, step.label, step.value, step.form, step.onlyEmpty, step.expectedSelections);
     case 'verify':
-      return verify(doc, step.label, step.value, step.form);
+      return verify(doc, step.label, step.value, step.form, step.exact);
+    case 'query': {
+      const { widget } = findWidget(doc, step.label, step.form);
+      if (!(widget instanceof HTMLInputElement) || widget.readOnly || widget.value || displayedValues(widget).length) {
+        return { status: 'not_searchable' };
+      }
+      comboQueries.set(widget, step.value);
+      widget.focus({ preventScroll: true });
+      setNativeValue(widget, step.value);
+      await settle(() => comboOptionNodes(widget).length > 0);
+      return { status: 'queried' };
+    }
+    case 'clear': {
+      const { widget } = findWidget(doc, step.label, step.form);
+      if (widget instanceof HTMLInputElement) {
+        const query = comboQueries.get(widget);
+        if (query !== undefined && widget.value === query && !displayedValues(widget).length) {
+          setNativeValue(widget, '');
+        }
+        if (query !== widget.value) comboQueries.delete(widget);
+      }
+      return { status: 'cleared' };
+    }
     default:
       return assertNever(step.action);
   }
@@ -204,7 +234,13 @@ function press(el: Element): void {
     el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, composed: true }));
   }
   for (const type of ['mousedown', 'mouseup', 'click']) {
-    el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, composed: true, button: 0 }));
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, composed: true, button: 0 });
+    // A custom trigger implemented as a button without a type defaults to submit.
+    const button = el.closest('button');
+    if (type === 'click' && ((button && button.type !== 'button') || el.closest('a[href]'))) {
+      event.preventDefault();
+    }
+    el.dispatchEvent(event);
   }
 }
 

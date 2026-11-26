@@ -64,6 +64,15 @@ describe('extractForm grouping', () => {
     expect(must(extractForm(document)[0]).value).toBe('Poland');
   });
 
+  it('keeps a labelled fieldset question when every checkbox has a different name', () => {
+    const [germany, poland] = checkboxGroup('Preferred countries', ['Germany', 'Poland']);
+    must(germany).name = 'preference_de';
+    must(poland).name = 'preference_pl';
+    const fields = extractForm(document);
+    expect(fields).toHaveLength(1);
+    expect(fields[0]).toMatchObject({ label: 'Preferred countries', options: ['Germany', 'Poland'] });
+  });
+
   it('does not group text inputs that merely share a fieldset', () => {
     // An address fieldset: each control is its own question despite the shared
     // legend, so grouping them would hide three fields from the agent.

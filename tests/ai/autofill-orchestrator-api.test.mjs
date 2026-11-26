@@ -61,7 +61,7 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
   });
 
   // Mock DB store
-  function createMockDb(userConfigs = {}, userSecrets = {}, candidates = {}) {
+  function createMockDb(userConfigs = {}, userSecrets = {}, candidates = {}, screening = {}, answers = [], atoms = []) {
     return {
       from(table) {
         const filters = {};
@@ -87,14 +87,72 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
               const sec = userSecrets[filters.user_id];
               return { data: sec || null, error: null };
             }
+            if (table === 'screening_answers') {
+              return { data: screening[filters.user_id] ?? null, error: null };
+            }
             return { data: null, error: null };
           },
           single: async () => query.maybeSingle(),
+          order: () => query,
+          then: (resolve) => resolve({
+            data: table === 'screening_answer_bank'
+              ? answers.filter((entry) => entry.user_id === filters.user_id && entry.provenance === filters.provenance)
+              : table === 'experience_atoms' ? atoms.filter((atom) => atom.user_id === filters.user_id) : [],
+            error: null,
+          }),
         };
         return query;
       },
     };
   }
+
+  await t.test('uses only caller-owned confirmed answers for native and custom choices', async () => {
+    const question = 'Which tools do you use for project management?';
+    const db = createMockDb(
+      {}, {}, { [CANDIDATE_OWNED]: { user_id: USER_OWNER, full_name: 'Candidate' } },
+      { [USER_OWNER]: {
+        age_18_or_older: false, notice_period_days: 14, authorized_countries: ['ca'],
+        desired_salary_amount: 90000, desired_salary_currency: 'USD', desired_salary_period: 'year',
+        privacy_consent: true,
+      } },
+      [
+        { user_id: USER_OWNER, question, answer: 'Jira', provenance: 'candidate' },
+        { user_id: USER_OWNER, question, answer: 'Trello', provenance: 'agent_inferred' },
+        { user_id: USER_OTHER, question, answer: 'Asana', provenance: 'candidate' },
+        { user_id: USER_OWNER, question: 'How did you find out about this opening?', answer: 'Company website', provenance: 'candidate' },
+      ],
+      [
+        { id: 'verified', user_id: USER_OWNER, claim: 'Built web apps in React.', skills: ['react'], provenance: 'manual' },
+        { id: 'draft', user_id: USER_OWNER, claim: 'Uses Svelte.', skills: ['svelte'], provenance: 'agent_inferred' },
+      ],
+    );
+    const fetchFn = async () => assert.fail('Confirmed choices should not require a model call');
+    const result = await executePlan({
+      candidateId: CANDIDATE_OWNED,
+      fields: [
+        { id: 'age', label: 'Are you 18 years or older?', options: ['Yes', 'No'] },
+        { id: 'notice', label: 'What is your notice period?', options: ['2 weeks', '1 week'] },
+        { id: 'tools', label: question, options: ['Asana', 'Trello', 'Jira'] },
+        { id: 'auth', label: 'Are you legally authorized to work in Canada?', options: ['Yes', 'No'] },
+        { id: 'salary', label: 'What are your annual salary expectations?', options: ['EUR 90,000 per year', 'USD 90,000 per year', 'USD 90,000 per month'] },
+        { id: 'referral', label: 'How did you hear about us?', options: ['Company website', 'Referral'] },
+        { id: 'experience', label: 'Do you have experience with React?', options: ['Yes', 'No'] },
+        { id: 'consent', label: 'Do you consent to the privacy policy?', options: ['Yes', 'No'] },
+      ],
+      answerBank: { [question]: 'Asana' },
+    }, USER_OWNER, { db, fetchFn });
+    assert.deepEqual(result.executableFills.map(({ fieldId, value }) => [fieldId, value]),
+      [
+        ['age', 'No'], ['notice', '2 weeks'], ['tools', 'Jira'], ['auth', 'Yes'],
+        ['salary', 'USD 90,000 per year'], ['referral', 'Company website'], ['experience', 'Yes'],
+      ]);
+    const chosen = await executeChoose({
+      candidateId: CANDIDATE_OWNED,
+      question: { label: question, combo: true },
+      options: ['Asana', 'Trello', 'Jira'],
+    }, USER_OWNER, { db, fetchFn });
+    assert.equal(chosen.choice, 'Jira');
+  });
 
   await t.test('1. server checks feature flag SERVER_ENABLE_STRUCTURED_AI_PLANNER (defaults to true; can be disabled)', async () => {
     // Enabled by default (undefined or 'true')
@@ -524,7 +582,7 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
     assert.ok(seenPlanAgent instanceof SafeHttpsAgent, 'SafeHttpsAgent instance must reach fetch adapter');
     assert.ok(seenPlanAgent.targetIp, 'SafeHttpsAgent must have resolved targetIp');
     assert.equal(seenPlanAgent.hostname, 'openrouter.ai');
-    assert.equal(seenPlanResponseFormat?.type, 'json_schema');
+    assert.equal(seenPlanResponseFormat, undefined);
 
     // Verify SafeHttpsAgent socket binding preserves targetIp + SNI hostname
     let boundNetOpts = null;

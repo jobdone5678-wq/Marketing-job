@@ -10,7 +10,7 @@
 
 export type FactType = 'string' | 'number' | 'boolean' | 'string[]';
 
-export type FactSource = 'profile' | 'confirmed_facts' | 'resume' | 'answer_bank';
+export type FactSource = 'profile' | 'confirmed_facts' | 'resume' | 'answer_bank' | 'experience_bank';
 
 export type FactCategory =
   | 'personal'
@@ -167,7 +167,17 @@ function parseSkillString(skillStr: string): Array<{ name: string; years?: numbe
  */
 export function buildVerifiedFacts(
   candidate: CandidateInput,
-  answerBank?: AnswerBankInput
+  answerBank?: AnswerBankInput,
+  screening?: {
+    age_18_or_older: boolean | null;
+    notice_period_days: number | null;
+    willing_to_relocate: boolean | null;
+    visa_sponsorship_needed: boolean | null;
+    authorized_countries?: string[] | null;
+    desired_salary_amount?: number | null;
+    desired_salary_currency?: string | null;
+    desired_salary_period?: string | null;
+  },
 ): Map<string, VerifiedFact> {
   const facts = new Map<string, VerifiedFact>();
   if (!candidate || typeof candidate !== 'object') {
@@ -285,6 +295,10 @@ export function buildVerifiedFacts(
   if (authUsa !== null) {
     addFact('profile.work_auth.authorized_in_usa', 'boolean', authUsa, 'work_auth', 'profile', 'authorized_in_usa');
   }
+  const authorizedCountries = screening?.authorized_countries?.filter((country) => /^[a-z]{2}$/i.test(country));
+  if (authorizedCountries?.length) {
+    addFact('screening.authorized_countries', 'string[]', authorizedCountries, 'work_auth');
+  }
 
   const sponNow = parseBoolean(pickVal('need_sponsorship_now'));
   if (sponNow !== null) {
@@ -297,6 +311,16 @@ export function buildVerifiedFacts(
   }
 
   // Compensation (EEO/demographic fields are intentionally omitted from autofill profiles)
+  const desiredSalary = screening?.desired_salary_amount;
+  if (typeof desiredSalary === 'number' && Number.isFinite(desiredSalary) && desiredSalary > 0) {
+    addFact('screening.desired_salary_amount', 'number', desiredSalary, 'compensation');
+    if (screening?.desired_salary_currency) {
+      addFact('screening.desired_salary_currency', 'string', screening.desired_salary_currency, 'compensation');
+    }
+    if (screening?.desired_salary_period) {
+      addFact('screening.desired_salary_period', 'string', screening.desired_salary_period, 'compensation');
+    }
+  }
   const expectedSalRaw = pickVal('expected_salary', 'salary_expectation');
   if (isNonEmptyString(expectedSalRaw) || typeof expectedSalRaw === 'number') {
     addFact('profile.compensation.expected_salary', 'string', String(expectedSalRaw).trim(), 'compensation', 'profile', 'expected_salary');
@@ -307,7 +331,20 @@ export function buildVerifiedFacts(
   }
 
   // Preferences & Relocation
+  if (typeof screening?.age_18_or_older === 'boolean') {
+    addFact('screening.age_18_or_older', 'boolean', screening.age_18_or_older, 'personal');
+  }
+  const noticeDays = screening?.notice_period_days;
+  if (typeof noticeDays === 'number' && Number.isInteger(noticeDays) && noticeDays >= 0) {
+    addFact('screening.notice_period_days', 'number', noticeDays, 'personal');
+  }
+  if (typeof screening?.visa_sponsorship_needed === 'boolean') {
+    addFact('screening.visa_sponsorship_needed', 'boolean', screening.visa_sponsorship_needed, 'work_auth');
+  }
   const openToReloc = parseBoolean(candidate.open_to_relocation);
+  if (typeof screening?.willing_to_relocate === 'boolean') {
+    addFact('screening.willing_to_relocate', 'boolean', screening.willing_to_relocate, 'personal');
+  }
   if (openToReloc !== null) {
     addFact('profile.preferences.open_to_relocation', 'boolean', openToReloc, 'personal', 'profile', 'open_to_relocation');
     addFact('profile.open_to_relocation', 'boolean', openToReloc, 'personal', 'profile', 'open_to_relocation');

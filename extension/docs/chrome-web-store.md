@@ -1,9 +1,11 @@
 # Publishing to the Chrome Web Store
 
-Last updated November 25, 2026.
+Last updated November 26, 2026.
 
-Unreleased update to 0.1.15 adds NextKinHR autofill, dropdown selection, draft
+Unreleased update to 0.1.19 adds NextKinHR autofill, dropdown selection, draft
 answers, and application tracking for external job sites.
+The NextKinHR build keeps the panel focused on autofill and application tracking.
+Autofill also supports radio groups, checkbox groups, and more browser dropdowns.
 
 Everything the dashboard asks for, kept next to the manifest it has to match.
 Reviewers cross-check this copy against `extension/wxt.config.ts` and the code —

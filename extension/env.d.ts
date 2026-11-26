@@ -7,6 +7,8 @@
 interface ImportMetaEnv {
   /** Where hire's API and sign-in live, e.g. https://freehire.me. */
   readonly WXT_HIRE_ORIGIN?: string;
+  /** Opt-in for deployments that serve the FreeHire job catalog API. */
+  readonly WXT_ENABLE_JOB_CATALOG?: string;
   /** The extension's GA4 stream; absent, analytics stays inert (see lib/analytics.ts). */
   readonly WXT_GA_MEASUREMENT_ID?: string;
   /** That stream's Measurement Protocol API secret. Ships in the bundle by design. */

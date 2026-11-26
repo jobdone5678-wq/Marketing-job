@@ -14,7 +14,8 @@ export interface ChatMessage {
 }
 
 export interface GenerateCompletionOptions {
-  responseFormat?: 'json_object' | 'text';
+  /** `json_prompt` uses one request and parses JSON requested by the caller's prompt. */
+  responseFormat?: 'json_object' | 'json_prompt' | 'text';
   schemaName?: 'plan' | 'choose';
   temperature?: number;
   maxTokens?: number;
@@ -183,7 +184,7 @@ export class ProviderClient {
     options?: GenerateCompletionOptions,
   ): Promise<ChatCompletionResult> {
     const wantsJson = options?.responseFormat !== 'text';
-    const sendJsonMode = wantsJson && this.supportsJsonMode;
+    const sendJsonMode = wantsJson && options?.responseFormat !== 'json_prompt' && this.supportsJsonMode;
 
     try {
       return await this._executeRequest(messages, options, sendJsonMode);
@@ -214,7 +215,7 @@ export class ProviderClient {
 
     let effectiveMessages = [...messages];
     // If json mode is not supported by provider, constrain via prompt
-    if (options?.responseFormat !== 'text' && !sendJsonMode) {
+    if (options?.responseFormat !== 'text' && options?.responseFormat !== 'json_prompt' && !sendJsonMode) {
       const jsonConstraint =
         '\n\nIMPORTANT: Respond with valid JSON only. Do not include markdown fences, preamble, or commentary.';
       const lastMsg = effectiveMessages[effectiveMessages.length - 1];
@@ -258,13 +259,14 @@ export class ProviderClient {
       controller.abort();
     }, timeoutMs);
 
+    const abortRequest = () => controller.abort();
     // Link caller's signal if passed
     if (options?.signal) {
       if (options.signal.aborted) {
         clearTimeout(timer);
         throw new ProviderError('Request was aborted', 499, 'ABORTED');
       }
-      options.signal.addEventListener('abort', () => controller.abort(), { once: true });
+      options.signal.addEventListener('abort', abortRequest, { once: true });
     }
 
     const requestInit: RequestInit & { agent?: any; dispatcher?: any } = {
@@ -283,8 +285,10 @@ export class ProviderClient {
     }
 
     let response: Response;
+    let rawBody: string;
     try {
       response = await fetchFn(url, requestInit);
+      rawBody = await response.text();
     } catch (fetchErr: any) {
       clearTimeout(timer);
       if (timedOut || fetchErr.name === 'AbortError' || fetchErr.message?.includes('aborted')) {
@@ -296,10 +300,10 @@ export class ProviderClient {
       throw new ProviderError(`Network fetch error: ${fetchErr.message}`, 500, 'FETCH_ERROR');
     } finally {
       clearTimeout(timer);
+      options?.signal?.removeEventListener('abort', abortRequest);
     }
 
     const contentType = response.headers.get('content-type');
-    const rawBody = await response.text();
 
     if (isHtml(rawBody, contentType)) {
       throw new ProviderError('Endpoint returned HTML error page instead of JSON', 502, 'HTML_RESPONSE', rawBody);
@@ -331,6 +335,9 @@ export class ProviderClient {
     try {
       rawJson = JSON.parse(cleanedText);
     } catch {
+      if (options?.responseFormat === 'json_prompt') {
+        throw new ProviderError('Provider did not return a valid JSON answer', 502, 'MALFORMED_JSON', cleanedText);
+      }
       // If rawJson parsing fails, rawJson remains undefined
     }
 

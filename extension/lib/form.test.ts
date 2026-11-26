@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { extractForm, extractUploads } from './form';
+import { extractForm, extractUploads, fillByLabel } from './form';
 import { revealField } from './revealField';
 import { planLabelFills, fillsForFrame, looksLikeApplication, scopeToApplication } from './fillPlan';
 import { labeledInput, must, reset, formWith } from './test-utils';
@@ -449,6 +449,121 @@ describe('LinkedIn-style radios named after their question', () => {
 });
 
 describe('control naming', () => {
+  it('commits only the offered demographic choices to a native multi-select and checkbox group', () => {
+    document.body.innerHTML = `<form><label>Race or ethnicity <select multiple>
+      <option>Asian</option><option>Black or African American</option><option>White</option>
+      </select></label><fieldset><legend>What are your pronouns?</legend>
+      <label><input type="checkbox" name="she">She/her</label>
+      <label><input type="checkbox" name="they">They/them</label></fieldset></form>`;
+    const result = fillByLabel(document, [
+      { label: 'Race or ethnicity', value: '', choices: ['Asian', 'Black or African American'], onlyEmpty: true },
+      { label: 'What are your pronouns?', value: '', choices: ['She/her', 'They/them'], onlyEmpty: true },
+    ]);
+    expect(result.map(({ status }) => status)).toEqual(['filled', 'filled']);
+    expect(extractForm(document).map((field) => field.value)).toEqual(['Asian, Black or African American', 'She/her, They/them']);
+    expect(fillByLabel(document, [
+      { label: 'Race or ethnicity', value: '', choices: ['White'], onlyEmpty: true },
+    ])[0]?.status).toBe('not_fillable');
+  });
+
+  it('fills a named fieldset of independently named ARIA and native checkboxes with an Other text field', () => {
+    document.body.innerHTML = `<form><fieldset>
+      <legend>Which countries are you authorized to work in?</legend>
+      <label><input type="checkbox" name="india">India</label>
+      <div role="checkbox" aria-checked="false">Canada</div>
+      <label>Other <input name="other"></label>
+    </fieldset></form>`;
+    const otherChoice = must(document.querySelector('[role="checkbox"]') ?? undefined);
+    otherChoice.addEventListener('click', () => otherChoice.setAttribute('aria-checked', 'true'));
+    const [field, other] = extractForm(document);
+    expect(field.options).toEqual(['India', 'Canada']);
+    expect(other.label).toBe('Other');
+    expect(fillByLabel(document, [{ label: field.label, value: 'India, Canada' }])[0]?.status).toBe('filled');
+    expect(extractForm(document)[0]?.value).toBe('India, Canada');
+  });
+
+  it('accepts clear binary answer variants and unique country dialing-code options', () => {
+    document.body.innerHTML = `<form>
+      <select aria-label="Do you require sponsorship?"><option value="">Select...</option>
+        <option>I require sponsorship</option><option>I do not require sponsorship</option></select>
+      <select aria-label="Country"><option value="">Select...</option><option>United States (+1)</option></select>
+    </form>`;
+    expect(fillByLabel(document, [
+      { label: 'Do you require sponsorship?', value: 'No' },
+      { label: 'Country', value: 'US' },
+    ]).map(({ status }) => status)).toEqual(['filled', 'filled']);
+    expect(extractForm(document).map(({ value }) => value)).toEqual(['I do not require sponsorship', 'United States (+1)']);
+  });
+
+  it('groups independent ATS Yes/No questions beneath their visible headings', () => {
+    document.body.innerHTML = `<form>
+      <div><div>Do you require sponsorship? *</div><div>
+        <label><input type="radio" name="sponsor_yes" value="y">Yes</label>
+        <label><input type="radio" name="sponsor_no" value="n">No</label>
+      </div></div>
+      <div><span>Are you willing to relocate?</span><ul>
+        <li><label><input type="radio" name="move">Yes</label></li>
+        <li><label><input type="radio" name="move">No</label></li>
+      </ul></div>
+    </form>`;
+    expect(extractForm(document).map(({ label, options }) => ({ label, options }))).toEqual([
+      { label: 'Do you require sponsorship? *', options: ['Yes', 'No'] },
+      { label: 'Are you willing to relocate?', options: ['Yes', 'No'] },
+    ]);
+    const target = must(document.querySelector<HTMLInputElement>('input[value="n"]') ?? undefined);
+    const clicks: string[] = [];
+    target.addEventListener('click', () => clicks.push('No'));
+    expect(fillByLabel(document, [{ label: 'Do you require sponsorship? *', value: 'false' }])[0]?.status).toBe('filled');
+    expect(clicks).toEqual(['No']);
+    expect(extractForm(document).map(({ value }) => value)).toEqual(['No', '']);
+  });
+
+  it('fills an ATS checkbox group from offered choices only', () => {
+    document.body.innerHTML = `<div><span>Which countries are you authorized to work in?</span>
+      <div><label><input type="checkbox" name="countries">India</label>
+      <label><input type="checkbox" name="countries">Canada</label></div></div>`;
+    const label = 'Which countries are you authorized to work in?';
+    expect(fillByLabel(document, [{ label, value: 'India, Canada' }])[0]?.status).toBe('filled');
+    expect(extractForm(document)[0]?.value).toBe('India, Canada');
+  });
+
+  it('answers work authorization only for the confirmed country named in the question', () => {
+    expect(planLabelFills([{ label: 'Are you legally authorized to work in the United States?' }], {}, 'US, CA'))
+      .toEqual([{ label: 'Are you legally authorized to work in the United States?', value: 'Yes' }]);
+    expect(planLabelFills([
+      { label: 'Are you legally authorized to work in Germany?' },
+      { label: 'Are you legally authorized to work in the United States without sponsorship?' },
+      { label: 'Are you legally authorized to work?' },
+    ], {}, 'US, CA')).toEqual([]);
+  });
+
+  it('replaces a nonempty dropdown placeholder and preserves a real existing answer', () => {
+    document.body.innerHTML = `<select aria-label="Are you willing to relocate?">
+      <option value="placeholder" disabled selected>Select...</option>
+      <option value="y">Yes</option><option value="n">No</option>
+    </select>`;
+    const label = 'Are you willing to relocate?';
+    expect(extractForm(document)[0]).toMatchObject({ value: '', options: ['Yes', 'No'] });
+    expect(fillByLabel(document, [{ label, value: 'true', onlyEmpty: true }])[0]?.status).toBe('filled');
+    expect(fillByLabel(document, [{ label, value: 'No', onlyEmpty: true }])[0]?.status).toBe('not_fillable');
+    expect(extractForm(document)[0]?.value).toBe('Yes');
+  });
+
+  it('excludes location status text from the field label', () => {
+    document.body.innerHTML = `<label>Current location *<input role="combobox">
+      <span role="status">No location found. Try entering a different location</span></label>`;
+    expect(extractForm(document)[0]?.label).toBe('Current location *');
+  });
+
+  it('reads a wrapped dropdown question separately from its options', () => {
+    document.body.innerHTML = `<label>Veteran status *
+      <select><option value="">Select...</option><option>I am a veteran</option>
+      <option>Decline to self-identify</option></select></label>`;
+    expect(extractForm(document)[0]).toMatchObject({
+      label: 'Veteran status *',
+      options: ['I am a veteran', 'Decline to self-identify'],
+    });
+  });
   it('prefers the visible label over the placeholder', () => {
     document.body.innerHTML =
       '<div><label>Location (city)*</label><input type="text" placeholder="Enter city or location"></div>';

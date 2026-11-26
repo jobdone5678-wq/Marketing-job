@@ -5,12 +5,23 @@ import {
   freehireSlugFromUrl,
   getJob,
   getMatch,
+  isFreehireOrigin,
   resolveJob,
   resolveNotice,
   type FreehireJob,
   type JobMatch,
 } from './freehire';
 import type { RuntimeMessage } from './protocol';
+import { isReadablePageUrl } from './tools/readable';
+
+/** The NextKinHR backend does not serve FreeHire's job catalog API. */
+export function jobCatalogEnabled(): boolean {
+  return import.meta.env.WXT_ENABLE_JOB_CATALOG === 'true';
+}
+
+export function isApplicationPageUrl(url: string): boolean {
+  return isReadablePageUrl(url) && !isFreehireOrigin(url);
+}
 
 /** What the side panel's Match tab shows for a page: the catalogue job and the reader's
  *  match with it, or nothing (offering "Add this job" when the page is plausibly a
@@ -23,6 +34,9 @@ export type PageMatch =
  *  `isStale` says a newer lookup has started, and a stale one answers null rather than
  *  overwrite it. */
 export async function matchPage(url: string, token: string, isStale: () => boolean): Promise<PageMatch | null> {
+  if (!isApplicationPageUrl(url) || !jobCatalogEnabled()) {
+    return { status: 'empty', canAddJob: false };
+  }
   const catalogMatch = async (slug: string): Promise<PageMatch | null> => {
     const [job, match] = await Promise.all([getJob(slug, token), getMatch(slug, token)]);
     return isStale() ? null : { status: 'ready', job, match };

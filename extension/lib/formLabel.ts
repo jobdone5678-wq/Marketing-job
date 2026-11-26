@@ -4,8 +4,10 @@ import type { Fillable } from './form';
 
 /** Best-effort human label for a control, in decreasing reliability. */
 export function extractLabel(el: Fillable): string {
-  const fromLabels = Array.from(el.labels ?? [])
-    .map((l) => l.textContent?.trim() ?? '')
+  const labels = el instanceof HTMLInputElement || el instanceof HTMLSelectElement ||
+    el instanceof HTMLTextAreaElement || el instanceof HTMLButtonElement ? el.labels : null;
+  const fromLabels = Array.from(labels ?? [])
+    .map(labelText)
     .filter(Boolean)
     .join(' ');
   if (fromLabels) return fromLabels;
@@ -15,18 +17,20 @@ export function extractLabel(el: Fillable): string {
   return (
     textFromIds(el.ownerDocument, el.getAttribute('aria-labelledby')) ||
     // LinkedIn names a radio after its QUESTION; the option's own words sit beside it.
-    (isChoice(el) ? visibleTextBeside(el) : '') ||
+    (el instanceof HTMLInputElement && choiceType(el) ? visibleTextBeside(el) : '') ||
     // A typeahead often repeats its placeholder as aria-label; the visible label is the question.
     (ariaLabel === placeholder ? '' : ariaLabel) ||
     visibleTextBeside(el, 'label') ||
     placeholder ||
     ariaLabel ||
+    (choiceType(el) ? collapse(labelText(el)) : '') ||
     collapse(el.getAttribute('name'))
   );
 }
 
-function isChoice(el: Fillable): boolean {
-  return el instanceof HTMLInputElement && (el.type === 'radio' || el.type === 'checkbox');
+export function choiceType(el: Fillable): 'radio' | 'checkbox' | undefined {
+  const type = el instanceof HTMLInputElement ? el.type : el.getAttribute('role');
+  return type === 'radio' || type === 'checkbox' ? type : undefined;
 }
 
 /**
@@ -39,10 +43,19 @@ function visibleTextBeside(el: Fillable, only?: string): string {
   let box = el.parentElement;
   for (let depth = 0; box && depth < 3; depth++, box = box.parentElement) {
     if (box.querySelectorAll('input, select, textarea').length > 1) return '';
-    const text = collapse(only ? box.querySelector(only)?.textContent : box.textContent);
+    const candidate = only ? box.querySelector(only) : box;
+    const text = candidate ? collapse(labelText(candidate)) : '';
     if (text && (only || text.length <= 80)) return text;
   }
   return '';
+}
+
+function labelText(label: Element): string {
+  const nestedContent = 'select, option, datalist, textarea, button, [role="listbox"], [role="option"], [aria-live], [role="status"], [role="alert"], [class*="-noOptionsMessage"], [class*="-loadingMessage"]';
+  if (!label.querySelector(nestedContent)) return label.textContent?.trim() ?? '';
+  const clone = label.cloneNode(true) as Element;
+  clone.querySelectorAll(nestedContent).forEach((node) => node.remove());
+  return clone.textContent?.trim() ?? '';
 }
 
 /** The joined text of the elements an `aria-labelledby`-style id list names. */
@@ -50,7 +63,8 @@ export function textFromIds(doc: Document, ids: string | null): string {
   if (!ids) return '';
   return ids
     .split(/\s+/)
-    .map((id) => collapse(doc.getElementById(id)?.textContent))
+    .map((id) => doc.getElementById(id))
+    .map((element) => element ? collapse(labelText(element)) : '')
     .filter(Boolean)
     .join(' ');
 }

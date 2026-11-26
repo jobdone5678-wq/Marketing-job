@@ -11,10 +11,10 @@
  * Attribution: Based on strelov1/freehire@2843637c09fb818fb64d4e7979638ff350b500c7 (MIT License)
  */
 
-import type { VerifiedFact } from './verified-facts.ts';
-import { validateGroundedAnswer } from './grounded.ts';
-import type { ProviderClient, TokenUsageTelemetry } from './provider-client.ts';
-import { type Field, inferQuestionDescriptor } from './planner.ts';
+import type { VerifiedFact } from './verified-facts';
+import { uniqueConfirmedChoice, validateGroundedAnswer } from './grounded';
+import type { ProviderClient, TokenUsageTelemetry } from './provider-client';
+import { type Field, inferQuestionDescriptor } from './planner';
 
 export interface ChooseResult {
   choice: string | null;
@@ -71,6 +71,10 @@ export async function chooseComboboxOption(
     return { choice: null, reason: 'No options provided' };
   }
 
+  const descriptor = inferQuestionDescriptor(question);
+  const confirmed = uniqueConfirmedChoice(options, facts, descriptor);
+  if (confirmed) return confirmed;
+
   const profile = factsToProfileObject(facts);
 
   const userPayload = {
@@ -82,11 +86,11 @@ export async function chooseComboboxOption(
 
   const messages = [
     { role: 'system' as const, content: CHOOSE_PROMPT },
-    { role: 'user' as const, content: JSON.stringify(userPayload, null, 2) },
+    { role: 'user' as const, content: JSON.stringify(userPayload) },
   ];
 
   const completion = await client.generateChatCompletion(messages, {
-    responseFormat: 'json_object',
+    responseFormat: 'json_prompt',
     schemaName: 'choose',
   });
 
@@ -111,20 +115,16 @@ export async function chooseComboboxOption(
   }
 
   // Find exact matching option in the offered options list (case-insensitive / trimmed)
-  const matchedOption = options.find(
-    (opt) => opt === rawChoice || opt.trim().toLowerCase() === rawChoice.toLowerCase(),
-  );
+  const matchingOptions = options.filter((opt) => opt.trim().toLowerCase() === rawChoice.toLowerCase());
+  const matchedOption = matchingOptions.length === 1 ? matchingOptions[0] : undefined;
 
   if (!matchedOption) {
     return {
       choice: null,
-      reason: `Model choice "${rawChoice}" was not offered in options`,
+      reason: `Model choice "${rawChoice}" did not identify a unique offered option`,
       ...telemetryField,
     };
   }
-
-  // Infer descriptor so grounding engine has canonical metadata
-  const descriptor = inferQuestionDescriptor(question);
 
   // Validate that the choice is grounded in candidate facts
   const grounding = validateGroundedAnswer(matchedOption, facts, descriptor);

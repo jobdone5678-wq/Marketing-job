@@ -7,6 +7,7 @@ import {
   partitionBlockers,
   pickTailoredCVForJob,
   requestAutofillPlan,
+  getDemographicPreferences,
   getJob,
   saveBankAnswer,
   allowanceRefuses,
@@ -15,6 +16,7 @@ import {
   type TailoredCV,
 } from './freehire';
 import { PlanRefused } from './planRefused';
+import { HIRE_ORIGIN } from './auth';
 
 describe('freehireSlugFromUrl', () => {
   it('extracts the slug from a freehire job URL', () => {
@@ -223,6 +225,33 @@ describe('authenticated calls', () => {
     const post = (fetchMock.mock.calls as unknown as [string, RequestInit][])[1];
     expect((post?.[1].headers as Record<string, string> | undefined)?.['Content-Type']).toBeTruthy();
   });
+
+  it('fetches demographic preferences from the backend with Bearer auth and omits cookies', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      Response.json({
+        ok: true,
+        demographic_preferences: {
+          enabled: true,
+          answers: { gender: ['Male'], raceEthnicity: [' Asian ', 'Asian'] },
+        },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const prefs = await getDemographicPreferences('tok');
+    expect(prefs).toEqual({
+      enabled: true,
+      answers: { gender: ['Male'], raceEthnicity: ['Asian'] },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/me\/demographic-preferences$/),
+      expect.objectContaining({
+        method: 'GET',
+        credentials: 'omit',
+        headers: expect.objectContaining({ Authorization: 'Bearer tok' }),
+      }),
+    );
+  });
 });
 
 describe('match analysis allowance', () => {
@@ -245,8 +274,8 @@ describe('isFreehireOrigin', () => {
   it('classifies a bare origin and a full page URL on it alike', () => {
     expect(isFreehireOrigin('https://freehire.me')).toBe(true);
     expect(isFreehireOrigin('https://freehire.me/my/profile')).toBe(true);
-    expect(isFreehireOrigin('http://localhost:5173')).toBe(true);
-    expect(isFreehireOrigin('http://localhost:5173/my/profile')).toBe(true);
+    expect(isFreehireOrigin(HIRE_ORIGIN)).toBe(true);
+    expect(isFreehireOrigin(new URL('/my/profile', HIRE_ORIGIN).href)).toBe(true);
   });
 
   it('leaves other sites and look-alike hosts out', () => {

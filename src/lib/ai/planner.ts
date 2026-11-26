@@ -12,7 +12,8 @@
  */
 
 import type { VerifiedFact } from './verified-facts';
-import { validateGroundedAnswer } from './grounded';
+import { uniqueConfirmedChoice, validateGroundedAnswer } from './grounded';
+import { offeredChoice } from '../../../extension/lib/fieldKeys';
 import type { ProviderClient, TokenUsageTelemetry } from './provider-client';
 
 export interface Field {
@@ -224,7 +225,6 @@ export async function planFormBatch(
 
   // Batch size: 4-6 questions (default 5)
   const batchSize = Math.max(4, Math.min(6, context?.batchSize ?? 5));
-  const batchCount = Math.ceil(fields.length / batchSize);
 
   const profile = factsToProfileObject(facts);
   const previouslyResolved: Record<string, string> = {
@@ -235,6 +235,19 @@ export async function planFormBatch(
   const filledFields = new Set<Field>();
   const deferredFields = new Set<Field>();
   const deferredSet = new Set<string>();
+  const unresolved = fields.filter((field) => {
+    if (field.combo || !field.options?.length) return true;
+    const answer = uniqueConfirmedChoice(field.options, facts, inferQuestionDescriptor(field));
+    if (!answer) return true;
+    filledFields.add(field);
+    allFills.push({
+      label: field.label, value: answer.choice, evidenceIds: answer.evidenceIds,
+      frame: field.frame, form: field.form, fieldId: field.id, grounded: true,
+    });
+    previouslyResolved[field.label] = answer.choice;
+    return false;
+  });
+  const batchCount = Math.ceil(unresolved.length / batchSize);
 
   const usageFields = [
     'inputTokens',
@@ -249,11 +262,11 @@ export async function planFormBatch(
 
   for (let i = 0; i < batchCount; i++) {
     const start = i * batchSize;
-    const end = Math.min(fields.length, start + batchSize);
-    const targetFields = fields.slice(start, end);
+    const end = Math.min(unresolved.length, start + batchSize);
+    const targetFields = unresolved.slice(start, end);
 
     // Neighbor fields: surrounding fields in the form outside this batch
-    const neighborFields = fields
+    const neighborFields = unresolved
       .filter((_, idx) => idx < start || idx >= end)
       .map((f) => ({
         label: f.label,
@@ -273,28 +286,26 @@ export async function planFormBatch(
 
     const userPayload = {
       fields: serializedTargetFields,
-      fieldsToFill: serializedTargetFields,
       neighborFields,
-      neighbors: neighborFields,
       previouslyResolved: { ...previouslyResolved },
       context: {
         pageTitle: context?.pageTitle,
         jobTitle: context?.jobTitle,
         company: context?.company,
-        jobDescription: context?.jobDescription?.slice(0, 5000),
+        jobDescription: targetFields.some((field) => field.type === 'textarea')
+          ? context?.jobDescription?.slice(0, 1500) : undefined,
         url: context?.url,
-        previouslyResolved: { ...previouslyResolved },
       },
       profile,
     };
 
     const messages = [
       { role: 'system' as const, content: SYSTEM_PROMPT },
-      { role: 'user' as const, content: JSON.stringify(userPayload, null, 2) },
+      { role: 'user' as const, content: JSON.stringify(userPayload) },
     ];
 
     const completion = await client.generateChatCompletion(messages, {
-      responseFormat: 'json_object',
+      responseFormat: 'json_prompt',
       schemaName: 'plan',
     });
 
@@ -335,7 +346,7 @@ export async function planFormBatch(
         continue;
       }
 
-      const fillValue = typeof rawFill.value === 'string' ? rawFill.value : String(rawFill.value ?? '');
+      let fillValue = typeof rawFill.value === 'string' ? rawFill.value : String(rawFill.value ?? '');
 
       if (rawFill.action === 'defer_combobox') {
         if (targetField.combo) {
@@ -356,6 +367,11 @@ export async function planFormBatch(
 
       // If value is non-empty, run question-specific grounding check
       if (fillValue.trim() !== '') {
+        if (targetField.options?.length && (targetField.type === 'select' || targetField.type === 'radio')) {
+          const choice = offeredChoice(fillValue, targetField.options, targetField.label);
+          if (!choice) continue;
+          fillValue = choice;
+        }
         const descriptor = inferQuestionDescriptor(targetField);
         const grounding = validateGroundedAnswer(fillValue, facts, descriptor);
 

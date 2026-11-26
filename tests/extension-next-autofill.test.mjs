@@ -40,7 +40,10 @@ const profile = Object.fromEntries(
 );
 profile.email = 'fixture@example.test';
 
-function fixture({ mode = 'server', uploads = [{ frame: 3, form: 1 }], abortOnPlan = false } = {}) {
+function fixture({
+  mode = 'server', uploads = [{ frame: 3, form: 1 }], abortOnPlan = false, timeoutOnBatch, planError = 504,
+  includeDemographics = false,
+} = {}) {
   const controller = new AbortController();
   const fields = [
     field(0, 'Email'),
@@ -51,7 +54,26 @@ function fixture({ mode = 'server', uploads = [{ frame: 3, form: 1 }], abortOnPl
     field(5, 'How many years of experience?', { tag: 'textarea' }),
     field(6, 'Password', { type: 'password' }),
   ];
+  if (timeoutOnBatch) {
+    fields.push(
+      field(7, 'How did you hear about us?', { tag: 'select', options: ['Other'] }),
+      field(8, 'Preferred schedule', { tag: 'select', options: ['Full time'] }),
+      field(9, 'Preferred work arrangement', { tag: 'select', options: ['On site'] }),
+    );
+  }
+  if (includeDemographics) {
+    fields.push(
+      field(10, 'Race or ethnicity', { type: 'checkbox', multiple: true, options: ['Asian', 'White', 'Black or African American'] }),
+      field(11, 'Are you Hispanic or Latino?', { type: 'radio', options: ['Yes', 'No'] }),
+      field(12, 'Protected veteran status', { combo: true }),
+      field(13, 'Religion or belief', { tag: 'select', options: ['Other', 'Prefer not to say'], value: 'Other' }),
+      field(14, 'Do you certify your disability status?', { type: 'checkbox', options: ['Yes', 'No'] }),
+      field(15, 'Medical information'),
+    );
+  }
   const events = [];
+  const notices = [];
+  let planRequests = 0;
   const write = (label, value) => {
     const item = fields.find((entry) => entry.label === label);
     assert.equal(item.value, '');
@@ -92,7 +114,11 @@ function fixture({ mode = 'server', uploads = [{ frame: 3, form: 1 }], abortOnPl
         if (action === 'select') write(label, value);
         return {
           kind: 'COMBOBOX_REPLY',
-          reply: { status: states[action], options: ['Yes', 'No'] },
+          reply: {
+            status: states[action],
+            options: label === 'Protected veteran status'
+              ? ['I am a protected veteran', 'I am not a protected veteran', 'I do not wish to answer'] : ['Yes', 'No'],
+          },
         };
       },
     },
@@ -108,18 +134,22 @@ function fixture({ mode = 'server', uploads = [{ frame: 3, form: 1 }], abortOnPl
     assert.equal(body.candidateId, candidateId);
     if (path.endsWith('/plan')) {
       events.push('plan');
-      assert.equal(body.context.jobDescription, 'Build the product.');
+      planRequests++;
+      assert.equal(body.context.jobDescription, undefined);
       assert.equal(body.context.url, 'https://jobs.example.test/apply');
-      assert.deepEqual(
-        body.fields.map(({ label }) => label),
-        fields.slice(2, 6).map(({ label }) => label)
-      );
+      const expected = [fields[2], fields[5], ...(timeoutOnBatch ? fields.slice(7, 10) : [])];
+      assert.deepEqual(body.fields.map(({ label }) => label),
+        expected.slice((planRequests - 1) * 4, planRequests * 4).map(({ label }) => label));
+      if (timeoutOnBatch === planRequests) {
+        return Response.json({ error: 'Plan request failed' }, { status: planError });
+      }
       if (abortOnPlan) controller.abort();
       return Response.json({
         ok: true,
         executableFills: [
           { fieldId: '3:1:2', value: 'Bachelor', grounded: true },
           { fieldId: '3:1:1', value: 'Unrequested overwrite', grounded: true },
+          { fieldId: '3:1:9', value: 'On site', grounded: true },
         ],
         deferredFieldIds: ['3:1:3'],
       });
@@ -160,7 +190,7 @@ function fixture({ mode = 'server', uploads = [{ frame: 3, form: 1 }], abortOnPl
   }
   const { runAutofill } = load(resolve(root, 'extension/lib/formFill.ts'));
   const panel = {
-    notice: () => {},
+    notice: (message) => notices.push(message),
     offerOverride: (run) => {
       panel.override = run;
     },
@@ -172,9 +202,10 @@ function fixture({ mode = 'server', uploads = [{ frame: 3, form: 1 }], abortOnPl
     walk: { filling() {}, stopped: () => false, wrote() {}, answered() {} },
   };
   return {
-    run: () => runAutofill('token', panel, controller.signal),
+    run: (demographics) => runAutofill('token', panel, controller.signal, demographics),
     events,
     fields,
+    notices,
     panel,
     controller,
   };
@@ -206,6 +237,55 @@ test('keeps local fills when direct provider mode is selected or a pending plan 
     const app = fixture(options);
     await app.run();
     assert.deepEqual(app.events, options.abortOnPlan ? ['Email', 'plan'] : ['Email']);
+  }
+});
+
+test('retains completed fills and handles deferred choices after a later plan batch times out', async () => {
+  const app = fixture({ timeoutOnBatch: 2 });
+  await app.run();
+  assert.deepEqual(app.events.slice(0, 4), ['Email', 'plan', 'Highest qualification', 'plan']);
+  assert.equal(app.fields[0].value, 'fixture@example.test');
+  assert.equal(app.fields[2].value, 'Bachelor');
+  assert.equal(app.fields[3].value, 'No');
+  assert.equal(app.fields[7].value, '');
+  assert.equal(app.fields[8].value, '');
+  assert.ok(app.notices.some((notice) => notice.includes('AI planning timed out (HTTP 504)')));
+});
+
+test('continues planning and checks live combobox options after the first batch times out', async () => {
+  const app = fixture({ timeoutOnBatch: 1 });
+  await app.run();
+  assert.deepEqual(app.events.slice(0, 4), ['Email', 'plan', 'plan', 'Preferred work arrangement']);
+  assert.equal(app.fields[2].value, '');
+  assert.equal(app.fields[3].value, 'No');
+  assert.equal(app.fields[9].value, 'On site');
+});
+
+test('still fills a live dropdown and generates prose after a non-timeout planning error', async () => {
+  const app = fixture({ timeoutOnBatch: 1, planError: 502 });
+  await app.run();
+  assert.equal(app.fields[3].value, 'No');
+  assert.equal(app.fields[4].value, 'I enjoy building products.');
+  assert.ok(app.notices.some((notice) => notice.includes('HTTP 502')));
+});
+
+test('uses only opted-in demographic answers locally and leaves existing or ambiguous answers alone', async () => {
+  const answers = {
+    raceEthnicity: ['Asian', 'Black or African American'],
+    hispanicOrigin: ['No'],
+    protectedVeteran: ['Decline'],
+    religion: ['Prefer not to say'],
+    disability: ['Yes'],
+    medicalInformation: ['private assertion'],
+  };
+  for (const enabled of [false, true]) {
+    const app = fixture({ includeDemographics: true });
+    await app.run({ enabled, answers });
+    const values = app.fields.filter(({ index }) => index >= 10).map(({ value }) => value);
+    assert.deepEqual(values, enabled
+      ? ['Asian, Black or African American', 'No', 'I do not wish to answer', 'Other', '', '']
+      : ['', '', '', 'Other', '', '']);
+    assert.equal(app.events.filter((event) => event === 'choose').length, 1);
   }
 });
 

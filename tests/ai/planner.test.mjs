@@ -220,11 +220,10 @@ test('Planner: FreeHire form batch planning with neighbor context & grounding', 
 
     const result = await planFormBatch(fields, facts, mockClient);
     assert.equal(capturedOptions.length, 1);
-    assert.equal(capturedOptions[0].responseFormat, 'json_object');
+    assert.equal(capturedOptions[0].responseFormat, 'json_prompt');
     assert.equal(capturedOptions[0].schemaName, 'plan');
 
     assert.equal(capturedUserPayloads[0].fields[0].fieldId, 'field_first');
-    assert.equal(capturedUserPayloads[0].fieldsToFill[0].fieldId, 'field_first');
     assert.equal('fieldId' in capturedUserPayloads[0].fields[1], false);
     assert.equal(result.fills.length, 1);
     assert.equal(result.fills[0].fieldId, 'field_first');

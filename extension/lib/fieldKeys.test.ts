@@ -62,6 +62,8 @@ describe('matchFieldKey', () => {
     expect(matchFieldKey('What is your notice period?')).toBe('noticePeriod');
     expect(matchFieldKey('Are you willing to relocate?')).toBe('willingToRelocate');
     expect(matchFieldKey('Are you at least 18 years of age?')).toBe('age18OrOlder');
+    expect(matchFieldKey('Are you 18 years or older?')).toBe('age18OrOlder');
+    expect(matchFieldKey('Are you 18 years or older and licensed to drive?')).toBeNull();
   });
 
   it('leaves a plain work-authorization Yes/No question unmatched', () => {

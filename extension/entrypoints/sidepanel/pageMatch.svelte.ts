@@ -2,7 +2,7 @@ import { pageIdentity } from '../../lib/assistant/pageIdentity';
 import { browser } from 'wxt/browser';
 import { getToken } from '../../lib/auth';
 import { type FreehireJob, type JobMatch } from '../../lib/freehire';
-import { contributePageUrl, matchPage } from '../../lib/pageMatch';
+import { contributePageUrl, isApplicationPageUrl, jobCatalogEnabled, matchPage } from '../../lib/pageMatch';
 
 export type MatchStatus = 'idle' | 'loading' | 'ready' | 'error' | 'empty';
 
@@ -47,6 +47,11 @@ export class PageMatch {
 
   load = async () => {
     const requestId = ++this.#requestId;
+    if (!jobCatalogEnabled()) {
+      this.status = 'empty';
+      this.canAddJob = false;
+      return;
+    }
     const token = await getToken();
     if (requestId !== this.#requestId) return;
     if (!token) {
@@ -59,6 +64,11 @@ export class PageMatch {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     if (requestId !== this.#requestId) return;
     const url = tab?.url ?? '';
+    if (!isApplicationPageUrl(url)) {
+      this.status = 'empty';
+      this.canAddJob = false;
+      return;
+    }
 
     const page = cardPage(url);
     if (!(this.keepCard && this.status === 'ready' && this.#cardPage === page)) this.status = 'loading';
@@ -92,15 +102,15 @@ export class PageMatch {
     // activation landing while the token is being read would otherwise pass the guard
     // too and post the page twice — two imports, and two charges against the rate limit
     // the endpoint carries.
-    if (this.contributing) return;
+    if (this.contributing || !jobCatalogEnabled()) return;
     this.contributing = true;
     try {
       const token = await getToken();
       if (!token) return;
       const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
       const url = tab?.url ?? '';
-      if (!url) {
-        this.notify('No page to add.');
+      if (!isApplicationPageUrl(url)) {
+        this.notify('Open an external job posting to add it.');
         return;
       }
       const resolved = await contributePageUrl(url, token);

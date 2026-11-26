@@ -50,6 +50,7 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
     'do you now or will you in the future require sponsorship',
     'will you require sponsorship',
     'do you require visa sponsorship',
+    'do you require sponsorship',
     'do you need visa sponsorship',
     'will you need visa sponsorship',
   ],
@@ -99,13 +100,6 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
     'sind sie umzugsbereit',
     'sind sie bereit umzuziehen',
   ],
-  age18OrOlder: [
-    'are you at least 18 years',
-    'are you 18 years of age or older',
-    'are you over the age of 18',
-    'are you 18 or older',
-    'will you be 18 years of age',
-  ],
 };
 
 /**
@@ -133,6 +127,68 @@ export function normalizeLabel(label: string): string {
   return label.toLowerCase().replace(/\*/g, '').replace(/\s+/g, ' ').trim();
 }
 
+export function workAuthorizationCountry(label: string): string | undefined {
+  return normalizeLabel(label).match(
+    /^(?:(?:are you (?:currently )?(?:legally )?)?(?:authorized|authorised|eligible|permitted) to work in|do you (?:currently )?have (?:the (?:legal )?right to work|work authori[sz]ation) in) (?:the )?(.+?)[?.!]*$/,
+  )?.[1]?.replace(/\./g, '');
+}
+
+export function matchesCountry(country: string, countryCode: string): boolean {
+  const code = countryCode.trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(code) && (
+    country === normalizeLabel(countryLabel(code)) || country === code.toLowerCase() ||
+    (code === 'US' && /^(?:usa|united states of america)$/.test(country))
+  );
+}
+
+export function isAgeThresholdQuestion(label: string): boolean {
+  return /^are you (?:at least 18(?: years(?: of age| old)?)?|18(?: years(?: of age| old)?)? or older)[?.!]*$/
+    .test(normalizeLabel(label).trim());
+}
+
+export function binaryChoice(value: string): boolean | undefined {
+  const label = normalizeLabel(value);
+  if (['true', '1', 'yes'].includes(label)) return true;
+  if (['false', '0', 'no'].includes(label)) return false;
+  return undefined;
+}
+
+/** Matches exact labels and unambiguous country, notice-period, and binary aliases. */
+export function matchChoice(answer: string, option: string, question = ''): boolean {
+  const value = binaryChoice(answer);
+  const optionLabel = normalizeLabel(option);
+  if (normalizeLabel(answer) === optionLabel) return true;
+  const optionWithoutDialCode = optionLabel.replace(/\s*\(\+\d[\d -]*\)$/, '');
+  if (normalizeLabel(answer) === optionWithoutDialCode) return true;
+  if (optionWithoutDialCode !== optionLabel && /^[A-Z]{2}$/.test(answer.trim()) &&
+      matchesCountry(optionWithoutDialCode, answer)) return true;
+  if (matchFieldKey(question) === 'noticePeriod') {
+    const days = normalizeLabel(answer).match(/^(\d+) days?$/)?.[1];
+    const weeks = optionLabel.match(/^(\d+) weeks?$/)?.[1];
+    if (days !== undefined && weeks !== undefined && Number(days) === Number(weeks) * 7) return true;
+    if (days === '0' && /^(?:immediate(?:ly)?|no notice(?: period)?)$/.test(optionLabel)) return true;
+  }
+  if (value === undefined) return false;
+  const leadingChoice = optionLabel.match(/^(yes|no)[,.:;–—-]\s+(.+)$/);
+  const explicitSponsorship = optionLabel.match(/^i (do not |don't )?(?:require|need) (?:visa )?sponsorship[.!]?$/);
+  if (leadingChoice?.[1] && leadingChoice[2] &&
+      !/\b(?:but|unless|if|except|may|maybe|depending|however)\b/.test(leadingChoice[2])) {
+    return value === binaryChoice(leadingChoice[1]);
+  }
+  if (explicitSponsorship && matchFieldKey(question) === 'visaSponsorshipNeeded') {
+    return value === !explicitSponsorship[1];
+  }
+  return value === binaryChoice(option);
+}
+
+/** Resolve a unique offered label, preferring the page's exact text. */
+export function offeredChoice(answer: string, options: readonly string[], question: string): string | undefined {
+  const exact = options.filter((option) => option === answer);
+  if (exact.length) return exact.length === 1 ? exact[0] : undefined;
+  const matches = options.filter((option) => matchChoice(answer, option, question));
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
 /**
  * Maps a control's label to a canonical profile key, or null when unknown.
  *
@@ -151,6 +207,7 @@ export function normalizeLabel(label: string): string {
 export function matchFieldKey(label: string): string | null {
   const normalized = normalizeLabel(label);
   if (!normalized) return null;
+  if (isAgeThresholdQuestion(normalized)) return 'age18OrOlder';
   const entries = Object.entries(FIELD_SYNONYMS);
   for (const [key, synonyms] of entries) {
     if (synonyms.some((s) => opensWith(normalized, s))) return key;

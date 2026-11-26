@@ -2,6 +2,7 @@ import { HIRE_ORIGIN } from './auth';
 import { planRefusedFrom } from './planRefused';
 import type { ApplicationReceipt } from './applicationCapture';
 import type { PlanApiRequest, PlanApiResponse, ChooseApiRequest, ChooseApiResponse } from '../../src/lib/ai/autofill-orchestrator';
+import { parseDemographicPreferences, type DemographicPreferences } from '../../src/lib/profile/demographic-preferences';
 
 /** Hosts whose /jobs/<slug> pages we recognise as freehire job postings.
  *
@@ -288,6 +289,13 @@ export function getAutofillProfile(token: string): Promise<AutofillProfile> {
   return getData<AutofillProfile>('/api/v1/me/autofill-profile', token);
 }
 
+export class ExtensionApiError extends Error {
+  constructor(path: string, public readonly status: number, body: string) {
+    super(apiErrorMessage(path, status, body));
+    this.name = 'ExtensionApiError';
+  }
+}
+
 async function extensionApi<T>(
   path: string, token: string, method: 'GET' | 'POST' | 'PUT', body?: unknown, signal?: AbortSignal,
 ): Promise<T> {
@@ -300,7 +308,7 @@ async function extensionApi<T>(
   });
   const raw = await res.text();
   if (res.status === 402) throw planRefusedFrom(parseOrNull(raw), "Your plan doesn't include this.");
-  if (!res.ok) throw new Error(apiErrorMessage(path, res.status, raw));
+  if (!res.ok) throw new ExtensionApiError(path, res.status, raw);
   return JSON.parse(raw) as T;
 }
 
@@ -308,6 +316,20 @@ export function getAutofillSessionProfile(token: string, signal?: AbortSignal) {
   return extensionApi<{ data: AutofillProfile; meta?: { candidateId: string | null } }>(
     '/api/v1/me/autofill-profile', token, 'GET', undefined, signal,
   );
+}
+
+export async function getDemographicPreferences(
+  token: string,
+  signal?: AbortSignal,
+): Promise<DemographicPreferences> {
+  const result = await extensionApi<{ ok?: boolean; demographic_preferences?: unknown }>(
+    '/api/v1/me/demographic-preferences',
+    token,
+    'GET',
+    undefined,
+    signal,
+  );
+  return parseDemographicPreferences(result.demographic_preferences);
 }
 
 export function requestAutofillPlan(input: PlanApiRequest, token: string, signal: AbortSignal) {

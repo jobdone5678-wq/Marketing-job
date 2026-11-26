@@ -5,20 +5,20 @@ import {
   ProviderClient,
   ProviderError,
   stripMarkdownFences,
-} from './provider-client.ts';
+} from './provider-client';
 import type {
   ProviderClientConfig,
   ChatMessage,
   GenerateCompletionOptions,
   ChatCompletionResult,
   TokenUsageTelemetry,
-} from './provider-client.ts';
+} from './provider-client';
 import {
   PlanContractSchema,
   ChooseContractSchema,
-} from './structured-contracts.ts';
-import { createSsrfSafeFetch } from './ssrf-fetch-adapter.ts';
-import type { SafeAgentResult } from './ssrf-guard.ts';
+} from './structured-contracts';
+import { createSsrfSafeFetch } from './ssrf-fetch-adapter';
+import type { SafeAgentResult } from './ssrf-guard';
 
 export interface CapabilityRecord {
   supportsStructured: boolean;
@@ -611,7 +611,7 @@ export class ServerVercelProviderClient extends ProviderClient {
     let tier1Passed = false;
     let tier1Result: ServerChatCompletionResult | undefined = undefined;
 
-    if (this.supportsStructuredOutputs && schema) {
+    if (options?.responseFormat !== 'json_prompt' && this.supportsStructuredOutputs && schema) {
       const remaining = checkDeadline();
       const timeoutSignal = AbortSignal.timeout(remaining);
       const attemptSignal = options?.signal
@@ -660,7 +660,7 @@ export class ServerVercelProviderClient extends ProviderClient {
     let tier2Passed = false;
     let tier2Result: ServerChatCompletionResult | undefined = undefined;
 
-    if (this.supportsJsonMode) {
+    if (options?.responseFormat !== 'json_prompt' && this.supportsJsonMode) {
       const remaining = checkDeadline();
       const timeoutSignal = AbortSignal.timeout(remaining);
       const attemptSignal = options?.signal
@@ -729,7 +729,7 @@ export class ServerVercelProviderClient extends ProviderClient {
 
     const jsonConstraint =
       '\n\nIMPORTANT: Respond with valid JSON only. Do not include markdown fences, preamble, or commentary.';
-    const tier3Messages = modelMessages.map((msg, idx) => {
+    const tier3Messages = options?.responseFormat === 'json_prompt' ? modelMessages : modelMessages.map((msg, idx) => {
       if (idx === modelMessages.length - 1) {
         return { ...msg, content: msg.content + jsonConstraint };
       }

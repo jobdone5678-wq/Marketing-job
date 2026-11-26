@@ -2,6 +2,7 @@ import { browser } from 'wxt/browser';
 import { track } from './analytics';
 import type { AnswerOffer } from './answerOffer';
 import {
+  ExtensionApiError,
   generateAutofillAnswer,
   getAutofillSessionProfile,
   getAutofillSettings,
@@ -10,10 +11,11 @@ import {
   saveBankAnswer,
 } from './freehire';
 import { isAutofillProse, isPrivateAutofillField } from './autofillSafety';
+import { demographicChoices, demographicKey, type DemographicPreferences } from '../../src/lib/profile/demographic-preferences';
 import type { FormContext } from '../../src/lib/ai/planner';
-import { normalizeLabel } from './fieldKeys';
+import { normalizeLabel, offeredChoice } from './fieldKeys';
 import { profileToValues } from './form';
-import { looksLikeApplication, planLabelFills, scopeToApplication } from './fillPlan';
+import { confirmedFieldValue, looksLikeApplication, planLabelFills, scopeToApplication } from './fillPlan';
 import { walkFills, type WalkHooks } from './formWalk';
 import { PlanRefused } from './planRefused';
 import type {
@@ -75,23 +77,23 @@ async function ask(message: RuntimeMessage) {
 async function jobContext(target: AutofillTarget): Promise<FormContext> {
   const reply = await ask({ kind: 'GET_PAGE_SNAPSHOT', target }).catch(() => undefined);
   if (reply?.kind !== 'PAGE_SNAPSHOT' || !reply.snapshot.url) return {};
-  const { jobPosting, headline, title, url, text } = reply.snapshot;
+  const { jobPosting, headline, title, url } = reply.snapshot;
   if (!URL.canParse(url)) return {};
   const page = new URL(url);
   return {
     pageTitle: title.slice(0, 300),
     jobTitle: (jobPosting?.title || headline).slice(0, 300),
     company: jobPosting?.company?.slice(0, 300),
-    jobDescription: (jobPosting?.description || text).slice(0, 5000),
+    jobDescription: jobPosting?.description?.slice(0, 5000),
     url: page.origin + page.pathname,
   };
 }
 
-export async function runAutofill(token: string, panel: FillPanel, signal: AbortSignal) {
+export async function runAutofill(token: string, panel: FillPanel, signal: AbortSignal, demographics?: DemographicPreferences) {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   if (tab?.id === undefined || !tab.url || !/^https?:\/\//i.test(tab.url)) return;
   const target = { tabId: tab.id, url: tab.url };
-  await fillApplication(token, panel, signal, target);
+  await fillApplication(token, panel, signal, target, demographics);
 }
 
 async function fillApplication(
@@ -99,6 +101,7 @@ async function fillApplication(
   panel: FillPanel,
   signal: AbortSignal,
   target: AutofillTarget,
+  demographics?: DemographicPreferences,
   force = false
 ) {
   const stopped = () => signal.aborted || panel.walk.stopped();
@@ -122,6 +125,57 @@ async function fillApplication(
       target
     );
   };
+  async function fillCombobox(
+    field: { label: string; frame: number; form: number },
+    choose: (options: string[]) => Promise<string | string[] | undefined>,
+    search?: string,
+    exact = false,
+  ) {
+    hooks.filling(field.label);
+    const step = async (action: ComboboxStep['action'], value = '', expectedSelections?: string[]) => {
+      if (stopped() && action !== 'clear') return;
+      const reply = await ask({
+        kind: 'COMBOBOX_STEP', target,
+        step: {
+          action, label: field.label, value, frame: field.frame, form: field.form,
+          onlyEmpty: !expectedSelections?.length, expectedSelections, exact,
+        },
+      });
+      return reply?.kind === 'COMBOBOX_REPLY' ? reply.reply : undefined;
+    };
+    let queried = false;
+    try {
+      const opened = (await step('open'))?.status === 'opened';
+      let offer = opened ? await step('options') : undefined;
+      let options = offer?.options ?? [];
+      if (search && !options.length && !stopped()) {
+        queried = (await step('query', search))?.status === 'queried';
+        if (queried) {
+          offer = await step('options');
+          options = offer?.options ?? [];
+        }
+      }
+      if (!options.length || stopped()) return;
+      const chosen = await choose(options);
+      const choices = Array.isArray(chosen) ? chosen : chosen ? [chosen] : [];
+      if (!choices.length || (choices.length > 1 && !offer?.multiple)) return;
+      const committed: string[] = [];
+      for (const choice of choices) {
+        if (stopped() || !options.includes(choice)) return;
+        if (committed.length && (await step('open'))?.status !== 'opened') return;
+        if ((await step('select', choice, committed.slice()))?.status !== 'selected') return;
+        if ((await step('verify', choice))?.status !== 'verified') return;
+        committed.push(choice);
+        hooks.wrote();
+      }
+      hooks.answered(field.label, field.frame, field.form);
+    } catch {
+      if (!stopped()) issues.push(field.label);
+    } finally {
+      if (queried) await step('clear').catch(() => undefined);
+      hooks.filling(null);
+    }
+  }
   try {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     if (stopped() || tab?.id !== target.tabId || tab.url !== target.url) return;
@@ -135,7 +189,7 @@ async function fillApplication(
       panel.notice(
         "This doesn't look like the application form. Open the application, or choose Fill it anyway."
       );
-      panel.offerOverride((nextSignal) => fillApplication(token, panel, nextSignal, target, true));
+      panel.offerOverride((nextSignal) => fillApplication(token, panel, nextSignal, target, demographics, true));
       return;
     }
     const uploadScopes = new Set(observed.uploads.map(({ frame, form }) => `${frame}:${form}`));
@@ -151,7 +205,7 @@ async function fillApplication(
     }
     panel.offerOverride(null);
     started = true;
-    const uniqueFields = (fields: FramedField[]) => {
+    const uniqueFields = (fields: FramedField[], privateFields = false) => {
       const counts = new Map<string, number>();
       for (const field of fields) {
         const key = fieldKey(field);
@@ -166,7 +220,8 @@ async function fillApplication(
           !field.value.trim() &&
           field.label.trim() &&
           field.label.length <= 2000 &&
-          !isPrivateAutofillField(field)
+          !(field.type === 'radio' && !field.options?.length && /^(?:yes|no)$/i.test(normalizeLabel(field.label))) &&
+          isPrivateAutofillField(field) === privateFields
         );
       });
     };
@@ -177,14 +232,45 @@ async function fillApplication(
 
     // Capture page context before writing any candidate data into the form.
     const contextRequest = jobContext(target);
+    if (demographics?.enabled) {
+      for (const field of uniqueFields(scoped, true)) {
+        if (stopped()) return;
+        const key = demographicKey(field.label);
+        const saved = key ? demographics.answers[key] : undefined;
+        if (!key || !saved?.length) continue;
+        if (field.combo) {
+          await fillCombobox(field, async (options) => demographicChoices(key, saved, options), undefined, true);
+        } else if (field.options?.length && (field.tag === 'select' || field.type === 'radio' || field.type === 'checkbox')) {
+          const choices = demographicChoices(key, saved, field.options);
+          if (choices.length && (field.multiple || choices.length === 1)) {
+            await walk([{ label: field.label, frame: field.frame, form: field.form, value: choices.join(', '), choices }]);
+          }
+        } else if (field.type === 'checkbox' && demographicChoices(key, saved, [field.label]).length) {
+          await walk([{ label: field.label, frame: field.frame, form: field.form, value: 'true' }]);
+        }
+      }
+    }
+    if (stopped()) return;
     const { data: profile, meta } = await getAutofillSessionProfile(token, signal);
     if (stopped()) return;
+    const values = profileToValues(profile);
     await walk(
       planLabelFills(
         uniqueFields(scoped).filter((field) => !field.combo),
-        profileToValues(profile)
+        values,
+        profile.authorized_countries
       )
     );
+    if (stopped()) return;
+    for (const field of await remaining()) {
+      if (stopped()) return;
+      const value = confirmedFieldValue(field.label, values, profile.authorized_countries).trim();
+      if (!field.combo || !value) continue;
+      await fillCombobox(field, async (options) => {
+        if (isPrivateAutofillField({ ...field, options })) return;
+        return offeredChoice(value, options, field.label);
+      }, value);
+    }
 
     if (stopped()) return;
     const fields = await remaining();
@@ -195,7 +281,7 @@ async function fillApplication(
       return;
     }
 
-    const [context, settings] = await Promise.all([
+    const [{ jobDescription, ...context }, settings] = await Promise.all([
       contextRequest,
       getAutofillSettings(token, signal),
     ]);
@@ -206,84 +292,64 @@ async function fillApplication(
       );
       return;
     }
-    const candidates = fields.map(plannerField);
-    const byId = new Map(candidates.map((field) => [field.id, field]));
+    const candidates = fields.filter(
+      (field) => !field.combo && !(field.tag === 'textarea' && isAutofillProse(field.label)),
+    ).map(plannerField);
+    // Keep each request within one server-side planner batch.
+    const batchSize = 4;
+    let consecutiveFailures = 0;
+    let reportedPlanError = false;
     usedAi = true;
-    const plan = await requestAutofillPlan(
-      { candidateId, fields: candidates, context },
-      token,
-      signal
-    );
-    if (stopped()) return;
-    if (!plan.ok) throw new Error(plan.error || 'The server could not plan autofill.');
-
-    const plannedFills: LabelFill[] = [];
-    for (const fill of plan.executableFills ?? []) {
-      const field = fill.fieldId ? byId.get(fill.fieldId) : undefined;
-      if (
-        field &&
-        !field.combo &&
-        fill.grounded === true &&
-        typeof fill.value === 'string' &&
-        fill.value.trim()
-      ) {
-        plannedFills.push({
-          label: field.label,
-          value: fill.value,
-          frame: field.frame,
-          form: field.form,
-        });
-      }
-    }
-    await walk(plannedFills);
-    if (stopped()) return;
-
-    const deferredIds = new Set(
-      plan.deferredFieldIds ??
-        candidates.filter((field) => plan.deferred?.includes(field.label)).map((field) => field.id)
-    );
-    for (const fill of plan.executableFills ?? []) {
-      if (fill.fieldId && byId.get(fill.fieldId)?.combo) deferredIds.add(fill.fieldId);
-    }
-    const pending = new Set((await remaining()).map(fieldKey));
-    for (const field of candidates) {
+    for (let start = 0; start < candidates.length; start += batchSize) {
       if (stopped()) return;
-      if (!field.combo || !deferredIds.has(field.id) || !pending.has(fieldKey(field))) continue;
-      hooks.filling(field.label);
-      const step = async (action: ComboboxStep['action'], value = '') => {
-        if (stopped()) return;
-        const reply = await ask({
-          kind: 'COMBOBOX_STEP',
-          target,
-          step: {
-            action,
-            label: field.label,
-            value,
-            frame: field.frame,
-            form: field.form,
-            onlyEmpty: true,
-          },
-        });
-        return reply?.kind === 'COMBOBOX_REPLY' ? reply.reply : undefined;
-      };
+      const batch = candidates.slice(start, start + batchSize);
+      const byId = new Map(batch.map((field) => [field.id, field]));
+      let plan: Awaited<ReturnType<typeof requestAutofillPlan>>;
       try {
-        if ((await step('open'))?.status !== 'opened') continue;
-        const options = (await step('options'))?.options ?? [];
-        if (!options.length || stopped()) continue;
+        plan = await requestAutofillPlan({ candidateId, fields: batch, context }, token, signal);
+        if (!plan.ok) throw new Error(plan.error || 'The server could not plan autofill.');
+      } catch (error) {
+        if (stopped()) return;
+        if (error instanceof PlanRefused) {
+          panel.refused(error);
+          break;
+        }
+        if (!reportedPlanError) {
+          const status = error instanceof ExtensionApiError ? error.status : undefined;
+          const message = status === 504 ? 'AI planning timed out (HTTP 504).' :
+            `AI planning could not complete a batch${status ? ` (HTTP ${status})` : ''}.`;
+          panel.notice(`${message} Autofill will check the remaining fields.`);
+          reportedPlanError = true;
+        }
+        if (++consecutiveFailures >= 2 ||
+            (error instanceof ExtensionApiError && [401, 403, 429].includes(error.status))) break;
+        continue;
+      }
+      if (stopped()) return;
+
+      consecutiveFailures = 0;
+      const plannedFills: LabelFill[] = [];
+      for (const fill of plan.executableFills ?? []) {
+        const field = fill.fieldId ? byId.get(fill.fieldId) : undefined;
+        if (field && fill.grounded === true && typeof fill.value === 'string' && fill.value.trim()) {
+          plannedFills.push({ label: field.label, value: fill.value, frame: field.frame, form: field.form });
+        }
+      }
+      await walk(plannedFills);
+    }
+    if (stopped()) return;
+    for (const field of await remaining()) {
+      if (stopped()) return;
+      if (!field.combo) continue;
+      await fillCombobox(field, async (options) => {
+        if (isPrivateAutofillField({ ...field, options })) return;
         const result = await requestAutofillChoice(
-          { candidateId, question: field, options, context },
+          { candidateId, question: plannerField(field), options },
           token,
           signal
         );
-        if (!result.ok || !result.choice || !options.includes(result.choice) || stopped()) continue;
-        if ((await step('select', result.choice))?.status !== 'selected') continue;
-        if ((await step('verify', result.choice))?.status === 'verified') {
-          hooks.wrote();
-          hooks.answered(field.label, field.frame, field.form);
-        }
-      } catch {
-        if (!stopped()) issues.push(field.label);
-      }
+        return result.ok ? result.choice ?? undefined : undefined;
+      });
     }
 
     if (stopped()) return;
@@ -300,7 +366,7 @@ async function fillApplication(
             fieldType: 'textarea',
             jobTitle: context.jobTitle,
             companyName: context.company,
-            jobDescription: context.jobDescription,
+            jobDescription,
           },
           token,
           signal

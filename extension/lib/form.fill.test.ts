@@ -177,7 +177,7 @@ describe('fillByLabel', () => {
       { label: 'Nothing C', value: 'z' },
     ]);
 
-    const scans = seen.mock.calls.filter(([sel]) => sel === 'input, select, textarea').length;
+    const scans = seen.mock.calls.filter(([sel]) => sel.startsWith('input, select, textarea')).length;
     seen.mockRestore();
 
     // One for collectQuestions, at most one for the miss path — not one per miss.
@@ -190,7 +190,7 @@ describe('fillByLabel', () => {
 
     fillByLabel(document, [{ label: 'Email', value: 'ilya@example.com' }]);
 
-    const scans = seen.mock.calls.filter(([sel]) => sel === 'input, select, textarea').length;
+    const scans = seen.mock.calls.filter(([sel]) => sel.startsWith('input, select, textarea')).length;
     seen.mockRestore();
 
     // Only collectQuestions'. Nothing missed, so nothing to explain.

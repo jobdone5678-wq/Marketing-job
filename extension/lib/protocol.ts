@@ -59,6 +59,7 @@ export interface FormField {
    * and the agent reads them with `combobox.open` + `combobox.options`.
    */
   options?: string[];
+  multiple?: boolean;
 }
 
 /**
@@ -103,6 +104,7 @@ export interface LabelFill {
   frame?: number;
   form?: number;
   onlyEmpty?: boolean;
+  choices?: string[];
 }
 
 /**
@@ -158,12 +160,14 @@ export interface FillOutcome {
  * commit is being confirmed for `verify`, and empty for the two that only read.
  */
 export interface ComboboxStep {
-  action: 'open' | 'options' | 'select' | 'verify';
+  action: 'open' | 'options' | 'select' | 'verify' | 'query' | 'clear';
   label: string;
   value: string;
   frame?: number;
   form?: number;
   onlyEmpty?: boolean;
+  expectedSelections?: string[];
+  exact?: boolean;
 }
 
 /**
@@ -175,6 +179,7 @@ export interface ComboboxReply {
   status: string;
   options?: string[];
   committed?: string;
+  multiple?: boolean;
 }
 
 /**

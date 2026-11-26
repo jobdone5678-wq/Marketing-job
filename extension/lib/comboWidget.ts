@@ -25,7 +25,11 @@ export function comboOptions(el: Element): string[] {
 export function comboOptionNodes(el: Element): Element[] {
   const listbox = comboListbox(el);
   if (!listbox) return [];
-  return Array.from(listbox.querySelectorAll('[role="option"]')).filter(isOnScreen);
+  return Array.from(listbox.querySelectorAll('[role="option"]')).filter(
+    (option) => option.getAttribute('aria-disabled') !== 'true' &&
+      !(option instanceof HTMLButtonElement && option.type === 'submit' && option.form) &&
+      isOnScreen(option),
+  );
 }
 
 /**
@@ -38,10 +42,13 @@ export function comboOptionNodes(el: Element): Element[] {
  * no options.
  */
 export function comboListbox(el: Element): Element | null {
-  const ids = (el.getAttribute('aria-controls') || el.getAttribute('aria-owns') || '').split(/\s+/).filter(Boolean);
+  const owner = el.closest(COMBO_WIDGET);
+  const ids = [el, owner].flatMap((node) =>
+    [node?.getAttribute('aria-controls'), node?.getAttribute('aria-owns')].flatMap((value) => value?.split(/\s+/) ?? []),
+  ).filter(Boolean);
   const named = ids.map((id) => el.ownerDocument.getElementById(id)).filter((node): node is HTMLElement => !!node);
   const listbox = named.find((n) => n.getAttribute('role') === 'listbox' || n.querySelector('[role="option"]'));
-  return listbox ?? named[0] ?? null;
+  return listbox ?? owner?.querySelector('[role="listbox"]') ?? null;
 }
 
 function collapseText(el: Element): string {
@@ -76,7 +83,7 @@ export function isOnScreen(el: Element): boolean {
  */
 export function isComboWidget(el: Fillable): boolean {
   if (el instanceof HTMLSelectElement) return false;
-  return el.matches(COMBO_WIDGET);
+  return el.matches(COMBO_WIDGET) || (el instanceof HTMLInputElement && !!el.closest(COMBO_WIDGET));
 }
 
 /**
@@ -87,6 +94,12 @@ export function isComboWidget(el: Fillable): boolean {
  * neighbour's value.
  */
 const COMBO_WIDGET = '[role="combobox"], [aria-autocomplete], [aria-haspopup="listbox"]';
+export const COMBO_TRIGGER = '[role="combobox"], [aria-haspopup="listbox"]';
+export const comboQueries = new WeakMap<HTMLInputElement, string>();
+
+export function isChoicePlaceholder(text: string): boolean {
+  return /^(?:(?:please\s+)?(?:select|choose)(?:\s+(?:one|an?\s+option|(?:a|your)\s+(?:country|state|location)))?|[-–—]+)\s*(?:\.{2,}|…)?$/i.test(text);
+}
 
 // react-select's rendered value and placeholder, by the emotion class names it
 // generates. Only the *reading* path guesses at class names; see displayedValue.
@@ -108,12 +121,31 @@ const PLACEHOLDER_NODE = '[class*="placeholder"]';
  * rather than `role` still stops the walk.
  */
 export function displayedValues(widget: Element): string[] {
+  const expanded = widget.getAttribute('aria-expanded') ??
+    widget.closest('[role="combobox"][aria-expanded]')?.getAttribute('aria-expanded');
+  const listbox = comboListbox(widget);
+  const selected = listbox?.querySelectorAll('[role="option"][aria-selected="true"]');
+  if (selected?.length && (expanded !== 'true' || listbox?.getAttribute('aria-multiselectable') === 'true')) {
+    return Array.from(selected, shownText).filter(Boolean);
+  }
+  if (widget.matches(COMBO_TRIGGER) && !(widget instanceof HTMLInputElement) &&
+      !widget.querySelector('input:not([type="hidden"])')) {
+    const copy = widget.cloneNode(true) as Element;
+    copy.querySelectorAll('[role="listbox"], [aria-live]').forEach((node) => node.remove());
+    const text = shownText(copy);
+    return text && !isChoicePlaceholder(text) && !widget.hasAttribute('data-placeholder') ? [text] : [];
+  }
   for (let el = widget.parentElement; el; el = el.parentElement) {
     if (el.querySelectorAll(COMBO_WIDGET).length > 1) return [];
     const shown = Array.from(el.querySelectorAll(VALUE_NODE));
     if (shown.length) return shown.map(shownText).filter(Boolean);
     // A visible placeholder means the widget is showing "Select…", not an answer.
     if (el.querySelector(PLACEHOLDER_NODE)) return [];
+  }
+  if (widget instanceof HTMLInputElement && widget.value.trim() &&
+      widget.value !== comboQueries.get(widget) &&
+      expanded !== 'true') {
+    return [widget.value.trim()];
   }
   return [];
 }

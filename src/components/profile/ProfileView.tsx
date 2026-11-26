@@ -28,6 +28,7 @@ import {
   AlertCircle,
   MapPin,
   ChevronDown,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   COUNTRIES,
@@ -68,6 +69,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AiProviderSettings } from '@/components/ai-provider-settings';
+import { DemographicPreferencesSection } from '@/components/profile/DemographicPreferencesSection';
+import type { DemographicPreferences } from '@/lib/profile/demographic-preferences';
 
 const LANGUAGE_FLAG_MAP: Record<string, string> = {
   English: 'gb',
@@ -115,7 +118,8 @@ const REMOTE_REGIONS = [
 
 export function ProfileView() {
   const [profile, setProfile] = useState<CandidateProfileState>(DEFAULT_PROFILE);
-  const [activeTab, setActiveTab] = useState<'profile' | 'skills' | 'experience' | 'screening' | 'ai'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'skills' | 'experience' | 'screening' | 'demographics' | 'ai'>('profile');
+  const [demographicsConfigured, setDemographicsConfigured] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [saveMessage, setSaveMessage] = useState<string>('All changes saved');
 
@@ -219,6 +223,16 @@ export function ProfileView() {
         setProfile(DEFAULT_PROFILE);
       }
     });
+
+    void fetch('/api/v1/me/demographic-preferences', { credentials: 'include', cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body) => {
+        const prefs = body?.demographic_preferences as DemographicPreferences | undefined;
+        if (prefs?.enabled && prefs.answers && Object.keys(prefs.answers).length > 0) {
+          setDemographicsConfigured(true);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // Autosave / Updater
@@ -533,6 +547,7 @@ export function ProfileView() {
             { id: 'skills', label: 'Skills', icon: Tags, attention: tabAttention.skills },
             { id: 'experience', label: 'Experience', icon: Briefcase, attention: tabAttention.experience },
             { id: 'screening', label: 'Screening answers', icon: ClipboardList, attention: tabAttention.screening },
+            { id: 'demographics', label: 'Demographics', icon: ShieldCheck, attention: !demographicsConfigured },
             { id: 'ai', label: 'AI Settings', icon: Sparkles, attention: false },
           ].map((tab) => {
             const Icon = tab.icon;
@@ -2457,7 +2472,14 @@ export function ProfileView() {
           </section>
 
           {/* Action button */}
-          <div className="flex justify-end pt-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('demographics')}
+              className="cursor-pointer text-xs font-medium text-lime-700 underline hover:text-lime-800 dark:text-lime-400"
+            >
+              Configure optional EEO &amp; demographic autofill dropdowns &rarr;
+            </button>
             <Button
               type="button"
               onClick={async () => {
@@ -2491,7 +2513,20 @@ export function ProfileView() {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 5: AI PROVIDER SETTINGS */}
+      {/* TAB 5: DEMOGRAPHICS */}
+      {/* ========================================================================= */}
+      {activeTab === 'demographics' && (
+        <div className="space-y-6 pt-1">
+          <DemographicPreferencesSection
+            onStatusChange={(prefs: DemographicPreferences) =>
+              setDemographicsConfigured(prefs.enabled && Object.keys(prefs.answers).length > 0)
+            }
+          />
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 6: AI PROVIDER SETTINGS */}
       {/* ========================================================================= */}
       {activeTab === 'ai' && (
         <div className="space-y-6 pt-1">

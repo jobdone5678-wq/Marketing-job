@@ -274,7 +274,15 @@ test('grounded engine: question-specific typed validation & anti-hallucination g
     assert.ok(result.evidenceIds.includes('answer_bank.relocation_willingness'));
   });
 
-  await t.test('9. reads confirmed_facts fields and grounds salary, names, city/state, and saved demographics', () => {
+  await t.test('does not reuse United States work authorization for another country', () => {
+    const facts = buildVerifiedFacts({ authorized_in_usa: true }, {
+      'Are you authorized to work in Canada?': 'Yes',
+    });
+    assert.equal(validateGroundedAnswer('Yes', facts, 'Are you authorized to work in Canada?').valid, false);
+    assert.equal(validateGroundedAnswer('Yes', facts, 'Are you authorized to work in the United States?').valid, true);
+  });
+
+  await t.test('9. grounds confirmed salary, names, and location while excluding demographics', () => {
     const facts = buildVerifiedFacts({
       full_name: 'Jane Doe',
       current_city: 'Austin',
@@ -294,14 +302,14 @@ test('grounded engine: question-specific typed validation & anti-hallucination g
 
     assert.equal(facts.get('profile.location.zip_code')?.value, '78701');
     assert.equal(facts.get('profile.compensation.expected_salary')?.value, '120000');
-    assert.equal(facts.get('profile.demographics.pronouns')?.value, 'She/Her');
+    assert.equal(facts.has('profile.demographics.pronouns'), false);
 
     assert.equal(validateGroundedAnswer('Jane', facts, inferQuestionDescriptor({ label: 'Legal First Name' })).valid, true);
     assert.equal(validateGroundedAnswer('Doe', facts, inferQuestionDescriptor({ label: 'Legal Last Name' })).valid, true);
     assert.equal(validateGroundedAnswer('Austin, Texas', facts, inferQuestionDescriptor({ label: 'Please provide the city and state/province you anticipate working in for the role in which you are applying' })).valid, true);
     assert.equal(validateGroundedAnswer('78701', facts, inferQuestionDescriptor({ label: 'Please provide your current ZIP or Postal Code to determine appropriate pay band' })).valid, true);
     assert.equal(validateGroundedAnswer('$120,000', facts, inferQuestionDescriptor({ label: 'What are your salary expectations?' })).valid, true);
-    assert.equal(validateGroundedAnswer('Asian', facts, inferQuestionDescriptor({ label: 'Which ethnicity(ies) do you identify with?' })).valid, true);
-    assert.equal(validateGroundedAnswer('She/Her', facts, inferQuestionDescriptor({ label: 'What are your pronouns? (Optional)' })).valid, true);
+    assert.equal(validateGroundedAnswer('Asian', facts, inferQuestionDescriptor({ label: 'Which ethnicity(ies) do you identify with?' })).valid, false);
+    assert.equal(validateGroundedAnswer('She/Her', facts, inferQuestionDescriptor({ label: 'What are your pronouns? (Optional)' })).valid, false);
   });
 });

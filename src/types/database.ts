@@ -96,6 +96,14 @@ export interface ExperienceAtomRow {
 
 export type ExperienceEvidenceAtomRow = ExperienceAtomRow;
 
+export interface DemographicPreferencesRow {
+  user_id: string;
+  enabled: boolean;
+  answers: Record<string, string[]>;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ScreeningAnswersRow {
   user_id: string;
   authorized_countries: string[] | null;

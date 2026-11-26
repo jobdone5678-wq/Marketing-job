@@ -142,7 +142,7 @@
         </div>
       {/if}
     {:else if authReady}
-      <p class="empty">Sign in to see your match for this page.</p>
+      <p class="empty">Sign in to autofill and track job applications.</p>
     {/if}
   </div>
 

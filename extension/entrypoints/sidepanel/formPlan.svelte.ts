@@ -75,8 +75,8 @@ export class FormPlan {
 
   /** Reads the page's form and rebuilds the plan, or clears it for a page that
    *  is not showing an application. */
-  async refresh(target?: AutofillTarget) {
-    if (this.#target?.tabId !== target?.tabId || this.#target?.url !== target?.url) {
+  async refresh(target: AutofillTarget) {
+    if (this.#target?.tabId !== target.tabId || this.#target?.url !== target.url) {
       this.#target = target;
     }
     if (this.#reading) {
@@ -88,11 +88,17 @@ export class FormPlan {
       do {
         this.#stale = false;
         const generation = this.#generation;
-        const readTarget = this.#target;
-        const reply = (await browser.runtime.sendMessage({
-          kind: 'GET_FRAMED_FORM',
-          target: readTarget,
-        } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
+        const readTarget: AutofillTarget | undefined = this.#target;
+        if (!readTarget) return;
+        let reply: RuntimeMessage | undefined;
+        try {
+          reply = (await browser.runtime.sendMessage({
+            kind: 'GET_FRAMED_FORM',
+            target: readTarget,
+          } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
+        } catch (error) {
+          if (generation === this.#generation && readTarget === this.#target) throw error;
+        }
         // The page changed while this read was in flight: its reply describes the old page.
         if (generation !== this.#generation || readTarget !== this.#target) {
           this.#stale = true;
@@ -156,9 +162,9 @@ export class FormPlan {
   /** Forgets what was learned about the previous page's questions. */
   resetPage() {
     this.#generation++;
+    this.#target = undefined;
+    this.#applyRead(undefined);
     this.read = false;
-    this.sent = false;
-    this.applicationPages = [];
     this.formFilled = false;
     this.autofilled.clear();
     this.prefilled.clear();

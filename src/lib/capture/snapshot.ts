@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CaptureError } from '@/lib/db/admin';
+import { isDemographicQuestion } from '../profile/demographic-preferences';
 
 const sensitive =
   /password|secret|token|credential|payment|credit.?card|bank|routing|ssn|social.?security|tax.?id|birth.?date|dob|medical|health|disability|ethnicity|race|gender|veteran|religion|consent|privacy|captcha|otp|one.?time.?code/i;
@@ -24,10 +25,8 @@ export function validateApplicationAnswers(input: unknown): ApplicationAnswer[] 
     if (!result.success) throw new CaptureError(`Application answer ${index + 1} is invalid.`, 400);
     const normalized = result.data;
     const key = normalized.key.toLowerCase();
-    if (
-      sensitive.test(`${key} ${normalized.label}`) ||
-      !relevant.test(`${key} ${normalized.label}`)
-    )
+    const question = `${normalized.key} ${normalized.label}`;
+    if (sensitive.test(question) || isDemographicQuestion(question) || !relevant.test(question))
       return null;
     if (seen.has(key)) throw new CaptureError('Application answer fields must be unique.', 400);
     seen.add(key);

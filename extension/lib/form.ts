@@ -9,14 +9,15 @@
  * which a position in the list does.
  */
 
-import { collapse, comboOptions, displayedValues, isComboWidget } from './comboWidget';
+import { collapse, COMBO_TRIGGER, comboOptions, displayedValues, isComboWidget, isChoicePlaceholder } from './comboWidget';
 import type { FieldTag, FormField, LabelFill, FillOutcome, FillStatus, Upload } from './protocol';
 import type { AutofillProfile } from './freehire';
 import { easyApplyDialog, easyApplyFieldError, isStoredResumeChoice } from './easyApply';
-import { extractLabel, textFromIds } from './formLabel';
-import { formatAuthorizedCountries, matchFieldKey, normalizeLabel } from './fieldKeys';
+import { choiceType, extractLabel, textFromIds } from './formLabel';
+import { binaryChoice, formatAuthorizedCountries, matchChoice, matchFieldKey, normalizeLabel } from './fieldKeys';
 
-export type Fillable = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+export type Fillable = HTMLElement;
+const CHOICES = 'input[type="radio"], input[type="checkbox"], [role="radio"], [role="checkbox"]';
 
 // Input types that are not free-fill targets.
 const SKIP_TYPES = new Set(['hidden', 'submit', 'button', 'reset', 'image', 'file']);
@@ -28,9 +29,12 @@ const SKIP_TYPES = new Set(['hidden', 'submit', 'button', 'reset', 'image', 'fil
  */
 function collectFillable(doc: Document): Fillable[] {
   const easyApply = easyApplyDialog(doc);
-  const all = Array.from((easyApply ?? doc).querySelectorAll<Fillable>('input, select, textarea'));
+  const all = Array.from((easyApply ?? doc).querySelectorAll<Fillable>(`input, select, textarea, ${COMBO_TRIGGER}, ${CHOICES}`));
   return all.filter((el) => {
-    if (el.disabled) return false;
+    if (el.matches(':disabled') || el.closest('[aria-disabled="true"]')) return false;
+    if (el instanceof HTMLButtonElement && /^(submit|reset)$/i.test(el.getAttribute('type') ?? '')) return false;
+    if (el.matches(COMBO_TRIGGER) && el.querySelector('input:not([type="hidden"]), select, textarea')) return false;
+    if (!(el instanceof HTMLInputElement) && choiceType(el) && el.querySelector(CHOICES)) return false;
     if (easyApply && isStoredResumeChoice(el)) return false;
     if (el instanceof HTMLInputElement && SKIP_TYPES.has(el.type)) return false;
     if (isHidden(el)) return false;
@@ -110,13 +114,58 @@ export function collectQuestions(doc: Document): Question[] {
  * share a `name` and a type, which is how the live forms mark them.
  */
 function groupOf(el: Fillable): { container: Element; question: string; key: string } | null {
-  if (!(el instanceof HTMLInputElement) || (el.type !== 'checkbox' && el.type !== 'radio')) return null;
-  // No name, no evidence: a React-controlled form may omit it entirely, and then
-  // nothing distinguishes one question in a container from two. A long report is
-  // the safer failure, so such controls stay ungrouped.
+  const type = choiceType(el);
+  if (!type) return null;
+  const labelled = labelledContainer(el);
+  if (labelled) {
+    const choices = Array.from(labelled.container.querySelectorAll<Fillable>(CHOICES))
+      .filter((choice) => choice.closest('fieldset, [role="group"], [role="radiogroup"]') === labelled.container);
+    const names = new Set(choices.map((choice) => choice.getAttribute('name')?.trim()).filter(Boolean));
+    const distinctCheckboxes = type === 'checkbox' && names.size > 1 &&
+      choices.every((choice) => !extractLabel(choice).includes('?'));
+    if ((distinctCheckboxes || labelled.container.matches('[role="radiogroup"]') ||
+        /\b(?:which|select|choose|check|how|what|where)\b|\?/i.test(labelled.question)) &&
+        choices.length > 1 && choices.includes(el) && choices.every((choice) => choiceType(choice) === type) &&
+        !labelled.container.querySelector('fieldset, [role="group"], [role="radiogroup"]')) {
+      return { ...labelled, key: type };
+    }
+  }
+  if (!(el instanceof HTMLInputElement)) return null;
+  const inferred = questionBeforeOptions(el);
+  if (inferred?.binaryPair) return { ...inferred, key: 'binary radio' };
   if (!el.name) return null;
-  const labelled = labelledContainer(el) ?? namedByControls(el);
-  return labelled ? { ...labelled, key: `${el.type} ${el.name}` } : null;
+  const group = labelled ?? namedByControls(el) ?? inferred;
+  return group ? { ...group, key: `${el.type} ${el.name}` } : null;
+}
+
+/** ATS forms often put a plain-text heading above a list of same-name choices. */
+function questionBeforeOptions(el: HTMLInputElement): { container: Element; question: string; binaryPair: boolean } | null {
+  for (let container = el.parentElement; container; container = container.parentElement) {
+    if (container.matches('form, body, [role="dialog"]')) break;
+    const choices = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"], input[type="checkbox"]'));
+    if (choices.some((item) => item.type !== el.type)) break;
+    if (choices.length < 2) continue;
+    const labels = new Set(choices.map((choice) => normalizeLabel(extractLabel(choice))));
+    const binaryPair = el.type === 'radio' && choices.length === 2 && labels.has('yes') && labels.has('no');
+    const sameName = el.name && choices.every((choice) => choice.name === el.name);
+    if (!sameName && !binaryPair) break;
+    const first = choices[0];
+    const prefix: string[] = [];
+    for (const node of container.childNodes) {
+      if (first && node.contains(first)) break;
+      if (node instanceof Element && (node.matches('label[for]') && choices.some((choice) => choice.id === node.getAttribute('for')))) continue;
+      prefix.push(node.textContent ?? '');
+    }
+    const nearby = container.previousElementSibling;
+    const siblingQuestion = nearby && !nearby.querySelector('input, select, textarea, button')
+      ? collapse(nearby.textContent) : '';
+    const question = collapse(prefix.join(' ')) || (/\?\s*\*?$/.test(siblingQuestion) ? siblingQuestion : '');
+    if (question && question.length <= 2000 && !labels.has(normalizeLabel(question)) &&
+        (sameName || /\?\s*\*?$/.test(question))) {
+      return { container, question, binaryPair: binaryPair && !sameName };
+    }
+  }
+  return null;
 }
 
 /**
@@ -138,19 +187,12 @@ function namedByControls(el: HTMLInputElement): { container: Element; question: 
 
 /** The nearest container that states the question its controls answer. */
 function labelledContainer(el: Element): { container: Element; question: string } | null {
-  const fieldset = el.closest('fieldset');
-  if (fieldset) {
-    const legend = Array.from(fieldset.children).find((c) => c.tagName === 'LEGEND');
-    const question = collapse(legend?.textContent);
-    if (question) return { container: fieldset, question };
-  }
-  // The same structure without a fieldset: ARIA's own way of saying "these
-  // controls answer one question".
-  const group = el.closest('[role="group"], [role="radiogroup"]');
-  if (group) {
+  const selector = 'fieldset, [role="group"], [role="radiogroup"]';
+  for (let group = el.closest(selector); group; group = group.parentElement?.closest(selector) ?? null) {
+    const legend = Array.from(group.children).find((c) => c.tagName === 'LEGEND');
     const question =
       textFromIds(el.ownerDocument, group.getAttribute('aria-labelledby')) ||
-      collapse(group.getAttribute('aria-label'));
+      collapse(group.getAttribute('aria-label')) || collapse(legend?.textContent);
     if (question) return { container: group, question };
   }
   return null;
@@ -213,26 +255,27 @@ export function extractUploads(doc: Document): Upload[] {
  * collected under both, so `indexOf` is enough.
  */
 export function formIndex(el: Fillable, forms: HTMLFormElement[]): number {
-  const owner = el.form;
+  const owner = 'form' in el ? el.form as HTMLFormElement | null : el.closest('form');
   return owner ? forms.indexOf(owner) : -1;
 }
 
 function describeQuestion({ label, controls }: Question, index: number, forms: HTMLFormElement[]): FormField {
   const [el] = controls;
-  const tag = el.tagName.toLowerCase() as FieldTag;
+  const tag: FieldTag = el instanceof HTMLSelectElement ? 'select' :
+    el instanceof HTMLTextAreaElement ? 'textarea' : 'input';
   const field: FormField = {
     index,
     form: formIndex(el, forms),
     tag,
-    type: el instanceof HTMLInputElement ? el.type : tag,
+    type: choiceType(el) ?? (el instanceof HTMLInputElement ? el.type : isComboWidget(el) ? 'select' : tag),
     label,
     name: el.getAttribute('name') ?? '',
     // A React-rendered ATS form typically validates in JS and marks the
     // requirement with ARIA rather than the native attribute.
     // Plenty of forms (LinkedIn Easy Apply's radio groups) mark it only as a trailing
     // asterisk in the question's text.
-    required: controls.some((c) => c.required || c.getAttribute('aria-required') === 'true') || /\*\s*$/.test(label),
-    value: el.value ?? '',
+    required: controls.some((c) => ('required' in c && c.required) || c.getAttribute('aria-required') === 'true') || /\*\s*$/.test(label),
+    value: 'value' in el && typeof el.value === 'string' ? el.value : '',
     combo: isComboWidget(el),
   };
   const invalid = fieldError(el);
@@ -242,34 +285,44 @@ function describeQuestion({ label, controls }: Question, index: number, forms: H
     // A group: the options are the controls' own labels, and its value is
     // whichever of them are already chosen.
     field.options = controls.map(extractLabel);
+    if (choiceType(el) === 'checkbox') field.multiple = true;
     field.value = controls
-      .filter((c) => c instanceof HTMLInputElement && c.checked)
+      .filter(choiceChecked)
       .map(extractLabel)
       .join(', ');
-  } else if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) {
+  } else if (choiceType(el)) {
     // A lone box's value attribute is "on" whether or not it is ticked; the answer is
     // its state, read back the way `fillField` writes it.
-    field.value = el.checked ? 'Yes' : '';
+    field.value = choiceChecked(el) ? 'Yes' : '';
   } else if (el instanceof HTMLSelectElement) {
-    field.options = Array.from(el.options).map((o) => (o.textContent ?? '').trim());
+    if (el.multiple) field.multiple = true;
+    field.options = Array.from(el.options).filter(isSelectableOption).map((o) => collapse(o.textContent));
     // The answer is the chosen option's text; its value attribute is the ATS's own
     // code ("4417"), which means nothing to the person or to anyone reading it back.
     // An empty value stays empty: that is the "Select..." placeholder, not an answer.
-    if (field.value) field.value = (el.selectedOptions[0]?.textContent ?? '').trim();
+    const selected = el.multiple
+      ? Array.from(el.options).filter((option) => option.selected)
+      : [el.options[el.selectedIndex]].filter((option): option is HTMLOptionElement => !!option);
+    field.value = selected.filter(isSelectableOption).map((o) => collapse(o.textContent)).join(', ');
   } else if (field.combo) {
     const offered = comboOptions(el);
     if (offered.length) field.options = offered;
     // The widget's input is empty even after a commit; the answer is what it displays.
-    if (!field.value) field.value = displayedValues(el).join(', ');
+    field.value = displayedValues(el).join(', ');
   }
   return field;
+}
+
+function isSelectableOption(option: HTMLOptionElement): boolean {
+  return !!option.value && !option.disabled && !option.closest('optgroup[disabled]') &&
+    !isChoicePlaceholder(collapse(option.textContent));
 }
 
 export function fillByLabel(doc: Document, fills: LabelFill[]): FillOutcome[] {
   const questions = collectQuestions(doc);
   const forms = Array.from(doc.querySelectorAll('form'));
   const unfillable = unfillableLabels(doc);
-  return fills.map(({ label, value, form, onlyEmpty }) => {
+  return fills.map(({ label, value, form, onlyEmpty, choices }) => {
     const resolved = findQuestion(unfillable, questions, forms, label, form);
     if ('miss' in resolved) return { label, status: resolved.miss };
     const question = resolved.found;
@@ -279,9 +332,33 @@ export function fillByLabel(doc: Document, fills: LabelFill[]): FillOutcome[] {
     if (question.controls.length === 1 && isComboWidget(question.controls[0])) {
       return { label, status: 'deferred_combobox' as const };
     }
+    if (choices) {
+      return { label, status: applyExactChoices(question, choices) ? 'filled' : 'no_option' };
+    }
     const answer = needsNumber(question, label) ? (numericAnswer(value) ?? value) : value;
     return { label, status: answerQuestion(question, answer) ? ('filled' as const) : ('no_option' as const) };
   });
+}
+
+function applyExactChoices({ controls }: Question, choices: string[]): boolean {
+  const [first] = controls;
+  if (!choices.length || new Set(choices).size !== choices.length) return false;
+  if (first instanceof HTMLSelectElement) {
+    if (!first.multiple && choices.length > 1) return false;
+    const offered = Array.from(first.options).filter(isSelectableOption);
+    const matches = choices.map((choice) => offered.filter((option) => collapse(option.textContent) === choice));
+    if (matches.some((options) => options.length !== 1)) return false;
+    const chosen = new Set(matches.flat());
+    Array.from(first.options).forEach((option) => { option.selected = chosen.has(option); });
+    dispatchNative(first);
+    const selected = Array.from(first.selectedOptions);
+    return selected.length === chosen.size && selected.every((option) => chosen.has(option));
+  }
+  const type = choiceType(first);
+  if (controls.length < 2 || !type || (type === 'radio' && choices.length > 1)) return false;
+  const matches = choices.map((choice) => controls.filter((control) => extractLabel(control) === choice));
+  if (matches.some((options) => options.length !== 1)) return false;
+  return matches.flat().every((control) => fillField(control, 'true'));
 }
 
 /** The page's own verdict that a control's answer is wrong, as its message; '' when none. */
@@ -396,7 +473,7 @@ function readUnfillableLabels(doc: Document): Set<string> {
   for (const el of doc.querySelectorAll<Fillable>('input, select, textarea')) {
     // Never a fill target in the first place, so its absence is not a refusal.
     if (el instanceof HTMLInputElement && SKIP_TYPES.has(el.type)) continue;
-    const droppedByCollectFillable = el.disabled || isHidden(el);
+    const droppedByCollectFillable = el.matches(':disabled') || isHidden(el);
     if (!droppedByCollectFillable) continue;
     labels.add(normalizeLabel(extractLabel(el)));
   }
@@ -429,13 +506,13 @@ function absentOrUnfillable(unfillable: () => Set<string>, target: string): 'not
  * Ticking only, never clearing: a group may already carry an answer the user
  * chose by hand, and autofill has no business undoing it.
  */
-function answerQuestion({ controls }: Question, value: string): boolean {
-  if (controls.length === 1) return fillField(controls[0], value);
+function answerQuestion({ controls, label }: Question, value: string): boolean {
+  if (controls.length === 1) return fillField(controls[0], value, label);
 
-  const chosen = chosenOptions(controls, value);
+  const chosen = chosenOptions(controls, value, label);
   if (!chosen) return false;
-  for (const control of chosen) fillField(control, 'true');
-  return true;
+  if (choiceType(controls[0]) === 'radio' && chosen.length !== 1) return false;
+  return chosen.every((control) => fillField(control, 'true'));
 }
 
 /**
@@ -449,7 +526,10 @@ function answerQuestion({ controls }: Question, value: string): boolean {
  * *longest* option that matches at each step, which recovers both readings
  * unambiguously.
  */
-function chosenOptions(controls: Fillable[], value: string): Fillable[] | null {
+function chosenOptions(controls: Fillable[], value: string, label: string): Fillable[] | null {
+  const exact = controls.filter((control) => matchChoice(value, extractLabel(control), label));
+  if (exact.length === 1) return exact;
+  if (exact.length > 1) return null;
   const byLongestLabel = controls.toSorted((a, b) => extractLabel(b).length - extractLabel(a).length);
   const chosen: Fillable[] = [];
   let rest = value.trim();
@@ -479,30 +559,41 @@ function startsWithOption(value: string, option: string): boolean {
 }
 
 /** Writes one control, dispatching native events. Returns false if unfillable. */
-function fillField(el: Fillable, value: string): boolean {
-  if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) {
-    el.checked = value === 'true' || value === '1' || normalizeLabel(value) === 'yes';
-    dispatchNative(el);
-    return true;
+function fillField(el: Fillable, value: string, label = ''): boolean {
+  const type = choiceType(el);
+  if (type) {
+    const checked = binaryChoice(value);
+    if (checked === undefined || (type === 'radio' && !checked)) return false;
+    if (!(el instanceof HTMLInputElement) && !/^(?:true|false)$/.test(el.getAttribute('aria-checked') ?? '')) return false;
+    const button = el.closest('button');
+    if ((button && button.type !== 'button' && button.form) || el.closest('a[href]')) return false;
+    // React's checkbox/radio change plugin observes native click activation.
+    if (choiceChecked(el) !== checked) el.click();
+    return choiceChecked(el) === checked;
   }
   if (el instanceof HTMLSelectElement) {
-    const match = Array.from(el.options).find(
+    const matches = Array.from(el.options).filter(
       (o) =>
-        (o.textContent ?? '').trim().toLowerCase() === value.toLowerCase() ||
-        o.value.toLowerCase() === value.toLowerCase(),
+        isSelectableOption(o) && (matchChoice(value, collapse(o.textContent), label) ||
+        normalizeLabel(o.value) === normalizeLabel(value)),
     );
-    if (!match) return false;
-    el.value = match.value;
+    if (matches.length !== 1 || !matches[0]) return false;
+    el.value = matches[0].value;
     dispatchNative(el);
-    return true;
+    return el.value === matches[0].value;
   }
+  if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return false;
   setNativeValue(el, value);
   return true;
 }
 
+function choiceChecked(el: Fillable): boolean {
+  return el instanceof HTMLInputElement ? el.checked : el.getAttribute('aria-checked') === 'true';
+}
+
 // React/Angular track the input's value via a native setter; calling it (rather
 // than el.value =) plus bubbling input/change is what makes them notice the fill.
-function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value: string): void {
+export function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value: string): void {
   const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
   const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
   if (setter) setter.call(el, value);
