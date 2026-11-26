@@ -1,4 +1,4 @@
-import type { Job } from './freehire-types';
+import type { Job } from './nextkinhr-types';
 
 export function formatJobSalary(job: Job): string | null {
   const {

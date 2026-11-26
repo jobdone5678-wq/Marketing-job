@@ -3,10 +3,10 @@ import { notFound } from 'next/navigation';
 import { cache } from 'react';
 import { sanitizeJobHtml } from '@/lib/html-sanitizer';
 import {
-  getFreehireJob,
-  getSimilarFreehireJobs,
-  getFreehireJobCopies,
-} from '@/lib/jobs/freehire-api';
+  getNextkinhrJob,
+  getSimilarNextkinhrJobs,
+  getNextkinhrJobCopies,
+} from '@/lib/jobs/nextkinhr-api';
 import { JobDetailClient } from '@/app/jobs/[id]/JobDetailClient';
 import { requireProfile } from '@/lib/auth/require-profile';
 import { database } from '@/lib/db/admin';
@@ -17,7 +17,7 @@ interface DashboardJobDetailPageProps {
 
 const loadJob = cache(async (id: string) => {
   try {
-    return { job: await getFreehireJob(id) };
+    return { job: await getNextkinhrJob(id) };
   } catch (error) {
     console.error('Unable to load FreeHire job details in dashboard:', error);
     return { unavailable: true };
@@ -43,7 +43,7 @@ export default async function DashboardJobDetailPage({ params }: DashboardJobDet
     return (
       <div className="p-8 text-center">
         <p className="text-muted-foreground text-sm">
-          This job opening could not be loaded from FreeHire.me. Try refreshing the page.
+          This job opening could not be loaded from FreeHire. Try refreshing the page.
         </p>
       </div>
     );
@@ -80,8 +80,8 @@ export default async function DashboardJobDetailPage({ params }: DashboardJobDet
   }
 
   const [similarJobs, copies] = await Promise.all([
-    getSimilarFreehireJobs(id),
-    getFreehireJobCopies(id),
+    getSimilarNextkinhrJobs(id),
+    getNextkinhrJobCopies(id),
   ]);
 
   return (

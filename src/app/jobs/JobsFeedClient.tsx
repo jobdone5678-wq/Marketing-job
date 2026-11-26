@@ -3,9 +3,9 @@
 import { useState, useTransition, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { Briefcase, RotateCcw, AlertCircle } from 'lucide-react';
-import type { Job, Slice, FacetsData } from '@/lib/jobs/freehire-types';
+import type { Job, Slice, FacetsData } from '@/lib/jobs/nextkinhr-types';
 import { useJobBookmarks } from '@/hooks/use-job-bookmarks';
-import { CATEGORY_LABELS, getCountryFlag, getCountryName } from '@/lib/jobs/freehire-formatters';
+import { CATEGORY_LABELS, getCountryFlag, getCountryName } from '@/lib/jobs/nextkinhr-formatters';
 import { JobCard } from '@/components/jobs/feed/JobCard';
 import { JobsToolbar } from '@/components/jobs/feed/JobsToolbar';
 import { JobsFilterBar } from '@/components/jobs/feed/JobsFilterBar';
@@ -43,6 +43,7 @@ export function JobsFeedClient({
 
   const [viewMode, setViewMode] = useState<'list' | 'map' | 'swipe'>('list');
   const [swipeIndex, setSwipeIndex] = useState(0);
+  const [referenceNow] = useState(() => Date.now());
 
   const { savedJobs, toggleSavedJob } = useJobBookmarks();
   const jobBasePath = pathname.startsWith('/dashboard') ? '/dashboard/jobs' : '/jobs';
@@ -152,10 +153,9 @@ export function JobsFeedClient({
   const displayJobs = useMemo(() => {
     let items = initial?.items ?? [];
     if (activePosted) {
-      const now = Date.now();
       items = items.filter((job) => {
         if (!job.posted_at) return true;
-        const diffMs = now - new Date(job.posted_at).getTime();
+        const diffMs = referenceNow - new Date(job.posted_at).getTime();
         if (activePosted === '24h') return diffMs <= 24 * 3600 * 1000;
         if (activePosted === '3d') return diffMs <= 3 * 24 * 3600 * 1000;
         if (activePosted === '7d') return diffMs <= 7 * 24 * 3600 * 1000;
@@ -254,7 +254,7 @@ export function JobsFeedClient({
             aria-live="polite"
             className="py-1 text-center text-xs text-neutral-500 animate-pulse"
           >
-            Loading live jobs from FreeHire.me…
+            Loading live jobs from FreeHire…
           </div>
         )}
 
@@ -297,7 +297,7 @@ export function JobsFeedClient({
                   Unable to load job openings
                 </h3>
                 <p className="max-w-md text-sm text-neutral-500 dark:text-neutral-400">
-                  We couldn't connect to FreeHire.me. Please check your internet connection or try refreshing the page.
+                  We couldn&apos;t connect to FreeHire. Try refreshing the page.
                 </p>
                 <button
                   type="button"

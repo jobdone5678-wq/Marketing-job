@@ -58,7 +58,6 @@ next-env.d.ts
 /dist/
 jobright_extension (2)/
 prompt-master/
-/docs/operations/legacy-data-review.json
 /lint-recruiting*.json
 /lint-recruiting*.txt
 /dependency-audit.json
@@ -74,9 +73,7 @@ browser-extension/
 /tests/extension-test-summary.json
 /scratch/
 
-API_COMMUNICATION.md
-APPLICATION_CAPTURE_FLOW.md
-AUTOFILL_ENGINE.md
-CHROMEWEBSTORE.md
-EXTENSION_ARCHITECTURE.md
-FEATURE_IMPLEMENTATION_ROADMAP.md
+# documentation
+docs/
+*.md
+*.markdown

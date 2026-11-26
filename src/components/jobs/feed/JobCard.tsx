@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { Bookmark, MapPin } from 'lucide-react';
-import type { Job } from '@/lib/jobs/freehire-types';
+import type { Job } from '@/lib/jobs/nextkinhr-types';
 import { CompanyLogo } from '@/components/company-logo';
 import { LinkedInIcon } from '@/components/tech-icons';
 import {
@@ -13,7 +13,7 @@ import {
   cleanHtmlSnippet,
   SOURCE_KINDS,
   SOURCE_DISPLAY_NAMES,
-} from '@/lib/jobs/freehire-formatters';
+} from '@/lib/jobs/nextkinhr-formatters';
 import { cn } from 'cn';
 
 export interface AtsMatchInfo {

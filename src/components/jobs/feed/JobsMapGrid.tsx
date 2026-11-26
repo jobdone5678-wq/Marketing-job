@@ -1,6 +1,6 @@
 'use client';
 
-import { getCountryFlag, getCountryName, formatCount } from '@/lib/jobs/freehire-formatters';
+import { getCountryFlag, getCountryName, formatCount } from '@/lib/jobs/nextkinhr-formatters';
 
 interface JobsMapGridProps {
   countryCounts: Record<string, number>;

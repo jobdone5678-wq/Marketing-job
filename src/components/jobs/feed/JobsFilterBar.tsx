@@ -7,8 +7,8 @@ import {
   getCountryFlag,
   getCountryName,
   formatCount,
-} from '@/lib/jobs/freehire-formatters';
-import type { FacetsData } from '@/lib/jobs/freehire-types';
+} from '@/lib/jobs/nextkinhr-formatters';
+import type { FacetsData } from '@/lib/jobs/nextkinhr-types';
 
 interface JobsFilterBarProps {
   facets?: FacetsData;

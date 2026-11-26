@@ -8,10 +8,10 @@ import {
   Bookmark,
   Flag,
 } from 'lucide-react';
-import type { Job, JobCopy } from '@/lib/jobs/freehire-types';
+import type { Job, JobCopy } from '@/lib/jobs/nextkinhr-types';
 import { useJobProfileSkills } from '@/hooks/use-job-profile-skills';
 import { useJobBookmarks } from '@/hooks/use-job-bookmarks';
-import { getJobLink } from '@/lib/jobs/freehire-display';
+import { getJobLink } from '@/lib/jobs/nextkinhr-display';
 import { computeUnifiedJobMatch } from '@/lib/resumes/job-match';
 import { CompanyLogo } from '@/components/company-logo';
 import {
@@ -21,7 +21,7 @@ import {
   getCountryFlag,
   getCountryName,
   formatRelativeTime,
-} from '@/lib/jobs/freehire-formatters';
+} from '@/lib/jobs/nextkinhr-formatters';
 import { JobPinnedHeader } from '@/components/jobs/detail/JobPinnedHeader';
 import { DraftReferralModal } from '@/components/jobs/detail/DraftReferralModal';
 import { JobFactsSidebar } from '@/components/jobs/detail/JobFactsSidebar';

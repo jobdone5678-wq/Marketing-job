@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { ApplicationHandoff } from '@/components/application-handoff';
 import { requireProfile } from '@/lib/auth/require-profile';
 import { checkDb, database } from '@/lib/db/admin';
-import { getJobLink } from '@/lib/jobs/freehire-display';
+import { getJobLink } from '@/lib/jobs/nextkinhr-display';
 
 export default async function ApplyOutsideJobPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

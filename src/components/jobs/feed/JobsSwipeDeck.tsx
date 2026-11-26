@@ -2,14 +2,14 @@
 
 import Link from 'next/link';
 import { Bookmark, MapPin, X, Heart, ExternalLink } from 'lucide-react';
-import type { Job } from '@/lib/jobs/freehire-types';
+import type { Job } from '@/lib/jobs/nextkinhr-types';
 import { CompanyLogo } from '@/components/company-logo';
 import {
   getCountryFlag,
   getCountryName,
   formatRelativeTime,
   cleanHtmlSnippet,
-} from '@/lib/jobs/freehire-formatters';
+} from '@/lib/jobs/nextkinhr-formatters';
 
 interface JobsSwipeDeckProps {
   jobs: Job[];

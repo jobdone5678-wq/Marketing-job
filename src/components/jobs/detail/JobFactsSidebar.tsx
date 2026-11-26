@@ -3,7 +3,7 @@
 import { JobMatchCard } from './JobMatchCard';
 import { JobMetadataTable } from './JobMetadataTable';
 import { JobSourceAvoidRow } from './JobSourceAvoidRow';
-import type { Requirement } from '@/lib/jobs/freehire-types';
+import type { Requirement } from '@/lib/jobs/nextkinhr-types';
 
 interface JobFactsSidebarProps {
   matchPercentage: number;

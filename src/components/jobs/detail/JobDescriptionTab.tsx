@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { CompanyLogo } from '@/components/company-logo';
 import { JobSkillChip } from './JobSkillChip';
-import type { Job } from '@/lib/jobs/freehire-types';
+import type { Job } from '@/lib/jobs/nextkinhr-types';
 
 interface JobDescriptionTabProps {
   job: Job;
@@ -105,7 +105,7 @@ export function JobDescriptionTab({
         </div>
       </div>
 
-      {/* INTERACTIVE SKILL CHIPS (Screenshot 3 & FreeHire SkillChip.svelte pattern) */}
+      {/* INTERACTIVE SKILL CHIPS (Screenshot 3 & NextKinHR SkillChip.svelte pattern) */}
       {skillsList.length > 0 && (
         <div className="space-y-3 border-t border-neutral-200 pt-6 dark:border-neutral-800">
           <h2 className="text-base font-bold text-neutral-900 dark:text-neutral-100">

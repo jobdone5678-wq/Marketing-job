@@ -1,4 +1,4 @@
-import type { Job, Slice, JobCopy, FacetsData } from './freehire-types';
+import type { Job, Slice, JobCopy, FacetsData } from './nextkinhr-types';
 
 const API_BASE = (
   process.env.FREEHIRE_API_URL ||
@@ -32,7 +32,7 @@ async function fetchJobList(path: string) {
   return response;
 }
 
-export async function searchFreehireJobs(
+export async function searchNextkinhrJobs(
   params: URLSearchParams,
   limit: number,
   offset: number
@@ -57,18 +57,18 @@ export async function searchFreehireJobs(
       items: [],
       total: 0,
       hasMore: false,
-      error: error instanceof Error ? error.message : 'Unable to connect to FreeHire.me',
+      error: error instanceof Error ? error.message : 'Unable to connect to FreeHire',
     };
   }
 }
 
-export async function getFreehireJob(slug: string): Promise<Job | null> {
+export async function getNextkinhrJob(slug: string): Promise<Job | null> {
   const response = await fetchJobs<Job>(`/${encodeURIComponent(slug)}`);
   if (response?.data?.public_slug) return response.data;
   return null;
 }
 
-export async function getFreehireFacets(source?: string): Promise<FacetsData | undefined> {
+export async function getNextkinhrFacets(source?: string): Promise<FacetsData | undefined> {
   const params = new URLSearchParams({ facets: 'category,work_mode,countries,skills' });
   if (source) params.set('source', source);
   try {
@@ -80,21 +80,21 @@ export async function getFreehireFacets(source?: string): Promise<FacetsData | u
   return undefined;
 }
 
-export async function getSimilarFreehireJobs(slug: string): Promise<Job[]> {
+export async function getSimilarNextkinhrJobs(slug: string): Promise<Job[]> {
   try {
     return (await fetchJobList(`/${encodeURIComponent(slug)}/similar`)).data;
-  } catch (error) {
+  } catch {
     return [];
   }
 }
 
-export async function getFreehireJobCopies(slug: string): Promise<JobCopy[]> {
+export async function getNextkinhrJobCopies(slug: string): Promise<JobCopy[]> {
   try {
     const response = await fetchJobs<JobCopy[]>(`/${encodeURIComponent(slug)}/copies`);
     if (response && Array.isArray(response.data)) {
       return response.data;
     }
-  } catch (error) {
+  } catch {
     // Return empty array
   }
   return [];

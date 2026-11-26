@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
-import { searchFreehireJobs, getFreehireFacets } from '@/lib/jobs/freehire-api';
+import { searchNextkinhrJobs, getNextkinhrFacets } from '@/lib/jobs/nextkinhr-api';
 import { JobsFeedClient } from '@/app/jobs/JobsFeedClient';
 import { JobsFeedSkeleton } from '@/components/jobs/feed/JobsFeedSkeleton';
 import { requireProfile } from '@/lib/auth/require-profile';
@@ -9,7 +9,7 @@ import { candidateJobApplications } from '@/lib/jobs/applications';
 
 export const metadata: Metadata = {
   title: 'Jobs · Dashboard',
-  description: 'Search live job openings from FreeHire.me.',
+  description: 'Search live job openings on NextKinHR.',
 };
 
 interface PageProps {
@@ -64,8 +64,8 @@ export default async function DashboardJobsPage({ searchParams }: PageProps) {
   }
 
   const [initial, facets] = await Promise.all([
-    searchFreehireJobs(urlParams, pageSize, offset),
-    getFreehireFacets(),
+    searchNextkinhrJobs(urlParams, pageSize, offset),
+    getNextkinhrFacets(),
   ]);
 
   return (

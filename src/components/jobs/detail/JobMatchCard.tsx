@@ -2,7 +2,7 @@
 
 import { Check, TriangleAlert } from 'lucide-react';
 import { TechBadgeIcon } from '@/components/tech-icons';
-import type { Requirement } from '@/lib/jobs/freehire-types';
+import type { Requirement } from '@/lib/jobs/nextkinhr-types';
 
 interface JobMatchCardProps {
   matchPercentage: number;
