@@ -1086,5 +1086,63 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
         ),
       (err) => err?.code === '42501' && /permission denied for table demographic_preferences/.test(String(err?.message)),
     );
+
+    // Upstream 429 rate-limit retries cleanly and maps exhausted 429s to UPSTREAM_RATE_LIMITED
+    let retryAttempt = 0;
+    const retryPlanFetch = async () => {
+      retryAttempt += 1;
+      if (retryAttempt === 1) {
+        return Response.json({ error: { message: 'Rate limit exceeded' } }, { status: 429 });
+      }
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                fills: [{ fieldId: 'race', label: 'Race', value: 'Asian' }],
+              }),
+            },
+          },
+        ],
+      });
+    };
+    const recoveredPlan = await executePlan(
+      {
+        candidateId: CANDIDATE_OWNED,
+        fields: [{ id: 'race', label: 'Race', options: ['Asian', 'White'] }],
+      },
+      USER_OWNER,
+      { db, fetchFn: retryPlanFetch, rateLimitRetryDelaysMs: [0] },
+    );
+    assert.equal(retryAttempt, 2);
+    assert.equal(recoveredPlan.executableFills?.[0]?.value, 'Asian');
+
+    const always429Fetch = async () =>
+      Response.json({ error: { message: 'Rate limit exceeded' } }, { status: 429 });
+    await assert.rejects(
+      () =>
+        executePlan(
+          {
+            candidateId: CANDIDATE_OWNED,
+            fields: [{ id: 'race', label: 'Race', options: ['Asian', 'White'] }],
+          },
+          USER_OWNER,
+          { db, fetchFn: always429Fetch, rateLimitRetryDelaysMs: [0] },
+        ),
+      (err) => err instanceof OrchestratorError && err.status === 429 && err.code === 'UPSTREAM_RATE_LIMITED',
+    );
+    await assert.rejects(
+      () =>
+        executeChoose(
+          {
+            candidateId: CANDIDATE_OWNED,
+            question: { id: 'race', label: 'Race', combo: true },
+            options: ['Asian', 'White'],
+          },
+          USER_OWNER,
+          { db, fetchFn: always429Fetch, rateLimitRetryDelaysMs: [0] },
+        ),
+      (err) => err instanceof OrchestratorError && err.status === 429 && err.code === 'UPSTREAM_RATE_LIMITED',
+    );
   });
 });

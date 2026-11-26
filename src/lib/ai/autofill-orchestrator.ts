@@ -87,6 +87,34 @@ export interface OrchestratorOptions {
   db?: any;
   fetchFn?: typeof fetch;
   dnsLookup?: DnsLookupFn;
+  rateLimitRetryDelaysMs?: number[];
+}
+
+const DEFAULT_RATE_LIMIT_RETRY_DELAYS_MS = [1500, 2500];
+
+function isUpstreamRateLimitError(err: unknown): err is ProviderError {
+  return err instanceof ProviderError && (err.status === 429 || err.code === 'RATE_LIMIT');
+}
+
+async function withUpstreamRateLimitRetry<T>(
+  run: () => Promise<T>,
+  delaysMs: number[] = DEFAULT_RATE_LIMIT_RETRY_DELAYS_MS
+): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await run();
+    } catch (err) {
+      if (!isUpstreamRateLimitError(err) || attempt >= delaysMs.length) {
+        throw err;
+      }
+      const delay = Math.max(0, delaysMs[attempt] ?? 0);
+      attempt += 1;
+      if (delay > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
 }
 
 /**
@@ -378,7 +406,10 @@ export async function executePlan(
   try {
     const fields = (req.fields || []).filter((field) => field && !isBlockedAutofillField(field));
     const facts = await loadVerifiedFacts(actorId, candidate, fields, db);
-    const planResult = await planFormBatch(fields, facts, () => resolveProviderClient(actorId, options), req.context);
+    const planResult = await withUpstreamRateLimitRetry(
+      () => planFormBatch(fields, facts, () => resolveProviderClient(actorId, options), req.context),
+      options?.rateLimitRetryDelaysMs
+    );
     return {
       ok: true,
       plan: planResult,
@@ -399,6 +430,13 @@ export async function executePlan(
         'Custom provider authentication failed',
         401,
         'AUTH_FAILED'
+      );
+    }
+    if (isUpstreamRateLimitError(err)) {
+      throw new OrchestratorError(
+        'AI provider rate-limited this request (HTTP 429). Wait a moment or switch models in AI Provider Settings.',
+        429,
+        'UPSTREAM_RATE_LIMITED'
       );
     }
     throw err;
@@ -450,17 +488,21 @@ export async function executeChoose(
     const jevKey = process.env.TYPESAFE_API_KEY?.trim();
     let config: ReturnType<typeof loadProviderConfig> | undefined;
     const getConfig = () => config ??= loadProviderConfig(actorId, db);
-    const chooseResult = await chooseComboboxOption(
-      req.question,
-      req.options,
-      facts,
-      async () => buildProviderClient(actorId, db, await getConfig(), options),
-      jevKey ? async (label, offered, profile) => {
-        const settings = await getConfig();
-        if (isPortalMode(settings) || (settings?.mode && settings.mode !== 'server')) return undefined;
-        return requestJevChoice(jevKey, label, offered, profile, options?.fetchFn);
-      } : undefined,
-      req.context,
+    const chooseResult = await withUpstreamRateLimitRetry(
+      () =>
+        chooseComboboxOption(
+          req.question,
+          req.options,
+          facts,
+          async () => buildProviderClient(actorId, db, await getConfig(), options),
+          jevKey ? async (label, offered, profile) => {
+            const settings = await getConfig();
+            if (isPortalMode(settings) || (settings?.mode && settings.mode !== 'server')) return undefined;
+            return requestJevChoice(jevKey, label, offered, profile, options?.fetchFn);
+          } : undefined,
+          req.context,
+        ),
+      options?.rateLimitRetryDelaysMs
     );
     return {
       ok: true,
@@ -478,6 +520,13 @@ export async function executeChoose(
         'Custom provider authentication failed',
         401,
         'AUTH_FAILED'
+      );
+    }
+    if (isUpstreamRateLimitError(err)) {
+      throw new OrchestratorError(
+        'AI provider rate-limited this request (HTTP 429). Wait a moment or switch models in AI Provider Settings.',
+        429,
+        'UPSTREAM_RATE_LIMITED'
       );
     }
     throw err;

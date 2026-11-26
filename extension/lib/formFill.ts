@@ -36,6 +36,39 @@ import type {
   RuntimeMessage,
 } from './protocol';
 
+const CLIENT_429_RETRY_DELAY_MS = 1200;
+
+async function waitForRetry(delayMs: number, signal: AbortSignal): Promise<boolean> {
+  if (signal.aborted) return false;
+  if (delayMs <= 0) return true;
+  return new Promise((resolve) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve(false);
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve(!signal.aborted);
+    }, delayMs);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+async function retryOnceOnRateLimit<T>(fn: () => Promise<T>, signal: AbortSignal): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (
+      err instanceof ExtensionApiError &&
+      err.status === 429 &&
+      (await waitForRetry(CLIENT_429_RETRY_DELAY_MS, signal))
+    ) {
+      return fn();
+    }
+    throw err;
+  }
+}
+
 /** What a fill tells the side panel, and asks of it. */
 export interface FillPanel {
   /** A line for the panel's notices. */
@@ -482,12 +515,22 @@ async function fillApplication(
       }
       if (!reportedPlanError) {
         const status = error instanceof ExtensionApiError ? error.status : undefined;
-        const message = status === 504 ? 'AI planning timed out (HTTP 504).' :
-          `AI planning could not complete a batch${status ? ` (HTTP ${status})` : ''}.`;
-        panel.notice(`${message} Autofill will check the remaining fields.`);
+        const message =
+          status === 504
+            ? 'AI planning timed out (HTTP 504).'
+            : status === 429
+              ? 'AI provider rate-limited a batch (HTTP 429). Wait a moment or switch AI models in AI Provider Settings;'
+              : `AI planning could not complete a batch${status ? ` (HTTP ${status})` : ''}.`;
+        panel.notice(
+          status === 429
+            ? `${message} autofill will still check the remaining fields.`
+            : `${message} Autofill will check the remaining fields.`,
+        );
         reportedPlanError = true;
       }
-      return error instanceof ExtensionApiError && [401, 403, 429].includes(error.status);
+      // Only abort the entire AI pass on hard auth failures (401/403) or billing/plan refusals.
+      // Transient 429 rate limits isolate the batch/combo so subsequent fields and prose answers still run.
+      return error instanceof ExtensionApiError && [401, 403].includes(error.status);
     };
 
     const replanSingleField = async (
@@ -495,16 +538,20 @@ async function fillApplication(
       extraResolved?: Record<string, string>,
     ): Promise<NonNullable<PlanApiResponse['executableFills']>[number] | undefined> => {
       try {
-        const replan = await requestAutofillPlan(
-          {
-            candidateId,
-            fields: [pField],
-            context: {
-              ...context,
-              previouslyResolved: { ...previouslyResolved, ...extraResolved },
-            },
-          },
-          token,
+        const replan = await retryOnceOnRateLimit(
+          () =>
+            requestAutofillPlan(
+              {
+                candidateId,
+                fields: [pField],
+                context: {
+                  ...context,
+                  previouslyResolved: { ...previouslyResolved, ...extraResolved },
+                },
+              },
+              token,
+              signal,
+            ),
           signal,
         );
         if (!replan.ok) return undefined;
@@ -527,18 +574,22 @@ async function fillApplication(
           field,
           async (options) => {
             if (isBlockedAutofillField({ ...field, options })) return;
-            const result = await requestAutofillChoice(
-              {
-                candidateId,
-                question: plannerField(field),
-                options,
-                context: {
-                  ...context,
-                  ...(field.helperText ? { helperText: field.helperText } : {}),
-                  previouslyResolved: { ...previouslyResolved },
-                },
-              },
-              token,
+            const result = await retryOnceOnRateLimit(
+              () =>
+                requestAutofillChoice(
+                  {
+                    candidateId,
+                    question: plannerField(field),
+                    options,
+                    context: {
+                      ...context,
+                      ...(field.helperText ? { helperText: field.helperText } : {}),
+                      previouslyResolved: { ...previouslyResolved },
+                    },
+                  },
+                  token,
+                  signal,
+                ),
               signal,
             );
             return result.ok ? result.choice ?? undefined : undefined;
@@ -585,13 +636,17 @@ async function fillApplication(
 
         let plan: PlanApiResponse;
         try {
-          plan = await requestAutofillPlan(
-            {
-              candidateId,
-              fields: plannedBatch,
-              context: { ...context, previouslyResolved: { ...previouslyResolved } },
-            },
-            token,
+          plan = await retryOnceOnRateLimit(
+            () =>
+              requestAutofillPlan(
+                {
+                  candidateId,
+                  fields: plannedBatch,
+                  context: { ...context, previouslyResolved: { ...previouslyResolved } },
+                },
+                token,
+                signal,
+              ),
             signal,
           );
           if (!plan.ok) throw new Error(plan.error || 'The server could not plan autofill.');
@@ -768,18 +823,22 @@ async function fillApplication(
       if (field.tag !== 'textarea' || field.combo || !isAutofillProse(field.label)) continue;
       hooks.filling(field.label);
       try {
-        const result = await generateAutofillAnswer(
-          {
-            candidateId,
-            questionId: plannerField(field).id,
-            fieldLabel: field.label,
-            fieldType: 'textarea',
-            jobTitle: context.jobTitle,
-            companyName: context.company,
-            jobDescription,
-          },
-          token,
-          signal
+        const result = await retryOnceOnRateLimit(
+          () =>
+            generateAutofillAnswer(
+              {
+                candidateId,
+                questionId: plannerField(field).id,
+                fieldLabel: field.label,
+                fieldType: 'textarea',
+                jobTitle: context.jobTitle,
+                companyName: context.company,
+                jobDescription,
+              },
+              token,
+              signal
+            ),
+          signal,
         );
         if (result.ok && result.answer?.trim() && !stopped()) {
           await walk([
