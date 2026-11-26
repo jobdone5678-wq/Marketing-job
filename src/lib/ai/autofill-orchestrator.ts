@@ -92,11 +92,67 @@ export interface OrchestratorOptions {
 
 const DEFAULT_RATE_LIMIT_RETRY_DELAYS_MS = [1500, 2500];
 
+function isUpstreamTransientError(err: unknown): err is ProviderError {
+  return (
+    err instanceof ProviderError &&
+    (err.status === 429 || err.status === 503 || err.code === 'RATE_LIMIT')
+  );
+}
+
 function isUpstreamRateLimitError(err: unknown): err is ProviderError {
   return err instanceof ProviderError && (err.status === 429 || err.code === 'RATE_LIMIT');
 }
 
-async function withUpstreamRateLimitRetry<T>(
+function isUpstreamUnavailableError(err: unknown): err is ProviderError {
+  return err instanceof ProviderError && err.status === 503;
+}
+
+export function resolveDefaultServerAiConfig(): { baseUrl: string; apiKey: string; model: string } {
+  const apiKey = (
+    process.env.AI_PROVIDER_DEFAULT_API_KEY ||
+    process.env.OPENAI_API_KEY ||
+    process.env.AI_GATEWAY_API_KEY ||
+    ''
+  ).trim();
+  const explicitBaseUrl = (
+    process.env.AI_PROVIDER_DEFAULT_BASE_URL ||
+    process.env.OPENAI_BASE_URL ||
+    ''
+  ).trim();
+  const explicitModel = (
+    process.env.AI_PROVIDER_DEFAULT_MODEL ||
+    process.env.OPENAI_MODEL ||
+    ''
+  ).trim();
+
+  const isOpenAiDefaultUrl = !explicitBaseUrl || /^https:\/\/api\.openai\.com(?:\/v1)?\/?$/i.test(explicitBaseUrl);
+  let baseUrl = explicitBaseUrl || 'https://api.openai.com/v1';
+
+  if (apiKey.startsWith('AIzaSy') && isOpenAiDefaultUrl) {
+    baseUrl = 'https://generativelanguage.googleapis.com/v1beta/openai/';
+  } else if (apiKey.startsWith('sk-or-') && isOpenAiDefaultUrl) {
+    baseUrl = 'https://openrouter.ai/api/v1';
+  } else if (apiKey.startsWith('sk-xt-') && isOpenAiDefaultUrl) {
+    baseUrl = 'https://api.xkiro.com/v1';
+  } else if ((apiKey.startsWith('vck_') || (!process.env.OPENAI_API_KEY && !process.env.AI_PROVIDER_DEFAULT_API_KEY && process.env.AI_GATEWAY_API_KEY)) && isOpenAiDefaultUrl) {
+    baseUrl = 'https://ai-gateway.vercel.sh/v1';
+  }
+
+  let model = explicitModel || 'gpt-4o-mini';
+  if (apiKey.startsWith('AIzaSy') || baseUrl.includes('generativelanguage.googleapis.com')) {
+    if (!explicitModel || model === 'gpt-4o-mini' || !model.startsWith('gemini-')) {
+      model = 'gemini-2.0-flash';
+    }
+  } else if (baseUrl.includes('ai-gateway.vercel.sh') || apiKey.startsWith('vck_') || baseUrl.includes('openrouter.ai') || apiKey.startsWith('sk-or-')) {
+    if (!model.includes('/')) {
+      model = `openai/${model}`;
+    }
+  }
+
+  return { baseUrl, apiKey, model };
+}
+
+async function withUpstreamTransientRetry<T>(
   run: () => Promise<T>,
   delaysMs: number[] = DEFAULT_RATE_LIMIT_RETRY_DELAYS_MS
 ): Promise<T> {
@@ -105,7 +161,7 @@ async function withUpstreamRateLimitRetry<T>(
     try {
       return await run();
     } catch (err) {
-      if (!isUpstreamRateLimitError(err) || attempt >= delaysMs.length) {
+      if (!isUpstreamTransientError(err) || attempt >= delaysMs.length) {
         throw err;
       }
       const delay = Math.max(0, delaysMs[attempt] ?? 0);
@@ -331,18 +387,20 @@ async function buildProviderClient(
   }
 
   // 3. Default server provider
-  const defaultBaseUrl =
-    process.env.AI_PROVIDER_DEFAULT_BASE_URL ||
-    process.env.OPENAI_BASE_URL ||
-    'https://api.openai.com/v1';
-  const defaultApiKey =
-    process.env.AI_PROVIDER_DEFAULT_API_KEY ||
-    process.env.OPENAI_API_KEY ||
-    '';
-  const defaultModel =
-    process.env.AI_PROVIDER_DEFAULT_MODEL ||
-    process.env.OPENAI_MODEL ||
-    'gpt-4o-mini';
+  const { baseUrl: defaultBaseUrl, apiKey: defaultApiKey, model: defaultModel } =
+    resolveDefaultServerAiConfig();
+
+  if (
+    !defaultApiKey &&
+    !options?.fetchFn &&
+    !/^https?:\/\/(localhost|127\.0\.0\.1)\b/i.test(defaultBaseUrl)
+  ) {
+    throw new OrchestratorError(
+      'Server AI is not configured. Add OPENAI_API_KEY, AI_PROVIDER_DEFAULT_API_KEY, or AI_GATEWAY_API_KEY (or use Portal API key mode).',
+      503,
+      'AI_NOT_CONFIGURED'
+    );
+  }
 
   let safeAgent;
   try {
@@ -406,7 +464,7 @@ export async function executePlan(
   try {
     const fields = (req.fields || []).filter((field) => field && !isBlockedAutofillField(field));
     const facts = await loadVerifiedFacts(actorId, candidate, fields, db);
-    const planResult = await withUpstreamRateLimitRetry(
+    const planResult = await withUpstreamTransientRetry(
       () => planFormBatch(fields, facts, () => resolveProviderClient(actorId, options), req.context),
       options?.rateLimitRetryDelaysMs
     );
@@ -437,6 +495,13 @@ export async function executePlan(
         'AI provider rate-limited this request (HTTP 429). Wait a moment or switch models in AI Provider Settings.',
         429,
         'UPSTREAM_RATE_LIMITED'
+      );
+    }
+    if (isUpstreamUnavailableError(err)) {
+      throw new OrchestratorError(
+        'AI provider returned HTTP 503 (Service Unavailable). Check your AI provider key, model, or retry shortly.',
+        503,
+        'UPSTREAM_UNAVAILABLE'
       );
     }
     throw err;
@@ -488,7 +553,7 @@ export async function executeChoose(
     const jevKey = process.env.TYPESAFE_API_KEY?.trim();
     let config: ReturnType<typeof loadProviderConfig> | undefined;
     const getConfig = () => config ??= loadProviderConfig(actorId, db);
-    const chooseResult = await withUpstreamRateLimitRetry(
+    const chooseResult = await withUpstreamTransientRetry(
       () =>
         chooseComboboxOption(
           req.question,
@@ -527,6 +592,13 @@ export async function executeChoose(
         'AI provider rate-limited this request (HTTP 429). Wait a moment or switch models in AI Provider Settings.',
         429,
         'UPSTREAM_RATE_LIMITED'
+      );
+    }
+    if (isUpstreamUnavailableError(err)) {
+      throw new OrchestratorError(
+        'AI provider returned HTTP 503 (Service Unavailable). Check your AI provider key, model, or retry shortly.',
+        503,
+        'UPSTREAM_UNAVAILABLE'
       );
     }
     throw err;

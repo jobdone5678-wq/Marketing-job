@@ -1144,5 +1144,71 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
         ),
       (err) => err instanceof OrchestratorError && err.status === 429 && err.code === 'UPSTREAM_RATE_LIMITED',
     );
+
+    // Upstream 503 retries cleanly and maps exhausted 503s to UPSTREAM_UNAVAILABLE
+    let attempt503 = 0;
+    const retry503Fetch = async () => {
+      attempt503 += 1;
+      if (attempt503 === 1) {
+        return Response.json({ error: { message: 'Service Unavailable' } }, { status: 503 });
+      }
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                fills: [{ fieldId: 'race', label: 'Race', value: 'Asian' }],
+              }),
+            },
+          },
+        ],
+      });
+    };
+    const recovered503 = await executePlan(
+      {
+        candidateId: CANDIDATE_OWNED,
+        fields: [{ id: 'race', label: 'Race', options: ['Asian', 'White'] }],
+      },
+      USER_OWNER,
+      { db, fetchFn: retry503Fetch, rateLimitRetryDelaysMs: [0] },
+    );
+    assert.equal(attempt503, 2);
+    assert.equal(recovered503.executableFills?.[0]?.value, 'Asian');
+
+    const always503Fetch = async () =>
+      Response.json({ error: { message: 'Service Unavailable' } }, { status: 503 });
+    await assert.rejects(
+      () =>
+        executePlan(
+          {
+            candidateId: CANDIDATE_OWNED,
+            fields: [{ id: 'race', label: 'Race', options: ['Asian', 'White'] }],
+          },
+          USER_OWNER,
+          { db, fetchFn: always503Fetch, rateLimitRetryDelaysMs: [0] },
+        ),
+      (err) => err instanceof OrchestratorError && err.status === 503 && err.code === 'UPSTREAM_UNAVAILABLE',
+    );
+
+    // Server AI key prefix & Vercel AI Gateway auto-detection
+    const { resolveDefaultServerAiConfig } = await import('../../src/lib/ai/autofill-orchestrator.ts');
+    const savedEnv = { ...process.env };
+    try {
+      delete process.env.AI_PROVIDER_DEFAULT_API_KEY;
+      delete process.env.AI_PROVIDER_DEFAULT_BASE_URL;
+      delete process.env.AI_PROVIDER_DEFAULT_MODEL;
+      delete process.env.OPENAI_BASE_URL;
+      delete process.env.OPENAI_MODEL;
+      process.env.OPENAI_API_KEY = 'AIzaSyTestGeminiKey';
+      assert.equal(resolveDefaultServerAiConfig().baseUrl, 'https://generativelanguage.googleapis.com/v1beta/openai/');
+      assert.equal(resolveDefaultServerAiConfig().model, 'gemini-2.0-flash');
+
+      delete process.env.OPENAI_API_KEY;
+      process.env.AI_GATEWAY_API_KEY = 'vck_test_gateway_key';
+      assert.equal(resolveDefaultServerAiConfig().baseUrl, 'https://ai-gateway.vercel.sh/v1');
+      assert.equal(resolveDefaultServerAiConfig().model, 'openai/gpt-4o-mini');
+    } finally {
+      process.env = savedEnv;
+    }
   });
 });

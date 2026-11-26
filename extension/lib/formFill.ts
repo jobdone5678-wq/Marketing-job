@@ -60,7 +60,7 @@ async function retryOnceOnRateLimit<T>(fn: () => Promise<T>, signal: AbortSignal
   } catch (err) {
     if (
       err instanceof ExtensionApiError &&
-      err.status === 429 &&
+      (err.status === 429 || err.status === 503) &&
       (await waitForRetry(CLIENT_429_RETRY_DELAY_MS, signal))
     ) {
       return fn();
@@ -515,12 +515,18 @@ async function fillApplication(
       }
       if (!reportedPlanError) {
         const status = error instanceof ExtensionApiError ? error.status : undefined;
+        const reason =
+          error instanceof ExtensionApiError
+            ? error.message.replace(/\s*\(HTTP \d+\)$/, '').trim()
+            : '';
         const message =
           status === 504
             ? 'AI planning timed out (HTTP 504).'
             : status === 429
               ? 'AI provider rate-limited a batch (HTTP 429). Wait a moment or switch AI models in AI Provider Settings;'
-              : `AI planning could not complete a batch${status ? ` (HTTP ${status})` : ''}.`;
+              : reason && (!status || !reason.includes(`HTTP ${status}`))
+                ? `${reason}${status ? ` (HTTP ${status})` : ''}.`
+                : `AI planning could not complete a batch${status ? ` (HTTP ${status})` : ''}.`;
         panel.notice(
           status === 429
             ? `${message} autofill will still check the remaining fields.`

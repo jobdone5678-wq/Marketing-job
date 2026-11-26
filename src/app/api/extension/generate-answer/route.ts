@@ -15,6 +15,7 @@ import { isAutofillProse, isPrivateAutofillField, isUrlField } from '@/lib/ai/au
 import { isUnreviewedResume } from '@/lib/candidate/confirmed-facts';
 import { createSafeAgent } from '@/lib/ai/ssrf-guard';
 import { createSsrfSafeFetch } from '@/lib/ai/ssrf-fetch-adapter';
+import { resolveDefaultServerAiConfig } from '@/lib/ai/autofill-orchestrator';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -206,17 +207,10 @@ export async function POST(request: Request) {
       return { ok: true, answer: String(candSummary).trim(), stored: true };
     }
 
-    let apiKey = (process.env.AI_PROVIDER_DEFAULT_API_KEY || process.env.OPENAI_API_KEY || '').trim();
-    let baseUrl = (
-      process.env.AI_PROVIDER_DEFAULT_BASE_URL ||
-      process.env.OPENAI_BASE_URL ||
-      'https://api.openai.com/v1'
-    ).trim();
-    let model = (
-      process.env.AI_PROVIDER_DEFAULT_MODEL ||
-      process.env.OPENAI_MODEL ||
-      'gpt-4o-mini'
-    ).trim();
+    const defaultServer = resolveDefaultServerAiConfig();
+    let apiKey = defaultServer.apiKey;
+    let baseUrl = defaultServer.baseUrl;
+    let model = defaultServer.model;
 
     // Check if user has configured a custom BYOK provider
     const [aiProviderData, encryptionMod] = await Promise.all([
