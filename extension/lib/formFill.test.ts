@@ -138,13 +138,15 @@ describe('deterministicAutofill job-alert guard', () => {
       field(1, 'Email', { required: true }),
       field(2, 'Describe a mistake you made in recent years and how did you change your approach afterward?', { tag: 'textarea', required: true }),
       field(3, 'Which country do you intend to work from?', { combo: true, required: false }),
-      field(4, 'What is your current age?', { tag: 'select', type: 'select', options: ['18-24', '25-34', '35-44'], required: false }),
+      field(4, 'What is your current age?', { tag: 'select', type: 'select', options: ['18-24', '25–39 years old', '40-55'], required: false }),
       field(5, 'What is your gender identity?', { combo: true, required: false }),
       field(6, 'Race / Ethnicity', { type: 'checkbox', multiple: true, options: ['Asian or Asian American', 'Black or African American', 'Hispanic or Latine', 'White', 'I prefer not to answer'], required: false }),
       field(7, 'Do you identify as any of the following?', { type: 'checkbox', multiple: true, options: ['Person with disability', 'Neurodivergent', 'Veteran', 'Parent', 'None of the above'], required: false }),
+      field(8, 'He/him', { type: 'checkbox', required: false }),
     ];
 
     const filled: Record<string, string> = {};
+    let searchedCountry = false;
     sendMessage.mockImplementation(async (m: { kind: string; fills?: Array<{ label: string; value: string }>; step?: { action: string; label: string; value: string } }) => {
       if (m.kind === 'GET_FRAMED_FORM') {
         return {
@@ -160,12 +162,18 @@ describe('deterministicAutofill job-alert guard', () => {
       if (m.kind === 'COMBOBOX_STEP' && m.step) {
         const { action, label, value } = m.step;
         if (action === 'open') return { kind: 'COMBOBOX_REPLY', reply: { status: 'opened' } };
+        if (action === 'query' && label.includes('country')) {
+          searchedCountry = value === 'United States';
+          return { kind: 'COMBOBOX_REPLY', reply: { status: 'queried' } };
+        }
         if (action === 'options') {
           return {
             kind: 'COMBOBOX_REPLY',
             reply: {
               status: 'open',
-              options: label.includes('country') ? ['United States', 'Canada'] : ['Man', 'Woman', 'Prefer not to say'],
+              options: label.includes('country')
+                ? searchedCountry ? ['US'] : ['Germany', 'Canada']
+                : ['Man', 'Woman', 'Prefer not to say'],
             },
           };
         }
@@ -193,6 +201,7 @@ describe('deterministicAutofill job-alert guard', () => {
       answers: {
         ageRange: ['25-34'],
         gender: ['Male'],
+        pronouns: ['He/Him'],
         raceEthnicity: ['Asian'],
         disability: ['Yes'],
         veteran: ['No'],
@@ -207,8 +216,9 @@ describe('deterministicAutofill job-alert guard', () => {
       'First name': 'Ilya',
       'Email': 'i@x.io',
       'Describe a mistake you made in recent years and how did you change your approach afterward?': 'I learned to verify early.',
-      'Which country do you intend to work from?': 'United States',
-      'What is your current age?': '25-34',
+      'Which country do you intend to work from?': 'US',
+      'What is your current age?': '25–39 years old',
+      'He/him': 'true',
       'What is your gender identity?': 'Man',
       'Race / Ethnicity': 'Asian or Asian American',
       'Do you identify as any of the following?': 'Person with disability, Parent',

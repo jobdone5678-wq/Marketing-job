@@ -1,4 +1,4 @@
-import { isDemographicQuestion } from '../../src/lib/profile/demographic-preferences';
+import { demographicOptionKey, isDemographicQuestion } from '../../src/lib/profile/demographic-preferences';
 
 const privateQuestion =
   /\b(?:date of birth|birth date|birthday|birth year|dob|password|passcode|social security|ssn|national (?:id|identification)|passport|gender|sex|pronouns?|race|ethnicity|hispanic|latino|veteran|disability|sexual orientation|criminal history|convictions?|marketing|newsletter|consent|certify|attest|signature|terms of (?:service|use)|privacy policy|agree|acknowledg\w*|opt[ -]?in|captcha)\b/i;
@@ -18,7 +18,8 @@ export function isPrivateAutofillField(field: { label?: string; type?: string; n
     .replace(/[_-]/g, ' ');
   return (
     /^(?:password|hidden|file|submit|button|reset)$/i.test(field.type ?? '') ||
-    privateQuestion.test(text) || manualChoice.test(text) || isDemographicQuestion(text)
+    privateQuestion.test(text) || manualChoice.test(text) || isDemographicQuestion(text) ||
+    ((field.type === 'checkbox' || field.type === 'radio') && Boolean(demographicOptionKey(field.label ?? '')))
   );
 }
 

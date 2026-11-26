@@ -55,7 +55,7 @@ describe('buildPlan', () => {
     expect(plan.items[0]?.answered).toBe(false);
   });
 
-  it('counts required questions only', () => {
+  it('counts required and optional questions separately', () => {
     const plan = buildPlan([
       field('First name', { required: true, value: 'Igor' }),
       field('Email', { required: true, value: 'a@b.test' }),
@@ -64,6 +64,7 @@ describe('buildPlan', () => {
     ]);
 
     expect(plan.required).toEqual({ answered: 2, total: 3, percent: 67 });
+    expect(plan.optional).toEqual({ answered: 1, total: 1, percent: 100 });
   });
 
   // A percentage over zero required questions states nothing, so there is nothing
@@ -72,6 +73,7 @@ describe('buildPlan', () => {
     const plan = buildPlan([field('Website'), field('X (fka Twitter)')]);
 
     expect(plan.required).toBeNull();
+    expect(plan.optional).toEqual({ answered: 0, total: 2, percent: 0 });
     expect(plan.items).toHaveLength(2);
   });
 
@@ -154,12 +156,13 @@ describe('markAnswered', () => {
     expect(after.required).toEqual({ answered: 1, total: 2, percent: 50 });
   });
 
-  it('does not touch the optional side of the counter', () => {
+  it('updates the optional count without changing required progress', () => {
     const plan = buildPlan([field('Email', { required: true, index: 0 }), field('Website', { index: 1 })]);
 
     const after = markAnswered(plan, must(plan.items[1]).key);
 
     expect(after.required).toEqual({ answered: 0, total: 1, percent: 0 });
+    expect(after.optional).toEqual({ answered: 1, total: 1, percent: 100 });
   });
 });
 

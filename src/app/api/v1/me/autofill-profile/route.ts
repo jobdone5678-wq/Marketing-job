@@ -20,10 +20,14 @@ function countryFromCode(code: string): string {
   }
 }
 
+function structuredLocation(facts: Record<string, unknown>): Record<string, unknown> | null {
+  return facts.location && typeof facts.location === 'object' ? (facts.location as Record<string, unknown>) : null;
+}
+
 function resolveCountry(facts: Record<string, unknown>, authorizedCountries: string[] | null): string {
   const direct = text(facts.country) || text(facts.current_country);
-  if (direct) return direct;
-  const loc = facts.location && typeof facts.location === 'object' ? (facts.location as Record<string, unknown>) : null;
+  if (direct) return countryFromCode(direct);
+  const loc = structuredLocation(facts);
   const countries = Array.isArray(loc?.countries) ? loc.countries.map(text).filter(Boolean) : [];
   if (countries.length === 1 && countries[0]) return countryFromCode(countries[0]);
   const where = text(loc?.whereBased) || text(facts.full_address);
@@ -72,7 +76,7 @@ async function readProfile(request: Request): Promise<Response> {
   const salaryPeriod = screening.desired_salary_period;
   const noticeDays = screening.notice_period_days;
   const country = resolveCountry(facts, screening.authorized_countries);
-  const intendedWorkCountry = text(facts.intended_work_country) || country;
+  const intendedWorkCountry = countryFromCode(text(facts.intended_work_country)) || country;
 
   return Response.json({
     meta: {
@@ -96,7 +100,8 @@ async function readProfile(request: Request): Promise<Response> {
       location: Object.hasOwn(facts, 'full_address')
         ? text(facts.full_address)
         : text(facts.location) ||
-          [text(facts.current_city), text(facts.current_state)].filter(Boolean).join(', '),
+          [text(facts.current_city), text(facts.current_state)].filter(Boolean).join(', ') ||
+          text(structuredLocation(facts)?.whereBased),
       state: text(facts.current_state),
       country,
       postal_code: text(facts.zip_code) || text(facts.postal_code),

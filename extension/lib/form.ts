@@ -13,7 +13,8 @@ import { collapse, COMBO_TRIGGER, comboOptions, displayedValues, isComboWidget, 
 import type { FieldTag, FormField, LabelFill, FillOutcome, FillStatus, Upload } from './protocol';
 import type { AutofillProfile } from './freehire';
 import { easyApplyDialog, easyApplyFieldError, isStoredResumeChoice } from './easyApply';
-import { choiceType, extractLabel, textFromIds } from './formLabel';
+import { choiceType, extractLabel, precedingPrompt, textFromIds } from './formLabel';
+import { demographicKey } from '../../src/lib/profile/demographic-preferences';
 import { binaryChoice, formatAuthorizedCountries, matchChoice, matchFieldKey, normalizeLabel } from './fieldKeys';
 
 export type Fillable = HTMLElement;
@@ -135,6 +136,7 @@ function groupOf(el: Fillable): { container: Element; question: string; key: str
   }
   const inferred = questionBeforeOptions(el);
   if (inferred?.binaryPair) return { ...inferred, key: 'binary radio' };
+  if (!labelled && inferred && type === 'checkbox') return { ...inferred, key: 'checkbox list' };
   const name = el.getAttribute('name')?.trim() ?? '';
   if (!name) return inferred ? { ...inferred, key: `${type}:${inferred.question}` } : null;
   const group = labelled ?? (el instanceof HTMLInputElement ? namedByControls(el) : null) ?? inferred;
@@ -147,11 +149,15 @@ function questionBeforeOptions(el: Fillable): { container: Element; question: st
   if (!type) return null;
   for (let container = el.parentElement; container; container = container.parentElement) {
     if (container.matches('form, body, [role="dialog"]')) break;
-    // Do not merge unrelated non-choice controls or separate nested question groups.
-    if (container.querySelector('input:not([type="radio"]):not([type="checkbox"]), select, textarea')) break;
+    const otherControls = Array.from(container.querySelectorAll<Fillable>(
+      'input:not([type="radio"]):not([type="checkbox"]):not([type="hidden"]), select, textarea',
+    ));
     const choices = Array.from(container.querySelectorAll<Fillable>(CHOICES));
     if (choices.some((item) => choiceType(item) !== type)) break;
-    if (choices.length < 2) continue;
+    if (choices.length < 2) {
+      if (otherControls.length) break;
+      continue;
+    }
     const hasNestedSubgroup = Array.from(container.children).some((child) => {
       const sub = child.querySelectorAll(CHOICES);
       return sub.length >= 2 && sub.length < choices.length;
@@ -166,19 +172,23 @@ function questionBeforeOptions(el: Fillable): { container: Element; question: st
       !(labels.has('yes') && labels.has('no')) &&
       choices.every((choice) => !extractLabel(choice).includes('?'));
     if (!sameName && !binaryPair && !checkboxList) break;
-    const first = choices[0];
+    const first = choices[0]!;
+    let branch = first as Element;
+    while (branch.parentElement && branch.parentElement !== container) branch = branch.parentElement;
+    const isDemographicPrompt = (text: string) => Boolean(demographicKey(text)) ||
+      /^do you identify as any of the following\b/i.test(text);
+    const isPrompt = (text: string) => /\?\s*\*?$/.test(text) || (checkboxList && isDemographicPrompt(text));
     const prefix: string[] = [];
     for (const node of container.childNodes) {
       if (first && node.contains(first)) break;
       if (node instanceof Element && (node.matches('label[for]') && choices.some((choice) => choice.id === node.getAttribute('for')))) continue;
       prefix.push(node.textContent ?? '');
     }
-    const nearby = container.previousElementSibling;
-    const siblingQuestion = nearby && !nearby.querySelector('input, select, textarea, button')
-      ? collapse(nearby.textContent) : '';
-    const question =
-      collapse(prefix.join(' ')) ||
-      ((/\?\s*\*?$/.test(siblingQuestion) || (checkboxList && siblingQuestion.length <= 300)) ? siblingQuestion : '');
+    const question = precedingPrompt(branch, isPrompt) || collapse(prefix.join(' ')) || precedingPrompt(container, isPrompt);
+    // The Other detail box belongs alongside an explicit demographic checkbox question.
+    // A different text field in an unlabelled container gives no such evidence.
+    if (otherControls.length && (!checkboxList || !isDemographicPrompt(question) ||
+        otherControls.some((control) => !/^other(?:\b|_)/i.test(extractLabel(control))))) break;
     if (question && question.length <= 2000 && !labels.has(normalizeLabel(question)) &&
         (sameName || checkboxList || /\?\s*\*?$/.test(question))) {
       return { container, question, binaryPair: binaryPair && !sameName };

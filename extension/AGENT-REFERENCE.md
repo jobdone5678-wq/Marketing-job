@@ -113,8 +113,8 @@ content --PAGE_SNAPSHOT--> background --> panel --> relay --> the agent, mid-tur
 - **The plan is the panel's standing account of the form**, computed by
   `buildPlan` from what the page reported and rebuilt on every page change, after
   a walk, on `FORM_CHANGED`, on returning to the Match tab and on the panel
-  regaining focus. It counts REQUIRED questions only (they are what gates
-  submission) and is null for a page showing no application form.
+  regaining focus. Required progress gates submission and optional progress has
+  a separate count. The plan is null for a page showing no application form.
 - **Two different tests for "this is an application".** `looksLikeApplication`
   (a CV upload) gates the FILLER — it is what stops a job-alert signup being
   written into. `showsApplicationForm` gates the CHECKLIST and is deliberately

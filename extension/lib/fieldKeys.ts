@@ -169,8 +169,8 @@ export function matchChoice(answer: string, option: string, question = ''): bool
   if (optionWithoutDialCode !== optionLabel && /^[A-Z]{2}$/.test(answer.trim()) &&
       matchesCountry(optionWithoutDialCode, answer)) return true;
   const fieldKey = matchFieldKey(question);
-  if ((fieldKey === 'country' || fieldKey === 'intendedWorkCountry') && /^[A-Z]{2}$/.test(answer.trim()) &&
-      matchesCountry(optionLabel, answer)) return true;
+  if ((fieldKey === 'country' || fieldKey === 'intendedWorkCountry') &&
+      (matchesCountry(optionLabel, answer) || matchesCountry(normalizeLabel(answer), option.trim()))) return true;
   if ((fieldKey === 'country' || fieldKey === 'intendedWorkCountry') &&
       ((normalizeLabel(answer) === 'united states' && optionLabel === 'united states of america') ||
        (normalizeLabel(answer) === 'united states of america' && optionLabel === 'united states') ||

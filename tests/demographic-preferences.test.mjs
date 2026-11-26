@@ -155,6 +155,10 @@ test('demographic preferences options, matching, Supabase RLS, and /api/v1/me/de
     ['I am not a protected veteran']
   );
   assert.equal(prefsLib.demographicKey('What is your current age?'), 'ageRange');
+  assert.deepEqual([...prefsLib.demographicChoices('ageRange', ['25-34'], ['25–39 years old', '40–54'])], ['25–39 years old']);
+  assert.deepEqual([...prefsLib.demographicChoices('ageRange', ['25-34'], ['18–29', '30–39'])], []);
+  assert.deepEqual([...prefsLib.demographicChoices('ageRange', ['25-34'], ['27 years old'])], []);
+  assert.deepEqual([...prefsLib.demographicChoices('ageRange', ['65+'], ['65 years old', '65 or older'])], ['65 or older']);
   assert.deepEqual(
     clone(prefsLib.demographicChoices('raceEthnicity', ['Asian'], ['Asian or Asian American', 'Black or African American', 'Hispanic or Latine', 'Indigenous or Native American', 'White', 'I prefer not to answer'])),
     ['Asian or Asian American']

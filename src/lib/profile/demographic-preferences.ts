@@ -57,7 +57,7 @@ export function isDemographicQuestion(label: string): boolean {
 }
 
 const decline = /^(?:(?:i )?(?:prefer|choose|elect|wish|opt) not to (?:say|answer|disclose|self identify|respond)|(?:i )?(?:do not|don t) (?:want|wish) to (?:answer|disclose|self identify|respond)|decline(?: to (?:answer|disclose|self identify|respond))?|prefer not to say|not disclosed|rather not (?:say|answer|disclose))$/;
-const optionKey = (text: string) => normalizeLabel(demographicWords(text).replace(/[^\p{L}\p{N}/]+/gu, ' '));
+const optionKey = (text: string) => normalizeLabel(demographicWords(text).replace(/[^\p{L}\p{N}/+]+/gu, ' '));
 
 function statusChoice(key: DemographicKey, option: string): boolean | undefined {
   const status = {
@@ -117,15 +117,6 @@ const CHOICE_ALIASES: Partial<Record<DemographicKey, readonly RegExp[]>> = {
     /^middle eastern or north african(?:\s+not hispanic or latin[eoax])?$/,
     /^(?:two or more races(?:\s+not hispanic or latin[eoax])?|multiracial|mixed(?: or multiple ethnic groups)?)$/,
   ],
-  ageRange: [
-    /^(?:under 18|18 or younger|less than 18)$/,
-    /^18(?:\s+to\s+|\s+)24(?:\s+years(?: old)?)?$/,
-    /^25(?:\s+to\s+|\s+)34(?:\s+years(?: old)?)?$/,
-    /^35(?:\s+to\s+|\s+)44(?:\s+years(?: old)?)?$/,
-    /^45(?:\s+to\s+|\s+)54(?:\s+years(?: old)?)?$/,
-    /^55(?:\s+to\s+|\s+)64(?:\s+years(?: old)?)?$/,
-    /^(?:65\+|65 or older|65 and older)$/,
-  ],
   sexualOrientation: [
     /^(?:heterosexual|straight|heterosexual\s*\/\s*straight)$/,
     /^(?:gay|lesbian|gay or lesbian|homosexual)$/,
@@ -152,6 +143,31 @@ function aliasGroup(key: DemographicKey, option: string): number {
   return groups.findIndex((pattern) => pattern.test(option));
 }
 
+/** Only distinctive labels carry demographic meaning when the ATS omits the group heading. */
+export function demographicOptionKey(label: string): DemographicKey | undefined {
+  const option = optionKey(label);
+  if (aliasGroup('pronouns', option) >= 0) return 'pronouns';
+  if (/^(?:asian or asian american|black or african american|hispanic or latin[eoax]|indigenous or native american|american indian or alaska native|native hawaiian or (?:other )?pacific islander)$/.test(option)) return 'raceEthnicity';
+  return undefined;
+}
+
+function ageBounds(option: string): [number, number] | undefined {
+  const range = option.replace(/^(?:aged?|ages)\s+|\s+years?(?: old)?$/g, '');
+  const between = range.match(/^(\d{1,3})(?: to)? (\d{1,3})$/);
+  if (between) {
+    const lower = Number(between[1]);
+    const upper = Number(between[2]);
+    return lower < upper ? [lower, upper] : undefined;
+  }
+  const below = range.match(/^(?:under|less than) (\d{1,3})$/);
+  if (below) return [0, Number(below[1]) - 1];
+  const through = range.match(/^(\d{1,3}) (?:or younger|and under)$/);
+  if (through) return [0, Number(through[1])];
+  const above = range.match(/^(\d{1,3})(?:\s*\+| (?:or|and) (?:older|over))$/);
+  if (above) return [Number(above[1]), Infinity];
+  return undefined;
+}
+
 export function demographicChoices(key: DemographicKey, answers: readonly string[], options: readonly string[]): string[] {
   if (!answers.length) return [];
   const result: string[] = [];
@@ -161,11 +177,14 @@ export function demographicChoices(key: DemographicKey, answers: readonly string
     const exact = selectable.filter((option) => optionKey(option) === wanted);
     const status = statusChoice(key, wanted);
     const alias = aliasGroup(key, wanted);
+    const age = key === 'ageRange' ? ageBounds(wanted) : undefined;
     const matches = exact.length ? exact : selectable.filter((option) => {
       const offered = optionKey(option);
+      const offeredAge = age ? ageBounds(offered) : undefined;
       return (decline.test(wanted) && decline.test(offered)) ||
         (status !== undefined && statusChoice(key, offered) === status) ||
-        (alias >= 0 && aliasGroup(key, offered) === alias);
+        (alias >= 0 && aliasGroup(key, offered) === alias) ||
+        Boolean(age && offeredAge && offeredAge[0] <= age[0] && offeredAge[1] >= age[1]);
     });
     if (matches.length !== 1 || !matches[0] || result.includes(matches[0])) return [];
     result.push(matches[0]);

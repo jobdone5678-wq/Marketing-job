@@ -8,7 +8,7 @@ import type { ApplicationPage } from '../../lib/applicationCapture';
 
 /**
  * The application-form plan: the panel's standing account of the form in front of the
- * user — what it asks, what is answered, how far the required questions are along. It
+ * user — what it asks and which required and optional questions are answered. It
  * exists before any fill and outlives every one, which is the difference from the
  * notices — those describe one action and are gone by the next.
  */

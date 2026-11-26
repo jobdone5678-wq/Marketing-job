@@ -107,6 +107,30 @@ const VALUE_NODE = '[class*="singleValue"], [class*="single-value"], [class*="mu
 
 const PLACEHOLDER_NODE = '[class*="placeholder"]';
 
+export function isLocationRejection(text: string | null): boolean {
+  return /^(?:no (?:matching )?locations? found\b|try entering a different location\b)/i.test(collapse(text));
+}
+
+function hasLocationRejection(widget: Element): boolean {
+  const described = widget.getAttribute('aria-describedby')?.split(/\s+/) ?? [];
+  if (described.some((id) => {
+    const node = widget.ownerDocument.getElementById(id);
+    return node && isLocationRejection(node.textContent) && isOnScreen(node);
+  })) return true;
+
+  for (let parent = widget.parentElement, depth = 0; parent && depth < 4; parent = parent.parentElement, depth++) {
+    if (parent.matches('form, body') || hasOtherWidget(parent, widget)) break;
+    if (Array.from(parent.querySelectorAll('[role="status"], [role="alert"], [aria-live], [class*="noOptions"], div, span, p'))
+      .some((node) => isLocationRejection(node.textContent) && isOnScreen(node))) return true;
+  }
+  return false;
+}
+
+function hasOtherWidget(container: Element, widget: Element): boolean {
+  return Array.from(container.querySelectorAll(COMBO_WIDGET))
+    .some((candidate) => !candidate.contains(widget) && !widget.contains(candidate));
+}
+
 /**
  * The values the widget displays — one per chip on a multi-select, empty when it
  * displays none.
@@ -121,6 +145,7 @@ const PLACEHOLDER_NODE = '[class*="placeholder"]';
  * rather than `role` still stops the walk.
  */
 export function displayedValues(widget: Element): string[] {
+  if (widget.getAttribute('aria-invalid') === 'true' || hasLocationRejection(widget)) return [];
   const expanded = widget.getAttribute('aria-expanded') ??
     widget.closest('[role="combobox"][aria-expanded]')?.getAttribute('aria-expanded');
   const listbox = comboListbox(widget);
@@ -136,7 +161,7 @@ export function displayedValues(widget: Element): string[] {
     return text && !isChoicePlaceholder(text) && !widget.hasAttribute('data-placeholder') ? [text] : [];
   }
   for (let el = widget.parentElement; el; el = el.parentElement) {
-    if (el.querySelectorAll(COMBO_WIDGET).length > 1) return [];
+    if (hasOtherWidget(el, widget)) return [];
     const shown = Array.from(el.querySelectorAll(VALUE_NODE));
     if (shown.length) return shown.map(shownText).filter(Boolean);
     // A visible placeholder means the widget is showing "Select…", not an answer.

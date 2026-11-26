@@ -5,7 +5,7 @@
 
   /**
    * The panel's account of the application form in front of the user: what it
-   * asks, what is answered, and how far the required questions are along.
+   * asks and how far the required and optional questions are along.
    *
    * It reaches the page through nobody — `onReveal` is the one thing it asks for,
    * and App.svelte decides what that means. The plan itself is computed in
@@ -39,9 +39,11 @@
   let optional = $derived(plan.items.filter((i) => !i.required));
 </script>
 
-{#snippet group(heading: string, items: PlanItem[])}
+{#snippet group(heading: string, items: PlanItem[], count?: string)}
   {#if items.length > 0}
-    <p class="group">{heading}</p>
+    <p class="group">
+      {heading}{#if count}<span class="count" aria-label="{count} optional questions answered">{count}</span>{/if}
+    </p>
     <ul>
       {#each items as item (item.key)}
         <li>
@@ -73,7 +75,7 @@
   <div class="head">
     <span class="title">{walking ? 'Autofilling…' : 'Application form'}</span>
     {#if plan.required}
-      <span class="count">{plan.required.answered}/{plan.required.total} · {plan.required.percent}%</span>
+      <span class="count" aria-label="{plan.required.answered} of {plan.required.total} required questions answered">{plan.required.answered}/{plan.required.total} · {plan.required.percent}%</span>
     {/if}
     {#if walking}
       <!-- Cancel belongs beside the progress it cancels, not pinned at the far
@@ -92,7 +94,7 @@
   {/if}
 
   {@render group('Required', required)}
-  {@render group('Optional', optional)}
+  {@render group('Optional', optional, plan.optional ? `${plan.optional.answered}/${plan.optional.total}` : undefined)}
 </Card>
 
 <style>
@@ -150,6 +152,9 @@
   }
 
   .group {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
     margin: 12px 0 4px;
     font-size: 11px;
     text-transform: uppercase;

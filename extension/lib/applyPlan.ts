@@ -1,7 +1,6 @@
 /**
  * The panel's account of the application form in front of the user: the questions
- * the page asks, which of them are answered, and how far along the required ones
- * are.
+ * the page asks and which required and optional questions are answered.
  *
  * Pure over the fields the page reported — no DOM, no messaging — so the counter
  * arithmetic and the answered rule are testable on their own, the same discipline
@@ -36,8 +35,8 @@ export interface PlanItem {
   answered: boolean;
 }
 
-/** How far along the questions that gate submission are. */
-interface RequiredProgress {
+/** Answered progress for one group of questions. */
+interface QuestionProgress {
   answered: number;
   total: number;
   /** Rounded to whole percent — the panel shows a figure, not a measurement. */
@@ -48,7 +47,8 @@ export interface ApplyPlan {
   items: PlanItem[];
   /** Null when the form marks nothing required: a percentage over zero required
    *  questions states nothing, so there is no counter to show. */
-  required: RequiredProgress | null;
+  required: QuestionProgress | null;
+  optional: QuestionProgress | null;
 }
 
 /**
@@ -138,15 +138,16 @@ export function buildPlan(fields: FramedField[]): ApplyPlan {
 /** The counter, derived from the items. The one place the arithmetic lives, so a
  *  plan built from a fresh read and one ticked off in place agree. */
 function recount(items: PlanItem[]): ApplyPlan {
-  const required = items.filter((i) => i.required);
-  if (required.length === 0) return { items, required: null };
-  const answered = required.filter((i) => i.answered).length;
   return {
     items,
-    required: {
-      answered,
-      total: required.length,
-      percent: Math.round((answered / required.length) * 100),
-    },
+    required: progress(items.filter((i) => i.required)),
+    optional: progress(items.filter((i) => !i.required)),
   };
+}
+
+function progress(items: PlanItem[]): QuestionProgress | null {
+  const total = items.length;
+  if (total === 0) return null;
+  const answered = items.filter((item) => item.answered).length;
+  return { answered, total, percent: Math.round((answered / total) * 100) };
 }

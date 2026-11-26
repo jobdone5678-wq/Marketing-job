@@ -12,7 +12,7 @@ import {
   saveBankAnswer,
 } from './freehire';
 import { isAutofillProse, isPrivateAutofillField } from './autofillSafety';
-import { demographicChoices, demographicKey, mixedDemographicChoices, type DemographicPreferences } from '../../src/lib/profile/demographic-preferences';
+import { demographicChoices, demographicKey, demographicOptionKey, mixedDemographicChoices, type DemographicPreferences } from '../../src/lib/profile/demographic-preferences';
 import { inferQuestionDescriptor, type FormContext } from '../../src/lib/ai/planner';
 import { validateGroundedAnswer } from '../../src/lib/ai/grounded';
 import { findReusableAnswer } from '../../src/lib/ai/reusable-answers';
@@ -152,15 +152,17 @@ async function fillApplication(
       const opened = (await step('open'))?.status === 'opened';
       let offer = opened ? await step('options') : undefined;
       let options = offer?.options ?? [];
-      if (search && !options.length && !stopped()) {
+      let chosen = options.length && !stopped() ? await choose(options) : undefined;
+      if (search && (!chosen || (Array.isArray(chosen) && !chosen.length)) && !stopped() &&
+          !isPrivateAutofillField({ ...field, options })) {
         queried = (await step('query', search))?.status === 'queried';
         if (queried) {
           offer = await step('options');
           options = offer?.options ?? [];
+          chosen = options.length && !stopped() ? await choose(options) : undefined;
         }
       }
       if (!options.length || stopped()) return;
-      const chosen = await choose(options);
       const choices = Array.isArray(chosen) ? chosen : chosen ? [chosen] : [];
       if (!choices.length || (choices.length > 1 && !offer?.multiple)) return;
       const committed: string[] = [];
@@ -239,7 +241,8 @@ async function fillApplication(
     if (demographics?.enabled) {
       for (const field of uniqueFields(scoped, true)) {
         if (stopped()) return;
-        const key = demographicKey(field.label);
+        const optionKey = field.type === 'checkbox' && !field.options?.length ? demographicOptionKey(field.label) : undefined;
+        const key = optionKey ?? demographicKey(field.label);
         const saved = key
           ? demographics.answers[key] ?? (key === 'veteran' ? demographics.answers.protectedVeteran : undefined)
           : undefined;
@@ -260,7 +263,9 @@ async function fillApplication(
           if (choices.length && (field.multiple || choices.length === 1)) {
             await walk([{ label: field.label, frame: field.frame, form: field.form, value: choices.join(', '), choices }]);
           }
-        } else if (field.type === 'checkbox' && demographicChoices(key, saved, [field.label]).length) {
+        } else if (field.type === 'checkbox' && (optionKey
+          ? saved.some((answer) => demographicChoices(key, [answer], [field.label]).length)
+          : demographicChoices(key, saved, [field.label]).length)) {
           await walk([{ label: field.label, frame: field.frame, form: field.form, value: 'true' }]);
         }
       }

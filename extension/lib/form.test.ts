@@ -562,6 +562,45 @@ describe('control naming', () => {
     expect(extractForm(document)[0]?.label).toBe('Current location *');
   });
 
+  it('does not count a rejected location search as a committed answer', () => {
+    document.body.innerHTML = `<form><label>Current location *<input role="combobox" value="Austin">
+      <div>No location found. Try entering a different location</div><span>Loading</span></label>
+      <label>Intended work country <select><option>Canada</option></select></label></form>`;
+    expect(extractForm(document).map(({ label, value }) => ({ label, value }))).toEqual([
+      { label: 'Current location *', value: '' },
+      { label: 'Intended work country', value: 'Canada' },
+    ]);
+  });
+
+  it('finds distinct screening questions above identical response placeholders', () => {
+    document.body.innerHTML = `<form>
+      <div><h3>Describe a recent project.</h3><small>Give one example.</small><textarea placeholder="Type your response"></textarea></div>
+      <div><h3>Why are you interested in this role?</h3><div><textarea aria-label="Type your response"></textarea></div></div>
+    </form>`;
+    expect(extractForm(document).map(({ label }) => label)).toEqual([
+      'Describe a recent project.', 'Why are you interested in this role?',
+    ]);
+  });
+
+  it('keeps optional ethnicity and pronoun choices in their own questions', () => {
+    document.body.innerHTML = `<form>
+      <section><h3>Race or ethnicity</h3><div>Select all that apply</div><div>
+        <label><input type="checkbox" name="a">Asian or Asian American</label>
+        <label><input type="checkbox" name="b">White</label>
+        <label>Other <input type="text"></label>
+      </div></section>
+      <section><h3>Pronouns</h3><div>Select all that apply</div><div>
+        <label><input type="checkbox" name="he">He/him</label>
+        <label><input type="checkbox" name="she">She/her</label>
+      </div></section>
+    </form>`;
+    expect(extractForm(document).map(({ label, options }) => ({ label, options }))).toEqual([
+      { label: 'Race or ethnicity', options: ['Asian or Asian American', 'White'] },
+      { label: 'Other', options: undefined },
+      { label: 'Pronouns', options: ['He/him', 'She/her'] },
+    ]);
+  });
+
   it('reads a wrapped dropdown question separately from its options', () => {
     document.body.innerHTML = `<label>Veteran status *
       <select><option value="">Select...</option><option>I am a veteran</option>

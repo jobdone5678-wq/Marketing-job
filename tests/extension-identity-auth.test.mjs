@@ -192,7 +192,8 @@ test('autofill profile reads only the bearer owner’s reviewed facts and typed 
           notes: confirmedFacts.UNSAVED_RESUME_NOTE,
           uploadedAt: '2026-11-25T10:00:00Z',
           email: '',
-          current_city: 'New Delhi',
+          location: { whereBased: 'Berlin, Germany', countries: ['de'] },
+          intended_work_country: 'ca',
           github_url: 'https://github.com/candidate',
           raw_text: 'private resume',
           race: 'private demographic',
@@ -228,14 +229,29 @@ test('autofill profile reads only the bearer owner’s reviewed facts and typed 
   assert.equal(result.headers.get('access-control-allow-origin'), extensionOrigin);
   assert.equal(result.headers.get('access-control-allow-credentials'), null);
   assert.deepEqual(await result.json(), {
-    meta: { candidateId },
+    meta: {
+      candidateId,
+      screening: {
+        age_18_or_older: null,
+        notice_period_days: 0,
+        willing_to_relocate: true,
+        visa_sponsorship_needed: false,
+        desired_salary_amount: 100000,
+        desired_salary_currency: 'USD',
+        desired_salary_period: 'year',
+      },
+    },
     data: {
       full_name: 'Confirmed Candidate',
       first_name: 'Confirmed',
       last_name: 'Candidate',
       email: '',
       phone: '',
-      location: 'New Delhi',
+      location: 'Berlin, Germany',
+      state: '',
+      country: 'Germany',
+      postal_code: '',
+      intended_work_country: 'Canada',
       linkedin: '',
       github: 'https://github.com/candidate',
       portfolio: '',
