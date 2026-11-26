@@ -23,6 +23,7 @@ import {
   demographicKey,
   demographicOptionKey,
   demographicOptionSupported,
+  demographicSelectionKey,
   isDemographicQuestion,
   isExplicitDemographicDecline,
   isNegativeDemographicStatus,
@@ -30,6 +31,7 @@ import {
   type DemographicKey,
 } from '../profile/demographic-preferences';
 import {
+  asksVisaSponsorship,
   isAgeThresholdQuestion,
   matchChoice,
   matchFieldKey,
@@ -375,7 +377,7 @@ export function validateGroundedAnswer(
     canonical === 'need_sponsorship_future' ||
     canonical === 'need_sponsorship_now' ||
     category === 'sponsorship' ||
-    /\b(sponsor(?:ship)?|visa\s+sponsor)\b/i.test(normQ);
+    asksVisaSponsorship(qText);
 
   const authorizationCountry = workAuthorizationCountry(qText);
   const isAuthQuestion =
@@ -385,8 +387,12 @@ export function validateGroundedAnswer(
     /\b(authorized\s+to\s+work|legally\s+authorized|legal\s+right\s+to\s+work|work\s+authoriz)\b/i.test(normQ);
 
   if (isSponsorshipQuestion) {
-    if (resolvedCountryCode) {
-      const countrySponsorshipFact = facts.get(`country_specific_answers.${resolvedCountryCode}_sponsorship`);
+    const namedCountry = qText.match(/\b(?:to work in|sponsorship in) (?:the )?([^?]+?)\s*[?!.]*\s*\*?$/i)?.[1];
+    const country = (namedCountry && resolveCountryIso(namedCountry)) ||
+      (/\b(?:this (?:role|position) requires candidates to be (?:a )?u\.?s\.? citizen)\b/i.test(qText) ? 'us' : undefined) ||
+      resolvedCountryCode;
+    if (country) {
+      const countrySponsorshipFact = facts.get(`country_specific_answers.${country}_sponsorship`);
       if (countrySponsorshipFact) {
         const val = countrySponsorshipFact.value;
         const needsSponsorship =
@@ -413,7 +419,7 @@ export function validateGroundedAnswer(
     const futureFact = facts.get('profile.work_auth.need_sponsorship_future');
     const nowFact = facts.get('profile.work_auth.need_sponsorship_now');
     const generalFact = facts.get('screening.visa_sponsorship_needed');
-    if (generalFact && ((!isSpecificNow && !isSpecificFuture) || /\bnow or in the future\b/.test(normQ))) {
+    if (generalFact && ((!isSpecificNow && !isSpecificFuture) || /\b(?:now|currently)\b.*\bfuture\b/.test(normQ))) {
       const negative = isNegativeStance(answer);
       const positive = isPositiveStance(answer);
       const lead = normAns.match(/^(yes|no)\b/)?.[1];
@@ -469,9 +475,16 @@ export function validateGroundedAnswer(
   }
 
   if (isAuthQuestion) {
+    if (/\bwithout\b[^?]*\bsponsor(?:ship)?\b/.test(normQ)) {
+      return unresolvedResult('Authorization and sponsorship conditions require separate confirmation');
+    }
     const countries = facts.get('screening.authorized_countries');
     const authFact = facts.get('profile.work_auth.authorized_in_usa');
     const explicitCountryCode = authorizationCountry ? resolveCountryIso(authorizationCountry) : undefined;
+    if (authorizationCountry && !explicitCountryCode &&
+        !/^(?:this (?:country|location|jurisdiction)|(?:the )?(?:country|location) (?:where|in which)\b)/i.test(authorizationCountry)) {
+      return unresolvedResult('Work authorization must target an identifiable country');
+    }
     const fallbackTextUs = !authorizationCountry && !resolvedCountryCode && /\b(?:us|usa|united states)\b/i.test(normQ)
       ? 'us'
       : undefined;
@@ -484,12 +497,27 @@ export function validateGroundedAnswer(
     const countryList = Array.isArray(countries?.value) && countries.value.length > 0
       ? countries.value
       : undefined;
+    const scopedFact = facts.get(`country_specific_answers.${targetCountryCode}_auth`);
     const countriesAuthorized = countryList
       ? countryList.some((code) => {
           const normCode = resolveCountryIso(code) ?? String(code).trim().toLowerCase();
           return normCode === targetCountryCode;
         })
       : undefined;
+    if (scopedFact) {
+      const saved = typeof scopedFact.value === 'boolean' ? scopedFact.value :
+        typeof scopedFact.value === 'string' ?
+          (isNegativeStance(scopedFact.value) ? false : isPositiveStance(scopedFact.value) ? true : undefined) : undefined;
+      if (saved !== undefined) {
+        if ((countriesAuthorized === true && !saved) ||
+            (targetCountryCode === 'us' && authFact && authFact.value !== saved)) {
+          return unresolvedResult('Conflicting confirmed work authorization facts', [scopedFact.id]);
+        }
+        const lead = normAns.match(/^(yes|no)\b/)?.[1];
+        const matches = saved ? isPositiveStance(answer) && lead !== 'no' : isNegativeStance(answer) && lead !== 'yes';
+        return matches ? validResult([scopedFact.id]) : unresolvedResult('Answer conflicts with confirmed work authorization', [scopedFact.id]);
+      }
+    }
 
     if (targetCountryCode === 'us') {
       const usaAuthorized = authFact !== undefined ? Boolean(authFact.value) : undefined;
@@ -614,7 +642,7 @@ export function validateGroundedAnswer(
       }
       const evidenceIds = new Set<string>();
       for (const opt of traitOptions) {
-        const optKey = demographicKey(opt) ?? demographicOptionKey(opt) ?? questionKey;
+        const optKey = demographicSelectionKey(qText, opt);
         if (!optKey) {
           return unresolvedResult(`Cannot verify "None of the above" because option "${opt}" has no mapped demographic key`);
         }
@@ -636,7 +664,7 @@ export function validateGroundedAnswer(
         ? [questionKey]
         : [...new Set(
             offeredOptions
-              .map((opt) => demographicKey(opt) ?? demographicOptionKey(opt))
+              .map((opt) => demographicSelectionKey(qText, opt))
               .filter((k): k is DemographicKey => Boolean(k)),
           )];
       const declinedFacts = relevantKeys
@@ -655,13 +683,21 @@ export function validateGroundedAnswer(
       if (isExplicitDemographicDecline(choice) || (isNoneOfTheAboveOption(choice) && questionKey !== 'religion')) {
         return unresolvedResult('Invalid demographic selection');
       }
-      const optKey = demographicKey(choice) ?? demographicOptionKey(choice) ?? questionKey;
+      const optKey = demographicSelectionKey(qText, choice);
       if (!optKey) {
         return unresolvedResult(`Demographic option "${choice}" has no mapped demographic key`);
       }
       const fact = getDemographicFact(optKey);
       if (!fact || !Array.isArray(fact.value) || fact.value.length === 0) {
         return unresolvedResult(`Missing saved demographic preference for "${optKey}"`);
+      }
+      if (optKey === 'raceEthnicity' && /\bnot hispanic or latin[eoax]\b/i.test(choice) &&
+          !fact.value.some((value) => normalizeLabel(String(value)) === normalizeLabel(choice))) {
+        const ethnicity = getDemographicFact('hispanicOrigin');
+        if (!Array.isArray(ethnicity?.value) || !ethnicity.value.every((value) => isNegativeDemographicStatus('hispanicOrigin', String(value)))) {
+          return unresolvedResult('The offered race option also requires a confirmed ethnicity answer');
+        }
+        evidenceIds.add(ethnicity.id);
       }
       if (!demographicOptionSupported(optKey, fact.value.map(String), choice)) {
         return unresolvedResult(`Demographic option "${choice}" is not supported by saved "${optKey}" preference`, [fact.id]);

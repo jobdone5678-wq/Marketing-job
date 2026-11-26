@@ -3,6 +3,11 @@ import { matchFieldKey, formatAuthorizedCountries } from './fieldKeys';
 
 describe('matchFieldKey', () => {
   it('maps common labels to canonical profile keys', () => {
+    expect(matchFieldKey('Name')).toBe('fullName');
+    expect(matchFieldKey('Name *')).toBe('fullName');
+    expect(matchFieldKey('Name (required)')).toBe('fullName');
+    expect(matchFieldKey('Legal Full Name')).toBe('fullName');
+    expect(matchFieldKey('Name of employer')).toBeNull();
     expect(matchFieldKey('First Name')).toBe('firstName');
     expect(matchFieldKey('Legal Last Name *')).toBe('lastName');
     expect(matchFieldKey('E-mail Address')).toBe('email');

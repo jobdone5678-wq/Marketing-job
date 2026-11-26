@@ -10,7 +10,7 @@ import { countryLabel } from './labels';
  * (a hyphen ends the word), so email needs no German entry.
  */
 const FIELD_SYNONYMS: Record<string, string[]> = {
-  fullName: ['full name', 'your name', 'candidate name', 'applicant name'],
+  fullName: ['full name', 'your name', 'candidate name', 'applicant name', 'legal name', 'legal full name', 'candidate full name'],
   firstName: ['first name', 'given name', 'legal first name', 'preferred first name', 'vorname'],
   lastName: ['last name', 'family name', 'surname', 'legal last name', 'nachname', 'familienname'],
   email: ['email', 'e-mail', 'e-mail address', 'email address'],
@@ -135,8 +135,16 @@ export function normalizeLabel(label: string): string {
 
 export function workAuthorizationCountry(label: string): string | undefined {
   return normalizeLabel(label).match(
-    /^(?:(?:are you (?:currently )?(?:legally )?)?(?:authorized|authorised|eligible|permitted) to work in|do you (?:currently )?have (?:the (?:legal )?right to work|work authori[sz]ation) in) (?:the )?(.+?)[?.!]*$/,
+    /^(?:(?:are you (?:(?:currently|legally) )*)?(?:authori[sz]ed|eligible|entitled|permitted|allowed) to work in|do you (?:currently )?(?:have|hold) (?:(?:the )?(?:legal )?right to work|(?:valid )?work authori[sz]ation) (?:in|for)) (?:the )?(.+?)[?.!]*$/,
   )?.[1]?.replace(/\./g, '');
+}
+
+export function asksVisaSponsorship(label: string): boolean {
+  const clauses = normalizeLabel(label).split(/[.!?;:]\s+/);
+  return clauses.some((clause) =>
+    /^(?:do|will|would|did) you\b[^?]*\b(?:need|require)\b[^?]*\bsponsor(?:ship)?\b/.test(clause) ||
+    /^(?:visa |immigration )?sponsorship (?:needed|required)[?.!]*$/.test(clause),
+  );
 }
 
 export function matchesCountry(country: string, countryCode: string): boolean {
@@ -222,6 +230,7 @@ export function matchFieldKey(label: string): string | null {
   const normalized = normalizeLabel(label);
   if (!normalized) return null;
   if (isAgeThresholdQuestion(normalized)) return 'age18OrOlder';
+  if (/^name(?:\s*\((?:required|optional)\))?$/i.test(normalized)) return 'fullName';
   const entries = Object.entries(FIELD_SYNONYMS);
   for (const [key, synonyms] of entries) {
     if (synonyms.some((s) => opensWith(normalized, s))) return key;

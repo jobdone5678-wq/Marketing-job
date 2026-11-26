@@ -74,6 +74,7 @@ function plannerField(field: FramedField): Field & { id: string } {
     type: field.tag === 'textarea' ? 'textarea' : field.type,
     required: field.required,
     combo: field.combo,
+    ...(field.multiple ? { multiple: true } : {}),
     options: field.options,
     frame: field.frame,
     form: field.form,
@@ -168,8 +169,16 @@ function fallbackLocationSearch(
 ): string | undefined {
   if (!isUpstreamLocationField(field)) return undefined;
   const helper = field.helperText ?? '';
-  if (/city/i.test(helper) && profile.location?.trim()) {
-    return profile.location.trim();
+  if (/\bcity\b/i.test(helper) && profile.location?.trim()) {
+    const location = profile.location.trim();
+    if (matchFieldKey(field.label) !== 'intendedWorkCountry') return location;
+    const country = values.intendedWorkCountry?.trim();
+    const intended = extractCountryCodeFromLocation(country);
+    const home = extractCountryCodeFromLocation(profile.country);
+    const source = extractCountryCodeFromLocation(location);
+    if (intended && (source ?? home) === intended) {
+      return source ? location : [location, country].filter(Boolean).join(', ');
+    }
   }
   const direct = values.intendedWorkCountry?.trim() || profile.country?.trim() || profile.location?.trim();
   return direct || undefined;
@@ -363,9 +372,7 @@ async function fillApplication(
     const values = profileToValues(profile);
     const initialUnfilled = uniqueFields(scoped);
     const phaseALabelFields = initialUnfilled.filter(
-      (field, idx) =>
-        !field.combo &&
-        !(hasEarlierUnfilledLocation(initialUnfilled, idx) && isLocationLinkedWorkAuth(field.label)),
+      (field) => !field.combo && !isLocationLinkedWorkAuth(field.label),
     );
     await walk(planLabelFills(phaseALabelFields, values, profile.authorized_countries));
     if (stopped()) return;
@@ -374,8 +381,10 @@ async function fillApplication(
       if (stopped()) return;
       const field = phaseARemaining[i];
       if (!field) continue;
-      if (hasEarlierUnfilledLocation(phaseARemaining, i) && isLocationLinkedWorkAuth(field.label)) continue;
-      const value = confirmedFieldValue(field.label, values, profile.authorized_countries).trim();
+      if (isLocationLinkedWorkAuth(field.label)) continue;
+      const confirmedValue = confirmedFieldValue(field.label, values, profile.authorized_countries).trim();
+      const value = confirmedValue && /\bcity\b/i.test(field.helperText ?? '')
+        ? fallbackLocationSearch(field, profile, values) ?? confirmedValue : confirmedValue;
       if (!field.combo || !value) continue;
       await fillCombobox(field, async (options) => {
         if (isPrivateAutofillField({ ...field, options })) return;

@@ -225,17 +225,42 @@ export function buildVerifiedFacts(
   };
 
   // 1. Personal Information
-  const fullNameRaw = pickVal('full_name', 'name');
+  const cfContacts = cf.contacts && typeof cf.contacts === 'object' ? (cf.contacts as Record<string, unknown>) : undefined;
+  const candidateFullName = pickVal('full_name', 'name');
+  const contactsFullName = isNonEmptyString(cfContacts?.fullName)
+    ? cfContacts.fullName.trim()
+    : isNonEmptyString(cfContacts?.full_name)
+      ? cfContacts.full_name.trim()
+      : undefined;
+  const fullNameRaw =
+    isNonEmptyString(candidateFullName) && candidateFullName.trim().toLowerCase() !== 'applicant'
+      ? candidateFullName
+      : (contactsFullName ?? candidateFullName);
   if (isNonEmptyString(fullNameRaw)) {
-    addFact('profile.name', 'string', fullNameRaw.trim(), 'personal', 'profile', 'full_name');
-  }
-  const firstNameRaw = pickVal('first_name');
-  if (isNonEmptyString(firstNameRaw)) {
-    addFact('profile.first_name', 'string', firstNameRaw.trim(), 'personal', 'profile', 'first_name');
-  }
-  const lastNameRaw = pickVal('last_name');
-  if (isNonEmptyString(lastNameRaw)) {
-    addFact('profile.last_name', 'string', lastNameRaw.trim(), 'personal', 'profile', 'last_name');
+    const trimmedName = fullNameRaw.trim();
+    addFact('profile.name', 'string', trimmedName, 'personal', 'profile', 'full_name');
+    const nameTokens = trimmedName.split(/\s+/).filter(Boolean);
+    const firstNameRaw = pickVal('first_name');
+    const lastNameRaw = pickVal('last_name');
+    if (isNonEmptyString(firstNameRaw)) {
+      addFact('profile.first_name', 'string', firstNameRaw.trim(), 'personal', 'profile', 'first_name');
+    } else if (nameTokens.length >= 1 && nameTokens[0]) {
+      addFact('profile.first_name', 'string', nameTokens[0], 'personal', 'profile', 'full_name');
+    }
+    if (isNonEmptyString(lastNameRaw)) {
+      addFact('profile.last_name', 'string', lastNameRaw.trim(), 'personal', 'profile', 'last_name');
+    } else if (nameTokens.length > 1) {
+      addFact('profile.last_name', 'string', nameTokens.slice(1).join(' '), 'personal', 'profile', 'full_name');
+    }
+  } else {
+    const firstNameRaw = pickVal('first_name');
+    if (isNonEmptyString(firstNameRaw)) {
+      addFact('profile.first_name', 'string', firstNameRaw.trim(), 'personal', 'profile', 'first_name');
+    }
+    const lastNameRaw = pickVal('last_name');
+    if (isNonEmptyString(lastNameRaw)) {
+      addFact('profile.last_name', 'string', lastNameRaw.trim(), 'personal', 'profile', 'last_name');
+    }
   }
   const prefNameRaw = pickVal('preferred_full_name', 'preferred_name', 'preferred_first_name');
   if (isNonEmptyString(prefNameRaw)) {
@@ -243,11 +268,11 @@ export function buildVerifiedFacts(
   }
 
   // 2. Contact Information
-  const emailRaw = pickVal('email');
+  const emailRaw = pickVal('email') ?? (isNonEmptyString(cfContacts?.email) ? cfContacts.email : undefined);
   if (isNonEmptyString(emailRaw)) {
     addFact('profile.contact.email', 'string', emailRaw.trim(), 'contact', 'profile', 'email');
   }
-  const phoneRaw = pickVal('phone', 'phone_number');
+  const phoneRaw = pickVal('phone', 'phone_number') ?? (isNonEmptyString(cfContacts?.phone) ? cfContacts.phone : undefined);
   if (isNonEmptyString(phoneRaw)) {
     addFact('profile.contact.phone', 'string', phoneRaw.trim(), 'contact', 'profile', 'phone');
   }
@@ -266,7 +291,6 @@ export function buildVerifiedFacts(
 
   // 3. Structured Location
   const cfLocation = cf.location && typeof cf.location === 'object' ? (cf.location as Record<string, unknown>) : undefined;
-  const cfContacts = cf.contacts && typeof cf.contacts === 'object' ? (cf.contacts as Record<string, unknown>) : undefined;
   const rawLocation = pickVal('current_location', 'location');
   const locationString = isNonEmptyString(rawLocation)
     ? rawLocation
@@ -278,11 +302,27 @@ export function buildVerifiedFacts(
   const locParts = isNonEmptyString(locationString)
     ? locationString.split(',').map((p) => p.trim()).filter(Boolean)
     : [];
+  const isCountryPart = (raw: string): boolean => {
+    const clean = raw.trim().toLowerCase();
+    if (!clean) return false;
+    if (/^(?:usa|u\.s\.a?\.|united states(?: of america)?|uk|u\.k\.|united kingdom|great britain|uae|canada|india|germany|france|australia|singapore|ireland)$/.test(clean)) {
+      return true;
+    }
+    try {
+      const display = new Intl.DisplayNames(['en'], { type: 'region' });
+      if (/^[a-z]{2}$/i.test(clean)) {
+        const label = display.of(clean.toUpperCase());
+        return Boolean(label && label.toLowerCase() !== clean);
+      }
+    } catch {}
+    return false;
+  };
+  const twoPartCountry = locParts.length === 2 && locParts[1] && isCountryPart(locParts[1]) ? locParts[1] : undefined;
   const cityRaw = pickVal('current_city', 'city') ?? (locParts.length >= 2 ? locParts[0] : undefined);
   if (isNonEmptyString(cityRaw)) {
     addFact('profile.location.city', 'string', cityRaw.trim(), 'location', 'profile', 'current_city');
   }
-  const stateRaw = pickVal('current_state', 'state') ?? (locParts.length >= 2 ? locParts[1] : undefined);
+  const stateRaw = pickVal('current_state', 'state') ?? (locParts.length >= 3 || (locParts.length === 2 && !twoPartCountry) ? locParts[1] : undefined);
   if (isNonEmptyString(stateRaw)) {
     addFact('profile.location.state', 'string', stateRaw.trim(), 'location', 'profile', 'current_state');
   }
@@ -296,7 +336,7 @@ export function buildVerifiedFacts(
     : undefined;
   const countryVal =
     pickVal('country', 'current_country') ??
-    (locParts.length >= 3 ? locParts[locParts.length - 1] : undefined) ??
+    (locParts.length >= 3 ? locParts[locParts.length - 1] : twoPartCountry) ??
     singleLocCountry;
   if (isNonEmptyString(countryVal)) {
     addFact('profile.location.country', 'string', countryVal.trim(), 'location', 'profile', 'country');

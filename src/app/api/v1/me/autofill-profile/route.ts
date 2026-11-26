@@ -24,6 +24,28 @@ function structuredLocation(facts: Record<string, unknown>): Record<string, unkn
   return facts.location && typeof facts.location === 'object' ? (facts.location as Record<string, unknown>) : null;
 }
 
+function isKnownCountryName(raw: string): boolean {
+  const candidate = raw.trim().toLowerCase();
+  if (!candidate) return false;
+  if (/^(?:usa|u\.s\.a?\.|united states(?: of america)?|uk|u\.k\.|united kingdom|great britain|uae)$/i.test(candidate)) {
+    return true;
+  }
+  const display = new Intl.DisplayNames(['en'], { type: 'region' });
+  if (/^[a-z]{2}$/i.test(candidate)) {
+    const label = display.of(candidate.toUpperCase());
+    return Boolean(label && label.toLowerCase() !== candidate);
+  }
+  // Check common ISO codes via Intl.DisplayNames
+  for (let a = 65; a <= 90; a++) {
+    for (let b = 65; b <= 90; b++) {
+      const code = String.fromCharCode(a, b);
+      const name = display.of(code);
+      if (name && name.toLowerCase() === candidate) return true;
+    }
+  }
+  return false;
+}
+
 function resolveCountry(facts: Record<string, unknown>, authorizedCountries: string[] | null): string {
   const direct = text(facts.country) || text(facts.current_country);
   if (direct) return countryFromCode(direct);
@@ -33,6 +55,7 @@ function resolveCountry(facts: Record<string, unknown>, authorizedCountries: str
   const where = text(loc?.whereBased) || text(facts.full_address);
   const parts = where.split(',').map((p) => p.trim()).filter(Boolean);
   if (parts.length >= 3) return parts[parts.length - 1]!;
+  if (parts.length === 2 && parts[1] && isKnownCountryName(parts[1])) return countryFromCode(parts[1]);
   if (authorizedCountries?.length === 1 && authorizedCountries[0]) return countryFromCode(authorizedCountries[0]);
   return '';
 }
@@ -48,7 +71,7 @@ async function readProfile(request: Request): Promise<Response> {
   const db = database();
   const { data: profile, error: profileError } = await db
     .from('profiles')
-    .select('email, role, status')
+    .select('email, role, status, full_name, candidate_contacts')
     .eq('id', userId)
     .maybeSingle();
   checkDb(profileError);
@@ -59,7 +82,7 @@ async function readProfile(request: Request): Promise<Response> {
   const [candidates, screening] = await Promise.all([
     db
       .from('candidates')
-      .select('id, confirmed_facts, full_name')
+      .select('id, confirmed_facts, full_name, email, phone, linkedin_url, current_city, current_state, full_address')
       .eq('user_id', userId)
       .eq('provenance_status', 'confirmed')
       .order('updated_at', { ascending: false })
@@ -70,7 +93,20 @@ async function readProfile(request: Request): Promise<Response> {
   checkDb(candidates.error);
   const candidate = candidates.data?.find((row) => !isUnreviewedResume(row.confirmed_facts ?? {}));
   const facts: Record<string, unknown> = candidate?.confirmed_facts ?? {};
-  const fullName = text(facts.full_name) || text(candidate?.full_name);
+  const cfContacts = facts.contacts && typeof facts.contacts === 'object' ? (facts.contacts as Record<string, unknown>) : null;
+  const profileContacts = (profile as Record<string, unknown>).candidate_contacts &&
+    typeof (profile as Record<string, unknown>).candidate_contacts === 'object'
+    ? ((profile as Record<string, unknown>).candidate_contacts as Record<string, unknown>)
+    : null;
+  const realName = [
+    text(facts.full_name),
+    text(cfContacts?.fullName),
+    text(cfContacts?.full_name),
+    text(candidate?.full_name),
+    text(profileContacts?.full_name),
+    text((profile as Record<string, unknown>).full_name),
+  ].find((name) => name && name.toLowerCase() !== 'applicant') || '';
+  const fullName = realName || text(facts.full_name) || text(candidate?.full_name);
   const { first_name, last_name } = splitFullName(fullName);
   const salary = screening.desired_salary_amount;
   const salaryPeriod = screening.desired_salary_period;
@@ -95,18 +131,21 @@ async function readProfile(request: Request): Promise<Response> {
       full_name: fullName,
       first_name: Object.hasOwn(facts, 'first_name') ? text(facts.first_name) : first_name,
       last_name: Object.hasOwn(facts, 'last_name') ? text(facts.last_name) : last_name,
-      email: Object.hasOwn(facts, 'email') ? text(facts.email) : text(profile.email),
-      phone: text(facts.phone),
+      email: Object.hasOwn(facts, 'email') ? text(facts.email) : text(cfContacts?.email) || text(candidate?.email) || text(profile.email),
+      phone: text(facts.phone) || text(cfContacts?.phone) || text((candidate as Record<string, unknown> | undefined)?.phone),
       location: Object.hasOwn(facts, 'full_address')
         ? text(facts.full_address)
         : text(facts.location) ||
           [text(facts.current_city), text(facts.current_state)].filter(Boolean).join(', ') ||
-          text(structuredLocation(facts)?.whereBased),
-      state: text(facts.current_state),
+          text(structuredLocation(facts)?.whereBased) ||
+          text(cfContacts?.location) ||
+          [text((candidate as Record<string, unknown> | undefined)?.current_city), text((candidate as Record<string, unknown> | undefined)?.current_state)].filter(Boolean).join(', ') ||
+          text((candidate as Record<string, unknown> | undefined)?.full_address),
+      state: text(facts.current_state) || text((candidate as Record<string, unknown> | undefined)?.current_state),
       country,
       postal_code: text(facts.zip_code) || text(facts.postal_code),
       intended_work_country: intendedWorkCountry,
-      linkedin: text(facts.linkedin_url),
+      linkedin: text(facts.linkedin_url) || text((candidate as Record<string, unknown> | undefined)?.linkedin_url),
       github: text(facts.github_url),
       portfolio: Object.hasOwn(facts, 'portfolio_url')
         ? text(facts.portfolio_url)

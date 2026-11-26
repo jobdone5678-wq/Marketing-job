@@ -1,6 +1,7 @@
 // How a form control is named for a person: the label text the autofill matches questions by.
-import { collapse, isLocationRejection, isOnScreen } from './comboWidget';
+import { collapse, isChoicePlaceholder, isComboWidget, isLocationRejection, isOnScreen } from './comboWidget';
 import { normalizeLabel } from './fieldKeys';
+import { demographicKey, isCommunitySelfIdQuestion } from '../../src/lib/profile/demographic-preferences';
 import type { Fillable } from './form';
 
 /** Best-effort human label for a control, in decreasing reliability. */
@@ -14,20 +15,23 @@ export function extractLabel(el: Fillable): string {
     .map(labelText)
     .filter(Boolean)
     .join(' ');
-  if (fromLabels && !genericPrompt.test(fromLabels)) return fromLabels;
+  const isChoice = el instanceof HTMLSelectElement || isComboWidget(el);
+  const placeholderText = (text: string) => genericPrompt.test(text) ||
+    (isChoice && (isChoicePlaceholder(text) || /^(?:start typing|search)[. …]*$/i.test(text)));
+  if (fromLabels && !placeholderText(fromLabels)) return fromLabels;
 
   const placeholder = collapse(el.getAttribute('placeholder'));
   const ariaLabel = collapse(el.getAttribute('aria-label'));
   const ariaHeading = textFromIds(el.ownerDocument, el.getAttribute('aria-labelledby'));
   return (
-    (genericPrompt.test(ariaHeading) ? '' : ariaHeading) ||
+    (placeholderText(ariaHeading) ? '' : ariaHeading) ||
     // LinkedIn names a radio after its QUESTION; the option's own words sit beside it.
     (el instanceof HTMLInputElement && choiceType(el) ? visibleTextBeside(el) : '') ||
     // A typeahead often repeats its placeholder as aria-label; the visible label is the question.
-    (ariaLabel === placeholder || genericPrompt.test(ariaLabel) ? '' : ariaLabel) ||
+    (ariaLabel === placeholder || placeholderText(ariaLabel) ? '' : ariaLabel) ||
     visibleTextBeside(el, 'label') ||
-    (!choiceType(el) && [fromLabels, ariaHeading, ariaLabel, placeholder].some((text) => genericPrompt.test(text))
-      ? nearbyPrompt(el) : '') ||
+    (!choiceType(el) && (isChoice || [fromLabels, ariaHeading, ariaLabel, placeholder].some(placeholderText))
+      ? nearbyPrompt(el, isChoice) : '') ||
     placeholder ||
     ariaLabel ||
     (choiceType(el) ? collapse(labelText(el)) : '') ||
@@ -36,7 +40,7 @@ export function extractLabel(el: Fillable): string {
   );
 }
 
-const genericPrompt = /^(?:type|enter|write) (?:your|an?) (?:response|answer)(?:\s+here)?[. …]*$/i;
+const genericPrompt = /^(?:(?:type|enter|write) (?:(?:your|an?) (?:response|answer)(?:\s+here)?|here))[. …]*$/i;
 const questionPrompt = /\?\s*\*?$|^(?:describe|explain|tell us|share|provide|list)\b/i;
 const namedControl = 'input:not([type="hidden"]), select, textarea, [role="combobox"], [role="checkbox"], [role="radio"], [aria-haspopup="listbox"]';
 const helperTags = 'p, span, div, small';
@@ -137,9 +141,10 @@ export function precedingPrompt(element: Element, accepts = (text: string) => qu
   return '';
 }
 
-function nearbyPrompt(el: Fillable): string {
+function nearbyPrompt(el: Fillable, isChoice = false): string {
   for (let node: Element = el, depth = 0; depth < 3 && node.parentElement; depth++, node = node.parentElement) {
-    const text = precedingPrompt(node);
+    const text = precedingPrompt(node, (t) => questionPrompt.test(t) ||
+      (isChoice && t.length <= 120 && (Boolean(demographicKey(t)) || isCommunitySelfIdQuestion(t))));
     if (text) return text;
     if (node.parentElement.matches('form, body, [role="dialog"]') ||
         Array.from(node.parentElement.querySelectorAll(namedControl)).some((control) => control !== el && !control.contains(el))) break;

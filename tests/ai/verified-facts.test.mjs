@@ -383,10 +383,29 @@ test('VerifiedFact builder: candidate schema mapping & typed evidence generation
 
     const facts = buildVerifiedFacts(candidate);
     assert.equal(facts.get('profile.location.base')?.value, 'Austin, United States');
+    assert.equal(facts.get('profile.location.city')?.value, 'Austin');
+    assert.equal(facts.get('profile.location.country')?.value, 'United States');
+    assert.equal(facts.has('profile.location.state'), false);
     assert.deepEqual(facts.get('profile.location.remote_regions')?.value, ['North America', 'United States']);
     assert.deepEqual(facts.get('profile.location.work_format')?.value, ['Remote', 'Hybrid']);
     assert.equal(facts.get('country_specific_answers.us_sponsorship')?.value, 'no');
     assert.equal(facts.get('country_specific_answers.us_auth')?.value, 'yes');
     assert.equal(facts.has('country_specific_answers.empty_field'), false);
+  });
+
+  await t.test('recovers real name from contacts.fullName over Applicant placeholder and derives first/last name', () => {
+    const facts = buildVerifiedFacts({
+      full_name: 'Applicant',
+      confirmed_facts: {
+        contacts: {
+          fullName: 'Bhargav Reddy',
+          email: 'bhargav@example.com',
+        },
+      },
+    });
+    assert.equal(facts.get('profile.name')?.value, 'Bhargav Reddy');
+    assert.equal(facts.get('profile.first_name')?.value, 'Bhargav');
+    assert.equal(facts.get('profile.last_name')?.value, 'Reddy');
+    assert.equal(facts.get('profile.contact.email')?.value, 'bhargav@example.com');
   });
 });

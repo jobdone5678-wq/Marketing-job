@@ -598,4 +598,96 @@ test('Planner: FreeHire form batch planning with neighbor context & grounding', 
     assert.equal(result.fills.length, 0, 'Unresolved [deferred combobox] location in previouslyResolved must gate work-auth fills');
     assert.deepEqual(result.unmapped, [fields[0].label]);
   });
+
+  await t.test('uses AI planning for Name, select, radio, checkbox_group, and normalizes Self-ID options verbatim', async () => {
+    const facts = buildVerifiedFacts(
+      {
+        full_name: 'Bhargav Reddy',
+      },
+      undefined,
+      undefined,
+      {
+        enabled: true,
+        answers: {
+          ageRange: ['25-34'],
+          gender: ['Male'],
+          raceEthnicity: ['Asian'],
+          hispanicOrigin: ['No'],
+          veteran: ['Yes'],
+          neurodivergent: ['No'],
+        },
+      },
+    );
+
+    const fields = [
+      { id: 'f_name', label: 'Name *', type: 'text', widgetType: 'text', required: true },
+      {
+        id: 'f_age',
+        label: 'What is your current age?',
+        type: 'select',
+        widgetType: 'select',
+        options: ['18-24', '25–39 years old', '40-55', 'Prefer not to say'],
+      },
+      {
+        id: 'f_gender',
+        label: 'What is your gender identity?',
+        type: 'radio',
+        widgetType: 'radio',
+        options: ['Male / Man', 'Female / Woman', 'Non-binary', 'Prefer not to say'],
+      },
+      {
+        id: 'f_eth',
+        label: 'Which ethnicity(ies) do you identify with? Please select all that apply.',
+        type: 'checkbox',
+        widgetType: 'checkbox_group',
+        multiple: true,
+        options: ['Asian (Not Hispanic or Latino)', 'White (Not Hispanic or Latino)', 'Prefer not to answer'],
+      },
+      {
+        id: 'f_comm',
+        label: 'Which of the following communities do you belong to? Please select all that apply.',
+        type: 'checkbox',
+        widgetType: 'checkbox_group',
+        multiple: true,
+        options: ['Veteran', 'Neurodivergent', 'None of the above', 'I prefer not to answer'],
+      },
+    ];
+
+    let providerCalls = 0;
+    const mockClient = {
+      async generateChatCompletion(messages) {
+        providerCalls++;
+        const payload = JSON.parse(messages.find((m) => m.role === 'user').content);
+        assert.equal(payload.fields.length, 5, 'All 5 fields including Name and Self-IDs must reach AI planning');
+        assert.equal(payload.fields[3].multiple, true);
+        return {
+          text: '{}',
+          rawJson: {
+            fills: [
+              { fieldId: 'f_name', label: 'Name *', value: 'Bhargav Reddy', action: 'fill' },
+              { fieldId: 'f_age', label: 'What is your current age?', value: '25–39 years old', action: 'fill' },
+              // AI outputs profile wording ("Male", "Asian") -> must normalize to portal's exact offered options
+              { fieldId: 'f_gender', label: 'What is your gender identity?', value: 'Male', action: 'fill' },
+              { fieldId: 'f_eth', label: 'Which ethnicity(ies) do you identify with? Please select all that apply.', value: 'Asian', action: 'fill' },
+              { fieldId: 'f_comm', label: 'Which of the following communities do you belong to? Please select all that apply.', value: 'Veteran', action: 'fill' },
+            ],
+          },
+        };
+      },
+    };
+
+    const result = await planFormBatch(fields, facts, mockClient);
+    assert.equal(providerCalls, 1);
+    assert.equal(result.executableFills.length, 5);
+    assert.deepEqual(
+      Object.fromEntries(result.executableFills.map((f) => [f.fieldId, f.value])),
+      {
+        f_name: 'Bhargav Reddy',
+        f_age: '25–39 years old',
+        f_gender: 'Male / Man',
+        f_eth: 'Asian (Not Hispanic or Latino)',
+        f_comm: 'Veteran',
+      },
+    );
+  });
 });

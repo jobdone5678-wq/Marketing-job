@@ -138,19 +138,51 @@ async function loadDemographicPreferencesSafe(actorId: string, db: any) {
   }
 }
 
+async function loadProfileFallback(actorId: string, db: any): Promise<Record<string, unknown> | undefined> {
+  try {
+    const { data, error } = await db
+      .from('profiles')
+      .select('full_name, email, candidate_contacts')
+      .eq('id', actorId)
+      .maybeSingle();
+    if (error || !data || typeof data !== 'object') return undefined;
+    return data as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+}
+
 async function loadVerifiedFacts(actorId: string, candidate: Parameters<typeof buildVerifiedFacts>[0], fields: Field[], db: any) {
   const skillsAsked = new Set(fields.map((field) => experienceSkillQuestion(field.label)).filter(Boolean));
-  const [screening, entries, experience, demographics] = await Promise.all([
+  const [screening, entries, experience, demographics, profileFallback] = await Promise.all([
     getScreeningAnswers(actorId, db),
     listScreeningAnswerBank(actorId, { db, sendableOnly: true }),
     skillsAsked.size ? listExperienceBank(actorId, { db, tailorableOnly: true }) : undefined,
     loadDemographicPreferencesSafe(actorId, db),
+    loadProfileFallback(actorId, db),
   ]);
+  const profileContacts =
+    profileFallback?.candidate_contacts && typeof profileFallback.candidate_contacts === 'object'
+      ? (profileFallback.candidate_contacts as Record<string, unknown>)
+      : undefined;
+  const fallbackName =
+    (typeof profileContacts?.full_name === 'string' && profileContacts.full_name.trim()) ||
+    (typeof profileFallback?.full_name === 'string' && profileFallback.full_name.trim()) ||
+    undefined;
+  const currentName = typeof candidate.full_name === 'string' ? candidate.full_name.trim() : '';
+  const hydratedCandidate: Parameters<typeof buildVerifiedFacts>[0] = {
+    ...candidate,
+    ...((!currentName || currentName.toLowerCase() === 'applicant') && fallbackName ? { full_name: fallbackName } : {}),
+    ...(!candidate.email && (profileContacts?.email || profileFallback?.email)
+      ? { email: String(profileContacts?.email || profileFallback?.email) }
+      : {}),
+    ...(!candidate.phone && profileContacts?.phone ? { phone: String(profileContacts.phone) } : {}),
+  };
   const answers = fields.flatMap(({ label }) => {
     const entry = findReusableAnswer(label, entries);
     return entry ? [{ question: label, answer: entry.answer }] : [];
   });
-  const facts = buildVerifiedFacts(candidate, answers, screening, demographics);
+  const facts = buildVerifiedFacts(hydratedCandidate, answers, screening, demographics);
   const skills = new Set(experience?.atoms.flatMap((atom) => {
     if (atom.provenance !== 'manual' && atom.provenance !== 'stated_in_chat') return [];
     return (atom.skills ?? []).map((skill) => skill.trim().toLowerCase()).filter((skill) => skillsAsked.has(skill));
@@ -265,6 +297,7 @@ async function buildProviderClient(
       apiKey,
       model: config.model_id || 'default',
       agent: safeAgent.agent,
+      timeoutMs: 45_000,
       fetchFn: useSdk ? options?.fetchFn : createSsrfSafeFetch(safeAgent, options?.fetchFn),
     });
   }
@@ -304,6 +337,7 @@ async function buildProviderClient(
     apiKey: defaultApiKey,
     model: defaultModel,
     agent: safeAgent.agent,
+    timeoutMs: 45_000,
     fetchFn: useSdk ? options?.fetchFn : createSsrfSafeFetch(safeAgent, options?.fetchFn),
   });
 }

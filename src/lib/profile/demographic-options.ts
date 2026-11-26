@@ -68,6 +68,16 @@ export const DEMOGRAPHIC_FIELD_OPTIONS: Record<DemographicKey, readonly Demograp
     { value: 'No', label: 'No, I do not have a disability' },
     { value: 'Prefer not to say', label: 'Prefer not to say' },
   ],
+  neurodivergent: [
+    { value: 'Yes', label: 'Yes' },
+    { value: 'No', label: 'No' },
+    { value: 'Prefer not to say', label: 'Prefer not to say' },
+  ],
+  refugeeOrImmigrant: [
+    { value: 'Yes', label: 'Yes' },
+    { value: 'No', label: 'No' },
+    { value: 'Prefer not to say', label: 'Prefer not to say' },
+  ],
   sexualOrientation: [
     { value: 'Heterosexual / Straight', label: 'Heterosexual / Straight' },
     { value: 'Gay or Lesbian', label: 'Gay or Lesbian' },

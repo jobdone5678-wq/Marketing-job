@@ -449,6 +449,39 @@ describe('LinkedIn-style radios named after their question', () => {
 });
 
 describe('control naming', () => {
+  it('reads Race and work-location headings above generic combobox prompts', () => {
+    document.body.innerHTML = '<form><div><span>Race</span><div><input role="combobox" placeholder="Select ..."></div></div>' +
+      '<div><p>Which country do you intend to work from?*</p><small>Please list your city and country.</small>' +
+      '<div><input role="combobox" placeholder="Start typing..."></div></div></form>';
+    expect(extractForm(document).map(({ label, helperText }) => [label, helperText])).toEqual([
+      ['Race', undefined], ['Which country do you intend to work from?*', 'Please list your city and country.'],
+    ]);
+  });
+
+  it('groups ethnicity and communities prompts with trailing instructions into checkbox_group', () => {
+    document.body.innerHTML = '<form>' +
+      '<div><h3>Which ethnicity(ies) do you identify with? Please select all that apply.</h3>' +
+      '<div><label><input type="checkbox" name="asian">Asian</label>' +
+      '<label><input type="checkbox" name="white">White</label></div></div>' +
+      '<div><h3>Which of the following communities do you belong to? Please select all that apply.</h3>' +
+      '<div><label><input type="checkbox" name="vet">Veteran</label>' +
+      '<label><input type="checkbox" name="parent">Parent</label></div></div></form>';
+    expect(extractForm(document)).toMatchObject([
+      {
+        label: 'Which ethnicity(ies) do you identify with? Please select all that apply.',
+        widgetType: 'checkbox_group',
+        multiple: true,
+        options: ['Asian', 'White'],
+      },
+      {
+        label: 'Which of the following communities do you belong to? Please select all that apply.',
+        widgetType: 'checkbox_group',
+        multiple: true,
+        options: ['Veteran', 'Parent'],
+      },
+    ]);
+  });
+
   it('uses the field ID for discovery and writes when a control has no label or name', () => {
     document.body.innerHTML = '<form><input id="country"><input name="city" id="backup-city"></form>';
     expect(extractForm(document).map(({ label }) => label)).toEqual(['country', 'city']);

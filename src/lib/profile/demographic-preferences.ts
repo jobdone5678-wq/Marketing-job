@@ -8,10 +8,12 @@ export const demographicFields = {
   sex: ['Sex', /\bsex\b/],
   pronouns: ['Pronouns', /\bpronouns?\b/],
   hispanicOrigin: ['Hispanic or Latino origin', /\b(?:hispanic|latino|latina|latinx)\b/],
-  raceEthnicity: ['Race or ethnicity', /\b(?:race|ethnic(?:ity| group| background))\b/],
+  raceEthnicity: ['Race or ethnicity', /\b(?:race|racial background|ethnic(?:it(?:y|ies)| groups?| background))\b/],
   protectedVeteran: ['Protected veteran status', /\bprotected veteran\b/],
   veteran: ['Veteran status', /\b(?:veteran|military service)(?:s| status)?\b/],
   disability: ['Disability status', /\b(?:disabilit(?:y|ies)|disabled)\b/],
+  neurodivergent: ['Neurodivergent identity', /\bneurodivergent\b/],
+  refugeeOrImmigrant: ['Refugee or immigrant', /\b(?:refugee or immigrant|immigrant or refugee)\b/],
   sexualOrientation: ['Sexual orientation', /\bsexual orientation\b/],
   ageRange: ['Age range', /\b(?:age range|age group|age bracket|what is your (?:current )?age|how old are you|current age)\b/],
   religion: ['Religion or belief', /\b(?:religion|religious beliefs?|faith background|religious affiliation)\b/],
@@ -46,13 +48,21 @@ export function demographicKey(label: string): DemographicKey | undefined {
   const text = demographicWords(label);
   if (attestation.test(text) || /\b(?:authorized to work|authorised to work|work authorization|visa sponsorship|at least 18)\b/.test(text)) return undefined;
   const matches = demographicKeys.filter((key) => demographicFields[key][1].test(text));
-  const keys = matches.filter((key) => !(key === 'veteran' && matches.includes('protectedVeteran')));
+  const keys = matches.filter((key) =>
+    !(key === 'veteran' && matches.includes('protectedVeteran')) &&
+    !(key === 'hispanicOrigin' && matches.includes('raceEthnicity') && /^\s*(?:what is your |select your |which )?(?:race|ethnic)/.test(text)),
+  );
   return keys.length === 1 ? keys[0] : undefined;
+}
+
+export function isCommunitySelfIdQuestion(label: string): boolean {
+  return /\b(?:which (?:of the following )?communities (?:do )?you (?:belong to|identify with)|do you identify as any of the following)\b/i.test(label);
 }
 
 export function isDemographicQuestion(label: string): boolean {
   const text = demographicWords(label);
-  return /\b(?:date of birth|birth date|birth year|birthday|dob|demographics?)\b/.test(text) ||
+  return isCommunitySelfIdQuestion(text) ||
+    /\b(?:date of birth|birth date|birth year|birthday|dob|demographics?)\b/.test(text) ||
     demographicKeys.some((key) => demographicFields[key][1].test(text));
 }
 
@@ -86,6 +96,8 @@ function statusChoice(key: DemographicKey, option: string): boolean | undefined 
     transgender: [/^(?:yes|(?:yes )?i identify as transgender)$/, /^(?:no|(?:no )?i do not identify as transgender|not transgender)$/],
     parentalStatus: [/^(?:yes|(?:yes )?i am a parent(?: or have children)?|parent)$/, /^(?:no|(?:no )?i am not a parent)$/],
     caregiverStatus: [/^(?:yes|(?:yes )?i have caregiving responsibilities)$/, /^(?:no|(?:no )?i do not have caregiving responsibilities)$/],
+    neurodivergent: [/^(?:yes|(?:i am )?neurodivergent)$/, /^(?:no|i am not neurodivergent)$/],
+    refugeeOrImmigrant: [/^(?:yes|(?:i am )?(?:an? )?(?:refugee or immigrant|immigrant or refugee))$/, /^(?:no|i am neither a refugee nor an immigrant)$/],
     firstGeneration: [/^(?:yes|(?:yes )?i am a first generation (?:college|university|graduate|student))$/, /^(?:no|(?:no )?i am not a first generation (?:college|university|graduate|student))$/],
     schoolMeals: [/^(?:yes)$/, /^(?:no)$/],
     geneticInformation: [/^(?:yes)$/, /^(?:no)$/],
@@ -101,7 +113,7 @@ const CHOICE_ALIASES: Partial<Record<DemographicKey, readonly RegExp[]>> = {
   gender: [
     /^(?:male|man|cisgender man|male\s*\/\s*man|man\s*\/\s*male)$/,
     /^(?:female|woman|cisgender woman|female\s*\/\s*woman|woman\s*\/\s*female)$/,
-    /^(?:non ?binary|nonbinary|non ?binary\s*\/\s*genderqueer)$/,
+    /^(?:non ?binary|nonbinary|non ?binary\s*\/\s*(?:genderqueer|third gender))$/,
     /^(?:genderqueer|gender non ?conforming|genderqueer\s*\/\s*gender non ?conforming)$/,
     /^(?:transgender|trans)$/,
   ],
@@ -117,14 +129,14 @@ const CHOICE_ALIASES: Partial<Record<DemographicKey, readonly RegExp[]>> = {
     /^she\s*\/\s*they$/,
   ],
   raceEthnicity: [
-    /^(?:asian(?:\s+or\s+asian\s+american)?|east asian|south asian|southeast asian)(?:\s+not hispanic or latin[eoax])?$/,
-    /^white(?:\s+not hispanic or latin[eoax])?$/,
-    /^(?:black(?:\s+or\s+african\s+american)?(?:\s+not hispanic or latin[eoax])?|african american|black african caribbean or black british)$/,
-    /^hispanic(?:\s+or\s+latin[eoax])?$/,
-    /^(?:american indian or alaska native|native american or alaska native|indigenous(?:\s+or\s+native american)?|native american)(?:\s+not hispanic or latin[eoax])?$/,
+    /^(?:asian(?:\s*(?:or|\/)\s*asian american)?|east asian|south asian|southeast asian)(?:\s+not hispanic or latin[eoax])?$/,
+    /^(?:white(?:\s*\/\s*caucasian)?|caucasian)(?:\s+not hispanic or latin[eoax])?$/,
+    /^(?:black(?:\s*(?:or|\/)\s*african american)?(?:\s+not hispanic or latin[eoax])?|african american|black african caribbean or black british)$/,
+    /^hispanic(?:\s*(?:or|\/)\s*latin[eoax])?$/,
+    /^(?:american indian or alaska native|native american or alaska native|indigenous(?:\s*(?:or|\/)\s*native american)?|native american)(?:\s+not hispanic or latin[eoax])?$/,
     /^native hawaiian or (?:other )?pacific islander(?:\s+not hispanic or latin[eoax])?$/,
-    /^middle eastern or north african(?:\s+not hispanic or latin[eoax])?$/,
-    /^(?:two or more races(?:\s+not hispanic or latin[eoax])?|multiracial|mixed(?: or multiple ethnic groups)?)$/,
+    /^(?:middle eastern or north african|mena)(?:\s+not hispanic or latin[eoax])?$/,
+    /^(?:two or more races(?:\s*\/\s*ethnicities|\s+or\s+ethnicities)?(?:\s+not hispanic or latin[eoax])?|multiracial|mixed(?: or multiple ethnic groups)?)$/,
   ],
   sexualOrientation: [
     /^(?:heterosexual|straight|heterosexual\s*\/\s*straight)$/,
@@ -149,19 +161,30 @@ const CHOICE_ALIASES: Partial<Record<DemographicKey, readonly RegExp[]>> = {
 function aliasGroup(key: DemographicKey, option: string): number {
   const groups = CHOICE_ALIASES[key];
   if (!groups) return -1;
-  return groups.findIndex((pattern) => pattern.test(option));
+  const label = key === 'gender' || key === 'raceEthnicity'
+    ? option.replace(/^i (?:identify as|am) (?:a |an )?/, '') : option;
+  return groups.findIndex((pattern) => pattern.test(label));
 }
 
 /** Only distinctive labels carry demographic meaning when the ATS omits the group heading. */
 export function demographicOptionKey(label: string): DemographicKey | undefined {
   const option = optionKey(label);
   if (aliasGroup('pronouns', option) >= 0) return 'pronouns';
-  if (/^(?:asian or asian american|black or african american|hispanic or latin[eoax]|indigenous or native american|american indian or alaska native|native hawaiian or (?:other )?pacific islander)$/.test(option)) return 'raceEthnicity';
+  if (/^(?:asian or asian american|black or african american|hispanic\s*(?:or|\/)\s*latin[eoax]|indigenous or native american|american indian or alaska native|native hawaiian or (?:other )?pacific islander)$/.test(option)) return 'raceEthnicity';
   return undefined;
 }
 
+export function demographicSelectionKey(question: string, option: string): DemographicKey | undefined {
+  return demographicKey(question) ?? demographicOptionKey(option) ?? demographicKey(option);
+}
+
 function ageBounds(option: string): [number, number] | undefined {
-  const range = option.replace(/^(?:aged?|ages)\s+|\s+years?(?: old)?$/g, '');
+  const range = option
+    .replace(/^(?:aged?|ages)\s+/g, '')
+    .replace(/\s+years?(?: old)?$/g, '')
+    .replace(/\s+years?\s+(?=(?:or|and)\s+(?:older|over|younger|under)\b)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   const between = range.match(/^(\d{1,3})(?: to)? (\d{1,3})$/);
   if (between) {
     const lower = Number(between[1]);
@@ -213,7 +236,7 @@ export function mixedDemographicChoices(
   const chosen: string[] = [];
   const matchedKeys: DemographicKey[] = [];
   for (const option of options) {
-    const key = demographicKey(option);
+    const key = demographicSelectionKey('', option);
     if (!key) continue;
     matchedKeys.push(key);
     const saved = answers[key] ?? (key === 'veteran' ? answers.protectedVeteran : undefined);

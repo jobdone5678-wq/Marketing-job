@@ -14,7 +14,7 @@ import type { FieldTag, FormField, LabelFill, FillOutcome, FillStatus, Upload, W
 import type { AutofillProfile } from './freehire';
 import { easyApplyDialog, easyApplyFieldError, isStoredResumeChoice } from './easyApply';
 import { choiceType, extractHelperText, extractLabel, precedingPrompt, textFromIds } from './formLabel';
-import { demographicKey } from '../../src/lib/profile/demographic-preferences';
+import { demographicKey, isCommunitySelfIdQuestion } from '../../src/lib/profile/demographic-preferences';
 import { binaryChoice, formatAuthorizedCountries, matchChoice, matchFieldKey, normalizeLabel } from './fieldKeys';
 
 export type Fillable = HTMLElement;
@@ -272,7 +272,7 @@ function booleanButtonGroup(el: HTMLButtonElement): { container: Element; questi
 }
 
 const isDemographicPrompt = (text: string) =>
-  Boolean(demographicKey(text)) || /^do you identify as any of the following\b/i.test(text);
+  Boolean(demographicKey(text)) || isCommunitySelfIdQuestion(text);
 
 /** ATS forms often put a plain-text heading above a list of choices (with or without `name`). */
 function questionBeforeOptions(el: Fillable): { container: Element; question: string; binaryPair: boolean } | null {
@@ -307,7 +307,8 @@ function questionBeforeOptions(el: Fillable): { container: Element; question: st
     if (!first) break;
     let branch = first as Element;
     while (branch.parentElement && branch.parentElement !== container) branch = branch.parentElement;
-    const isPrompt = (text: string) => /\?\s*\*?$/.test(text) || (checkboxList && isDemographicPrompt(text));
+    const isPrompt = (text: string) => /\?\s*(?:\*\s*)?(?:please select all that apply\.?\s*)?$/i.test(text) ||
+      (checkboxList && isDemographicPrompt(text));
     const prefix: string[] = [];
     for (const node of container.childNodes) {
       if (first && node.contains(first)) break;
@@ -516,7 +517,10 @@ function applyExactChoices({ controls }: Question, choices: string[]): boolean {
   if (first instanceof HTMLSelectElement) {
     if (!first.multiple && choices.length > 1) return false;
     const offered = Array.from(first.options).filter(isSelectableOption);
-    const matches = choices.map((choice) => offered.filter((option) => collapse(option.textContent) === choice));
+    const matches = choices.map((choice) => {
+      const exact = offered.filter((option) => collapse(option.textContent) === choice);
+      return exact.length ? exact : offered.filter((option) => normalizeLabel(collapse(option.textContent)) === normalizeLabel(choice));
+    });
     if (matches.some((options) => options.length !== 1)) return false;
     const chosen = new Set(matches.flat());
     Array.from(first.options).forEach((option) => { option.selected = chosen.has(option); });
@@ -527,7 +531,10 @@ function applyExactChoices({ controls }: Question, choices: string[]): boolean {
   const isButtons = isBooleanButtonsQuestion(controls);
   const type = choiceType(first);
   if (controls.length < 2 || (!type && !isButtons) || ((type === 'radio' || isButtons) && choices.length > 1)) return false;
-  const matches = choices.map((choice) => controls.filter((control) => extractLabel(control) === choice));
+  const matches = choices.map((choice) => {
+    const exact = controls.filter((control) => extractLabel(control) === choice);
+    return exact.length ? exact : controls.filter((control) => normalizeLabel(extractLabel(control)) === normalizeLabel(choice));
+  });
   if (matches.some((options) => options.length !== 1)) return false;
   return matches.flat().every((control) => fillField(control, 'true'));
 }
