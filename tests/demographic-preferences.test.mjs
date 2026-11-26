@@ -154,6 +154,22 @@ test('demographic preferences options, matching, Supabase RLS, and /api/v1/me/de
     clone(prefsLib.demographicChoices('protectedVeteran', ['No'], ['I am a protected veteran', 'I am not a protected veteran'])),
     ['I am not a protected veteran']
   );
+  assert.equal(prefsLib.demographicKey('What is your current age?'), 'ageRange');
+  assert.deepEqual(
+    clone(prefsLib.demographicChoices('raceEthnicity', ['Asian'], ['Asian or Asian American', 'Black or African American', 'Hispanic or Latine', 'Indigenous or Native American', 'White', 'I prefer not to answer'])),
+    ['Asian or Asian American']
+  );
+  assert.deepEqual(
+    clone(prefsLib.demographicChoices('raceEthnicity', ['Hispanic or Latino'], ['Asian or Asian American', 'Hispanic or Latine', 'White'])),
+    ['Hispanic or Latine']
+  );
+  assert.deepEqual(
+    clone(prefsLib.mixedDemographicChoices(
+      { disability: ['Yes'], veteran: ['No'], parentalStatus: ['Yes'] },
+      ['Person with disability', 'Neurodivergent', 'Veteran', 'Parent', 'Refugee or immigrant', 'None of the above']
+    )),
+    ['Person with disability', 'Parent']
+  );
 
   // 3. Route rejects unauthenticated callers
   const unauth = await route.GET(new Request('http://localhost/api/v1/me/demographic-preferences'), { db });

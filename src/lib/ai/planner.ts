@@ -143,11 +143,17 @@ export function inferQuestionDescriptor(field: Field): {
   } else if (/\b(state|province|region)\b/.test(norm)) {
     canonical = 'state';
     category = 'location';
+  } else if (/\b(intend\s+to\s+work|intended\s+(?:work\s+)?country|country\s+of\s+intended\s+employment)\b/.test(norm)) {
+    canonical = 'intended_work_country';
+    category = 'location';
   } else if (/\b(country|residence|nation)\b/.test(norm)) {
     canonical = 'country';
     category = 'location';
   } else if (/\b(address|street)\b/.test(norm)) {
     canonical = 'full_address';
+    category = 'location';
+  } else if (/\b(current\s+location|where\s+are\s+you\s+(?:based|located)|^location$)\b/.test(norm)) {
+    canonical = 'location';
     category = 'location';
   } else if (/\b(linkedin)\b/.test(norm)) {
     canonical = 'linkedin_url';
@@ -158,6 +164,12 @@ export function inferQuestionDescriptor(field: Field): {
   } else if (/\b(website|portfolio)\b/.test(norm)) {
     canonical = 'website';
     category = 'contact';
+  } else if (/\b(current\s+(?:company|employer|organization)|employer\s*name)\b/.test(norm)) {
+    canonical = 'current_employer';
+    category = 'experience';
+  } else if (/\b(current\s+(?:job\s+)?title|current\s+(?:role|position))\b/.test(norm)) {
+    canonical = 'current_job_title';
+    category = 'experience';
   } else if (/\b(salary|compensation|pay\s*expectation|expected\s*pay)\b/.test(norm)) {
     canonical = 'expected_salary';
     category = 'compensation';
@@ -185,6 +197,12 @@ export function inferQuestionDescriptor(field: Field): {
   } else if (/\b(years?\s*of\s*experience|total\s*experience|experience\s*years)\b/.test(norm)) {
     canonical = 'total_experience_years';
     category = 'experience';
+  } else if (/\b(graduation\s*year|year\s*of\s*graduation|grad\s*year)\b/.test(norm)) {
+    canonical = 'graduation_year';
+    category = 'education';
+  } else if (/\b(university|college|school|alma\s*mater)\b/.test(norm)) {
+    canonical = 'university';
+    category = 'education';
   } else if (/\b(degree|education|highest\s*qualification|highest\s*education)\b/.test(norm)) {
     canonical = 'highest_qualification';
     category = 'education';
@@ -207,7 +225,7 @@ export function inferQuestionDescriptor(field: Field): {
 }
 
 function normalizeFieldLabel(label: string): string {
-  return label.trim().toLowerCase().replace(/\s+/g, ' ');
+  return label.replace(/\*/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
 /**

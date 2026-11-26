@@ -331,4 +331,54 @@ describe('fillByLabel on a group', () => {
     expect(o?.status).toBe('filled');
     expect(document.querySelector<HTMLInputElement>('input')?.checked).toBe(true);
   });
+
+  it('groups nameless React-style checkbox questions inside div containers without merging sibling groups', () => {
+    document.body.innerHTML = `
+      <div class="section">
+        <div class="field">
+          <label>Race / Ethnicity</label>
+          <div class="options">
+            <div><label><input type="checkbox"> Asian or Asian American</label></div>
+            <div><label><input type="checkbox"> Black or African American</label></div>
+            <div><label><input type="checkbox"> Hispanic or Latine</label></div>
+            <div><label><input type="checkbox"> White</label></div>
+            <div><label><input type="checkbox"> I prefer not to answer</label></div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Do you identify as any of the following?</label>
+          <div class="options">
+            <div><label><input type="checkbox"> Person with disability</label></div>
+            <div><label><input type="checkbox"> Veteran</label></div>
+            <div><label><input type="checkbox"> Parent</label></div>
+            <div><label><input type="checkbox"> None of the above</label></div>
+          </div>
+        </div>
+      </div>`;
+
+    const fields = extractForm(document);
+    expect(fields).toHaveLength(2);
+    expect(fields[0]).toMatchObject({
+      label: 'Race / Ethnicity',
+      type: 'checkbox',
+      multiple: true,
+      options: ['Asian or Asian American', 'Black or African American', 'Hispanic or Latine', 'White', 'I prefer not to answer'],
+    });
+    expect(fields[1]).toMatchObject({
+      label: 'Do you identify as any of the following?',
+      type: 'checkbox',
+      multiple: true,
+      options: ['Person with disability', 'Veteran', 'Parent', 'None of the above'],
+    });
+
+    const outcomes = fillByLabel(document, [
+      { label: 'Race / Ethnicity', value: 'Asian or Asian American' },
+      { label: 'Do you identify as any of the following?', value: 'Veteran, Parent' },
+    ]);
+    expect(outcomes.every((o) => o.status === 'filled')).toBe(true);
+    const checked = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'))
+      .filter((el) => el.checked)
+      .map((el) => el.parentElement?.textContent?.trim());
+    expect(checked).toEqual(['Asian or Asian American', 'Veteran', 'Parent']);
+  });
 });

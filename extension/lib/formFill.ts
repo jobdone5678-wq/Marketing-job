@@ -11,7 +11,7 @@ import {
   saveBankAnswer,
 } from './freehire';
 import { isAutofillProse, isPrivateAutofillField } from './autofillSafety';
-import { demographicChoices, demographicKey, type DemographicPreferences } from '../../src/lib/profile/demographic-preferences';
+import { demographicChoices, demographicKey, mixedDemographicChoices, type DemographicPreferences } from '../../src/lib/profile/demographic-preferences';
 import type { FormContext } from '../../src/lib/ai/planner';
 import { normalizeLabel, offeredChoice } from './fieldKeys';
 import { profileToValues } from './form';
@@ -236,8 +236,19 @@ async function fillApplication(
       for (const field of uniqueFields(scoped, true)) {
         if (stopped()) return;
         const key = demographicKey(field.label);
-        const saved = key ? demographics.answers[key] : undefined;
-        if (!key || !saved?.length) continue;
+        const saved = key
+          ? demographics.answers[key] ?? (key === 'veteran' ? demographics.answers.protectedVeteran : undefined)
+          : undefined;
+        if (!key) {
+          if (field.type === 'checkbox' && field.multiple && field.options?.length) {
+            const choices = mixedDemographicChoices(demographics.answers, field.options);
+            if (choices.length) {
+              await walk([{ label: field.label, frame: field.frame, form: field.form, value: choices.join(', '), choices }]);
+            }
+          }
+          continue;
+        }
+        if (!saved?.length) continue;
         if (field.combo) {
           await fillCombobox(field, async (options) => demographicChoices(key, saved, options), undefined, true);
         } else if (field.options?.length && (field.tag === 'select' || field.type === 'radio' || field.type === 'checkbox')) {

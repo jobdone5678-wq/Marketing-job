@@ -18,8 +18,12 @@ vi.mock('./freehire', () => ({
 vi.mock('./analytics', () => ({ track: vi.fn() }));
 
 import { runAutofill, type FillPanel } from './formFill';
+import { isAutofillProse } from './autofillSafety';
+import { getAutofillSessionProfile, getAutofillSettings, requestAutofillPlan, requestAutofillChoice, generateAutofillAnswer } from './freehire';
 
-const field = (index: number, label: string) => ({ index, form: 0, frame: 0, tag: 'input', label, value: '' });
+const field = (index: number, label: string, extra: Record<string, unknown> = {}) => ({
+  index, form: 0, frame: 0, tag: 'input', type: 'text', label, value: '', ...extra,
+});
 
 describe('deterministicAutofill job-alert guard', () => {
   beforeEach(() => {
@@ -58,5 +62,119 @@ describe('deterministicAutofill job-alert guard', () => {
     await p;
     vi.useRealTimers();
     expect(fillCalls().length).toBeGreaterThan(0);
+  });
+
+  it('fills optional demographic groups, intended country, age, and behavioral prose questions', async () => {
+    expect(isAutofillProse('Describe a mistake you made in recent years and how did you change your approach afterward?')).toBe(true);
+    expect(isAutofillProse('How did you handle a conflict and how did you change your approach afterward?')).toBe(true);
+    expect(isAutofillProse('How many years of experience?')).toBe(false);
+
+    vi.mocked(getAutofillSessionProfile).mockResolvedValueOnce({
+      meta: { candidateId: 'cand-1' },
+      data: {
+        full_name: 'Ilya S',
+        first_name: 'Ilya',
+        last_name: 'S',
+        email: 'i@x.io',
+        phone: '',
+        location: '',
+        country: 'United States',
+        intended_work_country: 'United States',
+        linkedin: '',
+        github: '',
+        portfolio: '',
+        authorized_countries: 'US',
+        visa_sponsorship_needed: '',
+        desired_salary: '',
+        notice_period: '',
+        willing_to_relocate: '',
+        age_18_or_older: '',
+      },
+    });
+    vi.mocked(getAutofillSettings).mockResolvedValueOnce({ mode: 'server', configVersion: 1 });
+    vi.mocked(requestAutofillPlan).mockResolvedValue({ ok: true, executableFills: [] });
+    vi.mocked(requestAutofillChoice).mockResolvedValue({ ok: true, choice: null });
+    vi.mocked(generateAutofillAnswer).mockResolvedValueOnce({ ok: true, answer: 'I learned to verify early.' });
+
+    const pageFields = [
+      field(0, 'First name', { required: true }),
+      field(1, 'Email', { required: true }),
+      field(2, 'Describe a mistake you made in recent years and how did you change your approach afterward?', { tag: 'textarea', required: true }),
+      field(3, 'Which country do you intend to work from?', { combo: true, required: false }),
+      field(4, 'What is your current age?', { tag: 'select', type: 'select', options: ['18-24', '25-34', '35-44'], required: false }),
+      field(5, 'What is your gender identity?', { combo: true, required: false }),
+      field(6, 'Race / Ethnicity', { type: 'checkbox', multiple: true, options: ['Asian or Asian American', 'Black or African American', 'Hispanic or Latine', 'White', 'I prefer not to answer'], required: false }),
+      field(7, 'Do you identify as any of the following?', { type: 'checkbox', multiple: true, options: ['Person with disability', 'Neurodivergent', 'Veteran', 'Parent', 'None of the above'], required: false }),
+    ];
+
+    const filled: Record<string, string> = {};
+    sendMessage.mockImplementation(async (m: { kind: string; fills?: Array<{ label: string; value: string }>; step?: { action: string; label: string; value: string } }) => {
+      if (m.kind === 'GET_FRAMED_FORM') {
+        return {
+          kind: 'FRAMED_FORM',
+          fields: pageFields.map((f) => Object.assign({}, f, { value: filled[f.label] ?? '' })),
+          uploads: [{ frame: 0, form: 0 }],
+        };
+      }
+      if (m.kind === 'FILL_BY_LABEL') {
+        for (const f of m.fills ?? []) filled[f.label] = f.value;
+        return { kind: 'FILL_OUTCOMES', outcomes: (m.fills ?? []).map((f) => ({ label: f.label, status: 'filled' })) };
+      }
+      if (m.kind === 'COMBOBOX_STEP' && m.step) {
+        const { action, label, value } = m.step;
+        if (action === 'open') return { kind: 'COMBOBOX_REPLY', reply: { status: 'opened' } };
+        if (action === 'options') {
+          return {
+            kind: 'COMBOBOX_REPLY',
+            reply: {
+              status: 'open',
+              options: label.includes('country') ? ['United States', 'Canada'] : ['Man', 'Woman', 'Prefer not to say'],
+            },
+          };
+        }
+        if (action === 'select') {
+          filled[label] = value;
+          return { kind: 'COMBOBOX_REPLY', reply: { status: 'selected' } };
+        }
+        if (action === 'verify') return { kind: 'COMBOBOX_REPLY', reply: { status: 'verified' } };
+      }
+      return { kind: 'FILL_OUTCOMES', outcomes: [] };
+    });
+
+    const panel = {
+      notice: vi.fn(),
+      offerOverride: vi.fn(),
+      walk: { filling: vi.fn(), stopped: () => false, wrote: vi.fn(), answered: vi.fn() },
+      refreshPlan: async () => {},
+      known: vi.fn(),
+      refused: vi.fn(),
+    } as FillPanel;
+
+    vi.useFakeTimers();
+    const p = runAutofill('t', panel, new AbortController().signal, {
+      enabled: true,
+      answers: {
+        ageRange: ['25-34'],
+        gender: ['Male'],
+        raceEthnicity: ['Asian'],
+        disability: ['Yes'],
+        veteran: ['No'],
+        parentalStatus: ['Yes'],
+      },
+    });
+    await vi.runAllTimersAsync();
+    await p;
+    vi.useRealTimers();
+
+    expect(filled).toEqual({
+      'First name': 'Ilya',
+      'Email': 'i@x.io',
+      'Describe a mistake you made in recent years and how did you change your approach afterward?': 'I learned to verify early.',
+      'Which country do you intend to work from?': 'United States',
+      'What is your current age?': '25-34',
+      'What is your gender identity?': 'Man',
+      'Race / Ethnicity': 'Asian or Asian American',
+      'Do you identify as any of the following?': 'Person with disability, Parent',
+    });
   });
 });

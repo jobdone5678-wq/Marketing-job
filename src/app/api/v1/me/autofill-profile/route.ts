@@ -10,6 +10,29 @@ const corsOptions = { methods: 'GET, OPTIONS', credentials: false };
 const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 const yesNo = (value: boolean | null) => (value === null ? '' : value ? 'Yes' : 'No');
 
+function countryFromCode(code: string): string {
+  const up = code.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(up)) return code.trim();
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'region' }).of(up) ?? up;
+  } catch {
+    return up;
+  }
+}
+
+function resolveCountry(facts: Record<string, unknown>, authorizedCountries: string[] | null): string {
+  const direct = text(facts.country) || text(facts.current_country);
+  if (direct) return direct;
+  const loc = facts.location && typeof facts.location === 'object' ? (facts.location as Record<string, unknown>) : null;
+  const countries = Array.isArray(loc?.countries) ? loc.countries.map(text).filter(Boolean) : [];
+  if (countries.length === 1 && countries[0]) return countryFromCode(countries[0]);
+  const where = text(loc?.whereBased) || text(facts.full_address);
+  const parts = where.split(',').map((p) => p.trim()).filter(Boolean);
+  if (parts.length >= 3) return parts[parts.length - 1]!;
+  if (authorizedCountries?.length === 1 && authorizedCountries[0]) return countryFromCode(authorizedCountries[0]);
+  return '';
+}
+
 export function OPTIONS(request: Request) {
   return cors(request, new Response(null, { status: 204 }), corsOptions);
 }
@@ -48,6 +71,8 @@ async function readProfile(request: Request): Promise<Response> {
   const salary = screening.desired_salary_amount;
   const salaryPeriod = screening.desired_salary_period;
   const noticeDays = screening.notice_period_days;
+  const country = resolveCountry(facts, screening.authorized_countries);
+  const intendedWorkCountry = text(facts.intended_work_country) || country;
 
   return Response.json({
     meta: { candidateId: candidate?.id ?? null },
@@ -61,6 +86,10 @@ async function readProfile(request: Request): Promise<Response> {
         ? text(facts.full_address)
         : text(facts.location) ||
           [text(facts.current_city), text(facts.current_state)].filter(Boolean).join(', '),
+      state: text(facts.current_state),
+      country,
+      postal_code: text(facts.zip_code) || text(facts.postal_code),
+      intended_work_country: intendedWorkCountry,
       linkedin: text(facts.linkedin_url),
       github: text(facts.github_url),
       portfolio: Object.hasOwn(facts, 'portfolio_url')

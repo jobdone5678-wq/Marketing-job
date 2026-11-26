@@ -274,6 +274,10 @@ export interface AutofillProfile {
   email: string;
   phone: string;
   location: string;
+  state?: string;
+  country?: string;
+  postal_code?: string;
+  intended_work_country?: string;
   linkedin: string;
   github: string;
   portfolio: string;

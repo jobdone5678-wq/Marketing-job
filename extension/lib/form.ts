@@ -121,34 +121,51 @@ function groupOf(el: Fillable): { container: Element; question: string; key: str
     const choices = Array.from(labelled.container.querySelectorAll<Fillable>(CHOICES))
       .filter((choice) => choice.closest('fieldset, [role="group"], [role="radiogroup"]') === labelled.container);
     const names = new Set(choices.map((choice) => choice.getAttribute('name')?.trim()).filter(Boolean));
-    const distinctCheckboxes = type === 'checkbox' && names.size > 1 &&
-      choices.every((choice) => !extractLabel(choice).includes('?'));
-    if ((distinctCheckboxes || labelled.container.matches('[role="radiogroup"]') ||
+    const labels = new Set(choices.map((choice) => normalizeLabel(extractLabel(choice))));
+    const noQuestionMark = choices.every((choice) => !extractLabel(choice).includes('?'));
+    const distinctCheckboxes = type === 'checkbox' && names.size > 1 && noQuestionMark;
+    const checkboxGroup = type === 'checkbox' && noQuestionMark &&
+      !(labels.has('yes') && labels.has('no')) && !/\bquestions\b/i.test(labelled.question);
+    if ((distinctCheckboxes || checkboxGroup || labelled.container.matches('[role="radiogroup"]') ||
         /\b(?:which|select|choose|check|how|what|where)\b|\?/i.test(labelled.question)) &&
         choices.length > 1 && choices.includes(el) && choices.every((choice) => choiceType(choice) === type) &&
         !labelled.container.querySelector('fieldset, [role="group"], [role="radiogroup"]')) {
       return { ...labelled, key: type };
     }
   }
-  if (!(el instanceof HTMLInputElement)) return null;
   const inferred = questionBeforeOptions(el);
   if (inferred?.binaryPair) return { ...inferred, key: 'binary radio' };
-  if (!el.name) return null;
-  const group = labelled ?? namedByControls(el) ?? inferred;
-  return group ? { ...group, key: `${el.type} ${el.name}` } : null;
+  const name = el.getAttribute('name')?.trim() ?? '';
+  if (!name) return inferred ? { ...inferred, key: `${type}:${inferred.question}` } : null;
+  const group = labelled ?? (el instanceof HTMLInputElement ? namedByControls(el) : null) ?? inferred;
+  return group ? { ...group, key: `${type} ${name}` } : null;
 }
 
-/** ATS forms often put a plain-text heading above a list of same-name choices. */
-function questionBeforeOptions(el: HTMLInputElement): { container: Element; question: string; binaryPair: boolean } | null {
+/** ATS forms often put a plain-text heading above a list of choices (with or without `name`). */
+function questionBeforeOptions(el: Fillable): { container: Element; question: string; binaryPair: boolean } | null {
+  const type = choiceType(el);
+  if (!type) return null;
   for (let container = el.parentElement; container; container = container.parentElement) {
     if (container.matches('form, body, [role="dialog"]')) break;
-    const choices = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"], input[type="checkbox"]'));
-    if (choices.some((item) => item.type !== el.type)) break;
+    // Do not merge unrelated non-choice controls or separate nested question groups.
+    if (container.querySelector('input:not([type="radio"]):not([type="checkbox"]), select, textarea')) break;
+    const choices = Array.from(container.querySelectorAll<Fillable>(CHOICES));
+    if (choices.some((item) => choiceType(item) !== type)) break;
     if (choices.length < 2) continue;
+    const hasNestedSubgroup = Array.from(container.children).some((child) => {
+      const sub = child.querySelectorAll(CHOICES);
+      return sub.length >= 2 && sub.length < choices.length;
+    });
+    if (hasNestedSubgroup) break;
     const labels = new Set(choices.map((choice) => normalizeLabel(extractLabel(choice))));
-    const binaryPair = el.type === 'radio' && choices.length === 2 && labels.has('yes') && labels.has('no');
-    const sameName = el.name && choices.every((choice) => choice.name === el.name);
-    if (!sameName && !binaryPair) break;
+    const binaryPair = type === 'radio' && choices.length === 2 && labels.has('yes') && labels.has('no');
+    const firstName = choices[0]?.getAttribute('name')?.trim() ?? '';
+    const sameName = Boolean(firstName) && choices.every((choice) => (choice.getAttribute('name')?.trim() ?? '') === firstName);
+    const checkboxList =
+      type === 'checkbox' &&
+      !(labels.has('yes') && labels.has('no')) &&
+      choices.every((choice) => !extractLabel(choice).includes('?'));
+    if (!sameName && !binaryPair && !checkboxList) break;
     const first = choices[0];
     const prefix: string[] = [];
     for (const node of container.childNodes) {
@@ -159,9 +176,11 @@ function questionBeforeOptions(el: HTMLInputElement): { container: Element; ques
     const nearby = container.previousElementSibling;
     const siblingQuestion = nearby && !nearby.querySelector('input, select, textarea, button')
       ? collapse(nearby.textContent) : '';
-    const question = collapse(prefix.join(' ')) || (/\?\s*\*?$/.test(siblingQuestion) ? siblingQuestion : '');
+    const question =
+      collapse(prefix.join(' ')) ||
+      ((/\?\s*\*?$/.test(siblingQuestion) || (checkboxList && siblingQuestion.length <= 300)) ? siblingQuestion : '');
     if (question && question.length <= 2000 && !labels.has(normalizeLabel(question)) &&
-        (sameName || /\?\s*\*?$/.test(question))) {
+        (sameName || checkboxList || /\?\s*\*?$/.test(question))) {
       return { container, question, binaryPair: binaryPair && !sameName };
     }
   }
@@ -615,6 +634,10 @@ export function profileToValues(p: AutofillProfile): Record<string, string> {
     email: p.email,
     phone: p.phone,
     city: p.location,
+    state: p.state ?? '',
+    country: p.country ?? '',
+    postalCode: p.postal_code ?? '',
+    intendedWorkCountry: p.intended_work_country || p.country || '',
     linkedin: p.linkedin,
     github: p.github,
     portfolio: p.portfolio,

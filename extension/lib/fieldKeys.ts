@@ -29,7 +29,13 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
   ],
   city: ['city', 'town', 'current location', 'location (city)', 'ort', 'wohnort', 'stadt'],
   state: ['state', 'province', 'region', 'bundesland'],
-  country: ['country', 'land'],
+  country: ['country', 'country of residence', 'current country', 'land'],
+  intendedWorkCountry: [
+    'which country do you intend to work from',
+    'country you intend to work from',
+    'country of intended employment',
+    'intended work country',
+  ],
   postalCode: ['postal code', 'zip', 'zip code', 'pincode', 'pin code', 'plz', 'postleitzahl'],
   linkedin: ['linkedin'],
   github: ['github'],
@@ -162,7 +168,15 @@ export function matchChoice(answer: string, option: string, question = ''): bool
   if (normalizeLabel(answer) === optionWithoutDialCode) return true;
   if (optionWithoutDialCode !== optionLabel && /^[A-Z]{2}$/.test(answer.trim()) &&
       matchesCountry(optionWithoutDialCode, answer)) return true;
-  if (matchFieldKey(question) === 'noticePeriod') {
+  const fieldKey = matchFieldKey(question);
+  if ((fieldKey === 'country' || fieldKey === 'intendedWorkCountry') && /^[A-Z]{2}$/.test(answer.trim()) &&
+      matchesCountry(optionLabel, answer)) return true;
+  if ((fieldKey === 'country' || fieldKey === 'intendedWorkCountry') &&
+      ((normalizeLabel(answer) === 'united states' && optionLabel === 'united states of america') ||
+       (normalizeLabel(answer) === 'united states of america' && optionLabel === 'united states') ||
+       (normalizeLabel(answer) === 'united kingdom' && optionLabel === 'uk') ||
+       (normalizeLabel(answer) === 'uk' && optionLabel === 'united kingdom'))) return true;
+  if (fieldKey === 'noticePeriod') {
     const days = normalizeLabel(answer).match(/^(\d+) days?$/)?.[1];
     const weeks = optionLabel.match(/^(\d+) weeks?$/)?.[1];
     if (days !== undefined && weeks !== undefined && Number(days) === Number(weeks) * 7) return true;

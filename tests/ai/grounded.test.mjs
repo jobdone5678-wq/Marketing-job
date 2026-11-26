@@ -311,5 +311,29 @@ test('grounded engine: question-specific typed validation & anti-hallucination g
     assert.equal(validateGroundedAnswer('$120,000', facts, inferQuestionDescriptor({ label: 'What are your salary expectations?' })).valid, true);
     assert.equal(validateGroundedAnswer('Asian', facts, inferQuestionDescriptor({ label: 'Which ethnicity(ies) do you identify with?' })).valid, false);
     assert.equal(validateGroundedAnswer('She/Her', facts, inferQuestionDescriptor({ label: 'What are your pronouns? (Optional)' })).valid, false);
+
+    const portalFacts = buildVerifiedFacts({
+      full_name: 'Alex Portal',
+      confirmed_facts: {
+        location: { whereBased: 'Austin, United States', countries: ['US'] },
+        intended_work_country: 'United States',
+        current_employer: 'Acme Corp',
+        current_job_title: 'Staff Engineer',
+        university_name: 'MIT',
+        graduation_year: '2019',
+      },
+    }, undefined, {
+      age_18_or_older: true,
+      notice_period_days: 0,
+      willing_to_relocate: true,
+      visa_sponsorship_needed: false,
+      authorized_countries: ['us'],
+    });
+    assert.equal(validateGroundedAnswer('United States', portalFacts, inferQuestionDescriptor({ label: 'Which country do you intend to work from?' })).valid, true);
+    assert.equal(validateGroundedAnswer('Acme Corp', portalFacts, inferQuestionDescriptor({ label: 'Current Company' })).valid, true);
+    assert.equal(validateGroundedAnswer('Staff Engineer', portalFacts, inferQuestionDescriptor({ label: 'Current Job Title' })).valid, true);
+    assert.equal(validateGroundedAnswer('MIT', portalFacts, inferQuestionDescriptor({ label: 'University' })).valid, true);
+    assert.equal(validateGroundedAnswer('2019', portalFacts, inferQuestionDescriptor({ label: 'Graduation Year' })).valid, true);
+    assert.equal(validateGroundedAnswer('Immediately', portalFacts, inferQuestionDescriptor({ label: 'Earliest start date' })).valid, true);
   });
 });

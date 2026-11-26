@@ -121,4 +121,9 @@ describe('matchFieldKey with a preamble', () => {
   it('keeps word boundaries for long synonyms', () => {
     expect(matchFieldKey('Is the notice periodicity of our reviews fine?')).toBeNull();
   });
+
+  it('maps intended work country questions and matches ISO country codes', () => {
+    expect(matchFieldKey('Which country do you intend to work from?')).toBe('intendedWorkCountry');
+    expect(matchFieldKey('Country of residence *')).toBe('country');
+  });
 });

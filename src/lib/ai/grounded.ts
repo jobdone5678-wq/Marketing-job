@@ -238,12 +238,12 @@ export function validateGroundedAnswer(
     }
   }
 
-  if (/\bnotice period\b|^how much notice\b/.test(normQ)) {
+  if (/\bnotice period\b|^how much notice\b|\b(?:earliest\s+start\s+date|when\s+can\s+you\s+start)\b/.test(normQ)) {
     const fact = facts.get('screening.notice_period_days');
     if (fact) {
       const duration = answer.trim().match(/^(\d+)\s*(days?|weeks?)$/i);
       const days = duration?.[2] ? Number(duration[1]) * (/^week/i.test(duration[2]) ? 7 : 1) :
-        /^(?:immediate(?:ly)?|no notice(?: period)?)$/i.test(answer.trim()) ? 0 :
+        /^(?:immediate(?:ly)?|available immediately|no notice(?: period)?)$/i.test(answer.trim()) ? 0 :
         /^\d+$/.test(normAns) && /\b(?:in days|number of days)\b/.test(normQ) ? Number(normAns) : null;
       return days === fact.value ? validResult([fact.id]) : unresolvedResult('Answer must match the confirmed notice period', [fact.id]);
     }
@@ -380,7 +380,7 @@ export function validateGroundedAnswer(
   const isExpQuestion =
     canonical === 'total_experience_years' ||
     canonical === 'relevant_experience_years' ||
-    category === 'experience' ||
+    (category === 'experience' && canonical !== 'current_employer' && canonical !== 'current_job_title') ||
     /\b(years?\s+of\s+experience|total\s+experience|how\s+many\s+years|experience\s+with)\b/i.test(normQ);
 
   if (isExpQuestion) {
@@ -467,6 +467,25 @@ export function validateGroundedAnswer(
   // =========================================================================
   // 4. Education & Degree Ceilings (Prevent Degree Elevation)
   // =========================================================================
+  if (canonical === 'university' || canonical === 'school') {
+    const uniFact = facts.get('profile.education.university') || facts.get('profile.education.university_name');
+    if (!uniFact) return fromBank(exactBankFact) ?? unresolvedResult('Missing profile.education.university fact');
+    const uniNorm = normalize(uniFact.value);
+    if (uniNorm === normAns || uniNorm.includes(normAns) || normAns.includes(uniNorm)) {
+      return validResult([uniFact.id], 'verified');
+    }
+    return unresolvedResult(`Answer '${answer}' does not match verified university '${uniFact.value}'`, [uniFact.id]);
+  }
+
+  if (canonical === 'graduation_year') {
+    const gradFact = facts.get('profile.education.graduation_year');
+    if (!gradFact) return fromBank(exactBankFact) ?? unresolvedResult('Missing profile.education.graduation_year fact');
+    if (String(gradFact.value) === answer.trim() || normalize(gradFact.value) === normAns) {
+      return validResult([gradFact.id], 'verified');
+    }
+    return unresolvedResult(`Answer '${answer}' does not match verified graduation year '${gradFact.value}'`, [gradFact.id]);
+  }
+
   const isEducationQuestion =
     canonical === 'highest_education' ||
     canonical === 'highest_qualification' ||
@@ -619,6 +638,45 @@ export function validateGroundedAnswer(
       return validResult(evidenceIds, 'verified');
     }
     return unresolvedResult(`Answer '${answer}' does not match verified city/state`, evidenceIds);
+  }
+
+  if (canonical === 'intended_work_country' || canonical === 'country') {
+    const intendedFact = facts.get('profile.location.intended_work_country');
+    const countryFact = facts.get('profile.location.country');
+    const authCountries = facts.get('screening.authorized_countries');
+    const primaryFact = canonical === 'intended_work_country' ? (intendedFact || countryFact) : countryFact;
+    const matchesCountryAnswer = (factVal: unknown) => {
+      const s = String(factVal ?? '').trim();
+      const fn = normalize(s);
+      if (fn && (fn === normAns || fn.includes(normAns) || normAns.includes(fn))) return true;
+      if (/^[a-z]{2}$/i.test(s) && matchesCountry(normAns, s)) return true;
+      if (/^[a-z]{2}$/i.test(normAns) && matchesCountry(fn, normAns)) return true;
+      return false;
+    };
+    if (primaryFact && matchesCountryAnswer(primaryFact.value)) {
+      return validResult([primaryFact.id], 'verified');
+    }
+    if (canonical === 'intended_work_country' && Array.isArray(authCountries?.value) &&
+        authCountries.value.some((code) => matchesCountry(normAns, String(code)))) {
+      return validResult([authCountries.id], 'verified');
+    }
+    if (primaryFact) {
+      return unresolvedResult(`Answer '${answer}' does not match verified country '${primaryFact.value}'`, [primaryFact.id]);
+    }
+    return fromBank(exactBankFact) ?? unresolvedResult('Missing verified fact for profile.location.country');
+  }
+
+  if (canonical === 'location') {
+    const locFact =
+      facts.get('profile.location.full_address') ||
+      facts.get('profile.location.city') ||
+      facts.get('profile.location.country');
+    if (locFact) {
+      const fn = normalize(locFact.value);
+      if (fn === normAns || fn.includes(normAns) || normAns.includes(fn)) {
+        return validResult([locFact.id], 'verified');
+      }
+    }
   }
 
   const fieldMapping: Record<string, string> = {
