@@ -268,7 +268,7 @@ const PLAN_JSON_SCHEMA: Record<string, any> = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['label', 'value'],
+        required: ['label'],
         properties: {
           label: { type: 'string' },
           value: { type: ['string', 'null'] },
@@ -313,7 +313,7 @@ function validatePlanShape(input: unknown): { success: true; data: any } | { suc
     if (typeof item.label !== 'string') {
       return { success: false, error: { message: `fills[${i}].label must be a string` } };
     }
-    if (item.value !== null && typeof item.value !== 'string') {
+    if (item.value !== undefined && item.value !== null && typeof item.value !== 'string') {
       return { success: false, error: { message: `fills[${i}].value must be a string or null` } };
     }
     if (item.fieldId !== undefined && typeof item.fieldId !== 'string') {
@@ -333,7 +333,7 @@ function validatePlanShape(input: unknown): { success: true; data: any } | { suc
     }
     validatedFills.push({
       label: item.label,
-      value: item.value,
+      ...(item.value !== undefined ? { value: item.value } : {}),
       ...(item.fieldId !== undefined ? { fieldId: item.fieldId } : {}),
       ...(item.evidenceIds !== undefined ? { evidenceIds: item.evidenceIds } : {}),
       ...(item.action !== undefined ? { action: item.action } : {}),

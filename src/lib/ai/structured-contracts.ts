@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const PlanFillSchema = z.object({
   label: z.string(),
-  value: z.string().nullable(),
+  value: z.string().nullish(),
   fieldId: z.string().optional(),
   evidenceIds: z.array(z.string()).optional(),
   action: z.enum(['fill', 'skip', 'defer_combobox']).optional(),

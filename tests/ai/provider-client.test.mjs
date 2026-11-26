@@ -4,8 +4,14 @@ import http from 'node:http';
 import { ProviderClient, ProviderError } from '../../src/lib/ai/provider-client.ts';
 
 test('ProviderClient: Markdown fence stripping and JSON parsing', async (t) => {
-  await t.test('strips ```json markdown fences and extracts valid rawJson', async () => {
-    const mockJson = { fills: [{ label: 'Full Name', value: 'Jane Doe' }] };
+  await t.test('strips JSON fences and accepts plan entries without a value', async () => {
+    const mockJson = {
+      fills: [
+        { label: 'Full Name', value: 'Jane Doe' },
+        { label: 'Remote', action: 'skip' },
+        { label: 'City', action: 'defer_combobox', searchQuery: 'Austin' },
+      ],
+    };
     const wrappedContent = '```json\n' + JSON.stringify(mockJson, null, 2) + '\n```';
 
     const customFetch = async () => {
@@ -25,9 +31,10 @@ test('ProviderClient: Markdown fence stripping and JSON parsing', async (t) => {
       fetchFn: customFetch,
     });
 
-    const result = await client.generateChatCompletion([
-      { role: 'user', content: 'Generate form plan' },
-    ]);
+    const result = await client.generateChatCompletion(
+      [{ role: 'user', content: 'Generate form plan' }],
+      { schemaName: 'plan' },
+    );
 
     assert.deepEqual(result.rawJson, mockJson);
     assert.equal(result.text, JSON.stringify(mockJson, null, 2));

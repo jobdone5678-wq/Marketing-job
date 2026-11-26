@@ -13,7 +13,8 @@ test('ServerVercelProviderClient: 3-Tier Fallback, Telemetry, and Capability Cac
     const mockPlan = {
       fills: [
         { label: 'Full Name', value: 'Jane Doe', action: 'fill', fieldId: 'f1', evidenceIds: ['ev1'] },
-        { label: 'Remote', value: null, action: 'skip', fieldId: 'f2' },
+        { label: 'Remote', action: 'skip', fieldId: 'f2' },
+        { label: 'City', action: 'defer_combobox', fieldId: 'f3', searchQuery: 'Austin' },
       ],
     };
 
