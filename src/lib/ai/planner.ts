@@ -12,6 +12,7 @@
  */
 
 import type { VerifiedFact } from './verified-facts';
+import { answerBankFactId } from '../candidate/answer-bank-topics';
 import { uniqueConfirmedChoice, validateGroundedAnswer } from './grounded';
 import { offeredChoice } from '../../../extension/lib/fieldKeys';
 import type { ProviderClient, TokenUsageTelemetry } from './provider-client';
@@ -234,7 +235,7 @@ function normalizeFieldLabel(label: string): string {
 export async function planFormBatch(
   fields: Field[],
   facts: Map<string, VerifiedFact>,
-  client: ProviderClient,
+  client: ProviderClient | (() => Promise<ProviderClient>),
   context?: FormContext,
 ): Promise<PlanResult> {
   if (!fields || fields.length === 0) {
@@ -254,8 +255,20 @@ export async function planFormBatch(
   const deferredFields = new Set<Field>();
   const deferredSet = new Set<string>();
   const unresolved = fields.filter((field) => {
-    if (field.combo || !field.options?.length) return true;
-    const answer = uniqueConfirmedChoice(field.options, facts, inferQuestionDescriptor(field));
+    if (field.combo) return true;
+    const descriptor = inferQuestionDescriptor(field);
+    let answer;
+    if (field.options?.length) {
+      answer = uniqueConfirmedChoice(field.options, facts, descriptor);
+    } else if (!field.type || /^(?:text|textarea|email|tel|url|number|date)$/.test(field.type)) {
+      const saved = facts.get(answerBankFactId(field.label));
+      if (typeof saved?.value === 'string') {
+        const grounding = validateGroundedAnswer(saved.value, facts, descriptor);
+        if (grounding.valid && grounding.action === 'fill') {
+          answer = { choice: saved.value, evidenceIds: grounding.evidenceIds };
+        }
+      }
+    }
     if (!answer) return true;
     filledFields.add(field);
     allFills.push({
@@ -266,6 +279,8 @@ export async function planFormBatch(
     return false;
   });
   const batchCount = Math.ceil(unresolved.length / batchSize);
+  const getProvider = typeof client === 'function' ? client : () => client;
+  let provider: ProviderClient | undefined;
 
   const usageFields = [
     'inputTokens',
@@ -322,7 +337,8 @@ export async function planFormBatch(
       { role: 'user' as const, content: JSON.stringify(userPayload) },
     ];
 
-    const completion = await client.generateChatCompletion(messages, {
+    provider ??= await getProvider();
+    const completion = await provider.generateChatCompletion(messages, {
       responseFormat: 'json_prompt',
       schemaName: 'plan',
     });

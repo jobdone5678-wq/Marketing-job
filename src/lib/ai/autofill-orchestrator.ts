@@ -19,11 +19,13 @@ import { planFormBatch, type Field, type Fill, type FormContext, type PlanResult
 import { chooseComboboxOption } from './chooser';
 import { isPrivateAutofillField } from './autofill-field-safety';
 import { isUnreviewedResume } from '../candidate/confirmed-facts';
-import { foldQuestionForTopic, listScreeningAnswerBank, normalizeAnswerBankTopic } from '../candidate/answerbank';
+import { listScreeningAnswerBank } from '../candidate/answerbank';
 import { listExperienceBank } from '../candidate/experience';
 import { getScreeningAnswers } from '../ingest/screeninganswers';
 import { getUserAiProviderSecret } from './ai-provider-data';
 import { experienceSkillQuestion } from './grounded';
+import { findReusableAnswer } from './reusable-answers';
+import { requestJevChoice } from './jev-choice';
 
 export class OrchestratorError extends Error {
   readonly status: number;
@@ -122,13 +124,8 @@ async function loadVerifiedFacts(actorId: string, candidate: Parameters<typeof b
     listScreeningAnswerBank(actorId, { db, sendableOnly: true }),
     skillsAsked.size ? listExperienceBank(actorId, { db, tailorableOnly: true }) : undefined,
   ]);
-  const reusable = entries.filter(({ question }) => !isPrivateAutofillField({ label: question }));
   const answers = fields.flatMap(({ label }) => {
-    const normalized = foldQuestionForTopic(label);
-    if (!normalized) return [];
-    const topic = reusableAnswerTopic(label);
-    const entry = reusable.find(({ question }) => foldQuestionForTopic(question) === normalized) ??
-      (topic && reusable.find(({ question }) => reusableAnswerTopic(question) === topic));
+    const entry = findReusableAnswer(label, entries);
     return entry ? [{ question: label, answer: entry.answer }] : [];
   });
   const facts = buildVerifiedFacts(candidate, answers, screening);
@@ -143,16 +140,6 @@ async function loadVerifiedFacts(actorId: string, candidate: Parameters<typeof b
   return facts;
 }
 
-function reusableAnswerTopic(question: string) {
-  const folded = foldQuestionForTopic(question);
-  if (!folded) return;
-  const topic = normalizeAnswerBankTopic(question);
-  if (topic === 'notice_period' && /^(?:(?:what is your|your|current) )?notice period$|^how much notice (?:do you need|is required)$/.test(folded)) return topic;
-  if (topic === 'salary_expectation' && /^(?:(?:what (?:is|are) your|your) )?(?:desired (?:salary|compensation)|(?:salary|compensation) expectations?)$/.test(folded)) return topic;
-  if (topic === 'how_did_you_hear' && /^(?:how did you (?:hear|find out|learn)|where did you hear) about (?:us|this (?:role|position|job|opening|opportunity))$/.test(folded)) return topic;
-  return undefined;
-}
-
 /**
  * Resolves the appropriate ProviderClient for the authenticated actor.
  * For portal BYOK, decrypts secret using AAD (userId:origin) and binds socket IP via SSRF safe agent.
@@ -164,8 +151,11 @@ export async function resolveProviderClient(
   options?: OrchestratorOptions
 ): Promise<ProviderClient> {
   const db = await getDb(options);
+  const config = await loadProviderConfig(actorId, db);
+  return buildProviderClient(actorId, db, config, options);
+}
 
-  // 1. Query user configuration
+async function loadProviderConfig(actorId: string, db: any) {
   const { data: config, error: configError } = await db
     .from('user_ai_provider_configs')
     .select('*')
@@ -174,6 +164,22 @@ export async function resolveProviderClient(
   if (configError) {
     throw new OrchestratorError('Could not load AI provider settings', 503, 'CONFIG_UNAVAILABLE');
   }
+  return config;
+}
+
+function isPortalMode(config: Awaited<ReturnType<typeof loadProviderConfig>>): boolean {
+  return Boolean(config && (
+    config.mode === 'portal' || config.mode === 'portal_byok' || config.routing === 'portal' ||
+    config.routing === 'proxy' || config.credential_source === 'portal'
+  ));
+}
+
+async function buildProviderClient(
+  actorId: string,
+  db: any,
+  config: Awaited<ReturnType<typeof loadProviderConfig>>,
+  options?: OrchestratorOptions,
+): Promise<ProviderClient> {
   if (config?.mode === 'extension_byok' || config?.mode === 'local') {
     throw new OrchestratorError(
       'Select Server or Portal API key to use NextKinHR AI autofill.',
@@ -182,15 +188,7 @@ export async function resolveProviderClient(
     );
   }
 
-  const isPortalMode =
-    config &&
-    (config.mode === 'portal' ||
-      config.mode === 'portal_byok' ||
-      config.routing === 'portal' ||
-      config.routing === 'proxy' ||
-      config.credential_source === 'portal');
-
-  if (isPortalMode) {
+  if (isPortalMode(config)) {
     // 2. Portal BYOK mode
     const secret = await getUserAiProviderSecret(actorId, db);
 
@@ -323,11 +321,8 @@ export async function executePlan(
 
   try {
     const fields = (req.fields || []).filter((field) => field && !isPrivateAutofillField(field));
-    const [client, facts] = await Promise.all([
-      resolveProviderClient(actorId, options),
-      loadVerifiedFacts(actorId, candidate, fields, db),
-    ]);
-    const planResult = await planFormBatch(fields, facts, client, req.context);
+    const facts = await loadVerifiedFacts(actorId, candidate, fields, db);
+    const planResult = await planFormBatch(fields, facts, () => resolveProviderClient(actorId, options), req.context);
     return {
       ok: true,
       plan: planResult,
@@ -394,15 +389,20 @@ export async function executeChoose(
   }
 
   try {
-    const [client, facts] = await Promise.all([
-      resolveProviderClient(actorId, options),
-      loadVerifiedFacts(actorId, candidate, [req.question], db),
-    ]);
+    const facts = await loadVerifiedFacts(actorId, candidate, [req.question], db);
+    const jevKey = process.env.TYPESAFE_API_KEY?.trim();
+    let config: ReturnType<typeof loadProviderConfig> | undefined;
+    const getConfig = () => config ??= loadProviderConfig(actorId, db);
     const chooseResult = await chooseComboboxOption(
       req.question,
       req.options,
       facts,
-      client
+      async () => buildProviderClient(actorId, db, await getConfig(), options),
+      jevKey ? async (label, offered, profile) => {
+        const settings = await getConfig();
+        if (isPortalMode(settings) || (settings?.mode && settings.mode !== 'server')) return undefined;
+        return requestJevChoice(jevKey, label, offered, profile, options?.fetchFn);
+      } : undefined,
     );
     return {
       ok: true,

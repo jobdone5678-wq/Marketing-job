@@ -8,6 +8,8 @@
  * Zero external or Node-only dependencies.
  */
 
+import { answerBankFactId } from '../candidate/answer-bank-topics';
+
 export type FactType = 'string' | 'number' | 'boolean' | 'string[]';
 
 export type FactSource = 'profile' | 'confirmed_facts' | 'resume' | 'answer_bank' | 'experience_bank';
@@ -522,10 +524,10 @@ export function buildVerifiedFacts(
   // 9. Answer Bank Entries
   if (answerBank) {
     const registerAnswerBankFact = (topic: string, answerText: string) => {
-      const cleanTopic = normalizeKey(topic);
+      const id = answerBankFactId(topic);
       const cleanAnswer = String(answerText || '').trim();
-      if (cleanTopic && cleanAnswer) {
-        addFact(`answer_bank.${cleanTopic}`, 'string', cleanAnswer, 'answer_bank', 'answer_bank');
+      if (id && cleanAnswer) {
+        addFact(id, 'string', cleanAnswer, 'answer_bank', 'answer_bank');
       }
     };
 

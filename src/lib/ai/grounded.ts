@@ -17,6 +17,7 @@
  */
 
 import type { VerifiedFact } from './verified-facts.js';
+import { answerBankFactId } from '../candidate/answer-bank-topics';
 import { isAgeThresholdQuestion, matchChoice, matchFieldKey, matchesCountry, workAuthorizationCountry } from '../../../extension/lib/fieldKeys';
 
 export interface QuestionDescriptor {
@@ -222,7 +223,7 @@ export function validateGroundedAnswer(
   const { text: qText, canonical, category, skill: explicitSkill } = resolveQuestionMeta(question);
   const normQ = normalize(qText);
   const normAns = normalize(answer);
-  const exactBankFact = facts.get(`answer_bank.${normalizeKey(qText)}`);
+  const exactBankFact = facts.get(answerBankFactId(qText));
   const fromBank = (fact: VerifiedFact | undefined) => (
     fact && typeof fact.value === 'string' && matchChoice(fact.value, answer, qText)
       ? validResult([fact.id], 'answer_bank') : undefined
@@ -238,7 +239,8 @@ export function validateGroundedAnswer(
     }
   }
 
-  if (/\bnotice period\b|^how much notice\b|\b(?:earliest\s+start\s+date|when\s+can\s+you\s+start)\b/.test(normQ)) {
+  if (/\bnotice period\b|^how much notice\b/.test(normQ) ||
+      (!exactBankFact && /\b(?:earliest\s+start\s+date|when\s+can\s+you\s+start)\b/.test(normQ))) {
     const fact = facts.get('screening.notice_period_days');
     if (fact) {
       const duration = answer.trim().match(/^(\d+)\s*(days?|weeks?)$/i);

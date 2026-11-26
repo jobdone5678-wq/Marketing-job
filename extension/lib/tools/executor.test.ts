@@ -253,6 +253,24 @@ describe('executeTool', () => {
     expect(res.error).toMatch(/label/);
   });
 
+  it('preserves frame and form scope for every combobox step and rejects malformed indices', async () => {
+    const seen: ComboboxStep[] = [];
+    const page = bridge({ combobox: async (step) => {
+      seen.push(step);
+      return { status: 'selected' };
+    } });
+    for (const action of ['open', 'options', 'select', 'verify'] as const) {
+      const args = { label: 'Country', value: 'Canada', frame: 0, form: -1 };
+      await executeTool({ id: action, tool: `combobox.${action}`, args }, page);
+      expect(seen.pop()).toEqual({ action, ...args });
+    }
+    const malformed = await executeTool({
+      id: 'invalid', tool: 'combobox.select', args: { label: 'Country', value: 'Canada', frame: '0' },
+    }, page);
+    expect(malformed.error).toMatch(/indices/);
+    expect(seen).toEqual([]);
+  });
+
   it('rejects a select that names no option, rather than committing a blank', async () => {
     const res = await executeTool({ id: 'c10', tool: 'combobox.select', args: { label: 'Country' } }, bridge());
 

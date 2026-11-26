@@ -75,7 +75,18 @@ async function readProfile(request: Request): Promise<Response> {
   const intendedWorkCountry = text(facts.intended_work_country) || country;
 
   return Response.json({
-    meta: { candidateId: candidate?.id ?? null },
+    meta: {
+      candidateId: candidate?.id ?? null,
+      screening: {
+        age_18_or_older: screening.age_18_or_older,
+        notice_period_days: screening.notice_period_days,
+        willing_to_relocate: screening.willing_to_relocate,
+        visa_sponsorship_needed: screening.visa_sponsorship_needed,
+        desired_salary_amount: salary,
+        desired_salary_currency: screening.desired_salary_currency,
+        desired_salary_period: salaryPeriod,
+      },
+    },
     data: {
       full_name: fullName,
       first_name: Object.hasOwn(facts, 'first_name') ? text(facts.first_name) : first_name,

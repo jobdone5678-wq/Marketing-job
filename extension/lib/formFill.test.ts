@@ -10,6 +10,7 @@ vi.mock('./freehire', () => ({
     first_name: 'Ilya', last_name: 'S', email: 'i@x.io',
   } }),
   getAutofillSettings: vi.fn(),
+  getReusableAnswers: vi.fn().mockResolvedValue([]),
   requestAutofillPlan: vi.fn(),
   requestAutofillChoice: vi.fn(),
   generateAutofillAnswer: vi.fn(),
@@ -19,7 +20,7 @@ vi.mock('./analytics', () => ({ track: vi.fn() }));
 
 import { runAutofill, type FillPanel } from './formFill';
 import { isAutofillProse } from './autofillSafety';
-import { getAutofillSessionProfile, getAutofillSettings, requestAutofillPlan, requestAutofillChoice, generateAutofillAnswer } from './freehire';
+import { getAutofillSessionProfile, getAutofillSettings, getReusableAnswers, requestAutofillPlan, requestAutofillChoice, generateAutofillAnswer } from './freehire';
 
 const field = (index: number, label: string, extra: Record<string, unknown> = {}) => ({
   index, form: 0, frame: 0, tag: 'input', type: 'text', label, value: '', ...extra,
@@ -62,6 +63,42 @@ describe('deterministicAutofill job-alert guard', () => {
     await p;
     vi.useRealTimers();
     expect(fillCalls().length).toBeGreaterThan(0);
+  });
+
+  it('fills a confirmed banked start date before loading AI settings', async () => {
+    vi.mocked(getAutofillSettings).mockClear();
+    vi.mocked(getAutofillSessionProfile).mockResolvedValueOnce({
+      data: {} as Awaited<ReturnType<typeof getAutofillSessionProfile>>['data'],
+      meta: { candidateId: 'candidate' },
+    });
+    vi.mocked(getReusableAnswers).mockResolvedValueOnce([
+      { topic: 'start_date', question: 'When can you start?', answer: '2027-02-01', provenance: 'candidate' },
+    ]);
+    const label = 'What is your earliest start date?';
+    let written = '';
+    sendMessage.mockImplementation(async (message) => {
+      if (message.kind === 'GET_FRAMED_FORM') {
+        return { kind: 'FRAMED_FORM', fields: [field(0, label, { value: written })], uploads: [{ frame: 0, form: 0 }] };
+      }
+      if (message.kind === 'FILL_BY_LABEL') {
+        written = message.fills[0].value;
+        return { kind: 'FILL_OUTCOMES', outcomes: [{ label, status: 'filled' }] };
+      }
+    });
+    const panel: FillPanel = {
+      notice: vi.fn(), offerOverride: vi.fn(), known: vi.fn(), refused: vi.fn(), refreshPlan: async () => {},
+      walk: { filling: vi.fn(), stopped: () => false, wrote: vi.fn(), answered: vi.fn() },
+    };
+    vi.useFakeTimers();
+    try {
+      const pending = runAutofill('t', panel, new AbortController().signal);
+      await vi.runAllTimersAsync();
+      await pending;
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(written).toBe('2027-02-01');
+    expect(getAutofillSettings).not.toHaveBeenCalled();
   });
 
   it('fills optional demographic groups, intended country, age, and behavioral prose questions', async () => {

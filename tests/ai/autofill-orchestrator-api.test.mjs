@@ -16,6 +16,7 @@ import { encryptSecret } from '../../src/lib/ai/encryption.ts';
 import { APPROVED_DEFAULT_HOSTS, SafeHttpsAgent } from '../../src/lib/ai/ssrf-guard.ts';
 import { ProviderClient } from '../../src/lib/ai/provider-client.ts';
 import { ServerVercelProviderClient } from '../../src/lib/ai/server-provider-client.ts';
+import { findReusableAnswer } from '../../src/lib/ai/reusable-answers.ts';
 
 const ENCRYPTION_KEY_HEX = crypto.randomBytes(32).toString('hex');
 const USER_OWNER = '11111111-1111-4000-8000-111111111111';
@@ -152,6 +153,79 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
       options: ['Asana', 'Trello', 'Jira'],
     }, USER_OWNER, { db, fetchFn });
     assert.equal(chosen.choice, 'Jira');
+  });
+
+  await t.test('uses scoped Answer Bank topics before provider settings and preserves typed precedence', async () => {
+    const rows = [
+      ['relocation', 'Are you willing to relocate?', 'Yes'],
+      ['start_date', 'When can you start?', '2027-02-01'],
+      ['age_18_or_older', 'Are you at least 18?', 'Yes'],
+      ['salary_expectation', 'What is your monthly salary expectation in EUR?', 'EUR 5000'],
+    ].map(([topic, question, answer]) => ({ topic, question, answer, user_id: USER_OWNER, provenance: 'candidate' }));
+    for (const question of [
+      'Are you willing to relocate to Germany?',
+      'Are you over the age of 18?',
+      'What is your current monthly salary in EUR?',
+      'What is your annual salary expectation in USD?',
+    ]) {
+      assert.equal(findReusableAnswer(question, rows), undefined, question);
+    }
+    const db = createMockDb({}, {}, { [CANDIDATE_OWNED]: { user_id: USER_OWNER } },
+      { [USER_OWNER]: { notice_period_days: 30 } }, rows);
+    const from = db.from;
+    db.from = (table) => {
+      assert.notEqual(table, 'user_ai_provider_configs');
+      return from(table);
+    };
+    const result = await executePlan({ candidateId: CANDIDATE_OWNED, fields: [
+      { id: 'relocation', label: 'Would you be open to relocation for this position?', options: ['No', 'Yes'] },
+      { id: 'start', label: 'What is your earliest start date?', type: 'text' },
+      { id: 'age', label: 'Are you 18 years or older?', options: ['No', 'Yes'] },
+      { id: 'salary', label: 'What are your expected monthly compensation expectations in EUR?', options: ['EUR 3000', 'EUR 5000'] },
+    ] }, USER_OWNER, { db });
+    assert.deepEqual(result.executableFills.map(({ value }) => value), ['Yes', '2027-02-01', 'Yes', 'EUR 5000']);
+    const choice = await executeChoose({ candidateId: CANDIDATE_OWNED,
+      question: { label: 'Would you be open to relocation for this position?' }, options: ['Yes', 'No'],
+    }, USER_OWNER, { db });
+    assert.equal(choice.choice, 'Yes');
+    const typed = createMockDb({}, {}, { [CANDIDATE_OWNED]: { user_id: USER_OWNER } },
+      { [USER_OWNER]: { age_18_or_older: false } }, rows);
+    const age = await executeChoose({ candidateId: CANDIDATE_OWNED,
+      question: { label: 'Are you 18 years or older?' }, options: ['Yes', 'No'],
+    }, USER_OWNER, { db: typed, fetchFn: async () => assert.fail('Expected the typed age answer') });
+    assert.equal(age.choice, 'No');
+  });
+
+  await t.test('uses the optional fast provider for server Choose and falls back on a malformed answer', async () => {
+    process.env.TYPESAFE_API_KEY = 'test-jev-key';
+    const candidates = { [CANDIDATE_OWNED]: { user_id: USER_OWNER, country: 'Canada', email: 'private@example.com' } };
+    const db = createMockDb({}, {}, candidates);
+    const input = { candidateId: CANDIDATE_OWNED, question: { label: 'Country' }, options: ['Canada', 'Germany'] };
+    const calls = [];
+    let choice = 'option_0';
+    const fetchFn = async (url, init) => {
+      calls.push(String(url));
+      if (String(url).includes('typesafe.ai')) {
+        const payload = JSON.parse(init.body);
+        assert.deepEqual(payload.state.confirmed_facts, { 'profile.location.country': 'Canada' });
+        assert.deepEqual(Object.values(payload.questions.selection.criteria).slice(0, 2), input.options);
+        return Response.json({ answers: { selection: { type: 'choice', choice } } });
+      }
+      return Response.json({ choices: [{ message: { content: '{"choice":"Canada"}' } }] });
+    };
+    assert.equal((await executeChoose(input, USER_OWNER, { db, fetchFn })).choice, 'Canada');
+    choice = 'no_supported_option';
+    assert.equal((await executeChoose(input, USER_OWNER, { db, fetchFn })).choice, null);
+    choice = 'option_1';
+    assert.equal((await executeChoose(input, USER_OWNER, { db, fetchFn })).choice, null);
+    assert.deepEqual(calls, Array(3).fill('https://api.typesafe.ai/v1/systemone'));
+    choice = 'unknown';
+    assert.equal((await executeChoose(input, USER_OWNER, { db, fetchFn })).choice, 'Canada');
+    assert.match(calls.at(-1), /chat\/completions$/);
+    const portal = createMockDb({ [USER_OWNER]: { mode: 'portal_byok' } }, {}, candidates);
+    calls.length = 0;
+    await assert.rejects(() => executeChoose(input, USER_OWNER, { db: portal, fetchFn }), { status: 401 });
+    assert.deepEqual(calls, []);
   });
 
   await t.test('1. server checks feature flag SERVER_ENABLE_STRUCTURED_AI_PLANNER (defaults to true; can be disabled)', async () => {

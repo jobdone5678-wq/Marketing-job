@@ -26,6 +26,9 @@ export interface ChooseResult {
   };
 }
 
+type FastChoice = (question: string, options: string[], profile: Record<string, unknown>) =>
+  Promise<string | null | undefined>;
+
 const CHOOSE_PROMPT = `You are answering ONE question on a job-application form by
 picking from the options it offers.
 
@@ -65,7 +68,8 @@ export async function chooseComboboxOption(
   question: Field,
   options: string[],
   facts: Map<string, VerifiedFact>,
-  client: ProviderClient,
+  client: ProviderClient | (() => Promise<ProviderClient>),
+  fastChoice?: FastChoice,
 ): Promise<ChooseResult> {
   if (!options || options.length === 0) {
     return { choice: null, reason: 'No options provided' };
@@ -74,6 +78,29 @@ export async function chooseComboboxOption(
   const descriptor = inferQuestionDescriptor(question);
   const confirmed = uniqueConfirmedChoice(options, facts, descriptor);
   if (confirmed) return confirmed;
+
+  if (fastChoice) {
+    const evidence = new Map<string, VerifiedFact['value']>();
+    for (const option of options) {
+      const grounding = validateGroundedAnswer(option, facts, descriptor);
+      if (!grounding.valid || grounding.action !== 'fill') continue;
+      for (const id of grounding.evidenceIds) {
+        const fact = facts.get(id);
+        if (fact) evidence.set(id, fact.value);
+      }
+    }
+    if (evidence.size) {
+      const chosen = await fastChoice(question.label, options, Object.fromEntries(evidence));
+      if (chosen === null) return { choice: null, reason: 'Choice provider declined' };
+      if (chosen !== undefined) {
+        const matches = options.filter((option) => option === chosen);
+        const grounding = validateGroundedAnswer(chosen, facts, descriptor);
+        return matches.length === 1 && grounding.valid && grounding.action === 'fill'
+          ? { choice: chosen, evidenceIds: grounding.evidenceIds }
+          : { choice: null, reason: 'Choice provider did not return a uniquely grounded option' };
+      }
+    }
+  }
 
   const profile = factsToProfileObject(facts);
 
@@ -89,7 +116,8 @@ export async function chooseComboboxOption(
     { role: 'user' as const, content: JSON.stringify(userPayload) },
   ];
 
-  const completion = await client.generateChatCompletion(messages, {
+  const provider = typeof client === 'function' ? await client() : client;
+  const completion = await provider.generateChatCompletion(messages, {
     responseFormat: 'json_prompt',
     schemaName: 'choose',
   });

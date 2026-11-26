@@ -111,12 +111,21 @@ function readIndex(v: unknown, least: number): number | undefined {
  * are better refused than reported as a result.
  */
 function readComboboxStep(action: ComboboxStep['action'], args: Record<string, unknown> | undefined): ComboboxStep {
-  const { label, value } = args ?? {};
+  const { label, value, frame, form } = args ?? {};
   if (typeof label !== 'string' || !label) throw new Error(`combobox.${action} requires args.label`);
   if ((action === 'select' || action === 'verify') && (typeof value !== 'string' || !value)) {
     throw new Error(`combobox.${action} requires args.value: the option in play`);
   }
-  return { action, label, value: typeof value === 'string' ? value : '' };
+  const frameIndex = readIndex(frame, 0);
+  const formIndex = readIndex(form, -1);
+  if ((frame !== undefined && frameIndex === undefined) || (form !== undefined && formIndex === undefined)) {
+    throw new Error(`combobox.${action} requires valid frame and form indices when provided`);
+  }
+  return {
+    action, label, value: typeof value === 'string' ? value : '',
+    ...(frameIndex !== undefined ? { frame: frameIndex } : {}),
+    ...(formIndex !== undefined ? { form: formIndex } : {}),
+  };
 }
 
 /**

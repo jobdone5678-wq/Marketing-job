@@ -1,0 +1,108 @@
+# ATS application-form capture
+
+The WXT extension [observes live controls](../../../extension/lib/form.ts) and separates [readiness and scoping](../../../extension/lib/fillPlan.ts) from answer selection. Durable capture and the job-question projection are proposed. See the [Lever capture design](../../../openspec/changes/capture-lever-apply-forms/design.md) and the [Recruitee fallback design](../../../openspec/changes/atsapply-recruitee-stored-schema/design.md). Use the [Supabase worker architecture](../../../docs/agents/workers.md) when implementing durable capture.
+
+## Data and projection rules
+
+- Preserve the ATS's field identifier, question text, choice labels, submitted values and raw control type. Normalize only known control types. Keep unknown types identifiable by their raw value. Employer-authored in-app forms have their own stable identifiers and stay outside external recapture.
+- The stored form is metadata for display and the approved fallback for providers with no live fetcher. The display projection groups standard name, email and CV controls as basics and omits hidden, informational, demographic and consent fields. Classify standard fields by provider IDs, including Workable's `QA_` and `CA_` custom markers. The required count comes from that same projection. Missing capture means the count is unknown.
+- Publish a new or changed projection only for eligible open, canonical, public postings. Update the projection's outbox in the same transaction. Replays of identical payloads produce no new event.
+
+## Durable processing rules
+
+- Use a single typed registry for enqueue eligibility and processing. Write a Recruitee form that arrives with provider job data directly. Use the posted Lever URL to select the regional application host.
+- Claim work with a lease that covers the call timeout. Bound concurrency and run size. Persist the captured form and retire the claim atomically. A deleted posting is terminal, including Ashby's successful response with no posting. A provider rate limit defers that provider for the remainder of the run without charging attempts.
+- Report a degraded run for dead letters or a run with failures and zero captures. Keep provider deferral and transient errors observable separately. The upstream sizing and retry defaults below are reference values for the corresponding Supabase task settings.
+
+<details>
+<summary>Original Freehire reference</summary>
+
+> Historical implementation and evidence from the Go/SvelteKit project. Paths, deployment commands, progress and measurements refer to that source.
+
+# Application-form capture conventions
+
+## Scope
+Capturing the application form an ATS published for a posting — the questions a candidate
+must answer and the identifiers the platform expects back — and projecting it for display
+on the job page. Providers: greenhouse, ashby, workable, lever, dover. Queue drain is
+`cmd/capture-apply-form`; the read is `GET /jobs/:slug/apply-form`
+(`internal/api/handler/apply_form.go:25`); wire shapes go to TypeScript via `cmd/gen-contracts`.
+
+## Always true
+- **One provider is not captured: `freehire`.** Its rows are the questions a verified
+  employer WROTE for a vacancy that takes applications on freehire (`FreehireForm`,
+  freehire.go; written by `internal/ingest/employer`). Nothing enqueues such a vacancy for
+  capture and nothing re-captures or deletes its row, so it is the one form here whose
+  vocabulary is ours — ids are minted `q1…qN` and an option's value is its label. See
+  [openspec/changes/add-in-app-apply](../../../openspec/changes/add-in-app-apply).
+- **Platform vocabulary is stored VERBATIM** — the opposite of `internal/dict/skilltag` and
+  `internal/dict/classify` (form.go:1-22). Field IDs, option values and question text are kept
+  exactly as the platform sent them: `question_67165648` is a token to hand back to
+  Greenhouse, not a name to interpret, and any mapping of it is loss. The ONE normalized
+  thing is `FieldType`, the kind of control (form.go:27-54), and it follows the dict-only
+  rule: a word the dictionary does not know yields no type, with `RawType` kept alongside
+  so nothing is lost.
+- **The store now has the consumer it was built for**: `internal/api/atsapply`'s auto-apply
+  submission path reads a captured form to resolve and fill it, and — for a provider with no
+  live schema fetcher (Recruitee) — `Client.fetchSchema`'s stored-form fallback reads it as
+  the ONLY source (`openspec/changes/archive/2026-11-25-atsapply-recruitee-stored-schema`). display.go remains a
+  second, display-only reader wanting almost none of the row: the question text plus one word
+  about the answer. It drops hidden/info/demographic/consent controls and folds the standard
+  fields (name, email, CV) into one `basics` line, keyed on the identifiers our own mappers
+  produce, not on labels (display.go:51-90, 120-166).
+- **The question count is the display's required half, counted at index time.**
+  `Form.RequiredQuestions` (questions.go) counts the required entries of `ForDisplay`'s
+  Questions, so a change to what counts as standard moves the job page's list and the
+  `apply_questions` search attribute together. It is NOT stored: `cmd/reindex` and
+  `cmd/search-drain` read each batch's payloads (`QuestionCounts`) because `search` sits
+  below `ingest` and cannot import this package — so a rule change reaches search with a
+  plain reindex, no backfill. No form → no count, never zero. `UpsertApplyForm` queues
+  the job into `search_outbox` in the same statement when the payload is new or changed
+  and the job is open, canonical and public, so a capture made after indexing reaches
+  search without waiting for the rebuild; an identical rewrite (Recruitee, every crawl)
+  queues nothing. Workable carries TWO employer markers — `QA_` per job, `CA_` per
+  account — and missing the second filed account-wide questions among the basics.
+- **One registry map sits behind both gate and drain.** `fetcherFor` (fetch.go:78-83) backs
+  both the ingest enqueue gate (`NeedsRequestCapture`, fetch.go:70-73) and the worker's
+  fetcher set, so the two cannot drift into a queue full of undrainable work; a test holds
+  them to it. Recruitee's form arrives free with the crawl and is written directly at
+  ingest (`cmd/ingest/store.go:168` `SaveWithApplyForm`), never queued.
+- **404 → `ErrPostingGone` → discard, not retry** (fetch.go:14-38). Across a backlog of a
+  quarter-million postings there are thousands the employer took down; retried, each burns
+  its attempts and dead-letters, and a queue steadily accumulating dead letters is
+  indistinguishable from a broken one. Ashby reports an absent posting as 200 + null, which
+  is converted to `ErrPostingGone` too (fetch.go:237-242).
+- **429 → defer, not fail.** A rate limit says nothing about the posting, so the capture
+  that drew it is put back with no attempt charged (`outbox.Deferred`), the rest of that
+  wave's captures from the same provider are deferred without a request, and every later
+  claim in the run skips the provider (`skip_sources` in `ClaimApplyFormBatch`). The next
+  run asks again — that is the backoff. Counted as a failure, Workable's throttling
+  dead-lettered ~7k good captures on 2026-10-18 in three hourly runs.
+- **Lever needs the posting's own URL.** A posting lives on exactly one of two regional
+  hosts and the wrong one answers 404 — the same code as a deleted posting — so the region
+  cannot be discovered by trying and is read from the stored URL (fetch.go:142-159;
+  runner.go:21-25).
+- **`RunStats.Degraded` deliberately rejects the shared `worker.ExitCode` rule**
+  (runner.go:90-105). This worker issues hundreds of thousands of requests to other
+  companies' APIs, where a handful of transient failures per run is the healthy shape
+  (first production run measured 10 in 2490). Only dead letters — work abandoned — or a run
+  that captured nothing while failing deserve an alert.
+- **`MaxPerRun` exists because nothing holds a flock.** systemd `Type=oneshot` is the only
+  anti-stacking mechanism, so an unbounded run over the ~185k backlog works for hours while
+  every scheduled firing behind it is silently dropped (runner.go:55-64;
+  internal/platform/config/applyform.go:23-28).
+- **`Transport` and `statusCoder` are declared here** (fetch.go:27, 46-53) because
+  `internal/ingest/sources` imports THIS package (its Recruitee adapter yields a form) — the
+  dependency cannot run both ways. The real `sources.Client` satisfies `Transport`
+  structurally, so the worker passes the same client the crawl uses.
+
+## How it works
+`cmd/ingest` enqueues a capture when `applyform.NeedsRequestCapture(source)`. `cmd/capture-apply-form`
+runs `applyform.Run`, which delegates the claim/process loop to `outbox.RunPool`: claim a leased
+wave, fetch each posting's form through its provider fetcher, and `Save` — which stores the
+form and retires the queue entry atomically, so a capture cannot be both stored and left
+queued. Tunables: `APPLY_FORM_BATCH_SIZE` (200), `_LEASE_SECONDS` (300, floored to the call
+timeout so an in-flight capture is never re-claimed), `_MAX_ATTEMPTS` (3), `_CONCURRENCY`
+(4), `_MAX_PER_RUN` (5000), `_CALL_TIMEOUT_SECONDS` (20) — internal/platform/config/applyform.go:29-53.
+
+</details>

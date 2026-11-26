@@ -6,13 +6,17 @@ import {
   generateAutofillAnswer,
   getAutofillSessionProfile,
   getAutofillSettings,
+  getReusableAnswers,
   requestAutofillChoice,
   requestAutofillPlan,
   saveBankAnswer,
 } from './freehire';
 import { isAutofillProse, isPrivateAutofillField } from './autofillSafety';
 import { demographicChoices, demographicKey, mixedDemographicChoices, type DemographicPreferences } from '../../src/lib/profile/demographic-preferences';
-import type { FormContext } from '../../src/lib/ai/planner';
+import { inferQuestionDescriptor, type FormContext } from '../../src/lib/ai/planner';
+import { validateGroundedAnswer } from '../../src/lib/ai/grounded';
+import { findReusableAnswer } from '../../src/lib/ai/reusable-answers';
+import { buildVerifiedFacts } from '../../src/lib/ai/verified-facts';
 import { normalizeLabel, offeredChoice } from './fieldKeys';
 import { profileToValues } from './form';
 import { confirmedFieldValue, looksLikeApplication, planLabelFills, scopeToApplication } from './fillPlan';
@@ -284,13 +288,43 @@ async function fillApplication(
     }
 
     if (stopped()) return;
-    const fields = await remaining();
+    let fields = await remaining();
     if (!fields.length || stopped()) return;
     const candidateId = meta?.candidateId;
     if (!candidateId) {
       panel.notice('Save a confirmed candidate profile in the portal to use AI autofill.');
       return;
     }
+
+    const bank = await getReusableAnswers(token, signal).catch(() => []);
+    if (stopped()) return;
+    const bankFills: LabelFill[] = [];
+    for (const field of fields) {
+      if (stopped()) return;
+      const entry = findReusableAnswer(field.label, bank);
+      if (!entry) continue;
+      const facts = buildVerifiedFacts({ ...profile, expected_salary: profile.desired_salary },
+        [{ question: field.label, answer: entry.answer }], meta?.screening);
+      const descriptor = inferQuestionDescriptor(plannerField(field));
+      const grounded = (value: string) => validateGroundedAnswer(value, facts, descriptor).action === 'fill';
+      const choice = (options: string[]) => {
+        const value = offeredChoice(entry.answer, options, field.label);
+        return value && grounded(value) ? value : undefined;
+      };
+      if (field.combo) {
+        await fillCombobox(field, async (options) =>
+          isPrivateAutofillField({ ...field, options }) ? undefined : choice(options),
+          grounded(entry.answer) ? entry.answer : undefined);
+      } else {
+        const value = field.options?.length ? choice(field.options) :
+          /^(?:text|textarea|email|tel|url|number|date)$/.test(descriptor.type ?? '') && grounded(entry.answer)
+            ? entry.answer : undefined;
+        if (value) bankFills.push({ label: field.label, frame: field.frame, form: field.form, value });
+      }
+    }
+    if (bankFills.length && !stopped()) await walk(bankFills);
+    if (bank.length && !stopped()) fields = await remaining();
+    if (!fields.length || stopped()) return;
 
     const [{ jobDescription, ...context }, settings] = await Promise.all([
       contextRequest,

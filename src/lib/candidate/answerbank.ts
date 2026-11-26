@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { answerBankTopic, isWorkAuthorizationYesNoQuestion } from './answer-bank-topics';
 import { isEeoDemographicField } from '../ingest/screeninganswers';
 import { DomainValidationError, getDbClient } from '../v1/auth';
 
@@ -10,15 +11,8 @@ export type AnswerBankProvenance = (typeof ANSWER_BANK_PROVENANCES)[number];
 export const AUTHOR_CANDIDATE: AnswerBankProvenance = 'candidate';
 export const AUTHOR_AGENT: AnswerBankProvenance = 'agent_inferred';
 
-export const CANONICAL_ANSWER_TOPICS = [
-  'salary_expectation',
-  'notice_period',
-  'relocation',
-  'start_date',
-  'how_did_you_hear',
-  'age_18_or_older',
-] as const;
-export type CanonicalAnswerTopic = (typeof CANONICAL_ANSWER_TOPICS)[number];
+export { CANONICAL_ANSWER_TOPICS, foldQuestionForTopic, isWorkAuthorizationYesNoQuestion } from './answer-bank-topics';
+export type { CanonicalAnswerTopic } from './answer-bank-topics';
 
 export interface ScreeningAnswerBankEntry {
   id: string;
@@ -31,109 +25,10 @@ export interface ScreeningAnswerBankEntry {
   updated_at: string;
 }
 
-const POLITE_WRAPPERS = [
-  'please tell us',
-  'please share',
-  'please provide',
-  'could you tell us',
-  'could you share',
-  'we would like to know',
-  'we d like to know',
-  'tell us',
-];
-
-/**
- * Exact stem dictionary from Freehire's internal/dict/answertopic/answertopic.go.
- * ALL keywords in a set must appear in the folded question for that set to fire.
- */
-const STEM_DICTIONARY: Array<{ topic: CanonicalAnswerTopic; sets: string[][] }> = [
-  {
-    topic: 'salary_expectation',
-    sets: [
-      ['desired', 'salary'],
-      ['desired', 'compensation'],
-      ['salary', 'expect'],
-      ['compensation', 'expect'],
-    ],
-  },
-  {
-    topic: 'notice_period',
-    sets: [
-      ['notice', 'period'],
-      ['how much notice'],
-    ],
-  },
-  {
-    topic: 'relocation',
-    sets: [['relocat']],
-  },
-  {
-    topic: 'start_date',
-    sets: [
-      ['start', 'date'],
-      ['when can you start'],
-    ],
-  },
-  {
-    topic: 'how_did_you_hear',
-    sets: [
-      ['how did you hear'],
-      ['how did you find out'],
-      ['how did you learn about'],
-      ['where did you hear'],
-      ['how you heard'],
-    ],
-  },
-  {
-    topic: 'age_18_or_older',
-    sets: [
-      ['at least 18'],
-      ['over the age of 18'],
-      ['18 years of age or older'],
-      ['18 or older'],
-    ],
-  },
-];
-
-const WORK_AUTH_YES_NO_PATTERN =
-  /\b(?:legally\s+)?(?:authorized|eligible|entitled|permitted)\s+to\s+work\b|\bwork\s+authorization\b|\bright\s+to\s+work\b/i;
-
-export function isWorkAuthorizationYesNoQuestion(question: string): boolean {
-  return WORK_AUTH_YES_NO_PATTERN.test(String(question || ''));
-}
-
-export function foldQuestionForTopic(question: string): string {
-  const folded = String(question || '')
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  for (const wrapper of POLITE_WRAPPERS) {
-    if (folded.startsWith(wrapper + ' ')) {
-      return folded.slice(wrapper.length).trim();
-    }
-  }
-  return folded;
-}
-
 export function normalizeAnswerBankTopic(question: string): string {
-  const folded = foldQuestionForTopic(question);
-  if (!folded) {
-    throw new DomainValidationError('this question cannot be saved — it has no readable text');
-  }
-
-  for (const entry of STEM_DICTIONARY) {
-    for (const set of entry.sets) {
-      if (set.every((kw) => folded.includes(kw))) {
-        return entry.topic;
-      }
-    }
-  }
-
-  return folded.slice(0, 500);
+  const topic = answerBankTopic(question);
+  if (!topic) throw new DomainValidationError('this question cannot be saved — it has no readable text');
+  return topic;
 }
 
 export function isSendableAnswer(entry: Pick<ScreeningAnswerBankEntry, 'provenance'>): boolean {
@@ -174,10 +69,10 @@ function mapAnswerBankRow(row: Record<string, any>): ScreeningAnswerBankEntry {
   return {
     id: String(row.id),
     user_id: String(row.user_id),
-    topic: String(row.topic),
+    topic: String(row.topic ?? ''),
     question: String(row.question),
     answer: String(row.answer),
-    provenance: row.provenance === AUTHOR_AGENT ? AUTHOR_AGENT : AUTHOR_CANDIDATE,
+    provenance: row.provenance === AUTHOR_CANDIDATE ? AUTHOR_CANDIDATE : AUTHOR_AGENT,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   };

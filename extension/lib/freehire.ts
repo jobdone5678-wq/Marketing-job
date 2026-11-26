@@ -317,9 +317,19 @@ async function extensionApi<T>(
 }
 
 export function getAutofillSessionProfile(token: string, signal?: AbortSignal) {
-  return extensionApi<{ data: AutofillProfile; meta?: { candidateId: string | null } }>(
+  return extensionApi<{
+    data: AutofillProfile;
+    meta?: { candidateId: string | null; screening?: Parameters<typeof import('../../src/lib/ai/verified-facts').buildVerifiedFacts>[2] };
+  }>(
     '/api/v1/me/autofill-profile', token, 'GET', undefined, signal,
   );
+}
+
+export async function getReusableAnswers(token: string, signal: AbortSignal) {
+  const result = await extensionApi<{
+    entries: import('../../src/lib/ai/reusable-answers').ReusableAnswer[];
+  }>('/api/v1/me/answer-bank?sendableOnly=true', token, 'GET', undefined, signal);
+  return Array.isArray(result.entries) ? result.entries : [];
 }
 
 export async function getDemographicPreferences(
@@ -367,7 +377,7 @@ export function saveAutofillSettings(mode: 'server' | 'portal_byok', configVersi
 /**
  * Saves the candidate's answer to one screening question into their answer bank, so
  * the agent fills it on the next form asking the same thing. The bank keys it by what
- * the question asks, not its wording — see internal/candidate/answerbank.
+ * the question asks. See `src/lib/candidate/answer-bank-topics.ts`.
  */
 export async function saveBankAnswer(question: string, answer: string, token: string): Promise<void> {
   const path = '/api/v1/me/answer-bank';

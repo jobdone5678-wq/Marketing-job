@@ -12,7 +12,9 @@ TypeScript AI planning, combobox selection, grounded validation, job requirement
 - **`planner.ts` & `chooser.ts`**:
   - `planFormBatch`: Classifies unresolved ATS fields, matches against `VerifiedFact` / answer bank, returns executable fills and `deferred` comboboxes.
   - `chooseComboboxOption`: Selects the best live DOM option for async/custom dropdowns.
-  - Bundled for browser use via `npm run bundle:extension-ai` (`scripts/bundle-extension-ai.mjs`).
+  - Confirmed answers are checked before provider resolution. `reusable-answers.ts` shares confirmed Answer Bank matching with the extension.
+  - With `TYPESAFE_API_KEY` set, `jev-choice.ts` can classify unresolved server-mode choices using only question-relevant evidence. A failed request falls back to the configured LLM and returned choices still pass grounding.
+  - The WXT build bundles the browser-safe modules imported by `extension/`.
 - **`grounded.ts` & `verified-facts.ts`**:
   - `buildVerifiedFacts`: Builds typed facts from confirmed candidate profile + reusable answer bank.
   - `validateGroundedAnswer`: Hard safety gate preventing fabricated or contradicted answers on factual fields (work authorization, sponsorship, experience years, education tiers, certifications).

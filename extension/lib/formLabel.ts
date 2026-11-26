@@ -24,7 +24,8 @@ export function extractLabel(el: Fillable): string {
     placeholder ||
     ariaLabel ||
     (choiceType(el) ? collapse(labelText(el)) : '') ||
-    collapse(el.getAttribute('name'))
+    collapse(el.getAttribute('name')) ||
+    collapse(el.id)
   );
 }
 

@@ -449,6 +449,13 @@ describe('LinkedIn-style radios named after their question', () => {
 });
 
 describe('control naming', () => {
+  it('uses the field ID for discovery and writes when a control has no label or name', () => {
+    document.body.innerHTML = '<form><input id="country"><input name="city" id="backup-city"></form>';
+    expect(extractForm(document).map(({ label }) => label)).toEqual(['country', 'city']);
+    expect(fillByLabel(document, [{ label: 'country', value: 'Canada' }])[0]?.status).toBe('filled');
+    expect(document.querySelector<HTMLInputElement>('#country')?.value).toBe('Canada');
+  });
+
   it('commits only the offered demographic choices to a native multi-select and checkbox group', () => {
     document.body.innerHTML = `<form><label>Race or ethnicity <select multiple>
       <option>Asian</option><option>Black or African American</option><option>White</option>
