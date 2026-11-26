@@ -13,13 +13,14 @@
 
 import type { VerifiedFact } from './verified-facts';
 import { answerBankFactId } from '../candidate/answer-bank-topics';
-import { uniqueConfirmedChoice, validateGroundedAnswer } from './grounded';
-import { offeredChoice, workAuthorizationCountry } from '../../../extension/lib/fieldKeys';
+import { confirmedDemographicSelection, uniqueConfirmedChoice, validateGroundedAnswer } from './grounded';
+import { asksVisaSponsorship, offeredChoice, workAuthorizationCountry } from '../../../extension/lib/fieldKeys';
 import { countryLabel } from '../../../extension/lib/labels';
 import { COUNTRIES } from '../profile/countries';
 import {
   demographicKey,
   demographicOptionKey,
+  isCommunitySelfIdQuestion,
   type DemographicKey,
 } from '../profile/demographic-preferences';
 import type { ProviderClient, TokenUsageTelemetry } from './provider-client';
@@ -32,6 +33,7 @@ export interface Field {
   value?: string;
   required?: boolean;
   combo?: boolean;
+  multiple?: boolean;
   options?: string[];
   frame?: number;
   form?: number;
@@ -226,11 +228,21 @@ export function inferQuestionDescriptor(field: Field): {
 } {
   const label = field.label || '';
   const norm = label.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const selfIdKey = demographicKey(label);
 
   let canonical = '';
   let category = '';
 
-  if (/\bpreferred\b.*\bfirst\b.*\blast\b|\bfull\s*name\b|\blegal\s*name\b|\bcandidate\s*name\b|\byour\s*name\b/.test(norm)) {
+  if (asksVisaSponsorship(label)) {
+    canonical = 'needs_sponsorship';
+    category = 'work_auth';
+  } else if (workAuthorizationCountry(label) || /\b(?:authori[sz]ed to work|work authori[sz]ation|(?:legal )?right to work)\b/.test(norm)) {
+    canonical = 'authorized_in_usa';
+    category = 'work_auth';
+  } else if (selfIdKey || isCommunitySelfIdQuestion(label)) {
+    canonical = selfIdKey ?? 'demographics';
+    category = 'demographics';
+  } else if (/\bpreferred\b.*\bfirst\b.*\blast\b|\bfull\s*name\b|\blegal\s*name\b|\bcandidate\s*name\b|\byour\s*name\b/.test(norm)) {
     canonical = 'name';
     category = 'personal';
   } else if (/\bfirst\s*name\b|\bgiven\s*name\b/.test(norm) && !/\blast\b/.test(norm)) {
@@ -382,7 +394,7 @@ function isUpstreamCountryLocationField(
 }
 
 export function hasExplicitCountryInLabel(label: string): boolean {
-  if (workAuthorizationCountry(label)) return true;
+  if (extractCountryCodeFromLocation(workAuthorizationCountry(label))) return true;
   return /\b(?:u\.?s\.?a?|united\s+states(?:\s+of\s+america)?|uk|u\.k\.|united\s+kingdom|canada|germany|australia|india|france|singapore|ireland)\b/i.test(
     label,
   );
@@ -537,6 +549,12 @@ export async function planFormBatch(
       plannedLocationCountryByLabel.get(normalizeFieldLabel(field.label));
 
     if (field.combo) {
+      if (baseDescriptor.category === 'demographics') {
+        deferredFields.add(field);
+        deferredSet.add(field.label);
+        deferredPlans.push({ ...(field.id ? { fieldId: field.id } : {}), label: field.label });
+        return false;
+      }
       if (isUpstreamLoc && !preSeededCountry) {
         unresolvedLocationIndices.add(idx);
       }
@@ -555,7 +573,9 @@ export async function planFormBatch(
 
     let answer;
     if (field.options?.length) {
-      answer = uniqueConfirmedChoice(field.options, facts, descriptor);
+      answer = descriptor.category === 'demographics' && (field.multiple || field.widgetType === 'checkbox_group')
+        ? confirmedDemographicSelection(field.options, facts, descriptor)
+        : uniqueConfirmedChoice(field.options, facts, descriptor);
     } else if (!field.type || /^(?:text|textarea|email|tel|url|number|date)$/.test(field.type)) {
       const saved = facts.get(answerBankFactId(field.label));
       if (typeof saved?.value === 'string') {

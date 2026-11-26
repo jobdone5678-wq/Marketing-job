@@ -554,6 +554,20 @@ test('grounded engine: question-specific typed validation & anti-hallucination g
     assert.equal(uniqueConfirmedChoice(['Yes', 'No'], usAllowedFacts, authHereUnresolved), undefined);
   });
 
+  await t.test('distinguishes race from ethnicity qualifiers and gender from more specific identities', () => {
+    const preferences = { enabled: true, answers: { raceEthnicity: ['Asian'], gender: ['Male'] } };
+    const facts = buildVerifiedFacts({}, undefined, undefined, preferences);
+    const race = { label: 'Race', options: ['Asian (Not Hispanic or Latino)', 'South Asian'] };
+    assert.equal(validateGroundedAnswer(race.options[0], facts, race).valid, false);
+    assert.equal(validateGroundedAnswer(race.options[1], facts, race).valid, false);
+    assert.equal(validateGroundedAnswer('Cisgender man', facts, { label: 'What is your gender?' }).valid, false);
+    const withEthnicity = buildVerifiedFacts({}, undefined, undefined, {
+      enabled: true, answers: { ...preferences.answers, hispanicOrigin: ['No'] },
+    });
+    assert.deepEqual(validateGroundedAnswer(race.options[0], withEthnicity, race).evidenceIds.sort(),
+      ['demographics.hispanicOrigin', 'demographics.raceEthnicity']);
+  });
+
   await t.test('12. location-linked sponsorship with resolvedCountryCode and hasUnresolvedUpstreamLocation gate', () => {
     const sponsorshipFacts = buildVerifiedFacts({ full_name: 'Alex' }, undefined, {
       age_18_or_older: true,

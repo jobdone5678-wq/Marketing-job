@@ -216,21 +216,22 @@ test('Chooser: FreeHire combobox option selection from live DOM options', async 
     );
     assert.equal(enabledRes.choice, 'Asian');
     assert.ok(enabledRes.evidenceIds.includes('demographics.raceEthnicity'));
-    assert.equal(capturedPayloads[0].helperText, 'Select the racial or ethnic group with which you identify.');
-    assert.deepEqual(capturedPayloads[0].previouslyResolved, {
-      'Which country do you intend to work from?': 'Austin, United States',
-    });
+    assert.equal(capturedPayloads.length, 0);
 
     // Rejects wrong-cased non-verbatim option
     const wrongCaseRes = await chooseComboboxOption(
       question,
       options,
-      enabledFacts,
+      disabledFacts,
       createClient('asian'),
       undefined,
       context,
     );
     assert.equal(wrongCaseRes.choice, null);
+    assert.equal(capturedPayloads[0].helperText, 'Select the racial or ethnic group with which you identify.');
+    assert.deepEqual(capturedPayloads[0].previouslyResolved, {
+      'Which country do you intend to work from?': 'Austin, United States',
+    });
 
     // Returns null when demographics enabled: false
     const disabledRes = await chooseComboboxOption(

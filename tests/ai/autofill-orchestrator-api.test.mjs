@@ -942,10 +942,11 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
       { db, fetchFn: planFetch },
     );
     assert.equal(planRes.ok, true);
+    assert.equal(planRes.executableFills.find((fill) => fill.fieldId === 'race')?.value, 'Asian');
     assert.deepEqual(
       seenPlanPayload.fields.map((f) => f.label),
-      ['Race', 'Which of the following communities do you belong to?'],
-      'Demographic fields must pass through to Phase B while DOB/privacy/marketing are blocked',
+      ['Which of the following communities do you belong to?'],
+      'Only the unresolved community question should reach the provider',
     );
     assert.deepEqual(seenPlanPayload.profile['demographics.raceEthnicity'], ['Asian']);
     assert.deepEqual(seenPlanPayload.profile['demographics.veteran'], ['No']);
@@ -972,8 +973,9 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
       { db, fetchFn: chooseFetch },
     );
     assert.equal(chooseRes.ok, true);
-    assert.deepEqual(seenChoosePayload.profile['demographics.raceEthnicity'], ['Asian']);
-    assert.equal(seenChoosePayload.profile['demographics.gender'], undefined);
+    assert.equal(chooseRes.choice, 'Asian');
+    assert.deepEqual(chooseRes.evidenceIds, ['demographics.raceEthnicity']);
+    assert.equal(seenChoosePayload, null, 'Confirmed race options should bypass the provider');
 
     // executeChoose accepts Communities question without returning 422
     const communitiesRes = await executeChoose(
