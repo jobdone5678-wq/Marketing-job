@@ -368,4 +368,234 @@ test('Planner: FreeHire form batch planning with neighbor context & grounding', 
     const resultNoTelemetry = await planFormBatch(fields.slice(0, 1), facts, noTelemetryClient);
     assert.equal(resultNoTelemetry.telemetry, undefined);
   });
+
+  await t.test('links location combobox searchQuery and dependsOnFieldId to sponsorship boolean_buttons, omits jobDescription without prose textarea, and clamps batchSize to [4, 8]', async () => {
+    const fields = [
+      {
+        id: 'f_loc',
+        label: 'Which country do you intend to work from?',
+        type: 'text',
+        widgetType: 'combobox',
+        combo: true,
+        helperText: 'Please list your city and country.',
+        required: true,
+      },
+      {
+        id: 'f_spon',
+        label: 'Will you now or in the future require sponsorship for employment visa status to work in this location?',
+        type: 'button',
+        widgetType: 'boolean_buttons',
+        options: ['Yes', 'No'],
+        required: true,
+      },
+    ];
+
+    const facts = buildVerifiedFacts(
+      {
+        full_name: 'Taylor Austin',
+        current_city: 'Austin',
+        current_state: 'Texas',
+        country: 'United States',
+        authorized_in_usa: true,
+        confirmed_facts: {
+          screeningAnswers: {
+            country_specific_answers: {
+              us_sponsorship: 'no',
+            },
+          },
+        },
+      },
+      undefined,
+      {
+        age_18_or_older: true,
+        notice_period_days: null,
+        willing_to_relocate: null,
+        visa_sponsorship_needed: true,
+      },
+    );
+
+    const capturedPayloads = [];
+    const mockClient = {
+      async generateChatCompletion(messages) {
+        const userPayload = JSON.parse(messages.find((m) => m.role === 'user').content);
+        capturedPayloads.push(userPayload);
+        return {
+          text: '{}',
+          rawJson: {
+            fills: [
+              {
+                fieldId: 'f_loc',
+                label: 'Which country do you intend to work from?',
+                value: null,
+                action: 'defer_combobox',
+                searchQuery: 'Austin, United States',
+              },
+              {
+                fieldId: 'f_spon',
+                label: 'Will you now or in the future require sponsorship for employment visa status to work in this location?',
+                value: 'No',
+                action: 'fill',
+                dependsOnFieldId: 'f_loc',
+              },
+            ],
+          },
+        };
+      },
+    };
+
+    const result = await planFormBatch(fields, facts, mockClient, {
+      jobDescription: 'Senior Engineer role requiring distributed systems expertise.',
+      batchSize: 8,
+    });
+
+    assert.equal(capturedPayloads.length, 1);
+    assert.equal(capturedPayloads[0].fields[0].helperText, 'Please list your city and country.');
+    assert.equal(capturedPayloads[0].fields[0].widgetType, 'combobox');
+    assert.equal(capturedPayloads[0].fields[1].widgetType, 'boolean_buttons');
+    assert.equal(capturedPayloads[0].context.jobDescription, undefined, 'jobDescription must be omitted when no prose textarea is in batch');
+
+    assert.deepEqual(result.deferred, ['Which country do you intend to work from?']);
+    assert.deepEqual(result.deferredFieldIds, ['f_loc']);
+    assert.deepEqual(result.deferredPlans, [
+      {
+        fieldId: 'f_loc',
+        label: 'Which country do you intend to work from?',
+        searchQuery: 'Austin, United States',
+      },
+    ]);
+
+    assert.equal(result.fills.length, 1);
+    assert.equal(result.fills[0].fieldId, 'f_spon');
+    assert.equal(result.fills[0].value, 'No');
+    assert.equal(result.fills[0].dependsOnFieldId, 'f_loc');
+    assert.equal(result.fills[0].grounded, true);
+    assert.ok(result.fills[0].evidenceIds.includes('country_specific_answers.us_sponsorship'));
+
+    // Batch size clamp [4, 8] and jobDescription trimmed to 1200 chars only when prose textarea is present
+    const eightFields = Array.from({ length: 8 }, (_, idx) => ({
+      id: `q_${idx}`,
+      label: idx === 0 ? 'Why do you want to work here?' : `Question ${idx}`,
+      type: idx === 0 ? 'textarea' : 'text',
+      widgetType: idx === 0 ? 'textarea' : 'text',
+    }));
+    const longDesc = 'A'.repeat(1500);
+    const prosePayloads = [];
+    const proseClient = {
+      async generateChatCompletion(messages) {
+        prosePayloads.push(JSON.parse(messages.find((m) => m.role === 'user').content));
+        return { text: '{}', rawJson: { fills: [] } };
+      },
+    };
+    const proseResult = await planFormBatch(eightFields, facts, proseClient, {
+      jobDescription: longDesc,
+      batchSize: 12,
+    });
+    assert.equal(proseResult.batchCount, 1, 'batchSize 12 must clamp to 8');
+    assert.equal(prosePayloads[0].context.jobDescription.length, 1200);
+  });
+
+  await t.test('handles bundled demographic checkbox_group strictly based on enabled flag', async () => {
+    const fields = [
+      {
+        id: 'f_communities',
+        label: 'Which of the following communities do you belong to?',
+        type: 'checkbox',
+        widgetType: 'checkbox_group',
+        options: ['Veteran', 'Person with a disability', 'None of the above'],
+      },
+    ];
+
+    const enabledFacts = buildVerifiedFacts(
+      { full_name: 'Pat Vet' },
+      undefined,
+      undefined,
+      { enabled: true, answers: { veteran: ['Yes'] } },
+    );
+    const disabledFacts = buildVerifiedFacts(
+      { full_name: 'Pat Vet' },
+      undefined,
+      undefined,
+      { enabled: false, answers: { veteran: ['Yes'] } },
+    );
+
+    const mockClient = {
+      async generateChatCompletion() {
+        return {
+          text: '{}',
+          rawJson: {
+            fills: [
+              {
+                fieldId: 'f_communities',
+                label: 'Which of the following communities do you belong to?',
+                value: 'Veteran',
+                action: 'fill',
+              },
+            ],
+          },
+        };
+      },
+    };
+
+    const enabledRes = await planFormBatch(fields, enabledFacts, mockClient);
+    assert.equal(enabledRes.fills.length, 1);
+    assert.equal(enabledRes.fills[0].value, 'Veteran');
+    assert.ok(enabledRes.fills[0].evidenceIds.includes('demographics.veteran'));
+
+    const disabledRes = await planFormBatch(fields, disabledFacts, mockClient);
+    assert.equal(disabledRes.fills.length, 0, 'Disabled demographics must leave field unmapped');
+    assert.deepEqual(disabledRes.unmapped, ['Which of the following communities do you belong to?']);
+  });
+
+  await t.test('tracks incoming [deferred combobox] entries in context.previouslyResolved as unresolved upstream location', async () => {
+    const facts = buildVerifiedFacts(
+      {
+        full_name: 'Taylor Austin',
+        authorized_countries: ['us'],
+      },
+      undefined,
+      {
+        age_18_or_older: true,
+        notice_period_days: null,
+        willing_to_relocate: null,
+        visa_sponsorship_needed: false,
+        authorized_countries: ['us'],
+      },
+    );
+
+    const fields = [
+      {
+        id: 'f_spon',
+        label: 'Will you now or in the future require sponsorship for employment visa status to work in this location?',
+        type: 'radio',
+        widgetType: 'boolean_buttons',
+        options: ['Yes', 'No'],
+      },
+    ];
+
+    const mockClient = {
+      async generateChatCompletion() {
+        return {
+          text: '{}',
+          rawJson: {
+            fills: [
+              {
+                fieldId: 'f_spon',
+                label: fields[0].label,
+                value: 'No',
+                action: 'fill',
+              },
+            ],
+          },
+        };
+      },
+    };
+
+    const result = await planFormBatch(fields, facts, mockClient, {
+      previouslyResolved: {
+        'Which country do you intend to work from?': '[deferred combobox]',
+      },
+    });
+    assert.equal(result.fills.length, 0, 'Unresolved [deferred combobox] location in previouslyResolved must gate work-auth fills');
+    assert.deepEqual(result.unmapped, [fields[0].label]);
+  });
 });

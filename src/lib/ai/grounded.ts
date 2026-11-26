@@ -18,18 +18,40 @@
 
 import type { VerifiedFact } from './verified-facts.js';
 import { answerBankFactId } from '../candidate/answer-bank-topics';
-import { isAgeThresholdQuestion, matchChoice, matchFieldKey, matchesCountry, workAuthorizationCountry } from '../../../extension/lib/fieldKeys';
+import { COUNTRIES } from '../profile/countries';
+import {
+  demographicKey,
+  demographicOptionKey,
+  demographicOptionSupported,
+  isDemographicQuestion,
+  isExplicitDemographicDecline,
+  isNegativeDemographicStatus,
+  isNoneOfTheAboveOption,
+  type DemographicKey,
+} from '../profile/demographic-preferences';
+import {
+  isAgeThresholdQuestion,
+  matchChoice,
+  matchFieldKey,
+  matchesCountry,
+  normalizeLabel,
+  workAuthorizationCountry,
+} from '../../../extension/lib/fieldKeys';
+import { countryLabel } from '../../../extension/lib/labels';
 
 export interface QuestionDescriptor {
   id?: string;
   label?: string;
   name?: string;
   hint?: string;
+  helperText?: string;
   type?: string;
   category?: string;
   field_key?: string;
   canonical_name?: string;
   skill?: string;
+  resolvedCountryCode?: string;
+  hasUnresolvedUpstreamLocation?: boolean;
   options?: Array<string | { label?: string; value?: string; text?: string }>;
   [key: string]: unknown;
 }
@@ -68,14 +90,14 @@ function parseClaimedYears(text: string): number | null {
 
   // Check for range e.g. "5-7 years" or "5 to 7 years"
   const rangeMatch = norm.match(/(\d+(?:\.\d+)?)\s*(?:-|to)\s*(\d+(?:\.\d+)?)/i);
-  if (rangeMatch) {
+  if (rangeMatch?.[2]) {
     const high = parseFloat(rangeMatch[2]);
     if (!isNaN(high)) return high;
   }
 
   // Check for single number with optional '+' or years/yrs
   const match = norm.match(/\b(\d+(?:\.\d+)?)\s*(?:\+)?\s*(?:years?|yrs?)?\b/i);
-  if (match) {
+  if (match?.[1]) {
     const val = parseFloat(match[1]);
     if (!isNaN(val)) return val;
   }
@@ -154,15 +176,104 @@ function resolveQuestionMeta(q: QuestionDescriptor | string): {
   return { text, canonical, category, skill };
 }
 
+let countryNameToIsoCache: Map<string, string> | undefined;
+
+function getCountryNameToIsoMap(): Map<string, string> {
+  if (countryNameToIsoCache) return countryNameToIsoCache;
+  const map = new Map<string, string>();
+  for (const country of COUNTRIES) {
+    const code = country.code.toLowerCase();
+    const normName = normalize(country.name);
+    if (normName && !map.has(normName)) {
+      map.set(normName, code);
+    }
+    const intlName = normalize(countryLabel(code));
+    if (intlName && intlName !== code && !map.has(intlName)) {
+      map.set(intlName, code);
+    }
+  }
+  map.set('usa', 'us');
+  map.set('u s', 'us');
+  map.set('u s a', 'us');
+  map.set('united states of america', 'us');
+  map.set('uk', 'gb');
+  map.set('u k', 'gb');
+  map.set('great britain', 'gb');
+  map.set('britain', 'gb');
+  map.set('england', 'gb');
+  map.set('uae', 'ae');
+  countryNameToIsoCache = map;
+  return map;
+}
+
+function resolveCountryIso(raw: unknown): string | undefined {
+  const trimmed = String(raw ?? '').trim();
+  if (!trimmed) return undefined;
+  if (/^[a-z]{2}$/i.test(trimmed)) {
+    const lower = trimmed.toLowerCase();
+    if (lower === 'uk') return 'gb';
+    const label = normalize(countryLabel(lower));
+    return label && label !== lower ? lower : undefined;
+  }
+  return getCountryNameToIsoMap().get(normalize(trimmed));
+}
+
+function extractOptionLabels(question: QuestionDescriptor | string): string[] {
+  if (typeof question === 'string' || !Array.isArray(question.options)) return [];
+  return question.options
+    .map((opt) => (typeof opt === 'string' ? opt : String(opt?.label ?? opt?.text ?? opt?.value ?? '')).trim())
+    .filter(Boolean);
+}
+
+/**
+ * Splits a single or comma-joined multi-select answer against offered option labels
+ * longest-first so commas inside an option label do not break splitting.
+ */
+function splitOfferedAnswers(answer: string, offeredOptions: readonly string[]): string[] | null {
+  const trimmed = answer.trim();
+  if (!trimmed) return null;
+  if (offeredOptions.length === 0) return [trimmed];
+
+  const normTrimmed = normalizeLabel(trimmed);
+  const exact = offeredOptions.filter((opt) => normalizeLabel(opt) === normTrimmed);
+  if (exact.length === 1 && exact[0] !== undefined) return [exact[0]];
+  if (exact.length > 1) return null;
+
+  const byLongest = [...offeredOptions].sort((a, b) => b.trim().length - a.trim().length);
+  const chosen: string[] = [];
+  let rest = trimmed;
+  while (rest) {
+    const next = byLongest.find((opt) => {
+      const label = opt.trim();
+      if (!label) return false;
+      const head = rest.slice(0, label.length);
+      if (normalizeLabel(head) !== normalizeLabel(label)) return false;
+      const tail = rest.slice(label.length);
+      return tail === '' || /^\s*,/.test(tail);
+    });
+    if (!next) return null;
+    chosen.push(next);
+    rest = rest.slice(next.trim().length).replace(/^\s*,\s*/, '').trim();
+  }
+  return chosen.length ? chosen : null;
+}
+
 export function uniqueConfirmedChoice(
   options: readonly string[],
   facts: Map<string, VerifiedFact>,
   question: QuestionDescriptor,
 ): { choice: string; evidenceIds: string[] } | undefined {
+  if (question.hasUnresolvedUpstreamLocation && !question.resolvedCountryCode) {
+    return undefined;
+  }
   const matches = options.flatMap((option) => {
     const result = validateGroundedAnswer(option, facts, question);
     return result.valid && result.evidenceIds.some(
-      (id) => id.startsWith('screening.') || id.startsWith('answer_bank.') || id.startsWith('experience_bank.'),
+      (id) =>
+        id.startsWith('screening.') ||
+        id.startsWith('country_specific_answers.') ||
+        id.startsWith('answer_bank.') ||
+        id.startsWith('experience_bank.'),
     ) ? [{ choice: option, evidenceIds: result.evidenceIds }] : [];
   });
   return matches.length === 1 ? matches[0] : undefined;
@@ -220,7 +331,12 @@ export function validateGroundedAnswer(
     return unresolvedResult('No verified facts available to ground answer');
   }
 
+  if (typeof question === 'object' && question.hasUnresolvedUpstreamLocation && !question.resolvedCountryCode) {
+    return unresolvedResult('Upstream location must be resolved before answering location-dependent questions');
+  }
+
   const { text: qText, canonical, category, skill: explicitSkill } = resolveQuestionMeta(question);
+  const resolvedCountryCode = typeof question === 'object' ? resolveCountryIso(question.resolvedCountryCode) : undefined;
   const normQ = normalize(qText);
   const normAns = normalize(answer);
   const exactBankFact = facts.get(answerBankFactId(qText));
@@ -269,6 +385,27 @@ export function validateGroundedAnswer(
     /\b(authorized\s+to\s+work|legally\s+authorized|legal\s+right\s+to\s+work|work\s+authoriz)\b/i.test(normQ);
 
   if (isSponsorshipQuestion) {
+    if (resolvedCountryCode) {
+      const countrySponsorshipFact = facts.get(`country_specific_answers.${resolvedCountryCode}_sponsorship`);
+      if (countrySponsorshipFact) {
+        const val = countrySponsorshipFact.value;
+        const needsSponsorship =
+          typeof val === 'boolean'
+            ? val
+            : typeof val === 'string'
+              ? (isPositiveStance(val) ? true : isNegativeStance(val) ? false : undefined)
+              : undefined;
+        if (needsSponsorship !== undefined) {
+          const negative = isNegativeStance(answer);
+          const positive = isPositiveStance(answer);
+          const lead = normAns.match(/^(yes|no)\b/)?.[1];
+          return (needsSponsorship ? positive && lead !== 'no' : negative && lead !== 'yes')
+            ? validResult([countrySponsorshipFact.id])
+            : unresolvedResult('Answer conflicts with country-specific sponsorship preference', [countrySponsorshipFact.id]);
+        }
+      }
+    }
+
     const isSpecificFuture = /\b(future|now\s+or\s+in\s+the\s+future|in\s+the\s+future)\b/i.test(normQ) ||
                              canonical === 'need_sponsorship_future';
     const isSpecificNow = /\b(currently|now)\b/i.test(normQ) && !isSpecificFuture;
@@ -333,39 +470,205 @@ export function validateGroundedAnswer(
 
   if (isAuthQuestion) {
     const countries = facts.get('screening.authorized_countries');
-    if (authorizationCountry && Array.isArray(countries?.value) &&
-        countries.value.some((code) => matchesCountry(authorizationCountry, code))) {
-      return isPositiveStance(answer) && !/^no\b/i.test(answer.trim())
-        ? validResult([countries.id])
-        : unresolvedResult('Answer conflicts with confirmed work authorization', [countries.id]);
-    }
-    const authFact = authorizationCountry && matchesCountry(authorizationCountry, 'US')
-      ? facts.get('profile.work_auth.authorized_in_usa') : undefined;
-    if (!authFact) {
+    const authFact = facts.get('profile.work_auth.authorized_in_usa');
+    const explicitCountryCode = authorizationCountry ? resolveCountryIso(authorizationCountry) : undefined;
+    const fallbackTextUs = !authorizationCountry && !resolvedCountryCode && /\b(?:us|usa|united states)\b/i.test(normQ)
+      ? 'us'
+      : undefined;
+    const targetCountryCode = explicitCountryCode ?? resolvedCountryCode ?? fallbackTextUs;
+
+    if (!targetCountryCode) {
       return unresolvedResult('Missing confirmed work authorization for the country asked');
     }
 
-    const candidateAuthorized = Boolean(authFact.value);
-    const answerClaimsAuthorized = isPositiveStance(answer);
-    const answerDeniesAuthorized = isNegativeStance(answer);
+    const countryList = Array.isArray(countries?.value) && countries.value.length > 0
+      ? countries.value
+      : undefined;
+    const countriesAuthorized = countryList
+      ? countryList.some((code) => {
+          const normCode = resolveCountryIso(code) ?? String(code).trim().toLowerCase();
+          return normCode === targetCountryCode;
+        })
+      : undefined;
 
-    if (candidateAuthorized) {
-      if (answerDeniesAuthorized) {
-        return unresolvedResult('Negation reversal: Candidate is authorized in USA, but answer claims No', [authFact.id]);
+    if (targetCountryCode === 'us') {
+      const usaAuthorized = authFact !== undefined ? Boolean(authFact.value) : undefined;
+      if (countriesAuthorized !== undefined && usaAuthorized !== undefined && countriesAuthorized !== usaAuthorized) {
+        return unresolvedResult('Conflicting US work authorization facts', [countries!.id, authFact!.id]);
       }
-      if (answerClaimsAuthorized) {
-        return validResult([authFact.id], 'verified');
+
+      const candidateAuthorized = usaAuthorized ?? countriesAuthorized;
+      if (candidateAuthorized === undefined) {
+        return unresolvedResult('Missing confirmed work authorization for the country asked');
       }
-    } else {
-      if (answerClaimsAuthorized) {
-        return unresolvedResult('Negation reversal: Candidate is not authorized in USA, but answer claims Yes', [authFact.id]);
+
+      const evidenceIds = [
+        ...(authFact ? [authFact.id] : []),
+        ...(countries && countriesAuthorized !== undefined ? [countries.id] : []),
+      ];
+      const answerClaimsAuthorized = isPositiveStance(answer) && !/^no\b/i.test(answer.trim());
+      const answerDeniesAuthorized = isNegativeStance(answer) && !/^yes\b/i.test(answer.trim());
+
+      if (candidateAuthorized) {
+        if (answerDeniesAuthorized) {
+          return unresolvedResult('Negation reversal: Candidate is authorized in USA, but answer claims No', evidenceIds);
+        }
+        if (answerClaimsAuthorized) {
+          return validResult(evidenceIds, 'verified');
+        }
+      } else {
+        if (answerClaimsAuthorized) {
+          return unresolvedResult('Negation reversal: Candidate is not authorized in USA, but answer claims Yes', evidenceIds);
+        }
+        if (answerDeniesAuthorized) {
+          return validResult(evidenceIds, 'verified');
+        }
       }
-      if (answerDeniesAuthorized) {
-        return validResult([authFact.id], 'verified');
-      }
+
+      return unresolvedResult('Ambiguous authorization answer', evidenceIds);
     }
 
-    return unresolvedResult('Ambiguous authorization answer', [authFact.id]);
+    if (countriesAuthorized === undefined) {
+      return unresolvedResult('Missing confirmed work authorization for the country asked');
+    }
+    const answerClaimsAuthorized = isPositiveStance(answer) && !/^no\b/i.test(answer.trim());
+    const answerDeniesAuthorized = isNegativeStance(answer) && !/^yes\b/i.test(answer.trim());
+    if (countriesAuthorized) {
+      return answerClaimsAuthorized
+        ? validResult([countries!.id], 'verified')
+        : unresolvedResult('Answer conflicts with confirmed work authorization', [countries!.id]);
+    }
+    return answerDeniesAuthorized
+      ? validResult([countries!.id], 'verified')
+      : unresolvedResult('Answer conflicts with confirmed work authorization', [countries!.id]);
+  }
+
+  // =========================================================================
+  // 2b. Strict DB-Only Demographics & Self-ID Gate
+  // =========================================================================
+  const offeredOptions = extractOptionLabels(question);
+  const isDemographicField =
+    category === 'demographics' ||
+    isDemographicQuestion(qText) ||
+    offeredOptions.some(
+      (opt) =>
+        Boolean(demographicKey(opt) || demographicOptionKey(opt)) ||
+        /\b(?:neurodivergent|refugee|immigrant)\b/i.test(opt),
+    );
+
+  if (isDemographicField) {
+    const demographicFacts = new Map<DemographicKey, VerifiedFact>();
+    for (const [id, fact] of facts.entries()) {
+      if (id.startsWith('demographics.') && Array.isArray(fact.value) && fact.value.length > 0) {
+        demographicFacts.set(id.slice('demographics.'.length) as DemographicKey, fact);
+      }
+    }
+    if (demographicFacts.size === 0) {
+      return unresolvedResult('Demographic preferences are disabled or unset');
+    }
+
+    const getDemographicFact = (key: DemographicKey): VerifiedFact | undefined =>
+      demographicFacts.get(key) ??
+      (key === 'veteran'
+        ? demographicFacts.get('protectedVeteran')
+        : key === 'protectedVeteran'
+          ? demographicFacts.get('veteran')
+          : undefined);
+
+    const chosenList = offeredOptions.length > 0
+      ? splitOfferedAnswers(answer, offeredOptions)
+      : [answer.trim()];
+    if (!chosenList || chosenList.length === 0) {
+      return unresolvedResult('Proposed demographic answer does not match offered options');
+    }
+
+    if (
+      chosenList.length > 1 &&
+      chosenList.some((choice) => isNoneOfTheAboveOption(choice) || isExplicitDemographicDecline(choice))
+    ) {
+      return unresolvedResult('Cannot combine opt-out or none-of-the-above with other demographic options');
+    }
+
+    const questionKey = demographicKey(qText);
+    const singleChoice = chosenList.length === 1 ? chosenList[0] : undefined;
+
+    if (
+      singleChoice &&
+      isNoneOfTheAboveOption(singleChoice) &&
+      !(
+        questionKey === 'religion' &&
+        demographicOptionSupported('religion', (getDemographicFact('religion')?.value as string[] | undefined) ?? [], singleChoice)
+      )
+    ) {
+      if (offeredOptions.length === 0) {
+        return unresolvedResult('Cannot verify "None of the above" without offered options');
+      }
+      const traitOptions = offeredOptions.filter(
+        (opt) => !isExplicitDemographicDecline(opt) && !isNoneOfTheAboveOption(opt),
+      );
+      if (
+        traitOptions.length === 0 ||
+        !traitOptions.some((opt) => Boolean(demographicKey(opt) || demographicOptionKey(opt) || questionKey))
+      ) {
+        return unresolvedResult('Cannot verify "None of the above" without demographic trait options');
+      }
+      const evidenceIds = new Set<string>();
+      for (const opt of traitOptions) {
+        const optKey = demographicKey(opt) ?? demographicOptionKey(opt) ?? questionKey;
+        if (!optKey) {
+          return unresolvedResult(`Cannot verify "None of the above" because option "${opt}" has no mapped demographic key`);
+        }
+        const fact = getDemographicFact(optKey);
+        if (!fact || !Array.isArray(fact.value) || fact.value.length === 0) {
+          return unresolvedResult(`Cannot verify "None of the above" without saved fact for "${optKey}"`);
+        }
+        const savedValues = fact.value.map(String);
+        if (isNegativeDemographicStatus(optKey, opt) || !savedValues.every((v) => isNegativeDemographicStatus(optKey, v))) {
+          return unresolvedResult(`Saved demographic preference for "${optKey}" does not explicitly contradict "${opt}"`);
+        }
+        evidenceIds.add(fact.id);
+      }
+      return validResult([...evidenceIds], 'verified');
+    }
+
+    if (singleChoice && isExplicitDemographicDecline(singleChoice)) {
+      const relevantKeys: DemographicKey[] = questionKey
+        ? [questionKey]
+        : [...new Set(
+            offeredOptions
+              .map((opt) => demographicKey(opt) ?? demographicOptionKey(opt))
+              .filter((k): k is DemographicKey => Boolean(k)),
+          )];
+      const declinedFacts = relevantKeys
+        .map((k) => getDemographicFact(k))
+        .filter((fact): fact is VerifiedFact =>
+          Boolean(fact && Array.isArray(fact.value) && fact.value.some((v) => isExplicitDemographicDecline(String(v)))),
+        );
+      if (declinedFacts.length > 0) {
+        return validResult([...new Set(declinedFacts.map((f) => f.id))], 'verified');
+      }
+      return unresolvedResult('Demographic decline is only permitted when saved demographic preferences explicitly select decline');
+    }
+
+    const evidenceIds = new Set<string>();
+    for (const choice of chosenList) {
+      if (isExplicitDemographicDecline(choice) || (isNoneOfTheAboveOption(choice) && questionKey !== 'religion')) {
+        return unresolvedResult('Invalid demographic selection');
+      }
+      const optKey = demographicKey(choice) ?? demographicOptionKey(choice) ?? questionKey;
+      if (!optKey) {
+        return unresolvedResult(`Demographic option "${choice}" has no mapped demographic key`);
+      }
+      const fact = getDemographicFact(optKey);
+      if (!fact || !Array.isArray(fact.value) || fact.value.length === 0) {
+        return unresolvedResult(`Missing saved demographic preference for "${optKey}"`);
+      }
+      if (!demographicOptionSupported(optKey, fact.value.map(String), choice)) {
+        return unresolvedResult(`Demographic option "${choice}" is not supported by saved "${optKey}" preference`, [fact.id]);
+      }
+      evidenceIds.add(fact.id);
+    }
+    return validResult([...evidenceIds], 'verified');
   }
 
   const skillAsked = experienceSkillQuestion(qText);
@@ -642,26 +945,104 @@ export function validateGroundedAnswer(
     return unresolvedResult(`Answer '${answer}' does not match verified city/state`, evidenceIds);
   }
 
-  if (canonical === 'intended_work_country' || canonical === 'country') {
+  const validateFormattedLocation = (allowCountryOnly: boolean): GroundingResult | undefined => {
+    const cityFact = facts.get('profile.location.city');
+    const stateFact = facts.get('profile.location.state');
     const intendedFact = facts.get('profile.location.intended_work_country');
     const countryFact = facts.get('profile.location.country');
+    const baseFact = facts.get('profile.location.base');
+    const fullAddressFact = facts.get('profile.location.full_address');
     const authCountries = facts.get('screening.authorized_countries');
-    const primaryFact = canonical === 'intended_work_country' ? (intendedFact || countryFact) : countryFact;
-    const matchesCountryAnswer = (factVal: unknown) => {
+    const primaryCountryFact = canonical === 'intended_work_country' ? (intendedFact || countryFact) : countryFact;
+
+    const matchesCountryVal = (candidateNorm: string, factVal: unknown): boolean => {
       const s = String(factVal ?? '').trim();
       const fn = normalize(s);
-      if (fn && (fn === normAns || fn.includes(normAns) || normAns.includes(fn))) return true;
-      if (/^[a-z]{2}$/i.test(s) && matchesCountry(normAns, s)) return true;
-      if (/^[a-z]{2}$/i.test(normAns) && matchesCountry(fn, normAns)) return true;
+      if (!fn) return false;
+      if (fn === candidateNorm) return true;
+      const candidateIso = resolveCountryIso(candidateNorm);
+      const factIso = resolveCountryIso(s);
+      if (candidateIso && factIso && candidateIso === factIso) return true;
+      if (/^[a-z]{2}$/i.test(s) && matchesCountry(candidateNorm, s)) return true;
+      if (/^[a-z]{2}$/i.test(candidateNorm) && matchesCountry(fn, candidateNorm)) return true;
       return false;
     };
-    if (primaryFact && matchesCountryAnswer(primaryFact.value)) {
-      return validResult([primaryFact.id], 'verified');
+
+    if (baseFact && normalize(baseFact.value) === normAns) {
+      return validResult([baseFact.id], 'verified');
     }
-    if (canonical === 'intended_work_country' && Array.isArray(authCountries?.value) &&
-        authCountries.value.some((code) => matchesCountry(normAns, String(code)))) {
-      return validResult([authCountries.id], 'verified');
+    if (!allowCountryOnly && fullAddressFact) {
+      const fn = normalize(fullAddressFact.value);
+      if (fn === normAns || fn.includes(normAns) || normAns.includes(fn)) {
+        return validResult([fullAddressFact.id], 'verified');
+      }
     }
+
+    const parts = answer.split(',').map((p) => p.trim()).filter(Boolean);
+    if (parts.length === 2) {
+      const [p1, p2] = parts;
+      if (cityFact && normalize(cityFact.value) === normalize(p1)) {
+        if (primaryCountryFact && matchesCountryVal(normalize(p2), primaryCountryFact.value)) {
+          return validResult([cityFact.id, primaryCountryFact.id], 'verified');
+        }
+        if (
+          canonical === 'intended_work_country' &&
+          Array.isArray(authCountries?.value) &&
+          authCountries.value.some((code) => matchesCountryVal(normalize(p2), code))
+        ) {
+          return validResult([cityFact.id, authCountries.id], 'verified');
+        }
+        if (!allowCountryOnly && stateFact && normalize(stateFact.value) === normalize(p2)) {
+          return validResult([cityFact.id, stateFact.id], 'verified');
+        }
+      }
+      if (allowCountryOnly && primaryCountryFact && normalize(primaryCountryFact.value) === normAns) {
+        return validResult([primaryCountryFact.id], 'verified');
+      }
+      return undefined;
+    }
+
+    if (parts.length === 3) {
+      const [pCity, pState, pCountry] = parts;
+      if (
+        cityFact && normalize(cityFact.value) === normalize(pCity) &&
+        stateFact && normalize(stateFact.value) === normalize(pState) &&
+        primaryCountryFact && matchesCountryVal(normalize(pCountry), primaryCountryFact.value)
+      ) {
+        return validResult([cityFact.id, stateFact.id, primaryCountryFact.id], 'verified');
+      }
+      return undefined;
+    }
+
+    if (allowCountryOnly) {
+      if (primaryCountryFact && matchesCountryVal(normAns, primaryCountryFact.value)) {
+        return validResult([primaryCountryFact.id], 'verified');
+      }
+      if (
+        canonical === 'intended_work_country' &&
+        Array.isArray(authCountries?.value) &&
+        authCountries.value.some((code) => matchesCountryVal(normAns, code))
+      ) {
+        return validResult([authCountries.id], 'verified');
+      }
+    } else {
+      const locFact = cityFact || countryFact;
+      if (locFact) {
+        const fn = normalize(locFact.value);
+        if (fn === normAns || fn.includes(normAns) || normAns.includes(fn)) {
+          return validResult([locFact.id], 'verified');
+        }
+      }
+    }
+    return undefined;
+  };
+
+  if (canonical === 'intended_work_country' || canonical === 'country') {
+    const formatted = validateFormattedLocation(true);
+    if (formatted) return formatted;
+    const intendedFact = facts.get('profile.location.intended_work_country');
+    const countryFact = facts.get('profile.location.country');
+    const primaryFact = canonical === 'intended_work_country' ? (intendedFact || countryFact) : countryFact;
     if (primaryFact) {
       return unresolvedResult(`Answer '${answer}' does not match verified country '${primaryFact.value}'`, [primaryFact.id]);
     }
@@ -669,16 +1050,8 @@ export function validateGroundedAnswer(
   }
 
   if (canonical === 'location') {
-    const locFact =
-      facts.get('profile.location.full_address') ||
-      facts.get('profile.location.city') ||
-      facts.get('profile.location.country');
-    if (locFact) {
-      const fn = normalize(locFact.value);
-      if (fn === normAns || fn.includes(normAns) || normAns.includes(fn)) {
-        return validResult([locFact.id], 'verified');
-      }
-    }
+    const formatted = validateFormattedLocation(false);
+    if (formatted) return formatted;
   }
 
   const fieldMapping: Record<string, string> = {

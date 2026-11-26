@@ -755,4 +755,160 @@ test('ServerVercelProviderClient: 3-Tier Fallback, Telemetry, and Capability Cac
     );
     assert.deepEqual(seenAgent, fakeSafeAgent);
   });
+
+  await t.test('16. schemaName plan/choose makes a single direct attempt on slow/malformed/json_prompt calls and in ProviderClient', async () => {
+    ServerVercelProviderClient.clearCache();
+
+    // A) Slow timeout on ServerVercelProviderClient with schemaName: 'plan' makes 1 call and throws 504 TIMEOUT
+    let slowCalls = 0;
+    const slowClient = new ServerVercelProviderClient({
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'test-key',
+      model: 'gpt-4o',
+      fetchFn: async (_url, init) => {
+        slowCalls++;
+        return new Promise((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => {
+            const err = new Error('Timed out');
+            err.name = 'TimeoutError';
+            reject(err);
+          });
+        });
+      },
+    });
+
+    await assert.rejects(
+      () => slowClient.generateChatCompletion([{ role: 'user', content: 'Plan' }], { schemaName: 'plan', timeoutMs: 30 }),
+      (err) => err instanceof ProviderError && err.status === 504 && err.code === 'TIMEOUT',
+    );
+    assert.equal(slowCalls, 1, 'Slow plan call must not cascade through 3 tiers');
+
+    // B) Malformed response on ServerVercelProviderClient with schemaName: 'choose' makes 1 call and throws 502
+    let malformedCalls = 0;
+    const malformedClient = new ServerVercelProviderClient({
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'test-key',
+      model: 'gpt-4o',
+      fetchFn: async () => {
+        malformedCalls++;
+        return new Response('not-valid-json', { status: 200, headers: { 'Content-Type': 'application/json' } });
+      },
+    });
+
+    await assert.rejects(
+      () => malformedClient.generateChatCompletion([{ role: 'user', content: 'Choose' }], { schemaName: 'choose' }),
+      (err) => err instanceof ProviderError && err.status === 502,
+    );
+    assert.equal(malformedCalls, 1, 'Malformed choose call must not cascade through 3 tiers');
+
+    // C) ProviderClient with schemaName: 'plan' or 'choose' makes a single direct attempt without 400 retry cascade
+    let providerCalls = 0;
+    const directProvider = new ProviderClient({
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'test-key',
+      model: 'gpt-4o',
+      fetchFn: async () => {
+        providerCalls++;
+        return new Response(
+          JSON.stringify({
+            error: {
+              message: "Unsupported parameter: 'response_format' is not supported",
+              code: 'unsupported_parameter',
+            },
+          }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } },
+        );
+      },
+    });
+
+    await assert.rejects(
+      () => directProvider.generateChatCompletion([{ role: 'user', content: 'Plan' }], { schemaName: 'plan' }),
+      (err) => err instanceof ProviderError && err.status === 400,
+    );
+    assert.equal(providerCalls, 1, 'ProviderClient with schemaName plan/choose must make a single direct attempt');
+
+    // D) ServerVercelProviderClient with responseFormat: 'json_prompt' & schemaName: 'plan' omits response_format,
+    //    makes 1 attempt even on HTTP 400 unsupported_parameter, and validates response against PlanContractSchema
+    ServerVercelProviderClient.clearCache();
+    let jsonPrompt400Calls = 0;
+    let seenJsonPromptBody = null;
+    const jsonPrompt400Client = new ServerVercelProviderClient({
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'test-key',
+      model: 'gpt-4o',
+      fetchFn: async (_url, init) => {
+        jsonPrompt400Calls++;
+        seenJsonPromptBody = JSON.parse(init.body);
+        return new Response(
+          JSON.stringify({
+            error: {
+              message: "Unsupported parameter: 'response_format' is not supported",
+              code: 'unsupported_parameter',
+            },
+          }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } },
+        );
+      },
+    });
+    await assert.rejects(
+      () =>
+        jsonPrompt400Client.generateChatCompletion(
+          [{ role: 'user', content: 'Plan' }],
+          { responseFormat: 'json_prompt', schemaName: 'plan' },
+        ),
+      (err) => err instanceof ProviderError && err.status === 400,
+    );
+    assert.equal(jsonPrompt400Calls, 1, 'json_prompt must make only 1 direct attempt on HTTP 400');
+    assert.equal(seenJsonPromptBody.response_format, undefined, 'json_prompt must omit response_format');
+
+    // Zod schema validation still runs on json_prompt response
+    ServerVercelProviderClient.clearCache();
+    const jsonPromptInvalidSchemaClient = new ServerVercelProviderClient({
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'test-key',
+      model: 'gpt-4o',
+      fetchFn: async () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { role: 'assistant', content: JSON.stringify({ wrongKey: [] }) } }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+    });
+    await assert.rejects(
+      () =>
+        jsonPromptInvalidSchemaClient.generateChatCompletion(
+          [{ role: 'user', content: 'Plan' }],
+          { responseFormat: 'json_prompt', schemaName: 'plan' },
+        ),
+      (err) => err instanceof ProviderError && err.status === 502 && err.code === 'SCHEMA_VALIDATION_ERROR',
+    );
+
+    ServerVercelProviderClient.clearCache();
+    let validJsonPromptCalls = 0;
+    let validJsonPromptBody = null;
+    const validPlan = { fills: [{ label: 'Full Name', value: 'Jane Doe', action: 'fill' }] };
+    const jsonPromptValidClient = new ServerVercelProviderClient({
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'test-key',
+      model: 'gpt-4o',
+      fetchFn: async (_url, init) => {
+        validJsonPromptCalls++;
+        validJsonPromptBody = JSON.parse(init.body);
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { role: 'assistant', content: JSON.stringify(validPlan) } }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      },
+    });
+    const jsonPromptRes = await jsonPromptValidClient.generateChatCompletion(
+      [{ role: 'user', content: 'Plan' }],
+      { responseFormat: 'json_prompt', schemaName: 'plan' },
+    );
+    assert.equal(validJsonPromptCalls, 1);
+    assert.equal(validJsonPromptBody.response_format, undefined);
+    assert.deepEqual(jsonPromptRes.rawJson, validPlan);
+  });
 });

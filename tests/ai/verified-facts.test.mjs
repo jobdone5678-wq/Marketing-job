@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildVerifiedFacts } from '../../src/lib/ai/verified-facts.ts';
+import * as fieldSafety from '../../src/lib/ai/autofill-field-safety.ts';
 
 test('VerifiedFact builder: candidate schema mapping & typed evidence generation', async (t) => {
   await t.test('maps candidate name, contact, and structured location into typed VerifiedFact objects with correct IDs', () => {
@@ -277,5 +278,115 @@ test('VerifiedFact builder: candidate schema mapping & typed evidence generation
     const degreeFact = facts.get('profile.education.degree') || facts.get('profile.education.highest_qualification');
     assert.ok(degreeFact);
     assert.equal(degreeFact.rawSnippet, 'Earned PhD in Mathematics from Yale University in 1934');
+  });
+
+  await t.test('isBlockedAutofillField allows demographic self-ID fields while blocking PII, consent, and marketing opt-ins', () => {
+    assert.equal(typeof fieldSafety.isBlockedAutofillField, 'function', 'isBlockedAutofillField must be exported');
+
+    // Allowed demographic / self-ID fields
+    assert.equal(fieldSafety.isBlockedAutofillField({ label: 'Race', options: ['Asian', 'White'] }), false);
+    assert.equal(
+      fieldSafety.isBlockedAutofillField({
+        label: 'Which of the following communities do you belong to?',
+        options: ['Person with disability', 'Veteran', 'I prefer not to answer'],
+      }),
+      false,
+    );
+    assert.equal(fieldSafety.isBlockedAutofillField({ label: 'Gender', options: ['Male', 'Female'] }), false);
+
+    // Phase A isPrivateAutofillField still blocks EEO fields
+    assert.equal(fieldSafety.isPrivateAutofillField({ label: 'Race', options: ['Asian', 'White'] }), true);
+
+    // Blocked PII, consent, marketing, future opportunities
+    assert.equal(fieldSafety.isBlockedAutofillField({ label: 'Date of birth' }), true);
+    assert.equal(fieldSafety.isBlockedAutofillField({ label: 'Contact me about future job opportunities' }), true);
+    assert.equal(fieldSafety.isBlockedAutofillField({ label: 'I agree to the privacy policy' }), true);
+    assert.equal(fieldSafety.isBlockedAutofillField({ type: 'password', label: 'Account password' }), true);
+    assert.equal(fieldSafety.isBlockedAutofillField({ label: 'Social Security Number' }), true);
+  });
+
+  await t.test('builds demographics.* facts ONLY when enabled === true and normalizes veteran/protectedVeteran cleanly', () => {
+    const candidate = { full_name: 'Alex Rivera' };
+    const screening = {
+      age_18_or_older: true,
+      notice_period_days: 14,
+      willing_to_relocate: false,
+      visa_sponsorship_needed: false,
+    };
+
+    // Disabled -> zero demographics.* facts
+    const disabledFacts = buildVerifiedFacts(candidate, [], screening, {
+      enabled: false,
+      answers: { gender: ['Male'], raceEthnicity: ['Asian'] },
+    });
+    for (const key of disabledFacts.keys()) {
+      assert.equal(key.startsWith('demographics.'), false, `Disabled demographics must not emit ${key}`);
+    }
+
+    // Enabled -> emits demographics.<key>
+    const enabledFacts = buildVerifiedFacts(candidate, [], screening, {
+      enabled: true,
+      answers: { gender: ['Male'], veteran: ['No'], raceEthnicity: ['  '] },
+    });
+    assert.deepEqual(enabledFacts.get('demographics.gender'), {
+      id: 'demographics.gender',
+      type: 'string[]',
+      value: ['Male'],
+      source: 'profile',
+      category: 'demographics',
+    });
+    assert.deepEqual(enabledFacts.get('demographics.veteran'), {
+      id: 'demographics.veteran',
+      type: 'string[]',
+      value: ['No'],
+      source: 'profile',
+      category: 'demographics',
+    });
+    assert.equal(enabledFacts.get('demographics.protectedVeteran')?.value?.[0], 'No');
+    assert.equal(enabledFacts.has('demographics.raceEthnicity'), false);
+
+    // Only protectedVeteran saved -> normalizes veteran alias cleanly
+    const protectedOnlyFacts = buildVerifiedFacts(candidate, [], screening, {
+      enabled: true,
+      answers: { protectedVeteran: ['I am not a protected veteran'] },
+    });
+    assert.deepEqual(protectedOnlyFacts.get('demographics.protectedVeteran')?.value, ['I am not a protected veteran']);
+    assert.deepEqual(protectedOnlyFacts.get('demographics.veteran')?.value, ['I am not a protected veteran']);
+
+    // Both saved -> preserves both without overwriting
+    const bothVeteranFacts = buildVerifiedFacts(candidate, [], screening, {
+      enabled: true,
+      answers: { veteran: ['Yes'], protectedVeteran: ['No'] },
+    });
+    assert.deepEqual(bothVeteranFacts.get('demographics.veteran')?.value, ['Yes']);
+    assert.deepEqual(bothVeteranFacts.get('demographics.protectedVeteran')?.value, ['No']);
+  });
+
+  await t.test('surfaces structured location (base, remote_regions, work_format) and country_specific_answers.*', () => {
+    const candidate = {
+      full_name: 'Sam Patel',
+      confirmed_facts: {
+        location: {
+          whereBased: 'Austin, United States',
+          regions: ['North America', 'United States'],
+          workFormat: ['Remote', 'Hybrid'],
+        },
+        screeningAnswers: {
+          country_specific_answers: {
+            us_sponsorship: 'no',
+            us_auth: 'yes',
+            empty_field: '   ',
+          },
+        },
+      },
+    };
+
+    const facts = buildVerifiedFacts(candidate);
+    assert.equal(facts.get('profile.location.base')?.value, 'Austin, United States');
+    assert.deepEqual(facts.get('profile.location.remote_regions')?.value, ['North America', 'United States']);
+    assert.deepEqual(facts.get('profile.location.work_format')?.value, ['Remote', 'Hybrid']);
+    assert.equal(facts.get('country_specific_answers.us_sponsorship')?.value, 'no');
+    assert.equal(facts.get('country_specific_answers.us_auth')?.value, 'yes');
+    assert.equal(facts.has('country_specific_answers.empty_field'), false);
   });
 });

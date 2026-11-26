@@ -10,14 +10,20 @@ import {
   requestAutofillChoice,
   requestAutofillPlan,
   saveBankAnswer,
+  type PlanApiResponse,
 } from './freehire';
-import { isAutofillProse, isPrivateAutofillField } from './autofillSafety';
-import { demographicChoices, demographicKey, demographicOptionKey, mixedDemographicChoices, type DemographicPreferences } from '../../src/lib/profile/demographic-preferences';
-import { inferQuestionDescriptor, type FormContext } from '../../src/lib/ai/planner';
+import { isAutofillProse, isBlockedAutofillField, isPrivateAutofillField } from './autofillSafety';
+import {
+  extractCountryCodeFromLocation,
+  inferQuestionDescriptor,
+  type Field,
+  type FormContext,
+} from '../../src/lib/ai/planner';
 import { validateGroundedAnswer } from '../../src/lib/ai/grounded';
 import { findReusableAnswer } from '../../src/lib/ai/reusable-answers';
 import { buildVerifiedFacts } from '../../src/lib/ai/verified-facts';
-import { normalizeLabel, offeredChoice } from './fieldKeys';
+import { matchFieldKey, normalizeLabel, offeredChoice, workAuthorizationCountry } from './fieldKeys';
+import { countryLabel } from './labels';
 import { profileToValues } from './form';
 import { confirmedFieldValue, looksLikeApplication, planLabelFills, scopeToApplication } from './fillPlan';
 import { walkFills, type WalkHooks } from './formWalk';
@@ -61,7 +67,7 @@ function fieldKey(field: { frame?: number; form?: number; label: string }) {
   return `${field.frame}:${field.form}:${normalizeLabel(field.label)}`;
 }
 
-function plannerField(field: FramedField) {
+function plannerField(field: FramedField): Field & { id: string } {
   return {
     id: `${field.frame}:${field.form}:${field.index}`,
     label: field.label,
@@ -71,7 +77,102 @@ function plannerField(field: FramedField) {
     options: field.options,
     frame: field.frame,
     form: field.form,
+    ...(field.helperText ? { helperText: field.helperText } : {}),
+    ...(field.widgetType ? { widgetType: field.widgetType } : {}),
   };
+}
+
+function isUpstreamLocationField(field: FramedField): boolean {
+  const key = matchFieldKey(field.label);
+  if (key === 'intendedWorkCountry' || key === 'country' || key === 'city') return true;
+  const desc = inferQuestionDescriptor(plannerField(field));
+  return (
+    desc.canonical_name === 'intended_work_country' ||
+    desc.canonical_name === 'country' ||
+    desc.canonical_name === 'location'
+  );
+}
+
+function hasEarlierUnfilledLocation(fields: FramedField[], index: number, done?: ReadonlySet<string>): boolean {
+  for (let i = 0; i < index; i++) {
+    const candidate = fields[i];
+    if (candidate && isUpstreamLocationField(candidate) && !done?.has(fieldKey(candidate))) return true;
+  }
+  return false;
+}
+
+function isLocationLinkedWorkAuth(label: string): boolean {
+  return matchFieldKey(label) === 'visaSponsorshipNeeded' || Boolean(workAuthorizationCountry(label));
+}
+
+function splitCheckboxChoices(value: string, options?: string[]): string[] | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (!options?.length) {
+    const parts = trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+    return parts.length ? Array.from(new Set(parts)) : undefined;
+  }
+  const exact = options.find((opt) => opt === trimmed || opt.toLowerCase() === trimmed.toLowerCase());
+  if (exact) return [exact];
+
+  const sorted = options.toSorted((a, b) => b.length - a.length);
+  const matched: string[] = [];
+  let rest = trimmed;
+  while (rest.length > 0) {
+    rest = rest.replace(/^[,\s]+/, '');
+    if (!rest) break;
+    const hit =
+      sorted.find((opt) => rest.startsWith(opt) && /^(?:\s*,\s*|$)/.test(rest.slice(opt.length))) ??
+      sorted.find(
+        (opt) =>
+          rest.toLowerCase().startsWith(opt.toLowerCase()) &&
+          /^(?:\s*,\s*|$)/.test(rest.slice(opt.length)),
+      );
+    if (!hit) break;
+    if (!matched.includes(hit)) matched.push(hit);
+    rest = rest.slice(hit.length);
+  }
+  if (matched.length > 0 && rest.replace(/^[,\s]+/, '').length === 0) {
+    return matched;
+  }
+
+  const fallbackParts = trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+  const mapped: string[] = [];
+  for (const part of fallbackParts) {
+    const match = options.find((opt) => opt === part || opt.toLowerCase() === part.toLowerCase());
+    if (!match) return undefined;
+    if (!mapped.includes(match)) mapped.push(match);
+  }
+  return mapped.length ? mapped : undefined;
+}
+
+function unambiguousContextCountry(context: FormContext): string | undefined {
+  const codes = new Set<string>();
+  for (const raw of [context.jobTitle, context.pageTitle]) {
+    if (!raw) continue;
+    for (const segment of raw.split(/[-–—|,/()]+/)) {
+      const token = segment.trim();
+      if (!token) continue;
+      if (/^[a-z]{2}$/i.test(token) && !/^(?:US|UK)$/.test(token)) continue;
+      const code = extractCountryCodeFromLocation(token);
+      if (code) codes.add(code);
+    }
+  }
+  return codes.size === 1 ? Array.from(codes)[0] : undefined;
+}
+
+function fallbackLocationSearch(
+  field: FramedField,
+  profile: { location?: string; country?: string; intended_work_country?: string },
+  values: Record<string, string>,
+): string | undefined {
+  if (!isUpstreamLocationField(field)) return undefined;
+  const helper = field.helperText ?? '';
+  if (/city/i.test(helper) && profile.location?.trim()) {
+    return profile.location.trim();
+  }
+  const direct = values.intendedWorkCountry?.trim() || profile.country?.trim() || profile.location?.trim();
+  return direct || undefined;
 }
 
 async function ask(message: RuntimeMessage) {
@@ -93,11 +194,11 @@ async function jobContext(target: AutofillTarget): Promise<FormContext> {
   };
 }
 
-export async function runAutofill(token: string, panel: FillPanel, signal: AbortSignal, demographics?: DemographicPreferences) {
+export async function runAutofill(token: string, panel: FillPanel, signal: AbortSignal) {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   if (tab?.id === undefined || !tab.url || !/^https?:\/\//i.test(tab.url)) return;
   const target = { tabId: tab.id, url: tab.url };
-  await fillApplication(token, panel, signal, target, demographics);
+  await fillApplication(token, panel, signal, target);
 }
 
 async function fillApplication(
@@ -105,7 +206,6 @@ async function fillApplication(
   panel: FillPanel,
   signal: AbortSignal,
   target: AutofillTarget,
-  demographics?: DemographicPreferences,
   force = false
 ) {
   const stopped = () => signal.aborted || panel.walk.stopped();
@@ -134,7 +234,7 @@ async function fillApplication(
     choose: (options: string[]) => Promise<string | string[] | undefined>,
     search?: string,
     exact = false,
-  ) {
+  ): Promise<string | undefined> {
     hooks.filling(field.label);
     const step = async (action: ComboboxStep['action'], value = '', expectedSelections?: string[]) => {
       if (stopped() && action !== 'clear') return;
@@ -154,7 +254,7 @@ async function fillApplication(
       let options = offer?.options ?? [];
       let chosen = options.length && !stopped() ? await choose(options) : undefined;
       if (search && (!chosen || (Array.isArray(chosen) && !chosen.length)) && !stopped() &&
-          !isPrivateAutofillField({ ...field, options })) {
+          !isBlockedAutofillField({ ...field, options })) {
         queried = (await step('query', search))?.status === 'queried';
         if (queried) {
           offer = await step('options');
@@ -162,21 +262,30 @@ async function fillApplication(
           chosen = options.length && !stopped() ? await choose(options) : undefined;
         }
       }
-      if (!options.length || stopped()) return;
+      if (!options.length || stopped()) return undefined;
       const choices = Array.isArray(chosen) ? chosen : chosen ? [chosen] : [];
-      if (!choices.length || (choices.length > 1 && !offer?.multiple)) return;
+      if (!choices.length || (choices.length > 1 && !offer?.multiple)) return undefined;
       const committed: string[] = [];
+      let lastCommittedDisplay = '';
       for (const choice of choices) {
-        if (stopped() || !options.includes(choice)) return;
-        if (committed.length && (await step('open'))?.status !== 'opened') return;
-        if ((await step('select', choice, committed.slice()))?.status !== 'selected') return;
-        if ((await step('verify', choice))?.status !== 'verified') return;
+        if (stopped() || !options.includes(choice)) return undefined;
+        if (committed.length && (await step('open'))?.status !== 'opened') return undefined;
+        if ((await step('select', choice, committed.slice()))?.status !== 'selected') return undefined;
+        const verified = await step('verify', choice);
+        if (verified?.status !== 'verified') return undefined;
+        const display = verified.committed?.trim() || choice;
         committed.push(choice);
+        lastCommittedDisplay = display;
         hooks.wrote();
       }
       hooks.answered(field.label, field.frame, field.form);
-    } catch {
+      return choices.length === 1 ? lastCommittedDisplay : committed.join(', ');
+    } catch (err) {
+      if (err instanceof PlanRefused || (err instanceof ExtensionApiError && [401, 403, 429].includes(err.status))) {
+        throw err;
+      }
       if (!stopped()) issues.push(field.label);
+      return undefined;
     } finally {
       if (queried) await step('clear').catch(() => undefined);
       hooks.filling(null);
@@ -195,7 +304,7 @@ async function fillApplication(
       panel.notice(
         "This doesn't look like the application form. Open the application, or choose Fill it anyway."
       );
-      panel.offerOverride((nextSignal) => fillApplication(token, panel, nextSignal, target, demographics, true));
+      panel.offerOverride((nextSignal) => fillApplication(token, panel, nextSignal, target, true));
       return;
     }
     const uploadScopes = new Set(observed.uploads.map(({ frame, form }) => `${frame}:${form}`));
@@ -211,7 +320,7 @@ async function fillApplication(
     }
     panel.offerOverride(null);
     started = true;
-    const uniqueFields = (fields: FramedField[], privateFields = false) => {
+    const uniqueFields = (fields: FramedField[]) => {
       const counts = new Map<string, number>();
       for (const field of fields) {
         const key = fieldKey(field);
@@ -227,63 +336,45 @@ async function fillApplication(
           field.label.trim() &&
           field.label.length <= 2000 &&
           !(field.type === 'radio' && !field.options?.length && /^(?:yes|no)$/i.test(normalizeLabel(field.label))) &&
-          isPrivateAutofillField(field) === privateFields
+          !isBlockedAutofillField(field)
         );
       });
     };
+    const previouslyResolved: Record<string, string> = {};
+    const recordResolvedFromForm = (allFields: FramedField[]) => {
+      for (const f of allFields) {
+        if (scopes.has(`${f.frame}:${f.form}`) && !isBlockedAutofillField(f) && f.value.trim()) {
+          previouslyResolved[f.label] = f.value.trim();
+        }
+      }
+    };
     const remaining = async () => {
       const reply = await ask({ kind: 'GET_FRAMED_FORM', target });
-      return reply?.kind === 'FRAMED_FORM' ? uniqueFields(reply.fields) : [];
+      if (reply?.kind !== 'FRAMED_FORM') return [];
+      recordResolvedFromForm(reply.fields);
+      return uniqueFields(reply.fields);
     };
 
     // Capture page context before writing any candidate data into the form.
     const contextRequest = jobContext(target);
-    if (demographics?.enabled) {
-      for (const field of uniqueFields(scoped, true)) {
-        if (stopped()) return;
-        const optionKey = field.type === 'checkbox' && !field.options?.length ? demographicOptionKey(field.label) : undefined;
-        const key = optionKey ?? demographicKey(field.label);
-        const saved = key
-          ? demographics.answers[key] ?? (key === 'veteran' ? demographics.answers.protectedVeteran : undefined)
-          : undefined;
-        if (!key) {
-          if (field.type === 'checkbox' && field.multiple && field.options?.length) {
-            const choices = mixedDemographicChoices(demographics.answers, field.options);
-            if (choices.length) {
-              await walk([{ label: field.label, frame: field.frame, form: field.form, value: choices.join(', '), choices }]);
-            }
-          }
-          continue;
-        }
-        if (!saved?.length) continue;
-        if (field.combo) {
-          await fillCombobox(field, async (options) => demographicChoices(key, saved, options), undefined, true);
-        } else if (field.options?.length && (field.tag === 'select' || field.type === 'radio' || field.type === 'checkbox')) {
-          const choices = demographicChoices(key, saved, field.options);
-          if (choices.length && (field.multiple || choices.length === 1)) {
-            await walk([{ label: field.label, frame: field.frame, form: field.form, value: choices.join(', '), choices }]);
-          }
-        } else if (field.type === 'checkbox' && (optionKey
-          ? saved.some((answer) => demographicChoices(key, [answer], [field.label]).length)
-          : demographicChoices(key, saved, [field.label]).length)) {
-          await walk([{ label: field.label, frame: field.frame, form: field.form, value: 'true' }]);
-        }
-      }
-    }
     if (stopped()) return;
     const { data: profile, meta } = await getAutofillSessionProfile(token, signal);
     if (stopped()) return;
     const values = profileToValues(profile);
-    await walk(
-      planLabelFills(
-        uniqueFields(scoped).filter((field) => !field.combo),
-        values,
-        profile.authorized_countries
-      )
+    const initialUnfilled = uniqueFields(scoped);
+    const phaseALabelFields = initialUnfilled.filter(
+      (field, idx) =>
+        !field.combo &&
+        !(hasEarlierUnfilledLocation(initialUnfilled, idx) && isLocationLinkedWorkAuth(field.label)),
     );
+    await walk(planLabelFills(phaseALabelFields, values, profile.authorized_countries));
     if (stopped()) return;
-    for (const field of await remaining()) {
+    const phaseARemaining = await remaining();
+    for (let i = 0; i < phaseARemaining.length; i++) {
       if (stopped()) return;
+      const field = phaseARemaining[i];
+      if (!field) continue;
+      if (hasEarlierUnfilledLocation(phaseARemaining, i) && isLocationLinkedWorkAuth(field.label)) continue;
       const value = confirmedFieldValue(field.label, values, profile.authorized_countries).trim();
       if (!field.combo || !value) continue;
       await fillCombobox(field, async (options) => {
@@ -304,8 +395,12 @@ async function fillApplication(
     const bank = await getReusableAnswers(token, signal).catch(() => []);
     if (stopped()) return;
     const bankFills: LabelFill[] = [];
-    for (const field of fields) {
+    for (let i = 0; i < fields.length; i++) {
       if (stopped()) return;
+      const field = fields[i];
+      if (!field) continue;
+      if (isPrivateAutofillField(field)) continue;
+      if (hasEarlierUnfilledLocation(fields, i, done) && isLocationLinkedWorkAuth(field.label)) continue;
       const entry = findReusableAnswer(field.label, bank);
       if (!entry) continue;
       const facts = buildVerifiedFacts({ ...profile, expected_salary: profile.desired_salary },
@@ -342,65 +437,321 @@ async function fillApplication(
       );
       return;
     }
-    const candidates = fields.filter(
-      (field) => !field.combo && !(field.tag === 'textarea' && isAutofillProse(field.label)),
-    ).map(plannerField);
-    // Keep each request within one server-side planner batch.
-    const batchSize = 4;
-    let consecutiveFailures = 0;
-    let reportedPlanError = false;
-    usedAi = true;
-    for (let start = 0; start < candidates.length; start += batchSize) {
-      if (stopped()) return;
-      const batch = candidates.slice(start, start + batchSize);
-      const byId = new Map(batch.map((field) => [field.id, field]));
-      let plan: Awaited<ReturnType<typeof requestAutofillPlan>>;
-      try {
-        plan = await requestAutofillPlan({ candidateId, fields: batch, context }, token, signal);
-        if (!plan.ok) throw new Error(plan.error || 'The server could not plan autofill.');
-      } catch (error) {
-        if (stopped()) return;
-        if (error instanceof PlanRefused) {
-          panel.refused(error);
-          break;
-        }
-        if (!reportedPlanError) {
-          const status = error instanceof ExtensionApiError ? error.status : undefined;
-          const message = status === 504 ? 'AI planning timed out (HTTP 504).' :
-            `AI planning could not complete a batch${status ? ` (HTTP ${status})` : ''}.`;
-          panel.notice(`${message} Autofill will check the remaining fields.`);
-          reportedPlanError = true;
-        }
-        if (++consecutiveFailures >= 2 ||
-            (error instanceof ExtensionApiError && [401, 403, 429].includes(error.status))) break;
-        continue;
-      }
-      if (stopped()) return;
 
-      consecutiveFailures = 0;
-      const plannedFills: LabelFill[] = [];
-      for (const fill of plan.executableFills ?? []) {
-        const field = fill.fieldId ? byId.get(fill.fieldId) : undefined;
-        if (field && fill.grounded === true && typeof fill.value === 'string' && fill.value.trim()) {
-          plannedFills.push({ label: field.label, value: fill.value, frame: field.frame, form: field.form });
+    const attemptedPhaseBKeys = new Set<string>();
+    const committedByFieldId = new Map<string, string>();
+    const failedFieldIds = new Set<string>();
+    const failedLocationFields: FramedField[] = [];
+    const batchSize = 5;
+    const maxPhaseBPasses = 4;
+    let reportedPlanError = false;
+    let abortAiPlanning = false;
+    usedAi = true;
+
+    const markFailedField = (field: FramedField) => {
+      const id = plannerField(field).id;
+      failedFieldIds.add(id);
+      if (isUpstreamLocationField(field) && !failedLocationFields.some((f) => plannerField(f).id === id)) {
+        failedLocationFields.push(field);
+      }
+    };
+
+    const findFailedEarlierLocation = (field: FramedField): FramedField | undefined => {
+      let latest: FramedField | undefined;
+      for (const loc of failedLocationFields) {
+        if (loc.frame === field.frame && loc.form === field.form && loc.index < field.index) {
+          if (!latest || loc.index > latest.index) latest = loc;
         }
       }
-      await walk(plannedFills);
-    }
-    if (stopped()) return;
-    for (const field of await remaining()) {
-      if (stopped()) return;
-      if (!field.combo) continue;
-      await fillCombobox(field, async (options) => {
-        if (isPrivateAutofillField({ ...field, options })) return;
-        const result = await requestAutofillChoice(
-          { candidateId, question: plannerField(field), options },
+      return latest;
+    };
+
+    const reportBatchError = (error: unknown): boolean => {
+      if (error instanceof PlanRefused) {
+        panel.refused(error);
+        return true;
+      }
+      if (!reportedPlanError) {
+        const status = error instanceof ExtensionApiError ? error.status : undefined;
+        const message = status === 504 ? 'AI planning timed out (HTTP 504).' :
+          `AI planning could not complete a batch${status ? ` (HTTP ${status})` : ''}.`;
+        panel.notice(`${message} Autofill will check the remaining fields.`);
+        reportedPlanError = true;
+      }
+      return error instanceof ExtensionApiError && [401, 403, 429].includes(error.status);
+    };
+
+    const replanSingleField = async (
+      pField: Field & { id: string },
+      extraResolved?: Record<string, string>,
+    ): Promise<NonNullable<PlanApiResponse['executableFills']>[number] | undefined> => {
+      try {
+        const replan = await requestAutofillPlan(
+          {
+            candidateId,
+            fields: [pField],
+            context: {
+              ...context,
+              previouslyResolved: { ...previouslyResolved, ...extraResolved },
+            },
+          },
           token,
-          signal
+          signal,
         );
-        return result.ok ? result.choice ?? undefined : undefined;
-      });
+        if (!replan.ok) return undefined;
+        return (replan.executableFills ?? []).find(
+          (f) => f.fieldId === pField.id && f.grounded === true && typeof f.value === 'string' && f.value.trim(),
+        );
+      } catch (err) {
+        if (stopped()) return undefined;
+        if (reportBatchError(err)) {
+          abortAiPlanning = true;
+        }
+        return undefined;
+      }
+    };
+
+    const runPhaseBCombo = async (field: FramedField, search?: string): Promise<string | undefined> => {
+      const id = plannerField(field).id;
+      try {
+        const committed = await fillCombobox(
+          field,
+          async (options) => {
+            if (isBlockedAutofillField({ ...field, options })) return;
+            const result = await requestAutofillChoice(
+              {
+                candidateId,
+                question: plannerField(field),
+                options,
+                context: {
+                  ...context,
+                  ...(field.helperText ? { helperText: field.helperText } : {}),
+                  previouslyResolved: { ...previouslyResolved },
+                },
+              },
+              token,
+              signal,
+            );
+            return result.ok ? result.choice ?? undefined : undefined;
+          },
+          search,
+        );
+        if (committed) {
+          committedByFieldId.set(id, committed);
+          previouslyResolved[field.label] = committed;
+        } else {
+          markFailedField(field);
+        }
+        return committed;
+      } catch (err) {
+        if (stopped()) return undefined;
+        markFailedField(field);
+        if (reportBatchError(err)) {
+          abortAiPlanning = true;
+        }
+        return undefined;
+      }
+    };
+
+    for (let pass = 0; pass < maxPhaseBPasses; pass++) {
+      if (stopped() || abortAiPlanning) break;
+      const passFields = pass === 0 ? fields : await remaining();
+      if (stopped()) return;
+      const candidates = passFields.filter(
+        (field) =>
+          !attemptedPhaseBKeys.has(fieldKey(field)) &&
+          !isBlockedAutofillField(field) &&
+          !(field.tag === 'textarea' && isAutofillProse(field.label)),
+      );
+      if (!candidates.length) break;
+
+      let wroteInPass = false;
+      for (let start = 0; start < candidates.length; start += batchSize) {
+        if (stopped() || abortAiPlanning) break;
+        const batch = candidates.slice(start, start + batchSize);
+        for (const field of batch) attemptedPhaseBKeys.add(fieldKey(field));
+        const plannedBatch = batch.map(plannerField);
+        const byId = new Map(batch.map((field) => [plannerField(field).id, field]));
+        const byLabel = new Map(batch.map((field) => [normalizeLabel(field.label), field]));
+
+        let plan: PlanApiResponse;
+        try {
+          plan = await requestAutofillPlan(
+            {
+              candidateId,
+              fields: plannedBatch,
+              context: { ...context, previouslyResolved: { ...previouslyResolved } },
+            },
+            token,
+            signal,
+          );
+          if (!plan.ok) throw new Error(plan.error || 'The server could not plan autofill.');
+        } catch (error) {
+          if (stopped()) return;
+          if (reportBatchError(error)) {
+            abortAiPlanning = true;
+            break;
+          }
+          // Batch fault isolation: continue handling comboboxes from this failed batch before moving to the next batch.
+          for (const field of batch) {
+            if (stopped() || abortAiPlanning) break;
+            if (field.combo) {
+              if (
+                isLocationLinkedWorkAuth(field.label) &&
+                findFailedEarlierLocation(field) &&
+                !unambiguousContextCountry(context)
+              ) {
+                markFailedField(field);
+                continue;
+              }
+              const committed = await runPhaseBCombo(field, fallbackLocationSearch(field, profile, values));
+              if (committed) wroteInPass = true;
+            } else if (isUpstreamLocationField(field)) {
+              markFailedField(field);
+            }
+          }
+          continue;
+        }
+        if (stopped()) return;
+
+        const fillById = new Map<string, NonNullable<PlanApiResponse['executableFills']>[number]>();
+        for (const fill of plan.executableFills ?? []) {
+          const targetField = fill.fieldId
+            ? byId.get(fill.fieldId)
+            : byLabel.get(normalizeLabel(fill.label));
+          if (targetField && fill.grounded === true && typeof fill.value === 'string' && fill.value.trim()) {
+            fillById.set(plannerField(targetField).id, fill);
+          }
+        }
+
+        const deferredPlanById = new Map<string, NonNullable<PlanApiResponse['deferredPlans']>[number]>();
+        for (const dp of plan.deferredPlans ?? []) {
+          const targetField = dp.fieldId
+            ? byId.get(dp.fieldId)
+            : byLabel.get(normalizeLabel(dp.label));
+          if (targetField) {
+            deferredPlanById.set(plannerField(targetField).id, dp);
+          }
+        }
+        for (const defId of plan.deferredFieldIds ?? []) {
+          const targetField = byId.get(defId);
+          if (targetField && !deferredPlanById.has(defId)) {
+            deferredPlanById.set(defId, { fieldId: defId, label: targetField.label });
+          }
+        }
+        const hasExplicitDeferred = Array.isArray(plan.deferredPlans) || Array.isArray(plan.deferredFieldIds);
+
+        const batchTentativeValueById = new Map<string, string>();
+        for (const [id, dp] of deferredPlanById.entries()) {
+          if (dp.searchQuery) batchTentativeValueById.set(id, dp.searchQuery);
+        }
+        for (const [id, f] of fillById.entries()) {
+          if (!batchTentativeValueById.has(id)) batchTentativeValueById.set(id, f.value);
+        }
+
+        for (const field of batch) {
+          if (stopped() || abortAiPlanning) break;
+          const pField = plannerField(field);
+          const id = pField.id;
+
+          if (field.combo) {
+            let dp = deferredPlanById.get(id);
+            if (!dp) {
+              if (hasExplicitDeferred) {
+                markFailedField(field);
+                continue;
+              }
+              dp = { fieldId: id, label: field.label };
+            }
+            const failedEarlierLoc = !dp.dependsOnFieldId && isLocationLinkedWorkAuth(field.label)
+              ? findFailedEarlierLocation(field)
+              : undefined;
+            const depId = dp.dependsOnFieldId ?? (failedEarlierLoc ? plannerField(failedEarlierLoc).id : undefined);
+            if (depId && failedFieldIds.has(depId) && !unambiguousContextCountry(context)) {
+              markFailedField(field);
+              continue;
+            }
+            const searchQuery = dp.searchQuery ?? fallbackLocationSearch(field, profile, values);
+            const committed = await runPhaseBCombo(field, searchQuery);
+            if (committed) wroteInPass = true;
+            continue;
+          }
+
+          let fill = fillById.get(id);
+          if (!fill) {
+            if (isUpstreamLocationField(field)) markFailedField(field);
+            continue;
+          }
+
+          const failedEarlierLoc = !fill.dependsOnFieldId && isLocationLinkedWorkAuth(field.label)
+            ? findFailedEarlierLocation(field)
+            : undefined;
+          const depId = fill.dependsOnFieldId ?? (failedEarlierLoc ? plannerField(failedEarlierLoc).id : undefined);
+          if (depId) {
+            if (failedFieldIds.has(depId)) {
+              const ctxCountry = unambiguousContextCountry(context);
+              if (!ctxCountry) {
+                markFailedField(field);
+                continue;
+              }
+              const tentativeVal = batchTentativeValueById.get(depId);
+              const tentativeCountry = tentativeVal ? extractCountryCodeFromLocation(tentativeVal) : undefined;
+              if (ctxCountry !== tentativeCountry) {
+                const depLabel = byId.get(depId)?.label ?? failedEarlierLoc?.label ?? 'work location';
+                const updated = await replanSingleField(pField, { [depLabel]: countryLabel(ctxCountry) });
+                if (abortAiPlanning) break;
+                if (!updated) {
+                  markFailedField(field);
+                  continue;
+                }
+                fill = updated;
+              }
+            } else if (byId.has(depId)) {
+              const committedVal = committedByFieldId.get(depId);
+              if (committedVal !== undefined) {
+                const tentativeVal = batchTentativeValueById.get(depId);
+                const committedCountry = extractCountryCodeFromLocation(committedVal);
+                const tentativeCountry = tentativeVal ? extractCountryCodeFromLocation(tentativeVal) : undefined;
+                if (committedCountry !== tentativeCountry || (!committedCountry && committedVal !== tentativeVal)) {
+                  const updated = await replanSingleField(pField);
+                  if (abortAiPlanning) break;
+                  if (!updated) {
+                    markFailedField(field);
+                    continue;
+                  }
+                  fill = updated;
+                }
+              }
+            }
+          }
+
+          let choices: string[] | undefined;
+          if (field.widgetType === 'checkbox_group' || field.multiple) {
+            choices = splitCheckboxChoices(fill.value, field.options);
+            if (!choices?.length && field.options?.length) continue;
+          }
+          const labelFill: LabelFill = {
+            label: field.label,
+            value: choices ? choices.join(', ') : fill.value,
+            frame: field.frame,
+            form: field.form,
+            ...(choices ? { choices } : {}),
+          };
+          await walk([labelFill]);
+          if (done.has(fieldKey(field))) {
+            wroteInPass = true;
+            committedByFieldId.set(id, labelFill.value);
+            previouslyResolved[field.label] = labelFill.value;
+          } else {
+            markFailedField(field);
+          }
+        }
+      }
+
+      if (!wroteInPass) break;
     }
+
+    if (stopped() || abortAiPlanning) return;
 
     if (stopped()) return;
     for (const field of await remaining()) {

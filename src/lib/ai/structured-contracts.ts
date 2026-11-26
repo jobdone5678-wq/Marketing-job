@@ -6,6 +6,8 @@ export const PlanFillSchema = z.object({
   fieldId: z.string().optional(),
   evidenceIds: z.array(z.string()).optional(),
   action: z.enum(['fill', 'skip', 'defer_combobox']).optional(),
+  searchQuery: z.string().optional(),
+  dependsOnFieldId: z.string().optional(),
 });
 
 export const PlanContractSchema = z.object({

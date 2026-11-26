@@ -57,7 +57,16 @@ export function isDemographicQuestion(label: string): boolean {
 }
 
 const decline = /^(?:(?:i )?(?:prefer|choose|elect|wish|opt) not to (?:say|answer|disclose|self identify|respond)|(?:i )?(?:do not|don t) (?:want|wish) to (?:answer|disclose|self identify|respond)|decline(?: to (?:answer|disclose|self identify|respond))?|prefer not to say|not disclosed|rather not (?:say|answer|disclose))$/;
+const noneOfTheAbove = /^(?:none(?: of (?:the above|these|the following|them))?|none apply|none of the listed)$/;
 const optionKey = (text: string) => normalizeLabel(demographicWords(text).replace(/[^\p{L}\p{N}/+]+/gu, ' '));
+
+export function isExplicitDemographicDecline(text: string): boolean {
+  return decline.test(optionKey(text));
+}
+
+export function isNoneOfTheAboveOption(text: string): boolean {
+  return noneOfTheAbove.test(optionKey(text));
+}
 
 function statusChoice(key: DemographicKey, option: string): boolean | undefined {
   const status = {
@@ -222,6 +231,43 @@ export function mixedDemographicChoices(
     if (declineOpt) return [declineOpt];
   }
   return [];
+}
+
+export function isNegativeDemographicStatus(key: DemographicKey, value: string): boolean {
+  const normalized = optionKey(value);
+  const direct = statusChoice(key, normalized);
+  if (direct !== undefined) return direct === false;
+  if (key === 'veteran') return statusChoice('protectedVeteran', normalized) === false;
+  if (key === 'protectedVeteran') return statusChoice('veteran', normalized) === false;
+  return false;
+}
+
+export function demographicOptionSupported(
+  key: DemographicKey,
+  saved: readonly string[],
+  option: string,
+): boolean {
+  if (!saved.length) return false;
+  const matchesKey = (targetKey: DemographicKey) =>
+    saved.some(
+      (answer) =>
+        !decline.test(optionKey(answer)) &&
+        demographicChoices(targetKey, [answer], [option]).length === 1,
+    );
+  if (matchesKey(key)) return true;
+  if (key === 'veteran' || key === 'protectedVeteran') {
+    const altKey: DemographicKey = key === 'veteran' ? 'protectedVeteran' : 'veteran';
+    if (matchesKey(altKey)) return true;
+    const offeredStatus = statusChoice(key, optionKey(option));
+    if (offeredStatus !== undefined) {
+      return saved.some(
+        (answer) =>
+          !decline.test(optionKey(answer)) &&
+          statusChoice(altKey, optionKey(answer)) === offeredStatus,
+      );
+    }
+  }
+  return false;
 }
 
 export function parseDemographicPreferences(input: unknown): DemographicPreferences {

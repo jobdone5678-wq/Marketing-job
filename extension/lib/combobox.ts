@@ -12,7 +12,7 @@
 
 import type { ComboboxReply, ComboboxStep } from './protocol';
 import { collectQuestions, formIndex, setNativeValue } from './form';
-import { comboListbox, comboOptionNodes, comboQueries, displayedValues, isComboWidget, isOnScreen, shownText } from './comboWidget';
+import { comboListbox, comboOptionNodes, comboQueries, displayedValues, isComboWidget, isLocationRejection, isOnScreen, shownText } from './comboWidget';
 import { normalizeLabel } from './fieldKeys';
 import { assertNever } from './utils';
 
@@ -29,6 +29,7 @@ export type VerifyStatus = 'verified' | 'mismatch' | 'empty' | 'not_found' | 'am
 
 /** How long a widget gets to re-render before it counts as unresponsive. */
 const SETTLE_MS = 1000;
+const QUERY_WAIT_MS = 2000;
 const POLL_MS = 25;
 
 /** The option texts each widget offered when `select` last read it, normalised. */
@@ -159,8 +160,19 @@ export async function runStep(doc: Document, step: ComboboxStep): Promise<Combob
       }
       comboQueries.set(widget, step.value);
       widget.focus({ preventScroll: true });
+      if (!isOpen(widget)) press(widget);
       setNativeValue(widget, step.value);
-      await settle(() => comboOptionNodes(widget).length > 0);
+      if (typeof KeyboardEvent === 'function') {
+        widget.dispatchEvent(
+          new KeyboardEvent('keyup', {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            key: step.value.slice(-1) || 'Unidentified',
+          }),
+        );
+      }
+      await waitForCondition(doc, () => readyOptionNodes(widget).length > 0, QUERY_WAIT_MS);
       return { status: 'queried' };
     }
     case 'clear': {
@@ -244,6 +256,13 @@ function press(el: Element): void {
   }
 }
 
+function readyOptionNodes(widget: Element): Element[] {
+  return comboOptionNodes(widget).filter((node) => {
+    const text = shownText(node);
+    return Boolean(text) && !/^loading[.…\s]*$/i.test(text) && !isLocationRejection(text);
+  });
+}
+
 /** Waits for a condition the widget's framework may only satisfy on a later tick. */
 async function settle(holds: () => boolean): Promise<boolean> {
   for (let waited = 0; waited < SETTLE_MS; waited += POLL_MS) {
@@ -251,4 +270,43 @@ async function settle(holds: () => boolean): Promise<boolean> {
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
   }
   return holds();
+}
+
+/** Waits via MutationObserver until `holds()` becomes true or `timeoutMs` elapses. */
+async function waitForCondition(doc: Document, holds: () => boolean, timeoutMs: number): Promise<boolean> {
+  if (holds()) return true;
+  const root = doc.body ?? doc.documentElement;
+  if (!root || typeof MutationObserver !== 'function') {
+    for (let waited = 0; waited < timeoutMs; waited += POLL_MS) {
+      if (holds()) return true;
+      await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+    }
+    return holds();
+  }
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let observer: MutationObserver | undefined;
+    const finish = (result: boolean) => {
+      if (settled) return;
+      settled = true;
+      observer?.disconnect();
+      if (timer !== undefined) clearTimeout(timer);
+      resolve(result);
+    };
+    observer = new MutationObserver(() => {
+      if (holds()) finish(true);
+    });
+    observer.observe(root, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      characterData: true,
+    });
+    if (holds()) {
+      finish(true);
+      return;
+    }
+    timer = setTimeout(() => finish(holds()), timeoutMs);
+  });
 }

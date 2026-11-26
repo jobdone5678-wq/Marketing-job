@@ -9,6 +9,7 @@
  */
 
 import { answerBankFactId } from '../candidate/answer-bank-topics';
+import type { DemographicPreferences } from '../profile/demographic-preferences';
 
 export type FactType = 'string' | 'number' | 'boolean' | 'string[]';
 
@@ -24,6 +25,7 @@ export type FactCategory =
   | 'certification'
   | 'skill'
   | 'compensation'
+  | 'demographics'
   | 'answer_bank';
 
 export interface VerifiedFact {
@@ -180,6 +182,7 @@ export function buildVerifiedFacts(
     desired_salary_currency?: string | null;
     desired_salary_period?: string | null;
   },
+  demographics?: DemographicPreferences,
 ): Map<string, VerifiedFact> {
   const facts = new Map<string, VerifiedFact>();
   if (!candidate || typeof candidate !== 'object') {
@@ -310,6 +313,26 @@ export function buildVerifiedFacts(
   if (isNonEmptyString(addressRaw)) {
     addFact('profile.location.full_address', 'string', addressRaw.trim(), 'location', 'profile', 'full_address');
   }
+  const locationBaseRaw = isNonEmptyString(cfLocation?.whereBased)
+    ? cfLocation.whereBased
+    : isNonEmptyString(cfContacts?.location)
+      ? cfContacts.location
+      : pickVal('location', 'current_location');
+  if (isNonEmptyString(locationBaseRaw)) {
+    addFact('profile.location.base', 'string', locationBaseRaw.trim(), 'location', 'profile', 'location');
+  }
+  const remoteRegions = Array.isArray(cfLocation?.regions)
+    ? cfLocation.regions.filter((r): r is string => isNonEmptyString(r)).map((r) => r.trim())
+    : [];
+  if (remoteRegions.length > 0) {
+    addFact('profile.location.remote_regions', 'string[]', remoteRegions, 'location', 'profile', 'location');
+  }
+  const workFormat = Array.isArray(cfLocation?.workFormat)
+    ? cfLocation.workFormat.filter((w): w is string => isNonEmptyString(w)).map((w) => w.trim())
+    : [];
+  if (workFormat.length > 0) {
+    addFact('profile.location.work_format', 'string[]', workFormat, 'location', 'profile', 'location');
+  }
 
   // 4. Work Authorization & Sponsorship
   const visaStatus = pickVal('visa_status', 'work_authorization');
@@ -336,7 +359,27 @@ export function buildVerifiedFacts(
     addFact('profile.work_auth.need_sponsorship_future', 'boolean', sponFuture, 'work_auth', 'profile', 'need_sponsorship_future');
   }
 
-  // Compensation (EEO/demographic fields are intentionally omitted from autofill profiles)
+  const cfScreeningAnswers = (
+    cf.screeningAnswers && typeof cf.screeningAnswers === 'object'
+      ? cf.screeningAnswers
+      : candidate.screeningAnswers && typeof candidate.screeningAnswers === 'object'
+        ? candidate.screeningAnswers
+        : undefined
+  ) as Record<string, unknown> | undefined;
+  const countrySpecific = cfScreeningAnswers?.country_specific_answers;
+  if (countrySpecific && typeof countrySpecific === 'object' && !Array.isArray(countrySpecific)) {
+    for (const [rawKey, rawVal] of Object.entries(countrySpecific as Record<string, unknown>)) {
+      const key = normalizeKey(rawKey);
+      if (!key) continue;
+      if (typeof rawVal === 'boolean') {
+        addFact(`country_specific_answers.${key}`, 'boolean', rawVal, 'work_auth', 'confirmed_facts', `country_specific_answers.${key}`);
+      } else if (isNonEmptyString(rawVal)) {
+        addFact(`country_specific_answers.${key}`, 'string', rawVal.trim(), 'work_auth', 'confirmed_facts', `country_specific_answers.${key}`);
+      }
+    }
+  }
+
+  // Compensation
   const desiredSalary = screening?.desired_salary_amount;
   if (typeof desiredSalary === 'number' && Number.isFinite(desiredSalary) && desiredSalary > 0) {
     addFact('screening.desired_salary_amount', 'number', desiredSalary, 'compensation');
@@ -564,6 +607,27 @@ export function buildVerifiedFacts(
           registerAnswerBankFact(topic, ans);
         }
       }
+    }
+  }
+
+  // 10. Demographic Preferences (only emitted when candidate explicitly enabled opt-in autofill)
+  if (demographics?.enabled === true && demographics.answers && typeof demographics.answers === 'object') {
+    for (const [key, rawValues] of Object.entries(demographics.answers)) {
+      if (!Array.isArray(rawValues)) continue;
+      const cleaned = rawValues
+        .filter((v): v is string => typeof v === 'string')
+        .map((v) => v.trim())
+        .filter(Boolean);
+      if (cleaned.length > 0) {
+        addFact(`demographics.${key}`, 'string[]', cleaned, 'demographics', 'profile', `demographics.${key}`);
+      }
+    }
+    const veteranFact = facts.get('demographics.veteran');
+    const protectedVeteranFact = facts.get('demographics.protectedVeteran');
+    if (protectedVeteranFact && !veteranFact) {
+      addFact('demographics.veteran', 'string[]', protectedVeteranFact.value as string[], 'demographics', 'profile', 'demographics.protectedVeteran');
+    } else if (veteranFact && !protectedVeteranFact) {
+      addFact('demographics.protectedVeteran', 'string[]', veteranFact.value as string[], 'demographics', 'profile', 'demographics.veteran');
     }
   }
 

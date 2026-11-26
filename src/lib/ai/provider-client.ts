@@ -185,11 +185,13 @@ export class ProviderClient {
   ): Promise<ChatCompletionResult> {
     const wantsJson = options?.responseFormat !== 'text';
     const sendJsonMode = wantsJson && options?.responseFormat !== 'json_prompt' && this.supportsJsonMode;
+    const isSingleAttemptSchema = options?.schemaName === 'plan' || options?.schemaName === 'choose';
 
     try {
       return await this._executeRequest(messages, options, sendJsonMode);
     } catch (err: any) {
       // If HTTP 400 indicates unsupported response_format, cache capability and retry
+      // unless this is a latency-bounded plan/choose call (single direct attempt).
       if (
         sendJsonMode &&
         err instanceof ProviderError &&
@@ -198,8 +200,10 @@ export class ProviderClient {
         isUnsupportedParamError(err.status, err.responseBody)
       ) {
         this.supportsJsonMode = false;
-        // Retry with prompt-constrained JSON instead
-        return await this._executeRequest(messages, options, false);
+        if (!isSingleAttemptSchema) {
+          // Retry with prompt-constrained JSON instead
+          return await this._executeRequest(messages, options, false);
+        }
       }
       throw err;
     }

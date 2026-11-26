@@ -17,10 +17,11 @@ import { ServerVercelProviderClient } from './server-provider-client';
 import { buildVerifiedFacts } from './verified-facts';
 import { planFormBatch, type Field, type Fill, type FormContext, type PlanResult } from './planner';
 import { chooseComboboxOption } from './chooser';
-import { isPrivateAutofillField } from './autofill-field-safety';
+import { isBlockedAutofillField } from './autofill-field-safety';
 import { isUnreviewedResume } from '../candidate/confirmed-facts';
 import { listScreeningAnswerBank } from '../candidate/answerbank';
 import { listExperienceBank } from '../candidate/experience';
+import { getDemographicPreferences } from '../candidate/demographic-preferences-store';
 import { getScreeningAnswers } from '../ingest/screeninganswers';
 import { getUserAiProviderSecret } from './ai-provider-data';
 import { experienceSkillQuestion } from './grounded';
@@ -60,6 +61,7 @@ export interface PlanApiResponse {
   unmapped?: string[];
   deferred?: string[];
   deferredFieldIds?: string[];
+  deferredPlans?: PlanResult['deferredPlans'];
   telemetry?: {
     usage?: TokenUsageTelemetry;
     durationMs?: number;
@@ -117,18 +119,38 @@ async function getDb(options?: OrchestratorOptions): Promise<any> {
   return admin.database();
 }
 
+async function loadDemographicPreferencesSafe(actorId: string, db: any) {
+  try {
+    return await getDemographicPreferences(actorId, db);
+  } catch (err: any) {
+    const msg = String(err?.message || '').toLowerCase();
+    if (
+      err?.code === '42P01' ||
+      err?.code === 'PGRST205' ||
+      msg.includes('does not exist') ||
+      msg.includes('no such table') ||
+      msg.includes('unknown table') ||
+      msg.includes('not implemented')
+    ) {
+      return { enabled: false, answers: {} };
+    }
+    throw err;
+  }
+}
+
 async function loadVerifiedFacts(actorId: string, candidate: Parameters<typeof buildVerifiedFacts>[0], fields: Field[], db: any) {
   const skillsAsked = new Set(fields.map((field) => experienceSkillQuestion(field.label)).filter(Boolean));
-  const [screening, entries, experience] = await Promise.all([
+  const [screening, entries, experience, demographics] = await Promise.all([
     getScreeningAnswers(actorId, db),
     listScreeningAnswerBank(actorId, { db, sendableOnly: true }),
     skillsAsked.size ? listExperienceBank(actorId, { db, tailorableOnly: true }) : undefined,
+    loadDemographicPreferencesSafe(actorId, db),
   ]);
   const answers = fields.flatMap(({ label }) => {
     const entry = findReusableAnswer(label, entries);
     return entry ? [{ question: label, answer: entry.answer }] : [];
   });
-  const facts = buildVerifiedFacts(candidate, answers, screening);
+  const facts = buildVerifiedFacts(candidate, answers, screening, demographics);
   const skills = new Set(experience?.atoms.flatMap((atom) => {
     if (atom.provenance !== 'manual' && atom.provenance !== 'stated_in_chat') return [];
     return (atom.skills ?? []).map((skill) => skill.trim().toLowerCase()).filter((skill) => skillsAsked.has(skill));
@@ -320,7 +342,7 @@ export async function executePlan(
   }
 
   try {
-    const fields = (req.fields || []).filter((field) => field && !isPrivateAutofillField(field));
+    const fields = (req.fields || []).filter((field) => field && !isBlockedAutofillField(field));
     const facts = await loadVerifiedFacts(actorId, candidate, fields, db);
     const planResult = await planFormBatch(fields, facts, () => resolveProviderClient(actorId, options), req.context);
     return {
@@ -331,6 +353,7 @@ export async function executePlan(
       unmapped: planResult.unmapped,
       deferred: planResult.deferred,
       deferredFieldIds: planResult.deferredFieldIds,
+      deferredPlans: planResult.deferredPlans,
       telemetry: planResult.telemetry,
     };
   } catch (err: any) {
@@ -365,7 +388,7 @@ export async function executeChoose(
   if (!req.question || !Array.isArray(req.options)) {
     throw new OrchestratorError('question and options array are required', 400, 'BAD_REQUEST');
   }
-  if (isPrivateAutofillField({ ...req.question, options: req.options })) {
+  if (isBlockedAutofillField({ ...req.question, options: req.options })) {
     throw new OrchestratorError('This question requires manual review.', 422);
   }
 
@@ -403,6 +426,7 @@ export async function executeChoose(
         if (isPortalMode(settings) || (settings?.mode && settings.mode !== 'server')) return undefined;
         return requestJevChoice(jevKey, label, offered, profile, options?.fetchFn);
       } : undefined,
+      req.context,
     );
     return {
       ok: true,

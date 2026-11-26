@@ -5,7 +5,7 @@
   import type { PlanRefused } from '../../lib/planRefused';
   import { track } from '../../lib/analytics';
   import { signIn, signOut, getToken, fetchMe, type HireUser } from '../../lib/auth';
-  import { getAutofillSettings, getDemographicPreferences, saveAutofillSettings, type AutofillSettings } from '../../lib/freehire';
+  import { getAutofillSettings, saveAutofillSettings, type AutofillSettings } from '../../lib/freehire';
   import { normalizeLabel } from '../../lib/fieldKeys';
   import type { PlanItem } from '../../lib/applyPlan';
   import { runAutofill, saveChosenAnswers, type FillPanel } from '../../lib/formFill';
@@ -250,14 +250,7 @@
 
   function autofill() {
     if (!user) return;
-    void startFill(async (token, signal) => {
-      const demographics = await getDemographicPreferences(token, signal).catch(() => ({
-        enabled: false,
-        answers: {},
-      }));
-      if (signal.aborted) return;
-      await runAutofill(token, fillPanel, signal, demographics);
-    });
+    void startFill((token, signal) => runAutofill(token, fillPanel, signal));
   }
 
   async function revealItem(item: PlanItem) {

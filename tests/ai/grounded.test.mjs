@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateGroundedAnswer } from '../../src/lib/ai/grounded.ts';
+import { validateGroundedAnswer, uniqueConfirmedChoice } from '../../src/lib/ai/grounded.ts';
+import {
+  isExplicitDemographicDecline,
+  isNoneOfTheAboveOption,
+} from '../../src/lib/profile/demographic-preferences.ts';
 import { buildVerifiedFacts } from '../../src/lib/ai/verified-facts.ts';
 import { inferQuestionDescriptor } from '../../src/lib/ai/planner.ts';
 
@@ -335,5 +339,305 @@ test('grounded engine: question-specific typed validation & anti-hallucination g
     assert.equal(validateGroundedAnswer('MIT', portalFacts, inferQuestionDescriptor({ label: 'University' })).valid, true);
     assert.equal(validateGroundedAnswer('2019', portalFacts, inferQuestionDescriptor({ label: 'Graduation Year' })).valid, true);
     assert.equal(validateGroundedAnswer('Immediately', portalFacts, inferQuestionDescriptor({ label: 'Earliest start date' })).valid, true);
+  });
+
+  await t.test('10. strict DB-only demographics grounding (enabled vs disabled/unset, bundled communities, opt-out, None of the above)', () => {
+    const communityOptions = [
+      'Person with disability',
+      'Neurodivergent',
+      'Veteran',
+      'Parent',
+      'Refugee or immigrant',
+      'None of the above',
+      'I prefer not to answer',
+    ];
+    const communityQuestion = {
+      label: 'Which of the following communities do you belong to?',
+      options: communityOptions,
+    };
+
+    // 10a. Enabled with veteran = ['Yes'] -> 'Veteran' valid; 'Person with disability' & 'None of the above' rejected
+    const veteranFacts = buildVerifiedFacts({ full_name: 'Jordan Lee' }, [], undefined, {
+      enabled: true,
+      answers: { veteran: ['Yes'] },
+    });
+    const vetRes = validateGroundedAnswer('Veteran', veteranFacts, communityQuestion);
+    assert.equal(vetRes.valid, true);
+    assert.equal(vetRes.action, 'fill');
+    assert.ok(vetRes.evidenceIds.includes('demographics.veteran'));
+    assert.equal(validateGroundedAnswer('Person with disability', veteranFacts, communityQuestion).action, 'skip');
+    assert.equal(validateGroundedAnswer('None of the above', veteranFacts, communityQuestion).action, 'skip');
+    assert.equal(validateGroundedAnswer('I prefer not to answer', veteranFacts, communityQuestion).action, 'skip');
+
+    // 10b. Multi-select communities including commas inside option labels
+    const multiFacts = buildVerifiedFacts({ full_name: 'Jordan Lee' }, [], undefined, {
+      enabled: true,
+      answers: { disability: ['Yes'], veteran: ['Yes'], parentalStatus: ['Yes'] },
+    });
+    assert.equal(validateGroundedAnswer('Veteran, Parent', multiFacts, communityQuestion).valid, true);
+    assert.equal(validateGroundedAnswer('Veteran, Neurodivergent', multiFacts, communityQuestion).action, 'skip');
+
+    const commaOptionsQuestion = {
+      label: 'Which of the following communities do you belong to?',
+      options: [
+        'Yes, I have a disability, or have had one in the past',
+        'Veteran',
+        'None of the above',
+      ],
+    };
+    const commaRes = validateGroundedAnswer(
+      'Yes, I have a disability, or have had one in the past, Veteran',
+      multiFacts,
+      commaOptionsQuestion,
+    );
+    assert.equal(commaRes.valid, true);
+    assert.ok(commaRes.evidenceIds.includes('demographics.disability'));
+    assert.ok(commaRes.evidenceIds.includes('demographics.veteran'));
+
+    // 10c. Disabled or unset demographics -> ALL options including 'None of the above' & 'I prefer not to answer' skipped
+    const disabledFacts = buildVerifiedFacts({ full_name: 'Jordan Lee' }, [], undefined, {
+      enabled: false,
+      answers: { veteran: ['Yes'], raceEthnicity: ['Asian'] },
+    });
+    for (const opt of ['Veteran', 'None of the above', 'I prefer not to answer']) {
+      const r = validateGroundedAnswer(opt, disabledFacts, communityQuestion);
+      assert.equal(r.valid, false, `Disabled demographics must reject '${opt}'`);
+      assert.equal(r.action, 'skip');
+    }
+
+    const unsetFacts = buildVerifiedFacts({ full_name: 'Jordan Lee' }, [], undefined, {
+      enabled: true,
+      answers: {},
+    });
+    for (const opt of ['Veteran', 'None of the above', 'I prefer not to answer']) {
+      assert.equal(validateGroundedAnswer(opt, unsetFacts, communityQuestion).action, 'skip');
+    }
+
+    // 10d. Enabled with ['Prefer not to say'] on mapped keys -> 'I prefer not to answer' valid
+    const declineFacts = buildVerifiedFacts({ full_name: 'Jordan Lee' }, [], undefined, {
+      enabled: true,
+      answers: {
+        disability: ['Prefer not to say'],
+        veteran: ['Prefer not to say'],
+        parentalStatus: ['Prefer not to say'],
+      },
+    });
+    assert.equal(validateGroundedAnswer('I prefer not to answer', declineFacts, communityQuestion).valid, true);
+    assert.equal(validateGroundedAnswer('None of the above', declineFacts, communityQuestion).action, 'skip');
+
+    // 10e. 'None of the above' allowed ONLY when every non-decline/non-none option is explicitly contradicted
+    const allNoFacts = buildVerifiedFacts({ full_name: 'Jordan Lee' }, [], undefined, {
+      enabled: true,
+      answers: {
+        disability: ['No'],
+        veteran: ['No'],
+        parentalStatus: ['No'],
+      },
+    });
+    // Still blocked when unmapped options ('Neurodivergent', 'Refugee or immigrant') are present
+    assert.equal(validateGroundedAnswer('None of the above', allNoFacts, communityQuestion).action, 'skip');
+
+    const fullyMappedQuestion = {
+      label: 'Which of the following communities do you belong to?',
+      options: ['Person with disability', 'Veteran', 'Parent', 'None of the above', 'I prefer not to answer'],
+    };
+    const noneValidRes = validateGroundedAnswer('None of the above', allNoFacts, fullyMappedQuestion);
+    assert.equal(noneValidRes.valid, true);
+    assert.equal(noneValidRes.action, 'fill');
+
+    // 10f. Standalone Race question
+    const raceQuestion = {
+      label: 'Race',
+      category: 'demographics',
+      options: ['Asian', 'White', 'Prefer not to say'],
+    };
+    const raceFacts = buildVerifiedFacts({ full_name: 'Jordan Lee' }, [], undefined, {
+      enabled: true,
+      answers: { raceEthnicity: ['Asian'], gender: ['Prefer not to say'] },
+    });
+    assert.equal(validateGroundedAnswer('Asian', raceFacts, raceQuestion).valid, true);
+    assert.equal(validateGroundedAnswer('White', raceFacts, raceQuestion).action, 'skip');
+    assert.equal(validateGroundedAnswer('Prefer not to say', raceFacts, raceQuestion).action, 'skip');
+
+    const noRaceFacts = buildVerifiedFacts({ full_name: 'Jordan Lee' }, [], undefined, {
+      enabled: true,
+      answers: { gender: ['Prefer not to say'] },
+    });
+    for (const opt of ['Asian', 'White', 'Prefer not to say']) {
+      assert.equal(validateGroundedAnswer(opt, noRaceFacts, raceQuestion).action, 'skip');
+    }
+    // 10g. Direct helper checks
+    assert.equal(isExplicitDemographicDecline('I prefer not to answer'), true);
+    assert.equal(isExplicitDemographicDecline('Decline to self-identify'), true);
+    assert.equal(isExplicitDemographicDecline('Prefer not to say'), true);
+    assert.equal(isExplicitDemographicDecline('Veteran'), false);
+    assert.equal(isNoneOfTheAboveOption('None of the above'), true);
+    assert.equal(isNoneOfTheAboveOption('None of these'), true);
+    assert.equal(isNoneOfTheAboveOption('Veteran'), false);
+  });
+
+  await t.test('11. country-resolved US and non-US work authorization with conflict detection', () => {
+    const usQuestion = { label: 'Are you authorized to work in the United States?' };
+
+    // 11a. screening.authorized_countries = ['us'] -> Yes valid, No rejected
+    const usAllowedFacts = buildVerifiedFacts({ full_name: 'Alex' }, undefined, {
+      age_18_or_older: true,
+      notice_period_days: null,
+      willing_to_relocate: null,
+      visa_sponsorship_needed: null,
+      authorized_countries: ['us'],
+    });
+    assert.equal(validateGroundedAnswer('Yes', usAllowedFacts, usQuestion).valid, true);
+    assert.equal(validateGroundedAnswer('No', usAllowedFacts, usQuestion).action, 'skip');
+
+    // 11b. screening.authorized_countries = ['in'] (non-empty, excludes 'us', no authorized_in_usa) -> No valid, Yes rejected
+    const inOnlyFacts = buildVerifiedFacts({ full_name: 'Alex' }, undefined, {
+      age_18_or_older: true,
+      notice_period_days: null,
+      willing_to_relocate: null,
+      visa_sponsorship_needed: null,
+      authorized_countries: ['in'],
+    });
+    assert.equal(validateGroundedAnswer('No', inOnlyFacts, usQuestion).valid, true);
+    assert.equal(validateGroundedAnswer('Yes', inOnlyFacts, usQuestion).action, 'skip');
+
+    // 11c. Contradiction: authorized_countries = ['in'] AND authorized_in_usa = true -> both Yes & No skipped
+    const conflictFacts = buildVerifiedFacts({ full_name: 'Alex', authorized_in_usa: true }, undefined, {
+      age_18_or_older: true,
+      notice_period_days: null,
+      willing_to_relocate: null,
+      visa_sponsorship_needed: null,
+      authorized_countries: ['in'],
+    });
+    assert.equal(validateGroundedAnswer('Yes', conflictFacts, usQuestion).action, 'skip');
+    assert.equal(validateGroundedAnswer('No', conflictFacts, usQuestion).action, 'skip');
+
+    // 11d. Empty authorized_countries and no authorized_in_usa -> both Yes & No skipped
+    const emptyAuthFacts = buildVerifiedFacts({ full_name: 'Alex' }, undefined, {
+      age_18_or_older: true,
+      notice_period_days: null,
+      willing_to_relocate: null,
+      visa_sponsorship_needed: null,
+      authorized_countries: [],
+    });
+    assert.equal(validateGroundedAnswer('Yes', emptyAuthFacts, usQuestion).action, 'skip');
+    assert.equal(validateGroundedAnswer('No', emptyAuthFacts, usQuestion).action, 'skip');
+
+    // 11e. Non-US country authorization
+    const deQuestion = { label: 'Are you authorized to work in Germany?' };
+    const deAllowedFacts = buildVerifiedFacts({ full_name: 'Alex' }, undefined, {
+      age_18_or_older: true,
+      notice_period_days: null,
+      willing_to_relocate: null,
+      visa_sponsorship_needed: null,
+      authorized_countries: ['de'],
+    });
+    assert.equal(validateGroundedAnswer('Yes', deAllowedFacts, deQuestion).valid, true);
+    assert.equal(validateGroundedAnswer('No', deAllowedFacts, deQuestion).action, 'skip');
+    assert.equal(validateGroundedAnswer('No', inOnlyFacts, deQuestion).valid, true);
+    assert.equal(validateGroundedAnswer('Yes', inOnlyFacts, deQuestion).action, 'skip');
+    assert.equal(validateGroundedAnswer('Yes', emptyAuthFacts, deQuestion).action, 'skip');
+
+    // 11f. Location-linked work authorization
+    const authHereResolved = {
+      label: 'Are you authorized to work in this location?',
+      resolvedCountryCode: 'us',
+      options: ['Yes', 'No'],
+    };
+    const authHereUnresolved = {
+      label: 'Are you authorized to work in this location?',
+      hasUnresolvedUpstreamLocation: true,
+      options: ['Yes', 'No'],
+    };
+    assert.equal(validateGroundedAnswer('Yes', usAllowedFacts, authHereResolved).valid, true);
+    assert.equal(validateGroundedAnswer('Yes', usAllowedFacts, authHereUnresolved).action, 'skip');
+    assert.equal(uniqueConfirmedChoice(['Yes', 'No'], usAllowedFacts, authHereUnresolved), undefined);
+  });
+
+  await t.test('12. location-linked sponsorship with resolvedCountryCode and hasUnresolvedUpstreamLocation gate', () => {
+    const sponsorshipFacts = buildVerifiedFacts({ full_name: 'Alex' }, undefined, {
+      age_18_or_older: true,
+      notice_period_days: null,
+      willing_to_relocate: null,
+      visa_sponsorship_needed: true,
+      authorized_countries: ['us'],
+    });
+
+    const resolvedQuestion = {
+      label: 'Will you now or in the future require sponsorship for employment visa status to work in this location?',
+      resolvedCountryCode: 'us',
+      options: ['Yes', 'No'],
+    };
+    assert.equal(validateGroundedAnswer('Yes', sponsorshipFacts, resolvedQuestion).valid, true);
+    assert.equal(validateGroundedAnswer('No', sponsorshipFacts, resolvedQuestion).action, 'skip');
+
+    // Country-specific sponsorship override when resolvedCountryCode is present
+    const countrySpecificFacts = buildVerifiedFacts({
+      full_name: 'Alex',
+      confirmed_facts: {
+        screeningAnswers: {
+          country_specific_answers: {
+            us_sponsorship: 'no',
+          },
+        },
+      },
+    }, undefined, {
+      age_18_or_older: true,
+      notice_period_days: null,
+      willing_to_relocate: null,
+      visa_sponsorship_needed: true,
+    });
+    const csNoRes = validateGroundedAnswer('No', countrySpecificFacts, resolvedQuestion);
+    assert.equal(csNoRes.valid, true);
+    assert.ok(csNoRes.evidenceIds.includes('country_specific_answers.us_sponsorship'));
+    assert.equal(validateGroundedAnswer('Yes', countrySpecificFacts, resolvedQuestion).action, 'skip');
+
+    const uniqueCs = uniqueConfirmedChoice(['Yes', 'No'], countrySpecificFacts, resolvedQuestion);
+    assert.equal(uniqueCs?.choice, 'No');
+    assert.ok(uniqueCs?.evidenceIds.includes('country_specific_answers.us_sponsorship'));
+
+    // Unresolved upstream location -> uniqueConfirmedChoice returns undefined and validateGroundedAnswer skips
+    const unresolvedQuestion = {
+      label: 'Will you now or in the future require sponsorship for employment visa status to work in this location?',
+      hasUnresolvedUpstreamLocation: true,
+      options: ['Yes', 'No'],
+    };
+    assert.equal(uniqueConfirmedChoice(['Yes', 'No'], sponsorshipFacts, unresolvedQuestion), undefined);
+    assert.equal(validateGroundedAnswer('Yes', sponsorshipFacts, unresolvedQuestion).action, 'skip');
+    assert.equal(validateGroundedAnswer('No', sponsorshipFacts, unresolvedQuestion).action, 'skip');
+  });
+
+  await t.test('13. formatted location answers (City, Country / City, State, Country) with helperText', () => {
+    const locFacts = buildVerifiedFacts({
+      full_name: 'Taylor Austin',
+      current_city: 'Austin',
+      current_state: 'Texas',
+      country: 'United States',
+    });
+
+    const workFromQuestion = {
+      ...inferQuestionDescriptor({ label: 'Which country do you intend to work from?' }),
+      helperText: 'Please list your city and country.',
+    };
+
+    const cityCountryRes = validateGroundedAnswer('Austin, United States', locFacts, workFromQuestion);
+    assert.equal(cityCountryRes.valid, true);
+    assert.equal(cityCountryRes.action, 'fill');
+
+    const cityStateCountryRes = validateGroundedAnswer('Austin, Texas, United States', locFacts, workFromQuestion);
+    assert.equal(cityStateCountryRes.valid, true);
+
+    assert.equal(validateGroundedAnswer('Seattle, United States', locFacts, workFromQuestion).action, 'skip');
+    assert.equal(validateGroundedAnswer('Austin, Canada', locFacts, workFromQuestion).action, 'skip');
+
+    const baseOnlyFacts = buildVerifiedFacts({
+      full_name: 'Taylor Base',
+      confirmed_facts: {
+        location: { whereBased: 'Austin, United States' },
+      },
+    });
+    const baseRes = validateGroundedAnswer('Austin, United States', baseOnlyFacts, workFromQuestion);
+    assert.equal(baseRes.valid, true);
+    assert.ok(baseRes.evidenceIds.includes('profile.location.base'));
   });
 });

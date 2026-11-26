@@ -14,7 +14,13 @@
 import type { VerifiedFact } from './verified-facts';
 import { uniqueConfirmedChoice, validateGroundedAnswer } from './grounded';
 import type { ProviderClient, TokenUsageTelemetry } from './provider-client';
-import { type Field, inferQuestionDescriptor } from './planner';
+import {
+  type Field,
+  type FormContext,
+  extractCountryCodeFromLocation,
+  hasExplicitCountryInLabel,
+  inferQuestionDescriptor,
+} from './planner';
 
 export interface ChooseResult {
   choice: string | null;
@@ -32,20 +38,26 @@ type FastChoice = (question: string, options: string[], profile: Record<string, 
 const CHOOSE_PROMPT = `You are answering ONE question on a job-application form by
 picking from the options it offers.
 
-You are given the question, the exact options available, and the candidate's
-profile. Pick the single option the profile supports.
+You are given the question, optional helperText/widgetType, any previouslyResolved
+form answers, the exact options available, and the candidate's profile. Pick the
+single option the profile supports, regardless of how the portal phrases the question.
 
 Rules:
-- Return an option copied exactly from the list. Never return anything else.
+- Return an option copied exactly from the list. Never paraphrase, re-case, or
+  return anything outside the offered options.
 - If the profile does not answer the question, return an empty choice —
   declining is the correct answer whenever nothing in the profile supports any
   of the options.
-- A location option is supported by the candidate's location (a profile of
-  "Berlin, Germany" supports the option "Germany"). A visa-sponsorship,
-  notice-period, salary or relocation option is supported when the profile
-  states the matching field (visa_sponsorship_needed, notice_period,
-  desired_salary, willing_to_relocate) and that value is consistent with the
-  option.
+- Understand semantic intent across Location (respecting helperText formatting
+  such as city+country vs country-only), Work Authorization, Visa Sponsorship,
+  Employment Eligibility, Demographics, and Self-ID.
+- When previouslyResolved shows a selected work location or country, evaluate
+  sponsorship and work-authorization options against that resolved country (using
+  country_specific_answers.* or screening.authorized_countries when present).
+- Strict DB-only EEO / Demographics / Self-ID: ONLY pick a demographic or Self-ID
+  option when explicit demographics.* facts in the profile support it. If
+  demographics.* facts are absent, unset, or disabled, return an empty choice —
+  never guess and never auto-pick "None of the above" or "Decline to self-identify".
 - Never infer a claim the profile does not state.
 
 Respond with JSON: {"choice":"..."}`;
@@ -61,6 +73,38 @@ function factsToProfileObject(facts: Map<string, VerifiedFact>): Record<string, 
   return profile;
 }
 
+function inferUpstreamLocationContext(
+  question: Field,
+  descriptor: ReturnType<typeof inferQuestionDescriptor>,
+  previouslyResolved?: Record<string, string>,
+): { resolvedCountryCode?: string; hasUnresolvedUpstreamLocation?: boolean } {
+  if (!previouslyResolved || descriptor.category !== 'work_auth') {
+    return {};
+  }
+  if (hasExplicitCountryInLabel(question.label)) {
+    return {};
+  }
+  let resolvedCountryCode: string | undefined;
+  let hasUnresolvedUpstreamLocation = false;
+  for (const [rawKey, rawVal] of Object.entries(previouslyResolved)) {
+    if (!/\b(country|location|intend\s+to\s+work|where.*work|where.*based|residence)\b/i.test(rawKey)) {
+      continue;
+    }
+    const val = String(rawVal ?? '').trim();
+    if (!val) continue;
+    const extracted = extractCountryCodeFromLocation(val);
+    if (extracted) {
+      resolvedCountryCode = extracted;
+    } else if (/\[deferred combobox\]/i.test(val)) {
+      hasUnresolvedUpstreamLocation = true;
+    }
+  }
+  return {
+    ...(resolvedCountryCode ? { resolvedCountryCode } : {}),
+    ...(!resolvedCountryCode && hasUnresolvedUpstreamLocation ? { hasUnresolvedUpstreamLocation: true } : {}),
+  };
+}
+
 /**
  * Chooses an exact option from live DOM captured combobox options.
  */
@@ -70,12 +114,28 @@ export async function chooseComboboxOption(
   facts: Map<string, VerifiedFact>,
   client: ProviderClient | (() => Promise<ProviderClient>),
   fastChoice?: FastChoice,
+  context?: FormContext,
 ): Promise<ChooseResult> {
   if (!options || options.length === 0) {
     return { choice: null, reason: 'No options provided' };
   }
 
-  const descriptor = inferQuestionDescriptor(question);
+  const helperText = question.helperText ?? context?.helperText;
+  const baseDescriptor = inferQuestionDescriptor({
+    ...question,
+    ...(helperText !== undefined ? { helperText } : {}),
+    options,
+  });
+  const upstreamLocation = inferUpstreamLocationContext(
+    question,
+    baseDescriptor,
+    context?.previouslyResolved,
+  );
+  const descriptor = {
+    ...baseDescriptor,
+    ...(helperText !== undefined ? { helperText } : {}),
+    ...upstreamLocation,
+  };
   const confirmed = uniqueConfirmedChoice(options, facts, descriptor);
   if (confirmed) return confirmed;
 
@@ -106,8 +166,13 @@ export async function chooseComboboxOption(
 
   const userPayload = {
     question: question.label,
+    ...(helperText !== undefined ? { helperText } : {}),
+    ...(question.widgetType ? { widgetType: question.widgetType } : {}),
     required: !!question.required,
     options,
+    ...(context?.previouslyResolved !== undefined
+      ? { previouslyResolved: context.previouslyResolved }
+      : {}),
     profile,
   };
 
@@ -132,9 +197,9 @@ export async function chooseComboboxOption(
   const telemetryField = telemetry !== undefined ? { telemetry } : {};
 
   const parsed = completion.rawJson || {};
-  const rawChoice = typeof parsed.choice === 'string' ? parsed.choice.trim() : '';
+  const rawChoice = typeof parsed.choice === 'string' ? parsed.choice : '';
 
-  if (!rawChoice) {
+  if (!rawChoice.trim()) {
     return {
       choice: null,
       reason: 'Model declined to answer or profile lacks support',
@@ -142,8 +207,10 @@ export async function chooseComboboxOption(
     };
   }
 
-  // Find exact matching option in the offered options list (case-insensitive / trimmed)
-  const matchingOptions = options.filter((opt) => opt.trim().toLowerCase() === rawChoice.toLowerCase());
+  // Require exact verbatim option match from the offered options list
+  const matchingOptions = options.filter(
+    (opt) => opt === rawChoice || opt === rawChoice.trim(),
+  );
   const matchedOption = matchingOptions.length === 1 ? matchingOptions[0] : undefined;
 
   if (!matchedOption) {

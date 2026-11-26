@@ -517,6 +517,77 @@ describe('combobox.runStep', () => {
       status: 'not_found',
     });
   });
+
+  it('waits via MutationObserver up to 2s for async typeahead options and ignores loading placeholders', async () => {
+    document.body.innerHTML = `
+      <label for="work-loc">Which country do you intend to work from?</label>
+      <input id="work-loc" role="combobox" aria-expanded="false" aria-controls="loc-list" />
+      <div id="loc-list" role="listbox"></div>`;
+    const input = document.getElementById('work-loc') as HTMLInputElement;
+    const listbox = document.getElementById('loc-list') as HTMLElement;
+    input.addEventListener('input', () => {
+      input.setAttribute('aria-expanded', 'true');
+      listbox.innerHTML = '<div role="option">Loading...</div>';
+      setTimeout(() => {
+        listbox.innerHTML = '<div role="option">Austin, United States</div>';
+      }, 1150);
+    });
+
+    const reply = await combobox.runStep(document, { action: 'query', label: 'Which country do you intend to work from?', value: 'Austin, United States' });
+    expect(reply).toEqual({ status: 'queried' });
+    expect(combobox.options(document, 'Which country do you intend to work from?').options).toEqual(['Austin, United States']);
+  });
+
+  it('opens closed typeahead widgets, dispatches keyup, and ignores location-rejection placeholders', async () => {
+    document.body.innerHTML = `
+      <label for="work-loc">Work location</label>
+      <input id="work-loc" role="combobox" aria-expanded="false" aria-controls="loc-list" />
+      <div id="loc-list" role="listbox"></div>`;
+    const input = document.getElementById('work-loc') as HTMLInputElement;
+    const listbox = document.getElementById('loc-list') as HTMLElement;
+    const events: string[] = [];
+    input.addEventListener('click', () => {
+      events.push('click');
+      input.setAttribute('aria-expanded', 'true');
+    });
+    input.addEventListener('keyup', () => {
+      events.push('keyup');
+      listbox.innerHTML = '<div role="option">No matching locations found</div>';
+      setTimeout(() => {
+        listbox.innerHTML = '<div role="option">Toronto, Canada</div>';
+      }, 30);
+    });
+
+    const reply = await combobox.runStep(document, { action: 'query', label: 'Work location', value: 'Toronto' });
+    expect(reply).toEqual({ status: 'queried' });
+    expect(events).toEqual(['click', 'keyup']);
+    expect(combobox.options(document, 'Work location').options).toEqual(['Toronto, Canada']);
+  });
+
+  it('disconnects MutationObserver and resolves cleanly when async query times out at 2000ms', async () => {
+    vi.useFakeTimers();
+    const disconnectSpy = vi.spyOn(MutationObserver.prototype, 'disconnect');
+    try {
+      document.body.innerHTML = `
+        <label for="slow-loc">Work country</label>
+        <input id="slow-loc" role="combobox" aria-expanded="false" aria-controls="slow-list" />
+        <div id="slow-list" role="listbox"></div>`;
+      const input = document.getElementById('slow-loc') as HTMLInputElement;
+      const listbox = document.getElementById('slow-list') as HTMLElement;
+      input.addEventListener('input', () => {
+        input.setAttribute('aria-expanded', 'true');
+        listbox.innerHTML = '<div role="option">Loading…</div>';
+      });
+
+      const pending = combobox.runStep(document, { action: 'query', label: 'Work country', value: 'Japan' });
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(await pending).toEqual({ status: 'queried' });
+      expect(disconnectSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      disconnectSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
 });
 
 /** An input stating `aria-expanded`, with its listbox left in the DOM and visible. */

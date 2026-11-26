@@ -2,6 +2,7 @@ import { HIRE_ORIGIN } from './auth';
 import { planRefusedFrom } from './planRefused';
 import type { ApplicationReceipt } from './applicationCapture';
 import type { PlanApiRequest, PlanApiResponse, ChooseApiRequest, ChooseApiResponse } from '../../src/lib/ai/autofill-orchestrator';
+export type { PlanApiRequest, PlanApiResponse, ChooseApiRequest, ChooseApiResponse };
 import { parseDemographicPreferences, type DemographicPreferences } from '../../src/lib/profile/demographic-preferences';
 
 /** Hosts whose /jobs/<slug> pages we recognise as freehire job postings.

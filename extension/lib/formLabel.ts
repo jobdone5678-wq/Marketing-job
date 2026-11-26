@@ -1,9 +1,13 @@
 // How a form control is named for a person: the label text the autofill matches questions by.
 import { collapse, isLocationRejection, isOnScreen } from './comboWidget';
+import { normalizeLabel } from './fieldKeys';
 import type { Fillable } from './form';
 
 /** Best-effort human label for a control, in decreasing reliability. */
 export function extractLabel(el: Fillable): string {
+  if (el instanceof HTMLButtonElement && !el.matches('[role="combobox"], [aria-haspopup="listbox"], [aria-autocomplete]')) {
+    return collapse(labelText(el)) || collapse(el.getAttribute('aria-label')) || collapse(el.id);
+  }
   const labels = el instanceof HTMLInputElement || el instanceof HTMLSelectElement ||
     el instanceof HTMLTextAreaElement || el instanceof HTMLButtonElement ? el.labels : null;
   const fromLabels = Array.from(labels ?? [])
@@ -34,7 +38,93 @@ export function extractLabel(el: Fillable): string {
 
 const genericPrompt = /^(?:type|enter|write) (?:your|an?) (?:response|answer)(?:\s+here)?[. …]*$/i;
 const questionPrompt = /\?\s*\*?$|^(?:describe|explain|tell us|share|provide|list)\b/i;
-const namedControl = 'input:not([type="hidden"]), select, textarea, [role="combobox"], [role="checkbox"], [role="radio"]';
+const namedControl = 'input:not([type="hidden"]), select, textarea, [role="combobox"], [role="checkbox"], [role="radio"], [aria-haspopup="listbox"]';
+const helperTags = 'p, span, div, small';
+const headingTags = 'label, legend, h1, h2, h3, h4, h5, h6';
+const liveOrErrorSelector = '[role="status"], [role="alert"], [aria-live]:not([aria-live="off"])';
+
+/**
+ * Best-effort helper/hint text for a question without merging it into `questionLabel`.
+ * Reads `aria-describedby` first (ignoring error, location-rejection, and live-status nodes),
+ * then falls back to immediate helper sibling/sub-label elements between the heading and control.
+ */
+export function extractHelperText(el: Fillable, questionLabel: string): string {
+  const errIds = new Set((el.getAttribute('aria-errormessage') ?? '').split(/\s+/).filter(Boolean));
+  const group = (choiceType(el) || el instanceof HTMLButtonElement)
+    ? el.closest('fieldset, [role="group"], [role="radiogroup"]')
+    : null;
+  const rawIds = [
+    ...(el.getAttribute('aria-describedby') ?? '').split(/\s+/),
+    ...(group?.getAttribute('aria-describedby') ?? '').split(/\s+/),
+  ].filter(Boolean);
+
+  const fromDescribedBy: string[] = [];
+  const seenIds = new Set<string>();
+  for (const id of rawIds) {
+    if (seenIds.has(id) || errIds.has(id)) continue;
+    seenIds.add(id);
+    const node = el.ownerDocument.getElementById(id);
+    if (!node || isExcludedHelperNode(node, el, true)) continue;
+    const text = cleanHelperText(node, el, questionLabel);
+    if (text && !fromDescribedBy.includes(text)) fromDescribedBy.push(text);
+  }
+  if (fromDescribedBy.length) return fromDescribedBy.join(' ');
+
+  const normQuestion = normalizeLabel(questionLabel);
+  if (!normQuestion) return '';
+
+  for (let node: Element = el, depth = 0; depth < 4 && node.parentElement; depth++, node = node.parentElement) {
+    const parent = node.parentElement;
+    const candidates: string[] = [];
+    let foundHeading = false;
+
+    for (let sibling = node.previousElementSibling; sibling; sibling = sibling.previousElementSibling) {
+      if (sibling.matches(namedControl) || sibling.querySelector(namedControl) ||
+          sibling.matches('button') || sibling.querySelector('button')) break;
+      if (!isOnScreen(sibling)) continue;
+      const raw = collapse(labelText(sibling));
+      if (raw && normalizeLabel(raw) === normQuestion) {
+        foundHeading = true;
+        break;
+      }
+      if (sibling.matches(headingTags)) break;
+      if (sibling.matches(helperTags) && !isExcludedHelperNode(sibling, el, false)) {
+        const text = cleanHelperText(sibling, el, questionLabel);
+        if (text && !candidates.includes(text)) candidates.unshift(text);
+      }
+    }
+
+    if (foundHeading) return candidates.join(' ');
+    if (parent.matches('form, body, [role="dialog"]')) break;
+  }
+  return '';
+}
+
+function isExcludedHelperNode(node: Element, el: Fillable, fromAriaDescribedBy: boolean): boolean {
+  if (!isOnScreen(node)) return true;
+  if (node.contains(el) || el.contains(node)) return true;
+  if (node.matches(liveOrErrorSelector) || node.closest(liveOrErrorSelector)) return true;
+  if (node.matches('[class*="error" i], [class*="invalid" i], [id*="error" i], [data-testid*="error" i], [data-testid="text-input-helper-text"]')) {
+    return true;
+  }
+  if (node.matches(namedControl) || node.querySelector(namedControl)) return true;
+  if (!fromAriaDescribedBy && (node.matches(headingTags) || node.matches('button') || node.querySelector('button'))) {
+    return true;
+  }
+  return false;
+}
+
+function cleanHelperText(node: Element, el: Fillable, questionLabel: string): string {
+  const text = collapse(labelText(node));
+  if (!text || text.length > 1000) return '';
+  if (isLocationRejection(text) || /^loading[.…\s]*$/i.test(text)) return '';
+  if (el.getAttribute('aria-invalid') === 'true' && /^(?:invalid|required|error|this field is required)\b/i.test(text)) {
+    return '';
+  }
+  const normQuestion = normalizeLabel(questionLabel);
+  if (normQuestion && normalizeLabel(text) === normQuestion) return '';
+  return text;
+}
 
 /** Reads a heading immediately before a control or an option list in its own section. */
 export function precedingPrompt(element: Element, accepts = (text: string) => questionPrompt.test(text)): string {
@@ -71,7 +161,7 @@ export function choiceType(el: Fillable): 'radio' | 'checkbox' | undefined {
 function visibleTextBeside(el: Fillable, only?: string): string {
   let box = el.parentElement;
   for (let depth = 0; box && depth < 3; depth++, box = box.parentElement) {
-    if (box.querySelectorAll('input, select, textarea').length > 1) return '';
+    if (box.querySelectorAll(namedControl).length > 1) return '';
     const candidate = only ? box.querySelector(only) : box;
     const text = candidate ? collapse(labelText(candidate)) : '';
     if (text && !genericPrompt.test(text) && (only || text.length <= 80)) return text;

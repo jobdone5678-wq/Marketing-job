@@ -62,7 +62,7 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
   });
 
   // Mock DB store
-  function createMockDb(userConfigs = {}, userSecrets = {}, candidates = {}, screening = {}, answers = [], atoms = []) {
+  function createMockDb(userConfigs = {}, userSecrets = {}, candidates = {}, screening = {}, answers = [], atoms = [], demographicPrefs = {}) {
     return {
       from(table) {
         const filters = {};
@@ -90,6 +90,9 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
             }
             if (table === 'screening_answers') {
               return { data: screening[filters.user_id] ?? null, error: null };
+            }
+            if (table === 'demographic_preferences') {
+              return { data: demographicPrefs[filters.user_id] ?? null, error: null };
             }
             return { data: null, error: null };
           },
@@ -886,6 +889,202 @@ test('autofill orchestrator: server-enforced endpoints, feature flag, ownership 
           dnsLookup: mockDnsPrivate,
         }),
       (err) => err instanceof OrchestratorError && err.status === 500 && err.code === 'SSRF_BLOCKED'
+    );
+  });
+
+  await t.test('11. executePlan & executeChoose allow demographic fields with actor-scoped preferences while still blocking PII/consent/marketing', async () => {
+    const candidates = {
+      [CANDIDATE_OWNED]: { id: CANDIDATE_OWNED, user_id: USER_OWNER, full_name: 'Jordan Lee' },
+    };
+    const demographicPrefs = {
+      [USER_OWNER]: {
+        enabled: true,
+        answers: {
+          raceEthnicity: ['Asian'],
+          veteran: ['No'],
+        },
+      },
+      [USER_OTHER]: {
+        enabled: true,
+        answers: {
+          raceEthnicity: ['White'],
+          gender: ['Female'],
+        },
+      },
+    };
+    const db = createMockDb({}, {}, candidates, {}, [], [], demographicPrefs);
+
+    let seenPlanPayload = null;
+    const planFetch = async (_url, init) => {
+      const body = JSON.parse(init.body);
+      seenPlanPayload = JSON.parse(body.messages[1].content);
+      return Response.json({
+        choices: [{ message: { content: JSON.stringify({ fills: [] }) } }],
+      });
+    };
+
+    const planRes = await executePlan(
+      {
+        candidateId: CANDIDATE_OWNED,
+        fields: [
+          { id: 'race', label: 'Race', options: ['Asian', 'White'] },
+          {
+            id: 'communities',
+            label: 'Which of the following communities do you belong to?',
+            options: ['Person with disability', 'Veteran', 'I prefer not to answer'],
+          },
+          { id: 'dob', label: 'Date of birth', type: 'text' },
+          { id: 'privacy', label: 'I agree to the privacy policy', type: 'checkbox' },
+          { id: 'future', label: 'Contact me about future job opportunities', type: 'checkbox' },
+        ],
+      },
+      USER_OWNER,
+      { db, fetchFn: planFetch },
+    );
+    assert.equal(planRes.ok, true);
+    assert.deepEqual(
+      seenPlanPayload.fields.map((f) => f.label),
+      ['Race', 'Which of the following communities do you belong to?'],
+      'Demographic fields must pass through to Phase B while DOB/privacy/marketing are blocked',
+    );
+    assert.deepEqual(seenPlanPayload.profile['demographics.raceEthnicity'], ['Asian']);
+    assert.deepEqual(seenPlanPayload.profile['demographics.veteran'], ['No']);
+    assert.equal(seenPlanPayload.profile['demographics.gender'], undefined, 'Must not leak other user demographics');
+
+    // executeChoose accepts demographic questions without returning 422 and loads actor-scoped demographics
+    let seenChoosePayload = null;
+    const chooseFetch = async (_url, init) => {
+      const body = JSON.parse(init.body);
+      seenChoosePayload = JSON.parse(body.messages[1].content);
+      return Response.json({
+        choices: [{ message: { content: JSON.stringify({ choice: 'Asian' }) } }],
+      });
+    };
+
+    const chooseRes = await executeChoose(
+      {
+        candidateId: CANDIDATE_OWNED,
+        question: { id: 'race', label: 'Race', combo: true },
+        options: ['Asian', 'White'],
+        context: { url: 'https://boards.greenhouse.io/acme/jobs/123' },
+      },
+      USER_OWNER,
+      { db, fetchFn: chooseFetch },
+    );
+    assert.equal(chooseRes.ok, true);
+    assert.deepEqual(seenChoosePayload.profile['demographics.raceEthnicity'], ['Asian']);
+    assert.equal(seenChoosePayload.profile['demographics.gender'], undefined);
+
+    // executeChoose accepts Communities question without returning 422
+    const communitiesRes = await executeChoose(
+      {
+        candidateId: CANDIDATE_OWNED,
+        question: { id: 'communities', label: 'Which of the following communities do you belong to?', combo: true },
+        options: ['Person with disability', 'Veteran', 'I prefer not to answer'],
+      },
+      USER_OWNER,
+      {
+        db,
+        fetchFn: async () => Response.json({ choices: [{ message: { content: JSON.stringify({ choice: '' }) } }] }),
+      },
+    );
+    assert.equal(communitiesRes.ok, true);
+
+    // executeChoose still rejects blocked PII/consent/marketing questions with 422
+    for (const blockedLabel of [
+      'Date of birth',
+      'I agree to the privacy policy',
+      'Contact me about future job opportunities',
+    ]) {
+      await assert.rejects(
+        () =>
+          executeChoose(
+            {
+              candidateId: CANDIDATE_OWNED,
+              question: { label: blockedLabel },
+              options: ['Yes', 'No'],
+            },
+            USER_OWNER,
+            { db, fetchFn: chooseFetch },
+          ),
+        (err) => err instanceof OrchestratorError && err.status === 422,
+        `Expected 422 for blocked field: ${blockedLabel}`,
+      );
+    }
+
+    // Disabled demographic preferences emit zero demographics.* facts
+    const disabledDb = createMockDb({}, {}, candidates, {}, [], [], {
+      [USER_OWNER]: { enabled: false, answers: { raceEthnicity: ['Asian'] } },
+    });
+    await executeChoose(
+      {
+        candidateId: CANDIDATE_OWNED,
+        question: { id: 'race', label: 'Race', combo: true },
+        options: ['Asian', 'White'],
+      },
+      USER_OWNER,
+      { db: disabledDb, fetchFn: chooseFetch },
+    );
+    assert.equal(seenChoosePayload.profile['demographics.raceEthnicity'], undefined);
+
+    // Mock DB lacking demographic_preferences table degrades gracefully to disabled
+    const legacyMockDb = {
+      from(table) {
+        if (table === 'demographic_preferences') {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: null,
+                  error: { code: '42P01', message: 'relation "public.demographic_preferences" does not exist' },
+                }),
+              }),
+            }),
+          };
+        }
+        return db.from(table);
+      },
+    };
+    const legacyRes = await executePlan(
+      {
+        candidateId: CANDIDATE_OWNED,
+        fields: [{ id: 'race', label: 'Race', options: ['Asian', 'White'] }],
+      },
+      USER_OWNER,
+      { db: legacyMockDb, fetchFn: planFetch },
+    );
+    assert.equal(legacyRes.ok, true);
+    assert.equal(seenPlanPayload.profile['demographics.raceEthnicity'], undefined);
+
+    // Unexpected DB/permission/timeout errors mentioning demographic_preferences must NOT degrade silently
+    const failingMockDb = {
+      from(table) {
+        if (table === 'demographic_preferences') {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: null,
+                  error: { code: '42501', message: 'permission denied for table demographic_preferences' },
+                }),
+              }),
+            }),
+          };
+        }
+        return db.from(table);
+      },
+    };
+    await assert.rejects(
+      () =>
+        executePlan(
+          {
+            candidateId: CANDIDATE_OWNED,
+            fields: [{ id: 'race', label: 'Race', options: ['Asian', 'White'] }],
+          },
+          USER_OWNER,
+          { db: failingMockDb, fetchFn: planFetch },
+        ),
+      (err) => err?.code === '42501' && /permission denied for table demographic_preferences/.test(String(err?.message)),
     );
   });
 });

@@ -488,6 +488,8 @@ export class ServerVercelProviderClient extends ProviderClient {
   /**
    * Generates chat completion with 3-tier fallback (Structured Outputs -> JSON Mode -> Prompt-Constrained Text),
    * shared deadline enforcement, capability caching, and usage telemetry.
+   * For `plan`/`choose` callers passing `responseFormat: 'json_prompt'`, executes a single direct
+   * prompt-constrained attempt with Zod schema validation within the single deadline.
    */
   async generateChatCompletion(
     messages: ChatMessage[],

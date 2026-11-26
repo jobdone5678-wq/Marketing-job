@@ -42,7 +42,7 @@ profile.email = 'fixture@example.test';
 
 function fixture({
   mode = 'server', uploads = [{ frame: 3, form: 1 }], abortOnPlan = false, timeoutOnBatch, planError = 504,
-  includeDemographics = false,
+  includeDemographics = false, demographicsEnabled = false,
 } = {}) {
   const controller = new AbortController();
   const fields = [
@@ -137,13 +137,38 @@ function fixture({
       planRequests++;
       assert.equal(body.context.jobDescription, undefined);
       assert.equal(body.context.url, 'https://jobs.example.test/apply');
-      const expected = [fields[2], fields[5], ...(timeoutOnBatch ? fields.slice(7, 10) : [])];
+      const expected = fields.filter((f) =>
+        [2, 3, 5, ...(timeoutOnBatch ? [7, 8, 9] : []), ...(includeDemographics ? [10, 11, 12, 15] : [])].includes(f.index),
+      );
       assert.deepEqual(body.fields.map(({ label }) => label),
-        expected.slice((planRequests - 1) * 4, planRequests * 4).map(({ label }) => label));
+        expected.slice((planRequests - 1) * 5, planRequests * 5).map(({ label }) => label));
       if (timeoutOnBatch === planRequests) {
         return Response.json({ error: 'Plan request failed' }, { status: planError });
       }
       if (abortOnPlan) controller.abort();
+      if (includeDemographics) {
+        if (planRequests === 1) {
+          return Response.json({
+            ok: true,
+            executableFills: [
+              { fieldId: '3:1:2', value: 'Bachelor', grounded: true },
+              { fieldId: '3:1:1', value: 'Unrequested overwrite', grounded: true },
+              ...(demographicsEnabled
+                ? [
+                    { fieldId: '3:1:10', value: 'Asian, Black or African American', grounded: true },
+                    { fieldId: '3:1:11', value: 'No', grounded: true },
+                  ]
+                : []),
+            ],
+            deferredFieldIds: ['3:1:3'],
+          });
+        }
+        return Response.json({
+          ok: true,
+          executableFills: [],
+          deferredFieldIds: demographicsEnabled ? ['3:1:12'] : [],
+        });
+      }
       return Response.json({
         ok: true,
         executableFills: [
@@ -156,6 +181,14 @@ function fixture({
     }
     if (path.endsWith('/choose')) {
       events.push('choose');
+      if (body.question.label === 'Protected veteran status') {
+        assert.deepEqual(body.options, [
+          'I am a protected veteran',
+          'I am not a protected veteran',
+          'I do not wish to answer',
+        ]);
+        return Response.json({ ok: true, choice: 'I do not wish to answer' });
+      }
       assert.deepEqual(body.options, ['Yes', 'No']);
       return Response.json({ ok: true, choice: 'No' });
     }
@@ -183,7 +216,9 @@ function fixture({
         if (name === 'wxt/browser') return { browser };
         if (name === './auth') return { HIRE_ORIGIN: 'https://portal.example.test' };
         if (name === './analytics') return { track() {} };
-        return load(resolve(dirname(file), name + '.ts'));
+        const resolved = resolve(dirname(file), name);
+        if (name.endsWith('.json')) return JSON.parse(readFileSync(resolved, 'utf8'));
+        return load(resolved.endsWith('.ts') ? resolved : resolved + '.ts');
       },
     });
     return exports;
@@ -202,7 +237,7 @@ function fixture({
     walk: { filling() {}, stopped: () => false, wrote() {}, answered() {} },
   };
   return {
-    run: (demographics) => runAutofill('token', panel, controller.signal, demographics),
+    run: () => runAutofill('token', panel, controller.signal),
     events,
     fields,
     notices,
@@ -243,19 +278,24 @@ test('keeps local fills when direct provider mode is selected or a pending plan 
 test('retains completed fills and handles deferred choices after a later plan batch times out', async () => {
   const app = fixture({ timeoutOnBatch: 2 });
   await app.run();
-  assert.deepEqual(app.events.slice(0, 4), ['Email', 'plan', 'Highest qualification', 'plan']);
+  assert.deepEqual(app.events.slice(0, 9), [
+    'Email', 'plan', 'Highest qualification', 'open', 'options', 'choose', 'select', 'verify', 'plan',
+  ]);
   assert.equal(app.fields[0].value, 'fixture@example.test');
   assert.equal(app.fields[2].value, 'Bachelor');
   assert.equal(app.fields[3].value, 'No');
   assert.equal(app.fields[7].value, '');
   assert.equal(app.fields[8].value, '');
+  assert.equal(app.fields[9].value, '');
   assert.ok(app.notices.some((notice) => notice.includes('AI planning timed out (HTTP 504)')));
 });
 
 test('continues planning and checks live combobox options after the first batch times out', async () => {
   const app = fixture({ timeoutOnBatch: 1 });
   await app.run();
-  assert.deepEqual(app.events.slice(0, 4), ['Email', 'plan', 'plan', 'Preferred work arrangement']);
+  assert.deepEqual(app.events.slice(0, 9), [
+    'Email', 'plan', 'open', 'options', 'choose', 'select', 'verify', 'plan', 'Preferred work arrangement',
+  ]);
   assert.equal(app.fields[2].value, '');
   assert.equal(app.fields[3].value, 'No');
   assert.equal(app.fields[9].value, 'On site');
@@ -265,27 +305,20 @@ test('still fills a live dropdown and generates prose after a non-timeout planni
   const app = fixture({ timeoutOnBatch: 1, planError: 502 });
   await app.run();
   assert.equal(app.fields[3].value, 'No');
+  assert.equal(app.fields[9].value, 'On site');
   assert.equal(app.fields[4].value, 'I enjoy building products.');
   assert.ok(app.notices.some((notice) => notice.includes('HTTP 502')));
 });
 
-test('uses only opted-in demographic answers locally and leaves existing or ambiguous answers alone', async () => {
-  const answers = {
-    raceEthnicity: ['Asian', 'Black or African American'],
-    hispanicOrigin: ['No'],
-    protectedVeteran: ['Decline'],
-    religion: ['Prefer not to say'],
-    disability: ['Yes'],
-    medicalInformation: ['private assertion'],
-  };
-  for (const enabled of [false, true]) {
-    const app = fixture({ includeDemographics: true });
-    await app.run({ enabled, answers });
+test('routes demographic and self-ID questions through Phase B and leaves existing or blocked answers alone', async () => {
+  for (const demographicsEnabled of [false, true]) {
+    const app = fixture({ includeDemographics: true, demographicsEnabled });
+    await app.run();
     const values = app.fields.filter(({ index }) => index >= 10).map(({ value }) => value);
-    assert.deepEqual(values, enabled
+    assert.deepEqual(values, demographicsEnabled
       ? ['Asian, Black or African American', 'No', 'I do not wish to answer', 'Other', '', '']
       : ['', '', '', 'Other', '', '']);
-    assert.equal(app.events.filter((event) => event === 'choose').length, 1);
+    assert.equal(app.events.filter((event) => event === 'choose').length, demographicsEnabled ? 2 : 1);
   }
 });
 

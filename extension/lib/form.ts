@@ -9,11 +9,11 @@
  * which a position in the list does.
  */
 
-import { collapse, COMBO_TRIGGER, comboOptions, displayedValues, isComboWidget, isChoicePlaceholder } from './comboWidget';
-import type { FieldTag, FormField, LabelFill, FillOutcome, FillStatus, Upload } from './protocol';
+import { collapse, COMBO_TRIGGER, comboOptions, displayedValues, isComboWidget, isChoicePlaceholder, isOnScreen } from './comboWidget';
+import type { FieldTag, FormField, LabelFill, FillOutcome, FillStatus, Upload, WidgetType } from './protocol';
 import type { AutofillProfile } from './freehire';
 import { easyApplyDialog, easyApplyFieldError, isStoredResumeChoice } from './easyApply';
-import { choiceType, extractLabel, precedingPrompt, textFromIds } from './formLabel';
+import { choiceType, extractHelperText, extractLabel, precedingPrompt, textFromIds } from './formLabel';
 import { demographicKey } from '../../src/lib/profile/demographic-preferences';
 import { binaryChoice, formatAuthorizedCountries, matchChoice, matchFieldKey, normalizeLabel } from './fieldKeys';
 
@@ -23,6 +23,42 @@ const CHOICES = 'input[type="radio"], input[type="checkbox"], [role="radio"], [r
 // Input types that are not free-fill targets.
 const SKIP_TYPES = new Set(['hidden', 'submit', 'button', 'reset', 'image', 'file']);
 
+function isSafeChoiceButton(btn: HTMLButtonElement): boolean {
+  if (/^(submit|reset)$/i.test(btn.getAttribute('type') ?? '')) return false;
+  if (btn.form && btn.type !== 'button') return false;
+  return true;
+}
+
+function buttonOptionLabel(btn: HTMLButtonElement): string {
+  return collapse(btn.textContent) || collapse(btn.getAttribute('aria-label'));
+}
+
+function isSafeSegmentedButton(btn: HTMLButtonElement): boolean {
+  if (btn.matches(':disabled') || btn.closest('[aria-disabled="true"]')) return false;
+  if (isHidden(btn)) return false;
+  if (isComboWidget(btn) || choiceType(btn)) return false;
+  if (!isSafeChoiceButton(btn)) return false;
+  const norm = normalizeLabel(buttonOptionLabel(btn));
+  return norm === 'yes' || norm === 'no';
+}
+
+function isBooleanButtonsQuestion(controls: Fillable[]): boolean {
+  return controls.length === 2 &&
+    controls.every((el) => el instanceof HTMLButtonElement && !isComboWidget(el) && !choiceType(el));
+}
+
+function isBooleanButtonSelected(btn: HTMLButtonElement): boolean {
+  if (btn.hasAttribute('aria-pressed') || btn.hasAttribute('aria-checked')) {
+    return btn.getAttribute('aria-pressed') === 'true' || btn.getAttribute('aria-checked') === 'true';
+  }
+  for (const attr of ['data-selected', 'data-active', 'data-checked']) {
+    const val = btn.getAttribute(attr);
+    if (val === 'true') return true;
+    if (val === 'false') return false;
+  }
+  return /(?:^|[^a-z])(?:active|selected|checked)(?:[^a-z]|$)/i.test(btn.className);
+}
+
 /**
  * The ordered list of fillable controls on the page. An open Easy Apply dialog is
  * the whole application, so only its controls count: LinkedIn's search box and
@@ -30,15 +66,19 @@ const SKIP_TYPES = new Set(['hidden', 'submit', 'button', 'reset', 'image', 'fil
  */
 function collectFillable(doc: Document): Fillable[] {
   const easyApply = easyApplyDialog(doc);
-  const all = Array.from((easyApply ?? doc).querySelectorAll<Fillable>(`input, select, textarea, ${COMBO_TRIGGER}, ${CHOICES}`));
+  const all = Array.from((easyApply ?? doc).querySelectorAll<Fillable>(`input, select, textarea, button, ${COMBO_TRIGGER}, ${CHOICES}`));
   return all.filter((el) => {
     if (el.matches(':disabled') || el.closest('[aria-disabled="true"]')) return false;
     if (el instanceof HTMLButtonElement && /^(submit|reset)$/i.test(el.getAttribute('type') ?? '')) return false;
     if (el.matches(COMBO_TRIGGER) && el.querySelector('input:not([type="hidden"]), select, textarea')) return false;
     if (!(el instanceof HTMLInputElement) && choiceType(el) && el.querySelector(CHOICES)) return false;
+    if (el instanceof HTMLButtonElement && choiceType(el) && !isSafeChoiceButton(el)) return false;
     if (easyApply && isStoredResumeChoice(el)) return false;
     if (el instanceof HTMLInputElement && SKIP_TYPES.has(el.type)) return false;
     if (isHidden(el)) return false;
+    if (el instanceof HTMLButtonElement && !el.matches(COMBO_TRIGGER) && !choiceType(el)) {
+      return booleanButtonGroup(el) !== null;
+    }
     return true;
   });
 }
@@ -60,6 +100,8 @@ export interface Question {
    * typed as `Fillable`, not `Fillable | undefined`.
    */
   controls: [Fillable, ...Fillable[]];
+  helperText?: string;
+  widgetType?: WidgetType;
 }
 
 /** The ordered list of questions — the index space for observe + act. */
@@ -96,7 +138,25 @@ export function collectQuestions(doc: Document): Question[] {
   for (const group of groups) {
     if (group.controls.length === 1) group.label = extractLabel(group.controls[0]);
   }
+  for (const question of questions) {
+    question.widgetType = inferWidgetType(question.controls);
+    const helper = extractHelperText(question.controls[0], question.label);
+    if (helper) question.helperText = helper;
+  }
   return questions;
+}
+
+function inferWidgetType(controls: Question['controls']): WidgetType {
+  const [el] = controls;
+  if (isBooleanButtonsQuestion(controls)) return 'boolean_buttons';
+  if (controls.length > 1) return choiceType(el) === 'checkbox' ? 'checkbox_group' : 'radio';
+  if (isComboWidget(el)) return 'combobox';
+  if (el instanceof HTMLSelectElement) return 'select';
+  if (el instanceof HTMLTextAreaElement) return 'textarea';
+  const choice = choiceType(el);
+  if (choice === 'radio') return 'radio';
+  if (choice === 'checkbox') return 'checkbox';
+  return 'text';
 }
 
 /**
@@ -115,6 +175,10 @@ export function collectQuestions(doc: Document): Question[] {
  * share a `name` and a type, which is how the live forms mark them.
  */
 function groupOf(el: Fillable): { container: Element; question: string; key: string } | null {
+  if (el instanceof HTMLButtonElement && !isComboWidget(el) && !choiceType(el)) {
+    const pair = booleanButtonGroup(el);
+    return pair ? { ...pair, key: 'boolean_buttons' } : null;
+  }
   const type = choiceType(el);
   if (!type) return null;
   const labelled = labelledContainer(el);
@@ -142,6 +206,73 @@ function groupOf(el: Fillable): { container: Element; question: string; key: str
   const group = labelled ?? (el instanceof HTMLInputElement ? namedByControls(el) : null) ?? inferred;
   return group ? { ...group, key: `${type} ${name}` } : null;
 }
+
+/** Segmented [Yes] / [No] button pair beneath a question prompt or labelled container. */
+function booleanButtonGroup(el: HTMLButtonElement): { container: Element; question: string } | null {
+  if (!isSafeSegmentedButton(el)) return null;
+  for (let container = el.parentElement; container && !container.matches('form, body, [role="dialog"]'); container = container.parentElement) {
+    if (container.querySelector('input:not([type="hidden"]), select, textarea, [role="combobox"], [role="radio"], [role="checkbox"]')) break;
+    const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).filter(
+      (btn) => !btn.matches(':disabled') && !btn.closest('[aria-disabled="true"]') && !isHidden(btn),
+    );
+    if (buttons.length < 2) continue;
+    if (buttons.length !== 2) break;
+    if (!buttons.every(isSafeSegmentedButton)) break;
+    const norms = new Set(buttons.map((btn) => normalizeLabel(buttonOptionLabel(btn))));
+    if (!norms.has('yes') || !norms.has('no')) break;
+
+    const first = buttons[0];
+    if (!first) break;
+    let branch: Element = first;
+    while (branch.parentElement && branch.parentElement !== container) branch = branch.parentElement;
+
+    const ariaQuestion =
+      textFromIds(el.ownerDocument, container.getAttribute('aria-labelledby')) ||
+      collapse(container.getAttribute('aria-label')) ||
+      collapse(Array.from(container.children).find((c) => c.tagName === 'LEGEND')?.textContent);
+
+    let question = ariaQuestion;
+    if (!question) {
+      const beforeBranch: Element[] = [];
+      for (const child of Array.from(container.children)) {
+        if (child === branch || child.contains(first)) break;
+        if (isOnScreen(child) && !child.matches('button') && !child.querySelector('button')) beforeBranch.push(child);
+      }
+      const heading = beforeBranch.find((child) => child.matches('label, legend, h1, h2, h3, h4, h5, h6')) ??
+        beforeBranch.find((child) => /\?\s*\*?$|^(?:describe|explain|tell us|share|provide|list)\b/i.test(collapse(child.textContent))) ??
+        beforeBranch.find((child) => {
+          const text = collapse(child.textContent);
+          return Boolean(text) && !norms.has(normalizeLabel(text));
+        });
+      question = collapse(heading?.textContent);
+    }
+    if (!question) {
+      const prefix: string[] = [];
+      for (const node of container.childNodes) {
+        if (node === branch || node.contains(first)) break;
+        prefix.push(node.textContent ?? '');
+      }
+      const prefixText = collapse(prefix.join(' '));
+      if (prefixText) question = prefixText;
+    }
+    if (!question) {
+      const parent = container.parentElement;
+      const canWalkUp = Boolean(parent && !parent.matches('form, body, [role="dialog"]') &&
+        !parent.querySelector('input:not([type="hidden"]), select, textarea, [role="combobox"], [role="radio"], [role="checkbox"]') &&
+        parent.querySelectorAll('button').length === 2);
+      if (!canWalkUp) {
+        question = precedingPrompt(container, (text) => /\?\s*\*?$/.test(text));
+      }
+    }
+    if (question && question.length <= 2000 && !norms.has(normalizeLabel(question))) {
+      return { container, question };
+    }
+  }
+  return null;
+}
+
+const isDemographicPrompt = (text: string) =>
+  Boolean(demographicKey(text)) || /^do you identify as any of the following\b/i.test(text);
 
 /** ATS forms often put a plain-text heading above a list of choices (with or without `name`). */
 function questionBeforeOptions(el: Fillable): { container: Element; question: string; binaryPair: boolean } | null {
@@ -172,11 +303,10 @@ function questionBeforeOptions(el: Fillable): { container: Element; question: st
       !(labels.has('yes') && labels.has('no')) &&
       choices.every((choice) => !extractLabel(choice).includes('?'));
     if (!sameName && !binaryPair && !checkboxList) break;
-    const first = choices[0]!;
+    const first = choices[0];
+    if (!first) break;
     let branch = first as Element;
     while (branch.parentElement && branch.parentElement !== container) branch = branch.parentElement;
-    const isDemographicPrompt = (text: string) => Boolean(demographicKey(text)) ||
-      /^do you identify as any of the following\b/i.test(text);
     const isPrompt = (text: string) => /\?\s*\*?$/.test(text) || (checkboxList && isDemographicPrompt(text));
     const prefix: string[] = [];
     for (const node of container.childNodes) {
@@ -288,29 +418,40 @@ export function formIndex(el: Fillable, forms: HTMLFormElement[]): number {
   return owner ? forms.indexOf(owner) : -1;
 }
 
-function describeQuestion({ label, controls }: Question, index: number, forms: HTMLFormElement[]): FormField {
+function describeQuestion({ label, controls, helperText, widgetType }: Question, index: number, forms: HTMLFormElement[]): FormField {
   const [el] = controls;
+  const resolvedWidget = widgetType ?? inferWidgetType(controls);
+  const booleanButtons = resolvedWidget === 'boolean_buttons';
   const tag: FieldTag = el instanceof HTMLSelectElement ? 'select' :
     el instanceof HTMLTextAreaElement ? 'textarea' : 'input';
   const field: FormField = {
     index,
     form: formIndex(el, forms),
     tag,
-    type: choiceType(el) ?? (el instanceof HTMLInputElement ? el.type : isComboWidget(el) ? 'select' : tag),
+    type: booleanButtons ? 'radio' : (choiceType(el) ?? (el instanceof HTMLInputElement ? el.type : isComboWidget(el) ? 'select' : tag)),
     label,
+    widgetType: resolvedWidget,
     name: el.getAttribute('name') ?? '',
     // A React-rendered ATS form typically validates in JS and marks the
     // requirement with ARIA rather than the native attribute.
     // Plenty of forms (LinkedIn Easy Apply's radio groups) mark it only as a trailing
     // asterisk in the question's text.
     required: controls.some((c) => ('required' in c && c.required) || c.getAttribute('aria-required') === 'true') || /\*\s*$/.test(label),
-    value: 'value' in el && typeof el.value === 'string' ? el.value : '',
+    value: 'value' in el && typeof el.value === 'string' && !booleanButtons ? el.value : '',
     combo: isComboWidget(el),
   };
+  const resolvedHelper = helperText ?? extractHelperText(el, label);
+  if (resolvedHelper) field.helperText = resolvedHelper;
   const invalid = fieldError(el);
   if (invalid) field.invalid = invalid;
 
-  if (controls.length > 1) {
+  if (booleanButtons) {
+    field.options = controls.map(extractLabel);
+    field.value = controls
+      .filter((c) => isBooleanButtonSelected(c as HTMLButtonElement))
+      .map(extractLabel)
+      .join(', ');
+  } else if (controls.length > 1) {
     // A group: the options are the controls' own labels, and its value is
     // whichever of them are already chosen.
     field.options = controls.map(extractLabel);
@@ -383,8 +524,9 @@ function applyExactChoices({ controls }: Question, choices: string[]): boolean {
     const selected = Array.from(first.selectedOptions);
     return selected.length === chosen.size && selected.every((option) => chosen.has(option));
   }
+  const isButtons = isBooleanButtonsQuestion(controls);
   const type = choiceType(first);
-  if (controls.length < 2 || !type || (type === 'radio' && choices.length > 1)) return false;
+  if (controls.length < 2 || (!type && !isButtons) || ((type === 'radio' || isButtons) && choices.length > 1)) return false;
   const matches = choices.map((choice) => controls.filter((control) => extractLabel(control) === choice));
   if (matches.some((options) => options.length !== 1)) return false;
   return matches.flat().every((control) => fillField(control, 'true'));
@@ -540,7 +682,7 @@ function answerQuestion({ controls, label }: Question, value: string): boolean {
 
   const chosen = chosenOptions(controls, value, label);
   if (!chosen) return false;
-  if (choiceType(controls[0]) === 'radio' && chosen.length !== 1) return false;
+  if ((choiceType(controls[0]) === 'radio' || isBooleanButtonsQuestion(controls)) && chosen.length !== 1) return false;
   return chosen.every((control) => fillField(control, 'true'));
 }
 
@@ -599,6 +741,12 @@ function fillField(el: Fillable, value: string, label = ''): boolean {
     // React's checkbox/radio change plugin observes native click activation.
     if (choiceChecked(el) !== checked) el.click();
     return choiceChecked(el) === checked;
+  }
+  if (el instanceof HTMLButtonElement && !isComboWidget(el)) {
+    if (!isSafeChoiceButton(el) || el.closest('a[href]')) return false;
+    if (binaryChoice(value) !== true) return false;
+    if (!isBooleanButtonSelected(el)) el.click();
+    return true;
   }
   if (el instanceof HTMLSelectElement) {
     const matches = Array.from(el.options).filter(

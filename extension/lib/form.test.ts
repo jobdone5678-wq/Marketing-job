@@ -482,7 +482,9 @@ describe('control naming', () => {
     </fieldset></form>`;
     const otherChoice = must(document.querySelector('[role="checkbox"]') ?? undefined);
     otherChoice.addEventListener('click', () => otherChoice.setAttribute('aria-checked', 'true'));
-    const [field, other] = extractForm(document);
+    const [rawField, rawOther] = extractForm(document);
+    const field = must(rawField);
+    const other = must(rawOther);
     expect(field.options).toEqual(['India', 'Canada']);
     expect(other.label).toBe('Other');
     expect(fillByLabel(document, [{ label: field.label, value: 'India, Canada' }])[0]?.status).toBe('filled');
@@ -620,5 +622,169 @@ describe('control naming', () => {
     document.body.innerHTML =
       '<div><label>Location (city)*</label><input type="text" aria-label="Enter city" placeholder="Enter city"></div>';
     expect(extractForm(document)[0]?.label).toBe('Location (city)*');
+  });
+
+  it('extracts helperText via aria-describedby and adjacent subtitle without polluting label', () => {
+    document.body.innerHTML = `
+      <div>
+        <label for="work-loc">Which country do you intend to work from?*</label>
+        <p id="work-loc-hint">Please list your city and country.</p>
+        <input id="work-loc" role="combobox" aria-describedby="work-loc-hint" aria-expanded="false" />
+      </div>`;
+    const f = must(extractForm(document)[0]);
+    expect(f.label).toBe('Which country do you intend to work from?*');
+    expect(f.helperText).toBe('Please list your city and country.');
+    expect(f.widgetType).toBe('combobox');
+  });
+
+  it('extracts helperText from adjacent subtitle without aria-describedby and skips location rejections', () => {
+    document.body.innerHTML = `
+      <div>
+        <label for="reloc-note">Relocation preferences</label>
+        <p>Include cities or regions you would consider.</p>
+        <textarea id="reloc-note"></textarea>
+      </div>
+      <div>
+        <label for="city-box">Current location*</label>
+        <span id="city-status" role="status">No location found. Try entering a different location</span>
+        <input id="city-box" role="combobox" aria-describedby="city-status" />
+      </div>`;
+    const fields = extractForm(document);
+    expect(fields[0]?.helperText).toBe('Include cities or regions you would consider.');
+    expect(fields[0]?.widgetType).toBe('textarea');
+    expect(fields[1]?.helperText).toBeUndefined();
+    expect(fields[1]?.widgetType).toBe('combobox');
+  });
+
+  it('discovers combobox buttons lacking type="button" while skipping submit buttons', () => {
+    document.body.innerHTML = `
+      <form>
+        <label for="race">Race</label>
+        <button id="race" role="combobox" aria-expanded="false">Select ...</button>
+        <button type="submit">Submit application</button>
+      </form>`;
+    const fields = extractForm(document);
+    expect(fields).toHaveLength(1);
+    const first = must(fields[0]);
+    expect(first.label).toBe('Race');
+    expect(first.combo).toBe(true);
+    expect(first.widgetType).toBe('combobox');
+  });
+
+  it('extracts Ashby-style segmented [Yes] [No] button pairs as boolean_buttons', () => {
+    document.body.innerHTML = `
+      <div>
+        <span>Will you now or in the future require sponsorship for employment visa status to work in this location?*</span>
+        <div>
+          <button type="button" aria-pressed="false">Yes</button>
+          <button type="button" aria-pressed="false">No</button>
+        </div>
+      </div>`;
+    const f = must(extractForm(document)[0]);
+    expect(f.label).toContain('require sponsorship');
+    expect(f.widgetType).toBe('boolean_buttons');
+    expect(f.options).toEqual(['Yes', 'No']);
+    expect(f.value).toBe('');
+  });
+
+  it('skips segmented [Yes] [No] buttons inside a <form> when type defaults to submit, while keeping type-less buttons outside a <form>', () => {
+    document.body.innerHTML = `
+      <form>
+        <span>Inside form without explicit type?</span>
+        <div>
+          <button>Yes</button>
+          <button>No</button>
+        </div>
+      </form>
+      <div>
+        <span>Outside form without explicit type?</span>
+        <div>
+          <button>Yes</button>
+          <button>No</button>
+        </div>
+      </div>`;
+    const fields = extractForm(document);
+    expect(fields).toHaveLength(1);
+    const first = must(fields[0]);
+    expect(first.label).toBe('Outside form without explicit type?');
+    expect(first.widgetType).toBe('boolean_buttons');
+    expect(first.form).toBe(-1);
+  });
+
+  it('reads boolean_buttons selected state from aria-pressed, aria-checked, or data-selected/class fallback', () => {
+    document.body.innerHTML = `
+      <div>
+        <span>Question one?</span>
+        <div>
+          <button type="button" aria-pressed="true">Yes</button>
+          <button type="button" aria-pressed="false">No</button>
+        </div>
+      </div>
+      <div>
+        <span>Question two?</span>
+        <div>
+          <button type="button" aria-checked="false">Yes</button>
+          <button type="button" aria-checked="true">No</button>
+        </div>
+      </div>
+      <div>
+        <span>Question three?</span>
+        <div>
+          <button type="button" class="pill active">Yes</button>
+          <button type="button" class="pill">No</button>
+        </div>
+      </div>
+      <div>
+        <span>Question four?</span>
+        <div>
+          <button type="button" aria-pressed="false" class="active">Yes</button>
+          <button type="button" aria-pressed="false">No</button>
+        </div>
+      </div>
+      <div>
+        <span>Question five?</span>
+        <div>
+          <button type="button" data-selected="false" class="pill active">Yes</button>
+          <button type="button" data-active="true" class="pill">No</button>
+        </div>
+      </div>
+      <div>
+        <span>Question six?</span>
+        <div>
+          <button type="button" data-checked="false" class="pill checked">Yes</button>
+          <button type="button" data-selected="true">No</button>
+        </div>
+      </div>`;
+    expect(extractForm(document).map((f) => [f.label, f.value, f.widgetType])).toEqual([
+      ['Question one?', 'Yes', 'boolean_buttons'],
+      ['Question two?', 'No', 'boolean_buttons'],
+      ['Question three?', 'Yes', 'boolean_buttons'],
+      ['Question four?', '', 'boolean_buttons'],
+      ['Question five?', 'No', 'boolean_buttons'],
+      ['Question six?', 'No', 'boolean_buttons'],
+    ]);
+  });
+
+  it('reports accurate widgetType for all supported control kinds', () => {
+    document.body.innerHTML = `
+      <form>
+        <label>Name <input type="text" /></label>
+        <label>Bio <textarea></textarea></label>
+        <label>Country <select><option>US</option></select></label>
+        <fieldset><legend>Relocate?</legend>
+          <label><input type="radio" name="reloc" />Yes</label>
+          <label><input type="radio" name="reloc" />No</label>
+        </fieldset>
+        <label><input type="checkbox" /> I agree</label>
+        <label>City <input role="combobox" /></label>
+      </form>`;
+    expect(extractForm(document).map((f) => f.widgetType)).toEqual([
+      'text',
+      'textarea',
+      'select',
+      'radio',
+      'checkbox',
+      'combobox',
+    ]);
   });
 });

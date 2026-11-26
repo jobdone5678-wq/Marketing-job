@@ -255,4 +255,27 @@ describe('fillByLabel', () => {
     fillByLabel(document, [{ label: 'Country', value: '4417' }]);
     expect(select.value).toBe('4417');
   });
+
+  it('clicks the matching button in a segmented [Yes] [No] button group and respects aria-pressed', () => {
+    document.body.innerHTML = `
+      <div>
+        <span>Will you require sponsorship?*</span>
+        <div><button type="button" aria-pressed="false">Yes</button><button type="button" aria-pressed="false">No</button></div>
+      </div>`;
+    const buttons = Array.from(document.querySelectorAll('button'));
+    const noBtn = must(buttons[1]);
+    noBtn.addEventListener('click', () => {
+      buttons[0]?.setAttribute('aria-pressed', 'false');
+      noBtn.setAttribute('aria-pressed', 'true');
+    });
+    const outcomes = fillByLabel(document, [{ label: 'Will you require sponsorship?*', value: 'No', onlyEmpty: true }]);
+    expect(outcomes[0]?.status).toBe('filled');
+    expect(noBtn.getAttribute('aria-pressed')).toBe('true');
+    expect(extractForm(document)[0]?.value).toBe('No');
+
+    // Respects onlyEmpty: true when already selected
+    const second = fillByLabel(document, [{ label: 'Will you require sponsorship?*', value: 'Yes', onlyEmpty: true }]);
+    expect(second[0]?.status).toBe('not_fillable');
+    expect(noBtn.getAttribute('aria-pressed')).toBe('true');
+  });
 });

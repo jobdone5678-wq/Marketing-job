@@ -381,4 +381,27 @@ describe('fillByLabel on a group', () => {
       .map((el) => el.parentElement?.textContent?.trim());
     expect(checked).toEqual(['Asian or Asian American', 'Veteran', 'Parent']);
   });
+
+  it('groups distinct-name checkboxes under shared fieldset legend while keeping lone consent box separate', () => {
+    document.body.innerHTML = `
+      <fieldset>
+        <legend>Which of the following communities do you belong to? Please select all that apply.</legend>
+        <label><input type="checkbox" name="comm_disability" /> Person with disability</label>
+        <label><input type="checkbox" name="comm_neuro" /> Neurodivergent</label>
+        <label><input type="checkbox" name="comm_veteran" /> Veteran</label>
+        <label><input type="checkbox" name="comm_decline" /> I prefer not to answer</label>
+      </fieldset>
+      <fieldset>
+        <legend>Consent</legend>
+        <label><input type="checkbox" name="privacy" /> I agree to the privacy notice</label>
+      </fieldset>`;
+    const fields = extractForm(document);
+    expect(fields).toHaveLength(2);
+    const groupField = must(fields[0]);
+    const consentField = must(fields[1]);
+    expect(groupField.widgetType).toBe('checkbox_group');
+    expect(groupField.options).toEqual(['Person with disability', 'Neurodivergent', 'Veteran', 'I prefer not to answer']);
+    expect(consentField.label).toBe('I agree to the privacy notice');
+    expect(consentField.widgetType).toBe('checkbox');
+  });
 });

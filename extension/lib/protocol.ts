@@ -23,6 +23,16 @@ export interface AutofillTarget {
 
 export type FieldTag = 'input' | 'select' | 'textarea';
 
+export type WidgetType =
+  | 'text'
+  | 'textarea'
+  | 'select'
+  | 'radio'
+  | 'checkbox_group'
+  | 'checkbox'
+  | 'boolean_buttons'
+  | 'combobox';
+
 /**
  * A serialisable view of one question the page asks (see lib/form.ts). Usually
  * one control, but a question rendered as several checkboxes under a shared
@@ -42,6 +52,10 @@ export interface FormField {
   type: string;
   /** The question's text: a control's label, or a group's legend. */
   label: string;
+  /** Optional helper/hint text associated with this question (never merged into `label`). */
+  helperText?: string;
+  /** The UI widget pattern used to render this question. */
+  widgetType?: WidgetType;
   name: string;
   required: boolean;
   /** The current answer; for a group, the options already chosen. */
