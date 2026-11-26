@@ -63,6 +63,8 @@ export default defineBackground(() => {
         return revealAcrossFrames(message.request);
       case 'COMBOBOX_STEP':
         return comboboxAcrossFrames(message.step, message.target);
+      case 'ATTACH_SAVED_RESUME':
+        return attachSavedResumeInFrame(message);
       case 'ATTACH_TAILORED_CV':
         return attachTailoredCV(message.jobSlug);
       default:
@@ -242,6 +244,19 @@ async function activeTabId(target?: AutofillTarget): Promise<number | null> {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   if (target && (tab?.id !== target.tabId || tab.url !== target.url)) return null;
   return tab?.id ?? null;
+}
+
+async function attachSavedResumeInFrame(message: Extract<RuntimeMessage, { kind: 'ATTACH_SAVED_RESUME' }>): Promise<RuntimeMessage> {
+  const tabId = await activeTabId(message.target);
+  if (tabId !== null) {
+    try {
+      const reply = await browser.tabs.sendMessage(tabId, message, { frameId: message.frame }) as RuntimeMessage | undefined;
+      if (reply?.kind === 'ATTACH_SAVED_RESUME_RESULT') return reply;
+    } catch {
+      // The application frame may have navigated or closed.
+    }
+  }
+  return { kind: 'ATTACH_SAVED_RESUME_RESULT', status: 'unavailable' };
 }
 
 /** How long a download may sit unresolved before `resolveDownloadedPath` gives up — bounds

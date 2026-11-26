@@ -1,6 +1,6 @@
 import { startErrorTelemetry } from '../lib/telemetry';
 import { extractSnapshot, hasJobPostingMarkup } from '../lib/scraper';
-import { clearUserEdited, extractForm, extractUploads, fillByLabel, markUserEdited } from '../lib/form';
+import { attachSavedResume, clearUserEdited, extractForm, extractUploads, fillByLabel, markUserEdited } from '../lib/form';
 import { revealField } from '../lib/revealField';
 import { easyApplyDialog, easyApplyOnResumeStep, easyApplySent, linkedInPostingClosed } from '../lib/easyApply';
 import { isFreehireOrigin } from '../lib/freehire';
@@ -47,6 +47,7 @@ export default defineContentScript({
   main() {
     startErrorTelemetry('content');
     const onLinkedIn = /(^|\.)linkedin\.com$/.test(location.hostname);
+    const documentKey = crypto.getRandomValues(new Uint32Array(4)).join('-');
     browser.runtime.onMessage.addListener((message: RuntimeMessage) => {
       switch (message.kind) {
         case 'GET_PAGE_SNAPSHOT':
@@ -65,15 +66,16 @@ export default defineContentScript({
             return Promise.resolve<RuntimeMessage>({ kind: 'FORM', fields: [], uploads: [] });
           }
           // The frame tag is stamped by the background relay, which is the only
-          // side that knows this frame's id. The uploads travel alongside the
-          // questions: they are not fillable, they say whether this is an
-          // application at all.
+          // side that knows this frame's id. The document key binds résumé
+          // attachment to the same document that exposed the upload.
           const fields = extractForm(document);
           return Promise.resolve<RuntimeMessage>({
             kind: 'FORM',
             snapshotId: fields[0]?.snapshotId,
             fields,
-            uploads: extractUploads(document),
+            uploads: extractUploads(document).map((upload) =>
+              upload.resume ? { ...upload, documentKey } : upload,
+            ),
             easyApply: easyApplyDialog(document) !== null,
             resumeStep: easyApplyOnResumeStep(document),
             sent: easyApplySent(document),
@@ -104,6 +106,14 @@ export default defineContentScript({
           // The only asynchronous handler here: a widget re-renders when its
           // framework decides to, so the step awaits the result.
           return runStep(document, message.step).then((reply): RuntimeMessage => ({ kind: 'COMBOBOX_REPLY', reply }));
+        case 'ATTACH_SAVED_RESUME':
+          return Promise.resolve<RuntimeMessage>({
+            kind: 'ATTACH_SAVED_RESUME_RESULT',
+            status: message.documentKey === documentKey && !isFreehireOrigin(location.origin) &&
+              (window !== window.top || location.href === message.target.url)
+              ? attachSavedResume(document, message.form, message.resume)
+              : 'unavailable',
+          });
         default:
           return undefined;
       }

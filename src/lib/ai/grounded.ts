@@ -204,6 +204,7 @@ export type GroundingReasonCode =
   | 'FORMAT_MISMATCH'
   | 'DEMOGRAPHIC_DISABLED_OR_UNSET'
   | 'DEMOGRAPHIC_MISMATCH'
+  | 'DEMOGRAPHIC_ETHNICITY_UNCONFIRMED'
   | 'ATTESTATION_REQUIRES_USER'
   | 'UNSUPPORTED_OPTION'
   | 'AMBIGUOUS_MATCH';
@@ -2028,25 +2029,6 @@ export function validateGroundedAnswer(
           'demographics',
         );
       }
-      if (
-        optKey === 'raceEthnicity' &&
-        /\bnot hispanic or latin[eoax]\b/i.test(choice) &&
-        !fact.value.some((value) => normalizeLabel(String(value)) === normalizeLabel(choice))
-      ) {
-        const ethnicity = getDemographicFact('hispanicOrigin');
-        if (
-          !Array.isArray(ethnicity?.value) ||
-          !ethnicity.value.every((value) => isNegativeDemographicStatus('hispanicOrigin', String(value)))
-        ) {
-          return unresolvedResult(
-            'The offered race option also requires a confirmed ethnicity answer',
-            [fact.id],
-            'DEMOGRAPHIC_MISMATCH',
-            'demographics',
-          );
-        }
-        evidenceIds.add(ethnicity.id);
-      }
       if (!demographicOptionSupported(optKey, fact.value.map(String), choice)) {
         return unresolvedResult(
           `Demographic option "${choice}" is not supported by saved "${optKey}" preference`,
@@ -2054,6 +2036,25 @@ export function validateGroundedAnswer(
           'DEMOGRAPHIC_MISMATCH',
           'demographics',
         );
+      }
+      if (
+        optKey === 'raceEthnicity' &&
+        /\bnot hispanic or latin[eoax]\b/i.test(choice) &&
+        !fact.value.some((value) => normalizeLabel(String(value)) === normalizeLabel(choice))
+      ) {
+        const ethnicity = getDemographicFact('hispanicOrigin');
+        if (
+          !Array.isArray(ethnicity?.value) || !ethnicity.value.length ||
+          !ethnicity.value.every((value) => isNegativeDemographicStatus('hispanicOrigin', String(value)))
+        ) {
+          return unresolvedResult(
+            'The offered race option also requires a confirmed ethnicity answer',
+            [fact.id],
+            'DEMOGRAPHIC_ETHNICITY_UNCONFIRMED',
+            'demographics',
+          );
+        }
+        evidenceIds.add(ethnicity.id);
       }
       evidenceIds.add(fact.id);
     }

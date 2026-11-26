@@ -10,7 +10,7 @@
  */
 
 import { collapse, COMBO_TRIGGER, comboOptions, displayedValues, isComboWidget, isChoicePlaceholder, isOnScreen } from './comboWidget';
-import type { FieldTag, FormField, LabelFill, FillOutcome, FillStatus, OptionsState, Upload, WidgetType } from './protocol';
+import type { FieldTag, FormField, LabelFill, FillOutcome, FillStatus, OptionsState, ResumeAttachmentStatus, SavedResumeFile, Upload, WidgetType } from './protocol';
 import type { AutofillProfile } from './freehire';
 import { easyApplyDialog, easyApplyFieldError, isStoredResumeChoice } from './easyApply';
 import { choiceType, extractHelperText, extractLabel, extractPlaceholder, extractSection, precedingPrompt, textFromIds } from './formLabel';
@@ -478,19 +478,62 @@ function annotateParentFieldIds(questions: Question[], fields: FormField[]): voi
  * The resume/CV uploads the page is offering, each tagged with the form that
  * owns it.
  *
- * A file input is never a fill target — `SKIP_TYPES` drops it from the question
- * list, and its value cannot be set from script anyway — but it is the one thing
- * that reliably marks a form as an *application*. Measured across Greenhouse
+ * File inputs are handled separately from regular questions. They reliably mark
+ * a form as an application. Measured across Greenhouse
  * (board, embed and site-with-iframe), Lever and Ashby: every open application
  * offered one, and no page that was not showing an application did. That is what
  * lets a job-alert signup be told from a short application form, which counting
  * fields or required markers cannot do.
  */
 export function extractUploads(doc: Document): Upload[] {
+  return uploadInputs(doc).map(({ input, form, resume }) => ({
+    form,
+    ...(resume ? { resume: true, ...(input.files?.length ? { hasFile: true } : {}) } : {}),
+  }));
+}
+
+function uploadInputs(doc: Document) {
   const forms = Array.from(doc.querySelectorAll('form'));
   return Array.from(doc.querySelectorAll<HTMLInputElement>('input[type="file"]'))
-    .filter((el) => !el.disabled && !isHidden(el))
-    .map((el) => ({ form: formIndex(el, forms) }));
+    .filter((input) => !input.matches(':disabled, [aria-disabled="true"]') && !isHidden(input))
+    .map((input) => {
+      const label = [extractLabel(input), input.name, input.id].join(' ')
+        .normalize('NFD').replace(/\p{M}/gu, '').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]/g, ' ');
+      const resume = /\b(?:resume|curriculum vitae|cv|lebenslauf)\b/i.test(label) &&
+        !/\b(?:cover letter|coverletter|references?|transcript|portfolio)\b/i.test(label);
+      return { input, form: formIndex(input, forms), resume };
+    });
+}
+
+/** Writes the caller's saved file to the one résumé input in the named form. */
+export function attachSavedResume(doc: Document, form: number, resume: SavedResumeFile): ResumeAttachmentStatus {
+  const matches = uploadInputs(doc).filter((entry) => entry.form === form && entry.resume);
+  const input = matches.length === 1 ? matches[0]?.input : undefined;
+  if (!input?.isConnected) return 'unavailable';
+  if (input.files?.length) return 'already_attached';
+
+  const accepted = input.accept.toLowerCase().split(',').map((entry) => entry.trim()).filter(Boolean);
+  const mime = resume.mimeType.toLowerCase();
+  const name = resume.filename.toLowerCase();
+  if (accepted.length && !accepted.some((entry) =>
+    entry.startsWith('.') ? name.endsWith(entry) :
+      entry.endsWith('/*') ? mime.startsWith(entry.slice(0, -1)) : entry === mime,
+  )) return 'incompatible';
+
+  try {
+    const bytes = Uint8Array.from(atob(resume.base64), (char) => char.charCodeAt(0));
+    if (!bytes.length) return 'failed';
+    const file = new File([bytes], resume.filename, { type: mime });
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    input.files = transfer.files;
+    input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    const observed = input.files?.[0];
+    return input.isConnected && observed?.name === file.name && observed.size === file.size ? 'attached' : 'failed';
+  } catch {
+    return 'failed';
+  }
 }
 
 /**

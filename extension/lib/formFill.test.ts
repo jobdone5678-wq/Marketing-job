@@ -14,6 +14,7 @@ vi.mock('./freehire', async () => {
     } }),
     getAutofillSettings: vi.fn(),
     getReusableAnswers: vi.fn().mockResolvedValue([]),
+    getSavedResumeFile: vi.fn(),
     requestAutofillPlan: vi.fn(),
     requestAutofillChoice: vi.fn(),
     generateAutofillAnswer: vi.fn(),
@@ -29,6 +30,7 @@ import {
   getAutofillSessionProfile,
   getAutofillSettings,
   getReusableAnswers,
+  getSavedResumeFile,
   requestAutofillPlan,
   requestAutofillChoice,
   generateAutofillAnswer,
@@ -36,6 +38,36 @@ import {
 
 const field = (index: number, label: string, extra: Record<string, unknown> = {}) => ({
   index, form: 0, frame: 0, tag: 'input', type: 'text', label, value: '', ...extra,
+});
+
+it('attaches the active candidate’s saved résumé in the observed application frame', async () => {
+  const resume = { filename: 'Saved.pdf', mimeType: 'application/pdf', base64: 'JVBERi0xLjc=' };
+  vi.mocked(getSavedResumeFile).mockResolvedValueOnce(resume);
+  vi.mocked(getAutofillSessionProfile).mockResolvedValueOnce({
+    meta: { candidateId: 'candidate-with-resume' },
+    data: {} as Awaited<ReturnType<typeof getAutofillSessionProfile>>['data'],
+  });
+  sendMessage.mockReset();
+  sendMessage.mockImplementation(async ({ kind }) => {
+    if (kind === 'GET_FRAMED_FORM') return {
+      kind: 'FRAMED_FORM', fields: [],
+      uploads: [{ frame: 2, form: 1, resume: true, documentKey: 'application-document' }],
+    };
+    if (kind === 'ATTACH_SAVED_RESUME') return { kind: 'ATTACH_SAVED_RESUME_RESULT', status: 'attached' };
+    return undefined;
+  });
+  const notice = vi.fn();
+  await runAutofill('t', {
+    notice, offerOverride: vi.fn(), known: vi.fn(), refused: vi.fn(), refreshPlan: async () => {},
+    walk: { filling: vi.fn(), stopped: () => false, wrote: vi.fn(), answered: vi.fn() },
+  }, new AbortController().signal);
+
+  expect(getSavedResumeFile).toHaveBeenCalledWith('candidate-with-resume', 't', expect.any(AbortSignal));
+  expect(sendMessage).toHaveBeenCalledWith({
+    kind: 'ATTACH_SAVED_RESUME', target: { tabId: 1, url: 'https://jobs.example.test/apply' },
+    frame: 2, form: 1, documentKey: 'application-document', resume,
+  });
+  expect(notice).toHaveBeenCalledWith('Saved résumé attached. Review it before submitting.');
 });
 
 describe('deterministicAutofill job-alert guard', () => {
@@ -265,8 +297,10 @@ describe('deterministicAutofill job-alert guard', () => {
   it('(a) executes typeahead location combobox and linked boolean_buttons sponsorship in DOM order, skipping when combobox fails to commit, and re-planning on country mismatch', async () => {
     const locLabel = 'Which country do you intend to work from?';
     const sponLabel = 'Will you now or in the future require sponsorship for employment visa status to work in this location?';
+    const usSponsorship = 'This role requires a US Citizen or Permanent Resident. Will you now or in the future require sponsorship for employment visa status?';
 
-    const setupScenario = (opts: { commitMode: 'match' | 'did_not_commit' | 'mismatch_country' }) => {
+    const setupScenario = (opts: { commitMode: 'match' | 'did_not_commit' | 'mismatch_country'; explicitCountry?: boolean }) => {
+      const question = opts.explicitCountry ? usSponsorship : sponLabel;
       vi.mocked(getAutofillSessionProfile).mockResolvedValueOnce({
         meta: { candidateId: 'cand-a' },
         data: {
@@ -286,7 +320,10 @@ describe('deterministicAutofill job-alert guard', () => {
             ok: true,
             deferredPlans: [{ fieldId: '0:0:0', label: locLabel, searchQuery: 'Austin, United States' }],
             executableFills: [
-              { fieldId: '0:0:1', label: sponLabel, value: 'No', dependsOnFieldId: '0:0:0', grounded: true },
+              {
+                fieldId: '0:0:1', label: question, value: 'No', grounded: true,
+                ...(opts.explicitCountry ? {} : { dependsOnFieldId: '0:0:0' }),
+              },
             ],
           };
         }
@@ -294,7 +331,7 @@ describe('deterministicAutofill job-alert guard', () => {
         return {
           ok: true,
           executableFills: [
-            { fieldId: '0:0:1', label: sponLabel, value: 'Yes', grounded: true },
+            { fieldId: '0:0:1', label: question, value: 'Yes', grounded: true },
           ],
         };
       });
@@ -305,7 +342,7 @@ describe('deterministicAutofill job-alert guard', () => {
 
       const pageFields = [
         field(0, locLabel, { combo: true, widgetType: 'combobox', helperText: 'Please list your city and country.' }),
-        field(1, sponLabel, { type: 'radio', widgetType: 'boolean_buttons', options: ['Yes', 'No'] }),
+        field(1, question, { type: 'radio', widgetType: 'boolean_buttons', options: ['Yes', 'No'] }),
       ];
       const filled: Record<string, string> = {};
       let queriedValue = '';
@@ -397,6 +434,13 @@ describe('deterministicAutofill job-alert guard', () => {
       await runWithTimers(panel);
       expect(filled[locLabel]).toBeUndefined();
       expect(filled[sponLabel]).toBeUndefined();
+    }
+    {
+      const { filled } = setupScenario({ commitMode: 'did_not_commit', explicitCountry: true });
+      const { panel } = makePanel();
+      await runWithTimers(panel);
+      expect(filled[locLabel]).toBeUndefined();
+      expect(filled[usSponsorship]).toBe('No');
     }
 
     // 3. Country mismatch path: committed Canada instead of planned US -> re-requests plan with Canada

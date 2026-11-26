@@ -95,14 +95,24 @@ export interface FormField {
 }
 
 /**
- * A resume/CV upload the page offers. Never a fill target — a file input's value
- * cannot be set from script — but it is what marks a form as an application
- * rather than a job-alert signup. See `extractUploads`.
+ * A file upload the page offers. Uploads help identify an application form.
+ * The saved résumé flow requires a positively identified résumé input.
  */
 export interface Upload {
   /** The `<form>` that owns it, indexed as `FormField.form` is. */
   form: number;
+  resume?: true;
+  hasFile?: true;
+  documentKey?: string;
 }
+
+export interface SavedResumeFile {
+  filename: string;
+  mimeType: string;
+  base64: string;
+}
+
+export type ResumeAttachmentStatus = 'attached' | 'already_attached' | 'unavailable' | 'incompatible' | 'failed';
 
 /** A control plus the tab frame it lives in; 0 is the top document. */
 export interface FramedField extends FormField {
@@ -298,6 +308,15 @@ export type RuntimeMessage =
   // only the frame holding the widget can answer for it.
   | { kind: 'COMBOBOX_STEP'; step: ComboboxStep; target?: AutofillTarget }
   | { kind: 'COMBOBOX_REPLY'; reply: ComboboxReply }
+  | {
+      kind: 'ATTACH_SAVED_RESUME';
+      target: AutofillTarget;
+      frame: number;
+      form: number;
+      documentKey: string;
+      resume: SavedResumeFile;
+    }
+  | { kind: 'ATTACH_SAVED_RESUME_RESULT'; status: ResumeAttachmentStatus }
   // Attaches the caller's tailored CV for `jobSlug` to the page's upload field via
   // chrome.debugger — see lib/tools/attachCv.ts. Only background holds the debugger
   // and downloads permissions' actual calls, so the panel asks for this by message

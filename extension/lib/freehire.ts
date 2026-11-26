@@ -330,6 +330,14 @@ export function getAutofillSessionProfile(token: string, signal?: AbortSignal) {
   );
 }
 
+export async function getSavedResumeFile(candidateId: string, token: string, signal: AbortSignal) {
+  const query = new URLSearchParams({ candidateId });
+  const { filename, mimeType, base64 } = await extensionApi<import('./protocol').SavedResumeFile>(
+    `/api/extension/resume-file?${query}`, token, 'GET', undefined, signal,
+  );
+  return { filename, mimeType, base64 };
+}
+
 export async function getReusableAnswers(token: string, signal: AbortSignal) {
   const result = await extensionApi<{
     entries: import('../../src/lib/ai/reusable-answers').ReusableAnswer[];

@@ -8,6 +8,35 @@ import {
 import { ProviderClient, ProviderError } from '../../src/lib/ai/provider-client.ts';
 import { buildVerifiedFacts } from '../../src/lib/ai/verified-facts.ts';
 
+test('Employ sponsorship wording and qualified race choices use confirmed facts', async () => {
+  const sponsorship = {
+    id: 'sponsorship',
+    label: 'This role requires candidates to be a US Citizen or Permanent Resident (Green Card holder). We are not able to support any form of visa sponsorship, including H-1B,H-1B Transfer, OPT, TN, EAD, etc. Will you now or in the future require sponsorship for employment visa status? *',
+    type: 'radio',
+    options: ['Yes', 'No'],
+  };
+  const qualified = 'Asian (Not Hispanic or Latino)';
+  const race = { id: 'race', label: 'Race', type: 'select', options: ['Hispanic or Latino', qualified, 'Decline to self-identify'] };
+  const descriptor = inferQuestionDescriptor(sponsorship);
+  assert.equal(descriptor.intent, 'visa_sponsorship');
+  assert.equal(descriptor.targetCountryCode, 'us');
+  assert.equal(descriptor.sponsorshipScope, 'now_or_future');
+
+  const confirmed = (id, value) => ({ id, value, provenance: 'user_confirmed' });
+  const facts = new Map([
+    ['screening.visa_sponsorship_needed', confirmed('screening.visa_sponsorship_needed', false)],
+    ['demographics.raceEthnicity', confirmed('demographics.raceEthnicity', ['Asian'])],
+  ]);
+  const noProvider = () => assert.fail('Confirmed profile choices do not need an AI call');
+  const partial = await planFormBatch([sponsorship, race], facts, noProvider);
+  assert.deepEqual(partial.executableFills.map(({ value }) => value), ['No']);
+  assert.equal(partial.unresolved.find(({ fieldId }) => fieldId === 'race')?.reasonCode, 'DEMOGRAPHIC_ETHNICITY_UNCONFIRMED');
+
+  facts.set('demographics.hispanicOrigin', confirmed('demographics.hispanicOrigin', ['No']));
+  const complete = await planFormBatch([sponsorship, race], facts, noProvider);
+  assert.deepEqual(complete.executableFills.map(({ value }) => value), ['No', qualified]);
+});
+
 test('Planner: FreeHire form batch planning with neighbor context & grounding', async (t) => {
   await t.test('chunks AI-bound fields into batches of 4-8 questions and preserves neighbor context across batches', async () => {
     // 8 AI-bound fields (not deterministically resolvable by scalar fast-path) -> 2 batches (5 + 3)

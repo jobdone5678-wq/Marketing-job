@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { extractForm, extractUploads, fillByLabel, markUserEdited } from './form';
+import { attachSavedResume, extractForm, extractUploads, fillByLabel, markUserEdited } from './form';
 import { revealField } from './revealField';
 import { planLabelFills, fillsForFrame, looksLikeApplication, scopeToApplication } from './fillPlan';
 import { labeledInput, must, reset, formWith } from './test-utils';
@@ -98,6 +98,27 @@ describe('extractUploads', () => {
     document.body.append(file);
 
     expect(extractUploads(document)).toEqual([]);
+  });
+
+  it('attaches a saved PDF to the scoped résumé field and preserves existing files', () => {
+    document.body.innerHTML = `
+      <form><label>Résumé <input type="file" accept=".pdf"></label>
+      <label>Cover letter <input type="file" accept=".pdf"></label></form>
+      <form><label>Résumé <input type="file"></label></form>
+    `;
+    const [resume, cover, other] = Array.from(document.querySelectorAll<HTMLInputElement>('input'));
+    const changes: string[] = [];
+    resume!.addEventListener('change', () => changes.push(resume!.files?.[0]?.name ?? ''));
+    const file = { filename: 'Saved.pdf', mimeType: 'application/pdf', base64: btoa('%PDF-1.7') };
+    expect(extractUploads(document)[0]).toMatchObject({ form: 0, resume: true });
+    expect(extractUploads(document)[1]).not.toHaveProperty('resume');
+    expect(attachSavedResume(document, 0, { ...file, filename: 'Saved.docx', mimeType: 'application/octet-stream' })).toBe('incompatible');
+    expect(attachSavedResume(document, 0, file)).toBe('attached');
+    expect(attachSavedResume(document, 0, { ...file, filename: 'Other.pdf' })).toBe('already_attached');
+    expect(extractUploads(document)[0]).toMatchObject({ hasFile: true });
+    expect(changes).toEqual(['Saved.pdf']);
+    expect(cover!.files).toHaveLength(0);
+    expect(other!.files).toHaveLength(0);
   });
 });
 

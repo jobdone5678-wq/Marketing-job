@@ -314,6 +314,12 @@ export function inferQuestionDescriptor(field: Field): QuestionDescriptor {
     intent = 'pronunciation';
     canonical = 'pronunciation';
     category = 'personal';
+  } else if (asksVisaSponsorship(label) || fkMatch === 'visaSponsorshipNeeded') {
+    intent = 'visa_sponsorship';
+    canonical = 'needs_sponsorship';
+    category = 'work_auth';
+    sponsorshipScope = detectSponsorshipScope(normCombined);
+    targetCountryCode = extractTargetCountryFromText(combined);
   } else if (/\bcitizenship\b/i.test(norm)) {
     intent = 'citizenship_country';
     canonical = 'citizenship_country';
@@ -327,12 +333,6 @@ export function inferQuestionDescriptor(field: Field): QuestionDescriptor {
     intent = 'visa_status';
     canonical = 'visa_status';
     category = 'work_auth';
-    targetCountryCode = extractTargetCountryFromText(combined);
-  } else if (asksVisaSponsorship(label) || (fkMatch === 'visaSponsorshipNeeded')) {
-    intent = 'visa_sponsorship';
-    canonical = 'needs_sponsorship';
-    category = 'work_auth';
-    sponsorshipScope = detectSponsorshipScope(normCombined);
     targetCountryCode = extractTargetCountryFromText(combined);
   } else if (
     workAuthorizationCountry(label) ||
@@ -1215,10 +1215,13 @@ function tryDeterministicResolution(
         }
       } else {
         const validSingle: Array<{ opt: string; res: GroundingResult }> = [];
+        let missingEthnicity: GroundingResult | undefined;
         for (const opt of field.options) {
           const g = validateGroundedAnswer(opt, facts, descriptor);
           if (g.valid && g.action === 'fill') {
             validSingle.push({ opt, res: g });
+          } else if (g.reasonCode === 'DEMOGRAPHIC_ETHNICITY_UNCONFIRMED') {
+            missingEthnicity = g;
           }
         }
         // Prefer specific non-decline match over decline if both somehow matched, else require unique match
@@ -1233,6 +1236,7 @@ function tryDeterministicResolution(
             },
           };
         }
+        if (missingEthnicity) return { failure: missingEthnicity };
       }
 
       // If no demographic facts exist at all, fail fast without unnecessary AI call

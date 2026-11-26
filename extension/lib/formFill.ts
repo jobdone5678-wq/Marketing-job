@@ -7,6 +7,7 @@ import {
   getAutofillSessionProfile,
   getAutofillSettings,
   getReusableAnswers,
+  getSavedResumeFile,
   requestAutofillChoice,
   requestAutofillPlan,
   saveBankAnswer,
@@ -14,6 +15,7 @@ import {
 } from './freehire';
 import { isAutofillProse, isBlockedAutofillField, isPrivateAutofillField } from './autofillSafety';
 import {
+  hasExplicitCountryInLabel,
   inferQuestionDescriptor,
   type Field,
   type FormContext,
@@ -306,6 +308,7 @@ async function fillApplication(
   };
   let started = false;
   let usedAi = false;
+  let resumeAttached = false;
   const hooks: WalkHooks = {
     ...panel.walk,
     stopped,
@@ -389,7 +392,7 @@ async function fillApplication(
     if (stopped() || tab?.id !== target.tabId || tab.url !== target.url) return;
     const observed = await ask({ kind: 'GET_FRAMED_FORM', target });
     if (stopped()) return;
-    if (observed?.kind !== 'FRAMED_FORM' || !observed.fields.length) {
+    if (observed?.kind !== 'FRAMED_FORM' || (!observed.fields.length && !observed.uploads.some((upload) => upload.resume))) {
       panel.notice('No form fields found on this page.');
       return;
     }
@@ -406,7 +409,7 @@ async function fillApplication(
       return;
     }
     const scoped = scopeToApplication(observed.fields, observed.uploads);
-    const scopes = new Set(scoped.map(({ frame, form }) => `${frame}:${form}`));
+    const scopes = new Set((scoped.length ? scoped : observed.uploads).map(({ frame, form }) => `${frame}:${form}`));
     if (scopes.size !== 1) {
       panel.notice('Could not identify one application form on this page.');
       return;
@@ -488,8 +491,42 @@ async function fillApplication(
     if (stopped()) return;
     const { data: profile, meta } = await getAutofillSessionProfile(token, signal);
     if (stopped()) return;
+    const candidateId = meta?.candidateId;
+    const resumeUploads = observed.uploads.filter((upload) => upload.resume && scopes.has(`${upload.frame}:${upload.form}`));
+    const [upload] = resumeUploads;
+    let resumeAttempted = false;
+    if (resumeUploads.length > 1) {
+      panel.notice('Multiple résumé fields found. Choose where to attach the résumé manually.');
+    } else if (upload && !upload.hasFile && !candidateId) {
+      panel.notice('Save a confirmed candidate profile with a résumé to attach it automatically.');
+    } else if (upload?.documentKey && !upload.hasFile && candidateId) {
+      try {
+        const resume = await getSavedResumeFile(candidateId, token, signal);
+        if (stopped()) return;
+        resumeAttempted = true;
+        const reply = await ask({
+          kind: 'ATTACH_SAVED_RESUME', target, frame: upload.frame, form: upload.form,
+          documentKey: upload.documentKey, resume,
+        });
+        if (stopped()) return;
+        const status = reply?.kind === 'ATTACH_SAVED_RESUME_RESULT' ? reply.status : 'unavailable';
+        if (status === 'attached') {
+          resumeAttached = true;
+          panel.notice('Saved résumé attached. Review it before submitting.');
+        } else if (status === 'incompatible') {
+          panel.notice('This form does not accept the saved résumé’s file type.');
+        } else if (status !== 'already_attached') {
+          panel.notice('Could not attach the saved résumé. Attach it directly on the form.');
+        }
+      } catch (err) {
+        if (stopped()) return;
+        panel.notice(err instanceof ExtensionApiError && err.status === 404
+          ? 'No saved résumé is available for this candidate.'
+          : 'Could not load or attach the saved résumé.');
+      }
+    }
     const values = profileToValues(profile);
-    const initialUnfilled = uniqueFields(scoped);
+    const initialUnfilled = resumeAttempted ? await remaining() : uniqueFields(scoped);
     const phaseALabelFields = initialUnfilled.filter(
       (field) => !field.combo && !isLocationLinkedWorkAuth(field.label),
     );
@@ -518,7 +555,6 @@ async function fillApplication(
     if (stopped()) return;
     let fields = await remaining();
     if (!fields.length || stopped()) return;
-    const candidateId = meta?.candidateId;
     if (!candidateId) {
       panel.notice('Save a confirmed candidate profile in the portal to use AI autofill.');
       return;
@@ -532,7 +568,7 @@ async function fillApplication(
       const field = fields[i];
       if (!field) continue;
       if (isPrivateAutofillField(field)) continue;
-      if (hasEarlierUnfilledLocation(fields, i, done) && isLocationLinkedWorkAuth(field.label)) continue;
+      if (isLocationLinkedWorkAuth(field.label) && !hasExplicitCountryInLabel(field.label) && hasEarlierUnfilledLocation(fields, i, done)) continue;
       const entry = findReusableAnswer(field.label, bank);
       if (!entry) continue;
       const facts = buildVerifiedFacts({ ...profile, expected_salary: profile.desired_salary },
@@ -872,7 +908,7 @@ async function fillApplication(
               }
               dp = { fieldId: id, label: field.label };
             }
-            const failedEarlierLoc = !dp.dependsOnFieldId && isLocationLinkedWorkAuth(field.label)
+            const failedEarlierLoc = !dp.dependsOnFieldId && isLocationLinkedWorkAuth(field.label) && !hasExplicitCountryInLabel(field.label)
               ? findFailedEarlierLocation(field)
               : undefined;
             const depId = dp.dependsOnFieldId ?? (failedEarlierLoc ? plannerField(failedEarlierLoc).id : undefined);
@@ -892,7 +928,7 @@ async function fillApplication(
             continue;
           }
 
-          const failedEarlierLoc = !fill.dependsOnFieldId && isLocationLinkedWorkAuth(field.label)
+          const failedEarlierLoc = !fill.dependsOnFieldId && isLocationLinkedWorkAuth(field.label) && !hasExplicitCountryInLabel(field.label)
             ? findFailedEarlierLocation(field)
             : undefined;
           const depId = fill.dependsOnFieldId ?? (failedEarlierLoc ? plannerField(failedEarlierLoc).id : undefined);
@@ -1011,10 +1047,15 @@ async function fillApplication(
         panel.notice(
           `✓ Autofilled ${count} field${count === 1 ? '' : 's'} — review before submitting.`
         );
-      else panel.notice('No fields were filled. Review the remaining questions.');
+      else if (!resumeAttached) panel.notice('No fields were filled. Review the remaining questions.');
       if (issues.length) panel.notice(`Could not complete: ${nameSome(issues)}.`);
       if (requiresReviewItems.length) {
         panel.notice(`Review required before filling: ${nameSome(requiresReviewItems.map((r) => r.label))}.`);
+      }
+      if (unresolvedDiagnostics.some((item) =>
+        item.reasonCode === 'DEMOGRAPHIC_ETHNICITY_UNCONFIRMED' && (!item.fieldId || !done.has(item.fieldId)),
+      )) {
+        panel.notice('The Race option also specifies Hispanic or Latino origin. Confirm that preference in your profile or answer the field on the form.');
       }
       panel.diagnostics?.({
         requiresReview: requiresReviewItems,
