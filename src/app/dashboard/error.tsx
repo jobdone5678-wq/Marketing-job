@@ -25,7 +25,7 @@ export default function ErrorPage({
         </div>
 
         <h1 className="text-foreground text-[17px] font-medium tracking-tight">
-          Workspace couldn't load
+          Workspace couldn&apos;t load
         </h1>
         <p className="text-muted-foreground mt-2 text-[13px] leading-relaxed">
           An unexpected issue prevented this view from loading completely. Your saved records and

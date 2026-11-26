@@ -9,8 +9,9 @@ describe('ATS dropdown controls', () => {
     document.body.innerHTML = `<form><label for="region">Region</label>
       <button id="region" type="button" role="combobox" aria-controls="regions" aria-expanded="false">Select...</button>
       <div role="listbox" id="regions" hidden><div role="option">India</div></div></form>`;
-    const button = document.querySelector<HTMLButtonElement>('#region')!;
-    const list = document.querySelector<HTMLElement>('#regions')!;
+    const button = document.querySelector<HTMLButtonElement>('#region');
+    const list = document.querySelector<HTMLElement>('#regions');
+    if (!button || !list) throw new Error('Missing fixture elements');
     button.addEventListener('click', () => {
       button.setAttribute('aria-expanded', 'true');
       list.hidden = false;
@@ -29,7 +30,8 @@ describe('ATS dropdown controls', () => {
 
   it('clears a temporary typeahead search when no offered option is selected', async () => {
     document.body.innerHTML = '<label for="city">Current location</label><input id="city" role="combobox" aria-expanded="false">';
-    const input = document.querySelector<HTMLInputElement>('#city')!;
+    const input = document.querySelector<HTMLInputElement>('#city');
+    if (!input) throw new Error('Missing #city input');
     input.addEventListener('input', () => {
       input.setAttribute('aria-expanded', String(Boolean(input.value)));
       document.querySelector('#result')?.remove();
@@ -486,8 +488,9 @@ describe('combobox.runStep', () => {
       <${tag} aria-label="Country" aria-haspopup="listbox" aria-controls="country-list" aria-expanded="false">Select...</${tag}>
       <div id="country-list" role="listbox"><div role="option">Germany</div></div>
     </form>`;
-    const trigger = document.querySelector<HTMLElement>('[aria-haspopup]')!;
-    const option = document.querySelector('[role="option"]')!;
+    const trigger = document.querySelector<HTMLElement>('[aria-haspopup]');
+    const option = document.querySelector('[role="option"]');
+    if (!trigger || !option) throw new Error('Missing listbox fixture elements');
     const submit = vi.fn();
     document.querySelector('form')?.addEventListener('submit', submit);
     trigger.addEventListener('click', () => trigger.setAttribute('aria-expanded', 'true'));

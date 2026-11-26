@@ -34,7 +34,7 @@
 </script>
 
 <!-- The account of the form the user is standing in front of. It is
-     independent of the match: a page can show an application freehire
+     independent of the match: a page can show an application NextKinHR
      does not carry a posting for, and the checklist is just as useful
      there. -->
 {#if !plan && planError}

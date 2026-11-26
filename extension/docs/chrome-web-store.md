@@ -16,7 +16,7 @@ when one changes, change the other.
 1. **Bump the version** in `extension/package.json` (`version`). The store
    rejects a re-upload of a version it already has.
 2. **Get the package** — either `cd extension && pnpm run zip`
-   (`.output/freehire-extension-<version>-chrome.zip`) or download the
+   (`.output/nextkinhr-extension-<version>-chrome.zip`) or download the
    `extension` artifact from the `build` workflow.
 3. **Upload** to the [Developer Dashboard](https://chrome.google.com/webstore/devconsole)
    (one-time $5 registration + a verified contact email).
@@ -28,12 +28,12 @@ when one changes, change the other.
    for review. The pinned unpacked Chrome and Firefox builds already have
    allowlisted callbacks.
 
-Still manual, not in the repo: the privacy-policy page on `freehire.me` and
+Still manual, not in the repo: the privacy-policy page on `nextkinhr.com` and
 1–5 screenshots at 1280×800 (side panel over a real job posting).
 
 ## Listing
 
-**Name:** freehire
+**Name:** NextKinHR
 
 **Short description** (≤132 chars):
 
@@ -45,7 +45,7 @@ Still manual, not in the repo: the privacy-policy page on `freehire.me` and
 
 **Detailed description:**
 
-> freehire fills application fields from your verified NextKinHR profile. It can
+> NextKinHR fills application fields from your verified NextKinHR profile. It can
 > select answers from supported dropdowns and draft short answers to open-ended
 > questions using the job description. You review the completed fields and submit
 > the application yourself.
@@ -62,7 +62,7 @@ Paste one per field in the dashboard.
 
 | Permission | Justification |
 | --- | --- |
-| `storage` | Stores the freehire session token issued by sign-in, plus nothing else. Local to the browser profile. |
+| `storage` | Stores the NextKinHR session token issued by sign-in, plus nothing else. Local to the browser profile. |
 | `tabs` | Identifies the application tab so autofill uses the form the candidate opened. |
 | `sidePanel` | The entire UI is a side panel opened from the toolbar icon. |
 | `scripting` | Injects the reader into the active tab's frames on demand, so the agent can read the application form and fill the fields the user asked it to. |
@@ -75,7 +75,7 @@ Paste one per field in the dashboard.
 Data collected — declare all four:
 
 - **Personally identifiable information** — name, email, phone and CV fields from
-  the user's freehire profile, fetched to fill application forms.
+  the user's NextKinHR profile, fetched to fill application forms.
 - **Authentication information** — a NextKinHR extension session token is stored
   in the browser's local extension storage and sent to the portal API to
   authenticate requests. The server stores the token's hash for verification
@@ -91,7 +91,7 @@ Data collected — declare all four:
 - **User activity** — anonymous usage events (`extension/lib/analytics.ts`):
   the panel opened, a sign-in, an Autofill run, a plan limit
   shown and its upgrade link clicked. Sent to Google Analytics under a random
-  per-install id, never the freehire account; no URL, page text, message or
+  per-install id, never the NextKinHR account; no URL, page text, message or
   profile field is ever part of an event. This is the only request the
   extension makes to a host other than the configured portal.
 

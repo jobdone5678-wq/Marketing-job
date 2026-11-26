@@ -2,9 +2,9 @@ import { track } from '../../lib/analytics';
 import { getToken } from '../../lib/auth';
 import {
   getAutofillSessionProfile,
-  isFreehireOrigin,
+  isNextkinhrOrigin,
   saveApplicationReceipt,
-} from '../../lib/freehire';
+} from '../../lib/nextkinhr';
 import {
   applicationPageUrl,
   collectApplicationAnswers,
@@ -30,6 +30,7 @@ export interface AppliedJob {
 
 interface Attempt {
   job: AppliedJob;
+  posting: ApplicationPage;
   frame: number;
   form: number;
   started: boolean;
@@ -65,8 +66,11 @@ function continuesPosting(jobUrl: string, pageUrl: string) {
 export class AppliedTracker {
   candidate = $state<AppliedJob | null>(null);
   saving = $state(false);
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- internal bookkeeping map, not read in UI
   #attempts = new Map<number, Attempt>();
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- internal bookkeeping map, not read in UI
   #pending = new Map<number, Attempt>();
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- internal bookkeeping map, not read in UI
   #postings = new Map<number, ApplicationPage>();
   #controller = new AbortController();
 
@@ -106,6 +110,7 @@ export class AppliedTracker {
   }
 
   private mergeAnswers(attempt: Attempt, updates: ApplicationAnswer[]) {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- ephemeral local dedup map
     const byKey = new Map(attempt.answers.map((answer) => [answer.key, answer]));
     for (const answer of updates) {
       if (answer.value) byKey.set(answer.key, answer);
@@ -144,7 +149,7 @@ export class AppliedTracker {
     if (
       tab.id === null ||
       !applicationPageUrl(tab.url) ||
-      isFreehireOrigin(tab.url) ||
+      isNextkinhrOrigin(tab.url) ||
       !pages.length
     )
       return;
@@ -196,6 +201,8 @@ export class AppliedTracker {
         this.#attempts.set(id, attempt);
       }
       if (attempt.recorded || attempt.dismissed) return;
+      attempt.job.title ||= receipt.jobTitle ?? '';
+      attempt.job.company ||= receipt.companyName ?? '';
       attempt.confirmation = receipt;
       this.#pending.set(id, attempt);
       if (
@@ -288,6 +295,7 @@ export class AppliedTracker {
         company: page.companyName ?? '',
         eventKey: crypto.randomUUID(),
       },
+      posting: page,
       frame,
       form,
       answers: [],
@@ -338,6 +346,9 @@ export class AppliedTracker {
           jobTitle: title.trim().slice(0, 200),
           companyName: company.trim().slice(0, 200),
           jobUrl: attempt.job.jobUrl,
+          jobLocation: attempt.confirmation?.jobLocation ?? attempt.posting.jobLocation,
+          employmentType: attempt.confirmation?.employmentType ?? attempt.posting.employmentType,
+          department: attempt.confirmation?.department ?? attempt.posting.department,
           confirmationUrl: confirmation.startsWith('https:') ? confirmation : undefined,
           answers: attempt.answers,
           manualAttestation: manual,
@@ -363,7 +374,7 @@ export class AppliedTracker {
     } catch (error) {
       if (signal.aborted) return;
       const message = error instanceof Error ? error.message : 'Could not save this application.';
-      if (attempt.payload && !attempt.payload.manualAttestation && /\(HTTP 422\)$/.test(message)) {
+      if (attempt.payload && !attempt.payload.manualAttestation && message.endsWith('(HTTP 422)')) {
         // The server rejected the observation before writing. The same event can be attested manually.
         attempt.payload = undefined;
       }

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('./freehire', () => ({ listSavedSlugs: vi.fn() }));
+vi.mock('./nextkinhr', () => ({ listSavedSlugs: vi.fn() }));
 
-const { listSavedSlugs } = await import('./freehire');
+const { listSavedSlugs } = await import('./nextkinhr');
 const { ensureSavedLoaded, isSaved, markSaved, markUnsaved } = await import('./savedJobs');
 
 describe('savedJobs', () => {
@@ -39,7 +39,7 @@ describe('savedJobs', () => {
 
   it('degrades to empty when the load fails, without throwing', async () => {
     vi.resetModules();
-    vi.doMock('./freehire', () => ({
+    vi.doMock('./nextkinhr', () => ({
       listSavedSlugs: vi.fn().mockRejectedValue(new Error('network down')),
     }));
     const fresh = await import('./savedJobs');

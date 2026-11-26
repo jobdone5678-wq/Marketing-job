@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { PlanContractSchema, ChooseContractSchema } from '../../src/lib/ai/structured-contracts.ts';
 
 test('Structured Contracts: Schema validation for Plan and Choose', async (t) => {
-  await t.test('PlanContractSchema accepts valid FreeHire plan output with fieldId, label, value, action', () => {
+  await t.test('PlanContractSchema accepts valid NextKinHR plan output with fieldId, label, value, action', () => {
     const validPlan = {
       fills: [
         {

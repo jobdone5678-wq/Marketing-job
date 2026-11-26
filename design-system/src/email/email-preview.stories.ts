@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/svelte';
 import EmailPreview from './email-preview.svelte';
 
 /**
- * Every transactional email freehire sends, rendered by the Go templates that
+ * Every transactional email NextKinHR sends, rendered by the Go templates that
  * actually send them and framed here for review.
  *
  * These stories live outside the primitives on purpose: an email is not a

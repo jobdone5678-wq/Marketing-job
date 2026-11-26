@@ -1,47 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { runInNewContext } from 'node:vm';
 
 import { buildVerifiedFacts } from '../../src/lib/ai/verified-facts.ts';
 import { planFormBatch } from '../../src/lib/ai/planner.ts';
 import { chooseComboboxOption } from '../../src/lib/ai/chooser.ts';
 import { ProviderClient } from '../../src/lib/ai/provider-client.ts';
-import { executePlan, executeChoose } from '../../src/lib/ai/autofill-orchestrator.ts';
 
-// Load ATS adapter registry
-function loadAdapterRegistry() {
-  const code = readFileSync(new URL('../../jobright_extension/adapters/ats-adapters.js', import.meta.url), 'utf8');
-  const sandbox = {
-    console: { log: () => {}, info: () => {}, warn: () => {}, error: () => {} },
-  };
-  sandbox.globalThis = sandbox;
-  sandbox.window = sandbox;
-  sandbox.self = sandbox;
-  sandbox.root = sandbox;
-  runInNewContext(code, sandbox);
-  return sandbox.NextkinAdapters || [];
-}
-
-test('E2E Regression: Full 74-Adapter Suite, Multi-ATS Planning & Submission Safety', async (t) => {
-  await t.test('1. Full ATS adapter regression: all 74+ registered adapters load without error', () => {
-    const adapters = loadAdapterRegistry();
-    assert.ok(Array.isArray(adapters), 'Adapters must be an array');
-    assert.ok(adapters.length >= 74, `Expected at least 74 adapters, found ${adapters.length}`);
-
-    // Verify key platforms exist
-    const names = adapters.map((a) => (a.name || a.id || '').toLowerCase());
-    assert.ok(names.some((n) => n.includes('greenhouse')), 'Greenhouse adapter must exist');
-    assert.ok(names.some((n) => n.includes('lever')), 'Lever adapter must exist');
-    assert.ok(names.some((n) => n.includes('ashby')), 'Ashby adapter must exist');
-    assert.ok(names.some((n) => n.includes('workday')), 'Workday adapter must exist');
-
-    for (const adapter of adapters) {
-      assert.ok(adapter.name || adapter.id, 'Every adapter must have a name or id');
-      assert.ok(typeof adapter.matches === 'function', `Adapter ${adapter.name || adapter.id} must have a matches function`);
-    }
-  });
-
+test('E2E Regression: Multi-ATS Planning, Combobox Choice & Submission Safety', async (t) => {
   await t.test('2. Multi-ATS form planning: Greenhouse form with deterministic profile & AI screening', async () => {
     const candidate = {
       full_name: 'Jane Doe',

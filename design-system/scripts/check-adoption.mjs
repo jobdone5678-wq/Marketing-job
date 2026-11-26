@@ -21,7 +21,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ratchet } from './ratchet.mjs';
 import { packageSrc, repoRelative, sourceFiles, stripComments, webSrc } from './source.mjs';
 
-const PACKAGE = 'freehire-design-system';
+const PACKAGE = 'nextkinhr-design-system';
 const DOOR = '#lib/ui/index.js';
 
 const indexPath = join(packageSrc, 'index.ts');

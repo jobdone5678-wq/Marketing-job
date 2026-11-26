@@ -1,8 +1,8 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { Card, Skeleton } from 'freehire-design-system';
+  import { Card, Skeleton } from 'nextkinhr-design-system';
   import { HIRE_ORIGIN } from '../../lib/auth';
-  import { companyLogoUrl } from '../../lib/freehire';
+  import { companyLogoUrl } from '../../lib/nextkinhr';
   import { loadJob } from '../../lib/assistant/jobCache';
   import type { DeckEntry } from '../../lib/assistant/deck';
 

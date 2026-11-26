@@ -11,7 +11,7 @@
 
 import { collapse, COMBO_TRIGGER, comboOptions, displayedValues, isComboWidget, isChoicePlaceholder, isOnScreen } from './comboWidget';
 import type { FieldTag, FormField, LabelFill, FillOutcome, FillStatus, OptionsState, ResumeAttachmentStatus, SavedResumeFile, Upload, WidgetType } from './protocol';
-import type { AutofillProfile } from './freehire';
+import type { AutofillProfile } from './nextkinhr';
 import { easyApplyDialog, easyApplyFieldError, isStoredResumeChoice } from './easyApply';
 import { choiceType, extractHelperText, extractLabel, extractPlaceholder, extractSection, precedingPrompt, textFromIds } from './formLabel';
 import { demographicKey, isCommunitySelfIdQuestion } from '../../src/lib/profile/demographic-preferences';
@@ -486,10 +486,14 @@ function annotateParentFieldIds(questions: Question[], fields: FormField[]): voi
  * fields or required markers cannot do.
  */
 export function extractUploads(doc: Document): Upload[] {
-  return uploadInputs(doc).map(({ input, form, resume }) => ({
-    form,
-    ...(resume ? { resume: true, ...(input.files?.length ? { hasFile: true } : {}) } : {}),
-  }));
+  return uploadInputs(doc).map(({ input, form, resume }) => {
+    const upload: Upload = { form };
+    if (resume) {
+      upload.resume = true;
+      if (input.files?.length) upload.hasFile = true;
+    }
+    return upload;
+  });
 }
 
 function uploadInputs(doc: Document) {

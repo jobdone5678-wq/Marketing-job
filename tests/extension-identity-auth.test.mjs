@@ -14,7 +14,7 @@ import { cors } from '../src/lib/http/cors.ts';
 
 const origin = 'http://localhost:3000';
 const chrome = 'https://ebhfafmnihndlaoibgjnfjhkjlnaencj.chromiumapp.org/';
-const firefox = 'https://13f2644fb08a641dc52d5b7c11faf2fb9775ee26.extensions.allizom.org/';
+const firefox = 'https://ec8a97d56edd2aed136d4ac76843cd4d70e1c017.extensions.allizom.org/';
 const store = 'https://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.chromiumapp.org/';
 const state = crypto.randomUUID();
 const profile = {

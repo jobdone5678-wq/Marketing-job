@@ -14,7 +14,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   args: {
-    title: 'A new version of freehire is available',
+    title: 'A new version of NextKinHR is available',
     description: 'Reload to get it.',
     confirmLabel: 'Reload',
   },

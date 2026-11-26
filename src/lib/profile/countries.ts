@@ -9,7 +9,7 @@ export interface CountryOption {
 
 export const COUNTRIES: CountryOption[] = rawCountries as CountryOption[];
 
-// First 8 popular countries shown as direct pills (matches Freehire UI Image 4)
+// First 8 popular countries shown as direct pills (matches NextKinHR UI Image 4)
 export const POPULAR_COUNTRY_CODES = ['al', 'dz', 'ad', 'ao', 'ar', 'am', 'au', 'at'];
 export const LOCATION_STARTING_COUNTRIES = ['in', 'af', 'ax', 'al', 'dz', 'as', 'ad', 'ao'];
 

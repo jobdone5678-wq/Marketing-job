@@ -1,6 +1,6 @@
 # Design system
 
-`freehire-design-system` — tokens and Svelte primitives, a **pnpm** package sibling to
+`nextkinhr-design-system` — tokens and Svelte primitives, a **pnpm** package sibling to
 `web/`, linked in as `link:../design-system`. `web/src/lib/ui/index.ts` is a thin re-export
 surface, so app code imports from `#lib/ui` and never reaches into the package directly.
 It re-exports with `export *`, not a list: an enumerated list is a second copy of `src/index.ts`
@@ -39,7 +39,7 @@ rather than here — their census of `web/` was already off by a third.
   joins the rule by existing — if it is a single-quoted `import type … from '…'` in a file
   directly under `src/` (not `src/email/`), the only form `typeSurface()` matches. It reads no lockfile and compares the declared range
   literally: `^1.25.0` and `^1.45.0` overlap and are the two ranges that put `@lucide/svelte`
-  on disk twice (freehire#2836), so "the ranges are compatible" is the wrong question.
+  on disk twice (nextkinhr#2836), so "the ranges are compatible" is the wrong question.
   `peerDependencies` is exempt — a library's peer range is deliberately wider than what it
   develops against. Dependabot reads the three `package.json` files as unrelated projects, so
   it keeps proposing a bump to one of them; that PR is correct once the other two move with
@@ -113,7 +113,7 @@ rather than here — their census of `web/` was already off by a third.
   (nine of fifteen today). The primitive list is derived from `src/index.ts`, so a new
   primitive joins the census by itself — **do not list them in the script.**
 - **`#lib/ui` is a wall, not a convention.** A `.svelte` or `.ts` file under `web/src` that
-  imports `freehire-design-system` by name fails `check:adoption` outright — no baseline, no
+  imports `nextkinhr-design-system` by name fails `check:adoption` outright — no baseline, no
   exception, because there are zero today. `web/src/app.css`'s `@import` of `theme.css` is
   exempt and must stay so: it is the CSS contract. The walk reads `from`-clauses only.
 - **`dist/` is committed, so CI rebuilds and diffs it** (`pnpm check:dist`). Editing a token

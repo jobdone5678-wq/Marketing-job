@@ -5,7 +5,7 @@
  * paywall rather than a status code.
  *
  * Shared by every surface that makes a model call — the assistant's streamed turn
- * and the plain JSON calls in `freehire.ts` (agent autofill) — because the 402 body
+ * and the plain JSON calls in `nextkinhr.ts` (agent autofill) — because the 402 body
  * is one shape server-side, and a surface that read it differently is how autofill
  * ended up printing "(HTTP 402)" with no way to upgrade.
  */

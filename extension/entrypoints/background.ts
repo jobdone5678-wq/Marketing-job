@@ -14,7 +14,7 @@ import {
 import { mergeComboboxReplies, mergeFrameOutcomes } from '../lib/tools/executor';
 import { fillsForFrame } from '../lib/fillPlan';
 import { getToken } from '../lib/auth';
-import { getTailoredCVForJob, getCVPdfBytes, getAutofillProfile } from '../lib/freehire';
+import { getTailoredCVForJob, getCVPdfBytes, getAutofillProfile } from '../lib/nextkinhr';
 import {
   uploadInputExpression,
   easyApplyUploadButtonExpression,
@@ -388,7 +388,7 @@ async function attachTailoredCVOnce(jobSlug: string): Promise<RuntimeMessage> {
   const dataUrl = pdfDataUrl(pdfBytes);
   // The employer sees the file name, so it is the candidate's, not the job's. The job's own
   // folder keeps names from clashing (a clash would add " (1)" to what the employer sees).
-  const filename = `freehire-tailored-cv/${cv.job_slug}/${(profile && cvFileName(profile)) ?? `${cv.job_slug}.pdf`}`;
+  const filename = `nextkinhr-tailored-cv/${cv.job_slug}/${(profile && cvFileName(profile)) ?? `${cv.job_slug}.pdf`}`;
 
   let filePath: string;
   try {

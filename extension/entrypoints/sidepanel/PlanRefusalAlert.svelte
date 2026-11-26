@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Alert, Button } from 'freehire-design-system';
+  import { Alert, Button } from 'nextkinhr-design-system';
   import { HIRE_ORIGIN } from '../../lib/auth';
   import { track } from '../../lib/analytics';
   import type { PlanRefused } from '../../lib/planRefused';

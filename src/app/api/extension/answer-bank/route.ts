@@ -17,7 +17,7 @@ export async function OPTIONS(request: Request) {
   return cors(request, new Response(null, { status: 204 }));
 }
 
-export function normalizeQuestion(text: string): string {
+function normalizeQuestion(text: string): string {
   try {
     return normalizeAnswerBankTopic(text);
   } catch {

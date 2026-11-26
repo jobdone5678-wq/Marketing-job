@@ -7,7 +7,7 @@ import { publicationWindow, newestPostedFirst } from '@/lib/jobs/freshness';
 import { candidateJobApplications } from '@/lib/jobs/applications';
 import { withoutAppliedJobs } from '@/lib/jobs/application-state';
 
-export interface PublicJob {
+interface PublicJob {
   id: string;
   title: string;
   company: string;

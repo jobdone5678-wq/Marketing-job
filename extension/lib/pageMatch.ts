@@ -2,32 +2,32 @@ import { browser } from 'wxt/browser';
 import { offersAddJob } from './addJob';
 import {
   findJob,
-  freehireSlugFromUrl,
+  nextkinhrSlugFromUrl,
   getJob,
   getMatch,
-  isFreehireOrigin,
+  isNextkinhrOrigin,
   resolveJob,
   resolveNotice,
-  type FreehireJob,
+  type NextkinhrJob,
   type JobMatch,
-} from './freehire';
+} from './nextkinhr';
 import type { RuntimeMessage } from './protocol';
 import { isReadablePageUrl } from './tools/readable';
 
-/** The NextKinHR backend does not serve FreeHire's job catalog API. */
+/** The NextKinHR backend does not serve NextKinHR's job catalog API. */
 export function jobCatalogEnabled(): boolean {
   return import.meta.env.WXT_ENABLE_JOB_CATALOG === 'true';
 }
 
 export function isApplicationPageUrl(url: string): boolean {
-  return isReadablePageUrl(url) && !isFreehireOrigin(url);
+  return isReadablePageUrl(url) && !isNextkinhrOrigin(url);
 }
 
 /** What the side panel's Match tab shows for a page: the catalogue job and the reader's
  *  match with it, or nothing (offering "Add this job" when the page is plausibly a
  *  vacancy). */
 export type PageMatch =
-  | { status: 'ready'; job: FreehireJob; match: JobMatch }
+  | { status: 'ready'; job: NextkinhrJob; match: JobMatch }
   | { status: 'empty'; canAddJob: boolean };
 
 /** Recognise the page at `url` as a catalogue job and read the reader's match with it.
@@ -41,8 +41,8 @@ export async function matchPage(url: string, token: string, isStale: () => boole
     const [job, match] = await Promise.all([getJob(slug, token), getMatch(slug, token)]);
     return isStale() ? null : { status: 'ready', job, match };
   };
-  // Freehire's own job page → curated slug directly.
-  const directSlug = freehireSlugFromUrl(url);
+  // NextKinHR's own job page → curated slug directly.
+  const directSlug = nextkinhrSlugFromUrl(url);
   if (directSlug) return await catalogMatch(directSlug);
 
   // Any other page: recognise it as a catalog job from its URL (curated card),
@@ -84,7 +84,7 @@ async function readJobPostingMarkup(): Promise<boolean> {
   return reply?.kind === 'JOB_POSTING_MARKUP' && reply.present;
 }
 
-/** Hands the page at `url` to freehire, which imports the vacancy when a link-source
+/** Hands the page at `url` to NextKinHR, which imports the vacancy when a link-source
  *  adapter can read it and queues the link for a maintainer when none can. Answers what to
  *  tell the user, and the posting's slug when the page resolved to one. */
 export async function contributePageUrl(url: string, token: string): Promise<{ notice: string; slug: string | null }> {

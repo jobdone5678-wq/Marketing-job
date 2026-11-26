@@ -285,28 +285,23 @@ async function waitForCondition(doc: Document, holds: () => boolean, timeoutMs: 
   }
   return new Promise<boolean>((resolve) => {
     let settled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let observer: MutationObserver | undefined;
+    const timer = setTimeout(() => finish(holds()), timeoutMs);
+    const observer = new MutationObserver(() => {
+      if (holds()) finish(true);
+    });
     const finish = (result: boolean) => {
       if (settled) return;
       settled = true;
-      observer?.disconnect();
-      if (timer !== undefined) clearTimeout(timer);
+      observer.disconnect();
+      clearTimeout(timer);
       resolve(result);
     };
-    observer = new MutationObserver(() => {
-      if (holds()) finish(true);
-    });
     observer.observe(root, {
       childList: true,
       subtree: true,
       attributes: true,
       characterData: true,
     });
-    if (holds()) {
-      finish(true);
-      return;
-    }
-    timer = setTimeout(() => finish(holds()), timeoutMs);
+    if (holds()) finish(true);
   });
 }

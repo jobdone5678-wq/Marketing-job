@@ -7,7 +7,7 @@ import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 const PINNED_REDIRECTS = [
   'https://ebhfafmnihndlaoibgjnfjhkjlnaencj.chromiumapp.org/',
-  'https://13f2644fb08a641dc52d5b7c11faf2fb9775ee26.extensions.allizom.org/',
+  'https://ec8a97d56edd2aed136d4ac76843cd4d70e1c017.extensions.allizom.org/',
 ];
 const CALLBACK_PATTERN =
   /^https:\/\/(?:[a-p]{32}\.chromiumapp\.org|[0-9a-f]{40}\.extensions\.allizom\.org)\/$/;

@@ -1,6 +1,6 @@
 // How far an unattended tailoring run has got, read off the tailored CV the run rewrites.
 //
-// The run itself starts in the freehire tab (the server lets only a signed-in browser start
+// The run itself starts in the NextKinHR tab (the server lets only a signed-in browser start
 // one, so the candidate can watch and undo it). Before its first step the server writes every
 // requirement of the vacancy onto the CV as `not_reached`, and each requirement the run gets
 // to is re-stamped with what it made of it. Counting the stamped ones is the progress.

@@ -27,7 +27,7 @@ describe('matchPage lookup URL', () => {
     'chrome-extension://example/page.html',
     'moz-extension://example/page.html',
     'file:///C:/resume.pdf',
-    'https://freehire.me/jobs/example',
+    'https://nextkinhr.com/jobs/example',
     new URL('/dashboard', HIRE_ORIGIN).href,
   ])('skips %s even when the catalog is enabled', async (url) => {
     vi.stubEnv('WXT_ENABLE_JOB_CATALOG', 'true');

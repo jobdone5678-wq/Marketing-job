@@ -6,6 +6,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
+import { handleApplicationReceipt } from '../supabase/functions/application-receipt/index.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const jobUrl = 'https://careers.example.test/jobs/123';
@@ -20,9 +21,11 @@ const field = (label, value, name = label) => ({
   type: 'text',
 });
 
-function fixture({ failOnce = false } = {}) {
+function fixture({ failOnce = false, webhook = false } = {}) {
   const notices = [];
   const posts = [];
+  const endpoints = [];
+  const webhookUrl = 'https://project.supabase.co/functions/v1/application-receipt';
   const tab = { id: 4, url: jobUrl + '/apply?tracking=excluded' };
   const form = {
     plan: { items: [{ answered: true }] },
@@ -55,8 +58,9 @@ function fixture({ failOnce = false } = {}) {
         assert.equal(request.headers.Authorization, 'Bearer fixture-token');
         if (url.endsWith('/autofill-profile'))
           return Response.json({ data: {}, meta: { candidateId } });
-        assert.ok(url.endsWith('/api/extension/auto-submit'));
+        assert.ok(url === webhookUrl || url.endsWith('/api/extension/auto-submit'));
         assert.equal(request.method, 'POST');
+        endpoints.push(url);
         posts.push(JSON.parse(request.body));
         if (failOnce && posts.length === 1)
           return Response.json({ error: 'Temporary failure' }, { status: 500 });
@@ -67,6 +71,7 @@ function fixture({ failOnce = false } = {}) {
           return {
             getToken: async () => 'fixture-token',
             HIRE_ORIGIN: 'https://portal.example.test',
+            APPLICATION_RECEIPT_WEBHOOK: webhook ? webhookUrl : undefined,
           };
         if (/(?:^|\/)analytics$/.test(name)) return { track() {} };
         return load(resolve(dirname(file), name + '.ts'));
@@ -92,8 +97,67 @@ function fixture({ failOnce = false } = {}) {
     form.applicationPages = [{ frame: 0, ...page }];
     tracker.note();
   }
-  return { tracker, form, tab, leave, posts, notices, capture, validation };
+  return { tracker, form, tab, leave, posts, notices, capture, validation, endpoints, webhookUrl };
 }
+
+test('captures Lever’s visible non-heading confirmation and sends the posting to the Supabase webhook', async () => {
+  const app = fixture({ webhook: true });
+  const url = 'https://jobs.lever.co/employ/a4ec1fd5-d606-4995-a745-5a8b7848937c/apply';
+  const visible = (textContent) => ({ textContent, closest: () => null, getClientRects: () => [1] });
+  const doc = {
+    location: new URL(url),
+    title: 'Employ - Senior Partnership Manager',
+    querySelector(selector) {
+      if (selector.includes('.posting-headline h2')) return visible('Senior Partnership Manager');
+      if (selector.includes('.posting-categories .location')) return visible('Remote, USA');
+      if (selector.includes('.posting-categories .commitment')) return visible('Full-Time');
+      if (selector.includes('.posting-categories .team')) return visible('Sales – Strategic Partnerships');
+      return null;
+    },
+    querySelectorAll: (selector) => selector.includes('.application-confirmation')
+      ? [visible('Application submitted!')] : [],
+  };
+  const receipt = app.capture.observeApplicationPage(doc);
+  assert.match(receipt.evidence ?? '', /application submitted/i);
+  app.leave(receipt);
+  await tick();
+  assert.deepEqual(app.endpoints, [app.webhookUrl]);
+  const [posted] = app.posts;
+  assert.equal(posted.jobUrl, url.replace(/\/apply$/, ''));
+  assert.equal(posted.companyName.toLowerCase(), 'employ');
+  assert.equal(posted.jobTitle, 'Senior Partnership Manager');
+  assert.equal(posted.jobLocation, 'Remote, USA');
+  assert.equal(posted.employmentType, 'Full-Time');
+  assert.equal(posted.department, 'Sales – Strategic Partnerships');
+  assert.equal(app.validation.allowedCaptureUrl(posted.confirmationUrl, posted.jobUrl, 'submitted', posted.evidence), true);
+});
+
+test('Supabase webhook requires a pairing token and preserves the authenticated save response', async () => {
+  const url = 'https://project.supabase.co/functions/v1/application-receipt';
+  const body = { eventKey: 'fixture', jobTitle: 'Engineer' };
+  const authorization = 'Bearer this-is-a-paired-token-fixture';
+  let forwards = 0;
+  const forward = async (target, request) => {
+    forwards++;
+    assert.equal(target, 'https://www.nextkinhr.com/api/webhooks/application-submitted');
+    assert.equal(request.headers.Authorization, authorization);
+    assert.equal(request.redirect, 'error');
+    assert.deepEqual(JSON.parse(new TextDecoder().decode(request.body)), body);
+    return Response.json({ error: 'Receipt could not be matched.' }, { status: 422 });
+  };
+  const denied = await handleApplicationReceipt(new Request(url, { method: 'POST' }), forward);
+  assert.equal(denied.status, 401);
+  assert.equal(forwards, 0);
+
+  const response = await handleApplicationReceipt(new Request(url, {
+    method: 'POST',
+    headers: { Authorization: authorization, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }), forward);
+  assert.equal(forwards, 1);
+  assert.equal(response.status, 422);
+  assert.deepEqual(await response.json(), { error: 'Receipt could not be matched.' });
+});
 
 test('captures an external ATS receipt once with its scoped answers and explicit candidate ID', async () => {
   const app = fixture();

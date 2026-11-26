@@ -37,7 +37,7 @@ test('Employ sponsorship wording and qualified race choices use confirmed facts'
   assert.deepEqual(complete.executableFills.map(({ value }) => value), ['No', qualified]);
 });
 
-test('Planner: FreeHire form batch planning with neighbor context & grounding', async (t) => {
+test('Planner: NextKinHR form batch planning with neighbor context & grounding', async (t) => {
   await t.test('chunks AI-bound fields into batches of 4-8 questions and preserves neighbor context across batches', async () => {
     // 8 AI-bound fields (not deterministically resolvable by scalar fast-path) -> 2 batches (5 + 3)
     const fields = [

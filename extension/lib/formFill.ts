@@ -12,7 +12,7 @@ import {
   requestAutofillPlan,
   saveBankAnswer,
   type PlanApiResponse,
-} from './freehire';
+} from './nextkinhr';
 import { isAutofillProse, isBlockedAutofillField, isPrivateAutofillField } from './autofillSafety';
 import {
   hasExplicitCountryInLabel,
@@ -93,7 +93,7 @@ export interface FillPanel {
   walk: WalkHooks;
   /** Read the page's form again, so the checklist follows what was filled. */
   refreshPlan(): Promise<void>;
-  /** A question whose answer freehire now holds, so it is not offered for saving. */
+  /** A question whose answer NextKinHR now holds, so it is not offered for saving. */
   known(label: string): void;
   /** The plan refused the agent: the panel shows its upgrade offer. */
   refused(err: PlanRefused): void;
@@ -281,6 +281,9 @@ export async function runAutofill(token: string, panel: FillPanel, signal: Abort
   await fillApplication(token, panel, signal, target);
 }
 
+const scopeSectionKey = (f: { frame: number; form: number; section?: string }) =>
+  `${f.frame}:${f.form}:${f.section ?? ''}`;
+
 async function fillApplication(
   token: string,
   panel: FillPanel,
@@ -419,8 +422,6 @@ async function fillApplication(
     const knownFieldIds = new Set(scoped.map((f) => plannerField(f).id));
     const committedParentsByScope = new Map<string, string[]>();
     const dynamicParentsByFieldId = new Map<string, string[]>();
-    const scopeSectionKey = (f: { frame: number; form: number; section?: string }) =>
-      `${f.frame}:${f.form}:${f.section ?? ''}`;
     const recordCommittedParent = (f: FramedField) => {
       const pid = plannerField(f).id;
       for (const key of [scopeSectionKey(f), `${f.frame}:${f.form}`]) {
@@ -1090,7 +1091,7 @@ export async function saveChosenAnswers(
   track('answers_saved', { saved, failed: failed.length });
   if (saved > 0) {
     panel.notice(
-      `✓ Saved ${saved} answer${saved === 1 ? '' : 's'} — freehire will fill them on the next form.`
+      `✓ Saved ${saved} answer${saved === 1 ? '' : 's'} — NextKinHR will fill them on the next form.`
     );
   }
   if (failed.length > 0) panel.notice(`Could not save: ${nameSome(failed)}.`);

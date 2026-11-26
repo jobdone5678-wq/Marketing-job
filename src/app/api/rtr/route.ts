@@ -138,7 +138,7 @@ export async function GET(request: Request) {
     const db = database();
 
     // A candidate only ever sees the agreements filed against their own record.
-    let candidateFilter = candidateId;
+    const candidateFilter = candidateId;
     const ownedIds = (await ownedCandidates(profile)).map((row) => row.id);
     if (ownedIds.length === 0) return { documents: [], total: 0 };
 

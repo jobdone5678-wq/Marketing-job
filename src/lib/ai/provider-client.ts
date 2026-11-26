@@ -677,7 +677,7 @@ export class ProviderClient {
     const url = resolveCompletionsUrl(this.baseUrl);
     const contractSchema = resolveContractSchema(options);
 
-    let effectiveMessages = [...messages];
+    const effectiveMessages = [...messages];
     // If json mode is not supported by provider, constrain via prompt
     if (options?.responseFormat !== 'text' && options?.responseFormat !== 'json_prompt' && mode === 'prompt') {
       const jsonConstraint =

@@ -5,8 +5,8 @@ vi.mock('wxt/browser', () => ({ browser: {
   runtime: { sendMessage },
   tabs: { query: async () => [{ id: 1, url: 'https://jobs.example.test/apply' }] },
 } }));
-vi.mock('./freehire', async () => {
-  const actual = await vi.importActual<typeof import('./freehire')>('./freehire');
+vi.mock('./nextkinhr', async () => {
+  const actual = await vi.importActual<typeof import('./nextkinhr')>('./nextkinhr');
   return {
     ...actual,
     getAutofillSessionProfile: vi.fn().mockResolvedValue({ data: {
@@ -34,7 +34,7 @@ import {
   requestAutofillPlan,
   requestAutofillChoice,
   generateAutofillAnswer,
-} from './freehire';
+} from './nextkinhr';
 
 const field = (index: number, label: string, extra: Record<string, unknown> = {}) => ({
   index, form: 0, frame: 0, tag: 'input', type: 'text', label, value: '', ...extra,

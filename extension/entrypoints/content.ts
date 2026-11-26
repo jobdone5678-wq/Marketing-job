@@ -3,7 +3,7 @@ import { extractSnapshot, hasJobPostingMarkup } from '../lib/scraper';
 import { attachSavedResume, clearUserEdited, extractForm, extractUploads, fillByLabel, markUserEdited } from '../lib/form';
 import { revealField } from '../lib/revealField';
 import { easyApplyDialog, easyApplyOnResumeStep, easyApplySent, linkedInPostingClosed } from '../lib/easyApply';
-import { isFreehireOrigin } from '../lib/freehire';
+import { isNextkinhrOrigin } from '../lib/nextkinhr';
 import { runStep } from '../lib/combobox';
 import { debounce } from '../lib/debounce';
 import { applicationReceiptEvidence, collectApplicationAnswers, observeApplicationPage } from '../lib/applicationCapture';
@@ -60,9 +60,9 @@ export default defineContentScript({
             kind: 'JOB_POSTING_MARKUP',
             present: hasJobPostingMarkup(document),
           });
-        case 'GET_FRAMED_FORM':
-          // freehire's own pages (profile, tailor) are not an application to read.
-          if (isFreehireOrigin(location.origin)) {
+        case 'GET_FRAMED_FORM': {
+          // NextKinHR's own pages (profile, tailor) are not an application to read.
+          if (isNextkinhrOrigin(location.origin)) {
             return Promise.resolve<RuntimeMessage>({ kind: 'FORM', fields: [], uploads: [] });
           }
           // The frame tag is stamped by the background relay, which is the only
@@ -74,7 +74,7 @@ export default defineContentScript({
             snapshotId: fields[0]?.snapshotId,
             fields,
             uploads: extractUploads(document).map((upload) =>
-              upload.resume ? { ...upload, documentKey } : upload,
+              upload.resume ? Object.assign({}, upload, { documentKey }) : upload,
             ),
             easyApply: easyApplyDialog(document) !== null,
             resumeStep: easyApplyOnResumeStep(document),
@@ -84,6 +84,7 @@ export default defineContentScript({
             // must know before it offers to tailor a CV for this job.
             closed: onLinkedIn && linkedInPostingClosed(document),
           });
+        }
         case 'FILL_BY_LABEL':
           // A revealed fill scrolls to each question and outlines it as the value
           // lands — the panel's walk, watched. The reveal runs first so the user
@@ -109,7 +110,7 @@ export default defineContentScript({
         case 'ATTACH_SAVED_RESUME':
           return Promise.resolve<RuntimeMessage>({
             kind: 'ATTACH_SAVED_RESUME_RESULT',
-            status: message.documentKey === documentKey && !isFreehireOrigin(location.origin) &&
+            status: message.documentKey === documentKey && !isNextkinhrOrigin(location.origin) &&
               (window !== window.top || location.href === message.target.url)
               ? attachSavedResume(document, message.form, message.resume)
               : 'unavailable',
@@ -137,7 +138,7 @@ export default defineContentScript({
     document.addEventListener('input', onUserControlEvent, true);
     document.addEventListener('change', onUserControlEvent, true);
     document.addEventListener('submit', (event) => {
-      if (!(event.target instanceof HTMLFormElement) || isFreehireOrigin(location.origin)) return;
+      if (!(event.target instanceof HTMLFormElement) || isNextkinhrOrigin(location.origin)) return;
       const form = Array.from(document.querySelectorAll('form')).indexOf(event.target);
       if (form < 0) return;
       const answers = collectApplicationAnswers(extractForm(document).filter((field) => field.form === form), true);

@@ -61,7 +61,7 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
   } catch {
     return undefined;
   }
-  const logger = provider.getLogger('freehire.errors');
+  const logger = provider.getLogger('nextkinhr.errors');
   const seen = new Set<string>();
   let windowStart = Date.now();
   return {

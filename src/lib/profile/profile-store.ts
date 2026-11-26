@@ -50,12 +50,12 @@ export const DEFAULT_PROFILE: CandidateProfileState = {
   screeningAnswers: DEFAULT_SCREENING_ANSWERS,
 };
 
-const STORAGE_KEY = 'freehire_candidate_profile_v2';
+const STORAGE_KEY = 'nextkinhr_candidate_profile_v2';
 
 export function clearLocalProfile(): CandidateProfileState {
   if (typeof window !== 'undefined') {
     localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem('freehire_candidate_profile_v1');
+    localStorage.removeItem('nextkinhr_candidate_profile_v1');
   }
   return DEFAULT_PROFILE;
 }
@@ -78,7 +78,7 @@ export async function clearRemoteProfile(): Promise<boolean> {
 export function loadLocalProfile(): CandidateProfileState {
   if (typeof window === 'undefined') return DEFAULT_PROFILE;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('freehire_candidate_profile_v1');
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('nextkinhr_candidate_profile_v1');
     if (!raw) return DEFAULT_PROFILE;
     const parsed = JSON.parse(raw);
     // Fields should only be filled or selected after the resume is parsed!

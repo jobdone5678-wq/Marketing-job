@@ -1,9 +1,9 @@
 {
-  "name": "freehire-design-system",
+  "name": "nextkinhr-design-system",
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Design system for freehire's web frontend — tokens, primitives, Storybook, docs.",
+  "description": "Design system for NextKinHR's web frontend — tokens, primitives, Storybook, docs.",
   "packageManager": "pnpm@11.7.0",
   "exports": {
     "./dist/*": "./dist/*",

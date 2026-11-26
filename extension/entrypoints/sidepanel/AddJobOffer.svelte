@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Plus } from '@lucide/svelte';
-  import { Button, Card } from 'freehire-design-system';
+  import { Button, Card } from 'nextkinhr-design-system';
 
-  // The Match tab's offer on a vacancy freehire does not carry yet: add it in one click.
+  // The Match tab's offer on a vacancy NextKinHR does not carry yet: add it in one click.
   let { adding, onAdd }: { adding: boolean; onAdd: () => void } = $props();
 </script>
 

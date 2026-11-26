@@ -14,7 +14,7 @@ import { executeTool, type PageBridge } from './executor';
 import { parseToolCall } from './wire';
 
 /** The subprotocol marker hire's relay accepts; the JWT rides beside it. */
-export const WS_SUBPROTOCOL_MARKER = 'freehire-jwt';
+export const WS_SUBPROTOCOL_MARKER = 'nextkinhr-jwt';
 
 /** The relay endpoint, joined as the extension end of this user's channel. */
 function toolsWsUrl(): string {

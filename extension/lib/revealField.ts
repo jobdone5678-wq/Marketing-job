@@ -27,7 +27,7 @@ const REVEAL_OUTLINE_MS = 600;
  * question was there at all — the panel says so rather than doing nothing.
  *
  * The outline is written as inline style and the previous inline style is put
- * back: this runs on a page freehire does not own, where an injected class could
+ * back: this runs on a page NextKinHR does not own, where an injected class could
  * collide with the ATS's own and a stylesheet would outlive our interest in the
  * element.
  */

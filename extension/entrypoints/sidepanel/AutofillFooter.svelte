@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button } from 'freehire-design-system';
+  import { Button } from 'nextkinhr-design-system';
   import { RectangleEllipsis, Square } from '@lucide/svelte';
 
   // The Match tab's pinned Autofill button, which becomes Stop while a walk runs.

@@ -1,5 +1,5 @@
 // The assistant's wire contract, mirroring `internal/assistant`'s Event and the
-// stored transcript. The agent runs inside the freehire backend, so a turn is one
+// stored transcript. The agent runs inside the NextKinHR backend, so a turn is one
 // HTTP request whose body is a stream of named SSE events — there is no control
 // protocol, no session attach and no input lease any more.
 //

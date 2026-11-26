@@ -17,7 +17,7 @@
     <div class="fill" class:pending={!total} style="width:{total ? pct : 100}%"></div>
   </div>
   <a class="link" href={watchUrl} target="_blank" rel="noreferrer">Watch it work →</a>
-  <p class="hint">Runs on freehire; the tab it opened shows each edit.</p>
+  <p class="hint">Runs on NextKinHR; the tab it opened shows each edit.</p>
 </div>
 
 <style>

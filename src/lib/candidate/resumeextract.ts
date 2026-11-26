@@ -67,7 +67,7 @@ export interface StructuredProjectItem {
 }
 
 /**
- * Matches Freehire's resumeextract.Structured wire shape.
+ * Matches NextKinHR's resumeextract.Structured wire shape.
  */
 export interface ResumeStructured {
   full_name?: string;
@@ -87,7 +87,7 @@ export interface ResumeStructured {
 }
 
 /**
- * Matches Freehire's resumeextract.Professional contact-free projection (whitelisted fields).
+ * Matches NextKinHR's resumeextract.Professional contact-free projection (whitelisted fields).
  * Includes `location` (city/country context) while withholding name, email, phone, and links.
  */
 export interface ResumeProfessional {
@@ -104,7 +104,7 @@ export interface ResumeProfessional {
 }
 
 /**
- * Matches Freehire's resume.Owned persisted in users.candidate_contacts (plus computed first/last name).
+ * Matches NextKinHR's resume.Owned persisted in users.candidate_contacts (plus computed first/last name).
  */
 export interface CandidateOwned {
   full_name?: string;
@@ -416,7 +416,7 @@ export function extractStructuredResume(rawText: string): ExtractedResumeBundle 
 }
 
 /**
- * Projects Structured onto Freehire's contact-free Professional view (whitelist):
+ * Projects Structured onto NextKinHR's contact-free Professional view (whitelist):
  * includes `location`, omits `full_name`, `email`, `phone`, and `links`.
  */
 export function toContactFreeProfessionalView(

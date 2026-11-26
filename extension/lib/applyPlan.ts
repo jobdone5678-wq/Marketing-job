@@ -123,16 +123,19 @@ export function buildPlan(fields: FramedField[]): ApplyPlan {
     // fill and the reveal reach one. Counting it would promise a row the panel
     // cannot act on.
     .filter((f) => f.label.trim() !== '')
-    .map((f) => ({
-      ...(f.fieldId ? { fieldId: f.fieldId } : {}),
-      key: `${f.frame}:${f.index}`,
-      label: f.label,
-      required: f.required,
-      // A value the page itself rejected is not an answer yet: it blocks the next step.
-      answered: f.value.trim() !== '' && !f.invalid,
-      frame: f.frame,
-      form: f.form,
-    }));
+    .map((f) => {
+      const item: PlanItem = {
+        key: `${f.frame}:${f.index}`,
+        label: f.label,
+        required: f.required,
+        // A value the page itself rejected is not an answer yet: it blocks the next step.
+        answered: f.value.trim() !== '' && !f.invalid,
+        frame: f.frame,
+        form: f.form,
+      };
+      if (f.fieldId) item.fieldId = f.fieldId;
+      return item;
+    });
 
   return recount(items);
 }

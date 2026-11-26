@@ -19,12 +19,13 @@ export function extractSnapshot(doc: Document): PageSnapshot {
   };
 }
 
+const boundedText = (value: unknown, max: number) =>
+  typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : undefined;
+
 export function extractJobPosting(doc: Document, includeDescription = false): PageSnapshot['jobPosting'] {
   const posting = findJobPostingMarkup(doc);
   if (!posting) return;
   const org = posting.hiringOrganization;
-  const boundedText = (value: unknown, max: number) =>
-    typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : undefined;
   let description: string | undefined;
   if (includeDescription && typeof posting.description === 'string') {
     const template = doc.createElement('template');

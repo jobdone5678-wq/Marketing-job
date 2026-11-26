@@ -36,7 +36,7 @@ const POLITE_WRAPPERS = [
 ];
 
 /**
- * Exact stem dictionary from Freehire's internal/dict/answertopic/answertopic.go.
+ * Exact stem dictionary from NextKinHR's internal/dict/answertopic/answertopic.go.
  * ALL keywords in a set must appear in the folded question for that set to fire.
  */
 const STEM_DICTIONARY: Array<{ topic: CanonicalAnswerTopic; sets: string[][] }> = [

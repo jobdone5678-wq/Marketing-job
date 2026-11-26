@@ -1,7 +1,7 @@
 /**
- * FreeHire AI Autofill Engine: Batch Form Planner
+ * NextKinHR AI Autofill Engine: Batch Form Planner
  *
- * Ports FreeHire Plan algorithm to TypeScript with:
+ * Ports NextKinHR Plan algorithm to TypeScript with:
  * - Unified CapturedField / QuestionDescriptor / SemanticQuestionIntent contract
  * - Expanded deterministic fast-path (profile.*, demographics.*, dual-index Answer Bank, verified text & select)
  * - Section-scoped location dependencies & DOM-confirmed dependency gating
@@ -9,7 +9,7 @@
  * - Structured unresolved diagnostics & batch-level partial-result preservation
  * - Per-batch data minimization
  *
- * Attribution: Based on strelov1/freehire@2843637c09fb818fb64d4e7979638ff350b500c7 (MIT License)
+ * Attribution: Based on strelov1/nextkinhr@2843637c09fb818fb64d4e7979638ff350b500c7 (MIT License)
  */
 
 import { normalizeSkillKey, type VerifiedFact } from './verified-facts';

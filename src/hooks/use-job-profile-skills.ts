@@ -4,18 +4,18 @@ import { useMemo, useSyncExternalStore } from 'react';
 
 function subscribe(onChange: () => void) {
   window.addEventListener('storage', onChange);
-  window.addEventListener('freehire:profile_updated', onChange);
+  window.addEventListener('nextkinhr:profile_updated', onChange);
   return () => {
     window.removeEventListener('storage', onChange);
-    window.removeEventListener('freehire:profile_updated', onChange);
+    window.removeEventListener('nextkinhr:profile_updated', onChange);
   };
 }
 
 function readProfile() {
   try {
     return (
-      localStorage.getItem('freehire_autofill_profile') ??
-      localStorage.getItem('freehire_candidate_profile')
+      localStorage.getItem('nextkinhr_autofill_profile') ??
+      localStorage.getItem('nextkinhr_candidate_profile')
     );
   } catch {
     return null;

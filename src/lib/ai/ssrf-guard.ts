@@ -417,7 +417,7 @@ export async function createSafeAgent(
     );
   }
 
-  let rawHostname = parsedUrl.hostname;
+  const rawHostname = parsedUrl.hostname;
   if (!rawHostname) {
     throw new SSRFError('URL must contain a valid hostname', 'INVALID_URL');
   }

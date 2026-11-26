@@ -110,8 +110,8 @@ function extractFallbackExperience(text: string): WorkExperience[] {
       let role = '';
       let company = '';
       let location = '';
-      let start = dateRangeMatch ? dateRangeMatch[1] : '';
-      let end = dateRangeMatch ? dateRangeMatch[2] : '';
+      const start = dateRangeMatch ? dateRangeMatch[1] : '';
+      const end = dateRangeMatch ? dateRangeMatch[2] : '';
 
       const lineWithoutDates = dateRangeMatch ? line.replace(dateRangeMatch[0], '').trim() : line;
       const parts = lineWithoutDates.split(/\s*[-–—|•]\s*|\s+at\s+|\s*,\s*/i).map(cleanLine).filter(Boolean);

@@ -13,8 +13,8 @@ first one is created in the browser:
 1. Get the two files — download the `extension` artifact from the `build`
    workflow (or the latest `extension-v*` GitHub Release), or run
    `cd extension && pnpm run zip:firefox`:
-   - `freehire-extension-<version>-firefox.zip` — the add-on;
-   - `freehire-extension-<version>-sources.zip` — the source code.
+   - `nextkinhr-extension-<version>-firefox.zip` — the add-on;
+   - `nextkinhr-extension-<version>-sources.zip` — the source code.
 2. [Developer Hub](https://addons.mozilla.org/developers/) → **Submit a New
    Add-on** → **On this site** (listed) → upload the `-firefox.zip`.
 3. When asked whether the code is minified or bundled, say **yes** and upload the
@@ -26,7 +26,7 @@ first one is created in the browser:
 
 4. Fill the listing from `chrome-web-store.md` and submit. Review is manual.
 
-The add-on id is fixed in `wxt.config.ts` (`extension@freehire.me`), so sign-in
+The add-on id is fixed in `wxt.config.ts` (`extension@nextkinhr.com`), so sign-in
 already works for the listed build — its redirect hash is on hire's allowlist.
 
 ## Every later version (automatic)

@@ -30,7 +30,7 @@ const MAX_ANSWER_LEN = 2000;
  * The answered questions on the form that neither the profile nor this panel's own
  * fill accounts for.
  *
- * `autofilled` holds the normalised labels freehire wrote on this page: those came from
+ * `autofilled` holds the normalised labels NextKinHR wrote on this page: those came from
  * the profile or the bank already. A label the profile vocabulary recognises
  * (`matchFieldKey`) is left out too — name, email, notice period live in typed records,
  * and a free-text copy in the bank would drift from them.

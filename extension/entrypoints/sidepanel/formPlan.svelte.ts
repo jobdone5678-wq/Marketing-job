@@ -26,7 +26,7 @@ export class FormPlan {
    *  about whether the page is showing an application: it accepted values. Reset
    *  by a page change, with the plan. */
   formFilled = $state(false);
-  /** The questions on this page whose answers freehire already holds, by normalised
+  /** The questions on this page whose answers NextKinHR already holds, by normalised
    *  label: the ones this panel wrote (from the profile or the bank) and the ones just
    *  saved. Neither is offered for saving again. Reset by a page change, with
    *  `formFilled`. */

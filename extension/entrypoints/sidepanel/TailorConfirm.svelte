@@ -1,14 +1,14 @@
 <script lang="ts">
   import { Check, TriangleAlert } from '@lucide/svelte';
-  import { ConfirmDialog } from 'freehire-design-system';
+  import { ConfirmDialog } from 'nextkinhr-design-system';
   import {
     allowanceRefuses,
     allowanceRemaining,
     partitionBlockers,
-    type FreehireJob,
+    type NextkinhrJob,
     type JobMatch,
     type MatchAnalysisAllowance,
-  } from '../../lib/freehire';
+  } from '../../lib/nextkinhr';
 
   // Pre-flight confirmation before a tailoring run: the deterministic (no-LLM)
   // skill/requirement check the card already has data for, shown one more time as an
@@ -25,7 +25,7 @@
     onConfirm,
   }: {
     open: boolean;
-    job: FreehireJob;
+    job: NextkinhrJob;
     match: JobMatch;
     tone: 'good' | 'warn' | 'bad';
     pct: number;

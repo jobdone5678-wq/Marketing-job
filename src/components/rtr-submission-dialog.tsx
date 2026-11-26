@@ -217,11 +217,12 @@ export function RTRSubmissionDialog({
 
   // Sync defaultCandidateId if provided
   React.useEffect(() => {
-    if (defaultCandidateId) {
+    if (!defaultCandidateId) return;
+    void Promise.resolve().then(() => {
       setSelectedCandidateId(defaultCandidateId);
       const cand = candidates.find((c) => c.id === defaultCandidateId);
       if (cand) setCandidateName(cand.full_name);
-    }
+    });
   }, [defaultCandidateId, candidates]);
 
   // Clean up preview object URL on unmount or file change

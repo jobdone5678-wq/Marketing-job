@@ -107,8 +107,9 @@ describe('extractUploads', () => {
       <form><label>Résumé <input type="file"></label></form>
     `;
     const [resume, cover, other] = Array.from(document.querySelectorAll<HTMLInputElement>('input'));
+    if (!resume || !cover || !other) throw new Error('Missing upload inputs');
     const changes: string[] = [];
-    resume!.addEventListener('change', () => changes.push(resume!.files?.[0]?.name ?? ''));
+    resume.addEventListener('change', () => changes.push(resume.files?.[0]?.name ?? ''));
     const file = { filename: 'Saved.pdf', mimeType: 'application/pdf', base64: btoa('%PDF-1.7') };
     expect(extractUploads(document)[0]).toMatchObject({ form: 0, resume: true });
     expect(extractUploads(document)[1]).not.toHaveProperty('resume');
@@ -117,8 +118,8 @@ describe('extractUploads', () => {
     expect(attachSavedResume(document, 0, { ...file, filename: 'Other.pdf' })).toBe('already_attached');
     expect(extractUploads(document)[0]).toMatchObject({ hasFile: true });
     expect(changes).toEqual(['Saved.pdf']);
-    expect(cover!.files).toHaveLength(0);
-    expect(other!.files).toHaveLength(0);
+    expect(cover.files).toHaveLength(0);
+    expect(other.files).toHaveLength(0);
   });
 });
 
@@ -397,7 +398,7 @@ describe('revealField', () => {
     expect(revealField(document, { label: 'Favourite colour' })).toBe(false);
   });
 
-  // The outline is written onto a page freehire does not own, so it has to leave
+  // The outline is written onto a page NextKinHR does not own, so it has to leave
   // the element exactly as it found it — including an inline style of its own.
   it('restores the inline style it borrowed', async () => {
     const el = labelled('Email', 'color: rebeccapurple');
@@ -860,13 +861,17 @@ describe('control naming', () => {
       </form>`;
 
     const yearsInputs = document.querySelectorAll<HTMLInputElement>('input[name="years"]');
-    yearsInputs[0]!.value = '4';
-    markUserEdited(yearsInputs[0]!);
+    const firstYearsInput = yearsInputs[0];
+    const secondYearsInput = yearsInputs[1];
+    if (!firstYearsInput || !secondYearsInput) throw new Error('Missing years inputs');
+    firstYearsInput.value = '4';
+    markUserEdited(firstYearsInput);
 
     const fields = extractForm(document);
     expect(fields).toHaveLength(4);
     expect(new Set(fields.map((f) => f.fieldId)).size).toBe(4);
-    expect(fields.every((f) => Boolean(f.snapshotId) && f.snapshotId === fields[0]!.snapshotId)).toBe(true);
+    const snapshotId = fields[0]?.snapshotId;
+    expect(fields.every((f) => Boolean(f.snapshotId) && f.snapshotId === snapshotId)).toBe(true);
     expect(fields[0]).toMatchObject({
       label: 'Years',
       section: 'Employment',
@@ -885,26 +890,31 @@ describe('control naming', () => {
       section: 'Work Eligibility',
       optionsState: 'deferred',
     });
+    const parentFieldId = fields[2]?.fieldId;
+    if (!parentFieldId) throw new Error('Missing parent fieldId');
     expect(fields[3]).toMatchObject({
       section: 'Work Eligibility',
       optionsState: 'loaded',
-      parentFieldIds: [fields[2]!.fieldId!],
+      parentFieldIds: [parentFieldId],
     });
 
     // Protects userEdited and requiresReview fills, and verifies DOM write by fieldId
-    const secondYearsId = fields[1]!.fieldId!;
+    const firstYearsId = fields[0]?.fieldId;
+    const secondYearsId = fields[1]?.fieldId;
+    const fourthFieldId = fields[3]?.fieldId;
+    if (!firstYearsId || !secondYearsId || !fourthFieldId) throw new Error('Missing extracted fieldIds');
     const outcomes = fillByLabel(document, [
-      { fieldId: fields[0]!.fieldId, label: 'Years', value: '99' },
+      { fieldId: firstYearsId, label: 'Years', value: '99' },
       { fieldId: secondYearsId, label: 'Years', value: '2' },
-      { fieldId: fields[3]!.fieldId, label: 'Will you require sponsorship?', value: 'No', requiresReview: true },
+      { fieldId: fourthFieldId, label: 'Will you require sponsorship?', value: 'No', requiresReview: true },
     ]);
     expect(outcomes).toEqual([
-      { fieldId: fields[0]!.fieldId, label: 'Years', status: 'not_fillable' },
+      { fieldId: firstYearsId, label: 'Years', status: 'not_fillable' },
       { fieldId: secondYearsId, label: 'Years', status: 'filled', verifiedValue: '2' },
-      { fieldId: fields[3]!.fieldId, label: 'Will you require sponsorship?', status: 'not_fillable', verificationError: 'Requires manual review' },
+      { fieldId: fourthFieldId, label: 'Will you require sponsorship?', status: 'not_fillable', verificationError: 'Requires manual review' },
     ]);
-    expect(yearsInputs[0]!.value).toBe('4');
-    expect(yearsInputs[1]!.value).toBe('2');
+    expect(firstYearsInput.value).toBe('4');
+    expect(secondYearsInput.value).toBe('2');
   });
 
   it('reports DOM verification failure when a controlled input reverts its written value', () => {
@@ -914,7 +924,7 @@ describe('control naming', () => {
       input.value = '';
     });
     const [field] = extractForm(document);
-    const [outcome] = fillByLabel(document, [{ fieldId: field!.fieldId, label: 'City', value: 'Austin' }]);
+    const [outcome] = fillByLabel(document, [{ fieldId: field?.fieldId, label: 'City', value: 'Austin' }]);
     expect(outcome?.status).toBe('not_fillable');
     expect(outcome?.verificationError).toContain('empty');
   });

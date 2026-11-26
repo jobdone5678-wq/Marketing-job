@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 import * as path from 'node:path';
 
-const pathToExtension = path.resolve(process.cwd(), 'jobright_extension');
+const pathToExtension = path.resolve(process.cwd(), 'extension/.output/chrome-mv3');
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -15,11 +15,13 @@ export default defineConfig({
   use: {
     headless: false,
     ...devices['Desktop Chrome'],
-    args: [
-      `--disable-extensions-except=${pathToExtension}`,
-      `--load-extension=${pathToExtension}`,
-      '--no-sandbox',
-    ],
+    launchOptions: {
+      args: [
+        `--disable-extensions-except=${pathToExtension}`,
+        `--load-extension=${pathToExtension}`,
+        '--no-sandbox',
+      ],
+    },
   },
   projects: [
     {
@@ -27,11 +29,13 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         channel: 'chromium',
-        args: [
-          `--disable-extensions-except=${pathToExtension}`,
-          `--load-extension=${pathToExtension}`,
-          '--no-sandbox',
-        ],
+        launchOptions: {
+          args: [
+            `--disable-extensions-except=${pathToExtension}`,
+            `--load-extension=${pathToExtension}`,
+            '--no-sandbox',
+          ],
+        },
       },
     },
   ],

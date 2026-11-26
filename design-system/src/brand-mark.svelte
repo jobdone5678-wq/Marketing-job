@@ -1,7 +1,7 @@
 <script lang="ts">
   // A brand's own logo glyph, drawn from its official SVG path + hex color — the
   // `simple-icons` shape, but this primitive takes the two fields directly rather
-  // than depending on that package: the caller (freehire's `techmarks.ts`) is the
+  // than depending on that package: the caller (NextKinHR's `techmarks.ts`) is the
   // one that knows which slug maps to which mark, and stays free to source marks
   // from wherever it needs to (simple-icons today, a hand-drawn path tomorrow).
   // Unlike ProviderIcon (a fixed switch over a handful of OAuth brands, several of

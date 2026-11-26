@@ -9,11 +9,11 @@ import {
   getEncryptionKey,
 } from '../../src/lib/ai/encryption.ts';
 import {
-  GET as getSettings,
-  OPTIONS as settingsPreflight,
-  PUT as putSettings,
+  getExtensionAiSettings as getSettings,
+  settingsOptions as settingsPreflight,
+  putExtensionAiSettings as putSettings,
   maskApiKey,
-} from '../../src/app/api/extension/ai/settings/route.ts';
+} from '../../src/lib/ai/extension-settings-service.ts';
 import { testAiConnection as testConnection } from '../../src/lib/ai/test-connection.ts';
 
 const migrationSql = readFileSync(

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { SvelteSet } from 'svelte/reactivity';
-  import { Button, Card } from 'freehire-design-system';
+  import { Button, Card } from 'nextkinhr-design-system';
   import type { AnswerOffer } from '../../lib/answerOffer';
 
   /**
@@ -42,7 +42,7 @@
   <Card class="save-answers">
     <p class="title">Save to your profile</p>
     <p class="hint">
-      freehire will fill these on the next form that asks. Untick anything only this employer should get.
+      NextKinHR will fill these on the next form that asks. Untick anything only this employer should get.
     </p>
     <ul>
       {#each offers as offer (offer.key)}

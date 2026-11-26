@@ -92,22 +92,22 @@ describe('readImports', () => {
   // The door rule. #lib/ui exists so that app code never names the package, and
   // there are zero of these today — so this one is not ratcheted, it is a wall.
   it('reports a file that names the package directly', () => {
-    const { direct } = readImports(`import { Button } from 'freehire-design-system';`);
+    const { direct } = readImports(`import { Button } from 'nextkinhr-design-system';`);
 
-    expect(direct).toEqual(['freehire-design-system']);
+    expect(direct).toEqual(['nextkinhr-design-system']);
   });
 
   it('reports a deep import into the package too', () => {
-    const { direct } = readImports(`import Button from 'freehire-design-system/button.svelte';`);
+    const { direct } = readImports(`import Button from 'nextkinhr-design-system/button.svelte';`);
 
-    expect(direct).toEqual(['freehire-design-system/button.svelte']);
+    expect(direct).toEqual(['nextkinhr-design-system/button.svelte']);
   });
 
   // web/src/app.css imports the package's theme.css, and must — it is the CSS
   // contract every consumer is required to import. The walk reads `from`
   // clauses, so a stylesheet's @import is never in its way.
   it('does not read a CSS @import as a module import', () => {
-    const { door, direct } = readImports(`@import "freehire-design-system/theme.css";`);
+    const { door, direct } = readImports(`@import "nextkinhr-design-system/theme.css";`);
 
     expect(door).toEqual([]);
     expect(direct).toEqual([]);

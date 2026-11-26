@@ -19,8 +19,6 @@ API/auth/AI provider changes require [Conventions](AGENT-REFERENCE.md#convention
 
 Never edit applied migrations in `supabase/migrations/`: add a new timestamped migration instead. Preserve authenticated caller ownership (`auth.uid()` / `extension_credentials`), AAD secret encryption + SSRF guards on BYOK endpoints, `validateGroundedAnswer` truth checks for factual autofill fields, and atomic/idempotent applied-job recording.
 
-Upstream Go/SvelteKit design references (for logic parity only — not the runtime stack) are archived under [docs/freehire-reference/README.md](docs/freehire-reference/README.md).
-
 ## Working principles
 
 Read [Working principles](AGENT-REFERENCE.md#working-principles) before work involving this topic.

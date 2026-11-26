@@ -92,7 +92,7 @@ export function normalizeCanonicalSkills(skills: string[], max = MAX_ATOM_SKILLS
 }
 
 /**
- * Freehire exact ClaimKey: shallow fold keeping numbers ("20s to 1s" vs "30s to 1s" never collide).
+ * NextKinHR exact ClaimKey: shallow fold keeping numbers ("20s to 1s" vs "30s to 1s" never collide).
  */
 export function computeAtomClaimKey(claim: string): string {
   const lowered = String(claim || '').trim().toLowerCase();

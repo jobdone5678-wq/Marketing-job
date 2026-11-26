@@ -9,13 +9,13 @@
 // the web's components call.
 
 import { getToken } from '../auth';
-import { getJob, type FreehireJob } from '../freehire';
+import { getJob, type NextkinhrJob } from '../nextkinhr';
 
-const cache = new Map<string, Promise<FreehireJob>>();
+const cache = new Map<string, Promise<NextkinhrJob>>();
 
 /** Fetch a job by slug, deduped by slug. A rejected fetch is evicted so a later
  *  render can retry instead of being stuck on the fallback for the whole session. */
-export function loadJob(slug: string): Promise<FreehireJob> {
+export function loadJob(slug: string): Promise<NextkinhrJob> {
   let p = cache.get(slug);
   if (!p) {
     p = fetchJob(slug);
@@ -27,7 +27,7 @@ export function loadJob(slug: string): Promise<FreehireJob> {
   return p;
 }
 
-async function fetchJob(slug: string): Promise<FreehireJob> {
+async function fetchJob(slug: string): Promise<NextkinhrJob> {
   const token = await getToken();
   if (!token) throw new Error('not signed in');
   return getJob(slug, token);

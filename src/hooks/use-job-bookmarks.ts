@@ -3,8 +3,8 @@
 import { useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
 
-const KEY = 'nextkinhr_saved_freehire_jobs';
-const LEGACY_KEY = 'freehire_tracked_applications';
+const KEY = 'nextkinhr_saved_jobs';
+const LEGACY_KEY = 'nextkinhr_tracked_applications';
 const CHANGE_EVENT = 'nextkinhr:job-bookmarks-changed';
 
 function subscribe(onChange: () => void) {

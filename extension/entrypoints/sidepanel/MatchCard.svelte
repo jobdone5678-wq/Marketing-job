@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Bookmark, Check, FileText, Paperclip, SquarePen, TriangleAlert } from '@lucide/svelte';
-  import { Button, Card, CountryFlag } from 'freehire-design-system';
+  import { Button, Card, CountryFlag } from 'nextkinhr-design-system';
   import { browser } from 'wxt/browser';
   import type { RuntimeMessage } from '../../lib/protocol';
   import { getToken, HIRE_ORIGIN } from '../../lib/auth';
@@ -12,11 +12,11 @@
     getTailoredCVForJob,
     saveJob,
     unsaveJob,
-    type FreehireJob,
+    type NextkinhrJob,
     type JobMatch,
     type MatchAnalysisResponse,
     type TailoredCV,
-  } from '../../lib/freehire';
+  } from '../../lib/nextkinhr';
   import { categoryLabel, countryLabel, regionLabel, workModeLabel } from '../../lib/labels';
   import { tailorRunFor } from './tailorRun.svelte';
   import TailorProgress from './TailorProgress.svelte';
@@ -31,7 +31,7 @@
     closed = false,
     closedUnknown = false,
   }: {
-    job: FreehireJob;
+    job: NextkinhrJob;
     match: JobMatch;
     hasUploadField: boolean;
     closed?: boolean;
@@ -66,7 +66,7 @@
     text?: string;
     countries?: string[];
   }
-  function buildFacts(j: FreehireJob): Fact[] {
+  function buildFacts(j: NextkinhrJob): Fact[] {
     const rows: Fact[] = [];
     if (j.work_mode) rows.push({ label: 'Work format', text: workModeLabel(j.work_mode) });
     if (j.location) rows.push({ label: 'Location', text: j.location });
@@ -191,7 +191,7 @@
     if (!canTailor) confirmOpen = false;
   });
 
-  // A tailoring run started from here runs in the freehire tab it opens (the server starts
+  // A tailoring run started from here runs in the NextKinHR tab it opens (the server starts
   // one only for a signed-in browser, where it can be watched and undone); the panel follows
   // its progress on the CV and offers the attach once it is over.
   $effect(() => {
@@ -386,7 +386,7 @@
 <style>
   /* No margin here: the card's outer inset comes from the sidepanel's own
    * `.match-panel` padding, same as every other element it sits next to (the
-   * Autofill button, the "Add to freehire" hint). A margin here on top of that
+   * Autofill button, the "Add to NextKinHR" hint). A margin here on top of that
    * padding used to double the card's inset to 24px while its siblings stayed at
    * 12px — visible as the card's content looking normally spaced and the
    * Autofill button looking edge-to-edge by contrast, when neither actually had

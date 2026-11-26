@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "freehire-design-system/theme.css";
+@import "nextkinhr-design-system/theme.css";
 /* The design system's CountryFlag primitive is backed by this sheet but doesn't
  * carry the dependency itself — loaded once here, same as web's root layout. */
 @import "flag-icons/css/flag-icons.min.css";

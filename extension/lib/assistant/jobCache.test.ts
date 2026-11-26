@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const getJob = vi.fn();
-vi.mock('../freehire', () => ({ getJob: (slug: string, token: string) => getJob(slug, token) }));
+vi.mock('../nextkinhr', () => ({ getJob: (slug: string, token: string) => getJob(slug, token) }));
 vi.mock('../auth', () => ({ getToken: async () => 'tok', HIRE_ORIGIN: 'http://localhost:5173' }));
 
 const { loadJob, resetJobCache } = await import('./jobCache');

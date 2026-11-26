@@ -1,19 +1,19 @@
 import { pageIdentity } from '../../lib/assistant/pageIdentity';
 import { browser } from 'wxt/browser';
 import { getToken } from '../../lib/auth';
-import { type FreehireJob, type JobMatch } from '../../lib/freehire';
+import { type NextkinhrJob, type JobMatch } from '../../lib/nextkinhr';
 import { contributePageUrl, isApplicationPageUrl, jobCatalogEnabled, matchPage } from '../../lib/pageMatch';
 
 export type MatchStatus = 'idle' | 'loading' | 'ready' | 'error' | 'empty';
 
 /**
- * The "Match" tab's account of the active page: the freehire job it is, the caller's
+ * The "Match" tab's account of the active page: the NextKinHR job it is, the caller's
  * match against it, and the "Add this job" offer when it is not one. `load` re-reads it
- * on every tab switch and page load; `contribute` hands the page to freehire.
+ * on every tab switch and page load; `contribute` hands the page to NextKinHR.
  */
 export class PageMatch {
   status = $state<MatchStatus>('idle');
-  job = $state<FreehireJob | null>(null);
+  job = $state<NextkinhrJob | null>(null);
   match = $state<JobMatch | null>(null);
   error = $state('');
   // Whether the empty state offers "Add this job": only on a page that is plausibly a
@@ -92,7 +92,7 @@ export class PageMatch {
   };
 
   /**
-   * Hands the current page to freehire. The server imports the vacancy when a link-source
+   * Hands the current page to NextKinHR. The server imports the vacancy when a link-source
    * adapter can read the page and queues the link for a maintainer when none can; either
    * way the panel says what happened, and a resolved slug re-runs the match so the curated
    * card replaces the ad-hoc one.

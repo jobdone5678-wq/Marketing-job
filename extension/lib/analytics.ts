@@ -10,7 +10,7 @@ import { browser } from 'wxt/browser';
 //
 // What is sent is deliberately thin — an event name and a few enum-like params. Never a
 // page URL, page text, a message, or anything from the user's profile: those are what the
-// privacy policy promises stay between the panel and freehire.me.
+// privacy policy promises stay between the panel and nextkinhr.com.
 //
 // Both values are read at build time and absent from a plain `wxt dev`, which leaves
 // tracking inert so local work never lands in the production stream. The API secret is
@@ -61,7 +61,7 @@ export function buildPayload(client: string, sessionId: string, name: string, pa
   };
 }
 
-/** An anonymous id for this browser profile, minted once. Not the freehire account id:
+/** An anonymous id for this browser profile, minted once. Not the NextKinHR account id:
  *  GA has no business knowing who the user is, only that it is the same install. */
 async function clientId(): Promise<string> {
   const stored = await browser.storage.local.get(CLIENT_KEY);

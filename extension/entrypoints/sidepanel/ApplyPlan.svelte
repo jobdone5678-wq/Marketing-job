@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Check, Loader, Minus } from '@lucide/svelte';
-  import { Card } from 'freehire-design-system';
+  import { Card } from 'nextkinhr-design-system';
   import type { ApplyPlan, PlanItem } from '../../lib/applyPlan';
 
   /**

@@ -23,7 +23,7 @@ const RELEASE = process.env.WXT_RELEASE === '1';
  * `https://<sha1(id)>.extensions.allizom.org/`, so like Chrome's `key` it must
  * never change — hire allowlists that hash.
  */
-const GECKO_ID = 'extension@freehire.me';
+const GECKO_ID = 'extension@nextkinhr.com';
 
 const DEV_KEY =
   'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2GECbcIeOfNjo0xv8Q4bMKgLHN5qKCOQSYfVr3aTTHlIk1VliYT/Kb+xZiCyR34tBHFYlTaJATBWLIqmoTqQghXPMvM2LmNPo6ttNKuRdiNJNFvMz5M8RE7Qfgawj8EJo2dCTzWbSdRet2HLTKTBDLsZ/9F4RpXnDQrWVaqQqDvNO9CXT99UqBuzpuTXq3WyWJYcnSjDETND62jkW2kUKj0YpybpxMYDjC1NwoXGgI2f6z3gy2FB/ld3yiaYwVu2NwZGTILgmKLQKGrutHQktnVc27qoeBVvO0s8VMnJkf3kFJPPNmJktGAbnvdiGlx4wBEGBqVEqFBhBaj0GlE1dwIDAQAB';
@@ -38,7 +38,7 @@ export default defineConfig({
     // Keep hidden maps beside the private build, out of store artifacts.
     exclude: ['**/*.map'],
     sourcesRoot: '..',
-    includeSources: ['extension/**', 'extension/.env.production', 'design-system/**', 'src/lib/profile/demographic-preferences.ts'],
+    includeSources: ['extension/**', 'extension/.env.production', 'design-system/**', 'src/lib/profile/demographic-preferences.ts', 'src/lib/ai/autofill-api-types.ts', 'src/lib/ai/planner.ts', 'src/lib/ai/provider-client.ts'],
   },
   vite: () => ({ plugins: [tailwindcss()], build: { sourcemap: 'hidden' } }),
   manifest: ({ browser }) =>
@@ -60,7 +60,7 @@ export default defineConfig({
             },
           }
         : {}),
-      name: 'freehire',
+      name: 'NextKinHR',
       description: 'Your job-application agent, on any page.',
       // `debugger`/`downloads` back the "Attach tailored CV" action only: attaching the
       // debugger is what lets DOM.setFileInputFiles place a file into an

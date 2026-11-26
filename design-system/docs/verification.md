@@ -91,7 +91,7 @@ establishes that the app can reach it, and that gap was real:
 eleven were built, tested, storybooked and documented while no app code could
 import them — with all of the above green.
 
-It is now `export * from 'freehire-design-system'`, so the seam cannot drift again.
+It is now `export * from 'nextkinhr-design-system'`, so the seam cannot drift again.
 That is a structural guarantee rather than a check, which is why it has no row in
 the table.
 
@@ -112,7 +112,7 @@ comes from `src/index.ts`, so a new primitive joins the census by itself.
 
 The same walk enforces the door. `#lib/ui` exists so app code never names the
 package, there are zero violations today, and zero is a number a wall can hold — so
-a `.svelte` or `.ts` file under `web/src` importing `freehire-design-system` fails
+a `.svelte` or `.ts` file under `web/src` importing `nextkinhr-design-system` fails
 outright, no baseline and no exception. `web/src/app.css`'s `@import` of the
 package's `theme.css` is untouched: it is the CSS contract every consumer must
 import, and the walk reads only `from`-clauses.

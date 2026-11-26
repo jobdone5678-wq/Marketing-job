@@ -7,7 +7,7 @@ describe('error telemetry', () => {
     const exporter = new InMemoryLogRecordExporter();
     const telemetry = createErrorTelemetry({
       endpoint: 'http://localhost/v1/logs',
-      service: 'freehire-web',
+      service: 'nextkinhr-web',
       environment: 'test',
       version: 'abc',
       exporter,
@@ -21,7 +21,7 @@ describe('error telemetry', () => {
     const [record] = exporter.getFinishedLogRecords();
     if (!record) throw new Error('Expected one exported exception');
     expect(record.resource.attributes).toMatchObject({
-      'service.name': 'freehire-web',
+      'service.name': 'nextkinhr-web',
       'service.version': 'abc',
       'deployment.environment.name': 'test',
     });
@@ -33,7 +33,7 @@ describe('error telemetry', () => {
   });
   it('redacts a bare JWT from the message and the stack', async () => {
     const exporter = new InMemoryLogRecordExporter();
-    const telemetry = createErrorTelemetry({ endpoint: 'http://localhost/v1/logs', service: 'freehire-web', exporter });
+    const telemetry = createErrorTelemetry({ endpoint: 'http://localhost/v1/logs', service: 'nextkinhr-web', exporter });
     telemetry?.capture(new Error('session rejected eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOjF9.c2ln'));
     await telemetry?.flush();
     const [record] = exporter.getFinishedLogRecords();
@@ -45,7 +45,7 @@ describe('error telemetry', () => {
   });
   it('filters expected noise, deduplicates and bounds event volume', async () => {
     const exporter = new InMemoryLogRecordExporter();
-    const telemetry = createErrorTelemetry({ endpoint: 'http://localhost/v1/logs', service: 'freehire-web', exporter });
+    const telemetry = createErrorTelemetry({ endpoint: 'http://localhost/v1/logs', service: 'nextkinhr-web', exporter });
     telemetry?.capture(new Error('Failed to fetch'));
     telemetry?.capture({ name: 'AbortError', message: 'cancelled' });
     const error = new Error('a defect');
@@ -57,7 +57,7 @@ describe('error telemetry', () => {
     await telemetry?.shutdown();
   });
   it('is inert without configuration', () => {
-    expect(createErrorTelemetry({ service: 'freehire-web' })).toBeUndefined();
+    expect(createErrorTelemetry({ service: 'nextkinhr-web' })).toBeUndefined();
   });
 });
 
@@ -65,7 +65,7 @@ it('captures error and rejection events only when their provenance belongs to th
   const exporter = new InMemoryLogRecordExporter();
   const telemetry = createErrorTelemetry({
     endpoint: 'http://localhost/v1/logs',
-    service: 'freehire-extension',
+    service: 'nextkinhr-extension',
     exporter,
   });
   const target = new EventTarget();
@@ -97,7 +97,7 @@ it('captures error and rejection events only when their provenance belongs to th
 
 it('records primitive rejections and opaque thrown objects without serializing private fields', async () => {
   const exporter = new InMemoryLogRecordExporter();
-  const telemetry = createErrorTelemetry({ endpoint: 'http://localhost/v1/logs', service: 'freehire-web', exporter });
+  const telemetry = createErrorTelemetry({ endpoint: 'http://localhost/v1/logs', service: 'nextkinhr-web', exporter });
   telemetry?.capture('unexpected alice@example.com token=private');
   telemetry?.capture(42);
   telemetry?.capture({ response: 'private response', auth: 'private credential' });
@@ -113,7 +113,7 @@ it('records primitive rejections and opaque thrown objects without serializing p
 
 it('redacts prefixed, quoted and Basic credential values before export', async () => {
   const exporter = new InMemoryLogRecordExporter();
-  const telemetry = createErrorTelemetry({ endpoint: 'http://localhost/v1/logs', service: 'freehire-web', exporter });
+  const telemetry = createErrorTelemetry({ endpoint: 'http://localhost/v1/logs', service: 'nextkinhr-web', exporter });
   const error = new Error(
     'access_token=access-private refresh_token:refresh-private client_secret=client-private {"token":"json-private"} authorization: Basic dXNlcjpwYXNz',
   );

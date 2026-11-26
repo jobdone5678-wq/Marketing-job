@@ -4,7 +4,7 @@
 // from GET /me/tracking/saved (side-effect-free) and is kept in sync locally by
 // the panel's own save/unsave clicks, same as the web app's markSaved/markUnsaved.
 
-import { listSavedSlugs } from './freehire';
+import { listSavedSlugs } from './nextkinhr';
 
 let loaded = false;
 let loading: Promise<void> | null = null;

@@ -6,21 +6,21 @@ Guidance for AI agents working in this directory.
 
 A browser extension that puts a job-application **agent in a side panel** — a
 Claude/Gemini-style side bar with access to whatever page the user is on. The
-agent is **freehire's own**, running inside hire's API (`internal/ai/assistant`):
+agent is **NextKinHR's own**, running inside hire's API (`internal/ai/assistant`):
 the panel holds a conversation under the `browse` preset, whose agent can read
 the open page through the browser-tool relay this extension serves.
 
-**Current state: the chat runs on hire's assistant.** Sign in with freehire and
+**Current state: the chat runs on hire's assistant.** Sign in with NextKinHR and
 talk to it; there is no "read page" affordance, because the agent calls
 `read_current_page` itself when a question needs it. A profile-aware match card,
 page intake and agent-driven Autofill also ship.
 
 Everything reaches one origin. Auth crosses it with the session JWT the connect
-flow minted: `Authorization: Bearer` on the HTTP API, the `freehire-jwt`
+flow minted: `Authorization: Bearer` on the HTTP API, the `nextkinhr-jwt`
 subprotocol on the relay's WebSocket (a browser cannot set headers on
 `new WebSocket`).
 
-Stack: **WXT + Svelte** (Chrome MV3; Firefox MV2 from the same source), styled on `freehire-design-system`
+Stack: **WXT + Svelte** (Chrome MV3; Firefox MV2 from the same source), styled on `nextkinhr-design-system`
 (Tailwind v4 tokens + primitives — see the root `AGENTS.md`'s design-system row).
 No local server, and no separate agent service.
 
@@ -38,20 +38,20 @@ extension/            WXT + Svelte MV3 extension (npm-managed; the repo's other
       ApplyPlan.svelte  the open form's questions, answered or not, + the counter
       ToolGroupList.svelte  what the agent is doing, mid-turn
       JobDeck.svelte / JobDeckCard.svelte  the `present_jobs` cards
-      app.css         Tailwind + freehire-design-system/theme.css import
+      app.css         Tailwind + nextkinhr-design-system/theme.css import
       main.ts         Svelte 5 mount
   lib/
     assistant/        the chat: SSE reader, wire types, chat + deck reducers,
                       tool formatters, the session store, and the API and turn
-                      clients (+ tests). Ported from the freehire web assistant.
+                      clients (+ tests). Ported from the NextKinHR web assistant.
     tools/            browser-tool executor: the wire contract, the executeTool
                       dispatch (+ tests), the ToolChannel socket to hire's relay,
                       and the PageBridge that reaches the tab's frames.
-    auth.ts           "Sign in with freehire" (launchWebAuthFlow) + token storage
+    auth.ts           "Sign in with NextKinHR" (launchWebAuthFlow) + token storage
     analytics.ts      anonymous usage events to GA4 via the Measurement Protocol
                       (gtag.js is remote code MV3 forbids); inert without the
                       WXT_GA_* build vars (+ test)
-    freehire.ts       hire API reads (job, match, autofill profile)
+    nextkinhr.ts       hire API reads (job, match, autofill profile)
     protocol.ts       in-extension RuntimeMessage contract (+ test)
     scraper.ts        DOM -> PageSnapshot + JobPosting JSON-LD check, pure over
                       its Document arg (+ test)
@@ -160,7 +160,7 @@ content --PAGE_SNAPSHOT--> background --> panel --> relay --> the agent, mid-tur
   schema.org `JobPosting` JSON-LD. Offered everywhere, it filled the triage queue
   with LinkedIn feeds, chat apps and localhost (63 submissions, nearly all junk).
 - **`revealField` borrows the page's style and gives it back.** The outline is
-  inline style, restored after ~600ms: the extension runs on pages freehire does
+  inline style, restored after ~600ms: the extension runs on pages NextKinHR does
   not own, where an injected class can collide with the ATS's own and a stylesheet
   outlives our interest in the element.
 - **The agent's reading is bounded, and visible.** `read_page` refuses any tab that
@@ -170,7 +170,7 @@ content --PAGE_SNAPSHOT--> background --> panel --> relay --> the agent, mid-tur
   where session tokens live. That display lives in `lib/assistant/pageRead.ts`
   rather than in `tool-formatters.ts`, precisely because the latter is a verbatim
   port and `read_current_page` cannot occur in the web app.
-- **`lib/assistant/` mirrors the freehire web assistant** (`web/src/lib/assistant`
+- **`lib/assistant/` mirrors the NextKinHR web assistant** (`web/src/lib/assistant`
   in this repo). `sse`, `wire`, `chat`, `deck` and `tool-formatters` are
   verbatim ports — keep them aligned. Three files diverge, and they say so
   at the top: `api.ts`/`client.ts` (absolute origin + Bearer, since extension code
@@ -181,7 +181,7 @@ content --PAGE_SNAPSHOT--> background --> panel --> relay --> the agent, mid-tur
   plumbing, the live socket and `storage.local` helpers are thin glue.
 - **TypeScript 6.x is fine; stay below 7** — svelte-check does not yet support
   the native `typescript@7` (tsgo).
-- **Styling comes from `freehire-design-system`** via a `file:../design-system`
+- **Styling comes from `nextkinhr-design-system`** via a `file:../design-system`
   dependency (npm's local-symlink protocol — pnpm's `link:` has no npm
   equivalent by that name). Components not covered by an existing primitive keep
   local scoped CSS, but reference the package's CSS custom properties
@@ -203,7 +203,7 @@ cd extension
 pnpm install --frozen-lockfile       # runs `wxt prepare` (generates .wxt/)
 pnpm run dev                         # dev build with HMR
 pnpm run build                       # production build -> .output/chrome-mv3
-                                     # targets freehire.me
+                                     # targets nextkinhr.com
                                      # (extension/.env.production); dev keeps
                                      # the localhost default
 cd extension && npm test             # vitest: lib/**/*.test.ts
@@ -230,5 +230,5 @@ Two differences, both in `wxt.config.ts`:
 - **A different sign-in redirect.** Firefox's `identity.getRedirectURL()` is
   `https://<sha1(gecko id)>.extensions.allizom.org/`, so hire's
   `EXTENSION_REDIRECT_ALLOWLIST` must carry that hash beside the Chrome ids. For
-  `extension@freehire.me` it is `13f2644fb08a641dc52d5b7c11faf2fb9775ee26`; the
+  `extension@nextkinhr.com` it is `ec8a97d56edd2aed136d4ac76843cd4d70e1c017`; the
   gecko id is therefore as fixed as Chrome's `key`.

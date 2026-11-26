@@ -95,39 +95,30 @@ test('Submission Tracking Safety & AI Settings UI Verification', async (t) => {
     );
   });
 
-  await t.test('4. Extension panel HTML contains collapsible AI Settings panel and controls', () => {
-    const panelHtml = readFileSync(
-      new URL('../../jobright_extension/panel.html', import.meta.url),
+  await t.test('4. Extension side panel exposes AI mode settings controls', () => {
+    const appSvelte = readFileSync(
+      new URL('../../extension/entrypoints/sidepanel/App.svelte', import.meta.url),
+      'utf8'
+    );
+    const matchTabSvelte = readFileSync(
+      new URL('../../extension/entrypoints/sidepanel/MatchTab.svelte', import.meta.url),
       'utf8'
     );
 
-    assert.ok(panelHtml.includes('ai-settings-panel'), 'panel.html must include ai-settings-panel');
-    assert.ok(panelHtml.includes('ai-mode-select'), 'panel.html must include ai-mode-select');
-    assert.ok(panelHtml.includes('ai-provider-select'), 'panel.html must include ai-provider-select');
-    assert.ok(panelHtml.includes('ai-base-url'), 'panel.html must include ai-base-url');
-    assert.ok(panelHtml.includes('ai-api-key'), 'panel.html must include ai-api-key');
-    assert.ok(panelHtml.includes('ai-model-id'), 'panel.html must include ai-model-id');
-    assert.ok(panelHtml.includes('ai-save-settings'), 'panel.html must include ai-save-settings');
-    assert.ok(panelHtml.includes('ai-test-connection'), 'panel.html must include ai-test-connection');
+    assert.ok(appSvelte.includes('getAutofillSettings'), 'App.svelte must load AI settings');
+    assert.ok(appSvelte.includes('saveAutofillSettings'), 'App.svelte must persist AI settings');
+    assert.ok(matchTabSvelte.includes('onModeChange'), 'MatchTab.svelte must expose mode switcher');
   });
 
-  await t.test('5. Extension panel JS synchronizes AI settings and test connection', () => {
-    const panelJs = readFileSync(
-      new URL('../../jobright_extension/panel.js', import.meta.url),
+  await t.test('5. Extension client synchronizes AI settings with portal endpoint', () => {
+    const clientSource = readFileSync(
+      new URL('../../extension/lib/nextkinhr.ts', import.meta.url),
       'utf8'
     );
 
     assert.ok(
-      panelJs.includes('ai-mode-select') || panelJs.includes('loadAiSettings'),
-      'panel.js must handle AI settings loading'
-    );
-    assert.ok(
-      panelJs.includes('ai-test-connection') || panelJs.includes('testAiConnection'),
-      'panel.js must handle AI test connection'
-    );
-    assert.ok(
-      panelJs.includes('/api/extension/ai/settings'),
-      'panel.js must sync settings with portal endpoint'
+      clientSource.includes('/api/extension/ai/settings'),
+      'extension API client must sync settings with portal endpoint'
     );
   });
 });

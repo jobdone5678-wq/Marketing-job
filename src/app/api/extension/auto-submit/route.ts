@@ -16,7 +16,7 @@ import { appliedResumeSchema, saveAppliedResume } from '@/lib/capture/applied-re
 import { z } from 'zod';
 import { applicationUrlKey } from '@/lib/jobs/application-state';
 
-export function computeIdempotencyKey(candidateId: string, canonicalJobUrl: string, dateStr: string): string {
+function computeIdempotencyKey(candidateId: string, canonicalJobUrl: string, dateStr: string): string {
   const input = `${candidateId}:${canonicalJobUrl}:${dateStr}`;
   if (nodeCrypto && typeof nodeCrypto.createHash === 'function') {
     return nodeCrypto.createHash('sha256').update(input).digest('hex');

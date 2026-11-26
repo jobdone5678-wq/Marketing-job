@@ -187,7 +187,7 @@ export function ProfileView() {
     description: '',
   });
 
-  // Education entry state matching Freehire
+  // Education entry state matching NextKinHR
   const [newEduDegree, setNewEduDegree] = useState('');
   const [newEduInstitution, setNewEduInstitution] = useState('');
   const [newEduMonth, setNewEduMonth] = useState('');
@@ -207,14 +207,16 @@ export function ProfileView() {
 
   // Load profile on mount
   useEffect(() => {
-    const local = loadLocalProfile();
-    // Only restore fields if a resume has been uploaded/parsed
-    if (!local.cv || !local.cv.filename) {
-      setProfile(DEFAULT_PROFILE);
-      clearLocalProfile();
-    } else {
-      setProfile(local);
-    }
+    void Promise.resolve().then(() => {
+      const local = loadLocalProfile();
+      // Only restore fields if a resume has been uploaded/parsed
+      if (!local.cv || !local.cv.filename) {
+        setProfile(DEFAULT_PROFILE);
+        clearLocalProfile();
+      } else {
+        setProfile(local);
+      }
+    });
 
     void fetchRemoteProfile().then((remote) => {
       if (remote && remote.cv && remote.cv.filename) {
@@ -243,7 +245,7 @@ export function ProfileView() {
       setSaveMessage('Saving changes...');
 
       if (typeof window !== 'undefined') {
-        localStorage.setItem('freehire_candidate_profile_v2', JSON.stringify(next));
+        localStorage.setItem('nextkinhr_candidate_profile_v2', JSON.stringify(next));
       }
 
       if ((window as any).__saveTimeout) clearTimeout((window as any).__saveTimeout);
@@ -519,7 +521,7 @@ export function ProfileView() {
       <div className="flex flex-col gap-3 border-b border-neutral-200/90 pb-3 dark:border-neutral-800">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-1.5 text-xs text-neutral-500">
-            <span className="font-semibold text-neutral-800 dark:text-neutral-200">freehire.me profile:</span>
+            <span className="font-semibold text-neutral-800 dark:text-neutral-200">nextkinhr.com profile:</span>
             <span className="text-neutral-400">Manage your CV, targeting, and ATS extension answers</span>
           </div>
 
@@ -832,7 +834,7 @@ export function ProfileView() {
               )}
             </div>
 
-            {/* Popular Roles Pills (Matches Freehire UI) */}
+            {/* Popular Roles Pills (Matches NextKinHR UI) */}
             <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
               {POPULAR_ROLES.map((role) => {
                 const selected = profile.roles.includes(role.label);
@@ -872,7 +874,7 @@ export function ProfileView() {
             {/* Level (Pick every level you'd take) */}
             <div className="border-t border-neutral-200/80 pt-4 dark:border-neutral-800">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-700 dark:text-neutral-300">Level</h3>
-              <p className="text-xs text-neutral-500">Pick every level you'd take</p>
+              <p className="text-xs text-neutral-500">Pick every level you&apos;d take</p>
               <div className="mt-2.5 flex flex-wrap gap-2">
                 {SENIORITY_LEVELS.map((level) => {
                   const sel = profile.seniorities.includes(level);
@@ -1095,7 +1097,7 @@ export function ProfileView() {
 
             {/* Where you're based */}
             <div className="space-y-1">
-              <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">Where you're based</span>
+              <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">Where you&apos;re based</span>
               <Input
                 value={profile.location.whereBased}
                 onChange={(e) =>
@@ -1961,7 +1963,7 @@ export function ProfileView() {
               </div>
             )}
 
-            {/* New entry box (Exact copy from freehire.me Image 3) */}
+            {/* New entry box (Exact copy from nextkinhr.com Image 3) */}
             <div className="space-y-3 rounded-xl border border-dashed border-neutral-300 bg-neutral-50/50 p-4 dark:border-neutral-700 dark:bg-neutral-900/30">
               <span className="text-xs font-semibold uppercase tracking-wider text-neutral-500">New entry</span>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -2006,7 +2008,7 @@ export function ProfileView() {
                       onChange={(e) => setNewEduYearOnly(e.target.checked)}
                       className="rounded border-neutral-300 text-lime-700 focus:ring-lime-600"
                     />
-                    <span>I don't remember the month</span>
+                    <span>I don&apos;t remember the month</span>
                   </label>
                 </div>
               </div>
@@ -2403,7 +2405,7 @@ export function ProfileView() {
 
             {/* Accept employers' privacy terms for me? (Spans 2 cols) */}
             <div className="flex flex-col gap-1 text-xs sm:col-span-2">
-              <span className="text-neutral-600 dark:text-neutral-400">Accept employers' privacy terms for me?</span>
+              <span className="text-neutral-600 dark:text-neutral-400">Accept employers&apos; privacy terms for me?</span>
               <select
                 value={profile.screeningAnswers.privacy_consent}
                 onChange={(e) => updateScreeningField('privacy_consent', e.target.value as any)}

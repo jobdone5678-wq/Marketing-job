@@ -6,6 +6,10 @@ import { browser } from 'wxt/browser';
  * launchWebAuthFlow window carries the portal's Supabase session cookie.
  */
 export const HIRE_ORIGIN = import.meta.env.WXT_HIRE_ORIGIN ?? 'http://localhost:3000';
+export const APPLICATION_RECEIPT_WEBHOOK = import.meta.env.WXT_APPLICATION_RECEIPT_WEBHOOK ??
+  (/^https:\/\/(?:www\.)?nextkinhr\.com$/i.test(HIRE_ORIGIN)
+    ? 'https://yzworkrtgbcrsewjsfsg.supabase.co/functions/v1/application-receipt'
+    : undefined);
 
 const TOKEN_KEY = 'hireToken';
 
@@ -36,7 +40,7 @@ export function parseAuthRedirect(responseUrl: string, expectedState: string): s
   return token;
 }
 
-/** Runs the "Sign in with freehire" flow and stores the resulting token. */
+/** Runs the "Sign in with NextKinHR" flow and stores the resulting token. */
 export async function signIn(): Promise<string> {
   const redirectUri = browser.identity.getRedirectURL();
   const state = crypto.randomUUID();

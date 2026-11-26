@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button, Card } from 'freehire-design-system';
+  import { Button, Card } from 'nextkinhr-design-system';
   import type { AppliedJob } from './applied.svelte';
 
   let { job, saving, onConfirm, onDismiss }: {

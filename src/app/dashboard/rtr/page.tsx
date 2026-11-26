@@ -109,7 +109,7 @@ export default function RTRManagementPage() {
   }, [statusFilter, search]);
 
   React.useEffect(() => {
-    void fetchRtrDocuments();
+    void Promise.resolve().then(() => fetchRtrDocuments());
     void getCandidates()
       .then(setCandidates)
       .catch((e) => console.warn('Candidates load error:', e));
@@ -944,7 +944,7 @@ export default function RTRManagementPage() {
                 <div className="border-border/60 bg-muted/20 space-y-1 rounded-[10px] border p-3">
                   <div className="text-foreground font-medium">Exclusivity Clause</div>
                   <p className="text-muted-foreground leading-relaxed">
-                    "{selectedDoc.representation_clause}"
+                    &ldquo;{selectedDoc.representation_clause}&rdquo;
                   </p>
                 </div>
               )}

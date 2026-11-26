@@ -17,7 +17,7 @@ import { withoutAppliedJobs } from '@/lib/jobs/application-state';
 
 import type { SupportedJobProvider } from '@/lib/public-directory';
 
-export interface LiveJobItem extends NormalizedJob {
+interface LiveJobItem extends NormalizedJob {
   provider: SupportedJobProvider;
   board_slug: string;
 }

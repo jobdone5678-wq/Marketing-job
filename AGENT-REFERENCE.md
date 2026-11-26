@@ -61,16 +61,16 @@ src/
 supabase/
   migrations/           Ordered PostgreSQL migrations (schema, RLS, pg_net/pg_cron, Realtime)
 scripts/
+  extension/            pack-extension.mjs (WXT release bundler)
   workers/              worker.ts (durable polling fallback)
   testing/              E2E, DB verification, migration runners
-tests/                  Node --test unit/contract suites (*.test.mjs) and Playwright E2E
+  tools/                Asset/brand generation & codebase inspection helpers
+tests/                  tsx --test unit/contract suites (*.test.mjs)
 extension/              WXT + Svelte 5 browser extension (see extension/AGENTS.md)
 design-system/          Svelte 5 tokens & primitives for extension/ (see design-system/AGENTS.md)
 docs/
   architecture.md       End-to-end system flows
   agents/               Focused operational guides (workers, realtime, pgvector)
-  freehire-reference/   Archived upstream Go/SvelteKit docs (logic reference only)
-  superpowers/          Design specs and implementation plans
 ```
 
 ## Commands
@@ -81,7 +81,7 @@ Run from `Marketing-job-main/` (the Next.js root):
 - **Typecheck**: `npm run typecheck` (`tsc --noEmit --incremental false`)
 - **Lint**: `npm run lint` (`eslint`)
 - **Format**: `npm run format`
-- **Unit & contract tests**: `npm test` (`node --experimental-strip-types --test --test-concurrency=1 tests/*.test.mjs`)
+- **Unit & contract tests**: `npm test` (`tsx --test --test-concurrency=1 tests/*.test.mjs tests/ai/*.test.mjs`)
 - **Build**: `npm run build` (`next build --webpack`)
 - **Worker (local durable polling)**: `npm run worker`
 - **E2E tests**: `npm run test:e2e`

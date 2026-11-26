@@ -1,12 +1,12 @@
 /**
- * FreeHire AI Autofill Engine: Server-Enforced Orchestrator Service
+ * NextKinHR AI Autofill Engine: Server-Enforced Orchestrator Service
  *
  * Implements server-side planning and combobox option choice:
  * - Checks SERVER_ENABLE_STRUCTURED_AI_PLANNER feature flag (default true)
  * - Verifies candidate ownership against authenticated actor (auth.uid())
  * - Resolves AI credentials (portal BYOK with AAD decryption & SSRF guard, or server default)
  * - Enforces zero-silent-fallback on BYOK authentication failures (returns 401)
- * - Executes FreeHire planFormBatch and chooseComboboxOption with typed grounding validation
+ * - Executes NextKinHR planFormBatch and chooseComboboxOption with typed grounding validation
  */
 
 import { setTimeout as delayTimer } from 'node:timers/promises';
@@ -56,49 +56,18 @@ export class OrchestratorError extends Error {
   }
 }
 
-export interface PlanApiRequest {
-  candidateId: string;
-  fields: Field[];
-  context?: FormContext;
-}
-
-export interface ChooseApiRequest {
-  candidateId: string;
-  question: Field;
-  options: string[];
-  context?: FormContext;
-}
-
-export interface PlanApiResponse {
-  ok: boolean;
-  plan?: PlanResult;
-  fills?: Fill[];
-  executableFills?: Fill[];
-  unmapped?: string[];
-  unresolved?: UnresolvedDiagnostic[];
-  deferred?: string[];
-  deferredFieldIds?: string[];
-  deferredPlans?: PlanResult['deferredPlans'];
-  telemetry?: {
-    usage?: TokenUsageTelemetry;
-    durationMs?: number;
-  };
-  error?: string;
-  code?: string;
-}
-
-export interface ChooseApiResponse {
-  ok: boolean;
-  choice?: string | null;
-  evidenceIds?: string[];
-  reason?: string;
-  telemetry?: {
-    usage?: TokenUsageTelemetry;
-    durationMs?: number;
-  };
-  error?: string;
-  code?: string;
-}
+import type {
+  PlanApiRequest,
+  ChooseApiRequest,
+  PlanApiResponse,
+  ChooseApiResponse,
+} from './autofill-api-types';
+export type {
+  PlanApiRequest,
+  ChooseApiRequest,
+  PlanApiResponse,
+  ChooseApiResponse,
+};
 
 export interface OrchestratorOptions {
   db?: any;

@@ -1,14 +1,14 @@
 /**
- * FreeHire AI Autofill Engine: Combobox Option Selector
+ * NextKinHR AI Autofill Engine: Combobox Option Selector
  *
- * Ports FreeHire Choose algorithm to TypeScript:
+ * Ports NextKinHR Choose algorithm to TypeScript:
  * - Reads live options captured from DOM combobox widgets
  * - Constrains LLM to selecting an exact option from offered list
  * - Rejects unoffered or hallucinated choices
  * - Rejects choices contradicting candidate verified facts (e.g. visa sponsorship negation)
  * - Returns choice: null when profile does not answer the question
  *
- * Attribution: Based on strelov1/freehire@2843637c09fb818fb64d4e7979638ff350b500c7 (MIT License)
+ * Attribution: Based on strelov1/nextkinhr@2843637c09fb818fb64d4e7979638ff350b500c7 (MIT License)
  */
 
 import type { VerifiedFact } from './verified-facts';

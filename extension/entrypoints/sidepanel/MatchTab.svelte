@@ -1,7 +1,7 @@
 <script lang="ts">
   import { TOP_FRAME } from '../../lib/tools/attachCv';
   import type { HireUser } from '../../lib/auth';
-  import type { AutofillSettings } from '../../lib/freehire';
+  import type { AutofillSettings } from '../../lib/nextkinhr';
   import type { AppliedJob } from './applied.svelte';
   import type { PlanItem } from '../../lib/applyPlan';
   import type { PlanRefused } from '../../lib/planRefused';
@@ -36,7 +36,7 @@
     settingsBusy,
     settingsError,
     hasOverrideFill,
-    onNotice,
+    onNotice: _onNotice,
     onReveal,
     onSave,
     onOverrideFill,

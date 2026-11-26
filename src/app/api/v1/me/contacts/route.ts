@@ -1,39 +1,14 @@
-import { resolveV1UserId, v1ErrorResponse, type RouteDbOptions } from '@/lib/v1/auth';
-import { getUserContacts, saveUserContacts } from '@/lib/candidate/resumeextract';
+import {
+  GET as handleGET,
+  PUT as handlePUT,
+} from '@/lib/v1/me/contacts';
 
 export const runtime = 'nodejs';
 
-export async function GET(request: Request, options?: RouteDbOptions) {
-  try {
-    const userId = await resolveV1UserId(request, options?.db);
-    if (!userId) {
-      return Response.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const contacts = await getUserContacts(userId, options?.db);
-    return Response.json({ ok: true, contacts });
-  } catch (error) {
-    return v1ErrorResponse(error);
-  }
+export function GET(request: Request) {
+  return handleGET(request);
 }
 
-export async function PUT(request: Request, options?: RouteDbOptions) {
-  try {
-    const userId = await resolveV1UserId(request, options?.db);
-    if (!userId) {
-      return Response.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      return Response.json({ ok: false, error: 'Invalid JSON request body.' }, { status: 400 });
-    }
-
-    const contacts = await saveUserContacts(userId, body, options?.db);
-    return Response.json({ ok: true, contacts });
-  } catch (error) {
-    return v1ErrorResponse(error);
-  }
+export function PUT(request: Request) {
+  return handlePUT(request);
 }

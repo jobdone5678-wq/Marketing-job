@@ -115,7 +115,7 @@ test('demographic preferences options, matching, Supabase RLS, and /api/v1/me/de
   const { loadTs } = createLoader();
   const prefsLib = loadTs('lib/profile/demographic-preferences.ts');
   const optionsLib = loadTs('lib/profile/demographic-options.ts');
-  const route = loadTs('app/api/v1/me/demographic-preferences/route.ts');
+  const route = loadTs('lib/v1/me/demographic-preferences.ts');
 
   // 1. Dropdown options cover every demographic key
   for (const key of prefsLib.demographicKeys) {

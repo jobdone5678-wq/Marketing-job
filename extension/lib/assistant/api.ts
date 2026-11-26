@@ -1,4 +1,4 @@
-// Fetch helpers for freehire's assistant, ported from the web app's own client
+// Fetch helpers for NextKinHR's assistant, ported from the web app's own client
 // (`web/src/lib/assistant/api.ts` in the hire repo).
 //
 // One divergence, and it is the whole reason this file is not a copy: the web is

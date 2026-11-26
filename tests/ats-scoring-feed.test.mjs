@@ -14,7 +14,7 @@ test('compareResumeToJob computes high match score for matching resume skills', 
 
 test('applicationUrlKey matches both primary URL and source_url against appliedKeys', () => {
   const jobUrl = 'https://boards.greenhouse.io/company/jobs/123';
-  const sourceUrl = 'https://freehire.me/jobs/company-123';
+  const sourceUrl = 'https://nextkinhr.com/jobs/company-123';
   const appliedKey = applicationUrlKey(jobUrl);
   const keys = new Set([appliedKey]);
   assert.ok(keys.has(applicationUrlKey(jobUrl)));

@@ -61,7 +61,7 @@ out('public/icon-192.png', await square(192, { pad: 0.1 }));
 out('public/icon-512.png', await square(512, { pad: 0.1 }));
 out('public/icon-maskable-512.png', await square(512, { pad: 0.22, background: WHITE }));
 
-// Chrome extension icons (same filenames the manifest already references)
-for (const [file, size] of [['icon16.plasmo.6c567d50.png', 16], ['icon32.plasmo.76b92899.png', 32], ['icon48.plasmo.aced7582.png', 48], ['icon128.plasmo.3c1ed2d2.png', 128]]) {
-  out(`jobright_extension/${file}`, await square(size, { pad: size <= 32 ? 0.04 : 0.08 }));
+// Chrome extension icons (extension/public/icon/*.png)
+for (const [file, size] of [['16.png', 16], ['32.png', 32], ['48.png', 48], ['128.png', 128]]) {
+  out(`extension/public/icon/${file}`, await square(size, { pad: size <= 32 ? 0.04 : 0.08 }));
 }

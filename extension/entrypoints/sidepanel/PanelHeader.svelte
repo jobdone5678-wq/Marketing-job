@@ -1,6 +1,6 @@
 <script lang="ts">
   import { browser } from 'wxt/browser';
-  import { Alert, Badge, Button } from 'freehire-design-system';
+  import { Alert, Badge, Button } from 'nextkinhr-design-system';
   import type { HireUser } from '../../lib/auth';
 
   // The side panel's header: the brand and build, whether the agent is working, and the
@@ -28,7 +28,7 @@
   <div class="top">
     <span class="brand">
       <img src="/icon/32.png" alt="" class="brand-mark" width="18" height="18" />
-      <strong>freehire</strong>
+      <strong>NextKinHR</strong>
       <!-- The build, in the one place both of us can see it: a side panel keeps
            its script until it is closed, so "did the reload take?" is otherwise
            unanswerable from a screenshot. -->
@@ -46,7 +46,7 @@
       <button class="link" onclick={onSignOut}>Sign out</button>
     {:else}
       <Button variant="primary" size="sm" onclick={onSignIn} disabled={authBusy}>
-        {authBusy ? 'Signing in…' : 'Sign in with freehire'}
+        {authBusy ? 'Signing in…' : 'Sign in with NextKinHR'}
       </Button>
     {/if}
   </div>

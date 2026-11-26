@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Skeleton } from 'freehire-design-system';
+  import { Skeleton } from 'nextkinhr-design-system';
   import JobDeckCard from './JobDeckCard.svelte';
   import type { DeckSlot } from '../../lib/assistant/deck';
 

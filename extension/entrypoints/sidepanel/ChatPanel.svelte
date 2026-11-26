@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ArrowUp, Square } from '@lucide/svelte';
-  import { Button, Input } from 'freehire-design-system';
+  import { Button, Input } from 'nextkinhr-design-system';
   import type { ChatState } from '../../lib/assistant/chat';
   import { splitPresentingCalls } from '../../lib/assistant/deck';
   import type { HireUser } from '../../lib/auth';

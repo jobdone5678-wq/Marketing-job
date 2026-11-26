@@ -43,7 +43,7 @@ export function startErrorTelemetry(context: 'background' | 'panel' | 'content')
   }
   const telemetry = createErrorTelemetry({
     endpoint,
-    service: 'freehire-extension',
+    service: 'nextkinhr-extension',
     environment: import.meta.env.WXT_OTEL_ENVIRONMENT,
     version: browser.runtime.getManifest().version,
   });

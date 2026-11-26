@@ -1,5 +1,5 @@
 /**
- * FreeHire AI Autofill Engine: Candidate VerifiedFact Builder
+ * NextKinHR AI Autofill Engine: Candidate VerifiedFact Builder
  *
  * Maps candidate profile data, confirmed facts, resume extracts, and Answer Bank
  * into strongly-typed VerifiedFact entries with unique canonical IDs, explicit

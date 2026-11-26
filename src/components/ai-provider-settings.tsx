@@ -129,7 +129,7 @@ export function AiProviderSettings({ candidateId }: AiProviderSettingsProps) {
   }, []);
 
   React.useEffect(() => {
-    fetchSettings();
+    void Promise.resolve().then(() => fetchSettings());
   }, [fetchSettings]);
 
   const handleProviderChange = (newProvider: AiProvider) => {

@@ -35,7 +35,7 @@ describe('answersToOffer', () => {
     expect(offers).toEqual([]);
   });
 
-  // What freehire itself wrote came FROM the profile or the bank; offering it back is noise.
+  // What NextKinHR itself wrote came FROM the profile or the bank; offering it back is noise.
   it('leaves out what the autofill wrote', () => {
     const label = 'Have you used our product before?';
     expect(answersToOffer([field(label, 'Yes')], new Set())).toHaveLength(1);

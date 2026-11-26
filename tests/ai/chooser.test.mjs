@@ -4,7 +4,7 @@ import { chooseComboboxOption } from '../../src/lib/ai/chooser.ts';
 import { ProviderClient } from '../../src/lib/ai/provider-client.ts';
 import { buildVerifiedFacts } from '../../src/lib/ai/verified-facts.ts';
 
-test('Chooser: FreeHire combobox option selection from live DOM options', async (t) => {
+test('Chooser: NextKinHR combobox option selection from live DOM options', async (t) => {
   await t.test('passes live captured options and selects exact matching option', async () => {
     const question = {
       label: 'Country of Residence',
@@ -108,7 +108,7 @@ test('Chooser: FreeHire combobox option selection from live DOM options', async 
     const facts = buildVerifiedFacts(candidate);
 
     const customFetch = async () => {
-      // Model correctly declines by returning empty choice per FreeHire prompt rules
+      // Model correctly declines by returning empty choice per NextKinHR prompt rules
       return new Response(
         JSON.stringify({
           choices: [{ message: { content: JSON.stringify({ choice: '' }) } }],

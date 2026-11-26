@@ -9,18 +9,17 @@
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
-    "test": "node --experimental-strip-types --test --test-concurrency=1 tests/*.test.mjs",
+    "test": "tsx --test --test-concurrency=1 tests/*.test.mjs tests/ai/*.test.mjs",
     "typecheck": "tsc --noEmit --incremental false",
     "worker:email": "node scripts/workers/email-sync-worker.mjs",
     "worker": "tsx --conditions=react-server scripts/workers/worker.ts",
-    "test:unit": "node --experimental-strip-types --test --test-concurrency=1 tests/*.test.mjs",
+    "test:unit": "tsx --test --test-concurrency=1 tests/*.test.mjs tests/ai/*.test.mjs",
     "test:ats:smoke": "node --test tests/smoke/ats-live.test.mjs",
     "test:e2e": "node scripts/testing/e2e.mjs",
     "test:db": "node scripts/testing/verify-candidate-writes.mjs",
     "legacy:report": "tsx --conditions=react-server scripts/tools/legacy-review-report.ts",
     "jobs:sync": "tsx --conditions=react-server scripts/workers/sync-public-jobs.ts",
-    "bundle:extension-ai": "node scripts/bundle-extension-ai.mjs",
-    "pack:extension": "node scripts/bundle-extension-ai.mjs && node scripts/pack-extension.mjs"
+    "pack:extension": "node scripts/extension/pack-extension.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.122",

@@ -5,7 +5,7 @@
   import type { PlanRefused } from '../../lib/planRefused';
   import { track } from '../../lib/analytics';
   import { signIn, signOut, getToken, fetchMe, type HireUser } from '../../lib/auth';
-  import { getAutofillSettings, saveAutofillSettings, type AutofillSettings } from '../../lib/freehire';
+  import { getAutofillSettings, saveAutofillSettings, type AutofillSettings } from '../../lib/nextkinhr';
   import { normalizeLabel } from '../../lib/fieldKeys';
   import type { PlanItem } from '../../lib/applyPlan';
   import { runAutofill, saveChosenAnswers, type FillPanel } from '../../lib/formFill';

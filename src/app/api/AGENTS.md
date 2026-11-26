@@ -21,10 +21,10 @@ Backend API surface running on Next.js 16 App Router (`Node.js` runtime for AI/D
 - **Autofill & AI**:
   - `extension/autofill/plan/route.ts` & `extension/autofill/choose/route.ts` -> `src/lib/ai/autofill-orchestrator.ts`
   - `extension/generate-answer/route.ts` -> open-ended screening prose
-  - `extension/ai/settings/route.ts` & `extension/ai/test-connection/route.ts` -> 4-mode AI config (`server`, `portal_byok`, `extension_byok`, `local`)
+  - `extension/ai/settings/route.ts` -> `src/lib/ai/extension-settings-service.ts` & `extension/ai/test-connection/route.ts` -> 4-mode AI config (`server`, `portal_byok`, `extension_byok`, `local`)
   - `extension/answer-bank/route.ts`, `extension/candidates/route.ts`, `extension/resume/route.ts`, `extension/resume-file/route.ts`
 - **Applied Jobs Saving**:
   - `extension/auto-submit/route.ts`, `extension/events/route.ts`, `extension/intents/*`, `extension/save-external-job/route.ts`
   - `webhooks/application-submitted/route.ts`, `submissions/*`, `outside-jobs/route.ts`, `application-intents/*`
 - **Candidate Profile & Resumes**:
-  - `jobseeker/resume/route.ts`, `resumes/*`, `v1/me/*`
+  - `jobseeker/resume/route.ts`, `resumes/*`, `v1/me/*` -> `src/lib/v1/me/*`

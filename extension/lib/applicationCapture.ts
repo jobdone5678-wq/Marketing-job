@@ -8,6 +8,9 @@ export interface ApplicationPage {
   jobUrl?: string;
   jobTitle?: string;
   companyName?: string;
+  jobLocation?: string;
+  employmentType?: string;
+  department?: string;
   evidence?: string;
   isJobPosting?: boolean;
 }
@@ -24,6 +27,9 @@ export interface ApplicationReceipt {
   companyName: string;
   jobTitle: string;
   jobUrl: string;
+  jobLocation?: string;
+  employmentType?: string;
+  department?: string;
   confirmationUrl?: string;
   answers: ApplicationAnswer[];
   manualAttestation: boolean;
@@ -41,6 +47,7 @@ const uncertainText =
 const cleanText = (value: string | null | undefined) =>
   value?.replace(/\s+/g, ' ').trim().slice(0, 200) || '';
 const linkedinHost = (host: string) => /(^|\.)linkedin\.com$/i.test(host);
+const leverHost = (host: string) => /^jobs(?:\.eu)?\.lever\.co$/i.test(host);
 const eligibleAnswer =
   /name|email|phone|mobile|address|city|state|zip|postal|country|location|linkedin|portfolio|website|github|skill|experience|employ|education|school|university|degree|qualif|company|title|role|position|salary|compensation|rate|availab|notice|start|relocat|sponsor|authori|work.?permit|cover.?letter|message|hear|referr|interest|project|summary/i;
 
@@ -59,12 +66,12 @@ export function applicationPageUrl(value: string, posting = false): string | und
     new URLSearchParams(
       [...params]
         .filter(
-          ([name, value]) =>
+          ([name, paramValue]) =>
             (postingParams.has(name.toLowerCase()) ||
               (/(^|\.)greenhouse\.io$/i.test(url.hostname) && /^(for|token)$/.test(name))) &&
-            /^[\w.-]{1,160}$/.test(value)
+            /^[\w.-]{1,160}$/.test(paramValue)
         )
-        .sort(([a], [b]) => a.localeCompare(b))
+        .toSorted(([a], [b]) => a.localeCompare(b))
     );
   const fragment = url.hash.match(/^#!?(\/[\w./%-]+)(?:\?([^#]*))?$/);
   url.hash = '';
@@ -94,11 +101,12 @@ export function observeApplicationPage(doc: Document): ApplicationPage {
   const heading = title.match(
     /^(?:job application for |apply for )?(.+?)\s+at\s+(.+?)(?:\s+\|.*)?$/i
   );
-  const atsBoard = /(^|\.)(?:greenhouse\.io|lever\.co|ashbyhq\.com)$/i.test(host)
-    ? doc.location?.pathname.split('/').filter(Boolean)[0]?.replace(/[-_]/g, ' ')
+  const lever = leverHost(host);
+  const atsBoard = (lever || /(^|\.)(?:greenhouse\.io|lever\.co|ashbyhq\.com)$/i.test(host))
+    ? doc.location?.pathname.split('/').find(Boolean)?.replace(/[-_]/g, ' ')
     : undefined;
   const displayedTitle = textOf(
-    '[itemprop=title], [data-automation-id=jobPostingHeader], .job-title, .jobs-unified-top-card__job-title, .job-details-jobs-unified-top-card__job-title h1, .posting-headline h2, main h1, h1'
+    '[itemprop=title], [data-automation-id=jobPostingHeader], .job-title, .jobs-unified-top-card__job-title, .job-details-jobs-unified-top-card__job-title h1, .posting-headline h2, .posting-header h2, main h1, h1'
   );
   const displayedCompany = textOf(
     '[itemprop=hiringOrganization] [itemprop=name], [data-automation-id=companyName], .company-name, .jobs-unified-top-card__company-name, .job-details-jobs-unified-top-card__company-name'
@@ -122,6 +130,11 @@ export function observeApplicationPage(doc: Document): ApplicationPage {
         ? undefined
         : jobTitle || undefined,
     companyName: companyName || undefined,
+    ...(lever && {
+      jobLocation: textOf('.posting-categories .location, .posting-categories .sort-by-location') || undefined,
+      employmentType: textOf('.posting-categories .commitment, .posting-categories .sort-by-commitment').slice(0, 50) || undefined,
+      department: textOf('.posting-categories .department, .posting-categories .team, .posting-categories .sort-by-team').slice(0, 100) || undefined,
+    }),
     evidence,
     isJobPosting: !!metadata || !!atsBoard || /^(?:job application for|apply for)\b/i.test(title),
   };
@@ -139,22 +152,30 @@ export function receiptMatchesPosting(receipt: ApplicationPage, jobUrl: string):
   );
 }
 
+const proposedVisible = (element: Element) =>
+  !element.closest('[hidden], [aria-hidden=true], dialog:not([open]), form') &&
+  element.getClientRects().length > 0;
+
 export function applicationReceiptEvidence(doc: Document): string | undefined {
-  if (linkedinHost(doc.location?.hostname ?? '') && easyApplySent(doc))
+  const host = doc.location?.hostname ?? '';
+  if (linkedinHost(host) && easyApplySent(doc))
     return 'Your application was sent';
-  const signals = doc.querySelectorAll(
-    'main h1, main h2, h1, [role=heading], [role=alert], [role=status], [role=dialog] h2, dialog[open] h2'
-  );
+  const lever = leverHost(host) && /^\/[^/]+\/[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}(?:\/|$)/i.test(doc.location?.pathname ?? '');
+  const headings = 'main h1, main h2, h1, [role=heading], [role=alert], [role=status], [role=dialog] h2, dialog[open] h2';
+  const signals = doc.querySelectorAll(lever
+    ? headings + ', .application-confirmation, .application-submitted, [data-qa="confirmation-page"], .confirmation-section, .lever-confirmation'
+    : headings);
   for (const element of signals) {
-    if (
-      element.closest('[hidden], [aria-hidden=true], dialog:not([open]), form') ||
-      !element.getClientRects().length
-    )
-      continue;
     const text = cleanText(element.textContent);
     if (!uncertainText.test(text)) {
       const match = text.match(receiptText);
-      if (match?.[0]) return match[0];
+      if (match?.[0] && proposedVisible(element)) return match[0];
+    }
+  }
+  if (lever) {
+    for (const element of doc.querySelectorAll('h2, h3, h4, p, strong, div:not(:has(*)), span:not(:has(*))')) {
+      const text = cleanText(element.textContent);
+      if (/^application submitted[.!]?$/i.test(text) && proposedVisible(element)) return text;
     }
   }
   return undefined;

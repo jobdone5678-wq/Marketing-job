@@ -5,9 +5,9 @@
  * development needs no env file at all.
  */
 interface ImportMetaEnv {
-  /** Where hire's API and sign-in live, e.g. https://freehire.me. */
+  /** Where NextKinHR's API and sign-in live, e.g. https://nextkinhr.com. */
   readonly WXT_HIRE_ORIGIN?: string;
-  /** Opt-in for deployments that serve the FreeHire job catalog API. */
+  /** Opt-in for deployments that serve the NextKinHR job catalog API. */
   readonly WXT_ENABLE_JOB_CATALOG?: string;
   /** The extension's GA4 stream; absent, analytics stays inert (see lib/analytics.ts). */
   readonly WXT_GA_MEASUREMENT_ID?: string;

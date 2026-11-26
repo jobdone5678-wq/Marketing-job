@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { Button, EmptyState, Skeleton } from 'freehire-design-system';
-  import type { FreehireJob, JobMatch } from '../../lib/freehire';
+  import { Button, EmptyState, Skeleton } from 'nextkinhr-design-system';
+  import type { NextkinhrJob, JobMatch } from '../../lib/nextkinhr';
   import AddJobOffer from './AddJobOffer.svelte';
   import MatchCard from './MatchCard.svelte';
 
   // The Match tab's verdict on the page: the match card, its loading and failed states,
-  // or the offer to add a vacancy freehire does not carry yet.
+  // or the offer to add a vacancy NextKinHR does not carry yet.
   let {
     status,
     job,
@@ -20,7 +20,7 @@
     onAdd,
   }: {
     status: 'idle' | 'loading' | 'ready' | 'error' | 'empty';
-    job: FreehireJob | null;
+    job: NextkinhrJob | null;
     match: JobMatch | null;
     hasUploadField: boolean;
     closed: boolean;
@@ -50,7 +50,7 @@
     {/snippet}
   </EmptyState>
 {:else if status === 'empty' && canAddJob}
-  <!-- Not an empty state but an offer: a vacancy freehire does not carry yet is
+  <!-- Not an empty state but an offer: a vacancy NextKinHR does not carry yet is
        the one moment the panel can ask for something useful, so it leads with
        the action and says what it buys — rather than reporting a miss. Any
        other page gets nothing here (see canAddJob). -->

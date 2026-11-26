@@ -1,5 +1,5 @@
 /**
- * FreeHire AI Autofill Engine: Question-Specific Typed Grounding Engine
+ * NextKinHR AI Autofill Engine: Question-Specific Typed Grounding Engine
  *
  * Implements strictly-typed anti-hallucination validation across:
  * - Policy / attestation / consent / accommodation user-action gates

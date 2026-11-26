@@ -170,7 +170,7 @@ export function normalizeSeniority(raw: string): Seniority {
 }
 
 /**
- * Normalizes a country code to Freehire's canonical lowercase ISO 3166-1 alpha-2 form.
+ * Normalizes a country code to NextKinHR's canonical lowercase ISO 3166-1 alpha-2 form.
  */
 export function normalizeCountryCode(raw: string): string {
   const code = String(raw || '').trim().toLowerCase();
@@ -773,7 +773,7 @@ export async function deleteUserProfile(userId: string, db?: any): Promise<boole
 
 /**
  * Updates resume_countries / resume_regions / resume_cities on public.profiles
- * (matching Freehire 0068). Read-only derived geography; only pre-fills base location if unset.
+ * (matching NextKinHR 0068). Read-only derived geography; only pre-fills base location if unset.
  */
 export async function syncDerivedLocationFromResume(
   userId: string,
