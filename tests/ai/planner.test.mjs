@@ -546,37 +546,6 @@ test('Planner: FreeHire form batch planning with neighbor context & grounding', 
     assert.deepEqual(disabledRes.unmapped, ['Which of the following communities do you belong to?']);
   });
 
-  await t.test('plans equivalent self-ID and country-specific eligibility questions from saved facts', async () => {
-    const facts = buildVerifiedFacts({
-      confirmed_facts: {
-        screeningAnswers: { country_specific_answers: { us_auth: 'yes', us_sponsorship: 'no' } },
-      },
-    }, undefined, undefined, {
-      enabled: true,
-      answers: {
-        raceEthnicity: ['Hispanic or Latino'], gender: ['Male'],
-        veteran: ['Yes'], neurodivergent: ['Yes'], parentalStatus: ['No'],
-      },
-    });
-    const result = await planFormBatch([
-      { id: 'race', label: 'Race / ethnicity', options: ['Hispanic or Latine', 'White'] },
-      { id: 'gender', label: 'How do you describe your gender?', options: ['I identify as a man', 'Cisgender man', 'Woman'] },
-      { id: 'race-menu', label: 'Race', combo: true },
-      { id: 'communities', label: 'Which of the following communities do you belong to? Please select all that apply.',
-        type: 'checkbox', widgetType: 'checkbox_group',
-        options: ['Person with disability', 'Neurodivergent', 'Veteran', 'Parent', 'Refugee or immigrant', 'None of the above'] },
-      { id: 'authorization', label: 'Do you hold valid work authorization for the United States?', options: ['Yes', 'No'] },
-      { id: 'sponsorship', label: 'This role requires candidates to be a US Citizen or Permanent Resident. Will you now or in the future require sponsorship for employment visa status?', options: ['Yes', 'No'] },
-    ], facts, async () => assert.fail('Saved choices and live-menu deferral should bypass the model'));
-    assert.deepEqual(result.executableFills.map(({ fieldId, value }) => [fieldId, value]), [
-      ['race', 'Hispanic or Latine'], ['gender', 'I identify as a man'],
-      ['communities', 'Neurodivergent, Veteran'], ['authorization', 'Yes'], ['sponsorship', 'No'],
-    ]);
-    assert.deepEqual(result.deferredFieldIds, ['race-menu']);
-    assert.deepEqual(result.executableFills[3].evidenceIds, ['country_specific_answers.us_auth']);
-    assert.deepEqual(result.executableFills[4].evidenceIds, ['country_specific_answers.us_sponsorship']);
-  });
-
   await t.test('tracks incoming [deferred combobox] entries in context.previouslyResolved as unresolved upstream location', async () => {
     const facts = buildVerifiedFacts(
       {

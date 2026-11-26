@@ -14,7 +14,7 @@ import type { FieldTag, FormField, LabelFill, FillOutcome, FillStatus, Upload, W
 import type { AutofillProfile } from './freehire';
 import { easyApplyDialog, easyApplyFieldError, isStoredResumeChoice } from './easyApply';
 import { choiceType, extractHelperText, extractLabel, precedingPrompt, textFromIds } from './formLabel';
-import { demographicKey, isCommunitySelfIdQuestion } from '../../src/lib/profile/demographic-preferences';
+import { demographicKey } from '../../src/lib/profile/demographic-preferences';
 import { binaryChoice, formatAuthorizedCountries, matchChoice, matchFieldKey, normalizeLabel } from './fieldKeys';
 
 export type Fillable = HTMLElement;
@@ -272,7 +272,7 @@ function booleanButtonGroup(el: HTMLButtonElement): { container: Element; questi
 }
 
 const isDemographicPrompt = (text: string) =>
-  Boolean(demographicKey(text)) || isCommunitySelfIdQuestion(text);
+  Boolean(demographicKey(text)) || /^do you identify as any of the following\b/i.test(text);
 
 /** ATS forms often put a plain-text heading above a list of choices (with or without `name`). */
 function questionBeforeOptions(el: Fillable): { container: Element; question: string; binaryPair: boolean } | null {
@@ -307,8 +307,7 @@ function questionBeforeOptions(el: Fillable): { container: Element; question: st
     if (!first) break;
     let branch = first as Element;
     while (branch.parentElement && branch.parentElement !== container) branch = branch.parentElement;
-    const isPrompt = (text: string) => /\?\s*(?:\*\s*)?(?:please select all that apply\.?\s*)?$/i.test(text) ||
-      (checkboxList && isDemographicPrompt(text));
+    const isPrompt = (text: string) => /\?\s*\*?$/.test(text) || (checkboxList && isDemographicPrompt(text));
     const prefix: string[] = [];
     for (const node of container.childNodes) {
       if (first && node.contains(first)) break;
