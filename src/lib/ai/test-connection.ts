@@ -6,7 +6,7 @@ import {
 } from './ai-provider-data';
 import { decryptSecret } from './encryption';
 import { ProviderClient, ProviderError } from './provider-client';
-import { isVercelAiSdkEnabled, resolveDefaultServerAiConfig } from './server-ai-config';
+import { isVercelAiSdkEnabled, resolveDefaultServerAiConfig, VERCEL_AI_GATEWAY_URL } from './server-ai-config';
 import { ServerVercelProviderClient } from './server-provider-client';
 import { createSafeAgent, SSRFError } from './ssrf-guard';
 import { createSsrfSafeFetch } from './ssrf-fetch-adapter';
@@ -52,7 +52,12 @@ export async function testAiConnection(request: Request, options?: TestConnectio
     const serverMode = input.mode === 'server' || (!input.mode && input.provider === 'server' && !apiKey);
     if (serverMode) {
       ({ baseUrl, apiKey, model } = resolveDefaultServerAiConfig());
-      if (!apiKey) return failure('Server AI is not configured.', 503);
+      if (!apiKey) {
+        const message = baseUrl === VERCEL_AI_GATEWAY_URL
+          ? 'Server AI is configured for Vercel AI Gateway. Set AI_GATEWAY_API_KEY on the deployment.'
+          : 'Server AI is not configured.';
+        return failure(message, 503, { code: 'AI_NOT_CONFIGURED' });
+      }
     } else {
       const saved = await getUserAiProviderConfig(userId, options?.db);
       const portalConfig = saved?.mode === 'portal_byok' ? saved : null;
@@ -98,7 +103,10 @@ export async function testAiConnection(request: Request, options?: TestConnectio
       { responseFormat: 'text', maxTokens: 128, signal: request.signal },
     );
     if (!completion.text.trim()) return failure('The model returned no text.', 502);
-    return Response.json({ ok: true, message: 'Chat completion verified', latencyMs: Date.now() - startTime, status: 200 });
+    const message = serverMode && baseUrl === VERCEL_AI_GATEWAY_URL
+      ? `Vercel AI Gateway chat verified for ${model}`
+      : 'Chat completion verified';
+    return Response.json({ ok: true, message, latencyMs: Date.now() - startTime, status: 200 });
   } catch (error) {
     if (error instanceof SSRFError) return failure(error.message, 400, { code: error.code });
     if (error instanceof ProviderError) {

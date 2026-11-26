@@ -1,18 +1,28 @@
 const OPENAI_URL = 'https://api.openai.com/v1';
+export const VERCEL_AI_GATEWAY_URL = 'https://ai-gateway.vercel.sh/v1';
+const DEFAULT_GATEWAY_MODEL = 'openai/gpt-4o-mini';
 
 export function resolveDefaultServerAiConfig(): { baseUrl: string; apiKey: string; model: string } {
   const defaultKey = process.env.AI_PROVIDER_DEFAULT_API_KEY?.trim();
   const openAiKey = process.env.OPENAI_API_KEY?.trim();
   const gatewayKey = process.env.AI_GATEWAY_API_KEY?.trim();
-  const apiKey = defaultKey || openAiKey || gatewayKey || '';
-  const usingGatewayKey = !defaultKey && !openAiKey && Boolean(gatewayKey);
+  const gatewaySelected = process.env.AI_PROVIDER?.trim().toLowerCase() === 'vercel_gateway';
+  if (gatewaySelected || (!defaultKey && !openAiKey && gatewayKey)) {
+    const model = process.env.AI_GATEWAY_MODEL?.trim() || DEFAULT_GATEWAY_MODEL;
+    return {
+      baseUrl: VERCEL_AI_GATEWAY_URL,
+      apiKey: gatewayKey || '',
+      model: model.includes('/') ? model : `openai/${model}`,
+    };
+  }
+  const apiKey = defaultKey || openAiKey || '';
 
   // Read overrides from the same configuration family as the selected key.
   const baseOverride = (defaultKey ? process.env.AI_PROVIDER_DEFAULT_BASE_URL : process.env.OPENAI_BASE_URL)?.trim();
   const modelOverride = (defaultKey ? process.env.AI_PROVIDER_DEFAULT_MODEL : process.env.OPENAI_MODEL)?.trim();
 
-  const detected = usingGatewayKey || apiKey.startsWith('vck_')
-    ? { baseUrl: 'https://ai-gateway.vercel.sh/v1', model: 'openai/gpt-4o-mini' }
+  const detected = apiKey.startsWith('vck_')
+    ? { baseUrl: VERCEL_AI_GATEWAY_URL, model: DEFAULT_GATEWAY_MODEL }
     : apiKey.startsWith('AIzaSy')
       ? { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash' }
       : apiKey.startsWith('sk-or-')

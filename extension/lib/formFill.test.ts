@@ -1094,7 +1094,13 @@ describe('deterministicAutofill job-alert guard', () => {
     expect(filled[sponLabel]).toBeUndefined();
   });
 
-  it('retries HTTP 429 once on plan and isolates persistent 429 without aborting remaining prose questions', async () => {
+  it.each([
+    { status: 429, code: 'UPSTREAM_RATE_LIMITED', message: 'rate-limited' },
+    { status: 503, code: 'UPSTREAM_UNAVAILABLE', message: 'The AI provider is unavailable' },
+    { status: 503, code: 'AI_NOT_CONFIGURED', message: 'Server AI has no provider key configured' },
+    { status: 503, code: 'CONFIG_UNAVAILABLE', message: 'NextKinHR could not load AI provider settings' },
+    { status: 503, code: undefined, message: 'NextKinHR could not complete AI planning' },
+  ])('retries $code ($status), explains the failure, and continues filling', async ({ status, code, message }) => {
     const proseLabel = 'Tell us about a hiring mistake you made. What did you learn?';
     vi.mocked(getAutofillSessionProfile).mockResolvedValueOnce({
       meta: { candidateId: 'cand-429' },
@@ -1111,9 +1117,13 @@ describe('deterministicAutofill job-alert guard', () => {
     vi.mocked(requestAutofillChoice).mockReset();
     vi.mocked(generateAutofillAnswer).mockReset();
 
+    const response = code
+      ? JSON.stringify({ error: `Provider request failed (HTTP ${status}).`, code })
+      : '<html>Service unavailable</html>';
+    const failure = new ExtensionApiError('/api/extension/autofill/plan', status, response);
     vi.mocked(requestAutofillPlan)
-      .mockRejectedValueOnce(new ExtensionApiError('/api/extension/autofill/plan', 429, '{"error":"Rate limited"}'))
-      .mockRejectedValueOnce(new ExtensionApiError('/api/extension/autofill/plan', 429, '{"error":"Rate limited"}'))
+      .mockRejectedValueOnce(failure)
+      .mockRejectedValueOnce(failure)
       .mockResolvedValueOnce({
         ok: true,
         executableFills: [{ fieldId: '0:0:5', label: 'Question 6', value: 'Answer 6', grounded: true }],
@@ -1157,7 +1167,7 @@ describe('deterministicAutofill job-alert guard', () => {
     expect(requestAutofillPlan).toHaveBeenCalledTimes(3);
     expect(filled['Question 6']).toBe('Answer 6');
     expect(filled[proseLabel]).toBe('Learned to validate role criteria earlier in interviews.');
-    expect(notices.some((n) => n.includes('HTTP 429'))).toBe(true);
+    expect(notices.some((n) => n.includes(message) && n.includes(`HTTP ${status}`))).toBe(true);
   });
 
   it('protects userEdited fields, never writes requiresReview fills, attaches parentFieldIds on conditional recapture, and surfaces diagnostics', async () => {

@@ -390,6 +390,7 @@ test('AI Settings Sync & Test Connection Endpoints', async (t) => {
     testCase.mock.method(dns, 'lookup', async () => [{ address: '8.8.8.8', family: 4 }]);
     const env = { ...process.env };
     try {
+      delete process.env.AI_PROVIDER;
       delete process.env.AI_PROVIDER_DEFAULT_API_KEY;
       process.env.OPENAI_API_KEY = 'sk-proj-test';
       process.env.OPENAI_BASE_URL = 'https://stale.example/v1';
@@ -410,6 +411,43 @@ test('AI Settings Sync & Test Connection Endpoints', async (t) => {
       } });
       assert.equal(res.status, 503);
       assert.equal((await res.json()).providerStatus, 503);
+    } finally {
+      process.env = env;
+    }
+  });
+
+  await t.test('explicit Vercel AI Gateway bypasses legacy credentials and models', async (testCase) => {
+    testCase.mock.method(dns, 'lookup', async () => [{ address: '8.8.8.8', family: 4 }]);
+    const env = { ...process.env };
+    const makeRequest = () => new Request('http://localhost/api/extension/ai/test-connection', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${USER_1}` },
+      body: JSON.stringify({ mode: 'server' }),
+    });
+    try {
+      process.env.AI_PROVIDER = 'vercel_gateway';
+      process.env.AI_PROVIDER_DEFAULT_API_KEY = 'legacy-default-key';
+      process.env.AI_PROVIDER_DEFAULT_BASE_URL = 'https://api.cent-ai.dev/v1';
+      process.env.AI_PROVIDER_DEFAULT_MODEL = 'hy4-flash:free';
+      process.env.OPENAI_API_KEY = 'legacy-openai-key';
+      process.env.AI_GATEWAY_MODEL = 'google/gemini-2.5-flash';
+      delete process.env.AI_GATEWAY_API_KEY;
+
+      const missing = await testConnection(makeRequest(), {
+        db, fetchFn: async () => assert.fail('Missing Gateway credentials must prevent an upstream request'),
+      });
+      assert.equal(missing.status, 503);
+      assert.equal((await missing.json()).code, 'AI_NOT_CONFIGURED');
+
+      process.env.AI_GATEWAY_API_KEY = 'vck_gateway_fixture';
+      const response = await testConnection(makeRequest(), { db, fetchFn: async (url, options) => {
+        assert.equal(String(url), 'https://ai-gateway.vercel.sh/v1/chat/completions');
+        assert.equal(new Headers(options.headers).get('authorization'), 'Bearer vck_gateway_fixture');
+        assert.equal(JSON.parse(options.body).model, 'google/gemini-2.5-flash');
+        return Response.json({ choices: [{ message: { content: 'OK' } }] });
+      } });
+      assert.equal(response.status, 200);
+      assert.equal((await response.json()).message, 'Vercel AI Gateway chat verified for google/gemini-2.5-flash');
     } finally {
       process.env = env;
     }

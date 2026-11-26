@@ -295,9 +295,13 @@ export function getAutofillProfile(token: string): Promise<AutofillProfile> {
 }
 
 export class ExtensionApiError extends Error {
+  readonly code?: string;
+
   constructor(path: string, public readonly status: number, body: string) {
     super(apiErrorMessage(path, status, body));
     this.name = 'ExtensionApiError';
+    const payload = parseOrNull(body) as { code?: unknown } | null;
+    if (typeof payload?.code === 'string') this.code = payload.code;
   }
 }
 

@@ -57,6 +57,12 @@ This workspace implements **candidate-based AI autofill** and **applied job savi
    - Reuses candidate-approved entries from `screening_answer_bank` (with `pgvector` semantic similarity as the target retrieval upgrade).
    - Drafts novel open-ended prose via `POST /api/extension/generate-answer` using candidate-approved answers and confirmed evidence from `experience_atoms`. The captured job description supplies role context. Direct provider modes run in the extension.
 
+**Vercel AI Gateway for Server mode**
+
+Set `AI_PROVIDER=vercel_gateway` and `AI_GATEWAY_API_KEY` in the Vercel project’s Production environment. Optionally set `AI_GATEWAY_MODEL` to a provider-qualified model ID. The default is `openai/gpt-4o-mini`. This selection takes precedence over legacy server keys, URLs, and models. If the Gateway key is missing, Server mode reports that it needs credentials. Portal BYOK, extension BYOK, and local modes keep their own credentials.
+
+Redeploy the production revision and run **AI Provider Settings → Server → Test Connection**. A successful probe names the Gateway model and confirms chat completion through the same provider settings used to plan, choose, and generate answers.
+
 ### 3. Applied Jobs Saving & Realtime Sync
 1. When the candidate submits an ATS application (or confirms the *"Did you submit?"* prompt), the extension posts the posting metadata, normalized company/URL key, evidence, applied resume version, and answer snapshot to `POST /api/extension/auto-submit` (or `/api/extension/events` / `/api/webhooks/application-submitted`).
 2. The server validates caller ownership, URL safety (`allowedCaptureUrl`), and idempotency (`computeIdempotencyKey` + `applicationUrlKey`), and persists the record to `job_submissions` and/or `outside_jobs`.

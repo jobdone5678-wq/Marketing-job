@@ -609,14 +609,24 @@ async function fillApplication(
           error instanceof ExtensionApiError
             ? error.message.replace(/\s*\(HTTP \d+\)$/, '').trim()
             : '';
+        const unavailableReasons: Record<string, string> = {
+          AI_NOT_CONFIGURED: 'Server AI has no provider key configured (HTTP 503).',
+          CONFIG_UNAVAILABLE: 'NextKinHR could not load AI provider settings (HTTP 503). Retry shortly.',
+          UPSTREAM_UNAVAILABLE: 'The AI provider is unavailable (HTTP 503). Run Test Connection in AI Provider Settings or retry shortly.',
+        };
+        const code = error instanceof ExtensionApiError ? error.code : undefined;
         const message =
-          status === 504
-            ? 'AI planning timed out (HTTP 504).'
-            : status === 429
-              ? 'AI provider rate-limited a batch (HTTP 429). Wait a moment or switch AI models in AI Provider Settings;'
-              : reason && (!status || !reason.includes(`HTTP ${status}`))
-                ? `${reason}${status ? ` (HTTP ${status})` : ''}.`
-                : `AI planning could not complete a batch${status ? ` (HTTP ${status})` : ''}.`;
+          status === 503
+            ? code && Object.hasOwn(unavailableReasons, code)
+              ? unavailableReasons[code]
+              : 'NextKinHR could not complete AI planning (HTTP 503). Retry shortly.'
+            : status === 504
+              ? 'AI planning timed out (HTTP 504).'
+              : status === 429
+                ? 'AI provider rate-limited a batch (HTTP 429). Wait a moment or switch AI models in AI Provider Settings;'
+                : reason && (!status || !reason.includes(`HTTP ${status}`))
+                  ? `${reason}${status ? ` (HTTP ${status})` : ''}.`
+                  : `AI planning could not complete a batch${status ? ` (HTTP ${status})` : ''}.`;
         panel.notice(
           status === 429
             ? `${message} autofill will still check the remaining fields.`
